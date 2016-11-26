@@ -20,13 +20,12 @@ AC_DEFUN([ORTE_CONFIG_FILES],[
         orte/include/Makefile
         orte/etc/Makefile
 
-        orte/tools/orted/Makefile
-        orte/tools/orterun/Makefile
+        orte/tools/psrvd/Makefile
+        orte/tools/prun/Makefile
         orte/tools/wrappers/Makefile
-        orte/tools/wrappers/ortecc-wrapper-data.txt
-        orte/tools/wrappers/orte.pc
-        orte/tools/orte-info/Makefile
-        orte/tools/orte-server/Makefile
-        orte/tools/orte-dvm/Makefile
+        orte/tools/wrappers/pcc-wrapper-data.txt
+        orte/tools/wrappers/pcc.pc
+        orte/tools/pinfo/Makefile
+        orte/tools/psrvr/Makefile
     ])
 ])

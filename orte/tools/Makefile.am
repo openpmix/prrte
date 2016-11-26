@@ -25,17 +25,15 @@
 # orte/Makefile.am
 
 SUBDIRS += \
-	tools/orted \
-	tools/orterun \
+	tools/psrvd \
+	tools/prun \
 	tools/wrappers \
-        tools/orte-info \
-        tools/orte-server \
-        tools/orte-dvm
+        tools/pinfo \
+        tools/psrvr
 
 DIST_SUBDIRS += \
-	tools/orted \
-	tools/orterun \
+	tools/psrvd \
+	tools/prun \
 	tools/wrappers \
-        tools/orte-info \
-        tools/orte-server \
-        tools/orte-dvm
+        tools/pinfo \
+        tools/psrvr
