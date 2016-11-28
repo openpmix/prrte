@@ -195,6 +195,15 @@ int opal_os_dirpath_destroy(const char *path,
         filenm = opal_os_path(false, path, ep->d_name, NULL);
 
         rc = stat(filenm, &buf);
+        if (0 > rc) {
+            /* Handle a race condition. filenm might have been deleted by an
+             * other process running on the same node. That typically occurs
+             * when one task is removing the job_session_dir and an other task
+             * is still removing its proc_session_dir.
+             */
+            free(filenm);
+            continue;
+        }
         if (S_ISDIR(buf.st_mode)) {
             is_dir = true;
         }
@@ -261,19 +270,19 @@ bool opal_os_dirpath_is_empty(const char *path ) {
     struct dirent *ep;
 
     if (NULL != path) {  /* protect against error */
-    	dp = opendir(path);
-    	if (NULL != dp) {
-    	    while ((ep = readdir(dp))) {
-        		if ((0 != strcmp(ep->d_name, ".")) &&
-        		    (0 != strcmp(ep->d_name, ".."))) {
+        dp = opendir(path);
+        if (NULL != dp) {
+            while ((ep = readdir(dp))) {
+                        if ((0 != strcmp(ep->d_name, ".")) &&
+                            (0 != strcmp(ep->d_name, ".."))) {
                             closedir(dp);
-        		    return false;
-        		}
-    	    }
-    	    closedir(dp);
-    	    return true;
-    	}
-    	return false;
+                            return false;
+                        }
+            }
+            closedir(dp);
+            return true;
+        }
+        return false;
     }
 
     return true;
@@ -302,4 +311,3 @@ int opal_os_dirpath_access(const char *path, const mode_t in_mode ) {
         return( OPAL_ERR_NOT_FOUND );
     }
 }
-

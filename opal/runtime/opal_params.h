@@ -78,4 +78,8 @@ OPAL_DECLSPEC extern int opal_abort_delay;
 extern bool opal_progress_debug;
 #endif
 
+#if OPAL_ENABLE_FT_CR == 1
+extern bool opal_base_distill_checkpoint_ready;
+#endif
+
 #endif
