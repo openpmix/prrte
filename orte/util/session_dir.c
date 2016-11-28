@@ -12,7 +12,7 @@
  * Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015      Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2016 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -174,16 +174,22 @@ static int _setup_jobfam_session_dir(orte_process_name_t *proc)
             return rc;
         }
 
-        if (ORTE_PROC_IS_HNP) {
+        if (ORTE_PROC_IS_MASTER) {
+            if (0 > asprintf(&orte_process_info.jobfam_session_dir,
+                             "%s/dvm", orte_process_info.top_session_dir)) {
+                rc = ORTE_ERR_OUT_OF_RESOURCE;
+                goto exit;
+            }
+        } else if (ORTE_PROC_IS_HNP) {
             if (0 > asprintf(&orte_process_info.jobfam_session_dir,
                              "%s/pid.%lu", orte_process_info.top_session_dir,
-                             (unsigned long)orte_process_info.pid) ) {
+                             (unsigned long)orte_process_info.pid)) {
                 rc = ORTE_ERR_OUT_OF_RESOURCE;
                 goto exit;
             }
         } else {
             /* we were not given one, so define it */
-            if (NULL == proc || (ORTE_JOBID_INVALID == proc->jobid) ) {
+            if (NULL == proc || (ORTE_JOBID_INVALID == proc->jobid)) {
                 if (0 > asprintf(&orte_process_info.jobfam_session_dir,
                                  "%s/jobfam", orte_process_info.top_session_dir) ) {
                     rc = ORTE_ERR_OUT_OF_RESOURCE;

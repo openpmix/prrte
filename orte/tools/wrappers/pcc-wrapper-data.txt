@@ -12,17 +12,17 @@ language=C
 compiler_env=CC
 compiler_flags_env=CFLAGS
 compiler=gcc
-preprocessor_flags=
+preprocessor_flags=-I${includedir}/openmpi -I${pkgincludedir}/opal/mca/hwloc/hwloc1113/hwloc/include -I${pkgincludedir}/opal/mca/event/libevent2022/libevent -I${pkgincludedir}/opal/mca/event/libevent2022/libevent/include  
 compiler_flags_prefix=
-compiler_flags=-pthread
-linker_flags=    -Wl,-rpath -Wl,@{libdir} -Wl,--enable-new-dtags -lpmix
+compiler_flags= 
+linker_flags=   -lpmix
 # Note that per https://svn.open-mpi.org/trac/ompi/ticket/3422, we
 # intentionally always link in open-pal and open-rte in
 # ortecc/ortec++ because we intend ORTE applications to use both the
 # ORTE and OPAL APIs.
 libs=-lopen-rte -lopen-pal -lpmix
-libs_static=-lopen-rte -lopen-pal -lm -lnuma -ludev -lutil
-dyn_lib_file=libopen-rte.so
+libs_static=-lopen-rte -lopen-pal -lm 
+dyn_lib_file=libopen-rte.dylib
 static_lib_file=libopen-rte.a
 required_file=
 includedir=${includedir}
