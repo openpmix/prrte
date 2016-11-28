@@ -131,7 +131,7 @@ exit:
     return rc;
 }
 
-static int _setup_top_session_dir(void)
+int orte_setup_top_session_dir(void)
 {
     int rc = ORTE_SUCCESS;
     /* get the effective uid */
@@ -170,7 +170,7 @@ static int _setup_jobfam_session_dir(orte_process_name_t *proc)
 
     /* construct the top_session_dir if we need */
     if (NULL == orte_process_info.jobfam_session_dir) {
-        if (ORTE_SUCCESS != (rc = _setup_top_session_dir())) {
+        if (ORTE_SUCCESS != (rc = orte_setup_top_session_dir())) {
             return rc;
         }
 
