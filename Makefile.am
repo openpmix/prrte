@@ -19,8 +19,8 @@
 # $HEADER$
 #
 
-SUBDIRS = config contrib $(MCA_PROJECT_SUBDIRS) test
-EXTRA_DIST = README INSTALL VERSION Doxyfile LICENSE autogen.pl README.JAVA.txt
+SUBDIRS = config contrib $(MCA_PROJECT_SUBDIRS)
+EXTRA_DIST = README INSTALL VERSION Doxyfile LICENSE autogen.pl
 
 include examples/Makefile.include
 

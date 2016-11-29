@@ -46,7 +46,7 @@ if OPAL_INSTALL_BINARIES
 
 bin_PROGRAMS = pinfo
 
-dist_ortedata_DATA = help-pinfo.txt
+dist_ortedata_DATA = help-orte-info.txt
 
 nodist_man_MANS = $(man_pages)
 

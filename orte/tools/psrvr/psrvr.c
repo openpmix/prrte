@@ -322,8 +322,6 @@ int main(int argc, char *argv[])
             fclose(fp);
         }
         free(uri);
-    } else {
-        printf("VMURI: %s\n", uri);
     }
 
     /* get the daemon job object - was created by ess/hnp component */

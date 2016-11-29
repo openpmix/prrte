@@ -102,6 +102,7 @@
 #include "orte/runtime/orte_wait.h"
 #include "orte/runtime/orte_quit.h"
 #include "orte/util/pre_condition_transports.h"
+#include "orte/util/session_dir.h"
 #include "orte/util/show_help.h"
 
 #include "orted_submit.h"
@@ -209,6 +210,8 @@ int orte_submit_init(int argc, char *argv[],
 {
     int rc, i;
     char *param;
+    char input[1024], *filename;
+    FILE *fp;
 
     /* init the globals */
     memset(&orte_cmd_options, 0, sizeof(orte_cmd_options));
@@ -368,154 +371,59 @@ int orte_submit_init(int argc, char *argv[],
         exit(0);
     }
 
-   /* set the flags - if they gave us a -hnp option, then
-     * we are a tool. If not, then we are an HNP */
-    if (NULL == orte_cmd_options.hnp) {
-        orte_process_info.proc_type = ORTE_PROC_HNP;
-    } else {
-        orte_process_info.proc_type = ORTE_PROC_TOOL;
-    }
+   /* set the flags */
+    orte_process_info.proc_type = ORTE_PROC_TOOL;
+
+    /* Setup MCA params */
+    orte_register_params();
+
+    /* setup the proc info struct */
+    orte_proc_info();
 
     if (ORTE_PROC_IS_TOOL) {
-        if (0 == strncasecmp(orte_cmd_options.hnp, "file", strlen("file"))) {
-            char input[1024], *filename;
-            FILE *fp;
+        /* setup the top session directory name */
+        if (ORTE_SUCCESS != orte_setup_top_session_dir()) {
+            fprintf(stderr, "OUT OF MEMORY\n");
+            exit(1);
+        }
+        /* look for the contact file on this node */
+        filename = opal_os_path(false, orte_process_info.top_session_dir, "dvm", "contact.txt", NULL);
+        if (NULL == filename) {
+            fprintf(stderr, "OUT OF MEMORY\n");
+            exit(1);
+        }
+        if (0 >= strlen(filename)) {
+            /* they forgot to give us the name! */
+            orte_show_help("help-orte-top.txt", "orte-top:hnp-filename-bad", true, "uri", filename);
+            exit(1);
+        }
 
-            /* it is a file - get the filename */
-            filename = strchr(orte_cmd_options.hnp, ':');
-            if (NULL == filename) {
-                /* filename is not correctly formatted */
-                orte_show_help("help-orte-top.txt", "orte-top:hnp-filename-bad", true, "uri", orte_cmd_options.hnp);
-                exit(1);
-            }
-            ++filename; /* space past the : */
-
-            if (0 >= strlen(filename)) {
-                /* they forgot to give us the name! */
-                orte_show_help("help-orte-top.txt", "orte-top:hnp-filename-bad", true, "uri", orte_cmd_options.hnp);
-                exit(1);
-            }
-
-            /* open the file and extract the uri */
-            fp = fopen(filename, "r");
-            if (NULL == fp) { /* can't find or read file! */
-                orte_show_help("help-orte-top.txt", "orte-top:hnp-filename-access", true, orte_cmd_options.hnp);
-                exit(1);
-            }
-            /* initialize the input to NULLs to ensure any input
-             * string is NULL-terminated */
-            memset(input, 0, 1024);
-            if (NULL == fgets(input, 1024, fp)) {
-                /* something malformed about file */
-                fclose(fp);
-                orte_show_help("help-orte-top.txt", "orte-top:hnp-file-bad", true, orte_cmd_options.hnp);
-                exit(1);
-            }
+        /* open the file and extract the uri */
+        fp = fopen(filename, "r");
+        if (NULL == fp) { /* can't find or read file! */
+            orte_show_help("help-orte-top.txt", "orte-top:hnp-filename-access", true, filename);
+            exit(1);
+        }
+        /* initialize the input to NULLs to ensure any input
+         * string is NULL-terminated */
+        memset(input, 0, 1024);
+        if (NULL == fgets(input, 1024, fp)) {
+            /* something malformed about file */
             fclose(fp);
-            input[strlen(input)-1] = '\0';  /* remove newline */
-            /* construct the target hnp info */
-            opal_setenv(OPAL_MCA_PREFIX"orte_hnp_uri", input, true, &environ);
-        } else {
-            /* should just be the uri itself - construct the target hnp info */
-            opal_setenv(OPAL_MCA_PREFIX"orte_hnp_uri", orte_cmd_options.hnp, true, &environ);
+            orte_show_help("help-orte-top.txt", "orte-top:hnp-file-bad", true, filename);
+            exit(1);
+        }
+        fclose(fp);
+        input[strlen(input)-1] = '\0';  /* remove newline */
+        /* construct the target hnp info */
+        opal_setenv(OPAL_MCA_PREFIX"orte_hnp_uri", input, true, &environ);
+        if (NULL == orte_process_info.my_hnp_uri) {
+            orte_process_info.my_hnp_uri = strdup(input);
         }
         /* we are never allowed to operate as a distributed tool,
          * so insist on the ess/tool component */
         opal_setenv(OPAL_MCA_PREFIX"ess", "tool", true, &environ);
-    } else {
-        /* may look strange, but the way we handle prefix is a little weird
-         * and probably needs to be addressed more fully at some future point.
-         * For now, we have a conflict between app_files and cmd line usage.
-         * Since app_files are used by the C/R system, we will make an
-         * adjustment here to avoid perturbing that system.
-         *
-         * We cannot just have the cmd line parser place any found value
-         * in the global struct as the app_file parser would replace it.
-         * So handle this specific cmd line option manually.
-         */
-        orte_cmd_options.prefix = NULL;
-        orte_cmd_options.path_to_mpirun = NULL;
-        if (opal_cmd_line_is_taken(orte_cmd_line, "prefix") ||
-            '/' == argv[0][0] || want_prefix_by_default) {
-            size_t param_len;
-            if ('/' == argv[0][0]) {
-                char* tmp_basename = NULL;
-                /* If they specified an absolute path, strip off the
-                   /bin/<exec_name>" and leave just the prefix */
-                orte_cmd_options.path_to_mpirun = opal_dirname(argv[0]);
-                /* Quick sanity check to ensure we got
-                   something/bin/<exec_name> and that the installation
-                   tree is at least more or less what we expect it to
-                   be */
-                tmp_basename = opal_basename(orte_cmd_options.path_to_mpirun);
-                if (0 == strcmp("bin", tmp_basename)) {
-                    char* tmp = orte_cmd_options.path_to_mpirun;
-                    orte_cmd_options.path_to_mpirun = opal_dirname(tmp);
-                    free(tmp);
-                } else {
-                    free(orte_cmd_options.path_to_mpirun);
-                    orte_cmd_options.path_to_mpirun = NULL;
-                }
-                free(tmp_basename);
-            }
-            /* if both are given, check to see if they match */
-            if (opal_cmd_line_is_taken(orte_cmd_line, "prefix") &&
-                NULL != orte_cmd_options.path_to_mpirun) {
-                char *tmp_basename;
-                /* if they don't match, then that merits a warning */
-                param = strdup(opal_cmd_line_get_param(orte_cmd_line, "prefix", 0, 0));
-                /* ensure we strip any trailing '/' */
-                if (0 == strcmp(OPAL_PATH_SEP, &(param[strlen(param)-1]))) {
-                    param[strlen(param)-1] = '\0';
-                }
-                tmp_basename = strdup(orte_cmd_options.path_to_mpirun);
-                if (0 == strcmp(OPAL_PATH_SEP, &(tmp_basename[strlen(tmp_basename)-1]))) {
-                    tmp_basename[strlen(tmp_basename)-1] = '\0';
-                }
-                if (0 != strcmp(param, tmp_basename)) {
-                    orte_show_help("help-orterun.txt", "orterun:double-prefix",
-                                   true, orte_basename, orte_basename,
-                                   param, tmp_basename, orte_basename);
-                    /* use the prefix over the path-to-mpirun so that
-                     * people can specify the backend prefix as different
-                     * from the local one
-                     */
-                    free(orte_cmd_options.path_to_mpirun);
-                    orte_cmd_options.path_to_mpirun = NULL;
-                }
-                free(tmp_basename);
-            } else if (NULL != orte_cmd_options.path_to_mpirun) {
-                param = strdup(orte_cmd_options.path_to_mpirun);
-            } else if (opal_cmd_line_is_taken(orte_cmd_line, "prefix")){
-                /* must be --prefix alone */
-                param = strdup(opal_cmd_line_get_param(orte_cmd_line, "prefix", 0, 0));
-            } else {
-                /* --enable-orterun-prefix-default was given to orterun */
-                param = strdup(opal_install_dirs.prefix);
-            }
-
-            if (NULL != param) {
-                /* "Parse" the param, aka remove superfluous path_sep. */
-                param_len = strlen(param);
-                while (0 == strcmp (OPAL_PATH_SEP, &(param[param_len-1]))) {
-                    param[param_len-1] = '\0';
-                    param_len--;
-                    if (0 == param_len) {
-                        orte_show_help("help-orterun.txt", "orterun:empty-prefix",
-                                       true, orte_basename, orte_basename);
-                        free(param);
-                        return ORTE_ERR_FATAL;
-                    }
-                }
-
-                orte_cmd_options.prefix = param;
-            }
-            want_prefix_by_default = true;
-        }
     }
-
-    /* Setup MCA params */
-    orte_register_params();
 
     if (orte_cmd_options.debug) {
         orte_devel_level_output = true;
@@ -3232,4 +3140,3 @@ void orte_profile_wakeup(int sd, short args, void *cbdata)
     /* abort the job */
     ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_ALL_JOBS_COMPLETE);
 }
-
