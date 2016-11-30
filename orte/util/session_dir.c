@@ -449,8 +449,6 @@ CLEANUP:
 int
 orte_session_dir_finalize(orte_process_name_t *proc)
 {
-    int rc=ORTE_SUCCESS;
-
     if (!orte_create_session_dirs || orte_process_info.rm_session_dirs ) {
         /* we haven't created them or RM will clean them up for us*/
         return ORTE_SUCCESS;
@@ -464,8 +462,7 @@ orte_session_dir_finalize(orte_process_name_t *proc)
          * accidentally removing directories we shouldn't
          * touch
          */
-        rc = ORTE_ERR_NOT_INITIALIZED;
-        goto CLEANUP;
+        return ORTE_ERR_NOT_INITIALIZED;
     }
 
     opal_os_dirpath_destroy(orte_process_info.proc_session_dir,
@@ -491,7 +488,6 @@ orte_session_dir_finalize(orte_process_name_t *proc)
                 opal_output(0, "sess_dir_finalize: proc session dir not empty - leaving");
             }
         }
-        goto CLEANUP;
     }
 
     if (opal_os_dirpath_is_empty(orte_process_info.job_session_dir)) {
@@ -508,10 +504,25 @@ orte_session_dir_finalize(orte_process_name_t *proc)
                 opal_output(0, "sess_dir_finalize: job session dir not empty - leaving");
             }
         }
-        goto CLEANUP;
     }
 
-    if(NULL != orte_process_info.top_session_dir) {
+    if (opal_os_dirpath_is_empty(orte_process_info.jobfam_session_dir)) {
+        if (orte_debug_flag) {
+            opal_output(0, "sess_dir_finalize: found jobfam session dir empty - deleting");
+        }
+        rmdir(orte_process_info.jobfam_session_dir);
+    } else {
+        if (orte_debug_flag) {
+            if (OPAL_ERR_NOT_FOUND ==
+                    opal_os_dirpath_access(orte_process_info.jobfam_session_dir, 0)) {
+                opal_output(0, "sess_dir_finalize: jobfam session dir does not exist");
+            } else {
+                opal_output(0, "sess_dir_finalize: jobfam session dir not empty - leaving");
+            }
+        }
+    }
+
+    if (NULL != orte_process_info.top_session_dir) {
         if (opal_os_dirpath_is_empty(orte_process_info.top_session_dir)) {
             if (orte_debug_flag) {
                 opal_output(0, "sess_dir_finalize: found top session dir empty - deleting");
@@ -529,8 +540,7 @@ orte_session_dir_finalize(orte_process_name_t *proc)
         }
     }
 
-CLEANUP:
-    return rc;
+    return ORTE_SUCCESS;
 }
 
 static bool

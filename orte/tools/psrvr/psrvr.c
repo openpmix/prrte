@@ -63,6 +63,7 @@
 #include "opal/util/cmd_line.h"
 #include "opal/util/opal_environ.h"
 #include "opal/util/opal_getcwd.h"
+#include "opal/util/os_dirpath.h"
 #include "opal/util/show_help.h"
 #include "opal/util/fd.h"
 
@@ -81,6 +82,7 @@
 
 #include "orte/runtime/runtime.h"
 #include "orte/runtime/orte_globals.h"
+#include "orte/util/session_dir.h"
 #include "orte/util/show_help.h"
 
 #include "orte/orted/orted.h"
@@ -457,7 +459,6 @@ int main(int argc, char *argv[])
         opal_event_loop(orte_event_base, OPAL_EVLOOP_ONCE);
     }
 
-    /* cleanup and leave */
     orte_finalize();
 
     if (orte_debug_flag) {
