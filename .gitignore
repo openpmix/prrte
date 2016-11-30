@@ -112,26 +112,14 @@ contrib/scaling/orte_no_op
 contrib/scaling/mpi_no_op
 contrib/scaling/mpi_barrier
 
-examples/hello_c
-examples/hello_cxx
-examples/hello_mpifh
-examples/hello_usempi
-examples/hello_usempif08
-examples/ring_c
-examples/ring_cxx
-examples/ring_mpifh
-examples/ring_usempi
-examples/ring_usempif08
-examples/connectivity_c
-examples/ring_oshmem
-examples/hello_oshmem
-examples/ring_oshmemfh
-examples/hello_oshmemfh
-examples/oshmem_circular_shift
-examples/oshmem_max_reduction
-examples/oshmem_shmalloc
-examples/oshmem_strided_puts
-examples/oshmem_symmetric_data
+examples/client
+examples/debugger
+examples/dmodex
+examples/dynamic
+examples/fault
+examples/launcher
+examples/pub
+examples/tool
 
 ompi/debuggers/*.in
 ompi/debuggers/dlopen_test

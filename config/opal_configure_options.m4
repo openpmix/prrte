@@ -17,7 +17,7 @@ dnl Copyright (c) 2009      Los Alamos National Security, LLC.  All rights
 dnl                         reserved.
 dnl Copyright (c) 2009-2011 Oak Ridge National Labs.  All rights reserved.
 dnl Copyright (c) 2011-2013 NVIDIA Corporation.  All rights reserved.
-dnl Copyright (c) 2013      Intel, Inc. All rights reserved
+dnl Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2015      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl
@@ -146,7 +146,6 @@ fi
 #
 # Developer debugging
 #
-
 AC_MSG_CHECKING([if want developer-level debugging code])
 AC_ARG_ENABLE(debug,
     AC_HELP_STRING([--enable-debug],
@@ -158,6 +157,7 @@ else
     AC_MSG_RESULT([no])
     WANT_DEBUG=0
 fi
+
 
 
 AC_MSG_CHECKING([if want to developer-level timing framework])
@@ -190,20 +190,9 @@ AC_ARG_ENABLE(debug-symbols,
         [Disable adding compiler flags to enable debugging symbols if --enable-debug is specified.  For non-debugging builds, this flag has no effect.]))
 
 #
-# Do we want to install all of OPAL/ORTE and OMPI's header files?
+# Do we want to install all of OPAL/ORTE and OMPI's header files? Reference server requires them
 #
-
-AC_MSG_CHECKING([if want to install project-internal header files])
-AC_ARG_WITH(devel-headers,
-    AC_HELP_STRING([--with-devel-headers],
-                   [normal MPI users/applications do not need this (mpi.h and mpif.h are ALWAYS installed).  Developer headers are only necessary for MCA module authors (default: disabled).]))
-if test "$with_devel_headers" = "yes"; then
-    AC_MSG_RESULT([yes])
-    WANT_INSTALL_HEADERS=1
-else
-    AC_MSG_RESULT([no])
-    WANT_INSTALL_HEADERS=0
-fi
+WANT_INSTALL_HEADERS=1
 AM_CONDITIONAL(WANT_INSTALL_HEADERS, test "$WANT_INSTALL_HEADERS" = 1)
 
 

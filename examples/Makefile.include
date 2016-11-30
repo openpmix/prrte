@@ -14,6 +14,7 @@
 # Copyright (c) 2007      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.  All rights reserved.
+# Copyright (c) 2016      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -33,25 +34,11 @@
 EXTRA_DIST += \
         examples/README \
         examples/Makefile \
-        examples/hello_c.c \
-        examples/hello_cxx.cc \
-        examples/hello_mpifh.f \
-        examples/hello_usempi.f90 \
-        examples/hello_usempif08.f90 \
-        examples/hello_oshmem_c.c \
-        examples/hello_oshmemfh.f90 \
-        examples/ring_c.c \
-        examples/ring_cxx.cc \
-        examples/ring_mpifh.f \
-        examples/ring_usempi.f90 \
-        examples/ring_usempif08.f90 \
-        examples/ring_oshmem_c.c \
-        examples/ring_oshmemfh.f90 \
-        examples/connectivity_c.c \
-        examples/oshmem_shmalloc.c \
-        examples/oshmem_circular_shift.c \
-        examples/oshmem_max_reduction.c \
-        examples/oshmem_strided_puts.c \
-        examples/oshmem_symmetric_data.c \
-        examples/Hello.java \
-        examples/Ring.java
+        examples/client.c \
+        examples/debugger.c \
+        examples/dmodex.c \
+        examples/dynamic.c \
+        examples/fault.c \
+        examples/launcher.c \
+        examples/pub.c \
+        examples/tool.c
