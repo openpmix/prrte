@@ -39,33 +39,77 @@ int main(int argc, char **argv)
     pmix_info_t *info;
     pmix_app_t *app;
     size_t ninfo, napps;
+    char *tdir, *nspace = NULL, *dspace = NULL;
+    int i;
+    uint64_t u64;
 
-    /* check for user directives - this would include:
-     * - a flag indicating we want to attach to a specified application
-     * - application info if we are launching a new app
+    /* Process any arguments we were given */
+    for (i=1; i < argc; i++) {
+        if (0 == strcmp(argv[i], "-h") ||
+            0 == strcmp(argv[i], "--help")) {
+            /* print the usage message and exit */
+
+        }
+        if (0 == strcmp(argv[i], "-a") ||
+            0 == strcmp(argv[i], "--attach")) {
+            if (NULL != nspace) {
+                /* can only support one */
+                fprintf(stderr, "Cannot attach to more than one nspace\n");
+                exit(1);
+            }
+            /* the next argument must be the nspace */
+            ++i;
+            if (argc == i) {
+                /* they goofed */
+                fprintf(stderr, "The %s option requires an <nspace> argument\n", argv[i]);
+                exit(1);
+            }
+            nspace = strdup(argv[i]);
+        } else {
+            fprintf(stderr, "Unknown option: %s\n", argv[i]);
+            exit(1);
+        }
+    }
+
+    /* we need to provide some info to the PMIx tool library so
+     * it can find the server's contact info. The simplest way
+     * of doing this here is to look for an environmental variable
+     * that tells us where to look. The PMIx reference server only
+     * allows one instantiation of the server per user, so setting
+     * this up is something a user could do in their login script.
+     * The reference server is based on OpenMPI, and so the contact
+     * info will always be found at:
+     *
+     * $TMPDIR/ompi.<nodename>.<numerical-userid>/dvm
      */
 
-    /* init us - if a PMIx server pid was provided, then pass it along */
-    if (0 < server_pid) {
-        ninfo = 1;
-        PMIX_INFO_CREATE(info, ninfo);
-        PMIX_INFO_LOAD(&info[0], PMIX_SERVER_PIDINFO, server_pid, PMIX_UINT32);
-    } else {
-        info = NULL;
-        ninfo = 0;
+    if (NULL == (tdir = getenv("PMIX_SERVER_TMPDIR"))) {
+        fprintf(stderr, "Tool usage requires that the PMIX_SERVER_TMPDIR envar\n");
+        fprintf(stderr, "be set to point at the directory where the PMIx Reference\n");
+        fprintf(stderr, "Server leaves its contact info file.\n");
+        exit(1);
     }
+
+    /* init us - pass along the location of the contact file */
+    ninfo = 1;
+    PMIX_INFO_CREATE(info, ninfo);
+    PMIX_INFO_LOAD(&info[0], PMIX_SERVER_TMPDIR, tdir, PMIX_STRING);
+
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, info, ninfo))) {
         fprintf(stderr, "PMIx_tool_init failed: %d\n", rc);
         exit(rc);
     }
-    if (0 < ninfo) {
-        PMIX_INFO_FREE(info, ninfo);
-    }
+    PMIX_INFO_FREE(info, ninfo);
+
     fprintf(stderr, "Tool ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
 
     /* if we are attaching to a running job, then attach to it */
-    if (attach) {
-        ret = attach_to_running_job(argv[1]);
+    if (NULL != nspace) {
+        if (PMIX_SUCCESS != (rc = attach_to_running_job(nspace))) {
+            fprintf(stderr, "Failed to attach to nspace %s: error code %d\n",
+                    nspace, rc);
+            goto done;
+        }
     } else {
         /* this is an initial launch - we need to launch the application
          * plus the debugger daemons, letting the RM know we are debugging
@@ -73,31 +117,32 @@ int main(int argc, char **argv)
         napps = 2;
         PMIX_APP_CREATE(app, napps);
         /* setup the executable */
-        app[0].cmd = strdup("app");
+        app[0].cmd = strdup("client");
         app[0].argc = 1;
         app[0].argv = (char**)malloc(2*sizeof(char*));
-        app[0].argv[0] = strdup("app");
+        app[0].argv[0] = strdup("client");
         app[0].argv[1] = NULL;
         /* provide directives so the apps do what the user requested */
         ninfo = 2;
         PMIX_INFO_CREATE(app[0].info, ninfo);
-        PMIX_INFO_LOAD(&app[0].info[0], PMIX_NP, 128, PMIX_UINT64);
-        PMIX_INFO_LOAD(&app[0].info[0], PMIX_MAPBY, "slot", PMIX_STRING);
+        u64 = 2;
+        PMIX_INFO_LOAD(&app[0].info[0], PMIX_JOB_SIZE, &u64, PMIX_UINT64);
+        PMIX_INFO_LOAD(&app[0].info[1], PMIX_MAPBY, "slot", PMIX_STRING);
 
         /* setup the name of the daemon executable to launch */
-        app[1].cmd = strdup("debuggerdaemon");
+        app[1].cmd = strdup("debuggerd");
         app[1].argc = 1;
         app[1].argv = (char**)malloc(2*sizeof(char*));
-        app[1].argv[0] = strdup("debuggerdaemon");
+        app[1].argv[0] = strdup("debuggerd");
         app[1].argv[1] = NULL;
         /* provide directives so the daemons go where we want, and
          * let the RM know these are debugger daemons */
         ninfo = 2;
         PMIX_INFO_CREATE(app[1].info, ninfo);
         PMIX_INFO_LOAD(&app[1].info[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
-        PMIX_INFO_LOAD(&app[1].info[1], PMIX_DEBUGGER_DAEMONS, true, PMIX_BOOL); // these are debugger daemons
+        PMIX_INFO_LOAD(&app[1].info[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
         /* spawn the daemons */
-        PMIx_Spawn(NULL, 0, app, napps, dspace);
+        rc = PMIx_Spawn(NULL, 0, app, napps, dspace);
         /* cleanup */
         PMIX_APP_FREE(app, napps);
 
@@ -106,28 +151,48 @@ int main(int argc, char **argv)
 
 
  done:
-    PMIx_tool_finalize(NULL, 0);
+    PMIx_tool_finalize();
 
-    return(ret);
+    return(rc);
+}
+
+static void infocbfunc(pmix_status_t status,
+                       pmix_info_t *info, size_t ninfo,
+                       void *cbdata,
+                       pmix_release_cbfunc_t release_fn,
+                       void *release_cbdata)
+{
+    volatile bool *active = (volatile bool*)cbdata;
+
+
 }
 
 static int attach_to_running_job(char *nspace)
 {
     pmix_status_t rc;
     pmix_proc_t myproc;
-    pmix_info_t *info;
+    pmix_query_t *query;
     pmix_app_t *app;
-    size_t ninfo, napps;
+    size_t nq, napps;
+    volatile bool active;
 
     /* query the active nspaces so we can verify that the
      * specified one exists */
-    ninfo = 1;
-    PMIX_INFO_CREATE(info, ninfo);
-    (void)strncpy(info[0].key, PMIX_QUERY_NAMESPACES, PMIX_MAX_KEYLEN);
-    if (PMIX_SUCCESS != (rc = PMIx_Query_info(info, ninfo))) {
+    nq = 1;
+    PMIX_QUERY_CREATE(query, nq);
+    query[0].keys = (char**)malloc(2 * sizeof(char*));
+    query[0].keys[0] = strdup(PMIX_QUERY_NAMESPACES);
+    query[0].keys[1] = NULL;
+
+    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, infocbfunc, (void*)&active))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Query_info failed: %d\n", myproc.nspace, myproc.rank, rc);
         return -1;
     }
+    /* wait for a response */
+    while (active) {
+        sleep(1);
+    }
+
     /* the query should have returned a comma-delimited list of nspaces */
     if (PMIX_STRING != info[0].type) {
         fprintf(stderr, "Query returned incorrect data type: %d\n", info[0].type);
@@ -147,10 +212,12 @@ static int attach_to_running_job(char *nspace)
     PMIX_INFO_CREATE(info, ninfo);
     (void)strncpy(info[0].key, PMIX_QUERY_PROC_TABLE, PMIX_MAX_KEYLEN);
     (void)strncpy(info[0].qualifier, nspace, PMIX_MAX_KEYLEN);
-    if (PMIX_SUCCESS != (rc = PMIx_Query_info(info, ninfo))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Query_info failed: %d\n", myproc.nspace, myproc.rank, rc);
+    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(info, ninfo, infocbfunc, (void*)&active))) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Query_info_nb failed: %d\n", myproc.nspace, myproc.rank, rc);
         return -1;
     }
+    /* wait to get a response */
+
     /* the query should have returned a data_array */
     if (PMIX_DATA_ARRAY != info[0].type) {
         fprintf(stderr, "Query returned incorrect data type: %d\n", info[0].type);

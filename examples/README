@@ -1,43 +1,32 @@
-Copyright (c) 2004-2006 The Trustees of Indiana University and Indiana
-                        University Research and Technology
-                        Corporation.  All rights reserved.
-Copyright (c) 2006-2012 Cisco Systems, Inc.  All rights reserved.
-Copyright (c) 2007-2009 Sun Microsystems, Inc.  All rights reserved.
-Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
-Copyright (c) 2013      Mellanox Technologies, Inc.  All rights reserved.
-
 # Copyright (c) 2016      Intel, Inc.  All rights reserved.
-$COPYRIGHT$
+# $COPYRIGHT$
 
 The files in this directory are sample PMIx applications provided both
 as a trivial primer to PMIx as well as simple tests to ensure that your
-PMIx Reference Server installation is working properly.
+PMIx Reference Server (PSVR) installation is working properly:
+
+client.c:
+A simple PMIx client that attaches to the server and performs a few
+simple PMIx_Get calls following a blocking fence operation that returns
+all collected data from calls to PMIx_Put.
+
+debugger.c:
+Mimics a debugger tool. Contacts the PSVR to obtain
+nspace information and displays it. Takes user input as to the application
+to be "debugged", and then instructs PSVR to launch the companion
+"debuggerd" daemons on the nodes where the application is running. The
+daemons then connect to the local PSVR daemon and issue a "breakpoint"
+notification so the application knows the debugger has attached and is
+released from its barrier. The debugger then cleans up and quits.
+
+dmodex.c:
+A simple PMIx client that attaches to the server and performs a few
+simple PMIx_Get calls following a blocking fence operation that has
+been directed _not_ to return any collected data from calls to PMIx_Put.
+
+dynamic.c:
 
 
-There are two MPI examples in this directory, each using one of six
-different MPI interfaces:
-
-- Hello world
-  C:                   hello_c.c
-  C++:                 hello_cxx.cc
-  Fortran mpif.h:      hello_mpifh.f
-  Fortran use mpi:     hello_usempi.f90
-  Fortran use mpi_f08: hello_usempif08.f90
-  Java:                Hello.java
-  C shmem.h:           hello_oshmem_c.c
-  Fortran shmem.fh:    hello_oshmemfh.f90
-
-- Send a trivial message around in a ring
-  C:                   ring_c.c
-  C++:                 ring_cxx.cc
-  Fortran mpif.h:      ring_mpifh.f
-  Fortran use mpi:     ring_usempi.f90
-  Fortran use mpi_f08: ring_usempif08.f90
-  Java:                Ring.java
-  C shmem.h:           ring_oshmem_c.c
-  Fortran shmem.fh:    ring_oshmemfh.f90
-
-The Makefile assumes that the wrapper compilers mpicc, mpic++, and
-mpifort are in your path.
+The Makefile assumes that the pcc wrapper compiler is in your path.
 
 Make today a PMIx day!
