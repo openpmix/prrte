@@ -19,7 +19,7 @@
  * Copyright (c) 2013-2015 NVIDIA Corporation.  All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -512,7 +512,7 @@ int btl_openib_register_mca_params(void)
     CHECK(reg_int("memory_registration_verbose", NULL,
                   "Output some verbose memory registration information "
                   "(0 = no output, nonzero = output)", 0,
-		  &mca_btl_openib_component.memory_registration_verbose_level, 0));
+                  &mca_btl_openib_component.memory_registration_verbose_level, 0));
 
     CHECK(reg_int("ignore_locality", NULL,
                   "Ignore any locality information and use all devices "
@@ -539,7 +539,7 @@ int btl_openib_register_mca_params(void)
     mca_btl_openib_module.super.btl_rdma_pipeline_frag_size = 1024 * 1024;
     mca_btl_openib_module.super.btl_min_rdma_pipeline_size = 256 * 1024;
     mca_btl_openib_module.super.btl_flags = MCA_BTL_FLAGS_RDMA |
-	MCA_BTL_FLAGS_NEED_ACK | MCA_BTL_FLAGS_NEED_CSUM | MCA_BTL_FLAGS_HETEROGENEOUS_RDMA |
+        MCA_BTL_FLAGS_NEED_ACK | MCA_BTL_FLAGS_NEED_CSUM | MCA_BTL_FLAGS_HETEROGENEOUS_RDMA |
         MCA_BTL_FLAGS_SEND;
 #if HAVE_DECL_IBV_ATOMIC_HCA
     mca_btl_openib_module.super.btl_flags |= MCA_BTL_FLAGS_ATOMIC_FOPS;
@@ -640,6 +640,9 @@ int btl_openib_register_mca_params(void)
     if (NULL == default_qps) {
         /* Don't try to recover from this */
         return OPAL_ERR_OUT_OF_RESOURCE;
+    }
+    if (NULL != mca_btl_openib_component.default_recv_qps) {
+        free(mca_btl_openib_component.default_recv_qps);
     }
     mca_btl_openib_component.default_recv_qps = default_qps;
     CHECK(reg_string("receive_queues", NULL,

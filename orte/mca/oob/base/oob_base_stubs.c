@@ -120,8 +120,11 @@ void orte_oob_base_send_nb(int fd, short args, void *cbdata)
                  * this is a local proc we just haven't heard from
                  * yet due to a race condition. Check that situation */
                 if (ORTE_PROC_IS_DAEMON || ORTE_PROC_IS_HNP) {
-                    ORTE_OOB_SEND(msg);
-                    return;
+                    ++msg->retries;
+                    if (msg->retries < orte_rml_base.max_retries) {
+                        ORTE_OOB_SEND(msg);
+                        return;
+                    }
                 }
                 msg->status = ORTE_ERR_ADDRESSEE_UNKNOWN;
                 ORTE_RML_SEND_COMPLETE(msg);

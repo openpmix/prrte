@@ -24,6 +24,7 @@
 #include "opal/mca/base/mca_base_component_repository.h"
 #include "opal/util/output.h"
 
+#include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/state/state.h"
 #include "orte/runtime/orte_wait.h"
@@ -63,6 +64,14 @@ static bool selected = false;
 
 static int orte_rml_base_register(mca_base_register_flag_t flags)
 {
+    orte_rml_base.max_retries = 3;
+    mca_base_var_register("orte", "rml", "base", "max_retries",
+                           "Max #times to retry sending a message",
+                           MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                           OPAL_INFO_LVL_9,
+                           MCA_BASE_VAR_SCOPE_READONLY,
+                           &orte_rml_base.max_retries);
+
 #if OPAL_ENABLE_TIMING
     orte_rml_base.timing = false;
     (void) mca_base_var_register ("orte", "rml", "base", "timing",
@@ -217,6 +226,11 @@ void orte_rml_send_callback(int status, orte_process_name_t *peer,
 {
     OBJ_RELEASE(buffer);
     if (ORTE_SUCCESS != status) {
+        opal_output_verbose(2, orte_rml_base_framework.framework_output,
+                            "%s UNABLE TO SEND MESSAGE TO %s TAG %d: %s",
+                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                            ORTE_NAME_PRINT(peer), tag,
+                            ORTE_ERROR_NAME(status));
         ORTE_ACTIVATE_PROC_STATE(peer, ORTE_PROC_STATE_UNABLE_TO_SEND_MSG);
     }
 }
@@ -240,6 +254,7 @@ void orte_rml_recv_callback(int status, orte_process_name_t* sender,
 /***   RML CLASS INSTANCES   ***/
 static void send_cons(orte_rml_send_t *ptr)
 {
+    ptr->retries = 0;
     ptr->cbdata = NULL;
     ptr->iov = NULL;
     ptr->buffer = NULL;

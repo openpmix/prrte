@@ -12,7 +12,7 @@
  * Copyright (c) 2008-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2015 Intel, Inc. All rights reserved
+ * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -85,6 +85,8 @@ opal_finalize_util(void)
     opal_util_keyval_parse_finalize();
 
     (void) mca_base_framework_close(&opal_installdirs_base_framework);
+
+    mca_base_close();
 
     /* finalize the memory allocator */
     opal_malloc_finalize();
