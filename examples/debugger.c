@@ -36,10 +36,11 @@ int main(int argc, char **argv)
 {
     pmix_status_t rc;
     pmix_proc_t myproc;
-    pmix_info_t *info;
+    pmix_info_t *info, *dinfo;
     pmix_app_t *app, *debugger;
-    size_t ninfo, napps;
-    char *tdir, *nspace = NULL, *dspace = NULL;
+    size_t ninfo, napps, dninfo;
+    char *tdir, *nspace = NULL;
+    char appspace[PMIX_MAX_NSLEN+1], dspace[PMIX_MAX_NSLEN+1];
     int i;
 
     /* Process any arguments we were given */
@@ -126,10 +127,10 @@ int main(int argc, char **argv)
         ninfo = 2;
         PMIX_INFO_CREATE(info, ninfo);
         PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
-        PMIX_INFO_LOAD(&info[1], PMIX_UNDER_DEBUGGER, NULL, PMIX_BOOL);  // job is to pause for debugger attach
+        PMIX_INFO_LOAD(&info[1], PMIX_SPAWN_UNDER_DEBUGGER, NULL, PMIX_BOOL);  // job is to pause for debugger attach
         /* spawn the job - the function will return when the app
          * has been launched */
-        if (PMIX_SUCCESS != (rc = PMIx_Spawn(info, ninfo, app, napps, dspace))) {
+        if (PMIX_SUCCESS != (rc = PMIx_Spawn(info, ninfo, app, napps, appspace))) {
             fprintf(stderr, "Application failed to launch with error: %s\n", PMIx_Error_string(rc));
             goto done;
         }
@@ -143,13 +144,13 @@ int main(int argc, char **argv)
         debugger[0].argv[1] = NULL;
         /* provide directives so the daemons go where we want, and
          * let the RM know these are debugger daemons */
-        ninfo = 3;
-        PMIX_INFO_CREATE(debugger[0].info, ninfo);
-        PMIX_INFO_LOAD(&debugger[0].info[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
-        PMIX_INFO_LOAD(&debugger[0].info[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
-        PMIX_INFO_LOAD(&debugger[0].info[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // the nspace being debugged so the RM will provide us with its job-level info
+        dninfo = 3;
+        PMIX_INFO_CREATE(dinfo, dninfo);
+        PMIX_INFO_LOAD(&dinfo[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
+        PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
+        PMIX_INFO_LOAD(&dinfo[2], PMIX_JOB_BEING_DEBUGGED, appspace, PMIX_STRING); // the nspace being debugged so the RM will provide us with its job-level info
         /* spawn the daemons */
-        rc = PMIx_Spawn(info, ninfo, app, napps, dspace);
+        rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace);
         /* the app and debugger daemons have been launched when the spawn
          * command returns - dspace contains the nspace of the application.
          * Note that we don't have a way of returning the nspace of the
@@ -158,6 +159,8 @@ int main(int argc, char **argv)
         /* cleanup */
         PMIX_INFO_FREE(info, ninfo);
         PMIX_APP_FREE(app, napps);
+        PMIX_INFO_FREE(dinfo, dninfo);
+        PMIX_APP_FREE(debugger, 1);
 
         /* this is where a debugger tool would wait until the debug operation is complete */
     }
