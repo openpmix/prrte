@@ -314,6 +314,9 @@ int pmix_server_spawn_fn(opal_process_name_t *requestor,
     orte_set_attribute(&jdata->attributes, ORTE_JOB_LAUNCH_PROXY, ORTE_ATTR_GLOBAL,
                        requestor, OPAL_NAME);
 
+    opal_output(0, "SPAWNING");
+    opal_dss.dump(0, jdata, ORTE_JOB);
+
     /* setup a spawn tracker so we know who to call back when this is done
      * and thread-shift the entire thing so it can be safely added to
      * our tracking list */

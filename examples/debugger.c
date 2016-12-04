@@ -37,11 +37,10 @@ int main(int argc, char **argv)
     pmix_status_t rc;
     pmix_proc_t myproc;
     pmix_info_t *info;
-    pmix_app_t *app;
+    pmix_app_t *app, *debugger;
     size_t ninfo, napps;
     char *tdir, *nspace = NULL, *dspace = NULL;
     int i;
-    uint64_t u64;
 
     /* Process any arguments we were given */
     for (i=1; i < argc; i++) {
@@ -114,7 +113,7 @@ int main(int argc, char **argv)
         /* this is an initial launch - we need to launch the application
          * plus the debugger daemons, letting the RM know we are debugging
          * so that it will "pause" the app procs until we are ready */
-        napps = 2;
+        napps = 1;
         PMIX_APP_CREATE(app, napps);
         /* setup the executable */
         app[0].cmd = strdup("client");
@@ -122,39 +121,60 @@ int main(int argc, char **argv)
         app[0].argv = (char**)malloc(2*sizeof(char*));
         app[0].argv[0] = strdup("client");
         app[0].argv[1] = NULL;
-        /* provide directives so the apps do what the user requested */
+        app[0].maxprocs = 2;
+        /* provide job-level directives so the apps do what the user requested */
         ninfo = 2;
-        PMIX_INFO_CREATE(app[0].info, ninfo);
-        u64 = 2;
-        PMIX_INFO_LOAD(&app[0].info[0], PMIX_JOB_SIZE, &u64, PMIX_UINT64);
-        PMIX_INFO_LOAD(&app[0].info[1], PMIX_MAPBY, "slot", PMIX_STRING);
+        PMIX_INFO_CREATE(info, ninfo);
+        PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
+        PMIX_INFO_LOAD(&info[1], PMIX_UNDER_DEBUGGER, NULL, PMIX_BOOL);  // job is to pause for debugger attach
+        /* spawn the job - the function will return when the app
+         * has been launched */
+        if (PMIX_SUCCESS != (rc = PMIx_Spawn(info, ninfo, app, napps, dspace))) {
+            fprintf(stderr, "Application failed to launch with error: %s\n", PMIx_Error_string(rc));
+            goto done;
+        }
 
-        /* setup the name of the daemon executable to launch */
-        app[1].cmd = strdup("debuggerd");
-        app[1].argc = 1;
-        app[1].argv = (char**)malloc(2*sizeof(char*));
-        app[1].argv[0] = strdup("debuggerd");
-        app[1].argv[1] = NULL;
+        /* setup the debugger */
+        PMIX_APP_CREATE(debugger, 1);
+        debugger[0].cmd = strdup("debuggerd");
+        debugger[0].argc = 1;
+        debugger[0].argv = (char**)malloc(2*sizeof(char*));
+        debugger[0].argv[0] = strdup("debuggerd");
+        debugger[0].argv[1] = NULL;
         /* provide directives so the daemons go where we want, and
          * let the RM know these are debugger daemons */
-        ninfo = 2;
-        PMIX_INFO_CREATE(app[1].info, ninfo);
-        PMIX_INFO_LOAD(&app[1].info[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
-        PMIX_INFO_LOAD(&app[1].info[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
+        ninfo = 3;
+        PMIX_INFO_CREATE(debugger[0].info, ninfo);
+        PMIX_INFO_LOAD(&debugger[0].info[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
+        PMIX_INFO_LOAD(&debugger[0].info[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
+        PMIX_INFO_LOAD(&debugger[0].info[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // the nspace being debugged so the RM will provide us with its job-level info
         /* spawn the daemons */
-        rc = PMIx_Spawn(NULL, 0, app, napps, dspace);
+        rc = PMIx_Spawn(info, ninfo, app, napps, dspace);
+        /* the app and debugger daemons have been launched when the spawn
+         * command returns - dspace contains the nspace of the application.
+         * Note that we don't have a way of returning the nspace of the
+         * debugger "job" itself */
+
         /* cleanup */
+        PMIX_INFO_FREE(info, ninfo);
         PMIX_APP_FREE(app, napps);
 
         /* this is where a debugger tool would wait until the debug operation is complete */
     }
 
-
- done:
+  done:
     PMIx_tool_finalize();
 
     return(rc);
 }
+
+typedef struct {
+    volatile bool active;
+    pmix_status_t status;
+    pmix_info_t *info;
+    size_t ninfo;
+} mydbug_query_t;
+
 
 static void infocbfunc(pmix_status_t status,
                        pmix_info_t *info, size_t ninfo,
@@ -162,9 +182,22 @@ static void infocbfunc(pmix_status_t status,
                        pmix_release_cbfunc_t release_fn,
                        void *release_cbdata)
 {
-    volatile bool *active = (volatile bool*)cbdata;
+    mydbug_query_t *q = (mydbug_query_t*)cbdata;
+    size_t n;
 
-
+    q->status = status;
+    q->info = NULL;
+    q->ninfo = ninfo;
+    if (0 < ninfo) {
+        PMIX_INFO_CREATE(q->info, q->ninfo);
+        for (n=0; n < ninfo; n++) {
+            PMIX_INFO_XFER(&q->info[n], &info[n]);
+        }
+    }
+    if (NULL != release_fn) {
+        release_fn(release_cbdata);
+    }
+    q->active = false;
 }
 
 static int attach_to_running_job(char *nspace)
@@ -174,7 +207,7 @@ static int attach_to_running_job(char *nspace)
     pmix_query_t *query;
     pmix_app_t *app;
     size_t nq, napps;
-    volatile bool active;
+    mydbug_query_t *q;
 
     /* query the active nspaces so we can verify that the
      * specified one exists */
@@ -184,24 +217,36 @@ static int attach_to_running_job(char *nspace)
     query[0].keys[0] = strdup(PMIX_QUERY_NAMESPACES);
     query[0].keys[1] = NULL;
 
-    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, infocbfunc, (void*)&active))) {
+    q = (mydbug_query_t*)malloc(sizeof(mydbug_query_t));
+    q->active = true;
+
+    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, infocbfunc, (void*)q))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Query_info failed: %d\n", myproc.nspace, myproc.rank, rc);
         return -1;
     }
     /* wait for a response */
-    while (active) {
+    while (q->active) {
         sleep(1);
     }
 
-    /* the query should have returned a comma-delimited list of nspaces */
-    if (PMIX_STRING != info[0].type) {
-        fprintf(stderr, "Query returned incorrect data type: %d\n", info[0].type);
+    if (NULL == q->info) {
+        fprintf(stderr, "Query returned no info\n");
         return -1;
     }
-    if (NULL == info[0].data.string) {
+    /* the query should have returned a comma-delimited list of nspaces */
+    if (PMIX_STRING != q->info[0].value.type) {
+        fprintf(stderr, "Query returned incorrect data type: %d\n", q->info[0].value.type);
+        return -1;
+    }
+    if (NULL == q->info[0].value.data.string) {
         fprintf(stderr, "Query returned no active nspaces\n");
         return -1;
     }
+
+    fprintf(stderr, "Query returned %s\n", q->info[0].value.data.string);
+    return 0;
+
+#if 0
     /* split the returned string and look for the given nspace */
 
     /* if not found, then we have an error */
@@ -269,4 +314,5 @@ static int attach_to_running_job(char *nspace)
     /* this is where a debugger tool would wait until the debug operation is complete */
 
     return 0;
+#endif
 }
