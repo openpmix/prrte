@@ -35,7 +35,7 @@ static int attach_to_running_job(char *nspace);
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
-    pmix_proc_t myproc;
+    pmix_proc_t myproc, target;
     pmix_info_t *info, *dinfo;
     pmix_app_t *app, *debugger;
     size_t ninfo, napps, dninfo;
@@ -127,7 +127,7 @@ int main(int argc, char **argv)
         ninfo = 2;
         PMIX_INFO_CREATE(info, ninfo);
         PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
-        PMIX_INFO_LOAD(&info[1], PMIX_SPAWN_UNDER_DEBUGGER, NULL, PMIX_BOOL);  // job is to pause for debugger attach
+        PMIX_INFO_LOAD(&info[1], PMIX_DEBUG_STOP_AT_INIT, NULL, PMIX_BOOL);  // job is to pause for debugger attach
         /* spawn the job - the function will return when the app
          * has been launched */
         if (PMIX_SUCCESS != (rc = PMIx_Spawn(info, ninfo, app, napps, appspace))) {
@@ -148,13 +148,9 @@ int main(int argc, char **argv)
         PMIX_INFO_CREATE(dinfo, dninfo);
         PMIX_INFO_LOAD(&dinfo[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
         PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
-        PMIX_INFO_LOAD(&dinfo[2], PMIX_JOB_BEING_DEBUGGED, appspace, PMIX_STRING); // the nspace being debugged so the RM will provide us with its job-level info
+        PMIX_INFO_LOAD(&dinfo[2], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged so the RM will provide us with its job-level info
         /* spawn the daemons */
         rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace);
-        /* the app and debugger daemons have been launched when the spawn
-         * command returns - dspace contains the nspace of the application.
-         * Note that we don't have a way of returning the nspace of the
-         * debugger "job" itself */
 
         /* cleanup */
         PMIX_INFO_FREE(info, ninfo);
@@ -162,7 +158,20 @@ int main(int argc, char **argv)
         PMIX_INFO_FREE(dinfo, dninfo);
         PMIX_APP_FREE(debugger, 1);
 
+        /* now that we know everything has been launched, we have to "release"
+         * the procs being debugged from their "paused" state - i.e., it's the
+         * equivalent to setting the MPIR breakpoint. We do this with the event
+         * notification system */
+        (void)strncpy(target.nspace, appspace, PMIX_MAX_NSLEN);
+        target.rank = PMIX_RANK_WILDCARD;
+        PMIx_Notify_event(PMIX_ERR_DEBUGGER_RELEASE,
+                          &target, PMIX_RANGE_SESSION,
+                          NULL, 0, NULL, NULL);
+
         /* this is where a debugger tool would wait until the debug operation is complete */
+        while (1) {
+            sleep(1);
+        }
     }
 
   done:
