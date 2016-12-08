@@ -30,7 +30,45 @@
 
 #include <pmix_tool.h>
 
+
+/* define a structure for collecting returned
+ * info from a query */
+typedef struct {
+    volatile bool active;
+    pmix_info_t *info;
+    size_t ninfo;
+} myquery_data_t;
+
 static int attach_to_running_job(char *nspace);
+
+static void cbfunc(pmix_status_t status,
+                   pmix_info_t *info, size_t ninfo,
+                   void *cbdata,
+                   pmix_release_cbfunc_t release_fn,
+                   void *release_cbdata)
+{
+    myquery_data_t *mq = (myquery_data_t*)cbdata;
+    size_t n;
+
+    /* save the returned info - it will be
+     * released in the release_fn */
+    if (0 < ninfo) {
+        PMIX_INFO_CREATE(mq->info, ninfo);
+        mq->ninfo = ninfo;
+        for (n=0; n < ninfo; n++) {
+            fprintf(stderr, "Transferring %s\n", info[n].key);
+            PMIX_INFO_XFER(&mq->info[n], &info[n]);
+        }
+    }
+
+    /* let the library release the data */
+    if (NULL != release_fn) {
+        release_fn(release_cbdata);
+    }
+
+    /* release the block */
+    mq->active = false;
+}
 
 int main(int argc, char **argv)
 {
@@ -42,6 +80,9 @@ int main(int argc, char **argv)
     char *tdir, *nspace = NULL;
     char appspace[PMIX_MAX_NSLEN+1], dspace[PMIX_MAX_NSLEN+1];
     int i;
+    pmix_query_t *query;
+    size_t nq, n;
+    myquery_data_t myquery_data;
 
     /* Process any arguments we were given */
     for (i=1; i < argc; i++) {
@@ -113,7 +154,48 @@ int main(int argc, char **argv)
     } else {
         /* this is an initial launch - we need to launch the application
          * plus the debugger daemons, letting the RM know we are debugging
-         * so that it will "pause" the app procs until we are ready */
+         * so that it will "pause" the app procs until we are ready. First
+         * we need to know if this RM supports co-spawning of daemons with
+         * the application, or if we need to launch them as a separate
+         * spawn command. The former is faster and more scalable, but not
+         * every RM may support it. We also need to ask for debug support
+         * so we know if the RM can stop-on-exec, or only supports stop-in-init */
+        nq = 1;
+        PMIX_QUERY_CREATE(query, nq);
+        query[0].keys = (char**)malloc(3 * sizeof(char*));
+        query[0].keys[0] = strdup(PMIX_QUERY_SPAWN_SUPPORT);
+        query[0].keys[1] = strdup(PMIX_QUERY_DEBUG_SUPPORT);
+        query[0].keys[2] = NULL;
+        /* setup the caddy to retrieve the data */
+        myquery_data.info = NULL;
+        myquery_data.ninfo = 0;
+        myquery_data.active = true;
+        /* execute the query */
+        if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void*)&myquery_data))) {
+            fprintf(stderr, "PMIx_Query_info failed: %d\n", rc);
+            goto done;
+        }
+        while (myquery_data.active) {
+            usleep(10);
+        }
+
+        /* we should have received back two info structs, one containing
+         * a comma-delimited list of PMIx spawn attributes the RM supports,
+         * and the other containing a comma-delimited list of PMIx debugger
+         * attributes it supports */
+        if (2 != myquery_data.ninfo) {
+            /* this is an error */
+            fprintf(stderr, "PMIx Query returned an incorrect number of results: %lu\n", myquery_data.ninfo);
+            PMIX_INFO_FREE(myquery_data.info, myquery_data.ninfo);
+            goto done;
+        }
+
+        fprintf(stderr, "RETURNED %lu KEYS\n", myquery_data.ninfo);
+        for (n=0; n < myquery_data.ninfo; n++) {
+            fprintf(stderr, "\tKEY %s DATA %s\n", myquery_data.info[n].key, myquery_data.info[n].value.data.string);
+        }
+        goto done;
+
         napps = 1;
         PMIX_APP_CREATE(app, napps);
         /* setup the executable */
@@ -127,7 +209,7 @@ int main(int argc, char **argv)
         ninfo = 2;
         PMIX_INFO_CREATE(info, ninfo);
         PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
-        PMIX_INFO_LOAD(&info[1], PMIX_DEBUG_STOP_AT_INIT, NULL, PMIX_BOOL);  // job is to pause for debugger attach
+        PMIX_INFO_LOAD(&info[1], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // job is to pause for debugger attach
         /* spawn the job - the function will return when the app
          * has been launched */
         if (PMIX_SUCCESS != (rc = PMIx_Spawn(info, ninfo, app, napps, appspace))) {

@@ -278,6 +278,7 @@ typedef uint32_t pmix_rank_t;
                                                                      //     procs in job on same node
 #define PMIX_QUERY_AUTHORIZATIONS           "pmix.qry.auths"         // return operations tool is authorized to perform
 #define PMIX_QUERY_SPAWN_SUPPORT            "pmix.qry.spawn"         // return a comma-delimited list of supported spawn attributes
+#define PMIX_QUERY_DEBUG_SUPPORT            "pmix.qry.debug"         // return a comma-delimited list of supported debug attributes
 
 /* log attributes */
 #define PMIX_LOG_STDERR                     "pmix.log.stderr"        // (bool) log data to stderr
@@ -286,7 +287,7 @@ typedef uint32_t pmix_rank_t;
                                                                      //        modified by directive
 /* debugger attributes */
 #define PMIX_DEBUG_STOP_ON_EXEC             "pmix.dbg.exec"          // (bool) job is being spawned under debugger - instruct it to pause on start
-#define PMIX_DEBUG_STOP_AT_INIT             "pmix.dbg.init"          // (bool) instruct job to stop during init (e.g., MPI_Init) - must
+#define PMIX_DEBUG_STOP_IN_INIT             "pmix.dbg.init"          // (bool) instruct job to stop during init (e.g., MPI_Init) - must
                                                                      //     occur after PMIx init completes
 #define PMIX_DEBUG_JOB                      "pmix.dbg.job"           // (char*) nspace of the job to be debugged - the RM/PMIx server are
 
