@@ -269,6 +269,9 @@ int main(int argc, char *argv[])
         exit(0);
     }
 
+    /* inform ORTE that we renamed orted to be psrvd */
+    opal_setenv("PMIX_MCA_orte_launch_agent", "psrvd", true, &environ);
+
     /* Setup MCA params */
     orte_register_params();
 

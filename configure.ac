@@ -1143,7 +1143,7 @@ AC_SUBST(opaldatadir)
 AC_SUBST(opallibdir)
 AC_SUBST(opalincludedir)
 
-OPAL_SET_MCA_PREFIX([PMCA_])
+OPAL_SET_MCA_PREFIX([PMIX_MCA_])
 OPAL_SET_MCA_CMD_LINE_ID([pmca])
 
 ortedatadir="$opaldatadir"
