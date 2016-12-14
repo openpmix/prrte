@@ -95,12 +95,11 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     cache = NULL;
     if (orte_get_attribute(&jdata->attributes, ORTE_JOB_INFO_CACHE, (void**)&cache, OPAL_PTR) &&
         NULL != cache) {
-        opal_output(0, "GOT CACHE");
         while (NULL != (kv = (opal_value_t*)opal_list_remove_first(cache))) {
-            opal_output(0, "ADDING %s TO JOB INFO", kv->key);
             opal_list_append(info, &kv->super);
         }
         orte_remove_attribute(&jdata->attributes, ORTE_JOB_INFO_CACHE);
+        OBJ_RELEASE(cache);
     }
 
     /* assemble the node and proc map info */

@@ -256,11 +256,9 @@ int pmix_server_spawn_fn(opal_process_name_t *requestor,
             opal_list_remove_item(job_info, &info->super);
             if (orte_get_attribute(&jdata->attributes, ORTE_JOB_INFO_CACHE, (void**)&cache, OPAL_PTR) &&
                 NULL != cache) {
-                opal_output(0, "ADDING TO CACHE %s", info->key);
                 opal_list_append(cache, &info->super);
             } else {
                 cache = OBJ_NEW(opal_list_t);
-                opal_output(0, "CACHING %s", info->key);
                 opal_list_append(cache, &info->super);
                 orte_set_attribute(&jdata->attributes, ORTE_JOB_INFO_CACHE, ORTE_ATTR_LOCAL, (void*)cache, OPAL_PTR);
             }

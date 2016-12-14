@@ -518,6 +518,7 @@ static void _query(int sd, short args, void *cbdata)
             }
         }
     }
+
     if (0 == opal_list_get_size(results)) {
         rc = ORTE_ERR_NOT_FOUND;
     } else if (opal_list_get_size(results) < opal_list_get_size(cd->info)) {

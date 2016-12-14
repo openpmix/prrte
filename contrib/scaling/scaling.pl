@@ -25,8 +25,8 @@ my @csvrow;
 my @tests = qw(/bin/true ./orte_no_op ./mpi_no_op ./mpi_no_op ./mpi_no_op);
 my @options = ("", "", "", "-mca mpi_add_procs_cutoff 0 -mca pmix_base_async_modex 1", "-mca mpi_add_procs_cutoff 0 -mca pmix_base_async_modex 1 -mca async_mpi_init 1 -mca async_mpi_finalize 1");
 my @starters = qw(mpirun orterun srun aprun);
-my @starteroptions = ("--map-by node --novm",
-                      "--hnp file:dvm_uri --map-by node",
+my @starteroptions = ("--pernode --novm",
+                      "--hnp file:dvm_uri --pernode",
                       "--distribution=cyclic",
                       "-N 1");
 
@@ -54,8 +54,7 @@ GetOptions(
 ) or die "unable to parse options, stopped";
 
 if ($HELP) {
-    print <<EOT;
-$0 [options]
+    print "$0 [options]
 
 --help | -h          This help message
 --quiet | -q         Only output critical messages to stdout
@@ -69,7 +68,7 @@ $0 [options]
 --all                Use all available start commands [default]
 --results=file       File where results are to stored in comma-separated value format
 --rawout             Provide raw timing output to the file
-EOT
+";
     exit(0);
 }
 
