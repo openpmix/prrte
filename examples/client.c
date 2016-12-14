@@ -83,7 +83,7 @@ static void evhandler_reg_callbk(pmix_status_t status,
                                  size_t evhandler_ref,
                                  void *cbdata)
 {
-    volatile bool *active = (volatile bool*)cbdata;
+    volatile int *active = (volatile int*)cbdata;
 
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
@@ -126,6 +126,7 @@ int main(int argc, char **argv)
         sleep(1);
     }
     if (0 != active) {
+        fprintf(stderr, "[%s:%d] Default handler registration failed\n", myproc.nspace, myproc.rank);
         exit(active);
     }
 
@@ -152,6 +153,7 @@ int main(int argc, char **argv)
             sleep(1);
         }
         if (0 != active) {
+            fprintf(stderr, "[%s:%d] Debug handler registration failed\n", myproc.nspace, myproc.rank);
             exit(active);
         }
         /* wait for debugger release */
