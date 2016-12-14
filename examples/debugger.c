@@ -367,7 +367,7 @@ int main(int argc, char **argv)
             PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
             PMIX_INFO_LOAD(&dinfo[2], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
             PMIX_INFO_LOAD(&dinfo[3], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
-            PMIX_INFO_LOAD(&dinfo[4], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting in PMIx_Init
+            PMIX_INFO_LOAD(&dinfo[4], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
             /* spawn the daemons */
             fprintf(stderr, "Debugger: spawning %s\n", debugger[0].cmd);
             if (PMIX_SUCCESS != (rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace))) {

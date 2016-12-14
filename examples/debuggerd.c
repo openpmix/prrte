@@ -203,14 +203,16 @@ int main(int argc, char **argv)
     ninfo = 1;
     PMIX_INFO_CREATE(info, ninfo);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);  // deliver to the target nspace
+    fprintf(stderr, "[%s:%u] Sending release\n", myproc.nspace, myproc.rank);
     PMIx_Notify_event(PMIX_ERR_DEBUGGER_RELEASE,
                       NULL, PMIX_RANGE_LOCAL,
                       info, ninfo, NULL, NULL);
 
     /* do some debugger magic */
     n = 0;
+    fprintf(stderr, "[%s:%u] Hanging around awhile, doing debugger magic\n", myproc.nspace, myproc.rank);
     while (n < 5) {
-        sleep(1);
+        usleep(10);
         ++n;
     }
 

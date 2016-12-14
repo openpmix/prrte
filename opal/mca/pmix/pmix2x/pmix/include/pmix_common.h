@@ -291,6 +291,7 @@ typedef uint32_t pmix_rank_t;
 #define PMIX_DEBUG_STOP_IN_INIT             "pmix.dbg.init"          // (bool) instruct job to stop during PMIx init
 #define PMIX_DEBUG_WAIT_FOR_NOTIFY          "pmix.dbg.notify"        // (bool) block at desired point until receiving debugger release notification
 #define PMIX_DEBUG_JOB                      "pmix.dbg.job"           // (char*) nspace of the job to be debugged - the RM/PMIx server are
+#define PMIX_DEBUG_WAITING_FOR_NOTIFY       "pmix.dbg.waiting"       // (bool) job to be debugged is waiting for a release
 
 /****    PROCESS STATE DEFINITIONS    ****/
 typedef uint8_t pmix_proc_state_t;

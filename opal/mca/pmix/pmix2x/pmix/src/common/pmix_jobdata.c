@@ -187,7 +187,6 @@ static inline pmix_status_t _job_data_store(const char *nspace, void *cbdata)
     kptr = PMIX_NEW(pmix_kval_t);
     while (PMIX_SUCCESS == (rc = pmix_bfrop.unpack(job_data, kptr, &cnt, PMIX_KVAL)))
     {
-        pmix_output(0, "JOB KEY %s", kptr->key);
         if (0 == strcmp(kptr->key, PMIX_PROC_BLOB)) {
             bo = &(kptr->value->data.bo);
             PMIX_CONSTRUCT(&buf2, pmix_buffer_t);
