@@ -44,6 +44,18 @@ typedef struct {
 static volatile bool waiting_for_debugger = true;
 static pmix_proc_t myproc;
 
+/* this is a callback function for the PMIx_Query
+ * API. The query will callback with a status indicating
+ * if the request could be fully satisfied, partially
+ * satisfied, or completely failed. The info parameter
+ * contains an array of the returned data, with the
+ * info->key field being the key that was provided in
+ * the query call. Thus, you can correlate the returned
+ * data in the info->value field to the requested key.
+ *
+ * Once we have dealt with the returned data, we must
+ * call the release_fn so that the PMIx library can
+ * cleanup */
 static void cbfunc(pmix_status_t status,
                    pmix_info_t *info, size_t ninfo,
                    void *cbdata,
@@ -73,6 +85,10 @@ static void cbfunc(pmix_status_t status,
     mq->active = false;
 }
 
+/* this is the event notification function we pass down below
+ * when registering for general events - i.e.,, the default
+ * handler. We don't technically need to register one, but it
+ * is usually good practice to catch any events that occur */
 static void notification_fn(size_t evhdlr_registration_id,
                             pmix_status_t status,
                             const pmix_proc_t *source,
@@ -86,20 +102,13 @@ static void notification_fn(size_t evhdlr_registration_id,
     }
 }
 
-static void release_fn(size_t evhdlr_registration_id,
-                       pmix_status_t status,
-                       const pmix_proc_t *source,
-                       pmix_info_t info[], size_t ninfo,
-                       pmix_info_t results[], size_t nresults,
-                       pmix_event_notification_cbfunc_fn_t cbfunc,
-                       void *cbdata)
-{
-    if (NULL != cbfunc) {
-        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
-    }
-    waiting_for_debugger = false;
-}
-
+/* event handler registration is done asynchronously because it
+ * may involve the PMIx server registering with the host RM for
+ * external events. So we provide a callback function that returns
+ * the status of the request (success or an error), plus a numerical index
+ * to the registered event. The index is used later on to deregister
+ * an event handler - if we don't explicitly deregister it, then the
+ * PMIx server will do so when it see us exit */
 static void evhandler_reg_callbk(pmix_status_t status,
                                  size_t evhandler_ref,
                                  void *cbdata)
@@ -127,8 +136,7 @@ int main(int argc, char **argv)
     myquery_data_t myquery_data;
 
     /* init us - since we were launched by the RM, our connection info
-     * will have been provided at startup. We will receive both our own
-     * job info -and- the job info of the application we are to debug */
+     * will have been provided at startup. */
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, NULL, 0))) {
         fprintf(stderr, "Debugger daemon ns %s rank %d: PMIx_tool_init failed: %d\n", myproc.nspace, myproc.rank, rc);
         exit(0);

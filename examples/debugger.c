@@ -43,6 +43,18 @@ static int attach_to_running_job(char *nspace);
 static bool waiting_for_debugger = true;
 static pmix_proc_t myproc;
 
+/* this is a callback function for the PMIx_Query
+ * API. The query will callback with a status indicating
+ * if the request could be fully satisfied, partially
+ * satisfied, or completely failed. The info parameter
+ * contains an array of the returned data, with the
+ * info->key field being the key that was provided in
+ * the query call. Thus, you can correlate the returned
+ * data in the info->value field to the requested key.
+ *
+ * Once we have dealt with the returned data, we must
+ * call the release_fn so that the PMIx library can
+ * cleanup */
 static void cbfunc(pmix_status_t status,
                    pmix_info_t *info, size_t ninfo,
                    void *cbdata,
@@ -52,8 +64,9 @@ static void cbfunc(pmix_status_t status,
     myquery_data_t *mq = (myquery_data_t*)cbdata;
     size_t n;
 
-    /* save the returned info - it will be
-     * released in the release_fn */
+    /* save the returned info - the PMIx library "owns" it
+     * and will release it and perform other cleanup actions
+     * when release_fn is called */
     if (0 < ninfo) {
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
@@ -63,7 +76,8 @@ static void cbfunc(pmix_status_t status,
         }
     }
 
-    /* let the library release the data */
+    /* let the library release the data and cleanup from
+     * the operation */
     if (NULL != release_fn) {
         release_fn(release_cbdata);
     }
@@ -72,6 +86,10 @@ static void cbfunc(pmix_status_t status,
     mq->active = false;
 }
 
+/* this is the event notification function we pass down below
+ * when registering for general events - i.e.,, the default
+ * handler. We don't technically need to register one, but it
+ * is usually good practice to catch any events that occur */
 static void notification_fn(size_t evhdlr_registration_id,
                             pmix_status_t status,
                             const pmix_proc_t *source,
@@ -86,6 +104,13 @@ static void notification_fn(size_t evhdlr_registration_id,
     }
 }
 
+/* this is an event notification function that we explicitly request
+ * be called when the PMIX_ERR_JOB_TERMINATED notification is issued.
+ * We could catch it in the general event notification function and test
+ * the status to see if it was "job terminated", but it often is simpler
+ * to declare a use-specific notification callback point. In this case,
+ * we are asking to know whenever a job terminates, and we will then
+ * know we can exit */
 static void release_fn(size_t evhdlr_registration_id,
                        pmix_status_t status,
                        const pmix_proc_t *source,
@@ -102,6 +127,13 @@ static void release_fn(size_t evhdlr_registration_id,
     waiting_for_debugger = false;
 }
 
+/* event handler registration is done asynchronously because it
+ * may involve the PMIx server registering with the host RM for
+ * external events. So we provide a callback function that returns
+ * the status of the request (success or an error), plus a numerical index
+ * to the registered event. The index is used later on to deregister
+ * an event handler - if we don't explicitly deregister it, then the
+ * PMIx server will do so when it see us exit */
 static void evhandler_reg_callbk(pmix_status_t status,
                                  size_t evhandler_ref,
                                  void *cbdata)
@@ -128,7 +160,7 @@ int main(int argc, char **argv)
     pmix_query_t *query;
     size_t nq, n;
     myquery_data_t myquery_data;
-    bool cospawn = false;
+    bool cospawn = false, stop_on_exec = false;
     char cwd[1024];
     volatile int active;
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
@@ -171,6 +203,8 @@ int main(int argc, char **argv)
      * info will always be found at:
      *
      * $TMPDIR/ompi.<nodename>.<numerical-userid>/dvm
+     *
+     * NOTE: we will eliminate this requirement in a future version
      */
 
     if (NULL == (tdir = getenv("PMIX_SERVER_TMPDIR"))) {
@@ -193,7 +227,7 @@ int main(int argc, char **argv)
 
     fprintf(stderr, "Tool ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
 
-    /* register an event handler for default events */
+    /* register a default event handler */
     active = -1;
     PMIx_Register_event_handler(NULL, 0, NULL, 0,
                                 notification_fn, evhandler_reg_callbk, (void*)&active);
@@ -228,7 +262,7 @@ int main(int argc, char **argv)
          * plus the debugger daemons, letting the RM know we are debugging
          * so that it will "pause" the app procs until we are ready. First
          * we need to know if this RM supports co-spawning of daemons with
-         * the application, or if we need to launch them as a separate
+         * the application, or if we need to launch the daemons as a separate
          * spawn command. The former is faster and more scalable, but not
          * every RM may support it. We also need to ask for debug support
          * so we know if the RM can stop-on-exec, or only supports stop-in-init */
@@ -265,6 +299,10 @@ int main(int argc, char **argv)
          * let's first check to see if this RM supports that operation by
          * looking for the PMIX_COSPAWN_APP attribute in the spawn support
          *
+         * We will also check to see if "stop_on_exec" is supported. Few RMs
+         * do so, which is why we have to check. The reference server sadly is
+         * not one of them, so we shouldn't find it here
+         *
          * Note that the PMIx reference server always returns the query results
          * in the same order as the query keys. However, this is not guaranteed,
          * so we should search the returned info structures to find the desired key
@@ -276,6 +314,12 @@ int main(int argc, char **argv)
                     cospawn = true;
                 } else {
                     cospawn = false;
+                }
+            } else if (0 == strcmp(myquery_data.info[n].key, PMIX_QUERY_DEBUG_SUPPORT)) {
+                if (NULL != strstr(myquery_data.info[n].value.data.string, PMIX_DEBUG_STOP_ON_EXEC)) {
+                    stop_on_exec = true;
+                } else {
+                    stop_on_exec = false;
                 }
             }
         }
@@ -298,6 +342,7 @@ int main(int argc, char **argv)
             ninfo = 2;
             PMIX_INFO_CREATE(info, ninfo);
             PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
+            /* we know stop-on-exec isn't supported here, so just use stop-in-init */
             PMIX_INFO_LOAD(&info[1], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // procs are to pause in PMIx_Init for debugger attach
             /* spawn the job - the function will return when the app
              * has been launched */
