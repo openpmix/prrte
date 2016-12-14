@@ -114,6 +114,7 @@ contrib/scaling/mpi_barrier
 
 examples/client
 examples/debugger
+examples/debuggerd
 examples/dmodex
 examples/dynamic
 examples/fault

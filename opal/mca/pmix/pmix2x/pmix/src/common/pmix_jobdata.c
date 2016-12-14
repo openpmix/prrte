@@ -13,6 +13,7 @@
 #include <pmix_server.h>
 #include <pmix_common.h>
 #include "src/include/pmix_globals.h"
+#include "src/client/pmix_client_ops.h"
 #include "src/class/pmix_value_array.h"
 #include "src/util/error.h"
 #include "src/buffer_ops/internal.h"
@@ -186,6 +187,7 @@ static inline pmix_status_t _job_data_store(const char *nspace, void *cbdata)
     kptr = PMIX_NEW(pmix_kval_t);
     while (PMIX_SUCCESS == (rc = pmix_bfrop.unpack(job_data, kptr, &cnt, PMIX_KVAL)))
     {
+        pmix_output(0, "JOB KEY %s", kptr->key);
         if (0 == strcmp(kptr->key, PMIX_PROC_BLOB)) {
             bo = &(kptr->value->data.bo);
             PMIX_CONSTRUCT(&buf2, pmix_buffer_t);
@@ -308,6 +310,13 @@ static inline pmix_status_t _job_data_store(const char *nspace, void *cbdata)
             }
             /* cleanup */
             PMIX_DESTRUCT(&buf2);
+        } else if (0 == strcmp(kptr->key, PMIX_DEBUG_STOP_IN_INIT)) {
+            /* set the flag - we don't store this value */
+            if (PMIX_UNDEF == kptr->value->type) {
+                pmix_client_globals.wait_for_debugger = true;
+            } else {
+                pmix_client_globals.wait_for_debugger = kptr->value->data.flag;
+            }
         } else {
             if (PMIX_SUCCESS != (rc = _add_key_for_rank(PMIX_RANK_WILDCARD, kptr, cb))) {
                 PMIX_ERROR_LOG(rc);

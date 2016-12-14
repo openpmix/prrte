@@ -32,9 +32,51 @@
 
 #include <pmix.h>
 
+static volatile bool waiting_for_debugger = true;
+static pmix_proc_t myproc;
+
+static void notification_fn(size_t evhdlr_registration_id,
+                            pmix_status_t status,
+                            const pmix_proc_t *source,
+                            pmix_info_t info[], size_t ninfo,
+                            pmix_info_t results[], size_t nresults,
+                            pmix_event_notification_cbfunc_fn_t cbfunc,
+                            void *cbdata)
+{
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+}
+
+static void release_fn(size_t evhdlr_registration_id,
+                       pmix_status_t status,
+                       const pmix_proc_t *source,
+                       pmix_info_t info[], size_t ninfo,
+                       pmix_info_t results[], size_t nresults,
+                       pmix_event_notification_cbfunc_fn_t cbfunc,
+                       void *cbdata)
+{
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+    waiting_for_debugger = false;
+}
+
+static void evhandler_reg_callbk(pmix_status_t status,
+                                 size_t evhandler_ref,
+                                 void *cbdata)
+{
+    volatile bool *active = (volatile bool*)cbdata;
+
+    if (PMIX_SUCCESS != status) {
+        fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
+                   myproc.nspace, myproc.rank, status, (unsigned long)evhandler_ref);
+    }
+    *active = status;
+}
+
 int main(int argc, char **argv)
 {
-    pmix_proc_t myproc;
     int rc;
     pmix_value_t value;
     pmix_value_t *val = &value;
@@ -43,6 +85,8 @@ int main(int argc, char **argv)
     uint32_t nprocs, n;
     pmix_info_t *info;
     bool flag;
+    volatile int active;
+    pmix_status_t dbg = PMIX_ERR_DEBUGGER_RELEASE;
 
     /* init us */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
@@ -50,6 +94,37 @@ int main(int argc, char **argv)
         exit(0);
     }
     fprintf(stderr, "Client ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
+
+
+    /* register our event handler */
+    active = -1;
+    PMIx_Register_event_handler(NULL, 0, NULL, 0,
+                                notification_fn, evhandler_reg_callbk, (void*)&active);
+    while (-1 == active) {
+        sleep(1);
+    }
+    if (0 != active) {
+        exit(active);
+    }
+
+    /* if we were told to stop for debugger, do it here */
+    if (NULL != getenv("PMIX_STOP_FOR_DEBUGGER")) {
+        /* register for debugger release */
+        active = -1;
+        PMIx_Register_event_handler(&dbg, 1, NULL, 0,
+                                    release_fn, evhandler_reg_callbk, (void*)&active);
+        /* wait for registration to complete */
+        while (-1 == active) {
+            sleep(1);
+        }
+        if (0 != active) {
+            exit(active);
+        }
+        /* wait for debugger release */
+        while (waiting_for_debugger) {
+            sleep(1);
+        }
+    }
 
     PMIX_PROC_CONSTRUCT(&proc);
     (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);

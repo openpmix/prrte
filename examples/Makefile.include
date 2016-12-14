@@ -36,6 +36,7 @@ EXTRA_DIST += \
         examples/Makefile \
         examples/client.c \
         examples/debugger.c \
+        examples/debuggerd.c \
         examples/dmodex.c \
         examples/dynamic.c \
         examples/fault.c \

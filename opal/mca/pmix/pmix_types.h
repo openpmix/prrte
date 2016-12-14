@@ -88,6 +88,7 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_TDIR_RMCLEAN                  "pmix.tdir.rmclean"     // (bool)  Resource Manager will clean session directories
 
 /* information about relative ranks as assigned by the RM */
+#define OPAL_PMIX_NSPACE                        "pmix.nspace"           // (char*) nspace of a job
 #define OPAL_PMIX_JOBID                         "pmix.jobid"            // (uint32_t) jobid assigned by scheduler
 #define OPAL_PMIX_APPNUM                        "pmix.appnum"           // (uint32_t) app number within the job
 #define OPAL_PMIX_RANK                          "pmix.rank"             // (uint32_t) process rank within the job
@@ -200,6 +201,8 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_FWD_STDOUT                    "pmix.fwd.stdout"       // (bool) forward stdout from spawned procs to me
 #define OPAL_PMIX_FWD_STDERR                    "pmix.fwd.stderr"       // (bool) forward stderr from spawned procs to me
 #define OPAL_PMIX_DEBUGGER_DAEMONS              "pmix.debugger"         // (bool) spawned app consists of debugger daemons
+#define OPAL_PMIX_COSPAWN_APP                   "pmix.cospawn"          // (bool) designated app is to be spawned as a disconnected
+                                                                        //     job - i.e., not part of the "comm_world" of the job
 
 /* query attributes */
 #define OPAL_PMIX_QUERY_NAMESPACES              "pmix.qry.ns"           // (char*) request a comma-delimited list of active nspaces
@@ -222,8 +225,8 @@ BEGIN_C_DECLS
 
 /* debugger attributes */
 #define OPAL_PMIX_DEBUG_STOP_ON_EXEC            "pmix.dbg.exec"          // (bool) job is being spawned under debugger - instruct it to pause on start
-#define OPAL_PMIX_DEBUG_STOP_IN_INIT            "pmix.dbg.init"          // (bool) instruct job to stop during init (e.g., MPI_Init) - must
-                                                                         //     occur after PMIx init completes
+#define OPAL_PMIX_DEBUG_STOP_IN_INIT            "pmix.dbg.init"          // (bool) instruct job to stop during PMIx init
+#define OPAL_PMIX_DEBUG_WAIT_FOR_NOTIFY         "pmix.dbg.notify"        // (bool) block at desired point until receiving debugger release notification
 #define OPAL_PMIX_DEBUG_JOB                     "pmix.dbg.job"           // (char*) nspace of the job to be debugged - the RM/PMIx server are
 
 
@@ -287,9 +290,9 @@ OBJ_CLASS_DECLARATION(opal_pmix_pdata_t);
 typedef struct {
     opal_list_item_t super;
     char *cmd;
-    int argc;
     char **argv;
     char **env;
+    char *cwd;
     int maxprocs;
     opal_list_t info;
 } opal_pmix_app_t;

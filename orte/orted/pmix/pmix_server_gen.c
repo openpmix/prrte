@@ -505,6 +505,7 @@ static void _query(int sd, short args, void *cbdata)
             } else if (0 == strcmp(q->keys[n], OPAL_PMIX_QUERY_DEBUG_SUPPORT)) {
                 opal_argv_append_nosize(&ans, OPAL_PMIX_DEBUG_STOP_IN_INIT);
                 opal_argv_append_nosize(&ans, OPAL_PMIX_DEBUG_JOB);
+                opal_argv_append_nosize(&ans, OPAL_PMIX_DEBUG_WAIT_FOR_NOTIFY);
                 /* create the return kv */
                 kv = OBJ_NEW(opal_value_t);
                 kv->key = strdup(OPAL_PMIX_QUERY_DEBUG_SUPPORT);

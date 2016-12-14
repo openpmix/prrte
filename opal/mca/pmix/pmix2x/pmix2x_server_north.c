@@ -588,12 +588,14 @@ static pmix_status_t server_spawn_fn(const pmix_proc_t *p,
         if (NULL != apps[n].cmd) {
             app->cmd = strdup(apps[n].cmd);
         }
-        app->argc = apps[n].argc;
         if (NULL != apps[n].argv) {
             app->argv = opal_argv_copy(apps[n].argv);
         }
         if (NULL != apps[n].env) {
             app->env = opal_argv_copy(apps[n].env);
+        }
+        if (NULL != apps[n].cwd) {
+            app->cwd = strdup(apps[n].cwd);
         }
         app->maxprocs = apps[n].maxprocs;
         for (k=0; k < apps[n].ninfo; k++) {

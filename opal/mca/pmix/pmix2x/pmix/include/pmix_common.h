@@ -155,6 +155,7 @@ typedef uint32_t pmix_rank_t;
 #define PMIX_TDIR_RMCLEAN                   "pmix.tdir.rmclean"     // (bool)  Resource Manager will clean session directories
 
 /* information about relative ranks as assigned by the RM */
+#define PMIX_NSPACE                         "pmix.nspace"           // (char*) nspace of a job
 #define PMIX_JOBID                          "pmix.jobid"            // (char*) jobid assigned by scheduler
 #define PMIX_APPNUM                         "pmix.appnum"           // (uint32_t) app number within the job
 #define PMIX_RANK                           "pmix.rank"             // (pmix_rank_t) process rank within the job
@@ -287,8 +288,8 @@ typedef uint32_t pmix_rank_t;
                                                                      //        modified by directive
 /* debugger attributes */
 #define PMIX_DEBUG_STOP_ON_EXEC             "pmix.dbg.exec"          // (bool) job is being spawned under debugger - instruct it to pause on start
-#define PMIX_DEBUG_STOP_IN_INIT             "pmix.dbg.init"          // (bool) instruct job to stop during init (e.g., MPI_Init) - must
-                                                                     //     occur after PMIx init completes
+#define PMIX_DEBUG_STOP_IN_INIT             "pmix.dbg.init"          // (bool) instruct job to stop during PMIx init
+#define PMIX_DEBUG_WAIT_FOR_NOTIFY          "pmix.dbg.notify"        // (bool) block at desired point until receiving debugger release notification
 #define PMIX_DEBUG_JOB                      "pmix.dbg.job"           // (char*) nspace of the job to be debugged - the RM/PMIx server are
 
 /****    PROCESS STATE DEFINITIONS    ****/
@@ -759,15 +760,21 @@ typedef struct pmix_value {
         }                                               \
     } while (0)
 
-/* expose two functions that are resolved in the
+/* expose some functions that are resolved in the
  * PMIx library, but part of a header that
  * includes internal functions - we don't
  * want to expose the entire header here
  */
 void pmix_value_load(pmix_value_t *v, void *data, pmix_data_type_t type);
 pmix_status_t pmix_value_xfer(pmix_value_t *kv, pmix_value_t *src);
+pmix_status_t pmix_argv_append_nosize(char ***argv, const char *arg);
+pmix_status_t pmix_setenv(const char *name, const char *value,
+                              bool overwrite, char ***env);
 
-
+#define PMIX_ARGV_APPEND(a, b) \
+    pmix_argv_append_nosize(&(a), (b))
+#define PMIX_SETENV(a, b, c) \
+    pmix_setenv((a), (b), true, (c))
 
 
 /****    PMIX INFO STRUCT    ****/
@@ -879,9 +886,9 @@ typedef struct pmix_pdata {
 /****    PMIX APP STRUCT    ****/
 typedef struct pmix_app {
     char *cmd;
-    int argc;
     char **argv;
     char **env;
+    char *cwd;
     int maxprocs;
     pmix_info_t *info;
     size_t ninfo;
@@ -920,6 +927,9 @@ typedef struct pmix_app {
                 free((m)->env[_ii]);                            \
             }                                                   \
             free((m)->env);                                     \
+        }                                                       \
+        if (NULL != (m)->cwd) {                                 \
+            free((m)->cwd);                                     \
         }                                                       \
         if (NULL != (m)->info) {                                \
             for (_ii=0; _ii < (m)->ninfo; _ii++) {              \
