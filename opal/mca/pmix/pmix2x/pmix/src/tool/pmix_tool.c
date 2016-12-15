@@ -209,7 +209,6 @@ PMIX_EXPORT int PMIx_tool_init(pmix_proc_t *proc,
         return rc;
     }
 
-pmix_output(0, "TOOL: SERVER CONNECTION COMPLETE");
     /* increment our init reference counter */
     pmix_globals.init_cntr++;
 
@@ -229,7 +228,6 @@ pmix_output(0, "TOOL: SERVER CONNECTION COMPLETE");
         }
     }
     if (NULL == nsptr) {
-pmix_output(0, "TOOL: NSPACE NOT FOUND");
         return PMIX_ERR_NOT_FOUND;
     }
 
