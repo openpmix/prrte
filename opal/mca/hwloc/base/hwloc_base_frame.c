@@ -313,8 +313,8 @@ static void buffer_cleanup(void *value)
         for (i=0; i < OPAL_HWLOC_PRINT_NUM_BUFS; i++) {
             free(ptr->buffers[i]);
         }
+        free(ptr);
     }
-    free(ptr);
 }
 
 opal_hwloc_print_buffers_t *opal_hwloc_get_print_buffer(void)
