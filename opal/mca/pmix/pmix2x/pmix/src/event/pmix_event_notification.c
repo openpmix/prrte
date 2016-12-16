@@ -283,7 +283,7 @@ static void progress_local_event_hdlr(pmix_status_t status,
                     chain->multi = multi;
                     /* add any cbobject - the info struct for it is at the end */
                     chain->info[chain->ninfo-1].value.data.ptr = multi->cbobject;
-                    multi->evhdlr(multi->index,
+                   multi->evhdlr(multi->index,
                                   chain->status, &chain->source,
                                   chain->info, chain->ninfo,
                                   chain->results, chain->nresults,
@@ -352,8 +352,7 @@ void pmix_invoke_local_event_hdlr(pmix_event_chain_t *chain)
     pmix_default_event_t *def;
     pmix_status_t rc = PMIX_SUCCESS;
 
-   // pmix_output_verbose(2, pmix_globals.debug_output,
-    pmix_output(0,
+    pmix_output_verbose(2, pmix_globals.debug_output,
                         "%s:%d invoke_local_event_hdlr",
                         pmix_globals.myid.nspace, pmix_globals.myid.rank);
 
@@ -439,7 +438,7 @@ void pmix_invoke_local_event_hdlr(pmix_event_chain_t *chain)
     }
 
   complete:
-    /* we still have to call their final callback */
+   /* we still have to call their final callback */
     if (NULL != chain->final_cbfunc) {
         chain->final_cbfunc(rc, chain->final_cbdata);
     }
@@ -538,8 +537,7 @@ static pmix_status_t notify_client_of_event(pmix_status_t status,
     pmix_status_t rc;
     size_t n;
 
-   // pmix_output_verbose(2, pmix_globals.debug_output,
-    pmix_output(0,
+    pmix_output_verbose(2, pmix_globals.debug_output,
                         "pmix_server: notify client of event %s",
                         PMIx_Error_string(status));
 
@@ -620,8 +618,7 @@ static pmix_status_t notify_client_of_event(pmix_status_t status,
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
 
-   // pmix_output_verbose(2, pmix_globals.debug_output,
-    pmix_output(0,
+    pmix_output_verbose(2, pmix_globals.debug_output,
                         "pmix_server_notify_event status =%d, source = %s:%d, ninfo =%lu",
                          status, cd->source.nspace, cd->source.rank, ninfo);
 

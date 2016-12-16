@@ -356,6 +356,7 @@ static void reg_event_hdlr(int sd, short args, void *cbdata)
         sing->code = cd->codes[0];
         index = pmix_globals.events.nhdlrs;
         sing->index = index;
+        sing->evhdlr = cd->evhdlr;
         ++pmix_globals.events.nhdlrs;
         sing->cbobject = cbobject;
         rc = _add_hdlr(&pmix_globals.events.single_events, &sing->super,
@@ -387,6 +388,7 @@ static void reg_event_hdlr(int sd, short args, void *cbdata)
     memcpy(multi->codes, cd->codes, cd->ncodes * sizeof(pmix_status_t));
     index = pmix_globals.events.nhdlrs;
     multi->index = index;
+    multi->evhdlr = cd->evhdlr;
     ++pmix_globals.events.nhdlrs;
     multi->cbobject = cbobject;
     rc = _add_hdlr(&pmix_globals.events.multi_events, &multi->super,
