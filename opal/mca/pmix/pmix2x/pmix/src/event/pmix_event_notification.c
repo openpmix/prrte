@@ -98,8 +98,7 @@ static pmix_status_t notify_server_of_event(pmix_status_t status,
     size_t n;
 
 
-   // pmix_output_verbose(2, pmix_globals.debug_output,
-    pmix_output(0,
+    pmix_output_verbose(2, pmix_globals.debug_output,
                         "client: notifying server %s:%d of status %s",
                         pmix_globals.myid.nspace, pmix_globals.myid.rank,
                         PMIx_Error_string(status));
