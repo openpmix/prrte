@@ -71,7 +71,6 @@ static void cbfunc(pmix_status_t status,
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
         for (n=0; n < ninfo; n++) {
-            fprintf(stderr, "Transferring %s\n", info[n].key);
             PMIX_INFO_XFER(&mq->info[n], &info[n]);
         }
     }
