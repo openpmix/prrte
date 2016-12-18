@@ -71,6 +71,7 @@ static void cbfunc(pmix_status_t status,
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
         for (n=0; n < ninfo; n++) {
+            fprintf(stderr, "Transferring %s\n", info[n].key);
             PMIX_INFO_XFER(&mq->info[n], &info[n]);
         }
     }
@@ -149,7 +150,6 @@ static void evhandler_reg_callbk(pmix_status_t status,
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
-    pmix_proc_t target;
     pmix_info_t *info, *dinfo;
     pmix_app_t *app, *debugger;
     size_t ninfo, napps, dninfo;
@@ -341,8 +341,11 @@ int main(int argc, char **argv)
             ninfo = 2;
             PMIX_INFO_CREATE(info, ninfo);
             PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
-            /* we know stop-on-exec isn't supported here, so just use stop-in-init */
-            PMIX_INFO_LOAD(&info[1], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // procs are to pause in PMIx_Init for debugger attach
+            if (stop_on_exec) {
+                PMIX_INFO_LOAD(&info[1], PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);  // procs are to stop on first instruction
+            } else {
+                PMIX_INFO_LOAD(&info[1], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // procs are to pause in PMIx_Init for debugger attach
+            }
             /* spawn the job - the function will return when the app
              * has been launched */
             fprintf(stderr, "Debugger: spawning %s\n", app[0].cmd);
@@ -429,8 +432,7 @@ static int attach_to_running_job(char *nspace)
     pmix_status_t rc;
     pmix_proc_t myproc;
     pmix_query_t *query;
-    pmix_app_t *app;
-    size_t nq, napps;
+    size_t nq;
     mydbug_query_t *q;
 
     /* query the active nspaces so we can verify that the
