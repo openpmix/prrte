@@ -212,7 +212,7 @@ int main(int argc, char **argv)
     n = 0;
     fprintf(stderr, "[%s:%u] Hanging around awhile, doing debugger magic\n", myproc.nspace, myproc.rank);
     while (n < 5) {
-        usleep(10);
+        usleep(1000);
         ++n;
     }
 

@@ -215,11 +215,9 @@ static void notification_fn(size_t evhdlr_registration_id,
                             pmix_event_notification_cbfunc_fn_t cbfunc,
                             void *cbdata)
 {
-    pmix_output(0, "[%s:%d] Client debugger release", pmix_globals.myid.nspace, pmix_globals.myid.rank);
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
     }
-    pmix_output(0, "[%s:%d] Releasing", pmix_globals.myid.nspace, pmix_globals.myid.rank);
     waiting_for_debugger = false;
 }
 static void evhandler_reg_callbk(pmix_status_t status,
