@@ -490,42 +490,45 @@ static void notify_requestor(int sd, short args, void *cbdata)
     int ret, id, *idptr;
     opal_buffer_t *reply;
 
-    /* notify the requestor */
-    reply = OBJ_NEW(opal_buffer_t);
+    if (ORTE_JOBID_INVALID != jdata->originator.jobid &&
+        ORTE_VPID_INVALID != jdata->originator.vpid) {
+        /* notify the requestor */
+        reply = OBJ_NEW(opal_buffer_t);
 
-    /* see if there was any problem */
-    if (orte_get_attribute(&jdata->attributes, ORTE_JOB_ABORTED_PROC, (void**)&pptr, OPAL_PTR) && NULL != pptr) {
-        ret = pptr->exit_code;
-    /* or whether we got cancelled by the user */
-    } else if (orte_get_attribute(&jdata->attributes, ORTE_JOB_CANCELLED, NULL, OPAL_BOOL)) {
-        ret = ORTE_ERR_JOB_CANCELLED;
-    } else {
-        ret = 0;
+        /* see if there was any problem */
+        if (orte_get_attribute(&jdata->attributes, ORTE_JOB_ABORTED_PROC, (void**)&pptr, OPAL_PTR) && NULL != pptr) {
+            ret = pptr->exit_code;
+        /* or whether we got cancelled by the user */
+        } else if (orte_get_attribute(&jdata->attributes, ORTE_JOB_CANCELLED, NULL, OPAL_BOOL)) {
+            ret = ORTE_ERR_JOB_CANCELLED;
+        } else {
+            ret = 0;
+        }
+        /* return the completion status */
+        opal_dss.pack(reply, &ret, 1, OPAL_INT);
+
+        /* pack the jobid to be returned */
+        opal_dss.pack(reply, &jdata->jobid, 1, ORTE_JOBID);
+
+        /* return the tracker ID */
+        idptr = &id;
+        if (orte_get_attribute(&jdata->attributes, ORTE_JOB_ROOM_NUM, (void**)&idptr, OPAL_INT)) {
+            /* pack the sender's index to the tracking object */
+            opal_dss.pack(reply, idptr, 1, OPAL_INT);
+        }
+
+        /* if there was a problem, we need to send the requestor more info about what happened */
+        if (0 < ret) {
+            opal_dss.pack(reply, &jdata->state, 1, ORTE_JOB_STATE_T);
+            opal_dss.pack(reply, &pptr, 1, ORTE_PROC);
+            opal_dss.pack(reply, &pptr->node, 1, ORTE_NODE);
+        }
+
+        orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                &jdata->originator, reply,
+                                ORTE_RML_TAG_NOTIFY_COMPLETE,
+                                send_callback, jdata);
     }
-    /* return the completion status */
-    opal_dss.pack(reply, &ret, 1, OPAL_INT);
-
-    /* pack the jobid to be returned */
-    opal_dss.pack(reply, &jdata->jobid, 1, ORTE_JOBID);
-
-    /* return the tracker ID */
-    idptr = &id;
-    if (orte_get_attribute(&jdata->attributes, ORTE_JOB_ROOM_NUM, (void**)&idptr, OPAL_INT)) {
-        /* pack the sender's index to the tracking object */
-        opal_dss.pack(reply, idptr, 1, OPAL_INT);
-    }
-
-    /* if there was a problem, we need to send the requestor more info about what happened */
-    if (0 < ret) {
-        opal_dss.pack(reply, &jdata->state, 1, ORTE_JOB_STATE_T);
-        opal_dss.pack(reply, &pptr, 1, ORTE_PROC);
-        opal_dss.pack(reply, &pptr->node, 1, ORTE_NODE);
-    }
-
-    orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                            &jdata->originator, reply,
-                            ORTE_RML_TAG_NOTIFY_COMPLETE,
-                            send_callback, jdata);
 
     /* we cannot cleanup the job object as we might
      * hit an error during transmission, so clean it

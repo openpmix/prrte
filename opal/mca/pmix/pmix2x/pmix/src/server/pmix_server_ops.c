@@ -1295,6 +1295,7 @@ pmix_status_t pmix_server_event_recvd_from_client(pmix_peer_t *peer,
     int32_t cnt;
     pmix_status_t rc;
     pmix_notify_caddy_t *cd;
+    bool local = false;
 
     pmix_output_verbose(2, pmix_globals.debug_output,
                         "recvd event notification from client");
@@ -1337,6 +1338,20 @@ pmix_status_t pmix_server_event_recvd_from_client(pmix_peer_t *peer,
             PMIX_ERROR_LOG(rc);
             goto exit;
         }
+    }
+
+    /* check the range directive - if it is LOCAL, then we just
+     * process it ourselves. Otherwise, it needs to go up to our
+     * host for dissemination */
+    if (PMIX_RANGE_LOCAL == cd->range) {
+        if (PMIX_SUCCESS != (rc = pmix_server_notify_client_of_event(cd->status,
+                                                                     &cd->source,
+                                                                     cd->range,
+                                                                     cd->info, cd->ninfo,
+                                                                     local_cbfunc, cd))) {
+            goto exit;
+        }
+        return PMIX_SUCCESS;
     }
 
     /* when we receive an event from a client, we just pass it to
