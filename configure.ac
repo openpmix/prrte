@@ -1134,11 +1134,11 @@ case "`uname`" in
 esac
 
 # opaldatadir, opallibdir, and opalinclude are essentially the same as
-# pkg*dir, but will always be */pmixsrvr.
+# pkg*dir, but will always be */pmix.
 
-opaldatadir='${datadir}/pmixsrvr'
-opallibdir='${libdir}/pmixsrvr'
-opalincludedir='${includedir}/pmixsrvr'
+opaldatadir='${datadir}/pmix'
+opallibdir='${libdir}/pmix'
+opalincludedir='${includedir}/pmix'
 AC_SUBST(opaldatadir)
 AC_SUBST(opallibdir)
 AC_SUBST(opalincludedir)

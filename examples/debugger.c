@@ -147,14 +147,51 @@ static void evhandler_reg_callbk(pmix_status_t status,
     *active = status;
 }
 
+static pmix_status_t spawn_debugger(char *appspace)
+{
+    pmix_status_t rc;
+    pmix_info_t *dinfo;
+    pmix_app_t *debugger;
+    size_t dninfo;
+    char cwd[1024];
+    char dspace[PMIX_MAX_NSLEN+1];
+
+    /* setup the debugger */
+    PMIX_APP_CREATE(debugger, 1);
+    debugger[0].cmd = strdup("./debuggerd");
+    PMIX_ARGV_APPEND(debugger[0].argv, "./debuggerd");
+    getcwd(cwd, 1024);  // point us to our current directory
+    debugger[0].cwd = strdup(cwd);
+    /* provide directives so the daemons go where we want, and
+     * let the RM know these are debugger daemons */
+    dninfo = 5;
+    PMIX_INFO_CREATE(dinfo, dninfo);
+    PMIX_INFO_LOAD(&dinfo[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
+    PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
+    PMIX_INFO_LOAD(&dinfo[2], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
+    PMIX_INFO_LOAD(&dinfo[3], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
+    PMIX_INFO_LOAD(&dinfo[4], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
+    /* spawn the daemons */
+    fprintf(stderr, "Debugger: spawning %s\n", debugger[0].cmd);
+    if (PMIX_SUCCESS != (rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace))) {
+        fprintf(stderr, "Debugger daemons failed to launch with error: %s\n", PMIx_Error_string(rc));
+    }
+
+    /* cleanup */
+    PMIX_INFO_FREE(dinfo, dninfo);
+    PMIX_APP_FREE(debugger, 1);
+
+    return rc;
+}
+
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
-    pmix_info_t *info, *dinfo;
-    pmix_app_t *app, *debugger;
-    size_t ninfo, napps, dninfo;
+    pmix_info_t *info;
+    pmix_app_t *app;
+    size_t ninfo, napps;
     char *tdir, *nspace = NULL;
-    char appspace[PMIX_MAX_NSLEN+1], dspace[PMIX_MAX_NSLEN+1];
+    char appspace[PMIX_MAX_NSLEN+1];
     int i;
     pmix_query_t *query;
     size_t nq, n;
@@ -356,30 +393,10 @@ int main(int argc, char **argv)
             PMIX_INFO_FREE(info, ninfo);
             PMIX_APP_FREE(app, napps);
 
-            /* setup the debugger */
-            PMIX_APP_CREATE(debugger, 1);
-            debugger[0].cmd = strdup("./debuggerd");
-            PMIX_ARGV_APPEND(debugger[0].argv, "./debuggerd");
-            debugger[0].cwd = strdup(cwd);
-            /* provide directives so the daemons go where we want, and
-             * let the RM know these are debugger daemons */
-            dninfo = 5;
-            PMIX_INFO_CREATE(dinfo, dninfo);
-            PMIX_INFO_LOAD(&dinfo[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
-            PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
-            PMIX_INFO_LOAD(&dinfo[2], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
-            PMIX_INFO_LOAD(&dinfo[3], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
-            PMIX_INFO_LOAD(&dinfo[4], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
-            /* spawn the daemons */
-            fprintf(stderr, "Debugger: spawning %s\n", debugger[0].cmd);
-            if (PMIX_SUCCESS != (rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace))) {
-                fprintf(stderr, "Debugger daemons failed to launch with error: %s\n", PMIx_Error_string(rc));
+            /* now launch the debugger daemons */
+            if (PMIX_SUCCESS != (rc = spawn_debugger(appspace))) {
                 goto done;
             }
-
-            /* cleanup */
-            PMIX_INFO_FREE(dinfo, dninfo);
-            PMIX_APP_FREE(debugger, 1);
         }
 
 
@@ -395,64 +412,30 @@ int main(int argc, char **argv)
     return(rc);
 }
 
-typedef struct {
-    volatile bool active;
-    pmix_status_t status;
-    pmix_info_t *info;
-    size_t ninfo;
-} mydbug_query_t;
-
-
-static void infocbfunc(pmix_status_t status,
-                       pmix_info_t *info, size_t ninfo,
-                       void *cbdata,
-                       pmix_release_cbfunc_t release_fn,
-                       void *release_cbdata)
-{
-    mydbug_query_t *q = (mydbug_query_t*)cbdata;
-    size_t n;
-
-    q->status = status;
-    q->info = NULL;
-    q->ninfo = ninfo;
-    if (0 < ninfo) {
-        PMIX_INFO_CREATE(q->info, q->ninfo);
-        for (n=0; n < ninfo; n++) {
-            PMIX_INFO_XFER(&q->info[n], &info[n]);
-        }
-    }
-    if (NULL != release_fn) {
-        release_fn(release_cbdata);
-    }
-    q->active = false;
-}
-
 static int attach_to_running_job(char *nspace)
 {
     pmix_status_t rc;
     pmix_proc_t myproc;
     pmix_query_t *query;
     size_t nq;
-    mydbug_query_t *q;
+    myquery_data_t *q;
 
     /* query the active nspaces so we can verify that the
      * specified one exists */
     nq = 1;
     PMIX_QUERY_CREATE(query, nq);
-    query[0].keys = (char**)malloc(2 * sizeof(char*));
-    query[0].keys[0] = strdup(PMIX_QUERY_NAMESPACES);
-    query[0].keys[1] = NULL;
+    PMIX_ARGV_APPEND(query[0].keys, PMIX_QUERY_NAMESPACES);
 
-    q = (mydbug_query_t*)malloc(sizeof(mydbug_query_t));
+    q = (myquery_data_t*)malloc(sizeof(myquery_data_t));
     q->active = true;
 
-    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, infocbfunc, (void*)q))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void*)q))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Query_info failed: %d\n", myproc.nspace, myproc.rank, rc);
         return -1;
     }
     /* wait for a response */
     while (q->active) {
-        sleep(1);
+        usleep(10);
     }
 
     if (NULL == q->info) {
