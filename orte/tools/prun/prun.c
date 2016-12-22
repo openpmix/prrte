@@ -86,6 +86,7 @@
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/state/state.h"
 #include "orte/util/proc_info.h"
+#include "orte/util/session_dir.h"
 #include "orte/util/show_help.h"
 
 #include "orte/runtime/runtime.h"
@@ -126,9 +127,55 @@ static void completed(int index, orte_job_t *jdata, int ret, void *cbdata)
     completest->active = false;
 }
 
+#define PRUN_LOOP_LIMIT  10
+
 int prun(int argc, char *argv[])
 {
     orte_submit_status_t launchst, completest;
+    int n;
+    char *filename;
+    char hostname[OPAL_MAXHOSTNAMELEN];
+
+    /* ****************************************************************/
+    /* we want to be able to detect that the PSRVR is up and running
+     * prior to attempting to connect to it. The code logic in ORTE
+     * actually supports such things, but unfortunately will emit
+     * error messages about the contact file missing before we can
+     * arrive at the point where retries can be done. So...let's
+     * setup the path to the contact file here, check to see if it
+     * exists, and then cycle a while if it doesn't. */
+
+    /* get the nodename */
+    gethostname(hostname, sizeof(hostname));
+    orte_process_info.nodename = strdup(hostname);
+
+    /* setup the top session directory name */
+    if (ORTE_SUCCESS != orte_setup_top_session_dir()) {
+        fprintf(stderr, "OUT OF MEMORY\n");
+        exit(1);
+    }
+    /* look for the contact file on this node */
+    filename = opal_os_path(false, orte_process_info.top_session_dir, "dvm", "contact.txt", NULL);
+    if (NULL == filename) {
+        fprintf(stderr, "OUT OF MEMORY\n");
+        exit(1);
+    }
+    /* check to see if the file exists - loop a few times if it
+     * doesn't, delaying between successive attempts */
+    n = 0;
+    while (n < PRUN_LOOP_LIMIT &&
+           0 != access(filename, R_OK)) {
+        sleep(1);
+        ++n;
+    }
+    /* if we still don't see the file, then give up */
+    if (0 != access(filename, R_OK)) {
+        fprintf(stderr, "PSRVR contact file not found - cannot continue\n");
+        exit(1);
+    }
+    free(filename);
+    free(orte_process_info.nodename);
+    orte_process_info.nodename = NULL;
 
     if (ORTE_SUCCESS != orte_submit_init(argc, argv, NULL)) {
         exit(1);
