@@ -1876,9 +1876,7 @@ static void launch_recv(int status, orte_process_name_t* sender,
     }
     trk->jdata->jobid = jobid;
 
-    if (ORTE_SUCCESS == ret) {
-        printf("[ORTE] Task: %d is launched! (Job ID: %s)\n", tool_job_index, ORTE_JOBID_PRINT(jobid));
-    } else {
+    if (ORTE_SUCCESS != ret) {
         /* unpack the offending proc and node, if sent */
         cnt = 1;
         if (OPAL_SUCCESS == opal_dss.unpack(buffer, &trk->jdata->state, &cnt, ORTE_JOB_STATE_T)) {
@@ -1947,9 +1945,7 @@ static void complete_recv(int status, orte_process_name_t* sender,
         return;
     }
 
-    if (ORTE_SUCCESS == ret) {
-        printf("[ORTE] Task: %d returned: %d (Job ID: %s)\n", tool_job_index, ret, ORTE_JOBID_PRINT(jobid));
-    } else {
+    if (ORTE_SUCCESS != ret) {
         /* unpack the offending proc and node */
         cnt = 1;
         opal_dss.unpack(buffer, &trk->jdata->state, &cnt, ORTE_JOB_STATE_T);
