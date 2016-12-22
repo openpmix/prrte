@@ -552,7 +552,7 @@ pmix_status_t pmix_server_notify_client_of_event(pmix_status_t status,
                 cd->nondefault = true;
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_CUSTOM_RANGE, PMIX_MAX_KEYLEN)) {
                 /* provides an array of pmix_proc_t identifying the procs
-                 * that are to receive this notification */
+                 * that are to receive this notification, or a single pmix_proc_t  */
                 if (PMIX_DATA_ARRAY == info[n].value.type &&
                     NULL != info[n].value.data.darray &&
                     NULL != info[n].value.data.darray->array) {

@@ -480,7 +480,6 @@ PMIX_EXPORT pmix_status_t PMIx_tool_finalize(void)
     pmix_buffer_t *msg;
     pmix_cmd_t cmd = PMIX_FINALIZE_CMD;
     pmix_status_t rc;
-    size_t n;
     volatile bool active;
 
     if (1 != pmix_globals.init_cntr) {
