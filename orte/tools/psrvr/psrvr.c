@@ -479,6 +479,7 @@ static void send_callback(int status, orte_process_name_t *peer,
 
     OBJ_RELEASE(buffer);
     /* cleanup the job object */
+    opal_hash_table_set_value_uint32(orte_job_data, jdata->jobid, NULL);
     OBJ_RELEASE(jdata);
 }
 
@@ -528,10 +529,15 @@ static void notify_requestor(int sd, short args, void *cbdata)
                                 &jdata->originator, reply,
                                 ORTE_RML_TAG_NOTIFY_COMPLETE,
                                 send_callback, jdata);
+        /* we cannot cleanup the job object as we might
+         * hit an error during transmission, so clean it
+         * up in the send callback */
+        OBJ_RELEASE(caddy);
+    } else {
+        /* cleanup the job object */
+        opal_hash_table_set_value_uint32(orte_job_data, jdata->jobid, NULL);
+        OBJ_RELEASE(jdata);
+        OBJ_RELEASE(caddy);
     }
 
-    /* we cannot cleanup the job object as we might
-     * hit an error during transmission, so clean it
-     * up in the send callback */
-    OBJ_RELEASE(caddy);
 }
