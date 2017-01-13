@@ -19,7 +19,7 @@
 # Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
-# Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
+# Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014-2016 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -243,8 +243,8 @@ fi
 # The library prefixes must be set before we call OPAL MCA.  Here is
 # as good a place as any.
 
-OPAL_SET_LIB_PREFIX([])
-ORTE_SET_LIB_PREFIX([])
+OPAL_SET_LIB_PREFIX([psrvr])
+ORTE_SET_LIB_PREFIX([psrvr])
 
 ############################################################################
 # Libtool: part one
