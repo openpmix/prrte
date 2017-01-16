@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
@@ -332,7 +332,9 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
 
             /* location, for local procs */
             if (node == mynode) {
-                if (orte_get_attribute(&pptr->attributes, ORTE_PROC_CPU_BITMAP, (void**)&tmp, OPAL_STRING)) {
+                tmp = NULL;
+                if (orte_get_attribute(&pptr->attributes, ORTE_PROC_CPU_BITMAP, (void**)&tmp, OPAL_STRING) &&
+                    NULL != tmp) {
                     kv = OBJ_NEW(opal_value_t);
                     kv->key = strdup(OPAL_PMIX_LOCALITY_STRING);
                     kv->type = OPAL_STRING;
@@ -407,6 +409,14 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
             kv->type = OPAL_UINT32;
             kv->data.uint32 = pptr->node->index;
             opal_list_append(pmap, &kv->super);
+
+            if (map->num_nodes < orte_hostname_cutoff) {
+                kv = OBJ_NEW(opal_value_t);
+                kv->key = strdup(OPAL_PMIX_HOSTNAME);
+                kv->type = OPAL_STRING;
+                kv->data.string = strdup(pptr->node->name);
+                opal_list_append(pmap, &kv->super);
+            }
         }
     }
 

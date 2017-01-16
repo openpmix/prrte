@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014-2015 Artem Y. Polyakov <artpol84@gmail.com>.
@@ -1180,6 +1180,13 @@ pmix_status_t pmix_server_register_events(pmix_peer_t *peer,
                     if (0 != strncmp(peer->info->nptr->nspace, cd->targets[n].nspace, PMIX_MAX_NSLEN)) {
                         continue;
                     }
+                    /* if the source of the event is the same peer just registered, then ignore it
+                     * as the event notification system will have already locally
+                     * processed it */
+                    if (0 == strncmp(peer->info->nptr->nspace, cd->source.nspace, PMIX_MAX_NSLEN) &&
+                        peer->info->rank == cd->source.rank) {
+                        continue;
+                    }
                     if (PMIX_RANK_WILDCARD == cd->targets[n].rank ||
                         peer->info->rank == cd->targets[n].rank) {
                         matched = true;
@@ -1559,9 +1566,9 @@ static void scadcon(pmix_setup_caddy_t *p)
 static void scaddes(pmix_setup_caddy_t *p)
 {
 }
-PMIX_CLASS_INSTANCE(pmix_setup_caddy_t,
-                    pmix_object_t,
-                    scadcon, scaddes);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_setup_caddy_t,
+                                pmix_object_t,
+                                scadcon, scaddes);
 
 static void ncon(pmix_notify_caddy_t *p)
 {

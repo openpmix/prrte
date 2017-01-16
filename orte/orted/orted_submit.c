@@ -14,8 +14,8 @@
  * Copyright (c) 2007-2009 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2007-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2016 Intel, Inc. All rights reserved.
- * Copyright (c) 2015-2016 Research Organization for Information Science
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
@@ -55,6 +55,7 @@
 #ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
 #endif
+#include <poll.h>
 
 #include "opal/dss/dss.h"
 #include "opal/mca/event/event.h"
@@ -138,6 +139,9 @@ static void set_classpath_jar_file(orte_app_context_t *app, int index, char *jar
 static int parse_appfile(orte_job_t *jdata, char *filename, char ***env);
 static void orte_timeout_wakeup(int sd, short args, void *cbdata);
 static void orte_profile_wakeup(int sd, short args, void *cbdata);
+static void profile_recv(int status, orte_process_name_t* sender,
+                         opal_buffer_t *buffer, orte_rml_tag_t tag,
+                         void* cbdata);
 static void launch_recv(int status, orte_process_name_t* sender,
                         opal_buffer_t *buffer,
                         orte_rml_tag_t tag, void *cbdata);
@@ -494,8 +498,6 @@ void orte_submit_finalize(void)
     trackr_t *trk;
     int i;
 
-    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_LAUNCH_RESP);
-    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_NOTIFY_COMPLETE);
     for (i=0; i < tool_jobs.size; i++) {
         if (NULL != (trk = (trackr_t*)opal_pointer_array_get_item(&tool_jobs, i))) {
             OBJ_RELEASE(trk);
@@ -516,6 +518,10 @@ void orte_submit_finalize(void)
         }
         close(orte_debugger_attach_fd);
         unlink(MPIR_attach_fifo);
+    }
+
+    if (NULL != orte_cmd_options.prefix) {
+        free(orte_cmd_options.prefix);
     }
 }
 
@@ -608,6 +614,9 @@ int orte_submit_job(char *argv[], int *index,
 
     /* reset the globals every time thru as the argv
      * will modify them */
+    if (NULL != orte_cmd_options.prefix) {
+        free(orte_cmd_options.prefix);
+    }
     memset(&orte_cmd_options, 0, sizeof(orte_cmd_options));
     argc = opal_argv_count(argv);
 
@@ -804,20 +813,6 @@ int orte_submit_job(char *argv[], int *index,
         }
     }
 
-    /* check for debugger test envars and forward them if necessary */
-    if (NULL != getenv("ORTE_TEST_DEBUGGER_ATTACH")) {
-        char *evar;
-        evar = getenv("ORTE_TEST_DEBUGGER_SLEEP");
-        for (i=0; i < (orte_app_idx_t)jdata->num_apps; i++) {
-            if (NULL != (app = (orte_app_context_t*)opal_pointer_array_get_item(jdata->apps, i))) {
-                opal_setenv("ORTE_TEST_DEBUGGER_ATTACH", "1", true, &app->env);
-                if (NULL != evar) {
-                    opal_setenv("ORTE_TEST_DEBUGGER_SLEEP", evar, true, &app->env);
-                }
-            }
-        }
-    }
-
     /* check for suicide test directives */
     if (NULL != getenv("ORTE_TEST_HNP_SUICIDE") ||
         NULL != getenv("ORTE_TEST_ORTED_SUICIDE")) {
@@ -864,6 +859,8 @@ int orte_submit_job(char *argv[], int *index,
             ORTE_UPDATE_EXIT_STATUS(ORTE_ERR_OUT_OF_RESOURCE);
             //goto DONE;
         }
+        orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_MEMPROFILE,
+                                ORTE_RML_PERSISTENT, profile_recv, NULL);
         orte_memprofile_timeout->tv.tv_sec = timeout_seconds;
         orte_memprofile_timeout->tv.tv_usec = 0;
         opal_event_evtimer_set(orte_event_base, orte_memprofile_timeout->ev,
@@ -1199,12 +1196,18 @@ static int parse_locals(orte_job_t *jdata, int argc, char* argv[])
              * region.
              * So we make a copy of the variable.
              */
-            char *s = strdup(env[j]);
+            char *value, *s = strdup(env[j]);
 
             if (NULL == s) {
                 return OPAL_ERR_OUT_OF_RESOURCE;
             }
-            putenv(s);
+
+            value = strchr(s, '=');
+            if (NULL != value) {
+                value++;
+            }
+            opal_setenv(s, value, true, &environ);
+            free(s);
         }
     }
 
@@ -2116,10 +2119,9 @@ static void orte_debugger_init_before_spawn(orte_job_t *jdata)
 
 static bool mpir_breakpoint_fired = false;
 
-static void _send_notification(void)
+static void _send_notification(int status)
 {
     opal_buffer_t buf;
-    int status = OPAL_ERR_DEBUGGER_RELEASE;
     orte_grpcomm_signature_t sig;
     int rc;
     opal_value_t kv, *kvptr;
@@ -2352,7 +2354,7 @@ void orte_debugger_init_after_spawn(int fd, short event, void *cbdata)
                                     "%s NOTIFYING DEBUGGER RELEASE",
                                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
                 /* notify all procs that the debugger is ready */
-                _send_notification();
+                _send_notification(OPAL_ERR_DEBUGGER_RELEASE);
             }
         }
         return;
@@ -2451,7 +2453,7 @@ void orte_debugger_init_after_spawn(int fd, short event, void *cbdata)
                                 "%s NOTIFYING DEBUGGER RELEASE",
                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
             /* notify all procs that the debugger is ready */
-            _send_notification();
+            _send_notification(OPAL_ERR_DEBUGGER_RELEASE);
         } else if (!orte_debugger_test_attach) {
             /* if I am launching debugger daemons, then I need to do so now
              * that the job has been started and I know which nodes have
@@ -3037,6 +3039,16 @@ void orte_timeout_wakeup(int sd, short args, void *cbdata)
 
 static int nreports = 0;
 static orte_timer_t profile_timer;
+static int nchecks = 0;
+
+static void profile_timeout(int sd, short args, void *cbdata)
+{
+    /* abort the job */
+    ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_ALL_JOBS_COMPLETE);
+    /* set the global abnormal exit flag  */
+    orte_abnormal_term_ordered = true;
+}
+
 
 static void profile_recv(int status, orte_process_name_t* sender,
                          opal_buffer_t *buffer, orte_rml_tag_t tag,
@@ -3071,26 +3083,33 @@ static void profile_recv(int status, orte_process_name_t* sender,
   done:
     --nreports;
     if (nreports == 0) {
+        ++nchecks;
         /* cancel the timeout */
         OBJ_DESTRUCT(&profile_timer);
-        /* abort the job */
-        ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_ALL_JOBS_COMPLETE);
-        /* set the global abnormal exit flag  */
-        orte_abnormal_term_ordered = true;
+        /* notify to release */
+        _send_notification(12345);
+        /* if this was the first measurement, then we need to
+         * let the probe move along */
+        if (2 > nchecks) {
+            /* reset the event */
+            opal_event_evtimer_set(orte_event_base, orte_memprofile_timeout->ev,
+                                   orte_profile_wakeup, NULL);
+            opal_event_set_priority(orte_memprofile_timeout->ev, ORTE_ERROR_PRI);
+            opal_event_evtimer_add(orte_memprofile_timeout->ev, &orte_memprofile_timeout->tv);
+            /* reset the timer */
+            OBJ_CONSTRUCT(&profile_timer, orte_timer_t);
+            opal_event_evtimer_set(orte_event_base,
+                                   profile_timer.ev, profile_timeout, NULL);
+            opal_event_set_priority(profile_timer.ev, ORTE_ERROR_PRI);
+            profile_timer.tv.tv_sec = 30;
+            opal_event_evtimer_add(profile_timer.ev, &profile_timer.tv);
+            return;
+        }
     }
-}
-
-static void profile_timeout(int sd, short args, void *cbdata)
-{
-    /* abort the job */
-    ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_ALL_JOBS_COMPLETE);
-    /* set the global abnormal exit flag  */
-    orte_abnormal_term_ordered = true;
 }
 
 void orte_profile_wakeup(int sd, short args, void *cbdata)
 {
-    orte_job_t *jdata = (orte_job_t*)cbdata;
     orte_job_t *dmns;
     orte_proc_t *dmn;
     int i;
@@ -3106,8 +3125,6 @@ void orte_profile_wakeup(int sd, short args, void *cbdata)
 
     /* set the recv */
     nreports = 1;  // always get a report from ourselves
-    orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_MEMPROFILE,
-                            ORTE_RML_PERSISTENT, profile_recv, NULL);
 
     /* setup the buffer */
     buffer = OBJ_NEW(opal_buffer_t);
@@ -3117,13 +3134,6 @@ void orte_profile_wakeup(int sd, short args, void *cbdata)
         OBJ_RELEASE(buffer);
         goto giveup;
     }
-    /* pack the jobid in question */
-    if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &jdata->jobid, 1, ORTE_JOBID))) {
-        ORTE_ERROR_LOG(rc);
-        OBJ_RELEASE(buffer);
-        goto giveup;
-    }
-
     /* goes to just the first daemon beyond ourselves - no need to get it from everyone */
     dmns = orte_get_job_data_object(ORTE_PROC_MY_NAME->jobid);
     if (NULL != (dmn = (orte_proc_t*)opal_pointer_array_get_item(dmns->procs, 1))) {

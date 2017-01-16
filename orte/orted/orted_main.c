@@ -17,7 +17,7 @@
  *                         et Automatique. All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2013-2016 Intel, Inc. All rights reserved.
- * Copyright (c) 2015-2016 Research Organization for Information Science
+ * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
@@ -126,7 +126,6 @@ static struct {
     int uri_pipe;
     int singleton_died_pipe;
     bool abort;
-    bool mapreduce;
     bool tree_spawn;
     char *hnp_topo_sig;
     bool test_suicide;
@@ -216,10 +215,6 @@ opal_cmd_line_init_t orte_cmd_line_opts[] = {
     { NULL, '\0', NULL, "hnp-topo-sig", 1,
       &orted_globals.hnp_topo_sig, OPAL_CMD_LINE_TYPE_STRING,
       "Topology signature of HNP" },
-
-    { NULL, '\0', "mapreduce", "mapreduce", 0,
-      &orted_globals.mapreduce, OPAL_CMD_LINE_TYPE_BOOL,
-      "Whether to report process bindings to stderr" },
 
     /* End of list */
     { NULL, '\0', NULL, NULL, 0,
@@ -334,11 +329,6 @@ int orte_daemon(int argc, char *argv[])
                 true, &environ);
     free(tmp_env_var);
 #endif
-
-    /* if mapreduce set, flag it */
-    if (orted_globals.mapreduce) {
-        orte_map_reduce = true;
-    }
 
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
@@ -889,6 +879,7 @@ int orte_daemon(int argc, char *argv[])
 
     /* cleanup and leave */
     orte_finalize();
+    opal_finalize_util();
 
     if (orte_debug_flag) {
         fprintf(stderr, "exiting with status %d\n", orte_exit_status);

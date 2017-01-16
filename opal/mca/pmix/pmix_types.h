@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -64,6 +64,8 @@ BEGIN_C_DECLS
 /* attributes for the rendezvous socket  */
 #define OPAL_PMIX_USOCK_DISABLE                 "pmix.usock.disable"    // (bool) disable legacy usock support
 #define OPAL_PMIX_SOCKET_MODE                   "pmix.sockmode"         // (uint32_t) POSIX mode_t (9 bits valid)
+#define OPAL_PMIX_SINGLE_LISTENER               "pmix.sing.listnr"      // (bool) use only one rendezvous socket, letting priorities and/or
+                                                                        //        MCA param select the active transport
 
 /* attributes for TCP connections */
 #define OPAL_PMIX_TCP_URI                       "pmix.tcp.uri"          // (char*) URI of server to connect to
@@ -88,6 +90,7 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_TDIR_RMCLEAN                  "pmix.tdir.rmclean"     // (bool)  Resource Manager will clean session directories
 
 /* information about relative ranks as assigned by the RM */
+#define OPAL_PMIX_PROCID                        "pmix.procid"           // (opal_process_name_t) process identifier
 #define OPAL_PMIX_NSPACE                        "pmix.nspace"           // (char*) nspace of a job
 #define OPAL_PMIX_JOBID                         "pmix.jobid"            // (uint32_t) jobid assigned by scheduler
 #define OPAL_PMIX_APPNUM                        "pmix.appnum"           // (uint32_t) app number within the job
@@ -117,6 +120,8 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_LOCAL_CPUSETS                 "pmix.lcpus"            // (char*) colon-delimited cpusets of local peers within the specified nspace
 #define OPAL_PMIX_PROC_URI                      "opal.puri"             // (char*) URI containing contact info for proc - NOTE: this is published by procs and
                                                                         //            thus cannot be prefixed with "pmix"
+#define OPAL_PMIX_DAEMON_MEMORY                 "pmix.dmn.mem"          // (float) Mbytes of memory currently used by daemon
+#define OPAL_PMIX_CLIENT_AVG_MEMORY             "pmix.cl.mem.avg"       // (float) Average Mbytes of memory used by client processes
 
 /* size info */
 #define OPAL_PMIX_UNIV_SIZE                     "pmix.univ.size"        // (uint32_t) #procs in this nspace
@@ -220,11 +225,16 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_QUERY_AUTHORIZATIONS          "pmix.qry.auths"        // return operations tool is authorized to perform"
 #define OPAL_PMIX_QUERY_SPAWN_SUPPORT           "pmix.qry.spawn"        // return a comma-delimited list of supported spawn attributes
 #define OPAL_PMIX_QUERY_DEBUG_SUPPORT           "pmix.qry.debug"        // return a comma-delimited list of supported debug attributes
+#define OPAL_PMIX_QUERY_MEMORY_USAGE            "pmix.qry.mem"          // return info on memory usage for the procs indicated in the qualifiers
+#define OPAL_PMIX_QUERY_LOCAL_ONLY              "pmix.qry.local"        // constrain the query to local information only
+#define OPAL_PMIX_QUERY_REPORT_AVG              "pmix.qry.avg"          // report average values
+#define OPAL_PMIX_QUERY_REPORT_MINMAX           "pmix.qry.minmax"       // report minimum and maximum value
 
 /* log attributes */
-#define OPAL_PMIX_LOG_STDERR                    "pmix.log.stderr"        // (bool) log data to stderr
-#define OPAL_PMIX_LOG_STDOUT                    "pmix.log.stdout"        // (bool) log data to stdout
-#define OPAL_PMIX_LOG_SYSLOG                    "pmix.log.syslog"        // (bool) log data to syslog - defaults to ERROR priority unless
+#define OPAL_PMIX_LOG_STDERR                    "pmix.log.stderr"        // (char*) log string to stderr
+#define OPAL_PMIX_LOG_STDOUT                    "pmix.log.stdout"        // (char*) log string to stdout
+#define OPAL_PMIX_LOG_SYSLOG                    "pmix.log.syslog"        // (char*) log data to syslog - defaults to ERROR priority unless
+#define OPAL_PMIX_LOG_MSG                       "pmix.log.msg"           // (pmix_byte_object_t) message blob to be sent somewhere
 
 /* debugger attributes */
 #define OPAL_PMIX_DEBUG_STOP_ON_EXEC            "pmix.dbg.exec"          // (bool) job is being spawned under debugger - instruct it to pause on start

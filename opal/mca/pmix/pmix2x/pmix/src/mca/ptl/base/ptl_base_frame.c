@@ -11,7 +11,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, Inc.  All rights reserved.
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -39,6 +39,7 @@
 #include "src/mca/base/pmix_mca_base_var.h"
 #include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/class/pmix_list.h"
+#include "src/client/pmix_client_ops.h"
 #include "src/mca/ptl/base/base.h"
 
 /*
@@ -76,6 +77,11 @@ static pmix_status_t pmix_ptl_close(void)
     /* ensure the listen thread has been shut down */
     pmix_ptl.stop_listening();
 
+    if (0 <= pmix_client_globals.myserver.sd) {
+        CLOSE_THE_SOCKET(pmix_client_globals.myserver.sd);
+        pmix_client_globals.myserver.sd = -1;
+    }
+
     /* the components will cleanup when closed */
     PMIX_DESTRUCT(&pmix_ptl_globals.actives);
     PMIX_LIST_DESTRUCT(&pmix_ptl_globals.posted_recvs);
@@ -92,6 +98,7 @@ static pmix_status_t pmix_ptl_open(pmix_mca_base_open_flag_t flags)
     PMIX_CONSTRUCT(&pmix_ptl_globals.posted_recvs, pmix_list_t);
     pmix_ptl_globals.listen_thread_active = false;
     PMIX_CONSTRUCT(&pmix_ptl_globals.listeners, pmix_list_t);
+    pmix_client_globals.myserver.sd = -1;
 
     /* Open up all available components */
     return pmix_mca_base_framework_components_open(&pmix_ptl_base_framework, flags);
@@ -157,9 +164,9 @@ static void srcon(pmix_ptl_sr_t *p)
     p->cbfunc = NULL;
     p->cbdata = NULL;
 }
-PMIX_CLASS_INSTANCE(pmix_ptl_sr_t,
-                    pmix_object_t,
-                    srcon, NULL);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_ptl_sr_t,
+                                pmix_object_t,
+                                srcon, NULL);
 
 static void pccon(pmix_pending_connection_t *p)
 {
@@ -186,9 +193,9 @@ static void pcdes(pmix_pending_connection_t *p)
         free(p->cred);
     }
 }
-PMIX_CLASS_INSTANCE(pmix_pending_connection_t,
-                    pmix_object_t,
-                    pccon, pcdes);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_pending_connection_t,
+                                pmix_object_t,
+                                pccon, pcdes);
 
 static void lcon(pmix_listener_t *p)
 {
@@ -211,10 +218,10 @@ static void ldes(pmix_listener_t *p)
         free(p->uri);
     }
 }
-PMIX_CLASS_INSTANCE(pmix_listener_t,
-                    pmix_list_item_t,
-                    lcon, ldes);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_listener_t,
+                                pmix_list_item_t,
+                                lcon, ldes);
 
-PMIX_CLASS_INSTANCE(pmix_ptl_queue_t,
-                   pmix_object_t,
-                   NULL, NULL);
+PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_ptl_queue_t,
+                                pmix_object_t,
+                                NULL, NULL);

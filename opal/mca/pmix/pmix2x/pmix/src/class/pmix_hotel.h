@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2012-2016 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, LLC. All rights reserved
- * Copyright (c) 2015-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -157,7 +157,7 @@ PMIX_CLASS_DECLARATION(pmix_hotel_t);
  * @return PMIX_SUCCESS if all initializations were succesful. Otherwise,
  *  the error indicate what went wrong in the function.
  */
-int pmix_hotel_init(pmix_hotel_t *hotel, int num_rooms,
+PMIX_EXPORT int pmix_hotel_init(pmix_hotel_t *hotel, int num_rooms,
                                   pmix_event_base_t *evbase,
                                   uint32_t eviction_timeout,
                                   int eviction_event_priority,

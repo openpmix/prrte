@@ -16,7 +16,10 @@
  * Copyright (c) 2010      IBM Corporation.  All rights reserved.
  * Copyright (c) 2011-2016 Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2017      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  *
+ * Copyright (c) 2017      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -246,6 +249,7 @@ static void mca_mpool_hugepage_finalize (struct mca_mpool_base_module_t *mpool)
     mca_mpool_hugepage_module_t *hugepage_module = (mca_mpool_hugepage_module_t *) mpool;
 
     OBJ_DESTRUCT(&hugepage_module->lock);
+    OBJ_DESTRUCT(&hugepage_module->allocation_tree);
 
     if (hugepage_module->allocator) {
         (void) hugepage_module->allocator->alc_finalize (hugepage_module->allocator);

@@ -11,7 +11,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, Inc. All rights reserved.
- * Copyright (c) 2013-2016 Intel, Inc. All rights reserved
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies, Inc.
@@ -45,7 +45,7 @@ BEGIN_C_DECLS
  * another pmix_value_t structure
  */
 pmix_status_t pmix_value_xfer(pmix_value_t *kv, pmix_value_t *src);
-void pmix_value_load(pmix_value_t *v, void *data,
+void pmix_value_load(pmix_value_t *v, const void *data,
                                    pmix_data_type_t type);
 pmix_status_t pmix_value_unload(pmix_value_t *kv, void **data,
                                               size_t *sz, pmix_data_type_t type);

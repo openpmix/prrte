@@ -11,7 +11,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, Inc.  All rights reserved.
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -297,14 +297,6 @@ pmix_status_t pmix_bfrop_open(void)
                        pmix_bfrop_std_copy,
                        pmix_bfrop_print_status);
 
-#if PMIX_HAVE_HWLOC
-    PMIX_REGISTER_TYPE("PMIX_HWLOC_TOPO", PMIX_HWLOC_TOPO,
-                       pmix_bfrop_pack_topo,
-                       pmix_bfrop_unpack_topo,
-                       pmix_bfrop_copy_topo,
-                       pmix_bfrop_print_topo);
-#endif
-
     PMIX_REGISTER_TYPE("PMIX_VALUE", PMIX_VALUE,
                        pmix_bfrop_pack_value,
                        pmix_bfrop_unpack_value,
@@ -425,6 +417,13 @@ pmix_status_t pmix_bfrop_open(void)
                        pmix_bfrop_copy_query,
                        pmix_bfrop_print_query);
 
+    PMIX_REGISTER_TYPE("PMIX_COMPRESSED_STRING",
+                       PMIX_COMPRESSED_STRING,
+                       pmix_bfrop_pack_bo,
+                       pmix_bfrop_unpack_bo,
+                       pmix_bfrop_copy_bo,
+                       pmix_bfrop_print_bo);
+
     /**** DEPRECATED ****/
     PMIX_REGISTER_TYPE("PMIX_INFO_ARRAY", PMIX_INFO_ARRAY,
                        pmix_bfrop_pack_array,
@@ -462,7 +461,8 @@ pmix_status_t pmix_bfrop_close(void)
 }
 
 /**** UTILITY SUPPORT ****/
-PMIX_EXPORT void pmix_value_load(pmix_value_t *v, void *data,
+PMIX_EXPORT void pmix_value_load(pmix_value_t *v,
+                                 const void *data,
                                  pmix_data_type_t type)
 {
     pmix_byte_object_t *bo;

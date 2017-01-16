@@ -13,9 +13,10 @@
  *
  * Copyright (c) 2006      Voltaire. All rights reserved.
  * Copyright (c) 2009      IBM Corporation.  All rights reserved.
- * Copyright (c) 2015-2016 Los Alamos National Security, LLC. All rights
+ * Copyright (c) 2015-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
  *
+ * Copyright (c) 2017      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,6 +45,7 @@ struct mca_rcache_base_vma_module_t {
     opal_object_t super;
     opal_rb_tree_t rb_tree;
     opal_list_t vma_list;
+    opal_list_t vma_gc_list;
     size_t reg_cur_cache_size;
     opal_mutex_t vma_lock;
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +23,7 @@ typedef struct {
     pmix_list_t pending_requests;   // list of pmix_cb_t pending data requests
 } pmix_client_globals_t;
 
-extern pmix_client_globals_t pmix_client_globals;
+PMIX_EXPORT extern pmix_client_globals_t pmix_client_globals;
 
 END_C_DECLS
 

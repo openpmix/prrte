@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2016      Intel, Inc. All rights reserved
+ * Copyright (c) 2016-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -73,7 +73,7 @@ static pmix_status_t setup_listener(pmix_info_t info[], size_t ninfo,
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
- pmix_ptl_usock_component_t mca_ptl_usock_component = {
+PMIX_EXPORT pmix_ptl_usock_component_t mca_ptl_usock_component = {
     .super = {
         .base = {
             PMIX_PTL_BASE_VERSION_1_0_0,
@@ -90,7 +90,7 @@ static pmix_status_t setup_listener(pmix_info_t info[], size_t ninfo,
             .pmix_mca_close_component = component_close,
             .pmix_mca_query_component = component_query
         },
-        .priority = 5,
+        .priority = 15,
         .uri = NULL,
         .setup_listener = setup_listener
     },

@@ -11,7 +11,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -33,9 +33,6 @@
 #ifdef HAVE_STRING_H
 #include <string.h>
 #endif
-#if PMIX_HAVE_HWLOC
-#include PMIX_HWLOC_HEADER
-#endif
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/mca/mca.h"
@@ -49,7 +46,7 @@
 /*
  * MCA Framework
  */
-extern pmix_mca_base_framework_t pmix_ptl_base_framework;
+PMIX_EXPORT extern pmix_mca_base_framework_t pmix_ptl_base_framework;
 /**
  * PTL select function
  *
@@ -82,7 +79,7 @@ struct pmix_ptl_globals_t {
 };
 typedef struct pmix_ptl_globals_t pmix_ptl_globals_t;
 
-extern pmix_ptl_globals_t pmix_ptl_globals;
+PMIX_EXPORT extern pmix_ptl_globals_t pmix_ptl_globals;
 
 /* API stubs */
 PMIX_EXPORT pmix_status_t pmix_ptl_stub_set_notification_cbfunc(pmix_ptl_cbfunc_t cbfunc);

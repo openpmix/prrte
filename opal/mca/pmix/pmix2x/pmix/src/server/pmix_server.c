@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014-2015 Artem Y. Polyakov <artpol84@gmail.com>.
@@ -286,6 +286,7 @@ static void _register_nspace(int sd, short args, void *cbdata)
     pmix_info_t *iptr;
     pmix_value_t val;
     char *msg;
+    bool nodata = false;
 #if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
     pmix_buffer_t *jobdata = PMIX_NEW(pmix_buffer_t);
     char *nspace = NULL;
@@ -335,6 +336,14 @@ static void _register_nspace(int sd, short args, void *cbdata)
                             "pmix:server _register_nspace recording %s",
                             cd->info[i].key);
 
+        if (0 == strcmp(cd->info[i].key, PMIX_REGISTER_NODATA)) {
+            /* we don't want to save any job data for this nspace */
+            nodata = true;
+            /* free anything that was previously stored */
+            PMIX_DESTRUCT(&nptr->server->job_info);
+            PMIX_CONSTRUCT(&nptr->server->job_info, pmix_buffer_t);
+            break;
+        }
         if (0 == strcmp(cd->info[i].key, PMIX_NODE_MAP)) {
             /* parse the regex to get the argv array of node names */
             if (PMIX_SUCCESS != (rc = pmix_regex_parse_nodes(cd->info[i].value.data.string, &nodes))) {
@@ -436,19 +445,21 @@ static void _register_nspace(int sd, short args, void *cbdata)
         PMIX_ERROR_LOG(rc);
         goto release;
     }
-    pmix_bfrop.copy_payload(jobdata, &nptr->server->job_info);
-    pmix_bfrop.copy_payload(jobdata, &pmix_server_globals.gdata);
+    if (!nodata) {
+        pmix_bfrop.copy_payload(jobdata, &nptr->server->job_info);
+        pmix_bfrop.copy_payload(jobdata, &pmix_server_globals.gdata);
 
-    /* unpack the nspace - we don't really need it, but have to
-    * unpack it to maintain sequence */
-    cnt = 1;
-    if (PMIX_SUCCESS != (rc = pmix_bfrop.unpack(jobdata, &nspace, &cnt, PMIX_STRING))) {
-        PMIX_ERROR_LOG(rc);
-        goto release;
-    }
-    if (PMIX_SUCCESS != (rc = pmix_job_data_dstore_store(cd->proc.nspace, jobdata))) {
-        PMIX_ERROR_LOG(rc);
-        goto release;
+        /* unpack the nspace - we don't really need it, but have to
+        * unpack it to maintain sequence */
+        cnt = 1;
+        if (PMIX_SUCCESS != (rc = pmix_bfrop.unpack(jobdata, &nspace, &cnt, PMIX_STRING))) {
+            PMIX_ERROR_LOG(rc);
+            goto release;
+        }
+        if (PMIX_SUCCESS != (rc = pmix_job_data_dstore_store(cd->proc.nspace, jobdata))) {
+            PMIX_ERROR_LOG(rc);
+            goto release;
+        }
     }
 #endif
 
@@ -791,7 +802,7 @@ static void _deregister_client(int sd, short args, void *cbdata)
         /* nothing to do */
         goto cleanup;
     }
-    /* find an remove this client */
+    /* find and remove this client */
     PMIX_LIST_FOREACH(info, &nptr->server->ranks, pmix_rank_info_t) {
         if (info->rank == cd->proc.rank) {
             pmix_list_remove_item(&nptr->server->ranks, &info->super);
@@ -1431,6 +1442,7 @@ static void op_cbfunc(pmix_status_t status, void *cbdata)
         PMIX_RELEASE(cd);
         return;
     }
+
     /* the function that created the server_caddy did a
      * retain on the peer, so we don't have to worry about
      * it still being present - send a copy to the originator */
@@ -2067,6 +2079,10 @@ static pmix_status_t server_switchyard(pmix_peer_t *peer, uint32_t tag,
             if (PMIX_SUCCESS != (rc = pmix_host_server.client_finalized(&proc, peer->info->server_object,
                                                                         op_cbfunc, cd))) {
                 PMIX_RELEASE(cd);
+            } else {
+                /* don't reply to them ourselves - we will do so when the host
+                 * server calls us back */
+                return rc;
             }
         }
         /* turn off the recv event - we shouldn't hear anything

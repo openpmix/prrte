@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -366,16 +366,16 @@ static void reg_event_hdlr(int sd, short args, void *cbdata)
             PMIX_ERR_WOULD_BLOCK != rc) {
                 /* unable to register */
             --pmix_globals.events.nhdlrs;
-        rc = PMIX_ERR_EVENT_REGISTRATION;
-        index = UINT_MAX;
+            rc = PMIX_ERR_EVENT_REGISTRATION;
+            index = UINT_MAX;
+            goto ack;
+        }
+        if (PMIX_ERR_WOULD_BLOCK == rc) {
+            /* the callback will provide our response */
+            PMIX_RELEASE(cd);
+            return;
+        }
         goto ack;
-    }
-    if (PMIX_ERR_WOULD_BLOCK == rc) {
-        /* the callback will provide our response */
-        PMIX_RELEASE(cd);
-        return;
-    }
-    goto ack;
     }
 
     /* must be a multi-code registration */
@@ -398,9 +398,9 @@ static void reg_event_hdlr(int sd, short args, void *cbdata)
         PMIX_ERR_WOULD_BLOCK != rc) {
             /* unable to register */
         --pmix_globals.events.nhdlrs;
-    rc = PMIX_ERR_EVENT_REGISTRATION;
-    index = UINT_MAX;
-    goto ack;
+        rc = PMIX_ERR_EVENT_REGISTRATION;
+        index = UINT_MAX;
+        goto ack;
     }
     if (PMIX_ERR_WOULD_BLOCK == rc) {
         /* the callback will provide our response */

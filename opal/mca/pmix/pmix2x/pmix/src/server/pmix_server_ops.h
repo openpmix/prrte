@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2015-2016 Intel, Inc. All rights reserved
+ * Copyright (c) 2015-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Artem Y. Polyakov <artpol84@gmail.com>.
  *                         All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.
@@ -217,7 +217,7 @@ pmix_status_t pmix_server_event_recvd_from_client(pmix_peer_t *peer,
                                                   void *cbdata);
 void pmix_server_execute_collective(int sd, short args, void *cbdata);
 
-extern pmix_server_module_t pmix_host_server;
-extern pmix_server_globals_t pmix_server_globals;
+PMIX_EXPORT extern pmix_server_module_t pmix_host_server;
+PMIX_EXPORT extern pmix_server_globals_t pmix_server_globals;
 
 #endif // PMIX_SERVER_OPS_H

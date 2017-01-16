@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,6 +19,7 @@
 
 #include "opal/util/output.h"
 #include "opal/dss/dss.h"
+#include "opal/mca/pmix/pmix.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/iof/base/base.h"
@@ -333,7 +334,7 @@ static void track_procs(int fd, short argc, void *cbdata)
          * to check to see if all procs from the job are actually terminated
          */
         if (NULL != orte_iof.close) {
-            orte_iof.close(proc, ORTE_IOF_STDIN);
+            orte_iof.close(proc, ORTE_IOF_STDALL);
         }
         if (ORTE_FLAG_TEST(pdata, ORTE_PROC_FLAG_WAITPID) &&
             !ORTE_FLAG_TEST(pdata, ORTE_PROC_FLAG_RECORDED)) {
@@ -440,11 +441,23 @@ static void track_procs(int fd, short argc, void *cbdata)
                     OBJ_RELEASE(pptr);  // maintain accounting
                 }
             }
+            /* tell the IOF that the job is complete */
+            if (NULL != orte_iof.complete) {
+                orte_iof.complete(jdata);
+            }
 
+            /* tell the PMIx subsystem the job is complete */
+            if (NULL != opal_pmix.server_deregister_nspace) {
+                opal_pmix.server_deregister_nspace(jdata->jobid, NULL, NULL);
+            }
+
+            /* cleanup the job info */
+            opal_hash_table_set_value_uint32(orte_job_data, jdata->jobid, NULL);
+            OBJ_RELEASE(jdata);
         }
     }
 
- cleanup:
+  cleanup:
     OBJ_RELEASE(caddy);
 }
 
