@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -869,4 +869,3 @@ int orte_dt_print_sig(char **output, char *prefix, orte_grpcomm_signature_t *src
     *output = tmp;
     return ORTE_SUCCESS;
 }
-

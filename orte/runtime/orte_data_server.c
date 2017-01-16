@@ -12,7 +12,7 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2016 Los Alamos National Security, LLC.
  *                         All rights reserved
- * Copyright (c) 2015-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -645,5 +645,3 @@ void orte_data_server(int status, orte_process_name_t* sender,
         OBJ_RELEASE(answer);
     }
 }
-
-
