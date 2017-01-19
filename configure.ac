@@ -300,10 +300,6 @@ OPAL_SETUP_CC
 AM_CONDITIONAL(OMPI_NEED_WINDOWS_REPLACEMENTS,
                test "$opal_cv_c_compiler_vendor" = "microsoft" )
 
-# Do all Interix detections if necessary
-
-OMPI_INTERIX
-
 # Does the compiler support "ident"-like constructs?
 
 OPAL_CHECK_IDENT([CC], [CFLAGS], [c], [C])
