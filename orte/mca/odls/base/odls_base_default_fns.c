@@ -1379,6 +1379,8 @@ void odls_base_default_wait_local_proc(orte_proc_t *proc, void* cbdata)
     }
 
  MOVEON:
+    /* cancel the wait as this proc has already terminated */
+    orte_wait_cb_cancel(proc);
     ORTE_ACTIVATE_PROC_STATE(&proc->name, state);
 }
 

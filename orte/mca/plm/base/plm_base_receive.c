@@ -86,6 +86,10 @@ int orte_plm_base_comm_start(void)
                                 ORTE_RML_TAG_REPORT_REMOTE_LAUNCH,
                                 ORTE_RML_PERSISTENT,
                                 orte_plm_base_daemon_failed, NULL);
+        orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD,
+                                ORTE_RML_TAG_TOPOLOGY_REPORT,
+                                ORTE_RML_PERSISTENT,
+                                orte_plm_base_daemon_topology, NULL);
     }
     recv_issued = true;
 
@@ -103,6 +107,12 @@ int orte_plm_base_comm_stop(void)
                          "%s plm:base:receive stop comm",
                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
 
+    orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_PLM);
+    if (ORTE_PROC_IS_HNP) {
+        orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_ORTED_CALLBACK);
+        orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_REPORT_REMOTE_LAUNCH);
+        orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_TOPOLOGY_REPORT);
+    }
     recv_issued = false;
 
     return ORTE_SUCCESS;

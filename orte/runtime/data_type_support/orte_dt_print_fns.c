@@ -476,13 +476,13 @@ int orte_dt_print_proc(char **output, char *prefix, orte_proc_t *src, opal_data_
         char *str=NULL, *cpu_bitmap=NULL;
 
         if (orte_get_attribute(&src->attributes, ORTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, OPAL_STRING) &&
-            NULL != src->node->topology) {
+            NULL != src->node->topology && NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
             hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
-            if (OPAL_ERR_NOT_BOUND == opal_hwloc_base_cset2str(tmp1, sizeof(tmp1), src->node->topology, mycpus)) {
+            if (OPAL_ERR_NOT_BOUND == opal_hwloc_base_cset2str(tmp1, sizeof(tmp1), src->node->topology->topo, mycpus)) {
                 str = strdup("UNBOUND");
             } else {
-                opal_hwloc_base_cset2mapstr(tmp2, sizeof(tmp2), src->node->topology, mycpus);
+                opal_hwloc_base_cset2mapstr(tmp2, sizeof(tmp2), src->node->topology->topo, mycpus);
                 asprintf(&str, "%s:%s", tmp1, tmp2);
             }
             hwloc_bitmap_free(mycpus);
@@ -517,7 +517,7 @@ int orte_dt_print_proc(char **output, char *prefix, orte_proc_t *src, opal_data_
 
     if (orte_get_attribute(&src->attributes, ORTE_PROC_HWLOC_LOCALE, (void**)&loc, OPAL_PTR)) {
         if (NULL != loc) {
-            if (OPAL_ERR_NOT_BOUND == opal_hwloc_base_cset2mapstr(locale, sizeof(locale), src->node->topology, loc->cpuset)) {
+            if (OPAL_ERR_NOT_BOUND == opal_hwloc_base_cset2mapstr(locale, sizeof(locale), src->node->topology->topo, loc->cpuset)) {
                 strcpy(locale, "NODE");
             }
         } else {
@@ -528,7 +528,7 @@ int orte_dt_print_proc(char **output, char *prefix, orte_proc_t *src, opal_data_
     }
     if (orte_get_attribute(&src->attributes, ORTE_PROC_HWLOC_BOUND, (void**)&bd, OPAL_PTR)) {
         if (NULL != bd) {
-            if (OPAL_ERR_NOT_BOUND == opal_hwloc_base_cset2mapstr(bind, sizeof(bind), src->node->topology, bd->cpuset)) {
+            if (OPAL_ERR_NOT_BOUND == opal_hwloc_base_cset2mapstr(bind, sizeof(bind), src->node->topology->topo, bd->cpuset)) {
                 strcpy(bind, "UNBOUND");
             }
         } else {
