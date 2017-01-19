@@ -45,12 +45,12 @@
 /*
  * The default starting chunk size
  */
-#define PMIX_BFROP_DEFAULT_INITIAL_SIZE  128
+#define PMIX_BFROP_DEFAULT_INITIAL_SIZE  2048
 /*
  * The default threshold size when we switch from doubling the
  * buffer size to addatively increasing it
  */
-#define PMIX_BFROP_DEFAULT_THRESHOLD_SIZE 1024
+#define PMIX_BFROP_DEFAULT_THRESHOLD_SIZE 4096
 
 /*
  * Internal type corresponding to size_t.  Do not use this in

@@ -270,7 +270,6 @@ static pmix_status_t connect_to_peer(struct pmix_peer_t *peer,
     if (PMIX_SUCCESS != (rc = send_connect_ack(sd))) {
         PMIX_ERROR_LOG(rc);
         CLOSE_THE_SOCKET(sd);
-        pmix_client_globals.myserver.sd = -1;
         return rc;
     }
 
@@ -278,7 +277,6 @@ static pmix_status_t connect_to_peer(struct pmix_peer_t *peer,
     if (PMIX_SUCCESS != (rc = recv_connect_ack(sd))) {
         PMIX_ERROR_LOG(rc);
         CLOSE_THE_SOCKET(sd);
-        pmix_client_globals.myserver.sd = -1;
         return rc;
     }
 

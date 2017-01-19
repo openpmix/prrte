@@ -21,8 +21,8 @@
  * $HEADER$
  *
  */
-#ifndef PMIX_BFROP_BASE_H_
-#define PMIX_BFROP_BASE_H_
+#ifndef PMIX_PSEC_BASE_H_
+#define PMIX_PSEC_BASE_H_
 
 #include <src/include/pmix_config.h>
 
@@ -48,7 +48,7 @@ BEGIN_C_DECLS
  */
 extern pmix_mca_base_framework_t pmix_psec_base_framework;
 /**
- * BFROP select function
+ * PSEC select function
  *
  * Cycle across available components and construct the list
  * of active modules

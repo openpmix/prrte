@@ -174,7 +174,7 @@ pmix_status_t pmix_bfrop_open(void)
     }
     pmix_bfrop_num_reg_types = PMIX_UNDEF;
     pmix_bfrop_threshold_size = PMIX_BFROP_DEFAULT_THRESHOLD_SIZE;
-    pmix_bfrop_initial_size = 1;
+    pmix_bfrop_initial_size = PMIX_BFROP_DEFAULT_INITIAL_SIZE;
 
     /* Register all the supported types */
     PMIX_REGISTER_TYPE("PMIX_BOOL", PMIX_BOOL,

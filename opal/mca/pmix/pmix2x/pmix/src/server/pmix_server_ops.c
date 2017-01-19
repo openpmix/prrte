@@ -1302,7 +1302,6 @@ pmix_status_t pmix_server_event_recvd_from_client(pmix_peer_t *peer,
     int32_t cnt;
     pmix_status_t rc;
     pmix_notify_caddy_t *cd;
-    bool local = false;
 
     pmix_output_verbose(2, pmix_globals.debug_output,
                         "recvd event notification from client");
@@ -1556,11 +1555,14 @@ static void scadcon(pmix_setup_caddy_t *p)
 {
     memset(&p->proc, 0, sizeof(pmix_proc_t));
     p->active = true;
+    p->nspace = NULL;
     p->server_object = NULL;
     p->nlocalprocs = 0;
     p->info = NULL;
     p->ninfo = 0;
     p->cbfunc = NULL;
+    p->opcbfunc = NULL;
+    p->setupcbfunc = NULL;
     p->cbdata = NULL;
 }
 static void scaddes(pmix_setup_caddy_t *p)
