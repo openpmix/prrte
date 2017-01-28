@@ -77,7 +77,6 @@
 #include "orte/util/session_dir.h"
 #include "orte/util/proc_info.h"
 #include "orte/util/nidmap.h"
-#include "orte/util/regex.h"
 #include "orte/util/show_help.h"
 #include "orte/runtime/orte_globals.h"
 #include "orte/runtime/orte_wait.h"
@@ -138,20 +137,11 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         return rc;
     }
 
-    /* construct a nodemap - only want updated items */
-    if (ORTE_SUCCESS != (rc = orte_util_encode_nodemap(&bo, true))) {
+    /* construct a nodemap of the daemons */
+    if (ORTE_SUCCESS != (rc = orte_util_encode_nodemap(buffer))) {
         ORTE_ERROR_LOG(rc);
         return rc;
     }
-
-    /* store it */
-    boptr = &bo;
-    if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &boptr, 1, OPAL_BYTE_OBJECT))) {
-        ORTE_ERROR_LOG(rc);
-        return rc;
-    }
-    /* release the data since it has now been copied into our buffer */
-    free(bo.bytes);
 
     /* if we are not using static ports, we need to send the wireup info */
     if (!orte_static_ports) {
@@ -261,7 +251,6 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
     orte_proc_t *pptr, *dmn;
     opal_buffer_t *bptr;
     orte_app_context_t *app;
-    bool found;
     orte_node_t *node;
     bool newmap = false;
 
@@ -454,18 +443,9 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
         opal_pointer_array_add(dmn->node->procs, pptr);
 
         /* add the node to the map, if not already there */
-        found = false;
-        for (k=0; k < jdata->map->nodes->size; k++) {
-            if (NULL == (node = (orte_node_t*)opal_pointer_array_get_item(jdata->map->nodes, k))) {
-                continue;
-            }
-            if (node->daemon == dmn) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
+        if (!ORTE_FLAG_TEST(dmn->node, ORTE_NODE_FLAG_MAPPED)) {
             OBJ_RETAIN(dmn->node);
+            ORTE_FLAG_SET(dmn->node, ORTE_NODE_FLAG_MAPPED);
             opal_pointer_array_add(jdata->map->nodes, dmn->node);
             if (newmap) {
                 jdata->map->num_nodes++;
@@ -496,6 +476,12 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
             /* mark that this app_context is being used on this node */
             app = (orte_app_context_t*)opal_pointer_array_get_item(jdata->apps, pptr->app_idx);
             ORTE_FLAG_SET(app, ORTE_APP_FLAG_USED_ON_NODE);
+        }
+    }
+    /* reset the node map flags we used so the next job will start clean */
+    for (n=0; n < jdata->map->nodes->size; n++) {
+        if (NULL != (node = (orte_node_t*)opal_pointer_array_get_item(jdata->map->nodes, n))) {
+            ORTE_FLAG_UNSET(node, ORTE_NODE_FLAG_MAPPED);
         }
     }
 

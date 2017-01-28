@@ -55,11 +55,11 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [
 if test "$GCC" = "yes" ; then
         # Enable many gcc warnings by default...
         CFLAGS="$CFLAGS -Wall"
-	# And disable the strict-aliasing optimization, since it breaks
-	# our sockaddr-handling code in strange ways.
-	if test x$have_gcc295 = xyes; then
-		CFLAGS="$CFLAGS -fno-strict-aliasing"
-	fi
+        # And disable the strict-aliasing optimization, since it breaks
+        # our sockaddr-handling code in strange ways.
+        if test x$have_gcc295 = xyes; then
+                CFLAGS="$CFLAGS -fno-strict-aliasing"
+        fi
 fi
 
 # OS X Lion started deprecating the system openssl. Let's just disable
@@ -77,7 +77,7 @@ AC_ARG_ENABLE(gcc-warnings,
      AS_HELP_STRING(--enable-gcc-warnings, enable verbose warnings with GCC))
 AC_ARG_ENABLE(thread-support,
      AS_HELP_STRING(--disable-thread-support, disable support for threading),
-	[], [enable_thread_support=yes])
+        [], [enable_thread_support=yes])
 AC_ARG_ENABLE(malloc-replacement,
      AS_HELP_STRING(--disable-malloc-replacement, disable support for replacing the memory mgt functions),
         [], [enable_malloc_replacement=yes])
@@ -89,13 +89,13 @@ AC_ARG_ENABLE(debug-mode,
         [], [enable_debug_mode=yes])
 AC_ARG_ENABLE([libevent-install],
      AS_HELP_STRING([--disable-libevent-install, disable installation of libevent]),
-	[], [enable_libevent_install=yes])
+        [], [enable_libevent_install=yes])
 AC_ARG_ENABLE([libevent-regress],
      AS_HELP_STRING([--disable-libevent-regress, skip regress in make check]),
-	[], [enable_libevent_regress=yes])
+        [], [enable_libevent_regress=yes])
 AC_ARG_ENABLE([function-sections],
      AS_HELP_STRING([--enable-function-sections, make static library allow smaller binaries with --gc-sections]),
-	[], [enable_function_sections=no])
+        [], [enable_function_sections=no])
 
 
 dnl   *******  Open MPI Changes  ******
@@ -175,8 +175,8 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 die horribly
 #endif
 ]], [[int i;]])],
-	[bwin32=true; AC_MSG_RESULT(yes)],
-	[bwin32=false; AC_MSG_RESULT(no)]
+        [bwin32=true; AC_MSG_RESULT(yes)],
+        [bwin32=false; AC_MSG_RESULT(no)]
 )
 dnl   ****** END Open MPI Changes (autoconf 2.68) ******
 
@@ -184,13 +184,13 @@ dnl - check if the macro __CYGWIN__ is defined on this compiler.
 dnl - (this is how we check for a cygwin version of GCC)
 AC_MSG_CHECKING(for CYGWIN)
 AC_TRY_COMPILE(,
-	[
+        [
 #ifndef __CYGWIN__
 die horribly
 #endif
-	],
-	cygwin=true; AC_MSG_RESULT(yes),
-	cygwin=false; AC_MSG_RESULT(no),
+        ],
+        cygwin=true; AC_MSG_RESULT(yes),
+        cygwin=false; AC_MSG_RESULT(no),
 )
 
 AC_CHECK_HEADERS([zlib.h])
@@ -203,9 +203,9 @@ LIBS=""
 ZLIB_LIBS=""
 have_zlib=no
 AC_SEARCH_LIBS([inflateEnd], [z],
-	[have_zlib=yes
-	ZLIB_LIBS="$LIBS"
-	AC_DEFINE(HAVE_LIBZ, 1, [Define if the system has zlib])])
+        [have_zlib=yes
+        ZLIB_LIBS="$LIBS"
+        AC_DEFINE(HAVE_LIBZ, 1, [Define if the system has zlib])])
 LIBS="$save_LIBS"
 AC_SUBST(ZLIB_LIBS)
 fi
@@ -231,11 +231,11 @@ LIBS=""
 OPENSSL_LIBS=""
 have_openssl=no
 AC_SEARCH_LIBS([SSL_new], [ssl],
-	[have_openssl=yes
-	OPENSSL_LIBS="$LIBS -lcrypto $EV_LIB_GDI $EV_LIB_WS32 $OPENSSL_LIBADD"
-	AC_DEFINE(HAVE_OPENSSL, 1, [Define if the system has openssl])],
-	[have_openssl=no],
-	[-lcrypto $EV_LIB_GDI $EV_LIB_WS32 $OPENSSL_LIBADD])
+        [have_openssl=yes
+        OPENSSL_LIBS="$LIBS -lcrypto $EV_LIB_GDI $EV_LIB_WS32 $OPENSSL_LIBADD"
+        AC_DEFINE(HAVE_OPENSSL, 1, [Define if the system has openssl])],
+        [have_openssl=no],
+        [-lcrypto $EV_LIB_GDI $EV_LIB_WS32 $OPENSSL_LIBADD])
 LIBS="$save_LIBS"
 AC_SUBST(OPENSSL_LIBS)
 fi
@@ -250,81 +250,81 @@ AC_CHECK_HEADERS(sys/sysctl.h, [], [], [
 #endif
 ])
 if test "x$ac_cv_header_sys_queue_h" = "xyes"; then
-	AC_MSG_CHECKING(for TAILQ_FOREACH in sys/queue.h)
-	AC_EGREP_CPP(yes,
+        AC_MSG_CHECKING(for TAILQ_FOREACH in sys/queue.h)
+        AC_EGREP_CPP(yes,
 [
 #include <sys/queue.h>
 #ifdef TAILQ_FOREACH
  yes
 #endif
-],	[AC_MSG_RESULT(yes)
-	 AC_DEFINE(HAVE_TAILQFOREACH, 1,
-		[Define if TAILQ_FOREACH is defined in <sys/queue.h>])],
-	AC_MSG_RESULT(no)
-	)
+],      [AC_MSG_RESULT(yes)
+         AC_DEFINE(HAVE_TAILQFOREACH, 1,
+                [Define if TAILQ_FOREACH is defined in <sys/queue.h>])],
+        AC_MSG_RESULT(no)
+        )
 fi
 
 if test "x$ac_cv_header_sys_time_h" = "xyes"; then
-	AC_MSG_CHECKING(for timeradd in sys/time.h)
-	AC_EGREP_CPP(yes,
+        AC_MSG_CHECKING(for timeradd in sys/time.h)
+        AC_EGREP_CPP(yes,
 [
 #include <sys/time.h>
 #ifdef timeradd
  yes
 #endif
-],	[ AC_DEFINE(HAVE_TIMERADD, 1,
-		[Define if timeradd is defined in <sys/time.h>])
-	  AC_MSG_RESULT(yes)] ,AC_MSG_RESULT(no)
+],      [ AC_DEFINE(HAVE_TIMERADD, 1,
+                [Define if timeradd is defined in <sys/time.h>])
+          AC_MSG_RESULT(yes)] ,AC_MSG_RESULT(no)
 )
 fi
 
 if test "x$ac_cv_header_sys_time_h" = "xyes"; then
-	AC_MSG_CHECKING(for timercmp in sys/time.h)
-	AC_EGREP_CPP(yes,
+        AC_MSG_CHECKING(for timercmp in sys/time.h)
+        AC_EGREP_CPP(yes,
 [
 #include <sys/time.h>
 #ifdef timercmp
  yes
 #endif
-],	[ AC_DEFINE(HAVE_TIMERCMP, 1,
-		[Define if timercmp is defined in <sys/time.h>])
-	  AC_MSG_RESULT(yes)] ,AC_MSG_RESULT(no)
+],      [ AC_DEFINE(HAVE_TIMERCMP, 1,
+                [Define if timercmp is defined in <sys/time.h>])
+          AC_MSG_RESULT(yes)] ,AC_MSG_RESULT(no)
 )
 fi
 
 if test "x$ac_cv_header_sys_time_h" = "xyes"; then
-	AC_MSG_CHECKING(for timerclear in sys/time.h)
-	AC_EGREP_CPP(yes,
+        AC_MSG_CHECKING(for timerclear in sys/time.h)
+        AC_EGREP_CPP(yes,
 [
 #include <sys/time.h>
 #ifdef timerclear
  yes
 #endif
-],	[ AC_DEFINE(HAVE_TIMERCLEAR, 1,
-		[Define if timerclear is defined in <sys/time.h>])
-	  AC_MSG_RESULT(yes)] ,AC_MSG_RESULT(no)
+],      [ AC_DEFINE(HAVE_TIMERCLEAR, 1,
+                [Define if timerclear is defined in <sys/time.h>])
+          AC_MSG_RESULT(yes)] ,AC_MSG_RESULT(no)
 )
 fi
 
 if test "x$ac_cv_header_sys_time_h" = "xyes"; then
-	AC_MSG_CHECKING(for timerisset in sys/time.h)
-	AC_EGREP_CPP(yes,
+        AC_MSG_CHECKING(for timerisset in sys/time.h)
+        AC_EGREP_CPP(yes,
 [
 #include <sys/time.h>
 #ifdef timerisset
  yes
 #endif
-],	[ AC_DEFINE(HAVE_TIMERISSET, 1,
-		[Define if timerisset is defined in <sys/time.h>])
-	  AC_MSG_RESULT(yes)] ,AC_MSG_RESULT(no)
+],      [ AC_DEFINE(HAVE_TIMERISSET, 1,
+                [Define if timerisset is defined in <sys/time.h>])
+          AC_MSG_RESULT(yes)] ,AC_MSG_RESULT(no)
 )
 fi
 
 if test "x$ac_cv_header_sys_sysctl_h" = "xyes"; then
-	AC_CHECK_DECLS([CTL_KERN, KERN_RANDOM, RANDOM_UUID, KERN_ARND], [], [],
-	   [[#include <sys/types.h>
-	     #include <sys/sysctl.h>]]
-	)
+        AC_CHECK_DECLS([CTL_KERN, KERN_RANDOM, RANDOM_UUID, KERN_ARND], [], [],
+           [[#include <sys/types.h>
+             #include <sys/sysctl.h>]]
+        )
 fi
 
 AM_CONDITIONAL(BUILD_WIN32, test x$bwin32 = xtrue)
@@ -349,18 +349,18 @@ AC_CACHE_CHECK(
     [for getaddrinfo],
     [libevent_cv_getaddrinfo],
     [AC_LINK_IFELSE(
-	[AC_LANG_PROGRAM(
-	    [[
-		#ifdef HAVE_NETDB_H
-		#include <netdb.h>
-		#endif
-	    ]],
-	    [[
-		getaddrinfo;
-	    ]]
-	)],
-	[libevent_cv_getaddrinfo=yes],
-	[libevent_cv_getaddrinfo=no]
+        [AC_LANG_PROGRAM(
+            [[
+                #ifdef HAVE_NETDB_H
+                #include <netdb.h>
+                #endif
+            ]],
+            [[
+                getaddrinfo;
+            ]]
+        )],
+        [libevent_cv_getaddrinfo=yes],
+        [libevent_cv_getaddrinfo=no]
     )]
 )
 if test "$libevent_cv_getaddrinfo" = "yes" ; then
@@ -436,16 +436,16 @@ AC_EGREP_CPP(yes,
 #ifdef F_SETFD
 yes
 #endif
-],	[ AC_DEFINE(HAVE_SETFD, 1,
-	      [Define if F_SETFD is defined in <fcntl.h>])
-	  AC_MSG_RESULT(yes) ], AC_MSG_RESULT(no))
+],      [ AC_DEFINE(HAVE_SETFD, 1,
+              [Define if F_SETFD is defined in <fcntl.h>])
+          AC_MSG_RESULT(yes) ], AC_MSG_RESULT(no))
 
 needsignal=no
 haveselect=no
 if test x$bwin32 != xtrue; then
     AC_CHECK_FUNCS(select, [haveselect=yes], )
     if test "x$haveselect" = "xyes" ; then
- 	needsignal=yes
+        needsignal=yes
     fi
 fi
 AM_CONDITIONAL(SELECT_BACKEND, [test "x$haveselect" = "xyes"])
@@ -469,7 +469,7 @@ if test "$enable_poll" != "no" ; then
       AC_CHECK_FUNCS(poll, [havepoll=yes], )
     fi
     if test "x$havepoll" = "xyes" ; then
-	needsignal=yes
+        needsignal=yes
     fi
 fi
 AM_CONDITIONAL(POLL_BACKEND, [test "x$havepoll" = "xyes" -a "$enable_poll" != "no"])
@@ -509,9 +509,9 @@ dnl   ****** Open MPI Changes ******
         ;;
     esac
 dnl   ****** End Open MPI Changes ******
-	if test "x$havekqueue" = "xyes" ; then
-		AC_MSG_CHECKING(for working kqueue)
-		AC_TRY_RUN(
+        if test "x$havekqueue" = "xyes" ; then
+                AC_MSG_CHECKING(for working kqueue)
+                AC_TRY_RUN(
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/event.h>
@@ -522,47 +522,47 @@ dnl   ****** End Open MPI Changes ******
 int
 main(int argc, char **argv)
 {
-	int kq;
-	int n;
-	int fd[[2]];
-	struct kevent ev;
-	struct timespec ts;
-	char buf[[8000]];
+        int kq;
+        int n;
+        int fd[[2]];
+        struct kevent ev;
+        struct timespec ts;
+        char buf[[8000]];
 
-	if (pipe(fd) == -1)
-		exit(1);
-	if (fcntl(fd[[1]], F_SETFL, O_NONBLOCK) == -1)
-		exit(1);
+        if (pipe(fd) == -1)
+                exit(1);
+        if (fcntl(fd[[1]], F_SETFL, O_NONBLOCK) == -1)
+                exit(1);
 
-	while ((n = write(fd[[1]], buf, sizeof(buf))) == sizeof(buf))
-		;
+        while ((n = write(fd[[1]], buf, sizeof(buf))) == sizeof(buf))
+                ;
 
         if ((kq = kqueue()) == -1)
-		exit(1);
+                exit(1);
 
-	memset(&ev, 0, sizeof(ev));
-	ev.ident = fd[[1]];
-	ev.filter = EVFILT_WRITE;
-	ev.flags = EV_ADD | EV_ENABLE;
-	n = kevent(kq, &ev, 1, NULL, 0, NULL);
-	if (n == -1)
-		exit(1);
+        memset(&ev, 0, sizeof(ev));
+        ev.ident = fd[[1]];
+        ev.filter = EVFILT_WRITE;
+        ev.flags = EV_ADD | EV_ENABLE;
+        n = kevent(kq, &ev, 1, NULL, 0, NULL);
+        if (n == -1)
+                exit(1);
 
-	read(fd[[0]], buf, sizeof(buf));
+        read(fd[[0]], buf, sizeof(buf));
 
-	ts.tv_sec = 0;
-	ts.tv_nsec = 0;
-	n = kevent(kq, NULL, 0, &ev, 1, &ts);
-	if (n == -1 || n == 0)
-		exit(1);
+        ts.tv_sec = 0;
+        ts.tv_nsec = 0;
+        n = kevent(kq, NULL, 0, &ev, 1, &ts);
+        if (n == -1 || n == 0)
+                exit(1);
 
-	exit(0);
+        exit(0);
 }, [AC_MSG_RESULT(yes)
     AC_DEFINE(HAVE_WORKING_KQUEUE, 1,
-		[Define if kqueue works correctly with pipes])
+                [Define if kqueue works correctly with pipes])
     havekqueue=yes
     ], AC_MSG_RESULT(no), AC_MSG_RESULT(no))
-	fi
+        fi
 fi
 AM_CONDITIONAL(KQUEUE_BACKEND, [test "x$havekqueue" = "xyes"])
 
@@ -611,8 +611,6 @@ if test "$enable_epoll" != "no" ; then
 AC_INCLUDES_DEFAULT
 #include <sys/epoll.h>
 ],[[
-int main(int argc, char **argv)
-{
     struct epoll_event epevin;
     struct epoll_event epevout;
     int res;
@@ -640,13 +638,12 @@ int main(int argc, char **argv)
         }
     }
     /* SUCCESS */
-}
 ]])],
         [haveepoll=yes
         # OMPI: Don't use AC_LIBOBJ
         needsignal=yes],
         [haveepoll=no], [])
-	AC_MSG_CHECKING([if epoll can build])
+        AC_MSG_CHECKING([if epoll can build])
         AC_MSG_RESULT([$haveepoll])
     fi
 else
@@ -673,9 +670,6 @@ AC_INCLUDES_DEFAULT
 #include <sys/syscall.h>
 #include <sys/epoll.h>
 ],[[
-int
-main(int argc, char **argv)
-{
     struct epoll_event epevin;
     struct epoll_event epevout;
     int res;
@@ -704,7 +698,6 @@ main(int argc, char **argv)
         }
     }
     /* SUCCESS */
-}
 ]])],
         [haveepollsyscall=yes
         # OMPI: don't use AC_LIBOBJ
@@ -722,17 +715,17 @@ haveeventports=no
 if test "$enable_evport" != "no" ; then
     AC_CHECK_FUNCS(port_create, [haveeventports=yes], )
     if test "x$haveeventports" = "xyes" -a "$enable_evport" != "no" ; then
-	needsignal=yes
+        needsignal=yes
     fi
 fi
 AM_CONDITIONAL(EVPORT_BACKEND, [test "x$haveeventports" = "xyes" -a "$enable_evport" != "no"])
 AC_MSG_CHECKING([for evport support])
 AS_IF([test "$enable_evport" != "no" && test "x$haveeventports" = "xyes"],
       [AC_DEFINE(HAVE_EVENT_PORTS, 1,
-		[Define if your system supports event ports])
+                [Define if your system supports event ports])
        AC_MSG_RESULT([yes])],
       [AC_DEFINE(HAVE_EVENT_PORTS, 0,
-		[No event port support])
+                [No event port support])
        AC_MSG_RESULT([no])])
 
 dnl Check for eventops
@@ -850,7 +843,7 @@ AC_TRY_COMPILE([
   AC_MSG_RESULT([yes]),
   [AC_MSG_RESULT([no])
   AC_DEFINE(socklen_t, unsigned int,
-	[Define to unsigned int if you dont have it])]
+        [Define to unsigned int if you dont have it])]
 )
 
 AC_MSG_CHECKING([whether our compiler supports __func__])
@@ -873,9 +866,9 @@ AC_TRY_COMPILE([],
 have_pthreads=no
 if test x$bwin32 != xtrue && test "$enable_thread_support" != "no"; then
   ACX_PTHREAD([
-	AC_DEFINE(HAVE_PTHREADS, 1,
-		[Define if we have pthreads on this system])
-	have_pthreads=yes])
+        AC_DEFINE(HAVE_PTHREADS, 1,
+                [Define if we have pthreads on this system])
+        have_pthreads=yes])
   CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
   AC_CHECK_SIZEOF(pthread_t, ,
      [AC_INCLUDES_DEFAULT()
@@ -887,7 +880,7 @@ AM_CONDITIONAL(PTHREADS, [test "$have_pthreads" != "no" && test "$enable_thread_
 # check if we should compile locking into the library
 if test x$enable_thread_support = xno; then
    AC_DEFINE(DISABLE_THREAD_SUPPORT, 1,
-	[Define if libevent should not be compiled with thread support])
+        [Define if libevent should not be compiled with thread support])
 fi
 
 # check if we should hard-code the mm functions.
@@ -967,72 +960,72 @@ fi
 LIBEVENT_GC_SECTIONS=
 if test "$GCC" = yes && test "$enable_function_sections" = yes ; then
     AC_CACHE_CHECK(
-	[if linker supports omitting unused code and data],
-	[libevent_cv_gc_sections_runs],
-	[
-	    dnl  NetBSD will link but likely not run with --gc-sections
-	    dnl  http://bugs.ntp.org/1844
-	    dnl  http://gnats.netbsd.org/40401
-	    dnl  --gc-sections causes attempt to load as linux elf, with
-	    dnl  wrong syscalls in place.  Test a little gauntlet of
-	    dnl  simple stdio read code checking for errors, expecting
-	    dnl  enough syscall differences that the NetBSD code will
-	    dnl  fail even with Linux emulation working as designed.
-	    dnl  A shorter test could be refined by someone with access
-	    dnl  to a NetBSD host with Linux emulation working.
-	    origCFLAGS="$CFLAGS"
-	    CFLAGS="$CFLAGS -Wl,--gc-sections"
-	    AC_LINK_IFELSE(
-		[AC_LANG_PROGRAM(
-		    [[
-			#include <stdlib.h>
-			#include <stdio.h>
-		    ]],
-		    [[
-			FILE *	fpC;
-			char	buf[32];
-			size_t	cch;
-			int	read_success_once;
+        [if linker supports omitting unused code and data],
+        [libevent_cv_gc_sections_runs],
+        [
+            dnl  NetBSD will link but likely not run with --gc-sections
+            dnl  http://bugs.ntp.org/1844
+            dnl  http://gnats.netbsd.org/40401
+            dnl  --gc-sections causes attempt to load as linux elf, with
+            dnl  wrong syscalls in place.  Test a little gauntlet of
+            dnl  simple stdio read code checking for errors, expecting
+            dnl  enough syscall differences that the NetBSD code will
+            dnl  fail even with Linux emulation working as designed.
+            dnl  A shorter test could be refined by someone with access
+            dnl  to a NetBSD host with Linux emulation working.
+            origCFLAGS="$CFLAGS"
+            CFLAGS="$CFLAGS -Wl,--gc-sections"
+            AC_LINK_IFELSE(
+                [AC_LANG_PROGRAM(
+                    [[
+                        #include <stdlib.h>
+                        #include <stdio.h>
+                    ]],
+                    [[
+                        FILE *  fpC;
+                        char    buf[32];
+                        size_t  cch;
+                        int     read_success_once;
 
-			fpC = fopen("conftest.c", "r");
-			if (NULL == fpC)
-				exit(1);
-			do {
-				cch = fread(buf, sizeof(buf), 1, fpC);
-				read_success_once |= (0 != cch);
-			} while (0 != cch);
-			if (!read_success_once)
-				exit(2);
-			if (!feof(fpC))
-				exit(3);
-			if (0 != fclose(fpC))
-				exit(4);
+                        fpC = fopen("conftest.c", "r");
+                        if (NULL == fpC)
+                                exit(1);
+                        do {
+                                cch = fread(buf, sizeof(buf), 1, fpC);
+                                read_success_once |= (0 != cch);
+                        } while (0 != cch);
+                        if (!read_success_once)
+                                exit(2);
+                        if (!feof(fpC))
+                                exit(3);
+                        if (0 != fclose(fpC))
+                                exit(4);
 
-			exit(EXIT_SUCCESS);
-		    ]]
-		)],
-		[
+                        exit(EXIT_SUCCESS);
+                    ]]
+                )],
+                [
                     dnl We have to do this invocation manually so that we can
                     dnl get the output of conftest.err to make sure it doesn't
                     dnl mention gc-sections.
-		    if test "X$cross_compiling" = "Xyes" || grep gc-sections conftest.err ; then
-			libevent_cv_gc_sections_runs=no
-		    else
-			libevent_cv_gc_sections_runs=no
-			./conftest >/dev/null 2>&1 && libevent_cv_gc_sections_runs=yes
-		    fi
-		],
-		[libevent_cv_gc_sections_runs=no]
-	    )
-	    CFLAGS="$origCFLAGS"
-	    AS_UNSET([origCFLAGS])
-	]
+                    if test "X$cross_compiling" = "Xyes" || grep gc-sections conftest.err ; then
+                        libevent_cv_gc_sections_runs=no
+                    else
+                        libevent_cv_gc_sections_runs=no
+                        ./conftest >/dev/null 2>&1 && libevent_cv_gc_sections_runs=yes
+                    fi
+                ],
+                [libevent_cv_gc_sections_runs=no]
+            )
+            CFLAGS="$origCFLAGS"
+            AS_UNSET([origCFLAGS])
+        ]
     )
     case "$libevent_cv_gc_sections_runs" in
      yes)
-	CFLAGS="-ffunction-sections -fdata-sections $CFLAGS"
-	LIBEVENT_GC_SECTIONS="-Wl,--gc-sections"
-	;;
+        CFLAGS="-ffunction-sections -fdata-sections $CFLAGS"
+        LIBEVENT_GC_SECTIONS="-Wl,--gc-sections"
+        ;;
     esac
 fi
 AC_SUBST([LIBEVENT_GC_SECTIONS])

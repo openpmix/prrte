@@ -14,7 +14,7 @@
  * Copyright (c) 2007-2009 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2007-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -66,6 +66,7 @@
 #include "opal/util/os_dirpath.h"
 #include "opal/util/show_help.h"
 #include "opal/util/fd.h"
+#include "opal/util/daemon_init.h"
 
 #include "opal/version.h"
 #include "opal/runtime/opal.h"
@@ -101,6 +102,8 @@ static struct {
     char *report_uri;
     char *prefix;
     bool run_as_root;
+    bool set_sid;
+    bool daemonize;
 } myglobals;
 
 static opal_cmd_line_init_t cmd_line_init[] = {
@@ -119,6 +122,14 @@ static opal_cmd_line_init_t cmd_line_init[] = {
     { NULL, '\0', "prefix", "prefix", 1,
       &myglobals.prefix, OPAL_CMD_LINE_TYPE_STRING,
       "Prefix to be used to look for ORTE executables" },
+
+    { "orte_daemonize", '\0', NULL, "daemonize", 0,
+      &myglobals.daemonize, OPAL_CMD_LINE_TYPE_BOOL,
+      "Daemonize the orte-dvm into the background" },
+
+    { NULL, '\0', NULL, "set-sid", 0,
+      &myglobals.set_sid, OPAL_CMD_LINE_TYPE_BOOL,
+      "Direct the orte-dvm to separate from the current session"},
 
     { "orte_debug_daemons", '\0', "debug-daemons", "debug-daemons", 0,
       NULL, OPAL_CMD_LINE_TYPE_BOOL,
@@ -282,6 +293,22 @@ int main(int argc, char *argv[])
      * orterun
      */
     orte_launch_environ = opal_argv_copy(environ);
+
+#if defined(HAVE_SETSID)
+    /* see if we were directed to separate from current session */
+    if (myglobals.set_sid) {
+        setsid();
+    }
+#endif
+
+    /* detach from controlling terminal
+     * otherwise, remain attached so output can get to us
+     */
+    if(!orte_debug_flag &&
+       !orte_debug_daemons_flag &&
+       myglobals.daemonize) {
+        opal_daemon_init(NULL);
+    }
 
     /* Intialize our Open RTE environment */
     if (ORTE_SUCCESS != (rc = orte_init(&argc, &argv, ORTE_PROC_MASTER))) {

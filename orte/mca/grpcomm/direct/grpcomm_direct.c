@@ -27,7 +27,7 @@
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/rml/base/base.h"
 #include "orte/mca/rml/base/rml_contact.h"
-#include "orte/mca/routed/routed.h"
+#include "orte/mca/routed/base/base.h"
 #include "orte/mca/state/state.h"
 #include "orte/util/compress.h"
 #include "orte/util/name_fns.h"
@@ -367,40 +367,33 @@ static void xcast_recv(int status, orte_process_name_t* sender,
         /* peek at the command */
         cnt=1;
         if (ORTE_SUCCESS == (ret = opal_dss.unpack(data, &command, &cnt, ORTE_DAEMON_CMD))) {
-            /* if it is add_procs, then... */
-            if (ORTE_DAEMON_ADD_LOCAL_PROCS == command ||
-                ORTE_DAEMON_DVM_NIDMAP_CMD == command) {
-                /* extract the byte object holding the daemonmap */
-                cnt=1;
-                if (ORTE_SUCCESS != (ret = opal_dss.unpack(data, &bo, &cnt, OPAL_BYTE_OBJECT))) {
+            /* if it is an exit cmd, then flag that we are quitting so we will properly
+             * handle connection losses from our downstream peers */
+            if (ORTE_DAEMON_EXIT_CMD == command ||
+                ORTE_DAEMON_HALT_VM_CMD == command) {
+                orte_orteds_term_ordered = true;
+            } else if (ORTE_DAEMON_ADD_LOCAL_PROCS == command ||
+                       ORTE_DAEMON_DVM_NIDMAP_CMD == command) {
+                /* update our local nidmap, if required - the decode function
+                 * knows what to do
+                 */
+                OPAL_OUTPUT_VERBOSE((5, orte_grpcomm_base_framework.framework_output,
+                                     "%s grpcomm:direct:xcast updating daemon nidmap",
+                                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
+
+                if (ORTE_SUCCESS != (ret = orte_util_decode_daemon_nodemap(data))) {
                     ORTE_ERROR_LOG(ret);
                     goto relay;
                 }
 
-                /* update our local nidmap, if required - the decode function
-                 * knows what to do - it will also free the bytes in the byte object
-                 */
-                if (ORTE_PROC_IS_HNP) {
-                    /* no need - already have the info */
-                    if (NULL != bo) {
-                        if (NULL != bo->bytes) {
-                            free(bo->bytes);
-                        }
-                        free(bo);
-                    }
-                } else {
-                    OPAL_OUTPUT_VERBOSE((5, orte_grpcomm_base_framework.framework_output,
-                                         "%s grpcomm:direct:xcast updating daemon nidmap",
-                                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
-
-                    if (ORTE_SUCCESS != (ret = orte_util_decode_daemon_nodemap(bo))) {
-                        ORTE_ERROR_LOG(ret);
-                        goto relay;
-                    }
+                if (!ORTE_PROC_IS_HNP) {
+                    /* update the routing plan - the HNP already did
+                     * it when it computed the VM, so don't waste time
+                     * re-doing it here */
+                    orte_routed.update_routing_plan(rtmod);
                 }
-
-                /* update the routing plan */
-                orte_routed.update_routing_plan(rtmod);
+                /* routing is now possible */
+                orte_routed_base.routing_enabled = true;
 
                 /* see if we have wiring info as well */
                 cnt=1;

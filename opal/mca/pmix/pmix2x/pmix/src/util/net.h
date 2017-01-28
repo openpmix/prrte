@@ -100,8 +100,8 @@ PMIX_EXPORT bool pmix_net_islocalhost(const struct sockaddr *addr);
  *                          same net, false otherwise.
  */
 PMIX_EXPORT bool pmix_net_samenetwork(const struct sockaddr *addr1,
-                                        const struct sockaddr *addr2,
-                                        uint32_t prefixlen);
+                                      const struct sockaddr *addr2,
+                                      uint32_t prefixlen);
 
 
 /**

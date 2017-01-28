@@ -1926,7 +1926,7 @@ static char *source_name(pmix_mca_base_var_t *var)
 
 static int var_value_string (pmix_mca_base_var_t *var, char **value_string)
 {
-    const pmix_mca_base_var_storage_t *value=NULL;
+    pmix_mca_base_var_storage_t *value=NULL;
     int ret;
 
     assert (PMIX_MCA_BASE_VAR_TYPE_MAX > var->mbv_type);

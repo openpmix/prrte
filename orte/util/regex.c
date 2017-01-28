@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2013 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2017      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -767,4 +768,3 @@ OBJ_CLASS_INSTANCE(orte_regex_node_t,
                    opal_list_item_t,
                    orte_regex_node_construct,
                    orte_regex_node_destruct);
-

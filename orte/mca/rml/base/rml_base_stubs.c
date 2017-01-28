@@ -5,8 +5,8 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2014-2016 Intel Corporation.  All rights reserved.
- * Copyright (c) 2015-2016 Research Organization for Information Science
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
@@ -312,6 +312,10 @@ void orte_rml_API_recv_cancel(orte_process_name_t* peer, orte_rml_tag_t tag)
                          "%s rml_recv_cancel for peer %s tag %d",
                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                          ORTE_NAME_PRINT(peer), tag);
+    if (!orte_event_base_active) {
+        /* no event will be processed any more, so simply return. */
+        return;
+    }
 
     /* push the request into the event base so we can remove
      * the receive from our list of posted recvs */

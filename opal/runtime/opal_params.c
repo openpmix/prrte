@@ -21,6 +21,8 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.
  *                         All rights reserved.
+ * Copyright (c) 2017      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2017      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,6 +50,7 @@
 #include "opal/util/timings.h"
 
 char *opal_signal_string = NULL;
+char *opal_stacktrace_output_filename = NULL;
 char *opal_net_private_ipv4 = NULL;
 char *opal_set_max_sys_limits = NULL;
 
@@ -76,6 +79,7 @@ static bool opal_register_done = false;
 int opal_register_params(void)
 {
     int ret;
+    char *string = NULL;
 
     if (opal_register_done) {
         return OPAL_SUCCESS;
@@ -87,7 +91,6 @@ int opal_register_params(void)
      * This string is going to be used in opal/util/stacktrace.c
      */
     {
-        char *string = NULL;
         int j;
         int signals[] = {
 #ifdef SIGABRT
@@ -117,15 +120,37 @@ int opal_register_params(void)
 
         opal_signal_string = string;
         ret = mca_base_var_register ("opal", "opal", NULL, "signal",
-				     "Comma-delimited list of integer signal numbers to Open MPI to attempt to intercept.  Upon receipt of the intercepted signal, Open MPI will display a stack trace and abort.  Open MPI will *not* replace signals if handlers are already installed by the time MPI_INIT is invoked.  Optionally append \":complain\" to any signal number in the comma-delimited list to make Open MPI complain if it detects another signal handler (and therefore does not insert its own).",
-				     MCA_BASE_VAR_TYPE_STRING, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
-				     OPAL_INFO_LVL_3, MCA_BASE_VAR_SCOPE_LOCAL,
-				     &opal_signal_string);
+                                     "Comma-delimited list of integer signal numbers to Open MPI to attempt to intercept.  Upon receipt of the intercepted signal, Open MPI will display a stack trace and abort.  Open MPI will *not* replace signals if handlers are already installed by the time MPI_INIT is invoked.  Optionally append \":complain\" to any signal number in the comma-delimited list to make Open MPI complain if it detects another signal handler (and therefore does not insert its own).",
+                                     MCA_BASE_VAR_TYPE_STRING, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
+                                     OPAL_INFO_LVL_3, MCA_BASE_VAR_SCOPE_LOCAL,
+                                     &opal_signal_string);
         free (string);
         if (0 > ret) {
             return ret;
         }
     }
+
+    /*
+     * Where should the stack trace output be directed
+     * This string is going to be used in opal/util/stacktrace.c
+     */
+    string = strdup("stderr");
+    opal_stacktrace_output_filename = string;
+    ret = mca_base_var_register ("opal", "opal", NULL, "stacktrace_output",
+                                 "Specifies where the stack trace output stream goes.  "
+                                 "Accepts one of the following: none (disabled), stderr (default), stdout, file[:filename].   "
+                                 "If 'filename' is not specified, a default filename of 'stacktrace' is used.  "
+                                 "The 'filename' is appended with either '.PID' or '.RANK.PID', if RANK is available.  "
+                                 "The 'filename' can be an absolute path or a relative path to the current working directory.",
+                                 MCA_BASE_VAR_TYPE_STRING, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
+                                 OPAL_INFO_LVL_3,
+                                 MCA_BASE_VAR_SCOPE_LOCAL,
+                                 &opal_stacktrace_output_filename);
+    free (string);
+    if (0 > ret) {
+        return ret;
+    }
+
 
 #if defined(HAVE_SCHED_YIELD)
     opal_progress_yield_when_idle = false;
@@ -139,21 +164,21 @@ int opal_register_params(void)
 #if OPAL_ENABLE_DEBUG
     opal_progress_debug = false;
     ret = mca_base_var_register ("opal", "opal", "progress", "debug",
-				 "Set to non-zero to debug progress engine features",
-				 MCA_BASE_VAR_TYPE_BOOL, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
-				 OPAL_INFO_LVL_8, MCA_BASE_VAR_SCOPE_LOCAL,
-				 &opal_progress_debug);
+                                 "Set to non-zero to debug progress engine features",
+                                 MCA_BASE_VAR_TYPE_BOOL, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
+                                 OPAL_INFO_LVL_8, MCA_BASE_VAR_SCOPE_LOCAL,
+                                 &opal_progress_debug);
     if (0 > ret) {
         return ret;
     }
 
     opal_debug_threads = false;
     ret = mca_base_var_register ("opal", "opal", "debug", "threads",
-				 "Debug thread usage within OPAL. Reports out "
-				 "when threads are acquired and released.",
-				 MCA_BASE_VAR_TYPE_BOOL, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
-				 OPAL_INFO_LVL_8, MCA_BASE_VAR_SCOPE_LOCAL,
-				 &opal_debug_threads);
+                                 "Debug thread usage within OPAL. Reports out "
+                                 "when threads are acquired and released.",
+                                 MCA_BASE_VAR_TYPE_BOOL, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
+                                 OPAL_INFO_LVL_8, MCA_BASE_VAR_SCOPE_LOCAL,
+                                 &opal_debug_threads);
     if (0 > ret) {
         return ret;
     }
@@ -182,21 +207,21 @@ int opal_register_params(void)
     */
     opal_net_private_ipv4 = "10.0.0.0/8;172.16.0.0/12;192.168.0.0/16;169.254.0.0/16";
     ret = mca_base_var_register ("opal", "opal", "net", "private_ipv4",
-				 "Semicolon-delimited list of CIDR notation entries specifying what networks are considered \"private\" (default value based on RFC1918 and RFC3330)",
-				 MCA_BASE_VAR_TYPE_STRING, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
-				 OPAL_INFO_LVL_3, MCA_BASE_VAR_SCOPE_ALL_EQ,
-				 &opal_net_private_ipv4);
+                                 "Semicolon-delimited list of CIDR notation entries specifying what networks are considered \"private\" (default value based on RFC1918 and RFC3330)",
+                                 MCA_BASE_VAR_TYPE_STRING, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
+                                 OPAL_INFO_LVL_3, MCA_BASE_VAR_SCOPE_ALL_EQ,
+                                 &opal_net_private_ipv4);
     if (0 > ret) {
         return ret;
     }
 
     opal_set_max_sys_limits = NULL;
     ret = mca_base_var_register ("opal", "opal", NULL, "set_max_sys_limits",
-				 "Set the specified system-imposed limits to the specified value, including \"unlimited\"."
+                                 "Set the specified system-imposed limits to the specified value, including \"unlimited\"."
                                  "Supported params: core, filesize, maxmem, openfiles, stacksize, maxchildren",
-				 MCA_BASE_VAR_TYPE_STRING, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
-				 OPAL_INFO_LVL_3, MCA_BASE_VAR_SCOPE_ALL_EQ,
-				 &opal_set_max_sys_limits);
+                                 MCA_BASE_VAR_TYPE_STRING, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
+                                 OPAL_INFO_LVL_3, MCA_BASE_VAR_SCOPE_ALL_EQ,
+                                 &opal_set_max_sys_limits);
     if (0 > ret) {
         return ret;
     }

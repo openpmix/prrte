@@ -168,9 +168,9 @@ int orte_dt_unpack_job(opal_buffer_t *buffer, void *dest,
             return rc;
         }
 
-        /* if the map is NULL, then we din't pack it as there was
+        /* if the map is NULL, then we didn't pack it as there was
          * nothing to pack. Instead, we packed a flag to indicate whether or not
-         * the map is included         */
+         * the map is included */
         n = 1;
         if (ORTE_SUCCESS != (rc = opal_dss_unpack_buffer(buffer,
                                             &j, &n, ORTE_STD_CNTR))) {
