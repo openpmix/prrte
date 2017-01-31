@@ -512,7 +512,7 @@ int pmix_mca_base_var_deregister(int vari);
  * Note: The value can be changed by the registering code without using
  * the pmix_mca_base_var_* interface so the source may be incorrect.
  */
-int pmix_mca_base_var_get_value (int vari, const void *value,
+int pmix_mca_base_var_get_value (int vari, void *value,
                                  pmix_mca_base_var_source_t *source,
                                  const char **source_file);
 
