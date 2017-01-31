@@ -2,6 +2,7 @@ dnl -*- shell-script -*-
 dnl
 dnl Copyright (c) 2015-2016 Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
+dnl Copyright (c) 2017      Intel, Inc.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -261,7 +262,7 @@ dnl
 dnl Summarize libnl and libnl3 usage,
 dnl and abort if conflict is found
 dnl
-dnl Print the list of libraries that use libnl, 
+dnl Print the list of libraries that use libnl,
 dnl the list of libraries that use libnl3,
 dnl and aborts if both libnl and libnl3 are used.
 dnl

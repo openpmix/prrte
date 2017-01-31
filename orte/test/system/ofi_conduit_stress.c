@@ -49,18 +49,18 @@ main(int argc, char *argv[]){
     int conduit_id = 0;  //use the first available conduit
     struct timeval start, end;
     opal_list_t *conduit_attr;
-    
+
 
     /*
      * Init
      */
     orte_init(&argc, &argv, ORTE_PROC_NON_MPI);
 
-    
+
     conduit_attr = OBJ_NEW(opal_list_t);
-   if( ORTE_SUCCESS == 
+   if( ORTE_SUCCESS ==
             ( orte_set_attribute( conduit_attr, ORTE_RML_PROVIDER_ATTRIB, ORTE_ATTR_GLOBAL,"sockets",OPAL_STRING)))   {
-    if( ORTE_SUCCESS == 
+    if( ORTE_SUCCESS ==
             ( orte_set_attribute( conduit_attr, ORTE_RML_INCLUDE_COMP_ATTRIB, ORTE_ATTR_GLOBAL,"ofi",OPAL_STRING)))   {
         opal_output(0, "%s calling open_conduit with ORTE_RML_INCLUDE_COMP_ATTRIB and ORTE_RML_OFI_PROV_NAME_ATTRIB",
                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));

@@ -126,7 +126,7 @@
    obj:*libatiadl*
 }
 
-# 
+#
 {
    libpciaccess_device_name_leak
    Memcheck:Leak
@@ -142,4 +142,3 @@
    ...
    fun:hwloc_look_libpci
 }
-

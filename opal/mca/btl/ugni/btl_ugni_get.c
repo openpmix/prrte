@@ -3,6 +3,7 @@
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2011      UT-Battelle, LLC. All rights reserved.
+ * Copyright (c) 2017      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -13,7 +14,7 @@
 #include "btl_ugni_rdma.h"
 #include "btl_ugni_smsg.h"
 
-/* 
+/*
  * taken from osc_rdma_comm.h, ugh.
  */
 
