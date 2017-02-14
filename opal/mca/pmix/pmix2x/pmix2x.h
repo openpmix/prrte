@@ -88,7 +88,6 @@ typedef struct {
     opal_pmix_value_cbfunc_t valcbfunc;
     opal_pmix_lookup_cbfunc_t lkcbfunc;
     opal_pmix_spawn_cbfunc_t spcbfunc;
-    opal_pmix_info_cbfunc_t infocbfunc;
     opal_pmix_evhandler_reg_cbfunc_t evregcbfunc;
     opal_pmix_info_cbfunc_t qcbfunc;
     void *cbdata;
