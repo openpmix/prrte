@@ -11,6 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2008      UT-Battelle, LLC
 # Copyright (c) 2008-2010 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2017      Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -24,7 +25,7 @@ dist_ortedata_DATA = help-ras-alps.txt \
 		  ras-alps-command.sh
 
 install-data-hook:
-	chmod +x $(DESTDIR)$(pkgdatadir)/ras-alps-command.sh
+	chmod +x $(ortedatadir)/ras-alps-command.sh
 
 sources = \
         ras_alps.h \

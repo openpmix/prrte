@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2016      Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -156,10 +156,8 @@ int mca_btl_tcp_del_procs(struct mca_btl_base_module_t* btl,
     OPAL_THREAD_LOCK(&tcp_btl->tcp_endpoints_mutex);
     for( i = 0; i < nprocs; i++ ) {
         mca_btl_tcp_endpoint_t* tcp_endpoint = endpoints[i];
-        if(tcp_endpoint->endpoint_proc != mca_btl_tcp_proc_local()) {
-            opal_list_remove_item(&tcp_btl->tcp_endpoints, (opal_list_item_t*)tcp_endpoint);
-            OBJ_RELEASE(tcp_endpoint);
-        }
+        opal_list_remove_item(&tcp_btl->tcp_endpoints, (opal_list_item_t*)tcp_endpoint);
+        OBJ_RELEASE(tcp_endpoint);
         opal_progress_event_users_decrement();
     }
     OPAL_THREAD_UNLOCK(&tcp_btl->tcp_endpoints_mutex);
@@ -356,9 +354,9 @@ static void fake_rdma_complete (mca_btl_base_module_t *btl, mca_btl_base_endpoin
  */
 
 int mca_btl_tcp_put (mca_btl_base_module_t *btl, struct mca_btl_base_endpoint_t *endpoint, void *local_address,
-		     uint64_t remote_address, mca_btl_base_registration_handle_t *local_handle,
-		     mca_btl_base_registration_handle_t *remote_handle, size_t size, int flags,
-		     int order, mca_btl_base_rdma_completion_fn_t cbfunc, void *cbcontext, void *cbdata)
+                     uint64_t remote_address, mca_btl_base_registration_handle_t *local_handle,
+                     mca_btl_base_registration_handle_t *remote_handle, size_t size, int flags,
+                     int order, mca_btl_base_rdma_completion_fn_t cbfunc, void *cbcontext, void *cbdata)
 {
     mca_btl_tcp_module_t* tcp_btl = (mca_btl_tcp_module_t*) btl;
     mca_btl_tcp_frag_t *frag = NULL;
@@ -421,9 +419,9 @@ int mca_btl_tcp_put (mca_btl_base_module_t *btl, struct mca_btl_base_endpoint_t 
  */
 
 int mca_btl_tcp_get (mca_btl_base_module_t *btl, struct mca_btl_base_endpoint_t *endpoint, void *local_address,
-		     uint64_t remote_address, mca_btl_base_registration_handle_t *local_handle,
-		     mca_btl_base_registration_handle_t *remote_handle, size_t size, int flags,
-		     int order, mca_btl_base_rdma_completion_fn_t cbfunc, void *cbcontext, void *cbdata)
+                     uint64_t remote_address, mca_btl_base_registration_handle_t *local_handle,
+                     mca_btl_base_registration_handle_t *remote_handle, size_t size, int flags,
+                     int order, mca_btl_base_rdma_completion_fn_t cbfunc, void *cbcontext, void *cbdata)
 {
     mca_btl_tcp_module_t* tcp_btl = (mca_btl_tcp_module_t*) btl;
     mca_btl_tcp_frag_t* frag = NULL;

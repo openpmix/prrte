@@ -1,7 +1,9 @@
 /*
  * Copyright (c) 2015-2016 Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2017      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -62,6 +64,7 @@ typedef struct ns_map_s ns_map_t;
 struct session_s {
     int in_use;
     uid_t jobuid;
+    char setjobuid;
     char *nspace_path;
     char *lockfile;
 #ifdef ESH_PTHREAD_LOCK
@@ -114,6 +117,7 @@ typedef struct {
     size_t num_data_seg;
     seg_desc_t *meta_seg;
     seg_desc_t *data_seg;
+    bool in_use;
 } ns_track_elem_t;
 
 extern pmix_dstore_base_module_t pmix_dstore_esh_module;

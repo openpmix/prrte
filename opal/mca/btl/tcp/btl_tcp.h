@@ -15,6 +15,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -107,7 +108,6 @@ struct mca_btl_tcp_component_t {
     uint32_t tcp_num_btls;                  /**< number of interfaces available to the TCP component */
     unsigned int tcp_num_links;             /**< number of logical links per physical device */
     struct mca_btl_tcp_module_t **tcp_btls; /**< array of available BTL modules */
-    struct mca_btl_tcp_proc_t* tcp_local;   /**< local proc struct */
     int tcp_free_list_num;                  /**< initial size of free lists */
     int tcp_free_list_max;                  /**< maximum size of free lists */
     int tcp_free_list_inc;                  /**< number of elements to alloc when growing free lists */

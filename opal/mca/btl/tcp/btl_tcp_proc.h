@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,10 +60,10 @@ struct mca_btl_tcp_proc_t {
 typedef struct mca_btl_tcp_proc_t mca_btl_tcp_proc_t;
 OBJ_CLASS_DECLARATION(mca_btl_tcp_proc_t);
 
-/*	the highest possible interface kernel index we can handle */
+/*      the highest possible interface kernel index we can handle */
 #define MAX_KERNEL_INTERFACE_INDEX 65536
 
-/*	the maximum number of kernel interfaces we can handle */
+/*      the maximum number of kernel interfaces we can handle */
 #define MAX_KERNEL_INTERFACES 8
 
 /* The maximum number of interfaces that we can have and use the
@@ -77,16 +78,16 @@ OBJ_CLASS_DECLARATION(mca_btl_tcp_proc_t);
  */
 
 struct mca_btl_tcp_interface_t {
-	struct sockaddr_storage* ipv4_address;
-	struct sockaddr_storage* ipv6_address;
-	mca_btl_tcp_addr_t* ipv4_endpoint_addr;
-	mca_btl_tcp_addr_t* ipv6_endpoint_addr;
-	uint32_t ipv4_netmask;
-	uint32_t ipv6_netmask;
-	int kernel_index;
-	int peer_interface;
-	int index;
-	int inuse;
+        struct sockaddr_storage* ipv4_address;
+        struct sockaddr_storage* ipv6_address;
+        mca_btl_tcp_addr_t* ipv4_endpoint_addr;
+        mca_btl_tcp_addr_t* ipv6_endpoint_addr;
+        uint32_t ipv4_netmask;
+        uint32_t ipv6_netmask;
+        int kernel_index;
+        int peer_interface;
+        int index;
+        int inuse;
 };
 
 typedef struct mca_btl_tcp_interface_t mca_btl_tcp_interface_t;
@@ -96,11 +97,11 @@ typedef struct mca_btl_tcp_interface_t mca_btl_tcp_interface_t;
  * a remote network interface
  */
 enum mca_btl_tcp_connection_quality {
-	CQ_NO_CONNECTION,
-	CQ_PRIVATE_DIFFERENT_NETWORK,
-	CQ_PRIVATE_SAME_NETWORK,
-	CQ_PUBLIC_DIFFERENT_NETWORK,
-	CQ_PUBLIC_SAME_NETWORK
+        CQ_NO_CONNECTION,
+        CQ_PRIVATE_DIFFERENT_NETWORK,
+        CQ_PRIVATE_SAME_NETWORK,
+        CQ_PUBLIC_DIFFERENT_NETWORK,
+        CQ_PUBLIC_SAME_NETWORK
 };
 
 
@@ -110,17 +111,6 @@ int  mca_btl_tcp_proc_insert(mca_btl_tcp_proc_t*, mca_btl_base_endpoint_t*);
 int  mca_btl_tcp_proc_remove(mca_btl_tcp_proc_t*, mca_btl_base_endpoint_t*);
 void mca_btl_tcp_proc_accept(mca_btl_tcp_proc_t*, struct sockaddr*, int);
 bool mca_btl_tcp_proc_tosocks(mca_btl_tcp_addr_t*, struct sockaddr_storage*);
-
-/**
- * Inlined function to return local TCP proc instance.
- */
-
-static inline mca_btl_tcp_proc_t* mca_btl_tcp_proc_local(void)
-{
-    if(NULL == mca_btl_tcp_component.tcp_local)
-        mca_btl_tcp_component.tcp_local = mca_btl_tcp_proc_create(opal_proc_local_get());
-    return mca_btl_tcp_component.tcp_local;
-}
 
 END_C_DECLS
 #endif

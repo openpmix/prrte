@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
@@ -9,10 +10,10 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011-2012 Los Alamos National Security, LLC.  All rights
+ * Copyright (c) 2011-2017 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2014 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -26,6 +27,7 @@
 #include "orte/constants.h"
 #include "orte/types.h"
 
+#include <netdb.h>
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
@@ -255,7 +257,7 @@ static int orte_ras_slurm_allocate(orte_job_t *jdata, opal_list_t *nodes)
         /* save this value in the global job ident string for
          * later use in any error reporting
          */
-    	orte_job_ident = strdup(slurm_jobid);
+        orte_job_ident = strdup(slurm_jobid);
     }
 
     slurm_node_str = getenv("SLURM_NODELIST");
@@ -1190,7 +1192,7 @@ static int read_ip_port(char *filename, char **ip, uint16_t *port)
 
     memset(line, 0, ORTE_SLURM_DYN_MAX_SIZE);
     while (NULL != fgets(line, ORTE_SLURM_DYN_MAX_SIZE, fp) &&
-    		 (!found_ip || !found_port)) {
+                 (!found_ip || !found_port)) {
         if (0 == strlen(line)) {
             continue;
         }
