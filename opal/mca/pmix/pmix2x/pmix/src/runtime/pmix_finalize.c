@@ -68,11 +68,6 @@ void pmix_rte_finalize(void)
         return;
     }
 
-    if (!pmix_globals.external_evbase) {
-        /* stop the progress thread */
-        (void)pmix_progress_thread_stop(NULL);
-    }
-
     /* cleanup communications */
     (void)pmix_mca_base_framework_close(&pmix_ptl_base_framework);
     #if defined(PMIX_ENABLE_DSTORE) && (PMIX_ENABLE_DSTORE == 1)
