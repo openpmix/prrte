@@ -12,7 +12,7 @@
  * Copyright (c) 2008-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -101,10 +101,8 @@ void pmix_rte_finalize(void)
        much */
     pmix_output_finalize();
 
-#if 0
     /* close the bfrops */
-    (void)pmix_mca_base_framework_close(&pmix_bfrops_base_framework);
-#endif
+    pmix_bfrop_close();
 
     /* clean out the globals */
     PMIX_RELEASE(pmix_globals.mypeer);
@@ -117,7 +115,14 @@ void pmix_rte_finalize(void)
     }
     PMIX_DESTRUCT(&pmix_globals.events);
 
-    #if PMIX_NO_LIB_DESTRUCTOR
-        pmix_cleanup();
-    #endif
+    /* now safe to release the event base */
+    if (!pmix_globals.external_evbase) {
+        (void)pmix_progress_thread_stop(NULL);
+    }
+
+
+#if PMIX_NO_LIB_DESTRUCTOR
+    pmix_cleanup();
+#endif
+
 }
