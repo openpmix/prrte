@@ -113,6 +113,7 @@ contrib/scaling/mpi_no_op
 contrib/scaling/mpi_barrier
 contrib/scaling/mpi_memprobe
 
+examples/alloc
 examples/client
 examples/debugger
 examples/debuggerd

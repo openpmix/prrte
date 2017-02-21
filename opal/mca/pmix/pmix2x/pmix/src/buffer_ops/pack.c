@@ -1006,6 +1006,12 @@ pmix_status_t pmix_bfrop_pack_query(pmix_buffer_t *buffer, const void *src,
     return PMIX_SUCCESS;
 }
 
+pmix_status_t pmix_bfrop_pack_alloc_directive(pmix_buffer_t *buffer, const void *src,
+                                              int32_t num_vals, pmix_data_type_t type)
+{
+    return pmix_bfrop_pack_byte(buffer, src, num_vals, PMIX_UINT8);
+}
+
 
 /**** DEPRECATED ****/
 pmix_status_t pmix_bfrop_pack_array(pmix_buffer_t *buffer, const void *src,
