@@ -15,7 +15,7 @@
  * Copyright (c) 2010      IBM Corporation.  All rights reserved.
  * Copyright (c) 2011-2014 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2016 Intel, Inc. All rights reserved
+ * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -668,7 +668,7 @@ static int odls_alps_fork_local_proc(orte_app_context_t* context,
     }
 
     if (pid == 0) {
-	close(p[0]);
+        close(p[0]);
 #if HAVE_SETPGID
         setpgid(0, 0);
 #endif
@@ -773,4 +773,3 @@ static int orte_odls_alps_restart_proc(orte_proc_t *child)
     }
     return rc;
 }
-
