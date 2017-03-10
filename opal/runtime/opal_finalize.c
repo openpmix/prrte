@@ -31,6 +31,7 @@
 #include "opal/util/output.h"
 #include "opal/util/malloc.h"
 #include "opal/util/net.h"
+#include "opal/util/proc.h"
 #include "opal/util/keyval_parse.h"
 #include "opal/util/show_help.h"
 #include "opal/memoryhooks/memory.h"
@@ -43,7 +44,6 @@
 #include "opal/mca/memchecker/base/base.h"
 #include "opal/mca/memcpy/base/base.h"
 #include "opal/mca/backtrace/base/base.h"
-#include "opal/mca/sec/base/base.h"
 #include "opal/mca/timer/base/base.h"
 #include "opal/mca/hwloc/base/base.h"
 #include "opal/mca/event/base/base.h"
@@ -131,9 +131,6 @@ opal_finalize(void)
     /* close the checkpoint and restart service */
     opal_cr_finalize();
 
-    /* close the security framework */
-    (void) mca_base_framework_close(&opal_sec_base_framework);
-
 #if OPAL_ENABLE_FT_CR    == 1
     (void) mca_base_framework_close(&opal_compress_base_framework);
 #endif
@@ -157,9 +154,6 @@ opal_finalize(void)
 
     /* close the shmem framework */
     (void) mca_base_framework_close(&opal_shmem_base_framework);
-
-    /* close the sec framework */
-    (void) mca_base_framework_close(&opal_sec_base_framework);
 
     /* cleanup the main thread specific stuff */
     opal_tsd_keys_destruct();
