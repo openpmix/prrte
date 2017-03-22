@@ -132,9 +132,9 @@ typedef struct {
 #define PMIX_EXECUTE_COLLECTIVE(c, t, f)                        \
     do {                                                        \
         PMIX_SETUP_COLLECTIVE(c, t);                            \
-        event_assign(&((c)->ev), pmix_globals.evbase, -1,       \
-                     EV_WRITE, (f), (c));                       \
-        event_active(&((c)->ev), EV_WRITE, 1);                  \
+        pmix_event_assign(&((c)->ev), pmix_globals.evbase, -1,  \
+                          EV_WRITE, (f), (c));                  \
+        pmix_event_active(&((c)->ev), EV_WRITE, 1);             \
     } while (0)
 
 
@@ -217,6 +217,16 @@ pmix_status_t pmix_server_alloc(pmix_peer_t *peer,
                                 pmix_buffer_t *buf,
                                 pmix_info_cbfunc_t cbfunc,
                                 void *cbdata);
+
+pmix_status_t pmix_server_job_ctrl(pmix_peer_t *peer,
+                                   pmix_buffer_t *buf,
+                                   pmix_info_cbfunc_t cbfunc,
+                                   void *cbdata);
+
+pmix_status_t pmix_server_monitor(pmix_peer_t *peer,
+                                  pmix_buffer_t *buf,
+                                  pmix_info_cbfunc_t cbfunc,
+                                  void *cbdata);
 
 pmix_status_t pmix_server_event_recvd_from_client(pmix_peer_t *peer,
                                                   pmix_buffer_t *buf,

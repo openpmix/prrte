@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -73,8 +73,10 @@ ORTE_DECLSPEC int orte_schizo_base_setup_fork(orte_job_t *jdata,
                                               orte_app_context_t *context);
 ORTE_DECLSPEC int orte_schizo_base_setup_child(orte_job_t *jobdat,
                                                orte_proc_t *child,
-                                               orte_app_context_t *app);
+                                               orte_app_context_t *app,
+                                               char ***env);
 ORTE_DECLSPEC orte_schizo_launch_environ_t orte_schizo_base_check_launch_environment(void);
+ORTE_DECLSPEC int orte_schizo_base_get_remaining_time(uint32_t *timeleft);
 ORTE_DECLSPEC void orte_schizo_base_finalize(void);
 
 END_C_DECLS

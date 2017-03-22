@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
@@ -71,7 +72,9 @@ typedef enum {
     PMIX_DEREGEVENTS_CMD,
     PMIX_QUERY_CMD,
     PMIX_LOG_CMD,
-    PMIX_ALLOC_CMD
+    PMIX_ALLOC_CMD,
+    PMIX_JOB_CONTROL_CMD,
+    PMIX_MONITOR_CMD
 } pmix_cmd_t;
 
 /* provide a "pretty-print" function for cmds */
@@ -213,6 +216,8 @@ typedef struct {
     pmix_status_t status;
     pmix_query_t *queries;
     size_t nqueries;
+    pmix_proc_t *targets;
+    size_t ntargets;
     pmix_info_t *info;
     size_t ninfo;
     pmix_info_cbfunc_t cbfunc;
@@ -331,12 +336,12 @@ typedef struct {
 } pmix_info_caddy_t;
 PMIX_CLASS_DECLARATION(pmix_info_caddy_t);
 
-#define PMIX_THREADSHIFT(r, c)                       \
- do {                                                 \
-    (r)->active = true;                               \
-    event_assign(&((r)->ev), pmix_globals.evbase,     \
-                 -1, EV_WRITE, (c), (r));             \
-    event_active(&((r)->ev), EV_WRITE, 1);            \
+#define PMIX_THREADSHIFT(r, c)                              \
+ do {                                                       \
+    (r)->active = true;                                     \
+    pmix_event_assign(&((r)->ev), pmix_globals.evbase,      \
+                      -1, EV_WRITE, (c), (r));              \
+    pmix_event_active(&((r)->ev), EV_WRITE, 1);             \
 } while (0)
 
 

@@ -144,11 +144,8 @@ static int orte_odls_default_restart_proc(orte_proc_t *child);
 static void send_error_show_help(int fd, int exit_status,
                                  const char *file, const char *topic, ...)
     __opal_attribute_noreturn__;
-static int do_child(orte_app_context_t* context,
-                    orte_proc_t *child,
-                    char **environ_copy,
-                    orte_job_t *jobdat, int write_fd,
-                    orte_iof_base_io_conf_t opts)
+
+static int do_child(orte_odls_spawn_caddy_t *cd, int write_fd)
     __opal_attribute_noreturn__;
 
 
@@ -318,16 +315,12 @@ static int close_open_file_descriptors(int write_fd,
     return ORTE_SUCCESS;
 }
 
-static int do_child(orte_app_context_t* context,
-                    orte_proc_t *child,
-                    char **environ_copy,
-                    orte_job_t *jobdat, int write_fd,
-                    orte_iof_base_io_conf_t opts)
+static int do_child(orte_odls_spawn_caddy_t *cd, int write_fd)
 {
-    int i, rc;
+    int i;
     sigset_t sigs;
     long fd, fdmax = sysconf(_SC_OPEN_MAX);
-    char *param, *msg;
+    char dir[MAXPATHLEN];
 
 #if HAVE_SETPGID
     /* Set a new process group for this child, so that any
@@ -338,7 +331,7 @@ static int do_child(orte_app_context_t* context,
     /* Setup the pipe to be close-on-exec */
     opal_fd_set_cloexec(write_fd);
 
-    if (NULL != child) {
+    if (NULL != cd->child) {
         /* setup stdout/stderr so that any error messages that we
            may print out will get displayed back at orterun.
 
@@ -352,22 +345,21 @@ static int do_child(orte_app_context_t* context,
            always outputs a nice, single message indicating what
            happened
         */
-        if (ORTE_FLAG_TEST(jobdat, ORTE_JOB_FLAG_FORWARD_OUTPUT)) {
-            if (ORTE_SUCCESS != (i = orte_iof_base_setup_child(&opts,
-                                                               &environ_copy))) {
+        if (ORTE_FLAG_TEST(cd->jdata, ORTE_JOB_FLAG_FORWARD_OUTPUT)) {
+            if (ORTE_SUCCESS != (i = orte_iof_base_setup_child(&cd->opts, &cd->env))) {
                 ORTE_ERROR_LOG(i);
                 send_error_show_help(write_fd, 1,
                                      "help-orte-odls-default.txt",
                                      "iof setup failed",
-                                     orte_process_info.nodename, context->app);
+                                     orte_process_info.nodename, cd->app->app);
                 /* Does not return */
             }
         }
 
         /* now set any child-level controls such as binding */
-        orte_rtc.set(jobdat, child, &environ_copy, write_fd);
+        orte_rtc.set(cd->jdata, cd->child, &cd->env, write_fd);
 
-    } else if (!ORTE_FLAG_TEST(jobdat, ORTE_JOB_FLAG_FORWARD_OUTPUT)) {
+    } else if (!ORTE_FLAG_TEST(cd->jdata, ORTE_JOB_FLAG_FORWARD_OUTPUT)) {
         /* tie stdin/out/err/internal to /dev/null */
         int fdnull;
         for (i=0; i < 3; i++) {
@@ -378,40 +370,28 @@ static int do_child(orte_app_context_t* context,
             close(fdnull);
         }
         fdnull = open("/dev/null", O_RDONLY, 0);
-        if (fdnull > opts.p_internal[1]) {
-            dup2(fdnull, opts.p_internal[1]);
+        if (fdnull > cd->opts.p_internal[1]) {
+            dup2(fdnull, cd->opts.p_internal[1]);
         }
         close(fdnull);
     }
 
-    /* if the user requested it, set the system resource limits */
-    if (OPAL_SUCCESS != (rc = opal_util_init_sys_limits(&msg))) {
-        send_error_show_help(write_fd, 1, "help-orte-odls-default.txt",
-                             "set limit",
-                             orte_process_info.nodename, context->app,
-                             __FILE__, __LINE__, msg);
-    }
-    /* ensure we only do this once */
-    (void) mca_base_var_env_name("opal_set_max_sys_limits", &param);
-    opal_unsetenv(param, &environ_copy);
-    free(param);
-
     /* close all open file descriptors w/ exception of stdin/stdout/stderr,
        the pipe used for the IOF INTERNAL messages, and the pipe up to
        the parent. */
-    if (ORTE_SUCCESS != close_open_file_descriptors(write_fd, opts)) {
+    if (ORTE_SUCCESS != close_open_file_descriptors(write_fd, cd->opts)) {
         // close *all* file descriptors -- slow
         for(fd=3; fd<fdmax; fd++) {
-            if (fd != opts.p_internal[1] && fd != write_fd) {
+            if (fd != cd->opts.p_internal[1] && fd != write_fd) {
                 close(fd);
             }
         }
     }
 
-    if (context->argv == NULL) {
-        context->argv = malloc(sizeof(char*)*2);
-        context->argv[0] = strdup(context->app);
-        context->argv[1] = NULL;
+    if (cd->argv == NULL) {
+        cd->argv = malloc(sizeof(char*)*2);
+        cd->argv[0] = strdup(cd->app->app);
+        cd->argv[1] = NULL;
     }
 
     /* Set signal handlers back to the default.  Do this close to
@@ -434,39 +414,31 @@ static int do_child(orte_app_context_t* context,
     sigprocmask(0, 0, &sigs);
     sigprocmask(SIG_UNBLOCK, &sigs, 0);
 
-    /* Exec the new executable */
+    /* take us to the correct wdir */
+    if (NULL != cd->wdir) {
+        chdir(cd->wdir);
+    }
 
-    execve(context->app, context->argv, environ_copy);
+    /* Exec the new executable */
+    execve(cd->app->app, cd->argv, cd->env);
+    getcwd(dir, sizeof(dir));
     send_error_show_help(write_fd, 1,
                          "help-orte-odls-default.txt", "execve error",
-                         orte_process_info.nodename, context->app, strerror(errno));
+                         orte_process_info.nodename, dir, cd->app->app, strerror(errno));
     /* Does not return */
 }
 
 
-static int do_parent(orte_app_context_t* context,
-                     orte_proc_t *child,
-                     char **environ_copy,
-                     orte_job_t *jobdat, int read_fd,
-                     orte_iof_base_io_conf_t opts)
+static int do_parent(orte_odls_spawn_caddy_t *cd, int read_fd)
 {
     int rc;
     orte_odls_pipe_err_msg_t msg;
     char file[ORTE_ODLS_MAX_FILE_LEN + 1], topic[ORTE_ODLS_MAX_TOPIC_LEN + 1], *str = NULL;
 
-    if (NULL != child && ORTE_FLAG_TEST(jobdat, ORTE_JOB_FLAG_FORWARD_OUTPUT)) {
-        /* connect endpoints IOF */
-        rc = orte_iof_base_setup_parent(&child->name, &opts);
-        if (ORTE_SUCCESS != rc) {
-            ORTE_ERROR_LOG(rc);
-            close(read_fd);
-
-            if (NULL != child) {
-                child->state = ORTE_PROC_STATE_UNDEF;
-            }
-            return rc;
-        }
-    }
+    close(cd->opts.p_stdin[0]);
+    close(cd->opts.p_stdout[1]);
+    close(cd->opts.p_stderr[1]);
+    close(cd->opts.p_internal[1]);
 
     /* Block reading a message from the pipe */
     while (1) {
@@ -482,18 +454,18 @@ static int do_parent(orte_app_context_t* context,
             ORTE_ERROR_LOG(rc);
             close(read_fd);
 
-            if (NULL != child) {
-                child->state = ORTE_PROC_STATE_UNDEF;
+            if (NULL != cd->child) {
+                cd->child->state = ORTE_PROC_STATE_UNDEF;
             }
             return rc;
         }
 
         /* Otherwise, we got a warning or error message from the child */
-        if (NULL != child) {
+        if (NULL != cd->child) {
             if (msg.fatal) {
-                ORTE_FLAG_UNSET(child, ORTE_PROC_FLAG_ALIVE);
+                ORTE_FLAG_UNSET(cd->child, ORTE_PROC_FLAG_ALIVE);
             } else {
-                ORTE_FLAG_SET(child, ORTE_PROC_FLAG_ALIVE);
+                ORTE_FLAG_SET(cd->child, ORTE_PROC_FLAG_ALIVE);
             }
         }
 
@@ -503,10 +475,10 @@ static int do_parent(orte_app_context_t* context,
             if (OPAL_SUCCESS != rc) {
                 orte_show_help("help-orte-odls-default.txt", "syscall fail",
                                true,
-                               orte_process_info.nodename, context->app,
+                               orte_process_info.nodename, cd->app->app,
                                "opal_fd_read", __FILE__, __LINE__);
-                if (NULL != child) {
-                    child->state = ORTE_PROC_STATE_UNDEF;
+                if (NULL != cd->child) {
+                    cd->child->state = ORTE_PROC_STATE_UNDEF;
                 }
                 return rc;
             }
@@ -517,10 +489,10 @@ static int do_parent(orte_app_context_t* context,
             if (OPAL_SUCCESS != rc) {
                 orte_show_help("help-orte-odls-default.txt", "syscall fail",
                                true,
-                               orte_process_info.nodename, context->app,
+                               orte_process_info.nodename, cd->app->app,
                                "opal_fd_read", __FILE__, __LINE__);
-                if (NULL != child) {
-                    child->state = ORTE_PROC_STATE_UNDEF;
+                if (NULL != cd->child) {
+                    cd->child->state = ORTE_PROC_STATE_UNDEF;
                 }
                 return rc;
             }
@@ -531,10 +503,10 @@ static int do_parent(orte_app_context_t* context,
             if (NULL == str) {
                 orte_show_help("help-orte-odls-default.txt", "syscall fail",
                                true,
-                               orte_process_info.nodename, context->app,
+                               orte_process_info.nodename, cd->app->app,
                                "opal_fd_read", __FILE__, __LINE__);
-                if (NULL != child) {
-                    child->state = ORTE_PROC_STATE_UNDEF;
+                if (NULL != cd->child) {
+                    cd->child->state = ORTE_PROC_STATE_UNDEF;
                 }
                 return rc;
             }
@@ -555,9 +527,9 @@ static int do_parent(orte_app_context_t* context,
            closed, indicating that the child launched
            successfully). */
         if (msg.fatal) {
-            if (NULL != child) {
-                child->state = ORTE_PROC_STATE_FAILED_TO_START;
-                ORTE_FLAG_UNSET(child, ORTE_PROC_FLAG_ALIVE);
+            if (NULL != cd->child) {
+                cd->child->state = ORTE_PROC_STATE_FAILED_TO_START;
+                ORTE_FLAG_UNSET(cd->child, ORTE_PROC_FLAG_ALIVE);
             }
             close(read_fd);
             return ORTE_ERR_FAILED_TO_START;
@@ -567,9 +539,9 @@ static int do_parent(orte_app_context_t* context,
     /* If we got here, it means that the pipe closed without
        indication of a fatal error, meaning that the child process
        launched successfully. */
-    if (NULL != child) {
-        child->state = ORTE_PROC_STATE_RUNNING;
-        ORTE_FLAG_SET(child, ORTE_PROC_FLAG_ALIVE);
+    if (NULL != cd->child) {
+        cd->child->state = ORTE_PROC_STATE_RUNNING;
+        ORTE_FLAG_SET(cd->child, ORTE_PROC_FLAG_ALIVE);
     }
     close(read_fd);
 
@@ -580,38 +552,12 @@ static int do_parent(orte_app_context_t* context,
 /**
  *  Fork/exec the specified processes
  */
-static int odls_default_fork_local_proc(orte_app_context_t* context,
-                                        orte_proc_t *child,
-                                        char **environ_copy,
-                                        orte_job_t *jobdat)
+static int odls_default_fork_local_proc(void *cdptr)
 {
-    orte_iof_base_io_conf_t opts = {0};
-    int rc, p[2];
+    orte_odls_spawn_caddy_t *cd = (orte_odls_spawn_caddy_t*)cdptr;
+    int p[2];
     pid_t pid;
-
-    if (NULL != child) {
-        /* should pull this information from MPIRUN instead of going with
-         default */
-        opts.usepty = OPAL_ENABLE_PTY_SUPPORT;
-
-        /* do we want to setup stdin? */
-        if (NULL != child &&
-            (jobdat->stdin_target == ORTE_VPID_WILDCARD ||
-             child->name.vpid == jobdat->stdin_target)) {
-            opts.connect_stdin = true;
-        } else {
-            opts.connect_stdin = false;
-        }
-
-        if (ORTE_SUCCESS != (rc = orte_iof_base_setup_prefork(&opts))) {
-            ORTE_ERROR_LOG(rc);
-            if (NULL != child) {
-                child->state = ORTE_PROC_STATE_FAILED_TO_START;
-                child->exit_code = rc;
-            }
-            return rc;
-        }
-    }
+    orte_proc_t *child = cd->child;
 
     /* A pipe is used to communicate between the parent and child to
        indicate whether the exec ultimately succeeded or failed.  The
@@ -647,12 +593,12 @@ static int odls_default_fork_local_proc(orte_app_context_t* context,
 
     if (pid == 0) {
         close(p[0]);
-        do_child(context, child, environ_copy, jobdat, p[1], opts);
+        do_child(cd, p[1]);
         /* Does not return */
     }
 
     close(p[1]);
-    return do_parent(context, child, environ_copy, jobdat, p[0], opts);
+    return do_parent(cd, p[0]);
 }
 
 

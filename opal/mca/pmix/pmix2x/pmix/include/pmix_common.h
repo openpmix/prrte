@@ -123,6 +123,8 @@ typedef uint32_t pmix_rank_t;
                                                                     //        a local system-level PMIx server
 #define PMIX_CONNECT_SYSTEM_FIRST           "pmix.cnct.sys.first"   // (bool) Preferentially look for a system-level PMIx server first
 #define PMIX_REGISTER_NODATA                "pmix.reg.nodata"       // (bool) Registration is for nspace only, do not copy job data
+#define PMIX_SERVER_ENABLE_MONITORING       "pmix.srv.monitor"      // (bool) Enable PMIx internal monitoring by server
+
 
 /* identification attributes */
 #define PMIX_USERID                         "pmix.euid"             // (uint32_t) effective user id
@@ -218,8 +220,9 @@ typedef uint32_t pmix_rank_t;
 #define PMIX_COLLECTIVE_ALGO                "pmix.calgo"            // (char*) comma-delimited list of algorithms to use for collective
 #define PMIX_COLLECTIVE_ALGO_REQD           "pmix.calreqd"          // (bool) if true, indicates that the requested choice of algo is mandatory
 #define PMIX_NOTIFY_COMPLETION              "pmix.notecomp"         // (bool) notify parent process upon termination of child job
-#define PMIX_RANGE                          "pmix.range"            // (int) pmix_data_range_t value for calls to publish/lookup/unpublish
-#define PMIX_PERSISTENCE                    "pmix.persist"          // (int) pmix_persistence_t value for calls to publish
+#define PMIX_RANGE                          "pmix.range"            // (pmix_data_range_t) value for calls to publish/lookup/unpublish or for
+                                                                    //        monitoring event notifications
+#define PMIX_PERSISTENCE                    "pmix.persist"          // (pmix_persistence_t) value for calls to publish
 #define PMIX_OPTIONAL                       "pmix.optional"         // (bool) look only in the immediate data store for the requested value - do
                                                                     //        not request data from the server if not found
 #define PMIX_EMBED_BARRIER                  "pmix.embed.barrier"    // (bool) execute a blocking fence operation before executing the
@@ -259,72 +262,78 @@ typedef uint32_t pmix_rank_t;
 #define PMIX_EVENT_ACTION_TIMEOUT           "pmix.evtimeout"        // (int) time in sec before RM will execute error response
 
 /* attributes used to describe "spawn" attributes */
-#define PMIX_PERSONALITY                    "pmix.pers"              // (char*) name of personality to use
-#define PMIX_HOST                           "pmix.host"              // (char*) comma-delimited list of hosts to use for spawned procs
-#define PMIX_HOSTFILE                       "pmix.hostfile"          // (char*) hostfile to use for spawned procs
-#define PMIX_ADD_HOST                       "pmix.addhost"           // (char*) comma-delimited list of hosts to add to allocation
-#define PMIX_ADD_HOSTFILE                   "pmix.addhostfile"       // (char*) hostfile to add to existing allocation
-#define PMIX_PREFIX                         "pmix.prefix"            // (char*) prefix to use for starting spawned procs
-#define PMIX_WDIR                           "pmix.wdir"              // (char*) working directory for spawned procs
-#define PMIX_MAPPER                         "pmix.mapper"            // (char*) mapper to use for placing spawned procs
-#define PMIX_DISPLAY_MAP                    "pmix.dispmap"           // (bool) display process map upon spawn
-#define PMIX_PPR                            "pmix.ppr"               // (char*) #procs to spawn on each identified resource
-#define PMIX_MAPBY                          "pmix.mapby"             // (char*) mapping policy
-#define PMIX_RANKBY                         "pmix.rankby"            // (char*) ranking policy
-#define PMIX_BINDTO                         "pmix.bindto"            // (char*) binding policy
-#define PMIX_PRELOAD_BIN                    "pmix.preloadbin"        // (bool) preload binaries
-#define PMIX_PRELOAD_FILES                  "pmix.preloadfiles"      // (char*) comma-delimited list of files to pre-position
-#define PMIX_NON_PMI                        "pmix.nonpmi"            // (bool) spawned procs will not call PMIx_Init
-#define PMIX_STDIN_TGT                      "pmix.stdin"             // (uint32_t) spawned proc rank that is to receive stdin
-#define PMIX_FWD_STDIN                      "pmix.fwd.stdin"         // (bool) forward my stdin to the designated proc
-#define PMIX_FWD_STDOUT                     "pmix.fwd.stdout"        // (bool) forward stdout from spawned procs to me
-#define PMIX_FWD_STDERR                     "pmix.fwd.stderr"        // (bool) forward stderr from spawned procs to me
-#define PMIX_DEBUGGER_DAEMONS               "pmix.debugger"          // (bool) spawned app consists of debugger daemons
-#define PMIX_COSPAWN_APP                    "pmix.cospawn"           // (bool) designated app is to be spawned as a disconnected
-                                                                     //     job - i.e., not part of the "comm_world" of the job
+#define PMIX_PERSONALITY                    "pmix.pers"             // (char*) name of personality to use
+#define PMIX_HOST                           "pmix.host"             // (char*) comma-delimited list of hosts to use for spawned procs
+#define PMIX_HOSTFILE                       "pmix.hostfile"         // (char*) hostfile to use for spawned procs
+#define PMIX_ADD_HOST                       "pmix.addhost"          // (char*) comma-delimited list of hosts to add to allocation
+#define PMIX_ADD_HOSTFILE                   "pmix.addhostfile"      // (char*) hostfile to add to existing allocation
+#define PMIX_PREFIX                         "pmix.prefix"           // (char*) prefix to use for starting spawned procs
+#define PMIX_WDIR                           "pmix.wdir"             // (char*) working directory for spawned procs
+#define PMIX_MAPPER                         "pmix.mapper"           // (char*) mapper to use for placing spawned procs
+#define PMIX_DISPLAY_MAP                    "pmix.dispmap"          // (bool) display process map upon spawn
+#define PMIX_PPR                            "pmix.ppr"              // (char*) #procs to spawn on each identified resource
+#define PMIX_MAPBY                          "pmix.mapby"            // (char*) mapping policy
+#define PMIX_RANKBY                         "pmix.rankby"           // (char*) ranking policy
+#define PMIX_BINDTO                         "pmix.bindto"           // (char*) binding policy
+#define PMIX_PRELOAD_BIN                    "pmix.preloadbin"       // (bool) preload binaries
+#define PMIX_PRELOAD_FILES                  "pmix.preloadfiles"     // (char*) comma-delimited list of files to pre-position
+#define PMIX_NON_PMI                        "pmix.nonpmi"           // (bool) spawned procs will not call PMIx_Init
+#define PMIX_STDIN_TGT                      "pmix.stdin"            // (uint32_t) spawned proc rank that is to receive stdin
+#define PMIX_FWD_STDIN                      "pmix.fwd.stdin"        // (bool) forward my stdin to the designated proc
+#define PMIX_FWD_STDOUT                     "pmix.fwd.stdout"       // (bool) forward stdout from spawned procs to me
+#define PMIX_FWD_STDERR                     "pmix.fwd.stderr"       // (bool) forward stderr from spawned procs to me
+#define PMIX_DEBUGGER_DAEMONS               "pmix.debugger"         // (bool) spawned app consists of debugger daemons
+#define PMIX_COSPAWN_APP                    "pmix.cospawn"          // (bool) designated app is to be spawned as a disconnected
+                                                                    //     job - i.e., not part of the "comm_world" of the job
 
 /* query attributes */
-#define PMIX_QUERY_NAMESPACES               "pmix.qry.ns"            // (char*) request a comma-delimited list of active nspaces
-#define PMIX_QUERY_JOB_STATUS               "pmix.qry.jst"           // (pmix_status_t) status of a specified currently executing job
-#define PMIX_QUERY_QUEUE_LIST               "pmix.qry.qlst"          // (char*) request a comma-delimited list of scheduler queues
-#define PMIX_QUERY_QUEUE_STATUS             "pmix.qry.qst"           // (TBD) status of a specified scheduler queue
-#define PMIX_QUERY_PROC_TABLE               "pmix.qry.ptable"        // (char*) input nspace of job whose info is being requested
-                                                                     //     returns (pmix_data_array_t) an array of pmix_proc_info_t
-#define PMIX_QUERY_LOCAL_PROC_TABLE         "pmix.qry.lptable"       // (char*) input nspace of job whose info is being requested
-                                                                     //     returns (pmix_data_array_t) an array of pmix_proc_info_t for
-                                                                     //     procs in job on same node
-#define PMIX_QUERY_AUTHORIZATIONS           "pmix.qry.auths"         // return operations tool is authorized to perform
-#define PMIX_QUERY_SPAWN_SUPPORT            "pmix.qry.spawn"         // return a comma-delimited list of supported spawn attributes
-#define PMIX_QUERY_DEBUG_SUPPORT            "pmix.qry.debug"         // return a comma-delimited list of supported debug attributes
-#define PMIX_QUERY_MEMORY_USAGE             "pmix.qry.mem"           // return info on memory usage for the procs indicated in the qualifiers
-#define PMIX_QUERY_LOCAL_ONLY               "pmix.qry.local"         // constrain the query to local information only
-#define PMIX_QUERY_REPORT_AVG               "pmix.qry.avg"           // report average values
-#define PMIX_QUERY_REPORT_MINMAX            "pmix.qry.minmax"        // report minimum and maximum value
-#define PMIX_QUERY_ALLOC_STATUS             "pmix.query.alloc"       // (char*) string identifier of the allocation whose status
-                                                                     //         is being requested
+#define PMIX_QUERY_NAMESPACES               "pmix.qry.ns"           // (char*) request a comma-delimited list of active nspaces
+#define PMIX_QUERY_JOB_STATUS               "pmix.qry.jst"          // (pmix_status_t) status of a specified currently executing job
+#define PMIX_QUERY_QUEUE_LIST               "pmix.qry.qlst"         // (char*) request a comma-delimited list of scheduler queues
+#define PMIX_QUERY_QUEUE_STATUS             "pmix.qry.qst"          // (TBD) status of a specified scheduler queue
+#define PMIX_QUERY_PROC_TABLE               "pmix.qry.ptable"       // (char*) input nspace of job whose info is being requested
+                                                                    //         returns (pmix_data_array_t) an array of pmix_proc_info_t
+#define PMIX_QUERY_LOCAL_PROC_TABLE         "pmix.qry.lptable"      // (char*) input nspace of job whose info is being requested
+                                                                    //         returns (pmix_data_array_t) an array of pmix_proc_info_t for
+                                                                    //         procs in job on same node
+#define PMIX_QUERY_AUTHORIZATIONS           "pmix.qry.auths"        // (bool) return operations tool is authorized to perform
+#define PMIX_QUERY_SPAWN_SUPPORT            "pmix.qry.spawn"        // (bool) return a comma-delimited list of supported spawn attributes
+#define PMIX_QUERY_DEBUG_SUPPORT            "pmix.qry.debug"        // (bool) return a comma-delimited list of supported debug attributes
+#define PMIX_QUERY_MEMORY_USAGE             "pmix.qry.mem"          // (bool) return info on memory usage for the procs indicated in the qualifiers
+#define PMIX_QUERY_LOCAL_ONLY               "pmix.qry.local"        // (bool) constrain the query to local information only
+#define PMIX_QUERY_REPORT_AVG               "pmix.qry.avg"          // (bool) report average values
+#define PMIX_QUERY_REPORT_MINMAX            "pmix.qry.minmax"       // (bool) report minimum and maximum value
+#define PMIX_QUERY_ALLOC_STATUS             "pmix.query.alloc"      // (char*) string identifier of the allocation whose status
+                                                                    //         is being requested
+#define PMIX_TIME_REMAINING                 "pmix.time.remaining"   // (char*) query number of seconds (uint32_t) remaining in allocation
+                                                                    //         for the specified nspace
 
 /* log attributes */
-#define PMIX_LOG_STDERR                    "pmix.log.stderr"         // (char*) log string to stderr
-#define PMIX_LOG_STDOUT                    "pmix.log.stdout"         // (char*) log string to stdout
-#define PMIX_LOG_SYSLOG                    "pmix.log.syslog"         // (char*) log data to syslog - defaults to ERROR priority unless
-#define PMIX_LOG_MSG                       "pmix.log.msg"            // (pmix_byte_object_t) message blob to be sent somewhere
+#define PMIX_LOG_STDERR                     "pmix.log.stderr"       // (char*) log string to stderr
+#define PMIX_LOG_STDOUT                     "pmix.log.stdout"       // (char*) log string to stdout
+#define PMIX_LOG_SYSLOG                     "pmix.log.syslog"       // (char*) log data to syslog - defaults to ERROR priority unless
+#define PMIX_LOG_MSG                        "pmix.log.msg"          // (pmix_byte_object_t) message blob to be sent somewhere
+#define PMIX_LOG_EMAIL                      "pmix.log.email"        // (pmix_data_array_t) log via email based on pmix_info_t containing directives
+#define PMIX_LOG_EMAIL_ADDR                 "pmix.log.emaddr"       // (char*) comma-delimited list of email addresses that are to recv msg
+#define PMIX_LOG_EMAIL_SUBJECT              "pmix.log.emsub"        // (char*) subject line for email
+#define PMIX_LOG_EMAIL_MSG                  "pmix.log.emmsg"        // (char*) msg to be included in email
 
 /* debugger attributes */
-#define PMIX_DEBUG_STOP_ON_EXEC             "pmix.dbg.exec"          // (bool) job is being spawned under debugger - instruct it to pause on start
-#define PMIX_DEBUG_STOP_IN_INIT             "pmix.dbg.init"          // (bool) instruct job to stop during PMIx init
-#define PMIX_DEBUG_WAIT_FOR_NOTIFY          "pmix.dbg.notify"        // (bool) block at desired point until receiving debugger release notification
-#define PMIX_DEBUG_JOB                      "pmix.dbg.job"           // (char*) nspace of the job to be debugged - the RM/PMIx server are
-#define PMIX_DEBUG_WAITING_FOR_NOTIFY       "pmix.dbg.waiting"       // (bool) job to be debugged is waiting for a release
+#define PMIX_DEBUG_STOP_ON_EXEC             "pmix.dbg.exec"         // (bool) job is being spawned under debugger - instruct it to pause on start
+#define PMIX_DEBUG_STOP_IN_INIT             "pmix.dbg.init"         // (bool) instruct job to stop during PMIx init
+#define PMIX_DEBUG_WAIT_FOR_NOTIFY          "pmix.dbg.notify"       // (bool) block at desired point until receiving debugger release notification
+#define PMIX_DEBUG_JOB                      "pmix.dbg.job"          // (char*) nspace of the job to be debugged - the RM/PMIx server are
+#define PMIX_DEBUG_WAITING_FOR_NOTIFY       "pmix.dbg.waiting"      // (bool) job to be debugged is waiting for a release
 
 /* Resource Manager identification */
-#define PMIX_RM_NAME                        "pmix.rm.name"           // (char*) string name of the resource manager
-#define PMIX_RM_VERSION                     "pmix.rm.version"        // (char*) RM version string
+#define PMIX_RM_NAME                        "pmix.rm.name"          // (char*) string name of the resource manager
+#define PMIX_RM_VERSION                     "pmix.rm.version"       // (char*) RM version string
 
 /* attributes for setting envars */
 #define PMIX_SET_ENVAR                      "pmix.set.envar"        // (char*) string "key=value" value shall be put into the environment
 #define PMIX_UNSET_ENVAR                    "pmix.unset.envar"      // (char*) unset envar specified in string
 
-/* attributes for allocation support */
+/* attributes relating to allocations */
 #define PMIX_ALLOC_ID                       "pmix.alloc.id"         // (char*) provide a string identifier for this allocation request
                                                                     //         which can later be used to query status of the request
 #define PMIX_ALLOC_NUM_NODES                "pmix.alloc.nnodes"     // (uint64_t) number of nodes
@@ -341,6 +350,38 @@ typedef uint32_t pmix_rank_t;
 #define PMIX_ALLOC_BANDWIDTH                "pmix.alloc.bw"         // (float) Mbits/sec
 #define PMIX_ALLOC_NETWORK_QOS              "pmix.alloc.netqos"     // (char*) quality of service level
 #define PMIX_ALLOC_TIME                     "pmix.alloc.time"       // (uint32_t) time in seconds
+
+/* job control attributes */
+#define PMIX_JOB_CTRL_ID                    "pmix.jctrl.id"         // (char*) provide a string identifier for this request
+#define PMIX_JOB_CTRL_PAUSE                 "pmix.jctrl.pause"      // (bool) pause the specified processes
+#define PMIX_JOB_CTRL_RESUME                "pmix.jctrl.resume"     // (bool) "un-pause" the specified processes
+#define PMIX_JOB_CTRL_CANCEL                "pmix.jctrl.cancel"     // (char*) cancel the specified request
+                                                                    //         (NULL => cancel all requests from this requestor)
+#define PMIX_JOB_CTRL_KILL                  "pmix.jctrl.kill"       // (bool) forcibly terminate the specified processes and cleanup
+#define PMIX_JOB_CTRL_RESTART               "pmix.jctrl.restart"    // (char*) restart the specified processes using the given checkpoint ID
+#define PMIX_JOB_CTRL_CHECKPOINT            "pmix.jctrl.ckpt"       // (char*) checkpoint the specified processes and assign the given ID to it
+#define PMIX_JOB_CTRL_CHECKPOINT_EVENT      "pmix.jctrl.ckptev"     // (bool) use event notification to trigger process checkpoint
+#define PMIX_JOB_CTRL_CHECKPOINT_SIGNAL     "pmix.jctrl.ckptsig"    // (int) use the given signal to trigger process checkpoint
+#define PMIX_JOB_CTRL_CHECKPOINT_TIMEOUT    "pmix.jctrl.ckptsig"    // (int) time in seconds to wait for checkpoint to complete
+#define PMIX_JOB_CTRL_SIGNAL                "pmix.jctrl.sig"        // (int) send given signal to specified processes
+#define PMIX_JOB_CTRL_PROVISION             "pmix.jctrl.pvn"        // (char*) regex identifying nodes that are to be provisioned
+#define PMIX_JOB_CTRL_PROVISION_IMAGE       "pmix.jctrl.pvnimg"     // (char*) name of the image that is to be provisioned
+#define PMIX_JOB_CTRL_PREEMPTIBLE           "pmix.jctrl.preempt"    // (bool) job can be pre-empted
+
+/* monitoring attributes */
+#define PMIX_MONITOR_HEARTBEAT              "pmix.monitor.mbeat"    // (void) register to have the server monitor the requestor for heartbeats
+#define PMIX_SEND_HEARTBEAT                 "pmix.monitor.beat"     // (void) send heartbeat to local server
+#define PMIX_MONITOR_HEARTBEAT_TIME         "pmix.monitor.btime"    // (uint32_t) time in seconds before declaring heartbeat missed
+#define PMIX_MONITOR_HEARTBEAT_DROPS        "pmix.monitor.bdrop"    // (uint32_t) number of heartbeats that can be missed before taking
+                                                                    //            specified action
+#define PMIX_MONITOR_FILE                   "pmix.monitor.fmon"     // (char*) register to monitor file for signs of life
+#define PMIX_MONITOR_FILE_SIZE              "pmix.monitor.fsize"    // (bool) monitor size of given file is growing to determine app is running
+#define PMIX_MONITOR_FILE_ACCESS            "pmix.monitor.faccess"  // (char*) monitor time since last access of given file to determine app is running
+#define PMIX_MONITOR_FILE_MODIFY            "pmix.monitor.fmod"     // (char*) monitor time since last modified of given file to determine app is running
+#define PMIX_MONITOR_FILE_CHECK_TIME        "pmix.monitor.ftime"    // (uint32_t) time in seconds between checking file
+#define PMIX_MONITOR_FILE_DROPS             "pmix.monitor.fdrop"    // (uint32_t) number of file checks that can be missed before taking
+                                                                    //            specified action
+
 
 /****    PROCESS STATE DEFINITIONS    ****/
 typedef uint8_t pmix_proc_state_t;
@@ -384,53 +425,97 @@ typedef uint8_t pmix_proc_state_t;
 
 typedef int pmix_status_t;
 
-#define PMIX_SUCCESS                            (PMIX_ERR_BASE)
-#define PMIX_ERROR                              (PMIX_ERR_BASE -  1)    // general error
+/* v1.x error values - must be fixed in place for backward
+ * compatability. Note that some number of these have been
+ * deprecated and may not be returned by v2.x and above
+ * clients or servers. However, they must always be
+ * at least defined to ensure older codes will compile */
+#define PMIX_SUCCESS                                 0
+#define PMIX_ERROR                                  -1          // general error
+#define PMIX_ERR_SILENT                             -2          // internal-only
 /* debugger release flag */
-#define PMIX_ERR_DEBUGGER_RELEASE               (PMIX_ERR_BASE -  2)
+#define PMIX_ERR_DEBUGGER_RELEASE                   -3
 /* fault tolerance */
-#define PMIX_ERR_PROC_RESTART                   (PMIX_ERR_BASE -  3)
-#define PMIX_ERR_PROC_CHECKPOINT                (PMIX_ERR_BASE -  4)
-#define PMIX_ERR_PROC_MIGRATE                   (PMIX_ERR_BASE -  5)
-#define PMIX_ERR_UPDATE_ENDPOINTS               (PMIX_ERR_BASE -  6)
+#define PMIX_ERR_PROC_RESTART                       -4
+#define PMIX_ERR_PROC_CHECKPOINT                    -5
+#define PMIX_ERR_PROC_MIGRATE                       -6
 /* abort */
-#define PMIX_ERR_PROC_ABORTED                   (PMIX_ERR_BASE -  7)
-#define PMIX_ERR_PROC_REQUESTED_ABORT           (PMIX_ERR_BASE -  8)
-#define PMIX_ERR_PROC_ABORTING                  (PMIX_ERR_BASE -  9)
+#define PMIX_ERR_PROC_ABORTED                       -7
+#define PMIX_ERR_PROC_REQUESTED_ABORT               -8
+#define PMIX_ERR_PROC_ABORTING                      -9
 /* communication failures */
-#define PMIX_ERR_UNREACH                        (PMIX_ERR_BASE - 10)
-#define PMIX_ERR_LOST_CONNECTION_TO_SERVER      (PMIX_ERR_BASE - 11)
-#define PMIX_ERR_LOST_PEER_CONNECTION           (PMIX_ERR_BASE - 12)
-#define PMIX_ERR_LOST_CONNECTION_TO_CLIENT      (PMIX_ERR_BASE - 13)
-/* used by the query system */
-#define PMIX_QUERY_PARTIAL_SUCCESS              (PMIX_ERR_BASE - 14)
+#define PMIX_ERR_SERVER_FAILED_REQUEST              -10
+#define PMIX_EXISTS                                 -11
+#define PMIX_ERR_INVALID_CRED                       -12         // internal-only
+#define PMIX_ERR_HANDSHAKE_FAILED                   -13         // internal-only
+#define PMIX_ERR_READY_FOR_HANDSHAKE                -14         // internal-only
+#define PMIX_ERR_WOULD_BLOCK                        -15
+#define PMIX_ERR_UNKNOWN_DATA_TYPE                  -16         // internal-only
+#define PMIX_ERR_PROC_ENTRY_NOT_FOUND               -17         // internal-only
+#define PMIX_ERR_TYPE_MISMATCH                      -18         // internal-only
+#define PMIX_ERR_UNPACK_INADEQUATE_SPACE            -19         // internal-only
+#define PMIX_ERR_UNPACK_FAILURE                     -20         // internal-only
+#define PMIX_ERR_PACK_FAILURE                       -21         // internal-only
+#define PMIX_ERR_PACK_MISMATCH                      -22         // internal-only
+#define PMIX_ERR_NO_PERMISSIONS                     -23
+#define PMIX_ERR_TIMEOUT                            -24
+#define PMIX_ERR_UNREACH                            -25
+#define PMIX_ERR_IN_ERRNO                           -26         // internal-only
+#define PMIX_ERR_BAD_PARAM                          -27
+#define PMIX_ERR_RESOURCE_BUSY                      -28         // internal-only
+#define PMIX_ERR_OUT_OF_RESOURCE                    -29
+#define PMIX_ERR_DATA_VALUE_NOT_FOUND               -30
+#define PMIX_ERR_INIT                               -31
+#define PMIX_ERR_NOMEM                              -32         // internal-only
+#define PMIX_ERR_INVALID_ARG                        -33         // internal-only
+#define PMIX_ERR_INVALID_KEY                        -34         // internal-only
+#define PMIX_ERR_INVALID_KEY_LENGTH                 -35         // internal-only
+#define PMIX_ERR_INVALID_VAL                        -36         // internal-only
+#define PMIX_ERR_INVALID_VAL_LENGTH                 -37         // internal-only
+#define PMIX_ERR_INVALID_LENGTH                     -38         // internal-only
+#define PMIX_ERR_INVALID_NUM_ARGS                   -39         // internal-only
+#define PMIX_ERR_INVALID_ARGS                       -40         // internal-only
+#define PMIX_ERR_INVALID_NUM_PARSED                 -41         // internal-only
+#define PMIX_ERR_INVALID_KEYVALP                    -42         // internal-only
+#define PMIX_ERR_INVALID_SIZE                       -43
+#define PMIX_ERR_INVALID_NAMESPACE                  -44
+#define PMIX_ERR_SERVER_NOT_AVAIL                   -45         // internal-only
+#define PMIX_ERR_NOT_FOUND                          -46
+#define PMIX_ERR_NOT_SUPPORTED                      -47
+#define PMIX_ERR_NOT_IMPLEMENTED                    -48
+#define PMIX_ERR_COMM_FAILURE                       -49
+#define PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER     -50         // internal-only
 
+/* define a starting point for v2.x error values */
+#define PMIX_ERR_V2X_BASE                   -100
+
+/* v2.x communication errors */
+#define PMIX_ERR_LOST_CONNECTION_TO_SERVER      (PMIX_ERR_V2X_BASE - 1)
+#define PMIX_ERR_LOST_PEER_CONNECTION           (PMIX_ERR_V2X_BASE - 2)
+#define PMIX_ERR_LOST_CONNECTION_TO_CLIENT      (PMIX_ERR_V2X_BASE - 3)
+/* used by the query system */
+#define PMIX_QUERY_PARTIAL_SUCCESS              (PMIX_ERR_V2X_BASE - 4)
+/* request responses */
+#define PMIX_NOTIFY_ALLOC_COMPLETE              (PMIX_ERR_V2X_BASE - 5)
+/* job control */
+#define PMIX_JCTRL_CHECKPOINT                   (PMIX_ERR_V2X_BASE - 6)
+#define PMIX_JCTRL_PREEMPT_ALERT                (PMIX_ERR_V2X_BASE - 7)
+/* monitoring */
+#define PMIX_MONITOR_HEARTBEAT_ALERT            (PMIX_ERR_V2X_BASE - 8)
+#define PMIX_MONITOR_FILE_ALERT                 (PMIX_ERR_V2X_BASE - 9)
 
 /* define a starting point for operational error constants so
  * we avoid renumbering when making additions */
-#define PMIX_ERR_OP_BASE    -100
+#define PMIX_ERR_OP_BASE    PMIX_ERR_V2X_BASE-30
 
 /* operational */
-#define PMIX_ERR_NO_PERMISSIONS                 (PMIX_ERR_OP_BASE -  1)
-#define PMIX_ERR_TIMEOUT                        (PMIX_ERR_OP_BASE -  2)
-#define PMIX_ERR_WOULD_BLOCK                    (PMIX_ERR_OP_BASE -  3)
-#define PMIX_EXISTS                             (PMIX_ERR_OP_BASE -  4)
-#define PMIX_ERR_SERVER_FAILED_REQUEST          (PMIX_ERR_OP_BASE -  5)
-#define PMIX_ERR_NOT_SUPPORTED                  (PMIX_ERR_OP_BASE -  6)
-#define PMIX_ERR_NOT_FOUND                      (PMIX_ERR_OP_BASE -  7)
-#define PMIX_ERR_BAD_PARAM                      (PMIX_ERR_OP_BASE -  8)
-#define PMIX_ERR_DATA_VALUE_NOT_FOUND           (PMIX_ERR_OP_BASE -  9)
-#define PMIX_ERR_OUT_OF_RESOURCE                (PMIX_ERR_OP_BASE - 10)
-#define PMIX_ERR_INVALID_NAMESPACE              (PMIX_ERR_OP_BASE - 11)
-#define PMIX_ERR_INVALID_SIZE                   (PMIX_ERR_OP_BASE - 12)
-#define PMIX_ERR_INIT                           (PMIX_ERR_OP_BASE - 13)
 #define PMIX_ERR_EVENT_REGISTRATION             (PMIX_ERR_OP_BASE - 14)
 #define PMIX_ERR_JOB_TERMINATED                 (PMIX_ERR_OP_BASE - 15)
-
+#define PMIX_ERR_UPDATE_ENDPOINTS               (PMIX_ERR_OP_BASE - 16)
 
 /* define a starting point for system error constants so
  * we avoid renumbering when making additions */
-#define PMIX_ERR_SYS_BASE    -200
+#define PMIX_ERR_SYS_BASE    PMIX_ERR_OP_BASE-100
 
 /* system failures */
 #define PMIX_ERR_NODE_DOWN                      (PMIX_ERR_SYS_BASE -  1)
@@ -439,7 +524,7 @@ typedef int pmix_status_t;
 
 /* define a starting point for event handler error constants so
  * we avoid renumbering when making additions */
-#define PMIX_ERR_EVHDLR_BASE    -300
+#define PMIX_ERR_EVHDLR_BASE    PMIX_ERR_SYS_BASE-100
 
 /* used by event handlers */
 #define PMIX_EVENT_NO_ACTION_TAKEN              (PMIX_ERR_EVHDLR_BASE -  1)

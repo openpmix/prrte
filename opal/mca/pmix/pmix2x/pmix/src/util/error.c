@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2007-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +35,7 @@
 #include "src/include/pmix_globals.h"
 #include "src/util/error.h"
 
-const char* PMIx_Error_string(pmix_status_t errnum)
+PMIX_EXPORT const char* PMIx_Error_string(pmix_status_t errnum)
 {
     switch(errnum) {
     case PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER:
@@ -56,6 +56,8 @@ const char* PMIx_Error_string(pmix_status_t errnum)
         return "INVALID-KEYVAL";
     case PMIX_ERR_INVALID_NUM_PARSED:
         return "INVALID-NUM-PARSED";
+    case PMIX_ERR_TAKE_NEXT_OPTION:
+        return "TAKE-NEXT-OPTION";
 
     case PMIX_ERR_INVALID_ARGS:
         return "INVALID-ARGS";
@@ -155,6 +157,16 @@ const char* PMIx_Error_string(pmix_status_t errnum)
         return "PMIX_ERR_JOB_TERMINATED";
     case PMIX_MAX_ERR_CONSTANT:
         return "PMIX_ERR_WILDCARD";
+    case PMIX_NOTIFY_ALLOC_COMPLETE:
+        return "PMIX ALLOC OPERATION COMPLETE";
+    case PMIX_JCTRL_CHECKPOINT:
+        return "PMIX JOB CONTROL CHECKPOINT";
+    case PMIX_JCTRL_PREEMPT_ALERT:
+        return "PMIX PRE-EMPTION ALERT";
+    case PMIX_MONITOR_HEARTBEAT_ALERT:
+        return "PMIX HEARTBEAT ALERT";
+    case PMIX_MONITOR_FILE_ALERT:
+        return "PMIX FILE MONITOR ALERT";
     case PMIX_SUCCESS:
         return "SUCCESS";
     default:

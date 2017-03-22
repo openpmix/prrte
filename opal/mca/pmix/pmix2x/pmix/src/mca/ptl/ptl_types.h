@@ -63,6 +63,16 @@ struct pmix_ptl_module_t;
 
 /****    MESSAGING STRUCTURES    ****/
 typedef uint32_t pmix_ptl_tag_t;
+/* define a range of "reserved" tags - these
+ * are tags that are used for persistent recvs
+ * within the system */
+#define PMIX_PTL_TAG_NOTIFY           0
+#define PMIX_PTL_TAG_HEARTBEAT        1
+
+/* define the start of dynamic tags that are
+ * assigned for send/recv operations */
+#define PMIX_PTL_TAG_DYNAMIC        100
+
 
 /* header for messages */
 typedef struct {
@@ -193,9 +203,9 @@ PMIX_CLASS_DECLARATION(pmix_listener_t);
         pmix_output_verbose(5, pmix_globals.debug_output,               \
                             "[%s:%d] post msg",                         \
                             __FILE__, __LINE__);                        \
-        event_assign(&((ms)->ev), pmix_globals.evbase, -1,              \
-                     EV_WRITE, pmix_ptl_base_process_msg, (ms));        \
-        event_active(&((ms)->ev), EV_WRITE, 1);                         \
+        pmix_event_assign(&((ms)->ev), pmix_globals.evbase, -1,         \
+                          EV_WRITE, pmix_ptl_base_process_msg, (ms));   \
+        pmix_event_active(&((ms)->ev), EV_WRITE, 1);                    \
     } while (0)
 
 #define PMIX_SND_CADDY(c, h, s)                                         \
@@ -237,7 +247,7 @@ PMIX_CLASS_DECLARATION(pmix_listener_t);
         }                                                                               \
         /* ensure the send event is active */                                           \
         if (!(p)->send_ev_active && 0 <= (p)->sd) {                                     \
-            event_add(&(p)->send_event, 0);                                             \
+            pmix_event_add(&(p)->send_event, 0);                                        \
             (p)->send_ev_active = true;                                                 \
         }                                                                               \
     } while (0)

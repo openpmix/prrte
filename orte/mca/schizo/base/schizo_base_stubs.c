@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2015-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -128,14 +128,15 @@ int orte_schizo_base_setup_fork(orte_job_t *jdata,
 
 int orte_schizo_base_setup_child(orte_job_t *jdata,
                                  orte_proc_t *child,
-                                 orte_app_context_t *app)
+                                 orte_app_context_t *app,
+                                 char ***env)
 {
     int rc;
     orte_schizo_base_active_module_t *mod;
 
     OPAL_LIST_FOREACH(mod, &orte_schizo_base.active_modules, orte_schizo_base_active_module_t) {
         if (NULL != mod->module->setup_child) {
-            rc = mod->module->setup_child(jdata, child, app);
+            rc = mod->module->setup_child(jdata, child, app, env);
             if (ORTE_SUCCESS != rc && ORTE_ERR_TAKE_NEXT_OPTION != rc) {
                 ORTE_ERROR_LOG(rc);
                 return rc;
@@ -159,6 +160,22 @@ orte_schizo_launch_environ_t orte_schizo_base_check_launch_environment(void)
         }
     }
     return ORTE_SCHIZO_UNDETERMINED;
+}
+
+int orte_schizo_base_get_remaining_time(uint32_t *timeleft)
+{
+    int rc;
+    orte_schizo_base_active_module_t *mod;
+
+    OPAL_LIST_FOREACH(mod, &orte_schizo_base.active_modules, orte_schizo_base_active_module_t) {
+        if (NULL != mod->module->get_remaining_time) {
+            rc = mod->module->get_remaining_time(timeleft);
+            if (ORTE_ERR_TAKE_NEXT_OPTION != rc) {
+                return rc;
+            }
+        }
+    }
+    return ORTE_ERR_NOT_SUPPORTED;
 }
 
 void orte_schizo_base_finalize(void)

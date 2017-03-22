@@ -186,6 +186,7 @@ int orte_util_encode_nodemap(opal_buffer_t *buffer)
     char **regexargs = NULL, *tmp, *tmp2;
     orte_node_t *nptr;
     int rc;
+    uint8_t ui8;
 
     /* setup the list of results */
     OBJ_CONSTRUCT(&nodenms, opal_list_t);
@@ -594,6 +595,28 @@ int orte_util_encode_nodemap(opal_buffer_t *buffer)
         free(tmp);
     }
 
+    /* pack a flag indicating if the HNP was included in the allocation */
+    if (orte_hnp_is_allocated) {
+        ui8 = 1;
+    } else {
+        ui8 = 0;
+    }
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &ui8, 1, OPAL_UINT8))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
+
+    /* pack a flag indicating if we are in a managed allocation */
+    if (orte_managed_allocation) {
+        ui8 = 1;
+    } else {
+        ui8 = 0;
+    }
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &ui8, 1, OPAL_UINT8))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
+
     /* handle the topologies - as the most common case by far
      * is to have homogeneous topologies, we only send them
      * if something is different */
@@ -682,8 +705,9 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
     char *ndnames, *rmndr, **tmp;
     opal_list_t dids, slts, flgs;;
     opal_buffer_t *bptr=NULL;
-    orte_topology_t *t;
+    orte_topology_t *t2;
     orte_regex_range_t *rng, *drng, *srng, *frng;
+    uint8_t ui8;
 
     /* unpack the node regex */
     n = 1;
@@ -737,6 +761,30 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
         ORTE_ERROR_LOG(ORTE_ERR_BAD_PARAM);
         rc = ORTE_ERR_BAD_PARAM;
         goto cleanup;
+    }
+
+    /* unpack the flag indicating if the HNP was allocated */
+    n = 1;
+    if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &ui8, &n, OPAL_UINT8))) {
+        ORTE_ERROR_LOG(rc);
+        goto cleanup;
+    }
+    if (0 == ui8) {
+        orte_hnp_is_allocated = false;
+    } else {
+        orte_hnp_is_allocated = true;
+    }
+
+    /* unpack the flag indicating we are in a managed allocation */
+    n = 1;
+    if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &ui8, &n, OPAL_UINT8))) {
+        ORTE_ERROR_LOG(rc);
+        goto cleanup;
+    }
+    if (0 == ui8) {
+        orte_managed_allocation = false;
+    } else {
+        orte_managed_allocation = true;
     }
 
     /* unpack the topos regex - this may not have been
@@ -930,14 +978,13 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
 
     /* if no topology info was passed, then everyone shares our topology */
     if (NULL == bptr) {
-        orte_topology_t *t;
         /* our topology is first in the array */
-        t = (orte_topology_t*)opal_pointer_array_get_item(orte_node_topologies, 0);
+        t2 = (orte_topology_t*)opal_pointer_array_get_item(orte_node_topologies, 0);
         for (n=0; n < orte_node_pool->size; n++) {
             if (NULL != (node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, n))) {
                 if (NULL == node->topology) {
-                    OBJ_RETAIN(t);
-                    node->topology = t;
+                    OBJ_RETAIN(t2);
+                    node->topology = t2;
                 }
             }
         }
@@ -956,6 +1003,13 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
                 OBJ_RELEASE(bptr);
                 goto cleanup;
             }
+            if (NULL == sig) {
+                rc = ORTE_ERR_BAD_PARAM;
+                ORTE_ERROR_LOG(rc);
+                opal_argv_free(tmp);
+                OBJ_RELEASE(bptr);
+                goto cleanup;
+            }
             n = 1;
             if (ORTE_SUCCESS != (rc = opal_dss.unpack(bptr, &topo, &n, OPAL_HWLOC_TOPO))) {
                 ORTE_ERROR_LOG(rc);
@@ -965,11 +1019,12 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
                 goto cleanup;
             }
             /* see if we already have this topology - could be an update */
+            t2 = NULL;
             for (n=0; n < orte_node_topologies->size; n++) {
-                if (NULL == (t = (orte_topology_t*)opal_pointer_array_get_item(orte_node_topologies, n))) {
+                if (NULL == (t2 = (orte_topology_t*)opal_pointer_array_get_item(orte_node_topologies, n))) {
                     continue;
                 }
-                if (0 == strcmp(t->sig, sig)) {
+                if (0 == strcmp(t2->sig, sig)) {
                     /* found a match */
                     free(sig);
                     opal_hwloc_base_free_topology(topo);
@@ -977,11 +1032,12 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
                     break;
                 }
             }
-            if (NULL != sig) {
+            if (NULL != sig || NULL == t2) {
                 /* new topology - record it */
-                t = OBJ_NEW(orte_topology_t);
-                t->sig = sig;
-                t->topo = topo;
+                t2 = OBJ_NEW(orte_topology_t);
+                t2->sig = sig;
+                t2->topo = topo;
+                opal_pointer_array_add(orte_node_topologies, t2);
             }
             /* point each of the nodes in the regex to this topology */
             start = strtoul(tmp[nn], &rmndr, 10);
@@ -995,8 +1051,8 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
             for (k=start; k <= endpt; k++) {
                 if (NULL != (node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, k))) {
                     if (NULL == node->topology) {
-                        OBJ_RETAIN(t);
-                        node->topology = t;
+                        OBJ_RETAIN(t2);
+                        node->topology = t2;
                     }
                 }
             }

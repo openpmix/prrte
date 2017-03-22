@@ -46,7 +46,7 @@
 
 #include "src/mca/ptl/base/base.h"
 
-static uint32_t current_tag = 1;  // 0 is reserved for system purposes
+static uint32_t current_tag = PMIX_PTL_TAG_DYNAMIC;
 
 static void _notify_complete(pmix_status_t status, void *cbdata)
 {
@@ -65,11 +65,11 @@ static void lost_connection(pmix_peer_t *peer, pmix_status_t err)
 
     /* stop all events */
     if (peer->recv_ev_active) {
-        event_del(&peer->recv_event);
+        pmix_event_del(&peer->recv_event);
         peer->recv_ev_active = false;
     }
     if (peer->send_ev_active) {
-        event_del(&peer->send_event);
+        pmix_event_del(&peer->send_event);
         peer->send_ev_active = false;
     }
     if (NULL != peer->recv_msg) {
@@ -162,7 +162,7 @@ static pmix_status_t send_msg(int sd, pmix_ptl_send_t *msg)
     } else {
         iov_count = 1;
     }
-retry:
+  retry:
     rc = writev(sd, iov, iov_count);
     if (PMIX_LIKELY(rc == remain)) {
         /* we successfully sent the header and the msg data if any */
@@ -304,7 +304,7 @@ void pmix_ptl_base_send_handler(int sd, short flags, void *cbdata)
             return;
         } else {
             // report the error
-            event_del(&peer->send_event);
+            pmix_event_del(&peer->send_event);
             peer->send_ev_active = false;
             PMIX_RELEASE(msg);
             peer->send_msg = NULL;
@@ -324,7 +324,7 @@ void pmix_ptl_base_send_handler(int sd, short flags, void *cbdata)
 
     /* if nothing else to do unregister for send event notifications */
     if (NULL == peer->send_msg && peer->send_ev_active) {
-        event_del(&peer->send_event);
+        pmix_event_del(&peer->send_event);
         peer->send_ev_active = false;
     }
 }
@@ -452,11 +452,11 @@ void pmix_ptl_base_recv_handler(int sd, short flags, void *cbdata)
  err_close:
     /* stop all events */
     if (peer->recv_ev_active) {
-        event_del(&peer->recv_event);
+        pmix_event_del(&peer->recv_event);
         peer->recv_ev_active = false;
     }
     if (peer->send_ev_active) {
-        event_del(&peer->send_event);
+        pmix_event_del(&peer->send_event);
         peer->send_ev_active = false;
     }
     if (NULL != peer->recv_msg) {
@@ -502,7 +502,7 @@ void pmix_ptl_base_send(int sd, short args, void *cbdata)
     }
     /* ensure the send event is active */
     if (!(queue->peer)->send_ev_active) {
-        event_add(&(queue->peer)->send_event, 0);
+        pmix_event_add(&(queue->peer)->send_event, 0);
         (queue->peer)->send_ev_active = true;
     }
     PMIX_RELEASE(queue);
@@ -521,16 +521,16 @@ void pmix_ptl_base_send_recv(int fd, short args, void *cbdata)
         return;
     }
 
-    /* set the tag */
-    tag = current_tag++;
+    /* take the next tag in the sequence */
+    current_tag++;
+    if (UINT32_MAX == current_tag ) {
+        current_tag = PMIX_PTL_TAG_DYNAMIC;
+    }
+    tag = current_tag;
 
     if (NULL != ms->cbfunc) {
         /* if a callback msg is expected, setup a recv for it */
         req = PMIX_NEW(pmix_ptl_posted_recv_t);
-        /* take the next tag in the sequence */
-        if (UINT32_MAX == current_tag ) {
-            current_tag = 1;
-        }
         req->tag = tag;
         req->cbfunc = ms->cbfunc;
         req->cbdata = ms->cbdata;
@@ -563,7 +563,7 @@ void pmix_ptl_base_send_recv(int fd, short args, void *cbdata)
     }
     /* ensure the send event is active */
     if (!ms->peer->send_ev_active) {
-        event_add(&ms->peer->send_event, 0);
+        pmix_event_add(&ms->peer->send_event, 0);
         ms->peer->send_ev_active = true;
     }
     /* cleanup */
@@ -597,23 +597,29 @@ void pmix_ptl_base_process_msg(int fd, short flags, void *cbdata)
                     buf.pack_ptr = ((char*)buf.base_ptr) + buf.bytes_used;
                 }
                 msg->data = NULL;  // protect the data region
-                if (NULL != rcv->cbfunc) {
-                    rcv->cbfunc(msg->peer, &msg->hdr, &buf, rcv->cbdata);
-                }
+                rcv->cbfunc(msg->peer, &msg->hdr, &buf, rcv->cbdata);
                 PMIX_DESTRUCT(&buf);  // free's the msg data
-                /* also done with the recv, if not a wildcard or the error tag */
-                if (UINT32_MAX != rcv->tag && 0 != rcv->tag) {
-                    pmix_list_remove_item(&pmix_ptl_globals.posted_recvs, &rcv->super);
-                    PMIX_RELEASE(rcv);
-                }
-                PMIX_RELEASE(msg);
-                return;
             }
+            /* done with the recv if it is a dynamic tag */
+            if (PMIX_PTL_TAG_DYNAMIC <= rcv->tag && UINT_MAX != rcv->tag) {
+                pmix_list_remove_item(&pmix_ptl_globals.posted_recvs, &rcv->super);
+                PMIX_RELEASE(rcv);
+            }
+            PMIX_RELEASE(msg);
+            return;
         }
     }
 
-    /* we get here if no matching recv was found - this is an error */
-    pmix_output(0, "UNEXPECTED MESSAGE tag = %d", msg->hdr.tag);
-    PMIX_RELEASE(msg);
-    PMIX_REPORT_EVENT(PMIX_ERROR, _notify_complete);
+    /* if the tag in this message is above the dynamic marker, then
+     * that is an error */
+    if (PMIX_PTL_TAG_DYNAMIC <= msg->hdr.tag) {
+        pmix_output(0, "UNEXPECTED MESSAGE tag = %d", msg->hdr.tag);
+        PMIX_RELEASE(msg);
+        PMIX_REPORT_EVENT(PMIX_ERROR, _notify_complete);
+        return;
+    }
+
+    /* it is possible that someone may post a recv for this message
+     * at some point, so we have to hold onto it */
+    pmix_list_append(&pmix_ptl_globals.unexpected_msgs, &msg->super);
 }

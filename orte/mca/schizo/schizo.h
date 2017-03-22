@@ -88,7 +88,8 @@ typedef int (*orte_schizo_base_module_setup_fork_fn_t)(orte_job_t *jdata,
  * proc upon execution */
 typedef int (*orte_schizo_base_module_setup_child_fn_t)(orte_job_t *jdata,
                                                         orte_proc_t *child,
-                                                        orte_app_context_t *app);
+                                                        orte_app_context_t *app,
+                                                        char ***env);
 
 
 typedef enum {
@@ -110,9 +111,13 @@ typedef orte_schizo_launch_environ_t (*orte_schizo_base_module_ck_launch_environ
 /* give the component a chance to cleanup */
 typedef void (*orte_schizo_base_module_finalize_fn_t)(void);
 
-
-/* request time remaining in this allocation */
-typedef long (*orte_schizo_base_module_get_rem_time_fn_t)(void);
+/* request time remaining in this allocation - only one module
+ * capable of supporting this operation should be available
+ * in a given environment. However, if a module is available
+ * and decides it cannot provide the info in the current situation,
+ * then it can return ORTE_ERR_TAKE_NEXT_OPTION to indicate that
+ * another module should be tried */
+typedef int (*orte_schizo_base_module_get_rem_time_fn_t)(uint32_t *timeleft);
 
 /*
  * schizo module version 1.3.0
