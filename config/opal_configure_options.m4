@@ -194,7 +194,7 @@ AC_ARG_ENABLE(debug-symbols,
 #
 WANT_INSTALL_HEADERS=1
 AM_CONDITIONAL(WANT_INSTALL_HEADERS, test "$WANT_INSTALL_HEADERS" = 1)
-
+with_devel_headers=yes
 
 #
 # Do we want the pretty-print stack trace feature?
