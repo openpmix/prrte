@@ -574,11 +574,6 @@ static void notify_requestor(int sd, short args, void *cbdata)
         OBJ_RELEASE(caddy);
     }
 
-    orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                            &jdata->originator, reply,
-                            ORTE_RML_TAG_NOTIFY_COMPLETE,
-                            send_callback, jdata);
-
     /* now ensure that _all_ daemons know that this job has terminated so even
      * those that did not participate in it will know to cleanup the resources
      * they assigned to the job. This is necessary now that the mapping function
@@ -596,9 +591,4 @@ static void notify_requestor(int sd, short args, void *cbdata)
     orte_grpcomm.xcast(sig, ORTE_RML_TAG_DAEMON, reply);
     OBJ_RELEASE(reply);
     OBJ_RELEASE(sig);
-
-    /* we cannot cleanup the job object as we might
-     * hit an error during transmission, so clean it
-     * up in the send callback */
-    OBJ_RELEASE(caddy);
 }
