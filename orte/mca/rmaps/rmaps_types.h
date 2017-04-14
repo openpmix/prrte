@@ -91,6 +91,8 @@ ORTE_DECLSPEC OBJ_CLASS_DECLARATION(orte_job_map_t);
 /* an error flag */
 #define ORTE_MAPPING_CONFLICTED        0x2000
 #define ORTE_MAPPING_GIVEN             0x4000
+/* mapping a debugger job */
+#define ORTE_MAPPING_DEBUGGER          0x8000
 #define ORTE_SET_MAPPING_DIRECTIVE(target, pol) \
     (target) |= (pol)
 #define ORTE_UNSET_MAPPING_DIRECTIVE(target, pol) \

@@ -48,11 +48,21 @@
 
  BEGIN_C_DECLS
 
+#define ORTED_PMIX_MIN_DMX_TIMEOUT      10
+#define ORTE_ADJUST_TIMEOUT(a)                                      \
+    do {                                                            \
+        (a)->timeout = (2 * orte_process_info.num_daemons) / 1000;  \
+        if ((a)->timeout < ORTED_PMIX_MIN_DMX_TIMEOUT) {            \
+            (a)->timeout = ORTED_PMIX_MIN_DMX_TIMEOUT;              \
+        }                                                           \
+    } while(0)
+
 /* object for tracking requests so we can
  * correctly route the eventual reply */
  typedef struct {
     opal_object_t super;
     opal_event_t ev;
+    char *operation;
     int status;
     int timeout;
     int room_num;
@@ -100,6 +110,7 @@ OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
     do {                                                     \
         pmix_server_req_t *_req;                             \
         _req = OBJ_NEW(pmix_server_req_t);                   \
+        (void)asprintf(&_req->operation, "DMDX: %s:%d", __FILE__, __LINE__); \
         _req->target = (p);                                  \
         _req->mdxcbfunc = (ocf);                             \
         _req->cbdata = (ocd);                                \
@@ -113,6 +124,7 @@ OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
     do {                                                     \
         pmix_server_req_t *_req;                             \
         _req = OBJ_NEW(pmix_server_req_t);                   \
+        (void)asprintf(&_req->operation, "SPAWN: %s:%d", __FILE__, __LINE__); \
         _req->jdata = (j);                                   \
         _req->spcbfunc = (ocf);                              \
         _req->cbdata = (ocd);                                \

@@ -13,7 +13,7 @@
  * Copyright (c) 2008      UT-Battelle, LLC. All rights reserved.
  * Copyright (c) 2011-2014 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -365,25 +365,6 @@ ras_alps_getline(FILE *fp)
     return NULL;
 }
 
-static int compare_nodes (opal_list_item_t **a, opal_list_item_t **b)
-{
-    orte_node_t *nodea = (orte_node_t *) *a;
-    orte_node_t *nodeb = (orte_node_t *) *b;
-    int32_t launcha, launchb, *ldptr;
-
-    ldptr = &launcha;
-    if (!orte_get_attribute(&nodea->attributes, ORTE_NODE_LAUNCH_ID, (void**)&ldptr, OPAL_INT32)) {
-        return 0;
-    }
-
-    ldptr = &launchb;
-    if (!orte_get_attribute(&nodeb->attributes, ORTE_NODE_LAUNCH_ID, (void**)&ldptr, OPAL_INT32)) {
-        return 0;
-    }
-
-    return (launcha > launchb) ? 1 : -1;
-}
-
 #if ALPS_APPINFO_VERSION > 0 && ALPS_APPINFO_VERSION < 3
     typedef placeNodeList_t orte_ras_alps_placeNodeList_t;
 #else
@@ -585,7 +566,11 @@ orte_ras_alps_read_appinfo_file(opal_list_t *nodes, char *filename,
             orte_set_attribute(&node->attributes, ORTE_NODE_LAUNCH_ID, ORTE_ATTR_LOCAL, &apNodes[ix].nid, OPAL_INT32);
             node->slots_inuse = 0;
             node->slots_max = 0;
-            node->slots = opal_hwloc_use_hwthreads_as_cpus ? apNodes[ix].cpuCnt : apNodes[ix].numPEs;
+            if (opal_hwloc_use_hwthreads_as_cpus) {
+                node->slots = apNodes[ix].cpuCnt;
+            } else {
+                node->slots = apNodes[ix].numPEs;
+            }
             node->state = ORTE_NODE_STATE_UP;
             /* need to order these node ids so the regex generator
              * can properly function
@@ -597,8 +582,6 @@ orte_ras_alps_read_appinfo_file(opal_list_t *nodes, char *filename,
 #endif
         break;                              /* Extended details ignored       */
     }
-
-    opal_list_sort (nodes, compare_nodes);
 
     free(cpBuf);                            /* Free the buffer                */
 
@@ -613,4 +596,3 @@ orte_ras_alps_finalize(void)
                          "ras:alps:finalize: success (nothing to do)");
     return ORTE_SUCCESS;
 }
-
