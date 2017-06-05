@@ -1,0 +1,110 @@
+This README documents the features and options specific to the
+**ORTE Level Failure Tolerant** PMIx Reference RunTime Environment (PRRTE)
+
+[TOC]
+
+Features
+========
+This implementation provides an orte level detector and propagator for fault
+detection and propagation. Also has a new module in grpcomm using binaminal tree
+to boardcast a message.
+
+
+Building
+======================
+```bash
+./autogen.pl
+
+# before configure make sure you have external pmix and libevent installed,
+# if you want to run mpi application you can use mpicc to build you binary
+# and run with prun.  If you want to run mpi applications, you mpi and PRRTE
+# should have the same version of PMIx
+
+./configure --prefix=...  --with-pmix=/external-pmix-path --with-libevent= /external-libevent-path --enable-debug --enable-orterun-prefix-by-default
+
+make [-j N] all install
+#    use an integer value of N for parallel builds
+```
+There are many available configure options (see `./configure --help`
+for a full list); a summary of the more commonly used ones is included
+in the upstream Open MPI README file.
+
+Running
+=====================
+## Building your application
+
+Compile your application as usual
+  1. using the provided `pcc` for pmix-based application
+  2. using your "mpicc" for mpi-based application
+
+## Running your application
+
+You need to launch your daemons by `prte`
+
+You can launch your application with by simply using the provided `prun`.
+Make sure to set your `PATH` and `LD_LIBRARY_PATH` properly.
+
+## Running under a batch scheduler
+
+This code can operate under a job/batch scheduler, and is tested routinely with Slurm.
+One difficulty comes from the fact that many job schedulers will "cleanup" the
+application as soon as a process fails. In order to avoid this problem, it is preferred
+that you use `-k` within an allocation (e.g. `salloc`, `sbatch`) rather than
+a direct launch (e.g. `srun`).
+
+## Run-time tuning knobs
+
+This code comes with a variety of knobs for controlling how it runs. The default
+parameters are sane and should result in very good performance in most
+cases. You can change those default by '-pmca parameter value'
+
+- `orte_enable_recovery <true|false> (default: true)` controls automatic
+  cleanup of apps with failed processes within mpirun. The default
+  differs from upstream Open MPI.
+
+- 'orte_abort_non_zero_exit <true|false> (default: false)` controls the job
+  termination after a error happpens.
+
+- 'errmgr_detector_enable <true|false> (default: true)` enable or disable error
+  detection and propagation.
+
+## Tesing
+=====================
+Step 1: salloc -k -n x -w host1,host2...
+        -k, --no-kill do not kill job on node failure
+
+Step 2: prte -pmca errmgr_detector_heartbeat_period 0.5 -pmca errmgr_detector_heartbeat_timeout 1  -pmca errmgr_detector_enable 1
+        using 'errmgr_detector_enable 1' choose enable the error detector.
+        using '-debug-daemons' give more info about your job.
+        Also you can using '-pmca componentname_base_verbose value' to get out put from that component.
+        eg: ~/opt/git/resilient_pmix_reference/resilient_prrte_master/debug/bin/prte -pmca errmgr_detector_heartbeat_period 0.5 -pmca errmgr_detector_heartbeat_timeout 1  -pmca errmgr_detector_enable  1  -pmca odls_base_verbose 10 -pmca errmgr_base_verbose 10 -pmca propagate_base_verbose 10 bind-by node (this is exactly how i start the DVM)
+
+        Also, the ring detector heartbeat sending frequency is not hard coded, you can change heartbeat_peroid and heartbeat_timeout by using mca params:
+        eg:
+        using '-pmca errmgr_detector_heartbeat_period 10' set the sending frequency to every 10 seconds(default is 5s)
+        using '-pmca errmgr_detector_heartbeat_timeout 20' set timeout to 20 seconds(default is 10s)
+
+Step 3: under example we have 2 test codes error_notify.c daemon_error_notify.c
+        compile: pcc -g error_notify.c -o error_notify
+        run: prun --oversubscribe -v error_notify
+
+        if use external pmix compile as: pcc error_notify.c -o error_notify_1 -I/external_pmix_install_path/include -L/external_pmix_install_path/lib
+        prun --oversubscribe  -x LD_LIBRARY_PATH error_notify_1 -v
+
+       if use external pmix compile as: pcc daemon_error_notify.c -o daemon_error_notify_1 -I/external_pmix_install_path/include -L/external_pmix_install_path/lib
+        prun --oversubscribe  -x LD_LIBRARY_PATH daemon_error_notify_1 -v
+
+Copyright
+=========
+
+```
+Copyright (c) 2018-2019 The University of Tennessee and The University
+                        of Tennessee Research Foundation.  All rights
+                        reserved.
+
+$COPYRIGHT$
+
+Additional copyrights may follow
+
+$HEADER$
+mps_base_oversubscribe``
