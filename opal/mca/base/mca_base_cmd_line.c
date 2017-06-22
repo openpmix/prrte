@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
  * Copyright (c) 2014-2015 Cisco Systems, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -67,7 +67,8 @@ int mca_base_cmd_line_setup(opal_cmd_line_t *cmd)
         opal_cmd_line_init_t entry =
             {"mca_base_param_file_prefix", '\0', "am", NULL, 1,
              NULL, OPAL_CMD_LINE_TYPE_STRING,
-             "Aggregate MCA parameter set file list"
+             "Aggregate MCA parameter set file list",
+             OPAL_CMD_LINE_OTYPE_LAUNCH
             };
         ret = opal_cmd_line_make_opt_mca(cmd, entry);
         if (OPAL_SUCCESS != ret) {
@@ -79,7 +80,8 @@ int mca_base_cmd_line_setup(opal_cmd_line_t *cmd)
         opal_cmd_line_init_t entry =
             {"mca_base_envar_file_prefix", '\0', "tune", NULL, 1,
              NULL, OPAL_CMD_LINE_TYPE_STRING,
-             "Application profile options file list"
+             "Application profile options file list",
+             OPAL_CMD_LINE_OTYPE_DEBUG
             };
         ret = opal_cmd_line_make_opt_mca(cmd, entry);
         if (OPAL_SUCCESS != ret) {

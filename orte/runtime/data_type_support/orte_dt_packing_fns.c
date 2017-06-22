@@ -64,7 +64,7 @@ int orte_dt_pack_job(opal_buffer_t *buffer, const void *src,
                      int32_t num_vals, opal_data_type_t type)
 {
     int rc;
-    int32_t i, j, count;
+    int32_t i, j, count, bookmark;
     orte_job_t **jobs;
     orte_app_context_t *app;
     orte_proc_t *proc;
@@ -85,116 +85,6 @@ int orte_dt_pack_job(opal_buffer_t *buffer, const void *src,
         /* pack the flags */
         if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
                         (void*)(&(jobs[i]->flags)), 1, ORTE_JOB_FLAGS_T))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the personality */
-        count = opal_argv_count(jobs[i]->personality);
-        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, &count, 1, OPAL_INT32))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-        for (j=0; j < count; j++) {
-            if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, &jobs[i]->personality[j], 1, OPAL_STRING))) {
-                ORTE_ERROR_LOG(rc);
-                return rc;
-            }
-        }
-
-        /* pack the number of apps */
-        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->num_apps)), 1, ORTE_APP_IDX))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* if there are apps, pack the app_contexts */
-        if (0 < jobs[i]->num_apps) {
-            for (j=0; j < jobs[i]->apps->size; j++) {
-                if (NULL == (app = (orte_app_context_t*)opal_pointer_array_get_item(jobs[i]->apps, j))) {
-                    continue;
-                }
-                if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, (void*)&app, 1, ORTE_APP_CONTEXT))) {
-                    ORTE_ERROR_LOG(rc);
-                    return rc;
-                }
-            }
-        }
-
-        /* pack the number of procs and offset */
-        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->num_procs)), 1, ORTE_VPID))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->offset)), 1, ORTE_VPID))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        if (orte_no_vm && 0 < jobs[i]->num_procs) {
-            for (j=0; j < jobs[i]->procs->size; j++) {
-                if (NULL == (proc = (orte_proc_t*)opal_pointer_array_get_item(jobs[i]->procs, j))) {
-                    continue;
-                }
-                if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, (void*)&proc, 1, ORTE_PROC))) {
-                    ORTE_ERROR_LOG(rc);
-                    return rc;
-                }
-            }
-        }
-
-        /* pack the stdin target */
-        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->stdin_target)), 1, ORTE_VPID))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the total slots allocated to the job */
-        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->total_slots_alloc)), 1, ORTE_STD_CNTR))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* if the map is NULL, then we cannot pack it as there is
-         * nothing to pack. However, we have to flag whether or not
-         * the map is included so the unpacking routine can know
-         * what to do
-         */
-        if (NULL == jobs[i]->map) {
-            /* pack a zero value */
-            j=0;
-        } else {
-            /* pack a one to indicate a map is there */
-            j = 1;
-        }
-        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
-                            (void*)&j, 1, ORTE_STD_CNTR))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the map - this will only pack the fields that control
-         * HOW a job is to be mapped. We do -not- pack the mapped procs
-         * or nodes as this info does not need to be transmitted
-         */
-        if (NULL != jobs[i]->map) {
-            if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
-                             (void*)(&(jobs[i]->map)), 1, ORTE_JOB_MAP))) {
-                ORTE_ERROR_LOG(rc);
-                return rc;
-            }
-        }
-
-        /* do not pack the bookmark or oversubscribe_override flags */
-
-        /* pack the job state */
-        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->state)), 1, ORTE_JOB_STATE))) {
             ORTE_ERROR_LOG(rc);
             return rc;
         }
@@ -244,6 +134,129 @@ int orte_dt_pack_job(opal_buffer_t *buffer, const void *src,
                 ORTE_ERROR_LOG(rc);
                 return rc;
             }
+        }
+
+        /* pack the personality */
+        count = opal_argv_count(jobs[i]->personality);
+        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, &count, 1, OPAL_INT32))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
+        for (j=0; j < count; j++) {
+            if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, &jobs[i]->personality[j], 1, OPAL_STRING))) {
+                ORTE_ERROR_LOG(rc);
+                return rc;
+            }
+        }
+
+        /* pack the number of apps */
+        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
+                         (void*)(&(jobs[i]->num_apps)), 1, ORTE_APP_IDX))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
+
+        /* if there are apps, pack the app_contexts */
+        if (0 < jobs[i]->num_apps) {
+            for (j=0; j < jobs[i]->apps->size; j++) {
+                if (NULL == (app = (orte_app_context_t*)opal_pointer_array_get_item(jobs[i]->apps, j))) {
+                    continue;
+                }
+                if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, (void*)&app, 1, ORTE_APP_CONTEXT))) {
+                    ORTE_ERROR_LOG(rc);
+                    return rc;
+                }
+            }
+        }
+
+        /* pack the number of procs and offset */
+        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
+                         (void*)(&(jobs[i]->num_procs)), 1, ORTE_VPID))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
+        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
+                         (void*)(&(jobs[i]->offset)), 1, ORTE_VPID))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
+
+        if (0 < jobs[i]->num_procs) {
+            /* check attributes to see if this job is to be fully
+             * described in the launch msg */
+            if (orte_get_attribute(&jobs[i]->attributes, ORTE_JOB_FULLY_DESCRIBED, NULL, OPAL_BOOL)) {
+                for (j=0; j < jobs[i]->procs->size; j++) {
+                    if (NULL == (proc = (orte_proc_t*)opal_pointer_array_get_item(jobs[i]->procs, j))) {
+                        continue;
+                    }
+                    if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, (void*)&proc, 1, ORTE_PROC))) {
+                        ORTE_ERROR_LOG(rc);
+                        return rc;
+                    }
+                }
+            }
+        }
+
+        /* pack the stdin target */
+        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
+                         (void*)(&(jobs[i]->stdin_target)), 1, ORTE_VPID))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
+
+        /* pack the total slots allocated to the job */
+        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
+                         (void*)(&(jobs[i]->total_slots_alloc)), 1, ORTE_STD_CNTR))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
+
+        /* if the map is NULL, then we cannot pack it as there is
+         * nothing to pack. However, we have to flag whether or not
+         * the map is included so the unpacking routine can know
+         * what to do
+         */
+        if (NULL == jobs[i]->map) {
+            /* pack a zero value */
+            j=0;
+        } else {
+            /* pack a one to indicate a map is there */
+            j = 1;
+        }
+        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
+                            (void*)&j, 1, ORTE_STD_CNTR))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
+
+        /* pack the map - this will only pack the fields that control
+         * HOW a job is to be mapped. We do -not- pack the mapped procs
+         * or nodes as this info does not need to be transmitted
+         */
+        if (NULL != jobs[i]->map) {
+            if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
+                             (void*)(&(jobs[i]->map)), 1, ORTE_JOB_MAP))) {
+                ORTE_ERROR_LOG(rc);
+                return rc;
+            }
+        }
+
+        /* pack the bookmark */
+        if (NULL == jobs[i]->bookmark) {
+            bookmark = -1;
+        } else {
+            bookmark = jobs[i]->bookmark->index;
+        }
+        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, &bookmark, 1, OPAL_INT32))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
+
+        /* pack the job state */
+        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer,
+                         (void*)(&(jobs[i]->state)), 1, ORTE_JOB_STATE))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
         }
     }
     return ORTE_SUCCESS;
@@ -594,7 +607,11 @@ int orte_dt_pack_map(opal_buffer_t *buffer, const void *src,
             ORTE_ERROR_LOG(rc);
             return rc;
         }
-
+        /* pack the last mapper */
+        if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, &(maps[i]->last_mapper), 1, OPAL_STRING))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
         /* pack the policies */
         if (ORTE_SUCCESS != (rc = opal_dss_pack_buffer(buffer, &(maps[i]->mapping), 1, ORTE_MAPPING_POLICY))) {
             ORTE_ERROR_LOG(rc);

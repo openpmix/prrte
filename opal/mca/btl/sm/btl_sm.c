@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2007 Voltaire. All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2010-2015 Los Alamos National Security, LLC.
+ * Copyright (c) 2010-2017 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2010-2012 IBM Corporation.  All rights reserved.
  * Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
@@ -221,7 +221,7 @@ sm_btl_first_time_init(mca_btl_sm_t *sm_btl,
 {
     size_t length, length_payload;
     sm_fifo_t *my_fifos;
-    int my_mem_node, num_mem_nodes, i, rc;
+    int my_mem_node, num_mem_nodes, i = 0, rc;
     mca_common_sm_mpool_resources_t *res = NULL;
     mca_btl_sm_component_t* m = &mca_btl_sm_component;
     char *loc, *mynuma;
@@ -1289,17 +1289,13 @@ void mca_btl_sm_dump(struct mca_btl_base_module_t* btl,
                      struct mca_btl_base_endpoint_t* endpoint,
                      int verbose)
 {
-    opal_list_item_t *item;
     mca_btl_sm_frag_t* frag;
 
     if( NULL != endpoint ) {
         mca_btl_base_err("BTL SM %p endpoint %p [smp_rank %d] [peer_rank %d]\n",
                          (void*) btl, (void*) endpoint,
                          endpoint->my_smp_rank, endpoint->peer_smp_rank);
-        for(item =  opal_list_get_first(&endpoint->pending_sends);
-            item != opal_list_get_end(&endpoint->pending_sends);
-            item = opal_list_get_next(item)) {
-            frag = (mca_btl_sm_frag_t*)item;
+        OPAL_LIST_FOREACH(frag, &endpoint->pending_sends, mca_btl_sm_frag_t) {
             mca_btl_base_err(" |  frag %p size %lu (hdr frag %p len %lu rank %d tag %d)\n",
                              (void*) frag, frag->size, (void*) frag->hdr->frag,
                              frag->hdr->len, frag->hdr->my_smp_rank,

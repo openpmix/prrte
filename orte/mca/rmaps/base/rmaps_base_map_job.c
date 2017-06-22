@@ -36,14 +36,17 @@
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/runtime/orte_globals.h"
 #include "orte/util/show_help.h"
+#include "orte/util/threads.h"
 #include "orte/mca/state/state.h"
 
 #include "orte/mca/rmaps/base/base.h"
 #include "orte/mca/rmaps/base/rmaps_private.h"
 
 
-int orte_rmaps_base_map_job(orte_job_t *jdata)
+void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
 {
+    orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
+    orte_job_t *jdata;
     orte_node_t *node;
     int rc, i, ppx = 0;
     bool did_map, given, pernode = false;
@@ -51,6 +54,9 @@ int orte_rmaps_base_map_job(orte_job_t *jdata)
     orte_job_t *parent;
     orte_vpid_t nprocs;
     orte_app_context_t *app;
+
+    ORTE_ACQUIRE_OBJECT(caddy);
+    jdata = caddy->jdata;
 
     jdata->state = ORTE_JOB_STATE_MAP;
 
@@ -116,7 +122,9 @@ int orte_rmaps_base_map_job(orte_job_t *jdata)
                             /* inform the user of the error */
                             orte_show_help("help-orte-rmaps-base.txt", "num-procs-not-specified", true);
                             OPAL_LIST_DESTRUCT(&nodes);
-                            return ORTE_ERR_BAD_PARAM;
+                            OBJ_RELEASE(caddy);
+                            ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
+                            return;
                         }
                     }
                     nprocs += slots;
@@ -335,7 +343,9 @@ int orte_rmaps_base_map_job(orte_job_t *jdata)
         int i;
         if (NULL == (node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, 0))) {
             ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-            return ORTE_ERR_NOT_FOUND;
+            OBJ_RELEASE(caddy);
+            ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
+            return;
         }
         t0 = node->topology;
         for (i=1; i < orte_node_pool->size; i++) {
@@ -368,15 +378,18 @@ int orte_rmaps_base_map_job(orte_job_t *jdata)
          */
         if (ORTE_ERR_TAKE_NEXT_OPTION != rc) {
             ORTE_ERROR_LOG(rc);
-            return rc;
+            ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
         }
     }
+
     if (did_map && ORTE_ERR_RESOURCE_BUSY == rc) {
         /* the map was done but nothing could be mapped
          * for launch as all the resources were busy
          */
         orte_show_help("help-orte-rmaps-base.txt", "cannot-launch", true);
-        return rc;
+        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
+        goto cleanup;
     }
 
     /* if we get here without doing the map, or with zero procs in
@@ -386,7 +399,8 @@ int orte_rmaps_base_map_job(orte_job_t *jdata)
         orte_show_help("help-orte-rmaps-base.txt", "failed-map", true,
                        did_map ? "mapped" : "unmapped",
                        jdata->num_procs, jdata->map->num_nodes);
-        return ORTE_ERR_INVALID_NUM_PROCS;
+        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
+        goto cleanup;
     }
 
     /* if any node is oversubscribed, then check to see if a binding
@@ -399,17 +413,39 @@ int orte_rmaps_base_map_job(orte_job_t *jdata)
         }
     }
 
-    /* compute and save local ranks */
-    if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_local_ranks(jdata))) {
-        ORTE_ERROR_LOG(rc);
-        return rc;
-    }
+    if (!orte_get_attribute(&jdata->attributes, ORTE_JOB_FULLY_DESCRIBED, NULL, OPAL_BOOL)) {
+        /* we didn't add the nodes to the node map as it would cause them to
+         * be in a different order than on the backend if this is a dynamic
+         * spawn (which means we may have started somewhere other than at
+         * the beginning of the allocation) */
+        for (i=0; i < orte_node_pool->size; i++) {
+            if (NULL == (node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, i))) {
+                continue;
+            }
+            if (ORTE_FLAG_TEST(node, ORTE_NODE_FLAG_MAPPED)) {
+                OBJ_RETAIN(node);
+                opal_pointer_array_add(jdata->map->nodes, node);
+            }
+        }
+        /* compute and save location assignments */
+        if (ORTE_SUCCESS != (rc = orte_rmaps_base_assign_locations(jdata))) {
+            ORTE_ERROR_LOG(rc);
+            ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+    } else {
+        /* compute and save local ranks */
+        if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_local_ranks(jdata))) {
+            ORTE_ERROR_LOG(rc);
+            ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
 
-    if (orte_no_vm) {
         /* compute and save bindings */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_bindings(jdata))) {
             ORTE_ERROR_LOG(rc);
-            return rc;
+            ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
         }
     }
 
@@ -427,7 +463,19 @@ int orte_rmaps_base_map_job(orte_job_t *jdata)
         }
     }
 
-    return ORTE_SUCCESS;
+    /* set the job state to the next position */
+    ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_COMPLETE);
+
+  cleanup:
+      /* reset any node map flags we used so the next job will start clean */
+       for (i=0; i < jdata->map->nodes->size; i++) {
+           if (NULL != (node = (orte_node_t*)opal_pointer_array_get_item(jdata->map->nodes, i))) {
+               ORTE_FLAG_UNSET(node, ORTE_NODE_FLAG_MAPPED);
+           }
+       }
+
+    /* cleanup */
+    OBJ_RELEASE(caddy);
 }
 
 void orte_rmaps_base_display_map(orte_job_t *jdata)
@@ -520,7 +568,9 @@ void orte_rmaps_base_display_map(orte_job_t *jdata)
             }
         }
     } else {
-        opal_output(orte_clean_output, " Data for JOB %s offset %s", ORTE_JOBID_PRINT(jdata->jobid), ORTE_VPID_PRINT(jdata->offset));
+        opal_output(orte_clean_output, " Data for JOB %s offset %s Total slots allocated %lu",
+                    ORTE_JOBID_PRINT(jdata->jobid), ORTE_VPID_PRINT(jdata->offset),
+                    (long unsigned)jdata->total_slots_alloc);
         opal_dss.print(&output, NULL, jdata->map, ORTE_JOB_MAP);
         if (orte_xml_output) {
             fprintf(orte_xml_fp, "%s\n", output);

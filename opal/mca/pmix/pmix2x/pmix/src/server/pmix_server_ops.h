@@ -19,6 +19,7 @@
 #include <pmix_common.h>
 #include <src/class/pmix_ring_buffer.h>
 #include <pmix_server.h>
+#include "src/threads/threads.h"
 #include "src/util/hash.h"
 
 typedef struct {
@@ -31,7 +32,7 @@ PMIX_CLASS_DECLARATION(pmix_trkr_caddy_t);
 typedef struct {
     pmix_object_t super;
     pmix_event_t ev;
-    volatile bool active;
+    pmix_lock_t lock;
     char *nspace;
     pmix_status_t status;
     pmix_proc_t proc;
@@ -47,24 +48,6 @@ typedef struct {
     void *cbdata;
 } pmix_setup_caddy_t;
 PMIX_CLASS_DECLARATION(pmix_setup_caddy_t);
-
-typedef struct {
-    pmix_object_t super;
-    pmix_event_t ev;
-    volatile bool active;
-    pmix_status_t status;
-    pmix_proc_t source;
-    pmix_data_range_t range;
-    pmix_proc_t *targets;
-    size_t ntargets;
-    bool nondefault;
-    pmix_info_t *info;
-    size_t ninfo;
-    pmix_buffer_t *buf;
-    pmix_op_cbfunc_t cbfunc;
-    void *cbdata;
-} pmix_notify_caddy_t;
-PMIX_CLASS_DECLARATION(pmix_notify_caddy_t);
 
 typedef struct {
     pmix_list_item_t super;
@@ -111,7 +94,6 @@ typedef struct {
     pmix_list_t local_reqs;                 // list of pmix_dmdx_local_t awaiting arrival of data from local neighbours
     pmix_buffer_t gdata;                    // cache of data given to me for passing to all clients
     pmix_list_t events;                     // list of pmix_regevents_info_t registered events
-    pmix_ring_buffer_t notifications;       // ring buffer of pending notifications
     bool tool_connections_allowed;
 } pmix_server_globals_t;
 

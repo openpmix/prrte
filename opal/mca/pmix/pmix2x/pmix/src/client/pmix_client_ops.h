@@ -15,11 +15,12 @@
 
 #include "src/buffer_ops/buffer_ops.h"
 #include "src/class/pmix_hash_table.h"
+#include "src/threads/threads.h"
 
 BEGIN_C_DECLS
 
 typedef struct {
-    pmix_peer_t myserver;           // messaging support to/from my server
+    pmix_peer_t *myserver;          // messaging support to/from my server
     pmix_list_t pending_requests;   // list of pmix_cb_t pending data requests
 } pmix_client_globals_t;
 

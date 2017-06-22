@@ -18,6 +18,8 @@
  * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
  * Copyright (c) 2017      Rutgers, The State University of New Jersey.
  *                         All rights reserved.
+ * Copyright (c) 2017      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -125,6 +127,7 @@
 #include "orte/mca/plm/plm.h"
 #include "orte/mca/rtc/rtc.h"
 #include "orte/util/name_fns.h"
+#include "orte/util/threads.h"
 
 #include "orte/mca/odls/base/base.h"
 #include "orte/mca/odls/base/odls_private.h"
@@ -155,11 +158,11 @@ static int do_child(orte_odls_spawn_caddy_t *cd, int write_fd)
  * Module
  */
 orte_odls_base_module_t orte_odls_default_module = {
-    orte_odls_base_default_get_add_procs_data,
-    orte_odls_default_launch_local_procs,
-    orte_odls_default_kill_local_procs,
-    orte_odls_default_signal_local_procs,
-    orte_odls_default_restart_proc
+    .get_add_procs_data = orte_odls_base_default_get_add_procs_data,
+    .launch_local_procs = orte_odls_default_launch_local_procs,
+    .kill_local_procs = orte_odls_default_kill_local_procs,
+    .signal_local_procs = orte_odls_default_signal_local_procs,
+    .restart_proc = orte_odls_default_restart_proc
 };
 
 
@@ -431,7 +434,7 @@ static int do_child(orte_odls_spawn_caddy_t *cd, int write_fd)
     }
 
     /* Exec the new executable */
-    execve(cd->app->app, cd->argv, cd->env);
+    execve(cd->cmd, cd->argv, cd->env);
     getcwd(dir, sizeof(dir));
     send_error_show_help(write_fd, 1,
                          "help-orte-odls-default.txt", "execve error",
@@ -641,9 +644,22 @@ int orte_odls_default_launch_local_procs(opal_buffer_t *data)
  * Send a signal to a pid.  Note that if we get an error, we set the
  * return value and let the upper layer print out the message.
  */
-static int send_signal(pid_t pid, int signal)
+static int send_signal(pid_t pd, int signal)
 {
     int rc = ORTE_SUCCESS;
+    pid_t pid;
+
+    if (orte_odls_globals.signal_direct_children_only) {
+        pid = pd;
+    } else {
+#if HAVE_SETPGID
+        /* send to the process group so that any children of our children
+         * also receive the signal*/
+        pid = -pd;
+#else
+        pid = pd;
+#endif
+    }
 
     OPAL_OUTPUT_VERBOSE((1, orte_odls_base_framework.framework_output,
                          "%s sending signal %d to pid %ld",

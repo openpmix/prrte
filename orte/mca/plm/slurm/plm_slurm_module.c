@@ -61,6 +61,7 @@
 #include "orte/types.h"
 #include "orte/util/show_help.h"
 #include "orte/util/name_fns.h"
+#include "orte/util/threads.h"
 #include "orte/runtime/orte_globals.h"
 #include "orte/runtime/orte_wait.h"
 #include "orte/runtime/orte_quit.h"
@@ -108,7 +109,6 @@ orte_plm_base_module_1_0_0_t orte_plm_slurm_module = {
  */
 static pid_t primary_srun_pid = 0;
 static bool primary_pid_set = false;
-static bool launching_daemons;
 static void launch_daemons(int fd, short args, void *cbdata);
 
 /**
@@ -189,28 +189,11 @@ static void launch_daemons(int fd, short args, void *cbdata)
     orte_job_t *daemons;
     orte_state_caddy_t *state = (orte_state_caddy_t*)cbdata;
 
+    ORTE_ACQUIRE_OBJECT(state);
+
     OPAL_OUTPUT_VERBOSE((1, orte_plm_base_framework.framework_output,
                          "%s plm:slurm: LAUNCH DAEMONS CALLED",
                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
-
-#if SLURM_CRAY_ENV
-        /* if we are in a Cray-SLURM environment, then we cannot
-         * launch procs local to the HNP. The problem
-         * is the MPI processes launched on the head node (where the
-         * ORTE_PROC_IS_HNP evalues to true) get launched by a daemon
-         * (mpirun) which is not a child of a slurmd daemon.  This
-         * means that any RDMA credentials obtained via the odls/alps
-         * local launcher are incorrect. So warn the user and set
-         * the envar for no_schedule_local if mpirun is not on a
-         * system management node (i.e. is part of the allocation)
-         * and the "no_use_local" flag hasn't been set */
-        if (mca_plm_slurm_component.slurm_warning_msg &&
-            (orte_hnp_is_allocated && !(ORTE_GET_MAPPING_DIRECTIVE(orte_rmaps_base.mapping) & ORTE_MAPPING_NO_USE_LOCAL))) {
-            orte_show_help("help-plm-slurm.txt", "no-local-support", true);
-            ORTE_SET_MAPPING_DIRECTIVE(orte_rmaps_base.mapping, ORTE_MAPPING_NO_USE_LOCAL);
-            mca_plm_slurm_component.slurm_warning_msg = false;  // only do this once
-        }
-#endif
 
     /* if we are launching debugger daemons, then just go
      * do it - no new daemons will be launched
@@ -564,27 +547,18 @@ static void srun_wait_cb(orte_proc_t *proc, void* cbdata){
 
     jdata = orte_get_job_data_object(ORTE_PROC_MY_NAME->jobid);
 
-    /* if we are in the launch phase, then any termination is bad */
-    if (launching_daemons) {
-        /* report that one or more daemons failed to launch so we can exit */
-        OPAL_OUTPUT_VERBOSE((1, orte_plm_base_framework.framework_output,
-                             "%s plm:slurm: daemon failed during launch",
-                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
-        /* notify the error manager */
-        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_FAILED_TO_START);
-    } else {
-        /* if this is after launch, then we need to abort only if the status
-         * returned is non-zero - i.e., if the orteds exited with an error
+    /* abort only if the status returned is non-zero - i.e., if
+    * the orteds exited with an error
+     */
+    if (0 != proc->exit_code) {
+        /* an orted must have died unexpectedly - report
+         * that the daemon has failed so we exit
          */
-        if (0 != proc->exit_code) {
-            /* an orted must have died unexpectedly after launch - report
-             * that the daemon has failed so we exit
-             */
-            OPAL_OUTPUT_VERBOSE((1, orte_plm_base_framework.framework_output,
-                                 "%s plm:slurm: daemon failed while running",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
-            ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_ABORTED);
-        }
+        OPAL_OUTPUT_VERBOSE((1, orte_plm_base_framework.framework_output,
+                             "%s plm:slurm: daemon failed while running",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
+        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_ABORTED);
+    } else {
         /* otherwise, check to see if this is the primary pid */
         if (primary_srun_pid == proc->pid) {
             /* in this case, we just want to fire the proper trigger so
@@ -598,6 +572,7 @@ static void srun_wait_cb(orte_proc_t *proc, void* cbdata){
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_DAEMONS_TERMINATED);
         }
     }
+
     /* done with this dummy */
     OBJ_RELEASE(proc);
 }
@@ -612,7 +587,8 @@ static int plm_slurm_start_proc(int argc, char **argv, char **env,
     orte_proc_t *dummy;
 
     if (NULL == exec_argv) {
-        return ORTE_ERR_NOT_FOUND;
+        orte_show_help("help-plm-slurm.txt", "no-srun", true);
+        return ORTE_ERR_SILENT;
     }
 
     srun_pid = fork();
@@ -620,6 +596,13 @@ static int plm_slurm_start_proc(int argc, char **argv, char **env,
         ORTE_ERROR_LOG(ORTE_ERR_SYS_LIMITS_CHILDREN);
         free(exec_argv);
         return ORTE_ERR_SYS_LIMITS_CHILDREN;
+    }
+    /* if this is the primary launch - i.e., not a comm_spawn of a
+     * child job - then save the pid
+     */
+    if (0 < srun_pid && !primary_pid_set) {
+        primary_srun_pid = srun_pid;
+        primary_pid_set = true;
     }
 
     /* setup a dummy proc object to track the srun */
@@ -710,14 +693,6 @@ static int plm_slurm_start_proc(int argc, char **argv, char **env,
            process group any more.  Stevens says always do this on both
            sides of the fork... */
         setpgid(srun_pid, srun_pid);
-
-        /* if this is the primary launch - i.e., not a comm_spawn of a
-         * child job - then save the pid
-         */
-        if (!primary_pid_set) {
-            primary_srun_pid = srun_pid;
-            primary_pid_set = true;
-        }
 
         free(exec_argv);
     }

@@ -4,7 +4,10 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2017      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,8 +38,8 @@
  */
 int32_t
 opal_convertor_raw( opal_convertor_t* pConvertor,
-		    struct iovec* iov, uint32_t* iov_count,
-		    size_t* length )
+                    struct iovec* iov, uint32_t* iov_count,
+                    size_t* length )
 {
     const opal_datatype_t *pData = pConvertor->pDesc;
     dt_stack_t* pStack;       /* pointer to the position on the stack */
@@ -164,7 +167,7 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
                                    pos_desc, (long)pStack->disp, (unsigned long)raw_data ); );
         }
         if( OPAL_DATATYPE_LOOP == pElem->elem.common.type ) {
-            OPAL_PTRDIFF_TYPE local_disp = (OPAL_PTRDIFF_TYPE)source_base;
+            ptrdiff_t local_disp = (ptrdiff_t)source_base;
             ddt_endloop_desc_t* end_loop = (ddt_endloop_desc_t*)(pElem + pElem->loop.items);
 
             if( pElem->loop.common.flags & OPAL_DATATYPE_FLAG_CONTIGUOUS ) {
@@ -185,7 +188,7 @@ opal_convertor_raw( opal_convertor_t* pConvertor,
                     goto update_loop_description;
                 }
             }
-            local_disp = (OPAL_PTRDIFF_TYPE)source_base - local_disp;
+            local_disp = (ptrdiff_t)source_base - local_disp;
             PUSH_STACK( pStack, pConvertor->stack_pos, pos_desc, OPAL_DATATYPE_LOOP, count_desc,
                         pStack->disp + local_disp);
             pos_desc++;

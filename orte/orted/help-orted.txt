@@ -67,7 +67,9 @@ A request has timed out and will therefore fail:
   Operation:  %s
 
 Your job may terminate as a result of this problem. You may want to
-adjust the MCA parameter pmix_server_max_wait and try again.
+adjust the MCA parameter pmix_server_max_wait and try again. If this
+occurred during a connect/accept operation, you can adjust that time
+using the pmix_base_exchange_timeout parameter.
 #
 [noroom]
 A request for an asynchronous runtime operation cannot be fulfilled
@@ -80,3 +82,10 @@ This is usually caused by a large job that encounters significant
 delays across the cluster when starting the application processes.
 Your job may terminate as a result of this problem. You may want to
 adjust the MCA parameter pmix_server_max_reqs and try again.
+#
+[noserver]
+A publish/lookup server was provided, but we were unable to connect
+to it - please check the connection info and ensure the server
+is alive:
+
+  Connection:  %s

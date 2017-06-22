@@ -1,7 +1,8 @@
 # -*- shell-script -*-
 #
-# Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2009-2017 Cisco Systems, Inc.  All rights reserved
 #
+# Copyright (c) 2017      Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -47,7 +48,8 @@ AC_DEFUN([MCA_opal_dl_dlopen_CONFIG],[
           ])
 
     AS_IF([test "$opal_dl_dlopen_happy" = "yes"],
-          [opal_dl_dlopen_ADD_LIBS=$opal_dl_dlopen_LIBS
+          [dl_dlopen_ADD_LIBS=$opal_dl_dlopen_LIBS
+           dl_dlopen_WRAPPER_EXTRA_LIBS=$opal_dl_dlopen_LIBS
            $1],
           [$2])
 

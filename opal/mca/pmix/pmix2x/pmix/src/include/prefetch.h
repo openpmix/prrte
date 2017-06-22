@@ -20,6 +20,8 @@
 #ifndef PMIX_PREFETCH_H
 #define PMIX_PREFETCH_H
 
+#include <src/include/pmix_config.h>
+
 #if PMIX_C_HAVE_BUILTIN_EXPECT
 #define PMIX_LIKELY(expression) __builtin_expect(!!(expression), 1)
 #define PMIX_UNLIKELY(expression) __builtin_expect(!!(expression), 0)

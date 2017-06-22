@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies, Inc.
@@ -92,32 +92,6 @@ int opal_pmix_base_notify_event(int status,
     return OPAL_SUCCESS;
 }
 
-struct lookup_caddy_t {
-    volatile bool active;
-    int status;
-    opal_pmix_pdata_t *pdat;
-};
-
-/********     DATA EXCHANGE     ********/
-static void lookup_cbfunc(int status, opal_list_t *data, void *cbdata)
-{
-    struct lookup_caddy_t *cd = (struct lookup_caddy_t*)cbdata;
-    cd->status = status;
-    if (OPAL_SUCCESS == status && NULL != data) {
-        opal_pmix_pdata_t *p = (opal_pmix_pdata_t*)opal_list_get_first(data);
-        if (NULL != p) {
-            cd->pdat->proc = p->proc;
-            if (p->value.type == cd->pdat->value.type) {
-                if (NULL != cd->pdat->value.key) {
-                    free(cd->pdat->value.key);
-                }
-                (void)opal_value_xfer(&cd->pdat->value, &p->value);
-            }
-        }
-    }
-    cd->active = false;
-}
-
 int opal_pmix_base_exchange(opal_value_t *indat,
                             opal_pmix_pdata_t *outdat,
                             int timeout)
@@ -126,8 +100,6 @@ int opal_pmix_base_exchange(opal_value_t *indat,
     opal_list_t ilist, mlist;
     opal_value_t *info;
     opal_pmix_pdata_t *pdat;
-    struct lookup_caddy_t caddy;
-    char **keys;
 
     /* protect the incoming value */
     opal_dss.copy((void**)&info, indat, OPAL_VALUE);
@@ -144,14 +116,13 @@ int opal_pmix_base_exchange(opal_value_t *indat,
     rc = opal_pmix.publish(&ilist);
     OPAL_LIST_DESTRUCT(&ilist);
     if (OPAL_SUCCESS != rc) {
-        OPAL_ERROR_LOG(rc);
         return rc;
     }
 
-   /* lookup the other side's info - if a non-blocking form
-    * of lookup isn't available, then we use the blocking
-    * form and trust that the underlying system will WAIT
-    * until the other side publishes its data */
+    /* lookup the other side's info - if a non-blocking form
+     * of lookup isn't available, then we use the blocking
+     * form and trust that the underlying system will WAIT
+     * until the other side publishes its data */
     pdat = OBJ_NEW(opal_pmix_pdata_t);
     pdat->value.key = strdup(outdat->value.key);
     pdat->value.type = outdat->value.type;
@@ -169,49 +140,30 @@ int opal_pmix_base_exchange(opal_value_t *indat,
     info = OBJ_NEW(opal_value_t);
     info->key = strdup(OPAL_PMIX_TIMEOUT);
     info->type = OPAL_INT;
-    info->data.integer = timeout;
+    if (0 < opal_pmix_base.timeout) {
+        /* the user has overridden the default */
+        info->data.integer = opal_pmix_base.timeout;
+    } else {
+        info->data.integer = timeout;
+    }
     opal_list_append(&mlist, &info->super);
 
     /* if a non-blocking version of lookup isn't
      * available, then use the blocking version */
-    if (NULL == opal_pmix.lookup_nb) {
-        OBJ_CONSTRUCT(&ilist, opal_list_t);
-        opal_list_append(&ilist, &pdat->super);
-        rc = opal_pmix.lookup(&ilist, &mlist);
-        OPAL_LIST_DESTRUCT(&mlist);
+    OBJ_CONSTRUCT(&ilist, opal_list_t);
+    opal_list_append(&ilist, &pdat->super);
+    rc = opal_pmix.lookup(&ilist, &mlist);
+    OPAL_LIST_DESTRUCT(&mlist);
+    if (OPAL_SUCCESS != rc) {
         OPAL_LIST_DESTRUCT(&ilist);
-        if (OPAL_SUCCESS != rc) {
-            OPAL_ERROR_LOG(rc);
-            return rc;
-        }
-    } else {
-        caddy.active = true;
-        caddy.pdat = pdat;
-        keys = NULL;
-        opal_argv_append_nosize(&keys, pdat->value.key);
-        rc = opal_pmix.lookup_nb(keys, &mlist, lookup_cbfunc, &caddy);
-        if (OPAL_SUCCESS != rc) {
-            OPAL_ERROR_LOG(rc);
-            OPAL_LIST_DESTRUCT(&mlist);
-            opal_argv_free(keys);
-            return rc;
-        }
-        while (caddy.active) {
-            usleep(10);
-        }
-        opal_argv_free(keys);
-        OPAL_LIST_DESTRUCT(&mlist);
-        if (OPAL_SUCCESS != caddy.status) {
-            OPAL_ERROR_LOG(caddy.status);
-            return caddy.status;
-        }
+        return rc;
     }
 
     /* pass back the result */
     outdat->proc = pdat->proc;
     free(outdat->value.key);
     rc = opal_value_xfer(&outdat->value, &pdat->value);
-    OBJ_RELEASE(pdat);
+    OPAL_LIST_DESTRUCT(&ilist);
     return rc;
 }
 

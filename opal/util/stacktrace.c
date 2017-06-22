@@ -13,6 +13,7 @@
  * Copyright (c) 2008-2009 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,6 +47,7 @@
 #include "opal/util/show_help.h"
 #include "opal/util/argv.h"
 #include "opal/util/proc.h"
+#include "opal/util/error.h"
 #include "opal/runtime/opal_params.h"
 
 #ifndef _NSIG
@@ -413,6 +415,9 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
         opal_stacktrace_output_fileno = -1;
     }
 
+    /* wait for a while before aborting for debugging */
+    opal_delay_abort();
+
     /* Raise the signal again, so we don't accidentally mask critical signals.
      * For critical signals, it is preferred that we call 'raise' instead of
      * 'exit' or 'abort' so that the return status is set properly for this
@@ -544,7 +549,7 @@ int opal_util_register_stackhandlers (void)
         opal_stacktrace_output_fileno = fileno(stdout);
     }
     else if( 0 == strcasecmp(opal_stacktrace_output_filename, "stderr") ) {
-        opal_stacktrace_output_fileno = fileno(stdout);
+        opal_stacktrace_output_fileno = fileno(stderr);
     }
     else if( 0 == strcasecmp(opal_stacktrace_output_filename, "file" ) ||
              0 == strcasecmp(opal_stacktrace_output_filename, "file:") ) {

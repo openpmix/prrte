@@ -13,10 +13,20 @@
 #include "orte_config.h"
 #include "orte/constants.h"
 
+#if HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#if HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
+
 #include "opal/class/opal_list.h"
 #include "opal/mca/event/event.h"
 #include "opal/mca/pmix/pmix.h"
+#include "opal/util/argv.h"
 
+#include "orte/orted/pmix/pmix_server_internal.h"
+#include "orte/runtime/orte_data_server.h"
 #include "orte/runtime/orte_globals.h"
 #include "orte/runtime/orte_wait.h"
 #include "orte/mca/errmgr/errmgr.h"
@@ -27,6 +37,7 @@
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/routed/routed.h"
 #include "orte/util/session_dir.h"
+#include "orte/util/threads.h"
 
 #include "orte/mca/state/base/base.h"
 #include "orte/mca/state/base/state_private.h"
@@ -69,9 +80,7 @@ void orte_state_base_activate_job_state(orte_job_t *jdata,
                 caddy->job_state = state;
                 OBJ_RETAIN(jdata);
             }
-            opal_event_set(orte_event_base, &caddy->ev, -1, OPAL_EV_WRITE, s->cbfunc, caddy);
-            opal_event_set_priority(&caddy->ev, s->priority);
-            opal_event_active(&caddy->ev, OPAL_EV_WRITE, 1);
+            ORTE_THREADSHIFT(caddy, orte_event_base, s->cbfunc, s->priority);
             return;
         }
     }
@@ -98,14 +107,12 @@ void orte_state_base_activate_job_state(orte_job_t *jdata,
         caddy->job_state = state;
         OBJ_RETAIN(jdata);
     }
-            OPAL_OUTPUT_VERBOSE((1, orte_state_base_framework.framework_output,
-                                 "%s ACTIVATING JOB %s STATE %s PRI %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                                 (NULL == jdata) ? "NULL" : ORTE_JOBID_PRINT(jdata->jobid),
-                                 orte_job_state_to_str(state), s->priority));
-    opal_event_set(orte_event_base, &caddy->ev, -1, OPAL_EV_WRITE, s->cbfunc, caddy);
-    opal_event_set_priority(&caddy->ev, s->priority);
-    opal_event_active(&caddy->ev, OPAL_EV_WRITE, 1);
+    OPAL_OUTPUT_VERBOSE((1, orte_state_base_framework.framework_output,
+                         "%s ACTIVATING JOB %s STATE %s PRI %d",
+                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                         (NULL == jdata) ? "NULL" : ORTE_JOBID_PRINT(jdata->jobid),
+                         orte_job_state_to_str(state), s->priority));
+    ORTE_THREADSHIFT(caddy, orte_event_base, s->cbfunc, s->priority);
 }
 
 
@@ -253,9 +260,7 @@ void orte_state_base_activate_proc_state(orte_process_name_t *proc,
             caddy = OBJ_NEW(orte_state_caddy_t);
             caddy->name = *proc;
             caddy->proc_state = state;
-            opal_event_set(orte_event_base, &caddy->ev, -1, OPAL_EV_WRITE, s->cbfunc, caddy);
-            opal_event_set_priority(&caddy->ev, s->priority);
-            opal_event_active(&caddy->ev, OPAL_EV_WRITE, 1);
+            ORTE_THREADSHIFT(caddy, orte_event_base, s->cbfunc, s->priority);
             return;
         }
     }
@@ -279,14 +284,12 @@ void orte_state_base_activate_proc_state(orte_process_name_t *proc,
     caddy = OBJ_NEW(orte_state_caddy_t);
     caddy->name = *proc;
     caddy->proc_state = state;
-            OPAL_OUTPUT_VERBOSE((1, orte_state_base_framework.framework_output,
-                                 "%s ACTIVATING PROC %s STATE %s PRI %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                                 ORTE_NAME_PRINT(proc),
-                                 orte_proc_state_to_str(state), s->priority));
-    opal_event_set(orte_event_base, &caddy->ev, -1, OPAL_EV_WRITE, s->cbfunc, caddy);
-    opal_event_set_priority(&caddy->ev, s->priority);
-    opal_event_active(&caddy->ev, OPAL_EV_WRITE, 1);
+    OPAL_OUTPUT_VERBOSE((1, orte_state_base_framework.framework_output,
+                         "%s ACTIVATING PROC %s STATE %s PRI %d",
+                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                         ORTE_NAME_PRINT(proc),
+                         orte_proc_state_to_str(state), s->priority));
+     ORTE_THREADSHIFT(caddy, orte_event_base, s->cbfunc, s->priority);
 }
 
 int orte_state_base_add_proc_state(orte_proc_state_t state,
@@ -434,7 +437,10 @@ void orte_state_base_local_launch_complete(int fd, short argc, void *cbdata)
 void orte_state_base_cleanup_job(int fd, short argc, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
-    orte_job_t *jdata = caddy->jdata;
+    orte_job_t *jdata;
+
+    ORTE_ACQUIRE_OBJECT(caddy);
+    jdata = caddy->jdata;
 
     OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
                          "%s state:base:cleanup on job %s",
@@ -451,12 +457,59 @@ void orte_state_base_cleanup_job(int fd, short argc, void *cbdata)
 void orte_state_base_report_progress(int fd, short argc, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
-    orte_job_t *jdata = caddy->jdata;
+    orte_job_t *jdata;
 
-    opal_output(orte_clean_output, "App launch reported: %d (out of %d) daemons - %d (out of %d) procs",
+     ORTE_ACQUIRE_OBJECT(caddy);
+    jdata = caddy->jdata;
+
+   opal_output(orte_clean_output, "App launch reported: %d (out of %d) daemons - %d (out of %d) procs",
                 (int)jdata->num_daemons_reported, (int)orte_process_info.num_procs,
                 (int)jdata->num_launched, (int)jdata->num_procs);
     OBJ_RELEASE(caddy);
+}
+
+void orte_state_base_notify_data_server(orte_process_name_t *target)
+{
+    opal_buffer_t *buf;
+    int rc, room = -1;
+    uint8_t cmd = ORTE_PMIX_PURGE_PROC_CMD;
+
+    /* if nobody local to us published anything, then we can ignore this */
+    if (ORTE_JOBID_INVALID == orte_pmix_server_globals.server.jobid) {
+        return;
+    }
+
+    buf = OBJ_NEW(opal_buffer_t);
+
+    /* pack the room number */
+    if (OPAL_SUCCESS != (rc = opal_dss.pack(buf, &room, 1, OPAL_INT))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_RELEASE(buf);
+        return;
+    }
+
+    /* load the command */
+    if (OPAL_SUCCESS != (rc = opal_dss.pack(buf, &cmd, 1, OPAL_UINT8))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_RELEASE(buf);
+        return;
+    }
+
+    /* provide the target */
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, target, 1, ORTE_NAME))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_RELEASE(buf);
+        return;
+    }
+
+    /* send the request to the server */
+    rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                 &orte_pmix_server_globals.server, buf,
+                                 ORTE_RML_TAG_DATA_SERVER,
+                                 orte_rml_send_callback, NULL);
+    if (ORTE_SUCCESS != rc) {
+        OBJ_RELEASE(buf);
+    }
 }
 
 static void _send_notification(int status,
@@ -606,13 +659,17 @@ static void _send_notification(int status,
 void orte_state_base_track_procs(int fd, short argc, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
-    orte_process_name_t *proc = &caddy->name;
-    orte_proc_state_t state = caddy->proc_state;
+    orte_process_name_t *proc;
+    orte_proc_state_t state;
     orte_job_t *jdata;
     orte_proc_t *pdata;
     int i;
     char *rtmod;
     orte_process_name_t parent, target, *npptr;
+
+    ORTE_ACQUIRE_OBJECT(caddy);
+    proc = &caddy->name;
+    state = caddy->proc_state;
 
     opal_output_verbose(5, orte_state_base_framework.framework_output,
                         "%s state:base:track_procs called for proc %s state %s",
@@ -714,6 +771,17 @@ void orte_state_base_track_procs(int fd, short argc, void *cbdata)
         /* track job status */
         jdata->num_terminated++;
         if (jdata->num_terminated == jdata->num_procs) {
+            /* if requested, check fd status for leaks */
+            if (orte_state_base_run_fdcheck) {
+                orte_state_base_check_fds(jdata);
+            }
+            /* if ompi-server is around, then notify it to purge
+             * any session-related info */
+            if (NULL != orte_data_server_uri) {
+                target.jobid = jdata->jobid;
+                target.vpid = ORTE_VPID_WILDCARD;
+                orte_state_base_notify_data_server(&target);
+            }
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_TERMINATED);
             /* if they requested notification upon completion, provide it */
             if (orte_get_attribute(&jdata->attributes, ORTE_JOB_NOTIFY_COMPLETION, NULL, OPAL_BOOL)) {
@@ -747,8 +815,7 @@ void orte_state_base_track_procs(int fd, short argc, void *cbdata)
 void orte_state_base_check_all_complete(int fd, short args, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
-    orte_job_t *jdata = caddy->jdata;
-
+    orte_job_t *jdata;
     orte_proc_t *proc;
     int i;
     orte_std_cntr_t j;
@@ -762,6 +829,9 @@ void orte_state_base_check_all_complete(int fd, short args, void *cbdata)
     uint32_t u32;
     void *nptr;
     char *rtmod;
+
+    ORTE_ACQUIRE_OBJECT(caddy);
+    jdata = caddy->jdata;
 
     opal_output_verbose(2, orte_state_base_framework.framework_output,
                         "%s state:base:check_job_complete on job %s",
@@ -899,8 +969,6 @@ void orte_state_base_check_all_complete(int fd, short args, void *cbdata)
             opal_pointer_array_set_item(map->nodes, index, NULL);
             /* maintain accounting */
             OBJ_RELEASE(node);
-            /* flag that the node is no longer in a map */
-            ORTE_FLAG_UNSET(node, ORTE_NODE_FLAG_MAPPED);
         }
         OBJ_RELEASE(map);
         jdata->map = NULL;
@@ -1017,4 +1085,100 @@ void orte_state_base_check_all_complete(int fd, short args, void *cbdata)
     orte_plm.terminate_orteds();
 
     OBJ_RELEASE(caddy);
+}
+
+
+void orte_state_base_check_fds(orte_job_t *jdata)
+{
+    int nfds, i, fdflags, flflags;
+    char path[1024], info[256], **list=NULL, *status, *result, *r2;
+    ssize_t rc;
+    struct flock fl;
+    bool flk;
+    int cnt = 0;
+
+    /* get the number of available file descriptors
+     * for this daemon */
+    nfds = getdtablesize();
+    result = NULL;
+    /* loop over them and get their info */
+    for (i=0; i < nfds; i++) {
+        fdflags = fcntl(i, F_GETFD);
+        if (-1 == fdflags) {
+            /* no open fd in that slot */
+            continue;
+        }
+        flflags = fcntl(i, F_GETFL);
+        if (-1 == flflags) {
+            /* no open fd in that slot */
+            continue;
+        }
+        snprintf(path, 1024, "/proc/self/fd/%d", i);
+        memset(info, 0, 256);
+        /* read the info about this fd */
+        rc = readlink(path, info, 256);
+        if (-1 == rc) {
+            /* this fd is unavailable */
+            continue;
+        }
+        /* get any file locking status */
+        fl.l_type = F_WRLCK;
+        fl.l_whence = 0;
+        fl.l_start = 0;
+        fl.l_len = 0;
+        if (-1 == fcntl(i, F_GETLK, &fl)) {
+            flk = false;
+        } else {
+            flk = true;
+        }
+        /* construct the list of capabilities */
+        if (fdflags & FD_CLOEXEC) {
+            opal_argv_append_nosize(&list, "cloexec");
+        }
+        if (flflags & O_APPEND) {
+            opal_argv_append_nosize(&list, "append");
+        }
+        if (flflags & O_NONBLOCK) {
+            opal_argv_append_nosize(&list, "nonblock");
+        }
+        /* from the man page:
+         *  Unlike the other values that can be specified in flags,
+         * the access mode values O_RDONLY, O_WRONLY, and O_RDWR,
+         * do not specify individual bits.  Rather, they define
+         * the low order two bits of flags, and defined respectively
+         * as 0, 1, and 2. */
+        if (O_RDONLY == (flflags & 3)) {
+            opal_argv_append_nosize(&list, "rdonly");
+        } else if (O_WRONLY == (flflags & 3)) {
+            opal_argv_append_nosize(&list, "wronly");
+        } else {
+            opal_argv_append_nosize(&list, "rdwr");
+        }
+        if (flk && F_UNLCK != fl.l_type) {
+            if (F_WRLCK == fl.l_type) {
+                opal_argv_append_nosize(&list, "wrlock");
+            } else {
+                opal_argv_append_nosize(&list, "rdlock");
+            }
+        }
+        if (NULL != list) {
+            status = opal_argv_join(list, ' ');
+            opal_argv_free(list);
+            list = NULL;
+            if (NULL == result) {
+                asprintf(&result, "    %d\t(%s)\t%s\n", i, info, status);
+            } else {
+                asprintf(&r2, "%s    %d\t(%s)\t%s\n", result, i, info, status);
+                free(result);
+                result = r2;
+            }
+            free(status);
+        }
+        ++cnt;
+    }
+    asprintf(&r2, "%s: %d open file descriptors after job %d completed\n%s",
+             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), cnt, ORTE_LOCAL_JOBID(jdata->jobid), result);
+    opal_output(0, "%s", r2);
+    free(result);
+    free(r2);
 }

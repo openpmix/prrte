@@ -31,6 +31,7 @@
 #include "orte/mca/routed/routed.h"
 #include "orte/util/nidmap.h"
 #include "orte/util/session_dir.h"
+#include "orte/util/threads.h"
 #include "orte/runtime/orte_quit.h"
 #include "orte/runtime/orte_wait.h"
 
@@ -80,6 +81,8 @@ static orte_job_state_t launch_states[] = {
     ORTE_JOB_STATE_DAEMONS_LAUNCHED,
     ORTE_JOB_STATE_DAEMONS_REPORTED,
     ORTE_JOB_STATE_VM_READY,
+    ORTE_JOB_STATE_MAP,
+    ORTE_JOB_STATE_MAP_COMPLETE,
     ORTE_JOB_STATE_SYSTEM_PREP,
     ORTE_JOB_STATE_LAUNCH_APPS,
     ORTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
@@ -98,6 +101,8 @@ static orte_state_cbfunc_t launch_callbacks[] = {
     orte_plm_base_daemons_launched,
     orte_plm_base_daemons_reported,
     vm_ready,
+    orte_rmaps_base_map_job,
+    orte_plm_base_mapping_complete,
     orte_plm_base_complete_setup,
     orte_plm_base_launch_apps,
     orte_state_base_local_launch_complete,
@@ -211,13 +216,15 @@ static void files_ready(int status, void *cbdata)
         ORTE_FORCED_TERMINATE(status);
         return;
     } else {
-        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_SYSTEM_PREP);
+        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP);
     }
 }
 
 static void init_complete(int sd, short args, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
+
+    ORTE_ACQUIRE_OBJECT(caddy);
 
     /* nothing to do here but move along - if it is the
      * daemon job, then next step is allocate */
@@ -245,6 +252,8 @@ static void vm_ready(int fd, short args, void *cbdata)
     int32_t numbytes;
     char *nidmap;
 
+    ORTE_ACQUIRE_OBJECT(caddy);
+
     /* if this is my job, then we are done */
     if (ORTE_PROC_MY_NAME->jobid == caddy->jdata->jobid) {
         /* send the daemon map to every daemon in this DVM - we
@@ -255,7 +264,7 @@ static void vm_ready(int fd, short args, void *cbdata)
         /* if we couldn't provide the allocation regex on the orted
          * cmd line, then we need to provide all the info here */
         if (!orte_nidmap_communicated) {
-            if (ORTE_SUCCESS != (rc = orte_util_nidmap_create(&nidmap))) {
+            if (ORTE_SUCCESS != (rc = orte_util_nidmap_create(orte_node_pool, &nidmap))) {
                 ORTE_ERROR_LOG(rc);
                 OBJ_RELEASE(buf);
                 return;
@@ -349,14 +358,16 @@ static void vm_ready(int fd, short args, void *cbdata)
 static void check_complete(int fd, short args, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
-    orte_job_t *jdata = caddy->jdata;
-
+    orte_job_t *jdata;
     orte_proc_t *proc;
     int i;
     orte_node_t *node;
     orte_job_map_t *map;
     orte_std_cntr_t index;
     char *rtmod;
+
+    ORTE_ACQUIRE_OBJECT(caddy);
+    jdata = caddy->jdata;
 
     opal_output_verbose(2, orte_state_base_framework.framework_output,
                         "%s state:dvm:check_job_complete on job %s",
@@ -468,7 +479,10 @@ static void check_complete(int fd, short args, void *cbdata)
 static void cleanup_job(int sd, short args, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
-    orte_job_t *jdata = caddy->jdata;
+    orte_job_t *jdata;
+
+    ORTE_ACQUIRE_OBJECT(caddy);
+    jdata = caddy->jdata;
 
     /* remove this object from the job array */
     opal_hash_table_set_value_uint32(orte_job_data, jdata->jobid, NULL);

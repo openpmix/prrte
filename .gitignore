@@ -246,6 +246,7 @@ ompi/tools/wrappers/mpicc.1
 ompi/tools/wrappers/mpic++.1
 ompi/tools/wrappers/mpicxx.1
 ompi/tools/wrappers/mpifort.1
+ompi/tools/wrappers/mpijavac.1
 ompi/tools/wrappers/ompi_wrapper_script
 ompi/tools/wrappers/ompi.pc
 ompi/tools/wrappers/ompi-c.pc
@@ -377,6 +378,7 @@ orte/test/mpi/segv
 orte/test/mpi/simple_spawn
 orte/test/mpi/slave
 orte/test/mpi/spawn_multiple
+orte/test/mpi/xlib
 orte/test/mpi/ziaprobe
 orte/test/mpi/ziatest
 orte/test/mpi/*.dwarf
@@ -404,6 +406,8 @@ orte/test/mpi/memcached-dummy
 orte/test/mpi/coll_test
 orte/test/mpi/badcoll
 orte/test/mpi/iof
+orte/test/mpi/no-disconnect
+orte/test/mpi/nonzero
 
 orte/test/system/radix
 orte/test/system/sigusr_trap
@@ -461,6 +465,7 @@ orte/test/system/opal_db
 orte/test/system/ulfm
 orte/test/system/pmixtool
 orte/test/system/orte_notify
+orte/test/system/threads
 
 orte/tools/prun/prun
 orte/tools/prun/prun.1

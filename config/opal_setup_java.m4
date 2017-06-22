@@ -14,9 +14,10 @@ dnl Copyright (c) 2006-2012 Los Alamos National Security, LLC.  All rights
 dnl                         reserved.
 dnl Copyright (c) 2007-2012 Oracle and/or its affiliates.  All rights reserved.
 dnl Copyright (c) 2008-2013 Cisco Systems, Inc.  All rights reserved.
-dnl Copyright (c) 2013      Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
 dnl Copyright (c) 2015      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
+dnl Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -162,10 +163,11 @@ AC_DEFUN([OPAL_SETUP_JAVA],[
             AC_PATH_PROG(JAVAC, javac)
             AC_PATH_PROG(JAVAH, javah)
             AC_PATH_PROG(JAR, jar)
+            AC_PATH_PROG(JAVADOC, javadoc)
             PATH=$opal_java_PATH_save
 
-            # Check to see if we have all 3 programs.
-            AS_IF([test -z "$JAVAC" || test -z "$JAVAH" || test -z "$JAR"],
+            # Check to see if we have all 4 programs.
+            AS_IF([test -z "$JAVAC" || test -z "$JAVAH" || test -z "$JAR" || test -z "$JAVADOC"],
                   [opal_java_happy=no
                    HAVE_JAVA_SUPPORT=0],
                   [opal_java_happy=yes

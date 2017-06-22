@@ -54,6 +54,13 @@ ORTE_MODULE_DECLSPEC int orte_rmaps_rr_byobj(orte_job_t *jdata, orte_app_context
                                              orte_vpid_t num_procs,
                                              hwloc_obj_type_t target, unsigned cache_level);
 
+ORTE_MODULE_DECLSPEC int orte_rmaps_rr_assign_root_level(orte_job_t *jdata);
+
+ORTE_MODULE_DECLSPEC int orte_rmaps_rr_assign_byobj(orte_job_t *jdata,
+                                                    hwloc_obj_type_t target,
+                                                    unsigned cache_level);
+
+
 END_C_DECLS
 
 #endif

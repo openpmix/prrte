@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -71,7 +71,6 @@ static void ofi_recv_msg_queue_des(ofi_recv_msg_queue_t *ptr)
 OBJ_CLASS_INSTANCE(ofi_recv_msg_queue_t,
                    opal_list_item_t,
                    ofi_recv_msg_queue_cons, ofi_recv_msg_queue_des);
-
 
 static void send_self_exe(int fd, short args, void* data)
 {
@@ -377,8 +376,6 @@ static void send_msg(int fd, short args, void *cbdata)
     uint32_t  total_packets;
     fi_addr_t dest_fi_addr;
     orte_rml_send_t *snd;
-    orte_rml_recv_t *rcv;
-    orte_self_send_xfer_t *xfer;
     orte_rml_ofi_request_t* ofi_send_req = OBJ_NEW( orte_rml_ofi_request_t );
     uint8_t ofi_prov_id = req->ofi_prov_id;
     orte_rml_ofi_send_pkt_t* ofi_msg_pkt;
@@ -386,8 +383,6 @@ static void send_msg(int fd, short args, void *cbdata)
     orte_rml_ofi_peer_t* pr;
     uint64_t ui64;
     struct sockaddr_in* ep_sockaddr;
-    int i, bytes;
-    char *ptr;
 
     snd = OBJ_NEW(orte_rml_send_t);
     snd->dst = *peer;
@@ -409,164 +404,59 @@ static void send_msg(int fd, short args, void *cbdata)
                          ORTE_NAME_PRINT(peer), tag);
 
 
-    /* get the peer address by doing modex_receive      */
+    /* get the peer address from our internal hash table */
+    opal_output_verbose(1, orte_rml_base_framework.framework_output,
+              "%s getting contact info for DAEMON peer %s from internal hash table",
+              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(peer));
+     memcpy(&ui64, (char*)peer, sizeof(uint64_t));
+     if (OPAL_SUCCESS != (ret = opal_hash_table_get_value_uint64(&orte_rml_ofi.peers,
+                                                        ui64, (void**)&pr) || NULL == pr)) {
+          opal_output_verbose(1, orte_rml_base_framework.framework_output,
+                        "%s rml:ofi: Send failed to get peer OFI contact info ",
+                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
+          snd->status = ORTE_ERR_ADDRESSEE_UNKNOWN;
+          ORTE_RML_SEND_COMPLETE(snd);
+          //OBJ_RELEASE( ofi_send_req);
+          return;
+     }
+     opal_output_verbose(1, orte_rml_base_framework.framework_output,
+                        "%s rml:ofi: OFI peer contact info got from hash table",
+                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
+     dest_ep_name = pr->ofi_ep;
+     dest_ep_namelen = pr->ofi_ep_len;
+
+   //[Debug] printing additional info of IP
+    switch ( orte_rml_ofi.ofi_prov[ofi_prov_id].fabric_info->addr_format)
+    {
+        case  FI_SOCKADDR_IN :
+            /*  Address is of type sockaddr_in (IPv4) */
+            /*[debug] - print the sockaddr - port and s_addr */
+            ep_sockaddr = (struct sockaddr_in*)dest_ep_name;
+            opal_output_verbose(1,orte_rml_base_framework.framework_output,
+                    "%s peer %s epnamelen is %lu, port = %d (or) 0x%x, InternetAddr = 0x%s  ",
+                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),ORTE_NAME_PRINT(peer),
+                    (unsigned long)orte_rml_ofi.ofi_prov[ofi_prov_id].epnamelen,ntohs(ep_sockaddr->sin_port),
+                    ntohs(ep_sockaddr->sin_port),inet_ntoa(ep_sockaddr->sin_addr));
+            /*[end debug]*/
+            break;
+    }
+    //[Debug] end debug
     opal_output_verbose(10, orte_rml_base_framework.framework_output,
-                         "%s calling OPAL_MODEX_RECV_STRING ", ORTE_NAME_PRINT(ORTE_PROC_MY_NAME) );
-    // if dest is same as me then instead of doing lookup just populate the dest_ep_name
-    /*if (!ORTE_PROC_IS_APP && peer->jobid == ORTE_PROC_MY_NAME->jobid && peer->vpid == ORTE_PROC_MY_NAME->vpid) {
-        dest_ep_namelen = orte_rml_ofi.ofi_prov[ofi_prov_id].epnamelen;
-        dest_ep_name = (char *)calloc(dest_ep_namelen,sizeof(char));
-        memcpy( dest_ep_name, orte_rml_ofi.ofi_prov[ofi_prov_id].ep_name,dest_ep_namelen);
+                     "%s OPAL_MODEX_RECV succeded, %s peer ep name obtained. length=%lu",
+                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                     ORTE_NAME_PRINT(peer), dest_ep_namelen);
+    ret = fi_av_insert(orte_rml_ofi.ofi_prov[ofi_prov_id].av, dest_ep_name,1,&dest_fi_addr,0,NULL);
+    if( ret != 1) {
         opal_output_verbose(1, orte_rml_base_framework.framework_output,
-                            "%s rml:ofi: send and dest are same so proceeding with cur provider ep_name ",
-                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
-        ret = OPAL_SUCCESS;
-    } else {*/
-    if (ORTE_PROC_IS_APP ) {
-            asprintf(&pmix_key,"%s%d",orte_rml_ofi.ofi_prov[ofi_prov_id].fabric_info->fabric_attr->prov_name,ofi_prov_id);
-            opal_output_verbose(1, orte_rml_base_framework.framework_output,
-                     "%s calling OPAL_MODEX_RECV_STRING for ORTE_PROC_APP peer - %s, key - %s ",
-                      ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(peer),pmix_key );
-            OPAL_MODEX_RECV_STRING(ret, pmix_key, peer , (uint8_t **) &dest_ep_name, &dest_ep_namelen);
-            opal_output_verbose(10, orte_rml_base_framework.framework_output, "Returned from MODEX_RECV");
-            opal_output_verbose(50, orte_rml_base_framework.framework_output,
-                         "%s  Return value from OPAL_MODEX_RECV_STRING - %d, length returned - %lu",
-                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret, dest_ep_namelen);
-            free(pmix_key);
-    } else {
-        opal_output_verbose(1, orte_rml_base_framework.framework_output,
-                  "%s calling OPAL_MODEX_RECV_STRING for DAEMON peer %s",
-                  ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(peer));
-        if (OPAL_EQUAL == orte_util_compare_name_fields(ORTE_NS_CMP_ALL, peer, ORTE_PROC_MY_NAME)) {
-                 opal_output_verbose(1, orte_rml_base_framework.framework_output,
-                             "%s rml_ofi_send_to_self at tag %d",
-                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), tag);
-            /* send to self is a tad tricky - we really don't want
-             * to track the send callback function throughout the recv
-             * process and execute it upon receipt as this would provide
-             * very different timing from a non-self message. Specifically,
-             * if we just retain a pointer to the incoming data
-             * and then execute the send callback prior to the receive,
-             * then the caller will think we are done with the data and
-             * can release it. So we have to copy the data in order to
-             * execute the send callback prior to receiving the message.
-             *
-             * In truth, this really is a better mimic of the non-self
-             * message behavior. If we actually pushed the message out
-             * on the wire and had it loop back, then we would receive
-             * a new block of data anyway.
-             */
-            /* setup the send callback */
-            xfer = OBJ_NEW(orte_self_send_xfer_t);
-            if (NULL != req->send.iov) {
-                xfer->iov = req->send.iov;
-                xfer->count = req->send.count;
-                xfer->cbfunc.iov = req->send.cbfunc.iov;
-            } else {
-                xfer->buffer = req->send.buffer;
-                xfer->cbfunc.buffer = req->send.cbfunc.buffer;
-            }
-            xfer->tag = tag;
-            xfer->cbdata = req->send.cbdata;
-            /* setup the event for the send callback */
-            opal_event_set(orte_event_base, &xfer->ev, -1, OPAL_EV_WRITE, send_self_exe, xfer);
-            opal_event_set_priority(&xfer->ev, ORTE_MSG_PRI);
-            opal_event_active(&xfer->ev, OPAL_EV_WRITE, 1);
+                     "%s fi_av_insert failed in send_msg() returned %d",
+                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),ret );
+        /* call the send-callback fn with error and return, also return failure status */
+        snd->status = ORTE_ERR_ADDRESSEE_UNKNOWN;
 
-            /* copy the message for the recv */
-            rcv = OBJ_NEW(orte_rml_recv_t);
-            rcv->sender = *peer;
-            rcv->tag = tag;
-            if (NULL != req->send.iov) {
-                /* get the total number of bytes in the iovec array */
-                bytes = 0;
-                for (i = 0 ; i < req->send.count ; ++i) {
-                    bytes += req->send.iov[i].iov_len;
-                }
-                /* get the required memory allocation */
-                if (0 < bytes) {
-                    rcv->iov.iov_base = (IOVBASE_TYPE*)malloc(bytes);
-                    rcv->iov.iov_len = bytes;
-                    /* transfer the bytes */
-                    ptr =  (char*)rcv->iov.iov_base;
-                    for (i = 0 ; i < req->send.count ; ++i) {
-                        memcpy(ptr, req->send.iov[i].iov_base, req->send.iov[i].iov_len);
-                        ptr += req->send.iov[i].iov_len;
-                    }
-                }
-            } else if (0 < req->send.buffer->bytes_used) {
-                rcv->iov.iov_base = (IOVBASE_TYPE*)malloc(req->send.buffer->bytes_used);
-                memcpy(rcv->iov.iov_base, req->send.buffer->base_ptr, req->send.buffer->bytes_used);
-                rcv->iov.iov_len = req->send.buffer->bytes_used;
-            }
-            /* post the message for receipt - since the send callback was posted
-             * first and has the same priority, it will execute first
-             */
-            ORTE_RML_ACTIVATE_MESSAGE(rcv);
-            OBJ_RELEASE(req);
-            return;
-       } else {
-             memcpy(&ui64, (char*)peer, sizeof(uint64_t));
-             if (OPAL_SUCCESS != opal_hash_table_get_value_uint64(&orte_rml_ofi.peers,
-                                                     ui64, (void**)&pr) || NULL == pr) {
-                  opal_output_verbose(1, orte_rml_base_framework.framework_output,
-                                "%s rml:ofi: Send failed to get peer OFI contact info ",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
-                  return;
-             }
-             opal_output_verbose(1, orte_rml_base_framework.framework_output,
-                                "%s rml:ofi: OFI peer contact info got from hash table",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
-             dest_ep_name = pr->ofi_ep;
-             dest_ep_namelen = pr->ofi_ep_len;
-             ret = OPAL_SUCCESS;
-      }
-   }
-    if ( OPAL_SUCCESS == ret) {
-           //Anandhi added for debug purpose
-            switch ( orte_rml_ofi.ofi_prov[ofi_prov_id].fabric_info->addr_format)
-            {
-                case  FI_SOCKADDR_IN :
-                    /*  Address is of type sockaddr_in (IPv4) */
-                    /*[debug] - print the sockaddr - port and s_addr */
-                    ep_sockaddr = (struct sockaddr_in*)dest_ep_name;
-                    opal_output_verbose(1,orte_rml_base_framework.framework_output,
-                            "%s peer %s epnamelen is %lu, port = %d (or) 0x%x, InternetAddr = 0x%s  ",
-                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),ORTE_NAME_PRINT(peer),
-                            orte_rml_ofi.ofi_prov[ofi_prov_id].epnamelen,ntohs(ep_sockaddr->sin_port),
-                            ntohs(ep_sockaddr->sin_port),inet_ntoa(ep_sockaddr->sin_addr));
-                    /*[end debug]*/
-                    break;
-            }
-            //Anandhi end debug
-        opal_output_verbose(10, orte_rml_base_framework.framework_output,
-                         "%s OPAL_MODEX_RECV succeded, %s peer ep name obtained. length=%lu",
-                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                         ORTE_NAME_PRINT(peer), dest_ep_namelen);
-        ret = fi_av_insert(orte_rml_ofi.ofi_prov[ofi_prov_id].av, dest_ep_name,1,&dest_fi_addr,0,NULL);
-        if( ret != 1) {
-            opal_output_verbose(1, orte_rml_base_framework.framework_output,
-                         "%s fi_av_insert failed in send_msg() returned %d",
-                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),ret );
-            /* call the send-callback fn with error and return, also return failure status */
-            snd->status = ORTE_ERR_ADDRESSEE_UNKNOWN;
-
-                ORTE_RML_SEND_COMPLETE(snd);
-                return;
-        }
-    } else {
-
-        opal_output_verbose(1, orte_rml_base_framework.framework_output,
-                         "%s OPAL_MODEX_RECV failed to obtain  %s peer ep name ",
-                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                         ORTE_NAME_PRINT(peer));
-            /* call the send-callback fn with error and return, also return failure status */
-            snd->status = ORTE_ERR_ADDRESSEE_UNKNOWN;
             ORTE_RML_SEND_COMPLETE(snd);
-            //OBJ_RELEASE( ofi_send_req);
+
             return;
     }
-
     ofi_send_req->send = snd;
     ofi_send_req->completion_count = 1;
 
@@ -704,6 +594,11 @@ int orte_rml_ofi_send_nb(struct orte_rml_base_module_t* mod,
                                    orte_rml_callback_fn_t cbfunc,
                                    void* cbdata)
 {
+    orte_rml_recv_t *rcv;
+    int bytes;
+    orte_self_send_xfer_t *xfer;
+    int i;
+    char* ptr;
     ofi_send_request_t *req;
     orte_rml_ofi_module_t *ofi_mod = (orte_rml_ofi_module_t*)mod;
     int ofi_prov_id = ofi_mod->cur_transport_id;
@@ -731,6 +626,69 @@ int orte_rml_ofi_send_nb(struct orte_rml_base_module_t* mod,
         ORTE_ERROR_LOG(ORTE_ERR_BAD_PARAM);
         return ORTE_ERR_BAD_PARAM;
     }
+
+       /* if this is a message to myself, then just post the message
+        * for receipt - no need to dive into the ofi send_msg()
+        */
+    if (OPAL_EQUAL == orte_util_compare_name_fields(ORTE_NS_CMP_ALL, peer, ORTE_PROC_MY_NAME)) {  /* local delivery */
+        OPAL_OUTPUT_VERBOSE((1, orte_rml_base_framework.framework_output,
+                             "%s rml_send_iovec_to_self at tag %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), tag));
+        /* send to self is a tad tricky - we really don't want
+         * to track the send callback function throughout the recv
+         * process and execute it upon receipt as this would provide
+         * very different timing from a non-self message. Specifically,
+         * if we just retain a pointer to the incoming data
+         * and then execute the send callback prior to the receive,
+         * then the caller will think we are done with the data and
+         * can release it. So we have to copy the data in order to
+         * execute the send callback prior to receiving the message.
+         *
+         * In truth, this really is a better mimic of the non-self
+         * message behavior. If we actually pushed the message out
+         * on the wire and had it loop back, then we would receive
+         * a new block of data anyway.
+         */
+
+        /* setup the send callback */
+        xfer = OBJ_NEW(orte_self_send_xfer_t);
+        xfer->iov = iov;
+        xfer->count = count;
+        xfer->cbfunc.iov = cbfunc;
+        xfer->tag = tag;
+        xfer->cbdata = cbdata;
+        /* setup the event for the send callback */
+        opal_event_set(orte_event_base, &xfer->ev, -1, OPAL_EV_WRITE, send_self_exe, xfer);
+        opal_event_set_priority(&xfer->ev, ORTE_MSG_PRI);
+        opal_event_active(&xfer->ev, OPAL_EV_WRITE, 1);
+
+        /* copy the message for the recv */
+        rcv = OBJ_NEW(orte_rml_recv_t);
+        rcv->sender = *peer;
+        rcv->tag = tag;
+        /* get the total number of bytes in the iovec array */
+        bytes = 0;
+        for (i = 0 ; i < count ; ++i) {
+            bytes += iov[i].iov_len;
+        }
+        /* get the required memory allocation */
+        if (0 < bytes) {
+            rcv->iov.iov_base = (IOVBASE_TYPE*)malloc(bytes);
+            rcv->iov.iov_len = bytes;
+            /* transfer the bytes */
+            ptr =  (char*)rcv->iov.iov_base;
+            for (i = 0 ; i < count ; ++i) {
+                memcpy(ptr, iov[i].iov_base, iov[i].iov_len);
+                ptr += iov[i].iov_len;
+            }
+        }
+        /* post the message for receipt - since the send callback was posted
+         * first and has the same priority, it will execute first
+         */
+        ORTE_RML_ACTIVATE_MESSAGE(rcv);
+        return ORTE_SUCCESS;
+    }
+
     /* get ourselves into an event to protect against
      * race conditions and threads
      */
@@ -759,6 +717,8 @@ int orte_rml_ofi_send_buffer_nb(struct orte_rml_base_module_t *mod,
                                               orte_rml_buffer_callback_fn_t cbfunc,
                                               void* cbdata)
 {
+    orte_rml_recv_t *rcv;
+    orte_self_send_xfer_t *xfer;
     ofi_send_request_t *req;
     orte_rml_ofi_module_t *ofi_mod = (orte_rml_ofi_module_t*)mod;
     int ofi_prov_id = ofi_mod->cur_transport_id;
@@ -785,6 +745,54 @@ int orte_rml_ofi_send_buffer_nb(struct orte_rml_base_module_t *mod,
         ORTE_ERROR_LOG(ORTE_ERR_BAD_PARAM);
         return ORTE_ERR_BAD_PARAM;
     }
+    /* if this is a message to myself, then just post the message
+     * for receipt - no need to dive into the oob
+     */
+    if (OPAL_EQUAL == orte_util_compare_name_fields(ORTE_NS_CMP_ALL, peer, ORTE_PROC_MY_NAME)) {  /* local delivery */
+        OPAL_OUTPUT_VERBOSE((1, orte_rml_base_framework.framework_output,
+                             "%s rml_send_iovec_to_self at tag %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), tag));
+        /* send to self is a tad tricky - we really don't want
+         * to track the send callback function throughout the recv
+         * process and execute it upon receipt as this would provide
+         * very different timing from a non-self message. Specifically,
+         * if we just retain a pointer to the incoming data
+         * and then execute the send callback prior to the receive,
+         * then the caller will think we are done with the data and
+         * can release it. So we have to copy the data in order to
+         * execute the send callback prior to receiving the message.
+         *
+         * In truth, this really is a better mimic of the non-self
+         * message behavior. If we actually pushed the message out
+         * on the wire and had it loop back, then we would receive
+         * a new block of data anyway.
+         */
+
+        /* setup the send callback */
+        xfer = OBJ_NEW(orte_self_send_xfer_t);
+        xfer->buffer = buffer;
+        xfer->cbfunc.buffer = cbfunc;
+        xfer->tag = tag;
+        xfer->cbdata = cbdata;
+        /* setup the event for the send callback */
+        opal_event_set(orte_event_base, &xfer->ev, -1, OPAL_EV_WRITE, send_self_exe, xfer);
+        opal_event_set_priority(&xfer->ev, ORTE_MSG_PRI);
+        opal_event_active(&xfer->ev, OPAL_EV_WRITE, 1);
+
+        /* copy the message for the recv */
+        rcv = OBJ_NEW(orte_rml_recv_t);
+        rcv->sender = *peer;
+        rcv->tag = tag;
+        rcv->iov.iov_base = (IOVBASE_TYPE*)malloc(buffer->bytes_used);
+        memcpy(rcv->iov.iov_base, buffer->base_ptr, buffer->bytes_used);
+        rcv->iov.iov_len = buffer->bytes_used;
+        /* post the message for receipt - since the send callback was posted
+         * first and has the same priority, it will execute first
+         */
+        ORTE_RML_ACTIVATE_MESSAGE(rcv);
+        return ORTE_SUCCESS;
+    }
+
     /* get ourselves into an event to protect against
      * race conditions and threads
      */

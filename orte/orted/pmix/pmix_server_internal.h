@@ -43,10 +43,13 @@
 #include "opal/mca/event/event.h"
 #include "opal/mca/pmix/pmix.h"
 #include "opal/util/proc.h"
+#include "opal/sys/atomic.h"
 
 #include "orte/mca/grpcomm/base/base.h"
+#include "orte/runtime/orte_globals.h"
+#include "orte/util/threads.h"
 
- BEGIN_C_DECLS
+BEGIN_C_DECLS
 
 #define ORTED_PMIX_MIN_DMX_TIMEOUT      10
 #define ORTE_ADJUST_TIMEOUT(a)                                      \
@@ -67,8 +70,9 @@
     int timeout;
     int room_num;
     int remote_room_num;
+    opal_pmix_data_range_t range;
     orte_process_name_t proxy;
-    opal_process_name_t target;
+    orte_process_name_t target;
     orte_job_t *jdata;
     opal_buffer_t msg;
     opal_pmix_op_cbfunc_t opcbfunc;
@@ -117,6 +121,7 @@ OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
         opal_event_set(orte_event_base, &(_req->ev),         \
                        -1, OPAL_EV_WRITE, (cf), _req);       \
         opal_event_set_priority(&(_req->ev), ORTE_MSG_PRI);  \
+        ORTE_POST_OBJECT(_req);                              \
         opal_event_active(&(_req->ev), OPAL_EV_WRITE, 1);    \
     } while(0);
 
@@ -131,6 +136,7 @@ OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
         opal_event_set(orte_event_base, &(_req->ev),         \
                        -1, OPAL_EV_WRITE, (cf), _req);       \
         opal_event_set_priority(&(_req->ev), ORTE_MSG_PRI);  \
+        ORTE_POST_OBJECT(_req);                              \
         opal_event_active(&(_req->ev), OPAL_EV_WRITE, 1);    \
     } while(0);
 
@@ -145,6 +151,7 @@ OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
         opal_event_set(orte_event_base, &(_cd->ev), -1,         \
                        OPAL_EV_WRITE, (fn), _cd);               \
         opal_event_set_priority(&(_cd->ev), ORTE_MSG_PRI);      \
+        ORTE_POST_OBJECT(_cd);                                  \
         opal_event_active(&(_cd->ev), OPAL_EV_WRITE, 1);        \
     } while(0);
 
@@ -163,6 +170,7 @@ OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
         opal_event_set(orte_event_base, &(_cd->ev), -1,         \
                        OPAL_EV_WRITE, (fn), _cd);               \
         opal_event_set_priority(&(_cd->ev), ORTE_MSG_PRI);      \
+        ORTE_POST_OBJECT(_cd);                                  \
         opal_event_active(&(_cd->ev), OPAL_EV_WRITE, 1);        \
     } while(0);
 
@@ -251,10 +259,10 @@ typedef struct {
     opal_hotel_t reqs;
     int num_rooms;
     int timeout;
-    char *server_uri;
     bool wait_for_server;
     orte_process_name_t server;
     opal_list_t notifications;
+    bool pubsub_init;
 } pmix_server_globals_t;
 
 extern pmix_server_globals_t orte_pmix_server_globals;

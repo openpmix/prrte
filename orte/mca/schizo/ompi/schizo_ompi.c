@@ -77,7 +77,7 @@ static opal_cmd_line_init_t cmd_line_init[] = {
     /* Various "obvious" options */
     { NULL, 'h', NULL, "help", 1,
       &orte_cmd_options.help, OPAL_CMD_LINE_TYPE_STRING,
-      "Help  messages.  Argument options are: general (Defaults to this option), debug, output, input, mapping, ranking, binding, devel (arguments usefull to OMPI Developers), compatibility (arguments supported for backwards compatibility) launch (arguments to modify launch options), and dvm (Distributed Virtual Machine arguments", OPAL_CMD_LINE_OTYPE_GENERAL },
+      "This help message", OPAL_CMD_LINE_OTYPE_GENERAL },
     { NULL, 'V', NULL, "version", 0,
       &orte_cmd_options.version, OPAL_CMD_LINE_TYPE_BOOL,
       "Print version and exit", OPAL_CMD_LINE_OTYPE_GENERAL },
@@ -90,11 +90,11 @@ static opal_cmd_line_init_t cmd_line_init[] = {
     { NULL, '\0', "report-pid", "report-pid", 1,
       &orte_cmd_options.report_pid, OPAL_CMD_LINE_TYPE_STRING,
       "Printout pid on stdout [-], stderr [+], or a file [anything else]",
-      OPAL_CMD_LINE_OTYPE_GENERAL },
+      OPAL_CMD_LINE_OTYPE_DEBUG },
     { NULL, '\0', "report-uri", "report-uri", 1,
       &orte_cmd_options.report_uri, OPAL_CMD_LINE_TYPE_STRING,
       "Printout URI on stdout [-], stderr [+], or a file [anything else]",
-      OPAL_CMD_LINE_OTYPE_GENERAL },
+      OPAL_CMD_LINE_OTYPE_DEBUG },
 
     /* testing options */
     { NULL, '\0', "timeout", "timeout", 1,
@@ -190,7 +190,7 @@ static opal_cmd_line_init_t cmd_line_init[] = {
     { NULL, '\0', NULL, "app", 1,
       &orte_cmd_options.appfile, OPAL_CMD_LINE_TYPE_STRING,
       "Provide an appfile; ignore all other command line options",
-      OPAL_CMD_LINE_OTYPE_GENERAL },
+      OPAL_CMD_LINE_OTYPE_LAUNCH },
 
     /* Number of processes; -c, -n, --n, -np, and --np are all
        synonyms */
@@ -238,7 +238,7 @@ static opal_cmd_line_init_t cmd_line_init[] = {
        so it does not make sense to set into a variable */
     { NULL, 'x', NULL, NULL, 1,
       NULL, OPAL_CMD_LINE_TYPE_NULL,
-      "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the environment variable foo and takes its value from the current environment; \"-x foo=bar\" exports the environment variable name foo and sets its value to \"bar\" in the started processes)", OPAL_CMD_LINE_OTYPE_GENERAL },
+      "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the environment variable foo and takes its value from the current environment; \"-x foo=bar\" exports the environment variable name foo and sets its value to \"bar\" in the started processes)", OPAL_CMD_LINE_OTYPE_LAUNCH },
 
       /* Mapping controls */
     { "rmaps_base_display_map", '\0', "display-map", "display-map", 0,
@@ -307,8 +307,8 @@ static opal_cmd_line_init_t cmd_line_init[] = {
       OPAL_CMD_LINE_OTYPE_COMPAT },
     { "rmaps_ppr_n_pernode", '\0', "N", NULL, 1,
       &orte_cmd_options.npernode, OPAL_CMD_LINE_TYPE_INT,
-      "Launch n processes per node on all allocated nodes (synonym for npernode)",
-      OPAL_CMD_LINE_OTYPE_GENERAL },
+      "Launch n processes per node on all allocated nodes (synonym for 'map-by node')",
+      OPAL_CMD_LINE_OTYPE_MAPPING },
 
     /* declare hardware threads as independent cpus */
     { "hwloc_base_use_hwthreads_as_cpus", '\0', "use-hwthread-cpus", "use-hwthread-cpus", 0,
@@ -510,7 +510,8 @@ static opal_cmd_line_init_t cmd_line_init[] = {
     /* fwd mpirun port */
     { "orte_fwd_mpirun_port", '\0', "fwd-mpirun-port", "fwd-mpirun-port", 0,
       NULL, OPAL_CMD_LINE_TYPE_BOOL,
-      "Forward mpirun port to compute node daemons so all will use it" },
+      "Forward mpirun port to compute node daemons so all will use it",
+      OPAL_CMD_LINE_OTYPE_LAUNCH },
 
     /* End of list */
     { NULL, '\0', NULL, NULL, 0,
@@ -969,7 +970,9 @@ static int setup_fork(orte_job_t *jdata,
      * any binding policy was applied by us (e.g., so that
      * MPI_INIT doesn't try to bind itself)
      */
-    opal_setenv("OMPI_MCA_orte_bound_at_launch", "1", true, &app->env);
+    if (OPAL_BIND_TO_NONE != OPAL_GET_BINDING_POLICY(jdata->map->binding)) {
+        opal_setenv("OMPI_MCA_orte_bound_at_launch", "1", true, &app->env);
+    }
 
     /* tell the ESS to avoid the singleton component - but don't override
      * anything that may have been provided elsewhere
@@ -1206,6 +1209,11 @@ static int setup_child(orte_job_t *jdata,
         opal_setenv("PWD", param, true, env);
         /* update the initial wdir value too */
         opal_setenv("OMPI_MCA_initial_wdir", param, true, env);
+    } else if (NULL != app->cwd) {
+        /* change to it */
+        if (0 != chdir(app->cwd)) {
+            return ORTE_ERROR;
+        }
     }
     return ORTE_SUCCESS;
 }

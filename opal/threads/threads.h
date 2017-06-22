@@ -115,6 +115,19 @@ OPAL_DECLSPEC OBJ_CLASS_DECLARATION(opal_thread_t);
         opal_condition_broadcast((cnd));    \
     } while(0);
 
+/* provide a macro for forward-proofing the shifting
+ * of objects between libevent threads - at some point, we
+ * may revamp that threading model */
+
+/* post an object to another thread - for now, we
+ * only have a memory barrier */
+#define OPAL_POST_OBJECT(o)     opal_atomic_wmb()
+
+/* acquire an object from another thread - for now,
+ * we only have a memory barrier */
+#define OPAL_ACQUIRE_OBJECT(o)  opal_atomic_rmb()
+
+
 
 OPAL_DECLSPEC int  opal_thread_start(opal_thread_t *);
 OPAL_DECLSPEC int  opal_thread_join(opal_thread_t *, void **thread_return);

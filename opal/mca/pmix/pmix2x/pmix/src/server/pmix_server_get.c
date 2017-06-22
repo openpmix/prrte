@@ -63,6 +63,7 @@ extern pmix_server_module_t pmix_host_server;
 typedef struct {
     pmix_object_t super;
     pmix_event_t ev;
+    volatile bool active;
     pmix_status_t status;
     const char *data;
     size_t ndata;
@@ -597,6 +598,8 @@ static void _process_dmdx_reply(int fd, short args, void *cbdata)
     pmix_nspace_t *ns, *nptr;
     pmix_status_t rc;
 
+    PMIX_ACQUIRE_OBJECT(caddy);
+
     pmix_output_verbose(2, pmix_globals.debug_output,
                     "[%s:%d] process dmdx reply from %s:%u",
                     __FILE__, __LINE__,
@@ -612,10 +615,10 @@ static void _process_dmdx_reply(int fd, short args, void *cbdata)
     }
 
     if (NULL == nptr) {
-/*
- * We may not have this namespace because someone asked about this namespace
- * but there are not processses from it running on this host
- */
+        /*
+         * We may not have this namespace because someone asked about this namespace
+         * but there are not processses from it running on this host
+         */
         nptr = PMIX_NEW(pmix_nspace_t);
         (void)strncpy(nptr->nspace, caddy->lcd->proc.nspace, PMIX_MAX_NSLEN);
         nptr->server = PMIX_NEW(pmix_server_nspace_t);
@@ -628,8 +631,12 @@ static void _process_dmdx_reply(int fd, short args, void *cbdata)
      * store the data first so we can immediately satisfy any future
      * requests. Then, rather than duplicate the resolve code here, we
      * will let the pmix_pending_resolve function go ahead and retrieve
-     * it from the hash table */
-    if (PMIX_SUCCESS == caddy->status) {
+     * it from the hash table.
+     *
+     * NOTE: A NULL data pointer indicates that the data has already
+     * been returned via completion of a background fence_nb operation.
+     * In this case, all we need to do is resolve the request */
+    if (PMIX_SUCCESS == caddy->status && NULL != caddy->data) {
         if (caddy->lcd->proc.rank == PMIX_RANK_WILDCARD) {
             void * where = malloc(caddy->ndata);
             if (where) {
@@ -705,7 +712,5 @@ static void dmdx_cbfunc(pmix_status_t status,
                         "[%s:%d] queue dmdx reply for %s:%u",
                         __FILE__, __LINE__,
                         caddy->lcd->proc.nspace, caddy->lcd->proc.rank);
-    pmix_event_assign(&caddy->ev, pmix_globals.evbase, -1, EV_WRITE,
-                      _process_dmdx_reply, caddy);
-    pmix_event_active(&caddy->ev, EV_WRITE, 1);
+    PMIX_THREADSHIFT(caddy, _process_dmdx_reply);
 }

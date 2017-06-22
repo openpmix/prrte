@@ -364,8 +364,6 @@ static pmix_server_trkr_t* new_tracker(pmix_proc_t *procs,
         return NULL;
     }
 
-    assert( NULL == get_tracker(procs, nprocs, type) );
-
     pmix_output_verbose(5, pmix_globals.debug_output,
                         "adding new tracker with %d procs", (int)nprocs);
 
@@ -468,7 +466,8 @@ pmix_status_t pmix_server_fence(pmix_server_caddy_t *cd,
         return rc;
     }
     pmix_output_verbose(2, pmix_globals.debug_output,
-                        "recvd fence with %d procs", (int)nprocs);
+                        "recvd fence from %s:%u with %d procs",
+                        cd->peer->info->nptr->nspace, cd->peer->info->rank, (int)nprocs);
     /* there must be at least one as the client has to at least provide
      * their own namespace */
     if (nprocs < 1) {
@@ -1161,8 +1160,8 @@ pmix_status_t pmix_server_register_events(pmix_peer_t *peer,
 
   check:
     /* check if any matching notifications have been cached */
-    for (i=0; i < pmix_server_globals.notifications.size; i++) {
-        if (NULL == (cd = (pmix_notify_caddy_t*)pmix_ring_buffer_poke(&pmix_server_globals.notifications, i))) {
+    for (i=0; i < pmix_globals.notifications.size; i++) {
+        if (NULL == (cd = (pmix_notify_caddy_t*)pmix_ring_buffer_poke(&pmix_globals.notifications, i))) {
             break;
         }
         found = false;
@@ -1676,7 +1675,7 @@ static void tcon(pmix_server_trkr_t *t)
 {
     t->pcs = NULL;
     t->npcs = 0;
-    t->active = true;
+    PMIX_CONSTRUCT_LOCK(&t->lock);
     t->def_complete = false;
     PMIX_CONSTRUCT(&t->ranks, pmix_list_t);
     PMIX_CONSTRUCT(&t->local_cbs, pmix_list_t);
@@ -1691,6 +1690,7 @@ static void tcon(pmix_server_trkr_t *t)
 }
 static void tdes(pmix_server_trkr_t *t)
 {
+    PMIX_DESTRUCT_LOCK(&t->lock);
     if (NULL != t->pcs) {
         free(t->pcs);
     }
@@ -1726,7 +1726,7 @@ PMIX_CLASS_INSTANCE(pmix_snd_caddy_t,
 static void scadcon(pmix_setup_caddy_t *p)
 {
     memset(&p->proc, 0, sizeof(pmix_proc_t));
-    p->active = true;
+    PMIX_CONSTRUCT_LOCK(&p->lock);
     p->nspace = NULL;
     p->server_object = NULL;
     p->nlocalprocs = 0;
@@ -1739,6 +1739,7 @@ static void scadcon(pmix_setup_caddy_t *p)
 }
 static void scaddes(pmix_setup_caddy_t *p)
 {
+    PMIX_DESTRUCT_LOCK(&p->lock);
 }
 PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_setup_caddy_t,
                                 pmix_object_t,
@@ -1746,7 +1747,7 @@ PMIX_EXPORT PMIX_CLASS_INSTANCE(pmix_setup_caddy_t,
 
 static void ncon(pmix_notify_caddy_t *p)
 {
-    p->active = true;
+    PMIX_CONSTRUCT_LOCK(&p->lock);
     memset(p->source.nspace, 0, PMIX_MAX_NSLEN+1);
     p->source.rank = PMIX_RANK_UNDEF;
     p->range = PMIX_RANGE_UNDEF;
@@ -1759,6 +1760,7 @@ static void ncon(pmix_notify_caddy_t *p)
 }
 static void ndes(pmix_notify_caddy_t *p)
 {
+    PMIX_DESTRUCT_LOCK(&p->lock);
     if (NULL != p->info) {
         PMIX_INFO_FREE(p->info, p->ninfo);
     }

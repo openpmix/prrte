@@ -13,9 +13,9 @@
  * Copyright (c) 2009-2013 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2013      Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
+ * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015      Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -260,10 +260,6 @@
  **********************************************************************/
 #if OMPI_BUILDING
 
-#ifndef HAVE_PTRDIFF_T
-typedef OPAL_PTRDIFF_TYPE ptrdiff_t;
-#endif
-
 /*
  * Maximum size of a filename path.
  */
@@ -272,11 +268,11 @@ typedef OPAL_PTRDIFF_TYPE ptrdiff_t;
 #include <sys/param.h>
 #endif
 #if defined(PATH_MAX)
-#define OPAL_PATH_MAX	(PATH_MAX + 1)
+#define OPAL_PATH_MAX   (PATH_MAX + 1)
 #elif defined(_POSIX_PATH_MAX)
-#define OPAL_PATH_MAX	(_POSIX_PATH_MAX + 1)
+#define OPAL_PATH_MAX   (_POSIX_PATH_MAX + 1)
 #else
-#define OPAL_PATH_MAX	256
+#define OPAL_PATH_MAX   256
 #endif
 
 /*

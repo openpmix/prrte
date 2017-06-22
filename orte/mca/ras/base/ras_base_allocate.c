@@ -45,6 +45,7 @@
 #include "orte/util/proc_info.h"
 #include "orte/util/comm/comm.h"
 #include "orte/util/error_strings.h"
+#include "orte/util/threads.h"
 #include "orte/mca/state/state.h"
 #include "orte/runtime/orte_quit.h"
 
@@ -114,6 +115,8 @@ void orte_ras_base_allocate(int fd, short args, void *cbdata)
     orte_app_context_t *app;
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
     char *hosts=NULL;
+
+    ORTE_ACQUIRE_OBJECT(caddy);
 
     OPAL_OUTPUT_VERBOSE((5, orte_ras_base_framework.framework_output,
                          "%s ras:base:allocate",
@@ -408,6 +411,8 @@ void orte_ras_base_allocate(int fd, short args, void *cbdata)
     node->slots_max = 0;
     node->slots = 1;
     opal_list_append(&nodes, &node->super);
+    /* mark the HNP as "allocated" since we have nothing else to use */
+    orte_hnp_is_allocated = true;
 
     /* store the results in the global resource pool - this removes the
      * list items

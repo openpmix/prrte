@@ -127,6 +127,7 @@
 #include <stdlib.h>
 #endif  /* HAVE_STDLIB_H */
 
+#include "src/threads/thread_usage.h"
 
 BEGIN_C_DECLS
 
@@ -496,7 +497,7 @@ static inline pmix_object_t *pmix_obj_new(pmix_class_t * cls)
 static inline int pmix_obj_update(pmix_object_t *object, int inc) __pmix_attribute_always_inline__;
 static inline int pmix_obj_update(pmix_object_t *object, int inc)
 {
-    return object->obj_reference_count += inc;
+    return PMIX_THREAD_ADD32(&object->obj_reference_count, inc);
 }
 
 END_C_DECLS

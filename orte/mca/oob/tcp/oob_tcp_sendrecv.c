@@ -14,6 +14,8 @@
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -62,6 +64,7 @@
 #include "opal/mca/event/event.h"
 
 #include "orte/util/name_fns.h"
+#include "orte/util/threads.h"
 #include "orte/runtime/orte_globals.h"
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/ess/ess.h"
@@ -80,7 +83,10 @@
 void mca_oob_tcp_queue_msg(int sd, short args, void *cbdata)
 {
     mca_oob_tcp_send_t *snd = (mca_oob_tcp_send_t*)cbdata;
-    mca_oob_tcp_peer_t *peer = (mca_oob_tcp_peer_t*)snd->peer;
+    mca_oob_tcp_peer_t *peer;
+
+    ORTE_ACQUIRE_OBJECT(snd);
+    peer = (mca_oob_tcp_peer_t*)snd->peer;
 
     /* if there is no message on-deck, put this one there */
     if (NULL == peer->send_msg) {
@@ -97,8 +103,9 @@ void mca_oob_tcp_queue_msg(int sd, short args, void *cbdata)
         } else {
             /* ensure the send event is active */
             if (!peer->send_ev_active) {
-                opal_event_add(&peer->send_event, 0);
                 peer->send_ev_active = true;
+                ORTE_POST_OBJECT(peer);
+                opal_event_add(&peer->send_event, 0);
             }
         }
     }
@@ -179,15 +186,8 @@ static int send_msg(mca_oob_tcp_peer_t* peer, mca_oob_tcp_send_t* msg)
             /* header was fully written, but only a part of the msg data was written */
             msg->hdr_sent = true;
             rc -= msg->sdbytes;
-            if (NULL != msg->data) {
-                /* technically, this should never happen as iov_count
-                 * would be 1 for a zero-byte message, and so we cannot
-                 * have a case where we write the header and part of the
-                 * msg. However, code checkers don't know that and are
-                 * fooled by our earlier check for NULL, and so
-                 * we silence their warnings by using this check */
-                msg->sdptr = (char *)msg->data + rc;
-            }
+            assert(2 == iov_count);
+            msg->sdptr = (char *)iov[1].iov_base + rc;
             msg->sdbytes = ntohl(msg->hdr.nbytes) - rc;
         }
         return ORTE_ERR_RESOURCE_BUSY;
@@ -201,8 +201,11 @@ static int send_msg(mca_oob_tcp_peer_t* peer, mca_oob_tcp_send_t* msg)
 void mca_oob_tcp_send_handler(int sd, short flags, void *cbdata)
 {
     mca_oob_tcp_peer_t* peer = (mca_oob_tcp_peer_t*)cbdata;
-    mca_oob_tcp_send_t* msg = peer->send_msg;
+    mca_oob_tcp_send_t* msg;
     int rc;
+
+    ORTE_ACQUIRE_OBJECT(peer);
+    msg = peer->send_msg;
 
     opal_output_verbose(OOB_TCP_DEBUG_CONNECT, orte_oob_base_framework.framework_output,
                         "%s tcp:send_handler called to send to peer %s",
@@ -429,6 +432,8 @@ void mca_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
     int rc;
     orte_rml_send_t *snd;
 
+    ORTE_ACQUIRE_OBJECT(peer);
+
     opal_output_verbose(OOB_TCP_DEBUG_CONNECT, orte_oob_base_framework.framework_output,
                         "%s:tcp:recv:handler called for peer %s",
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
@@ -442,8 +447,9 @@ void mca_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
             /* we connected! Start the send/recv events */
             if (!peer->recv_ev_active) {
-                opal_event_add(&peer->recv_event, 0);
                 peer->recv_ev_active = true;
+                ORTE_POST_OBJECT(peer);
+                opal_event_add(&peer->recv_event, 0);
             }
             if (peer->timer_ev_active) {
                 opal_event_del(&peer->timer_event);
@@ -454,8 +460,9 @@ void mca_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 peer->send_msg = (mca_oob_tcp_send_t*)opal_list_remove_first(&peer->send_queue);
             }
             if (NULL != peer->send_msg && !peer->send_ev_active) {
-                opal_event_add(&peer->send_event, 0);
                 peer->send_ev_active = true;
+                ORTE_POST_OBJECT(peer);
+                opal_event_add(&peer->send_event, 0);
             }
             /* update our state */
             peer->state = MCA_OOB_TCP_CONNECTED;

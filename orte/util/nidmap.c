@@ -13,7 +13,7 @@
  * Copyright (c) 2012-2014 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
- * Copyright (c) 2014      Research Organization for Information Science
+ * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
@@ -73,6 +73,27 @@
 #include "orte/mca/state/state.h"
 
 #include "orte/util/nidmap.h"
+
+static int orte_nidmap_verbosity = -1;
+static int orte_nidmap_output = -1;
+
+void orte_util_nidmap_init(void)
+{
+    orte_nidmap_verbosity = -1;
+    (void) mca_base_var_register ("orte", "orte", NULL, "nidmap_verbose",
+                                  "Verbosity level for ORTE debug messages in the nidmap utilities",
+                                  MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                  OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_ALL,
+                                  &orte_nidmap_verbosity);
+
+    /* set default output */
+    orte_nidmap_output = opal_output_open(NULL);
+
+    /* open up the verbose output for debugging */
+    if (0 < orte_nidmap_verbosity) {
+        opal_output_set_verbosity(orte_nidmap_output, orte_nidmap_verbosity);
+    }
+}
 
 int orte_util_build_daemon_nidmap(void)
 {
@@ -177,7 +198,7 @@ int orte_util_build_daemon_nidmap(void)
     return rc;
 }
 
-int orte_util_nidmap_create(char **regex)
+int orte_util_nidmap_create(opal_pointer_array_t *pool, char **regex)
 {
     char *node;
     char prefix[ORTE_MAX_NODE_PREFIX];
@@ -196,8 +217,8 @@ int orte_util_nidmap_create(char **regex)
     OBJ_CONSTRUCT(&dvpids, opal_list_t);
 
     rng = NULL;
-    for (n=0; n < orte_node_pool->size; n++) {
-        if (NULL == (nptr = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, n))) {
+    for (n=0; n < pool->size; n++) {
+        if (NULL == (nptr = (orte_node_t*)opal_pointer_array_get_item(pool, n))) {
             continue;
         }
         /* if no daemon has been assigned, then this node is not being used */
@@ -447,7 +468,6 @@ int orte_util_nidmap_create(char **regex)
     asprintf(&tmp2, "%s@%s", nodenames, tmp);
     free(nodenames);
     free(tmp);
-
     *regex = tmp2;
     return ORTE_SUCCESS;
 }
@@ -463,6 +483,7 @@ int orte_util_encode_nodemap(opal_buffer_t *buffer)
     orte_node_t *nptr;
     int rc;
     uint8_t ui8;
+    orte_topology_t *ortetopo;
 
     /* setup the list of results */
     OBJ_CONSTRUCT(&slots, opal_list_t);
@@ -495,52 +516,111 @@ int orte_util_encode_nodemap(opal_buffer_t *buffer)
         return rc;
     }
 
-    for (n=0; n < orte_node_pool->size; n++) {
+    /* handle the topologies - as the most common case by far
+     * is to have homogeneous topologies, we only send them
+     * if something is different. We know that the HNP is
+     * the first topology, and that any differing topology
+     * on the compute nodes must follow. So send the topologies
+     * if and only if:
+     *
+     * (a) the HNP is being used to house application procs and
+     *     there is more than one topology on our list; or
+     *
+     * (b) the HNP is not being used, but there are more than
+     *     two topologies on our list, thus indicating that
+     *     there are multiple topologies on the compute nodes
+     */
+    nptr = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, 0);
+    if (!orte_hnp_is_allocated || (ORTE_GET_MAPPING_DIRECTIVE(orte_rmaps_base.mapping) & ORTE_MAPPING_NO_USE_LOCAL)) {
+        /* assign a NULL topology so we still account for our presence,
+         * but don't cause us to send topology info when not needed */
+        tp = OBJ_NEW(orte_regex_range_t);
+        tp->t = NULL;
+        tp->cnt = 1;
+    } else {
+        /* there is always one topology - our own - so start with it */
+        tp = OBJ_NEW(orte_regex_range_t);
+        tp->t = nptr->topology;
+        tp->cnt = 1;
+    }
+    opal_list_append(&topos, &tp->super);
+
+    opal_output_verbose(5, orte_nidmap_output,
+                        "%s STARTING WITH TOPOLOGY FOR NODE %s: %s",
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                        nptr->name, (NULL == tp->t) ? "NULL" : tp->t->sig);
+
+    /* likewise, we have slots */
+    slt = OBJ_NEW(orte_regex_range_t);
+    slt->slots = nptr->slots;
+    slt->cnt = 1;
+    opal_list_append(&slots, &slt->super);
+
+    /* and flags */
+    flg = OBJ_NEW(orte_regex_range_t);
+    if (ORTE_FLAG_TEST(nptr, ORTE_NODE_FLAG_SLOTS_GIVEN)) {
+        flg->slots = 1;
+    } else {
+        flg->slots = 0;
+    }
+    flg->cnt = 1;
+    opal_list_append(&flags, &flg->super);
+
+    for (n=1; n < orte_node_pool->size; n++) {
         if (NULL == (nptr = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, n))) {
             continue;
         }
         /* check the #slots */
-        if (NULL == slt) {
-            /* just starting */
+        /* is this the next in line */
+        if (nptr->slots == slt->slots) {
+            slt->cnt++;
+        } else {
+            /* need to start another range */
             slt = OBJ_NEW(orte_regex_range_t);
             slt->slots = nptr->slots;
             slt->cnt = 1;
             opal_list_append(&slots, &slt->super);
-        } else {
-            /* is this the next in line */
-            if (nptr->slots == slt->slots) {
-                slt->cnt++;
-            } else {
-                /* need to start another range */
-                slt = OBJ_NEW(orte_regex_range_t);
-                slt->slots = nptr->slots;
-                slt->cnt = 1;
-                opal_list_append(&slots, &slt->super);
-            }
         }
         /* check the topologies */
-        if (NULL == tp) {
-            /* just starting */
+        if (NULL != tp->t && NULL == nptr->topology) {
+            /* we don't know this topology, likely because
+             * we don't have a daemon on the node */
             tp = OBJ_NEW(orte_regex_range_t);
-            tp->t = nptr->topology;
+            tp->t = NULL;
             tp->cnt = 1;
+            opal_output_verbose(5, orte_nidmap_output,
+                                "%s ADD TOPOLOGY FOR NODE %s: NULL",
+                                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), nptr->name);
             opal_list_append(&topos, &tp->super);
         } else {
             /* is this the next in line */
             if (tp->t == nptr->topology) {
                 tp->cnt++;
+                opal_output_verbose(5, orte_nidmap_output,
+                                    "%s CONTINUE TOPOLOGY RANGE (%d) WITH NODE %s: %s",
+                                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                                    tp->cnt, nptr->name,
+                                    (NULL == tp->t) ? "N/A" : tp->t->sig);
             } else {
                 /* need to start another range */
                 tp = OBJ_NEW(orte_regex_range_t);
                 tp->t = nptr->topology;
                 tp->cnt = 1;
+                opal_output_verbose(5, orte_nidmap_output,
+                                    "%s STARTING NEW TOPOLOGY RANGE WITH NODE %s: %s",
+                                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                                    nptr->name, tp->t->sig);
                 opal_list_append(&topos, &tp->super);
             }
         }
         /* check the flags */
         test = ORTE_FLAG_TEST(nptr, ORTE_NODE_FLAG_SLOTS_GIVEN);
-        if (NULL == flg) {
-            /* just starting */
+        /* is this the next in line */
+         if ((test && 1 == flg->slots) ||
+             (!test && 0 == flg->slots)) {
+            flg->cnt++;
+        } else {
+            /* need to start another range */
             flg = OBJ_NEW(orte_regex_range_t);
             if (test) {
                 flg->slots = 1;
@@ -549,22 +629,6 @@ int orte_util_encode_nodemap(opal_buffer_t *buffer)
             }
             flg->cnt = 1;
             opal_list_append(&flags, &flg->super);
-        } else {
-            /* is this the next in line */
-             if ((test && 1 == flg->slots) ||
-                 (!test && 0 == flg->slots)) {
-                flg->cnt++;
-            } else {
-                /* need to start another range */
-                flg = OBJ_NEW(orte_regex_range_t);
-                if (test) {
-                    flg->slots = 1;
-                } else {
-                    flg->slots = 0;
-                }
-                flg->cnt = 1;
-                opal_list_append(&flags, &flg->super);
-            }
         }
     }
 
@@ -582,7 +646,9 @@ int orte_util_encode_nodemap(opal_buffer_t *buffer)
         OBJ_RELEASE(rng);
     }
     OPAL_LIST_DESTRUCT(&slots);
-
+    opal_output_verbose(1, orte_nidmap_output,
+                        "%s SLOT ASSIGNMENTS: %s",
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), tmp);
     /* pack the string */
     if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &tmp, 1, OPAL_STRING))) {
         ORTE_ERROR_LOG(rc);
@@ -608,6 +674,9 @@ int orte_util_encode_nodemap(opal_buffer_t *buffer)
     OPAL_LIST_DESTRUCT(&flags);
 
     /* pack the string */
+    opal_output_verbose(1, orte_nidmap_output,
+                        "%s FLAG ASSIGNMENTS: %s",
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), tmp);
     if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &tmp, 1, OPAL_STRING))) {
         ORTE_ERROR_LOG(rc);
         return rc;
@@ -616,38 +685,32 @@ int orte_util_encode_nodemap(opal_buffer_t *buffer)
         free(tmp);
     }
 
-    /* handle the topologies - as the most common case by far
-     * is to have homogeneous topologies, we only send them
-     * if something is different. We know that the HNP is
-     * the first topology, and that any differing topology
-     * on the compute nodes must follow. So send the topologies
-     * if and only if:
-     *
-     * (a) the HNP is being used to house application procs and
-     *     there is more than one topology on our list; or
-     *
-     * (b) the HNP is not being used, but there are more than
-     *     two topologies on our list, thus indicating that
-     *     there are multiple topologies on the compute nodes
-     */
-    if (!orte_hnp_is_allocated || (ORTE_GET_MAPPING_DIRECTIVE(orte_rmaps_base.mapping) & ORTE_MAPPING_NO_USE_LOCAL)) {
-        /* remove the first topo on the list */
-        item = opal_list_remove_first(&topos);
-        OBJ_RELEASE(item);
+    /* don't try to be cute - there aren't going to be that many
+     * topologies, so just scan the list and see if they are the
+     * same, excluding any NULL values */
+    ortetopo = NULL;
+    test = false;
+    OPAL_LIST_FOREACH(rng, &topos, orte_regex_range_t) {
+        if (NULL == rng->t) {
+            continue;
+        }
+        if (NULL == ortetopo) {
+            ortetopo = rng->t;
+        } else if (0 != strcmp(ortetopo->sig, rng->t->sig)) {
+            /* we have a difference, so send them */
+            test = true;
+        }
     }
     tmp = NULL;
-    if (1 < opal_list_get_size(&topos)) {
+    if (test) {
         opal_buffer_t bucket, *bptr;
         OBJ_CONSTRUCT(&bucket, opal_buffer_t);
         while (NULL != (item = opal_list_remove_first(&topos))) {
             rng = (orte_regex_range_t*)item;
-            if (NULL == rng->t) {
-                /* when we pass thru here prior to launching the daemons, we
-                 * won't have topologies for them and so this entry might
-                 * be NULL - protect ourselves */
-                OBJ_RELEASE(item);
-                continue;
-            }
+            opal_output_verbose(5, orte_nidmap_output,
+                                "%s PASSING TOPOLOGY %s RANGE %d",
+                                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                                (NULL == rng->t) ? "NULL" : rng->t->sig, rng->cnt);
             if (NULL == tmp) {
                 asprintf(&tmp, "%d", rng->cnt);
             } else {
@@ -655,29 +718,50 @@ int orte_util_encode_nodemap(opal_buffer_t *buffer)
                 free(tmp);
                 tmp = tmp2;
             }
-            /* pack this topology string */
-            if (ORTE_SUCCESS != (rc = opal_dss.pack(&bucket, &rng->t->sig, 1, OPAL_STRING))) {
-                ORTE_ERROR_LOG(rc);
-                OBJ_RELEASE(rng);
-                OPAL_LIST_DESTRUCT(&topos);
-                OBJ_DESTRUCT(&bucket);
-                free(tmp);
-                return rc;
-            }
-            /* pack the topology itself */
-            if (ORTE_SUCCESS != (rc = opal_dss.pack(&bucket, &rng->t->topo, 1, OPAL_HWLOC_TOPO))) {
-                ORTE_ERROR_LOG(rc);
-                OBJ_RELEASE(rng);
-                OPAL_LIST_DESTRUCT(&topos);
-                OBJ_DESTRUCT(&bucket);
-                free(tmp);
-                return rc;
+            if (NULL == rng->t) {
+                /* need to account for NULL topology */
+                opal_output_verbose(1, orte_nidmap_output,
+                                    "%s PACKING NULL TOPOLOGY",
+                                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
+                tmp2 = NULL;
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(&bucket, &tmp2, 1, OPAL_STRING))) {
+                    ORTE_ERROR_LOG(rc);
+                    OBJ_RELEASE(rng);
+                    OPAL_LIST_DESTRUCT(&topos);
+                    OBJ_DESTRUCT(&bucket);
+                    free(tmp);
+                    return rc;
+                }
+            } else {
+                opal_output_verbose(1, orte_nidmap_output,
+                                    "%s PACKING TOPOLOGY: %s",
+                                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), rng->t->sig);
+                /* pack this topology string */
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(&bucket, &rng->t->sig, 1, OPAL_STRING))) {
+                    ORTE_ERROR_LOG(rc);
+                    OBJ_RELEASE(rng);
+                    OPAL_LIST_DESTRUCT(&topos);
+                    OBJ_DESTRUCT(&bucket);
+                    free(tmp);
+                    return rc;
+                }
+                /* pack the topology itself */
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(&bucket, &rng->t->topo, 1, OPAL_HWLOC_TOPO))) {
+                    ORTE_ERROR_LOG(rc);
+                    OBJ_RELEASE(rng);
+                    OPAL_LIST_DESTRUCT(&topos);
+                    OBJ_DESTRUCT(&bucket);
+                    free(tmp);
+                    return rc;
+                }
             }
             OBJ_RELEASE(rng);
         }
         OPAL_LIST_DESTRUCT(&topos);
-
         /* pack the string */
+        opal_output_verbose(1, orte_nidmap_output,
+                            "%s TOPOLOGY ASSIGNMENTS: %s",
+                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), tmp);
         if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &tmp, 1, OPAL_STRING))) {
             ORTE_ERROR_LOG(rc);
             OBJ_DESTRUCT(&bucket);
@@ -695,6 +779,9 @@ int orte_util_encode_nodemap(opal_buffer_t *buffer)
         }
         OBJ_DESTRUCT(&bucket);
     } else {
+        opal_output_verbose(1, orte_nidmap_output,
+                            "%s NOT PASSING TOPOLOGIES",
+                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
         /* need to pack the NULL just to terminate the region */
         if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &tmp, 1, OPAL_STRING))) {
             ORTE_ERROR_LOG(rc);
@@ -756,13 +843,14 @@ int orte_util_nidmap_parse(char *regex)
         opal_list_append(&dids, &rng->super);
         /* check for a count */
         if (NULL != (ptr = strchr(dvpids[n], '('))) {
+            dvpids[n][strlen(dvpids[n])-1] = '\0';  // remove trailing paren
             *ptr = '\0';
-            dvpids[n][strlen(dvpids[n])-2] = '\0';  // remove trailing paren
             ++ptr;
             rng->cnt = strtoul(ptr, NULL, 10);
+        } else {
+            rng->cnt = 1;
         }
-        /* convert the number - since it might be a range,
-         * save the remainder pointer */
+        /* convert the number */
         rng->vpid = strtoul(dvpids[n], NULL, 10);
     }
     opal_argv_free(dvpids);
@@ -797,16 +885,17 @@ int orte_util_nidmap_parse(char *regex)
             nd->daemon = proc;
         }
         ++cnt;
-        if (cnt == rng->cnt) {
+        if (rng->cnt <= cnt) {
             rng = (orte_regex_range_t*)opal_list_get_next(&rng->super);
             if (NULL == rng) {
                 ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
                 return ORTE_ERR_NOT_FOUND;
             }
+            cnt = 0;
         }
     }
 
-    /* unpdate num procs */
+    /* update num procs */
     if (orte_process_info.num_procs != daemons->num_procs) {
         orte_process_info.num_procs = daemons->num_procs;
         /* need to update the routing plan */
@@ -1002,6 +1091,9 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
     if (NULL == bptr) {
         /* our topology is first in the array */
         t2 = (orte_topology_t*)opal_pointer_array_get_item(orte_node_topologies, 0);
+        opal_output_verbose(1, orte_nidmap_output,
+                            "%s ASSIGNING ALL TOPOLOGIES TO: %s",
+                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), t2->sig);
         for (n=0; n < orte_node_pool->size; n++) {
             if (NULL != (node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, n))) {
                 if (NULL == node->topology) {
@@ -1028,11 +1120,10 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
                 goto cleanup;
             }
             if (NULL == sig) {
-                rc = ORTE_ERR_BAD_PARAM;
-                ORTE_ERROR_LOG(rc);
-                opal_argv_free(tmp);
-                OBJ_RELEASE(bptr);
-                goto cleanup;
+                /* the nodes in this range have not reported a topology,
+                 * so skip them */
+                offset += cnt;
+                continue;
             }
             n = 1;
             if (ORTE_SUCCESS != (rc = opal_dss.unpack(bptr, &topo, &n, OPAL_HWLOC_TOPO))) {
@@ -1069,6 +1160,10 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
                 if (NULL == (node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, n+offset))) {
                     continue;
                 }
+                opal_output_verbose(1, orte_nidmap_output,
+                                    "%s ASSIGNING NODE %s WITH TOPO: %s",
+                                    ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                                    node->name, t2->sig);
                 if (NULL == node->topology) {
                     OBJ_RETAIN(t2);
                     node->topology = t2;
@@ -1084,5 +1179,221 @@ int orte_util_decode_daemon_nodemap(opal_buffer_t *buffer)
   cleanup:
     OPAL_LIST_DESTRUCT(&slts);
     OPAL_LIST_DESTRUCT(&flgs);
+    return rc;
+}
+
+typedef struct {
+    opal_list_item_t super;
+    int ctx;
+    int nprocs;
+    int cnt;
+} orte_nidmap_regex_t;
+static void nrcon(orte_nidmap_regex_t *p)
+{
+    p->ctx = 0;
+    p->nprocs = -1;
+    p->cnt = 0;
+}
+static OBJ_CLASS_INSTANCE(orte_nidmap_regex_t,
+                          opal_list_item_t,
+                          nrcon, NULL);
+
+/* since not every node is involved in a job, we have to create a
+ * regex that indicates the ppn for every node, marking those that
+ * are not involved. Since each daemon knows the entire
+ * node pool, we simply provide a ppn for every daemon, with a -1
+ * to indicate that the node is empty for that job */
+int orte_util_nidmap_generate_ppn(orte_job_t *jdata, char **ppn)
+{
+    orte_nidmap_regex_t *prng, **actives;
+    opal_list_t *prk;
+    orte_node_t *nptr;
+    orte_proc_t *proc;
+    size_t n;
+    int *cnt, i, k;
+    char *tmp2, *ptmp, **cache = NULL;
+
+    /* create an array of lists to handle the number of app_contexts in this job */
+    prk = (opal_list_t*)malloc(jdata->num_apps * sizeof(opal_list_t));
+    cnt = (int*)malloc(jdata->num_apps * sizeof(int));
+    actives = (orte_nidmap_regex_t**)malloc(jdata->num_apps * sizeof(orte_nidmap_regex_t*));
+    for (n=0; n < jdata->num_apps; n++) {
+        OBJ_CONSTRUCT(&prk[n], opal_list_t);
+        actives[n] = NULL;
+    }
+
+    /* we provide a complete map in the regex, with an entry for every
+     * node in the pool */
+    for (i=0; i < orte_node_pool->size; i++) {
+        if (NULL == (nptr = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, i))) {
+            continue;
+        }
+        /* if a daemon has been assigned, then count how many procs
+         * for each app_context from the specified job are assigned to this node */
+        memset(cnt, 0, jdata->num_apps * sizeof(int));
+        if (NULL != nptr->daemon) {
+            for (k=0; k < nptr->procs->size; k++) {
+                if (NULL != (proc = (orte_proc_t*)opal_pointer_array_get_item(nptr->procs, k))) {
+                    if (proc->name.jobid == jdata->jobid) {
+                        ++cnt[proc->app_idx];
+                    }
+                }
+            }
+        }
+        /* track the #procs on this node */
+        for (n=0; n < jdata->num_apps; n++) {
+            if (NULL == actives[n]) {
+                /* just starting */
+                actives[n] = OBJ_NEW(orte_nidmap_regex_t);
+                actives[n]->nprocs = cnt[n];
+                actives[n]->cnt = 1;
+                opal_list_append(&prk[n], &actives[n]->super);
+            } else {
+                /* is this the next in line */
+                if (cnt[n] == actives[n]->nprocs) {
+                    actives[n]->cnt++;
+                } else {
+                    /* need to start another range */
+                    actives[n] = OBJ_NEW(orte_nidmap_regex_t);
+                    actives[n]->nprocs = cnt[n];
+                    actives[n]->cnt = 1;
+                    opal_list_append(&prk[n], &actives[n]->super);
+                }
+            }
+        }
+    }
+
+    /* construct the regex from the found ranges for each app_context */
+    ptmp = NULL;
+    for (n=0; n < jdata->num_apps; n++) {
+        OPAL_LIST_FOREACH(prng, &prk[n], orte_nidmap_regex_t) {
+            if (1 < prng->cnt) {
+                if (NULL == ptmp) {
+                    asprintf(&ptmp, "%u(%u)", prng->nprocs, prng->cnt);
+                } else {
+                    asprintf(&tmp2, "%s,%u(%u)", ptmp, prng->nprocs, prng->cnt);
+                    free(ptmp);
+                    ptmp = tmp2;
+                }
+            } else {
+                if (NULL == ptmp) {
+                    asprintf(&ptmp, "%u", prng->nprocs);
+                } else {
+                    asprintf(&tmp2, "%s,%u", ptmp, prng->nprocs);
+                    free(ptmp);
+                    ptmp = tmp2;
+                }
+            }
+        }
+        OPAL_LIST_DESTRUCT(&prk[n]);  // releases all the actives objects
+        if (NULL != ptmp) {
+            opal_argv_append_nosize(&cache, ptmp);
+            free(ptmp);
+            ptmp = NULL;
+        }
+    }
+    free(prk);
+    free(cnt);
+    free(actives);
+
+    *ppn = opal_argv_join(cache, '@');
+    opal_argv_free(cache);
+
+    return ORTE_SUCCESS;
+}
+
+int orte_util_nidmap_parse_ppn(orte_job_t *jdata, char *regex)
+{
+    orte_node_t *node;
+    orte_proc_t *proc;
+    int n, k, m, cnt;
+    char **tmp, *ptr, **ppn;
+    orte_nidmap_regex_t *rng;
+    opal_list_t trk;
+    int rc = ORTE_SUCCESS;
+
+    /* split the regex by app_context */
+    tmp = opal_argv_split(regex, '@');
+
+    /* for each app_context, set the ppn */
+    for (n=0; NULL != tmp[n]; n++) {
+        ppn = opal_argv_split(tmp[n], ',');
+        /* decompress the ppn */
+        OBJ_CONSTRUCT(&trk, opal_list_t);
+        for (m=0; NULL != ppn[m]; m++) {
+            rng = OBJ_NEW(orte_nidmap_regex_t);
+            opal_list_append(&trk, &rng->super);
+            /* check for a count */
+            if (NULL != (ptr = strchr(ppn[m], '('))) {
+                ppn[m][strlen(ppn[m])-1] = '\0';  // remove trailing paren
+                *ptr = '\0';
+                ++ptr;
+                rng->cnt = strtoul(ptr, NULL, 10);
+            } else {
+                rng->cnt = 1;
+            }
+            /* convert the number */
+            rng->nprocs = strtoul(ppn[m], NULL, 10);
+        }
+        opal_argv_free(ppn);
+
+        /* cycle thru our node pool and add the indicated number of procs
+         * to each node */
+        rng = (orte_nidmap_regex_t*)opal_list_get_first(&trk);
+        cnt = 0;
+        for (m=0; m < orte_node_pool->size; m++) {
+            if (NULL == (node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, m))) {
+                continue;
+            }
+            /* see if it has any procs for this job and app_context */
+            if (0 < rng->nprocs) {
+                /* add this node to the job map if it isn't already there */
+                if (!ORTE_FLAG_TEST(node, ORTE_NODE_FLAG_MAPPED)) {
+                    OBJ_RETAIN(node);
+                    ORTE_FLAG_SET(node, ORTE_NODE_FLAG_MAPPED);
+                    opal_pointer_array_add(jdata->map->nodes, node);
+                }
+                /* create a proc object for each one */
+                for (k=0; k < rng->nprocs; k++) {
+                    proc = OBJ_NEW(orte_proc_t);
+                    proc->name.jobid = jdata->jobid;
+                    /* leave the vpid undefined as this will be determined
+                     * later when we do the overall ranking */
+                    proc->app_idx = n;
+                    proc->parent = node->daemon->name.vpid;
+                    OBJ_RETAIN(node);
+                    proc->node = node;
+                    /* flag the proc as ready for launch */
+                    proc->state = ORTE_PROC_STATE_INIT;
+                    opal_pointer_array_add(node->procs, proc);
+                    /* we will add the proc to the jdata array when we
+                     * compute its rank */
+                }
+                node->num_procs += rng->nprocs;
+            }
+            ++cnt;
+            if (rng->cnt <= cnt) {
+                rng = (orte_nidmap_regex_t*)opal_list_get_next(&rng->super);
+                if (NULL == rng) {
+                    ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
+                    opal_argv_free(tmp);
+                    rc = ORTE_ERR_NOT_FOUND;
+                    goto complete;
+                }
+                cnt = 0;
+            }
+        }
+        OPAL_LIST_DESTRUCT(&trk);
+    }
+    opal_argv_free(tmp);
+
+  complete:
+    /* reset any node map flags we used so the next job will start clean */
+     for (n=0; n < jdata->map->nodes->size; n++) {
+         if (NULL != (node = (orte_node_t*)opal_pointer_array_get_item(jdata->map->nodes, n))) {
+             ORTE_FLAG_UNSET(node, ORTE_NODE_FLAG_MAPPED);
+         }
+     }
+
     return rc;
 }
