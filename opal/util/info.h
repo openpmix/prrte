@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2007-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2009      Sun Microsystems, Inc.  All rights reserved.
- * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
+ * Copyright (c) 2012-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2017      Intel, Inc. All rights reserved.
@@ -28,7 +28,6 @@
 
 #include <string.h>
 
-#include "mpi.h"
 #include "opal/class/opal_list.h"
 #include "opal/class/opal_pointer_array.h"
 #include "opal/threads/mutex.h"
@@ -67,7 +66,7 @@ struct opal_info_entry_t {
     opal_list_item_t super; /**< required for opal_list_t type */
     char *ie_value; /**< value part of the (key, value) pair.
                   * Maximum length is MPI_MAX_INFO_VAL */
-    char ie_key[MPI_MAX_INFO_KEY + 1]; /**< "key" part of the (key, value)
+    char ie_key[OPAL_MAX_INFO_KEY + 1]; /**< "key" part of the (key, value)
                                      * pair */
 };
 /**
@@ -82,13 +81,13 @@ BEGIN_C_DECLS
  * \internal
  * Some declarations needed to use OBJ_NEW and OBJ_DESTRUCT macros
  */
-OMPI_DECLSPEC OBJ_CLASS_DECLARATION(opal_info_t);
+OPAL_DECLSPEC OBJ_CLASS_DECLARATION(opal_info_t);
 
 /**
  * \internal
  * Some declarations needed to use OBJ_NEW and OBJ_DESTRUCT macros
  */
-OMPI_DECLSPEC OBJ_CLASS_DECLARATION(opal_info_entry_t);
+OPAL_DECLSPEC OBJ_CLASS_DECLARATION(opal_info_entry_t);
 
 
 int opal_mpiinfo_init(void*);
@@ -99,8 +98,8 @@ int opal_mpiinfo_init(void*);
  *   @param info source info object (handle)
  *   @param newinfo pointer to the new info object (handle)
  *
- *   @retval MPI_SUCCESS upon success
- *   @retval MPI_ERR_NO_MEM if out of memory
+ *   @retval OPAL_SUCCESS upon success
+ *   @retval OPAL_ERR_OUT_OF_RESOURCE if out of memory
  *
  *   Not only will the (key, value) pairs be duplicated, the order
  *   of keys will be the same in 'newinfo' as it is in 'info'.  When
@@ -115,8 +114,8 @@ int opal_info_dup (opal_info_t *info, opal_info_t **newinfo);
  *   @param info source info object (handle)
  *   @param newinfo pointer to the new info object (handle)
  *
- *   @retval MPI_SUCCESS upon success
- *   @retval MPI_ERR_NO_MEM if out of memory
+ *   @retval OPAL_SUCCESS upon success
+ *   @retval OPAL_ERR_OUT_OF_RESOURCE if out of memory
  *
  *   The user sets an info object with key/value pairs and once processed,
  *   we keep key/val pairs that might have been modified vs what the user
@@ -144,10 +143,10 @@ int opal_info_dup_mpistandard (opal_info_t *info, opal_info_t **newinfo);
  * @param key pointer to the new key object
  * @param value pointer to the new value object
  *
- * @retval MPI_SUCCESS upon success
- * @retval MPI_ERR_NO_MEM if out of memory
+ * @retval OPAL_SUCCESS upon success
+ * @retval OPAL_ERR_OUT_OF_RESOURCE if out of memory
  */
-OMPI_DECLSPEC int opal_info_set (opal_info_t *info, const char *key, const char *value);
+OPAL_DECLSPEC int opal_info_set (opal_info_t *info, const char *key, const char *value);
 
 /**
  * Set a new key,value pair from a variable enumerator.
@@ -157,11 +156,11 @@ OMPI_DECLSPEC int opal_info_set (opal_info_t *info, const char *key, const char 
  * @param value integer value of the info key (must be valid in var_enum)
  * @param var_enum variable enumerator
  *
- * @retval MPI_SUCCESS upon success
- * @retval MPI_ERR_NO_MEM if out of memory
+ * @retval OPAL_SUCCESS upon success
+ * @retval OPAL_ERR_OUT_OF_RESOURCE if out of memory
  * @retval OPAL_ERR_VALUE_OUT_OF_BOUNDS if the value is not valid in the enumerator
  */
-OMPI_DECLSPEC int opal_info_set_value_enum (opal_info_t *info, const char *key, int value,
+OPAL_DECLSPEC int opal_info_set_value_enum (opal_info_t *info, const char *key, int value,
                                             mca_base_var_enum_t *var_enum);
 
 /**
@@ -169,8 +168,8 @@ OMPI_DECLSPEC int opal_info_set_value_enum (opal_info_t *info, const char *key, 
  *
  *   @param info pointer to info (opal_info_t *) object to be freed (handle)
  *
- *   @retval MPI_SUCCESS
- *   @retval MPI_ERR_ARG
+ *   @retval OPAL_SUCCESS
+ *   @retval OPAL_ERR_BAD_PARAM
  *
  *   Upon successful completion, 'info' will be set to
  *   'MPI_INFO_NULL'.  Free the info handle and all of its keys and
@@ -188,7 +187,7 @@ int opal_info_free (opal_info_t **info);
    *   @param flag true (1) if 'key' defined on 'info', false (0) if not
    *               (logical)
    *
-   *   @retval MPI_SUCCESS
+   *   @retval OPAL_SUCCESS
    *
    *   If found, the string value will be cast to the boolen output in
    *   the following manner:
@@ -201,7 +200,7 @@ int opal_info_free (opal_info_t **info);
    *     result is false
    *   - All other values are false
    */
-OMPI_DECLSPEC int opal_info_get_bool (opal_info_t *info, char *key, bool *value,
+OPAL_DECLSPEC int opal_info_get_bool (opal_info_t *info, char *key, bool *value,
                                       int *flag);
 
 /**
@@ -217,10 +216,10 @@ OMPI_DECLSPEC int opal_info_get_bool (opal_info_t *info, char *key, bool *value,
  *   @param flag true (1) if 'key' defined on 'info', false (0) if not
  *               (logical)
  *
- *   @retval MPI_SUCCESS
+ *   @retval OPAL_SUCCESS
  */
 
-OMPI_DECLSPEC int opal_info_get_value_enum (opal_info_t *info, const char *key,
+OPAL_DECLSPEC int opal_info_get_value_enum (opal_info_t *info, const char *key,
                                             int *value, int default_value,
                                             mca_base_var_enum_t *var_enum, int *flag);
 
@@ -234,12 +233,12 @@ OMPI_DECLSPEC int opal_info_get_value_enum (opal_info_t *info, const char *key,
  *   @param flag true (1) if 'key' defined on 'info', false (0) if not
  *               (logical)
  *
- *   @retval MPI_SUCCESS
+ *   @retval OPAL_SUCCESS
  *
  *   In C and C++, 'valuelen' should be one less than the allocated
  *   space to allow for for the null terminator.
  */
-OMPI_DECLSPEC int opal_info_get (opal_info_t *info, const char *key, int valuelen,
+OPAL_DECLSPEC int opal_info_get (opal_info_t *info, const char *key, int valuelen,
                                  char *value, int *flag);
 
 /**
@@ -249,8 +248,8 @@ OMPI_DECLSPEC int opal_info_get (opal_info_t *info, const char *key, int valuele
  * @param key The key portion of the (key,value) pair that
  *            needs to be deleted
  *
- * @retval MPI_SUCCESS
- * @retval MPI_ERR_NOKEY
+ * @retval OPAL_SUCCESS
+ * @retval OPAL_ERR_NOT_FOUND
  */
 int opal_info_delete(opal_info_t *info, const char *key);
 
@@ -261,15 +260,15 @@ int opal_info_delete(opal_info_t *info, const char *key);
  *   @param flag - true (1) if 'key' defined on 'info', false (0) if not
  *   (logical)
  *
- *   @retval MPI_SUCCESS
- *   @retval MPI_ERR_ARG
+ *   @retval OPAL_SUCCESS
+ *   @retval OPAL_ERR_BAD_PARAM
  *   @retval MPI_ERR_INFO_KEY
  *
  *   The length returned in C and C++ does not include the end-of-string
  *   character.  If the 'key' is not found on 'info', 'valuelen' is left
  *   alone.
  */
-OMPI_DECLSPEC int opal_info_get_valuelen (opal_info_t *info, const char *key, int *valuelen,
+OPAL_DECLSPEC int opal_info_get_valuelen (opal_info_t *info, const char *key, int *valuelen,
                                           int *flag);
 
 /**
@@ -279,8 +278,8 @@ OMPI_DECLSPEC int opal_info_get_valuelen (opal_info_t *info, const char *key, in
  *   @param n index of key to retrieve (integer)
  *   @param key character string of at least 'MPI_MAX_INFO_KEY' characters
  *
- *   @retval MPI_SUCCESS
- *   @retval MPI_ERR_ARG
+ *   @retval OPAL_SUCCESS
+ *   @retval OPAL_ERR_BAD_PARAM
  */
 int opal_info_get_nthkey (opal_info_t *info, int n, char *key);
 
@@ -295,23 +294,23 @@ int opal_info_get_nthkey (opal_info_t *info, int n, char *key);
  * @param value Value string for info key to interpret
  * @param interp returned interpretation of the value key
  *
- * @retval OMPI_SUCCESS string was successfully interpreted
- * @retval OMPI_ERR_BAD_PARAM string was not able to be interpreted
+ * @retval OPAL_SUCCESS string was successfully interpreted
+ * @retval OPAL_ERR_BAD_PARAM string was not able to be interpreted
  */
-OMPI_DECLSPEC int opal_info_value_to_bool(char *value, bool *interp);
+OPAL_DECLSPEC int opal_info_value_to_bool(char *value, bool *interp);
 
 /**
  * Convert value string to integer
  *
  * Convert value string \c value into a integer, using the
  * interpretation rules specified in MPI-2 Section 4.10.
- * All others will return \c OMPI_ERR_BAD_PARAM
+ * All others will return \c OPAL_ERR_BAD_PARAM
  *
  * @param value Value string for info key to interpret
  * @param interp returned interpretation of the value key
  *
- * @retval OMPI_SUCCESS string was successfully interpreted
- * @retval OMPI_ERR_BAD_PARAM string was not able to be interpreted
+ * @retval OPAL_SUCCESS string was successfully interpreted
+ * @retval OPAL_ERR_BAD_PARAM string was not able to be interpreted
  */
 int opal_info_value_to_int(char *value, int *interp);
 
@@ -328,7 +327,7 @@ static inline int
 opal_info_get_nkeys(opal_info_t *info, int *nkeys)
 {
     *nkeys = (int) opal_list_get_size(&(info->super));
-    return MPI_SUCCESS;
+    return OPAL_SUCCESS;
 }
 
 bool opal_str_to_bool(char*);
