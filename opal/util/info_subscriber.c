@@ -115,11 +115,11 @@ static char* opal_infosubscribe_inform_subscribers(opal_infosubscriber_t *object
     if (found_callback) { *found_callback = 0; }
 /*
  * Present the new value to each subscriber.  They can decide to accept it, ignore it, or
- * over-ride it with their own value (like ignore, but they specify what value they want it to have)
+ * over-ride it with their own value (like ignore, but they specify what value they want it to have).
  *
  * Since multiple subscribers could set values, only the last setting is kept as the
- * returned value
- *
+ * returned value.
+ */
     if (table) {
         opal_hash_table_get_value_ptr(table, key, strlen(key), (void**) &list);
 
