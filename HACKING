@@ -9,7 +9,7 @@ Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
 Copyright (c) 2004-2005 The Regents of the University of California.
                         All rights reserved.
 Copyright (c) 2008-2016 Cisco Systems, Inc.  All rights reserved.
-Copyright (c) 2013      Intel, Inc.  All rights reserved.
+Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
 $COPYRIGHT$
 
 Additional copyrights may follow
@@ -19,30 +19,30 @@ $HEADER$
 Overview
 ========
 
-This file is here for those who are building/exploring OMPI in its
-source code form, most likely through a developer's tree (i.e., a
-Git clone).
+This file is here for those who are building/exploring the PMIx
+Reference Server (hereafter referred to as the "Server") in its
+source code form, most likely through a developer's tree (i.e., a Git clone).
 
 
 Developer Builds: Compiler Pickyness by Default
 ===============================================
 
-If you are building Open MPI from a Git clone (i.e., there is a ".git"
-directory in your build tree), the default build includes extra
-compiler pickyness, which will result in more compiler warnings than
-in non-developer builds.  Getting these extra compiler warnings is
-helpful to Open MPI developers in making the code base as clean as
-possible.
+If you are building the PMIx Reference Server from a Git clone
+(i.e., there is a ".git" directory in your build tree), the default
+build includes extra compiler pickyness, which will result in more
+compiler warnings than in non-developer builds.  Getting these extra
+compiler warnings is helpful to developers in making the code base
+as clean as possible.
 
 Developers can disable this picky-by-default behavior by using the
 --disable-picky configure option.  Also note that extra-picky compiles
 do *not* happen automatically when you do a VPATH build (e.g., if
 ".git" is in your source tree, but not in your build tree).
 
-Prior versions of Open MPI would automatically activate a lot of
+Prior versions of the Server would automatically activate a lot of
 (performance-reducing) debugging code by default if ".git" was found
 in your build tree.  This is no longer true.  You can manually enable
-these (performance-reducing) debugging features in the Open MPI code
+these (performance-reducing) debugging features in the Server code
 base with these configure options:
 
     --enable-debug
@@ -50,20 +50,20 @@ base with these configure options:
     --enable-mem-profile
 
 NOTE: These options are really only relevant to those who are
-developing Open MPI itself.  They are not generally helpful for
-debugging general MPI applications.
+developing the Server itself.  They are not generally helpful for
+debugging general applications.
 
 
 Use of GNU Autoconf, Automake, and Libtool (and m4)
 ===================================================
 
 You need to read/care about this section *ONLY* if you are building
-from a developer's tree (i.e., a Git clone of the Open MPI source
-tree).  If you have an Open MPI distribution tarball, the contents of
+from a developer's tree (i.e., a Git clone of the Server source
+tree).  If you have a Server distribution tarball, the contents of
 this section are optional -- you can (and probably should) skip
 reading this section.
 
-If you are building Open MPI from a developer's tree, you must first
+If you are building the Server from a developer's tree, you must first
 install fairly recent versions of the GNU tools Autoconf, Automake,
 and Libtool (and possibly GNU m4, because recent versions of Autoconf
 have specific GNU m4 version requirements).  The specific versions
@@ -71,7 +71,7 @@ required depend on if you are using the Git master branch or a release
 branch (and which release branch you are using).  The specific
 versions can be found here:
 
-  http://www.open-mpi.org/source/building.php
+    https://pmix.github.io/pmix/faq/building
 
 You can check what versions of the autotools you have installed with
 the following:
@@ -81,13 +81,9 @@ shell$ autoconf --version
 shell$ automake --version
 shell$ libtoolize --version
 
-Required version levels for all the OMPI releases can be found here:
-
-http://www.open-mpi.org/source/building.php
-
-To strengthen the above point: the core Open MPI developers typically
+To strengthen the above point: the core Server developers typically
 use very, very recent versions of the GNU tools.  There are known bugs
-in older versions of the GNU tools that Open MPI no longer compensates
+in older versions of the GNU tools that the Server no longer compensates
 for (it seemed senseless to indefinitely support patches for ancient
 versions of Autoconf, for example).  You *WILL* have problems if you
 do not use recent versions of the GNU tools.
@@ -109,7 +105,7 @@ NOTE: On MacOS/X, the default "libtool" program is different than the
         ftp://ftp.gnu.org/gnu/m4/
 
    NOTE: It is certainly easiest to download/build/install all four of
-   these tools together.  But note that Open MPI has no specific m4
+   these tools together.  But note that the Server has no specific m4
    requirements; it is only listed here because Autoconf requires
    minimum versions of GNU m4.  Hence, you may or may not *need* to
    actually install a new version of GNU m4.  That being said, if you
@@ -184,7 +180,7 @@ NOTE: On MacOS/X, the default "libtool" program is different than the
    m4, Autoconf and Automake build and install very quickly; Libtool will
    take a minute or two.
 
-5. You can now run OMPI's top-level "autogen.pl" script.  This script
+5. You can now run the Server's top-level "autogen.pl" script.  This script
    will invoke the GNU Autoconf, Automake, and Libtool commands in the
    proper order and setup to run OMPI's top-level "configure" script.
 
@@ -219,23 +215,15 @@ Flex is used during the compilation of a developer's checkout (it is
 not used to build official distribution tarballs).  Other flavors of
 lex are *not* supported: given the choice of making parsing code
 portable between all flavors of lex and doing more interesting work on
-Open MPI, we greatly prefer the latter.
+the Server, we greatly prefer the latter.
 
 Note that no testing has been performed to see what the minimum
-version of Flex is required by Open MPI.  We suggest that you use
+version of Flex is required by the Server.  We suggest that you use
 v2.5.35 at the earliest.
 
-*** NOTE: Windows developer builds of Open MPI *require* Flex version
-2.5.35.  Specifically, we know that v2.5.35 works and 2.5.4a does not.
-We have not tested to figure out exactly what the minimum required
-flex version is on Windows; we suggest that you use 2.5.35 at the
-earliest.  It is for this reason that the
-contrib/dist/make_dist_tarball script checks for a Windows-friendly
-version of flex before continuing.
-
-For now, Open MPI will allow developer builds with Flex 2.5.4.  This
+For now, the Server will allow developer builds with Flex 2.5.4.  This
 is primarily motivated by the fact that RedHat/Centos 5 ships with
-Flex 2.5.4.  It is likely that someday Open MPI developer builds will
+Flex 2.5.4.  It is likely that someday Server developer builds will
 require Flex version >=2.5.35.
 
 Note that the flex-generated code generates some compiler warnings on
