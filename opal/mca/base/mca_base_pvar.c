@@ -7,7 +7,7 @@
  * Copyright (c) 2015      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2016      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -720,6 +720,8 @@ int mca_base_pvar_handle_write_value (mca_base_pvar_handle_t *handle, const void
     }
 
     memmove (handle->current_value, value, handle->count * var_type_sizes[handle->pvar->type]);
+    /* read the value directly from the variable. */
+    ret = handle->pvar->set_value (handle->pvar, value, handle->obj_handle);
 
     return OPAL_SUCCESS;
 }
