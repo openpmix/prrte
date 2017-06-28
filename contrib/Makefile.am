@@ -26,6 +26,7 @@ amca_paramdir = $(AMCA_PARAM_SETS_DIR)
 dist_amca_param_DATA = amca-param-sets/example.conf
 
 EXTRA_DIST = \
+        make_manpage.pl \
         completion/mpirun.sh \
         completion/mpirun.zsh \
 	dist/make_dist_tarball \
