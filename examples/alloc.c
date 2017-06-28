@@ -48,12 +48,12 @@ static void infocbfunc(pmix_status_t status,
     mydata_t *mq = (mydata_t*)cbdata;
     size_t n;
 
-    fprintf(stderr, "Allocation request returned %s", PMIx_Error_string(status));
+    fprintf(stderr, "Allocation request returned %s\n", PMIx_Error_string(status));
 
     /* save the returned info - the PMIx library "owns" it
      * and will release it and perform other cleanup actions
      * when release_fn is called */
-    if (0 < ninfo) {
+    if (PMIX_SUCCESS == status && 0 < ninfo) {
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
         for (n=0; n < ninfo; n++) {
@@ -115,7 +115,7 @@ int main(int argc, char **argv)
         PMIX_INFO_CREATE(info, 2);
         PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NUM_NODES, &nnodes, PMIX_UINT64);
         PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, myallocation, PMIX_STRING);
-        if (PMIX_SUCCESS != (rc = PMIx_Allocation_request_nb(PMIX_ALLOC_NEW, info, 2, infocbfunc, NULL))) {
+        if (PMIX_SUCCESS != (rc = PMIx_Allocation_request_nb(PMIX_ALLOC_NEW, info, 2, infocbfunc, &mydata))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Allocation_request_nb failed: %d\n", myproc.nspace, myproc.rank, rc);
             goto done;
         }

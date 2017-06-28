@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -32,7 +32,7 @@
 #include <pmix.h>
 
 static pmix_proc_t myproc;
-static bool completed;
+static bool completed = false;
 
 static void notification_fn(size_t evhdlr_registration_id,
                             pmix_status_t status,
@@ -43,6 +43,9 @@ static void notification_fn(size_t evhdlr_registration_id,
                             void *cbdata)
 {
     fprintf(stderr, "Client %s:%d NOTIFIED with status %d\n", myproc.nspace, myproc.rank, status);
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
     completed = true;
 }
 
@@ -56,8 +59,11 @@ static void errhandler_reg_callbk(pmix_status_t status,
                                   size_t errhandler_ref,
                                   void *cbdata)
 {
+    volatile bool *release = (volatile bool*)cbdata;
+
     fprintf(stderr, "Client %s:%d ERRHANDLER REGISTRATION CALLBACK CALLED WITH STATUS %d, ref=%lu\n",
                myproc.nspace, myproc.rank, status, (unsigned long)errhandler_ref);
+    *release = false;
 }
 
 int main(int argc, char **argv)
@@ -67,6 +73,7 @@ int main(int argc, char **argv)
     pmix_value_t *val = &value;
     pmix_proc_t proc;
     uint32_t nprocs;
+    volatile bool waiting;
 
     /* init us */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
@@ -89,9 +96,13 @@ int main(int argc, char **argv)
     fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, nprocs);
     completed = false;
 
-    /* register our errhandler */
+    /* register our default errhandler */
+    waiting = true;
     PMIx_Register_event_handler(NULL, 0, NULL, 0,
-                                notification_fn, errhandler_reg_callbk, NULL);
+                                notification_fn, errhandler_reg_callbk, (void*)&waiting);
+    while (waiting) {
+        usleep(50);
+    }
 
     /* call fence to sync */
     PMIX_PROC_CONSTRUCT(&proc);
