@@ -58,14 +58,14 @@ my $include_list;
 my $exclude_list;
 
 # Minimum versions
-my $ompi_automake_version = "1.12.2";
-my $ompi_autoconf_version = "2.69";
-my $ompi_libtool_version = "2.4.2";
+my $psrvr_automake_version = "1.12.2";
+my $psrvr_autoconf_version = "2.69";
+my $psrvr_libtool_version = "2.4.2";
 
 # Search paths
-my $ompi_autoconf_search = "autoconf";
-my $ompi_automake_search = "automake";
-my $ompi_libtoolize_search = "libtoolize;glibtoolize";
+my $psrvr_autoconf_search = "autoconf";
+my $psrvr_automake_search = "automake";
+my $psrvr_libtoolize_search = "libtoolize;glibtoolize";
 
 # One-time setup
 my $username;
@@ -704,9 +704,9 @@ I need at least $req_version, but only found the following versions:\n\n";
 Please make sure you are using at least the following versions of the
 tools:
 
-    GNU Autoconf: $ompi_autoconf_version
-    GNU Automake: $ompi_automake_version
-    GNU Libtool: $ompi_libtool_version
+    GNU Autoconf: $psrvr_autoconf_version
+    GNU Automake: $psrvr_automake_version
+    GNU Libtool: $psrvr_libtool_version
 =================================================================\n";
     my_exit(1);
 }
@@ -770,7 +770,7 @@ sub patch_autotools_output {
     # name (pgfortran).  The following comes from the upstream LT patches:
     # http://lists.gnu.org/archive/html/libtool-patches/2009-11/msg00012.html
     # http://lists.gnu.org/archive/html/bug-libtool/2009-11/msg00045.html
-    # Note that that patch is part of Libtool (which is not in this OMPI
+    # Note that that patch is part of Libtool (which is not in this PSRVR
     # source tree); we can't fix it.  So all we can do is patch the
     # resulting configure script.  :-(
     push(@verbose_out, $indent_str . "Patching configure for Libtool PGI 10 fortran compiler name\n");
@@ -949,8 +949,8 @@ if (!$ok || $help_arg) {
 #---------------------------------------------------------------------------
 
 # Check for project existence
-my $project_name_long = "PMI-Exascale";
-my $project_name_short = "pmix";
+my $project_name_long = "PMIx-Reference-Server";
+my $project_name_short = "psrvr";
 
 #---------------------------------------------------------------------------
 
@@ -992,9 +992,9 @@ verbose "PMIx Reference Server autogen (buckle up!)
 $step. Checking tool versions\n\n";
 
 # Check the autotools revision levels
-&find_and_check("autoconf", $ompi_autoconf_search, $ompi_autoconf_version);
-&find_and_check("libtool", $ompi_libtoolize_search, $ompi_libtool_version);
-&find_and_check("automake", $ompi_automake_search, $ompi_automake_version);
+&find_and_check("autoconf", $psrvr_autoconf_search, $psrvr_autoconf_version);
+&find_and_check("libtool", $psrvr_libtoolize_search, $psrvr_libtool_version);
+&find_and_check("automake", $psrvr_automake_search, $psrvr_automake_version);
 
 #---------------------------------------------------------------------------
 
@@ -1075,7 +1075,7 @@ verbose "\n$step. Searching for projects, MCA frameworks, and MCA components\n";
 
 my $ret;
 
-# Figure out if we're at the top level of the OMPI tree or not.
+# Figure out if we're at the top level of the PSRVR tree or not.
 if (! (-f "VERSION" && -f "configure.ac" && -f $topdir_file)) {
     print("\n\nYou must run this script from the top-level directory of the Open MPI tree.\n\n");
     my_exit(1);
