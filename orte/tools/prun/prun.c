@@ -135,7 +135,6 @@ int prun(int argc, char *argv[])
     orte_submit_status_t launchst, completest;
     int n;
     char *filename, *tdir;
-    char hostname[OPAL_MAXHOSTNAMELEN];
 
     /* ****************************************************************/
     /* we want to be able to detect that the PSRVR is up and running
@@ -148,14 +147,18 @@ int prun(int argc, char *argv[])
 
     if (NULL != (tdir = getenv("PMIX_SERVER_TMPDIR"))) {
         filename = opal_os_path(false, tdir, "contact.txt", NULL);
-    if (NULL == filename) {
-        fprintf(stderr, "OUT OF MEMORY\n");
-        exit(1);
-    }
+        if (NULL == filename) {
+            fprintf(stderr, "OUT OF MEMORY\n");
+            exit(1);
+        }
     } else {
+        /* setup the param system */
+        if (OPAL_SUCCESS != opal_init(&argc, &argv)) {
+            fprintf(stderr, "Cannot setup OPAL\n");
+            exit(1);
+        }
         /* get the nodename */
-        gethostname(hostname, sizeof(hostname));
-        orte_process_info.nodename = strdup(hostname);
+        orte_proc_info();
 
         /* setup the top session directory name */
         if (ORTE_SUCCESS != orte_setup_top_session_dir()) {
@@ -167,10 +170,6 @@ int prun(int argc, char *argv[])
             fprintf(stderr, "OUT OF MEMORY\n");
             exit(1);
         }
-        free(orte_process_info.nodename);
-        orte_process_info.nodename = NULL;
-        free(orte_process_info.top_session_dir);
-        orte_process_info.top_session_dir = NULL;
     }
     /* check to see if the file exists - loop a few times if it
      * doesn't, delaying between successive attempts */
@@ -192,6 +191,8 @@ int prun(int argc, char *argv[])
     if (ORTE_SUCCESS != orte_submit_init(argc, argv, NULL)) {
         exit(1);
     }
+    /* refcount opal_init */
+    opal_finalize();
 
     /* check if we are running as root - if we are, then only allow
      * us to proceed if the allow-run-as-root flag was given. Otherwise,

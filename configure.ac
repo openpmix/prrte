@@ -1155,6 +1155,13 @@ AC_SUBST(orteincludedir)
 AC_DEFINE_UNQUOTED(OPAL_ENABLE_FT, 0, [Turn off])
 AC_DEFINE_UNQUOTED(OPAL_ENABLE_FT_CR, 0, [Turn off])
 AC_DEFINE_UNQUOTED(OPAL_ENABLE_FT_THREAD, 0, [Turn off])
+opal_want_ft=0
+opal_want_ft_cr=0
+opal_want_prd=0
+opal_want_ft_thread=0
+AM_CONDITIONAL(WANT_FT, test "$opal_want_ft" = "1")
+AM_CONDITIONAL(WANT_FT_CR,  test "$opal_want_ft_cr" = "1")
+AM_CONDITIONAL(WANT_FT_THREAD, test "$opal_want_ft_thread" = "1")
 
 
 opal_show_subtitle "Final output"
