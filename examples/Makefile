@@ -39,6 +39,7 @@ EXAMPLES = \
 	 dmodex \
 	 dynamic \
 	 fault \
+	 pmi1client \
 	 pub \
 	 tool \
 	 alloc

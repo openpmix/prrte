@@ -121,6 +121,7 @@ examples/dmodex
 examples/dynamic
 examples/fault
 examples/launcher
+examples/pmi1client
 examples/pub
 examples/tool
 
