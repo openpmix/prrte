@@ -11,10 +11,11 @@ dnl                         University of Stuttgart.  All rights reserved.
 dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright (c) 2006-2016 Cisco Systems, Inc.  All rights reserved.
-dnl Copyright (c) 2015      Research Organization for Information Science
+dnl Copyright (c) 2015-2017 Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 dnl                         reserved.
+dnl Copyright (c) 2017      Intel, Inc. All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -128,14 +129,21 @@ AC_DEFUN([ORTE_CHECK_TM],[
 					      [$orte_check_tm_dir],
 					      [$orte_check_tm_libdir],
 					      [orte_check_tm_found="yes"],
-					      [_OPAL_CHECK_PACKAGE_LIB([orte_check_tm],
-								       [torque],
-								       [tm_init],
-								       [],
-								       [$orte_check_tm_dir],
-								       [$orte_check_tm_libdir],
-								       [orte_check_tm_found="yes"],
-								       [orte_check_tm_found="no"])])])])
+                                              [_OPAL_CHECK_PACKAGE_LIB([orte_check_tm],
+					                               [pbs],
+					                               [tm_init],
+					                               [-lcrypto],
+					                               [$orte_check_tm_dir],
+					                               [$orte_check_tm_libdir],
+					                               [orte_check_tm_found="yes"],
+					                               [_OPAL_CHECK_PACKAGE_LIB([orte_check_tm],
+								                                [torque],
+								                                [tm_init],
+								                                [],
+								                                [$orte_check_tm_dir],
+								                                [$orte_check_tm_libdir],
+								                                [orte_check_tm_found="yes"],
+								                                [orte_check_tm_found="no"])])])])])
 
 	CPPFLAGS="$orte_check_package_$1_save_CPPFLAGS"
 	LDFLAGS="$orte_check_package_$1_save_LDFLAGS"

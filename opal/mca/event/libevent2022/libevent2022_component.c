@@ -2,8 +2,9 @@
 /*
  * Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC.  All rights reserved.
- * Copyright (c) 2015      Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
  *
+ * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +36,7 @@ const char *opal_event_libevent2022_component_version_string =
 /*
  * MCA variables
  */
-char *event_module_include = NULL;
+char *ompi_event_module_include = NULL;
 
 /* copied from event.c */
 #if defined(_EVENT_HAVE_EVENT_PORTS) && _EVENT_HAVE_EVENT_PORTS
@@ -61,29 +62,29 @@ extern const struct eventop win32ops;
 #endif
 
 /* Array of backends in order of preference. */
-const struct eventop *eventops[] = {
+const struct eventop *ompi_eventops[] = {
 #if defined(_EVENT_HAVE_EVENT_PORTS) && _EVENT_HAVE_EVENT_PORTS
-	&evportops,
+        &evportops,
 #endif
 #if defined(_EVENT_HAVE_WORKING_KQUEUE) && _EVENT_HAVE_WORKING_KQUEUE
-	&kqops,
+        &kqops,
 #endif
 #if defined(_EVENT_HAVE_EPOLL) && _EVENT_HAVE_EPOLL
-	&epollops,
+        &epollops,
 #endif
 #if defined(_EVENT_HAVE_DEVPOLL) && _EVENT_HAVE_DEVPOLL
-	&devpollops,
+        &devpollops,
 #endif
 #if defined(_EVENT_HAVE_POLL) && _EVENT_HAVE_POLL
-	&pollops,
+        &pollops,
 #endif
 #if defined(_EVENT_HAVE_SELECT) && _EVENT_HAVE_SELECT
-	&selectops,
+        &selectops,
 #endif
 #ifdef WIN32
-	&win32ops,
+        &win32ops,
 #endif
-	NULL
+        NULL
 };
 
 /*
@@ -122,7 +123,7 @@ const opal_event_component_t mca_event_libevent2022_component = {
 
 static int libevent2022_register (void)
 {
-    const struct eventop** _eventop = eventops;
+    const struct eventop** _eventop = ompi_eventops;
     char available_eventops[BUFSIZ] = "none";
     char *help_msg = NULL;
     int ret;
@@ -156,18 +157,18 @@ static int libevent2022_register (void)
         const int len = sizeof (available_eventops);
         int cur_len = snprintf (available_eventops, len, "%s", (*(_eventop++))->name);
 
-        for (int i = 1 ; eventops[i] && cur_len < len ; ++i) {
+        for (int i = 1 ; ompi_eventops[i] && cur_len < len ; ++i) {
             cur_len += snprintf (available_eventops + cur_len, len - cur_len, ", %s",
-                                 eventops[i]->name);
+                                 ompi_eventops[i]->name);
         }
         /* ensure the available_eventops string is always NULL-terminated  */
         available_eventops[len - 1] = '\0';
     }
 
 #ifdef __APPLE__
-    event_module_include ="select";
+    ompi_event_module_include ="select";
 #else
-    event_module_include = "poll";
+    ompi_event_module_include = "poll";
 #endif
 
     asprintf( &help_msg,
@@ -181,7 +182,7 @@ static int libevent2022_register (void)
                                            MCA_BASE_VAR_FLAG_SETTABLE,
                                            OPAL_INFO_LVL_3,
                                            MCA_BASE_VAR_SCOPE_LOCAL,
-                                           &event_module_include);
+                                           &ompi_event_module_include);
     free(help_msg);  /* release the help message */
 
     if (0 > ret) {

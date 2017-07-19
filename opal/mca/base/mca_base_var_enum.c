@@ -16,6 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,7 +42,7 @@ OBJ_CLASS_INSTANCE(mca_base_var_enum_t, opal_object_t, mca_base_var_enum_constru
 
 static void mca_base_var_enum_flag_constructor (mca_base_var_enum_flag_t *enumerator);
 static void mca_base_var_enum_flag_destructor (mca_base_var_enum_flag_t *enumerator);
-OBJ_CLASS_INSTANCE(mca_base_var_enum_flag_t, opal_object_t, mca_base_var_enum_flag_constructor,
+static OBJ_CLASS_INSTANCE(mca_base_var_enum_flag_t, opal_object_t, mca_base_var_enum_flag_constructor,
                    mca_base_var_enum_flag_destructor);
 
 static int enum_dump (mca_base_var_enum_t *self, char **out);

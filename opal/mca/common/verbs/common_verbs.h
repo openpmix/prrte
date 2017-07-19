@@ -6,6 +6,7 @@
  * Copyright (c) 2014      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -172,7 +173,7 @@ OPAL_DECLSPEC int opal_common_verbs_qp_test(struct ibv_context *device_context,
  * Known limitations:
  * If ibv_fork_init is called after ibv_create_* functions - it will have no effect.
  * OMPI initializes verbs many times during initialization in the following verbs components:
- *      oob/ud, btl/openib, mtl/mxm, pml/yalla, oshmem/ikrit, oshmem/yoda, ompi/mca/coll/{fca,hcoll}
+ *      oob/ud, btl/openib, mtl/mxm, pml/yalla, oshmem/ikrit, ompi/mca/coll/{fca,hcoll}
  *
  * So, ibv_fork_init should be called once, in the beginning of the init flow of every verb component
  * to proper request fork support.
@@ -183,4 +184,3 @@ int opal_common_verbs_fork_test(void);
 END_C_DECLS
 
 #endif
-

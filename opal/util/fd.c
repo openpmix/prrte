@@ -1,7 +1,9 @@
 /*
  * Copyright (c) 2008-2014 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2009 Sandia National Laboratories. All rights reserved.
+ * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  *
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -10,6 +12,14 @@
  */
 
 #include "opal_config.h"
+
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -88,4 +98,31 @@ int opal_fd_set_cloexec(int fd)
 #endif
 
     return OPAL_SUCCESS;
+}
+
+bool opal_fd_is_regular(int fd)
+{
+    struct stat buf;
+    if (fstat(fd, &buf)) {
+        return false;
+    }
+    return S_ISREG(buf.st_mode);
+}
+
+bool opal_fd_is_chardev(int fd)
+{
+    struct stat buf;
+    if (fstat(fd, &buf)) {
+        return false;
+    }
+    return S_ISCHR(buf.st_mode);
+}
+
+bool opal_fd_is_blkdev(int fd)
+{
+    struct stat buf;
+    if (fstat(fd, &buf)) {
+        return false;
+    }
+    return S_ISBLK(buf.st_mode);
 }

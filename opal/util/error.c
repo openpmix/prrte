@@ -16,6 +16,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
  * Copyright (c) 2017      Intel, Inc. All rights reserved.
+ * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,7 +50,7 @@ struct converter_info_t {
 typedef struct converter_info_t converter_info_t;
 
 /* all default to NULL */
-converter_info_t converters[MAX_CONVERTERS] = {{0}};
+static converter_info_t converters[MAX_CONVERTERS] = {{0}};
 
 static int
 opal_strerror_int(int errnum, const char **str)
