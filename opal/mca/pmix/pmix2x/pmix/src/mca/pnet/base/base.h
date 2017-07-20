@@ -47,14 +47,14 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-extern pmix_mca_base_framework_t pmix_pnet_base_framework;
+PMIX_EXPORT extern pmix_mca_base_framework_t pmix_pnet_base_framework;
 /**
  * PNET select function
  *
  * Cycle across available components and construct the list
  * of active modules
  */
-pmix_status_t pmix_pnet_base_select(void);
+PMIX_EXPORT pmix_status_t pmix_pnet_base_select(void);
 
 /**
  * Track an active component / module
@@ -78,13 +78,13 @@ typedef struct pmix_pnet_globals_t pmix_pnet_globals_t;
 
 extern pmix_pnet_globals_t pmix_pnet_globals;
 
-pmix_status_t pmix_pnet_base_setup_app(char *nspace, pmix_list_t *ilist);
-pmix_status_t pmix_pnet_base_setup_local_network(char *nspace,
-                                                 pmix_info_t info[],
-                                                 size_t ninfo);
-pmix_status_t pmix_pnet_base_setup_fork(const pmix_proc_t *peer, char ***env);
-void pmix_pnet_base_child_finalized(pmix_peer_t *peer);
-void pmix_pnet_base_local_app_finalized(char *nspace);
+PMIX_EXPORT pmix_status_t pmix_pnet_base_setup_app(char *nspace, pmix_list_t *ilist);
+PMIX_EXPORT pmix_status_t pmix_pnet_base_setup_local_network(char *nspace,
+                                                             pmix_info_t info[],
+                                                             size_t ninfo);
+PMIX_EXPORT pmix_status_t pmix_pnet_base_setup_fork(const pmix_proc_t *peer, char ***env);
+PMIX_EXPORT void pmix_pnet_base_child_finalized(pmix_peer_t *peer);
+PMIX_EXPORT void pmix_pnet_base_local_app_finalized(char *nspace);
 
 END_C_DECLS
 

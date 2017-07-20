@@ -31,7 +31,6 @@
 #include <time.h>
 
 #include "src/class/pmix_object.h"
-#include "src/buffer_ops/types.h"
 #include "test_common.h"
 #include "test_fence.h"
 #include "test_publish.h"
@@ -87,7 +86,20 @@ int main(int argc, char **argv)
     }
 
     /* init us */
-    if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
+    pmix_info_t info[1];
+    size_t ninfo = 0;
+    if (NULL != params.gds_mode) {
+        (void)strncpy(info[0].key, PMIX_GDS_MODULE, PMIX_MAX_KEYLEN);
+        info[0].value.type = PMIX_STRING;
+        info[0].value.data.string = strdup(params.gds_mode);
+        ninfo = 1;
+        {
+            int delay = 0;
+            while(delay)
+                sleep(1);
+        }
+    }
+    if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, info, ninfo))) {
         TEST_ERROR(("Client ns %s rank %d: PMIx_Init failed: %d", params.nspace, params.rank, rc));
         FREE_TEST_PARAMS(params);
         exit(0);

@@ -12,7 +12,7 @@
 
 #include "test_publish.h"
 #include <time.h>
-#include "src/buffer_ops/buffer_ops.h"
+#include <src/include/pmix_globals.h>
 
 typedef struct {
     int in_progress;
