@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -23,6 +23,7 @@
  *
  */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -184,13 +185,15 @@ static pmix_status_t spawn_debugger(char *appspace)
     return rc;
 }
 
+#define DBGR_LOOP_LIMIT  10
+
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
     pmix_info_t *info;
     pmix_app_t *app;
     size_t ninfo, napps;
-    char *tdir, *nspace = NULL;
+    char *tdir, *filename, *sdir, *str, *nspace = NULL;
     char appspace[PMIX_MAX_NSLEN+1];
     int i;
     pmix_query_t *query;
@@ -200,6 +203,7 @@ int main(int argc, char **argv)
     char cwd[1024];
     volatile int active;
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
+    char hostname[1024];
 
     /* Process any arguments we were given */
     for (i=1; i < argc; i++) {
@@ -229,31 +233,61 @@ int main(int argc, char **argv)
         }
     }
 
-    /* we need to provide some info to the PMIx tool library so
-     * it can find the server's contact info. The simplest way
-     * of doing this here is to look for an environmental variable
-     * that tells us where to look. The PMIx reference server only
-     * allows one instantiation of the server per user, so setting
-     * this up is something a user could do in their login script.
-     * The reference server is based on OpenMPI, and so the contact
-     * info will always be found at:
-     *
-     * $TMPDIR/ompi.<nodename>.<numerical-userid>/dvm
-     *
-     * NOTE: we will eliminate this requirement in a future version
-     */
+    /* ****************************************************************/
+    /* we want to be able to detect that the PSRVR is up and running
+     * prior to attempting to connect to it. The code logic in ORTE
+     * actually supports such things, but unfortunately will emit
+     * error messages about the contact file missing before we can
+     * arrive at the point where retries can be done. So...let's
+     * setup the path to the contact file here, check to see if it
+     * exists, and then cycle a while if it doesn't. */
 
-    if (NULL == (tdir = getenv("PMIX_SERVER_TMPDIR"))) {
-        fprintf(stderr, "Tool usage requires that the PMIX_SERVER_TMPDIR envar\n");
-        fprintf(stderr, "be set to point at the directory where the PMIx Reference\n");
-        fprintf(stderr, "Server leaves its contact info file.\n");
+    if (NULL != (tdir = getenv("PMIX_SERVER_TMPDIR"))) {
+        sdir = strdup(tdir);
+    } else {
+        /* get the effective uid */
+        uid_t uid = geteuid();
+
+        /* look for the temp directory */
+        if (NULL == (str = getenv("TMPDIR"))) {
+            if (NULL == (str = getenv("TEMP"))) {
+                if (NULL == (str = getenv("TMP"))) {
+                    str = "/tmp";
+                }
+            }
+        }
+        /* get the nodename */
+        gethostname(hostname, sizeof(hostname));
+
+        /* setup the directory */
+        asprintf(&sdir, "%s/ompi.%s.%lu/dvm", str, hostname, (unsigned long)uid);
+        /* setup the contact name */
+        asprintf(&filename, "%s/contact.txt", sdir);
+        if (NULL == filename) {
+            fprintf(stderr, "OUT OF MEMORY\n");
+            exit(1);
+        }
+    }
+    /* check to see if the file exists - loop a few times if it
+     * doesn't, delaying between successive attempts */
+    n = 0;
+    while (n < DBGR_LOOP_LIMIT &&
+           0 != access(filename, R_OK)) {
+        sleep(1);
+        ++n;
+    }
+    /* if we still don't see the file, then give up */
+    if (0 != access(filename, R_OK)) {
+        fprintf(stderr, "PSRVR contact file %s not found - cannot continue\n", filename);
         exit(1);
     }
+    free(filename);
 
     /* init us - pass along the location of the contact file */
     ninfo = 1;
     PMIX_INFO_CREATE(info, ninfo);
-    PMIX_INFO_LOAD(&info[0], PMIX_SERVER_TMPDIR, tdir, PMIX_STRING);
+    PMIX_INFO_LOAD(&info[0], PMIX_SERVER_TMPDIR, sdir, PMIX_STRING);
+    free(sdir);
 
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, info, ninfo))) {
         fprintf(stderr, "PMIx_tool_init failed: %d\n", rc);
@@ -387,7 +421,7 @@ int main(int argc, char **argv)
              * has been launched */
             fprintf(stderr, "Debugger: spawning %s\n", app[0].cmd);
             if (PMIX_SUCCESS != (rc = PMIx_Spawn(info, ninfo, app, napps, appspace))) {
-                fprintf(stderr, "Application failed to launch with error: %s\n", PMIx_Error_string(rc));
+                fprintf(stderr, "Application failed to launch with error: %s(%d)\n", PMIx_Error_string(rc), rc);
                 goto done;
             }
             PMIX_INFO_FREE(info, ninfo);
