@@ -108,3 +108,8 @@ levels.
 
 
 The connection was rejected.
+#
+[static-fwd]
+Static ports were requested while orte_fwd_mpirun_port was set.
+Both options cannot be simultaneously set. Please either set
+orte_fwd_mpirun_port=false or remove any static port directives.
