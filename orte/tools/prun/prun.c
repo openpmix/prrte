@@ -135,6 +135,7 @@ int prun(int argc, char *argv[])
     orte_submit_status_t launchst, completest;
     int n;
     char *filename, *tdir;
+    bool init_done = false;
 
     /* ****************************************************************/
     /* we want to be able to detect that the PSRVR is up and running
@@ -157,6 +158,7 @@ int prun(int argc, char *argv[])
             fprintf(stderr, "Cannot setup OPAL\n");
             exit(1);
         }
+        init_done = true;
         /* get the nodename */
         orte_proc_info();
 
@@ -191,8 +193,10 @@ int prun(int argc, char *argv[])
     if (ORTE_SUCCESS != orte_submit_init(argc, argv, NULL)) {
         exit(1);
     }
-    /* refcount opal_init */
-    opal_finalize();
+    if (init_done) {
+        /* refcount opal_init */
+        opal_finalize();
+    }
 
     /* check if we are running as root - if we are, then only allow
      * us to proceed if the allow-run-as-root flag was given. Otherwise,
