@@ -12,7 +12,7 @@ Copyright (c) 2006-2017 Cisco Systems, Inc.  All rights reserved.
 Copyright (c) 2006      Voltaire, Inc. All rights reserved.
 Copyright (c) 2006      Sun Microsystems, Inc.  All rights reserved.
                         Use is subject to license terms.
-Copyright (c) 2006-2016 Los Alamos National Security, LLC.  All rights
+Copyright (c) 2006-2017 Los Alamos National Security, LLC.  All rights
                         reserved.
 Copyright (c) 2010-2012 IBM Corporation.  All rights reserved.
 Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
@@ -65,6 +65,12 @@ Master (not on release branches yet)
   via --enable-mpi-cxx.
 - Removed embedded VampirTrace.  It is in maintenance mode since 2013.
   Please consider Score-P (score-p.org) as an external replacement.
+- Add a mca parameter ras_base_launch_orted_on_hn to allow for launching
+  MPI processes on the same node where mpirun is executing using a separate
+  orte daemon, rather than the mpirun process.   This may be useful to set to
+  true when using SLURM, as it improves interoperability with SLURM's signal
+  propagation tools.  By default it is set to false, except for Cray XC systems.
+- Remove IB XRC support from the OpenIB BTL due to lack of support.
 
 3.0.0 -- July, 2017
 -------------------

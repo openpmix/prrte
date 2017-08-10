@@ -3,7 +3,7 @@
  * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2014-2015 Mellanox Technologies, Inc.
+ * Copyright (c) 2014-2017 Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2016 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2016      Los Alamos National Security, LLC. All rights
@@ -29,7 +29,9 @@
 #include "opal/hash_string.h"
 #include "opal/threads/threads.h"
 #include "opal/util/argv.h"
+#include "opal/util/opal_environ.h"
 #include "opal/util/proc.h"
+#include "opal/util/show_help.h"
 
 #include "opal/mca/pmix/base/base.h"
 #include "pmix2x.h"
@@ -75,6 +77,11 @@ int pmix2x_client_init(opal_list_t *ilist)
         if (0 < (dbg = opal_output_get_verbosity(opal_pmix_base_framework.framework_output))) {
             asprintf(&dbgvalue, "PMIX_DEBUG=%d", dbg);
             putenv(dbgvalue);
+        }
+        /* check the evars for a mismatch */
+        if (OPAL_SUCCESS != (dbg = opal_pmix_pmix2x_check_evars())) {
+            OPAL_PMIX_RELEASE_THREAD(&opal_pmix_base.lock);
+            return dbg;
         }
     }
 

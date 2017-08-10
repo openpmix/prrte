@@ -77,8 +77,6 @@ void mca_btl_openib_proc_construct(mca_btl_openib_proc_t* ib_proc)
 
 void mca_btl_openib_proc_destruct(mca_btl_openib_proc_t* ib_proc)
 {
-    mca_btl_openib_proc_btlptr_t* elem;
-
     /* release resources */
     if(NULL != ib_proc->proc_endpoints) {
         free(ib_proc->proc_endpoints);
