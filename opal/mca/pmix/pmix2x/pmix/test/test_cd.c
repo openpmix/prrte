@@ -16,13 +16,6 @@ typedef struct {
     int status;
 } cd_cbdata;
 
-#define PMIX_WAIT_FOR_COMPLETION(a)             \
-    do {                                        \
-        while ((a)) {                           \
-            usleep(10);                         \
-        }                                       \
-    } while (0)
-
 static void cd_cb(pmix_status_t status, void *cbdata)
 {
     cd_cbdata *cb = (cd_cbdata*)cbdata;
