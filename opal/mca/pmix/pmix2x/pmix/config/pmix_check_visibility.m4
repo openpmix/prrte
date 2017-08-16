@@ -87,7 +87,7 @@ AC_DEFUN([PMIX_CHECK_VISIBILITY],[
         unset pmix_add
     fi
 
-    AC_DEFINE_UNQUOTED([PMIX_C_HAVE_VISIBILITY], [$WANT_VISIBILITY],
+    AC_DEFINE_UNQUOTED([PMIX_HAVE_VISIBILITY], [$WANT_VISIBILITY],
             [Whether C compiler supports symbol visibility or not])
     AM_CONDITIONAL([WANT_HIDDEN],[test "$WANT_VISIBILITY" = "1"])
 ])

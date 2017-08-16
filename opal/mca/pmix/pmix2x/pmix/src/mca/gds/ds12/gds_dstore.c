@@ -253,7 +253,8 @@ static pmix_status_t dstore_store(const pmix_proc_t *proc,
                                 pmix_kval_t *kv);
 
 static pmix_status_t _dstore_fetch(const char *nspace,
-                                pmix_rank_t rank, const char *key, pmix_value_t **kvs);
+                                pmix_rank_t rank,
+                                const char *key, pmix_value_t **kvs);
 
 static pmix_status_t dstore_fetch(const pmix_proc_t *proc,
                                 pmix_scope_t scope, bool copy,
@@ -835,7 +836,6 @@ static inline ns_map_data_t * _esh_session_map_search_client(const char *nspace)
 
 static inline int _esh_session_init(size_t idx, ns_map_data_t *m, size_t jobuid, int setjobuid)
 {
-    struct stat st = {0};
     seg_desc_t *seg = NULL;
     session_t *s = &(PMIX_VALUE_ARRAY_GET_ITEM(_session_array, session_t, idx));
     pmix_status_t rc = PMIX_SUCCESS;
@@ -856,8 +856,10 @@ static inline int _esh_session_init(size_t idx, ns_map_data_t *m, size_t jobuid,
         "%s:%d:%s _lockfile_name: %s", __FILE__, __LINE__, __func__, s->lockfile));
 
     if (PMIX_PROC_SERVER == pmix_globals.proc_type) {
-        if (stat(s->nspace_path, &st) == -1){
-            if (0 != mkdir(s->nspace_path, 0770)) {
+        if (0 != mkdir(s->nspace_path, 0770)) {
+            if (EEXIST != errno) {
+                pmix_output(0, "session init: can not create session directory \"%s\": %s",
+                    s->nspace_path, strerror(errno));
                 rc = PMIX_ERROR;
                 PMIX_ERROR_LOG(rc);
                 return rc;
@@ -1410,7 +1412,8 @@ static int set_rank_meta_info(ns_track_elem_t *ns_info, rank_meta_info *rinfo)
     PMIX_OUTPUT_VERBOSE((2, pmix_gds_base_framework.framework_output,
                          "%s:%d:%s: nspace %s, add rank %lu offset %lu count %lu meta info",
                          __FILE__, __LINE__, __func__,
-                         ns_info->ns_map.name, rinfo->rank, rinfo->offset, rinfo->count));
+                         ns_info->ns_map.name, (unsigned long)rinfo->rank,
+                         (unsigned long)rinfo->offset, (unsigned long)rinfo->count));
 
     tmp = ns_info->meta_seg;
     if (1 == _direct_mode) {
@@ -1576,7 +1579,7 @@ static size_t put_data_to_the_end(ns_track_elem_t *ns_info, seg_desc_t *dataseg,
          * warn a user about it and fail. */
         offset = 0; /* offset cannot be 0 in normal case, so we use this value to indicate a problem. */
         pmix_output(0, "PLEASE set NS_DATA_SEG_SIZE to value which is larger when %lu.",
-                    sizeof(size_t) + strlen(key) + 1 + sizeof(size_t) + size + EXT_SLOT_SIZE());
+                    (unsigned long)(sizeof(size_t) + strlen(key) + 1 + sizeof(size_t) + size + EXT_SLOT_SIZE()));
         return offset;
     }
 
@@ -1617,7 +1620,11 @@ static size_t put_data_to_the_end(ns_track_elem_t *ns_info, seg_desc_t *dataseg,
     memcpy(addr, &data_ended, sizeof(size_t));
     PMIX_OUTPUT_VERBOSE((1, pmix_gds_base_framework.framework_output,
                          "%s:%d:%s: key %s, rel start offset %lu, rel end offset %lu, abs shift %lu size %lu",
-                         __FILE__, __LINE__, __func__, key, offset, data_ended, id * _data_segment_size, size));
+                         __FILE__, __LINE__, __func__,
+                         key, (unsigned long)offset,
+                         (unsigned long)data_ended,
+                         (unsigned long)(id * _data_segment_size),
+                         (unsigned long)size));
     return global_offset;
 }
 
@@ -1702,8 +1709,10 @@ static int pmix_sm_store(ns_track_elem_t *ns_info, pmix_rank_t rank, pmix_kval_t
                 memcpy(&offset, ESH_DATA_PTR(addr), sizeof(size_t));
                 if (0 < offset) {
                     PMIX_OUTPUT_VERBOSE((10, pmix_gds_base_framework.framework_output,
-                                "%s:%d:%s: for rank %u, replace flag %d %s is filled with %lu value",
-                                __FILE__, __LINE__, __func__, rank, data_exist, ESH_REGION_EXTENSION, offset));
+                                "%s:%d:%s: for rank %lu, replace flag %d %s is filled with %lu value",
+                                __FILE__, __LINE__, __func__,
+                                (unsigned long)rank, data_exist,
+                                ESH_REGION_EXTENSION, (unsigned long)offset));
                     /* go to next item, updating address */
                     addr = _get_data_region_by_offset(datadesc, offset);
                     if (NULL == addr) {
@@ -1937,7 +1946,6 @@ static pmix_status_t dstore_init(pmix_info_t info[], size_t ninfo)
     size_t n;
     char *dstor_tmpdir = NULL;
     size_t tbl_idx;
-    struct stat st = {0};
     ns_map_data_t *ns_map = NULL;
 
     pmix_output_verbose(2, pmix_gds_base_framework.framework_output,
@@ -2043,9 +2051,9 @@ static pmix_status_t dstore_init(pmix_info_t info[], size_t ninfo)
             goto err_exit;
         }
 
-        if (0 > stat(_base_path, &st)){
-            if (0 > mkdir(_base_path, 0770)) {
-                rc = PMIX_ERR_NO_PERMISSIONS;
+        if (0 != mkdir(_base_path, 0770)) {
+            if (EEXIST != errno) {
+                rc = PMIX_ERROR;
                 PMIX_ERROR_LOG(rc);
                 goto err_exit;
             }
@@ -2260,7 +2268,8 @@ static pmix_status_t dstore_store(const pmix_proc_t *proc,
     return rc;
 }
 
-inline pmix_status_t _dstore_fetch(const char *nspace, pmix_rank_t rank, const char *key, pmix_value_t **kvs)
+static pmix_status_t _dstore_fetch(const char *nspace, pmix_rank_t rank,
+                                   const char *key, pmix_value_t **kvs)
 {
     ns_seg_info_t *ns_info = NULL;
     pmix_status_t rc = PMIX_ERROR, lock_rc;
@@ -2304,8 +2313,10 @@ inline pmix_status_t _dstore_fetch(const char *nspace, pmix_rank_t rank, const c
         return rc;
     }
 
-    if (kvs) {
-        *kvs = NULL;
+    if (NULL == kvs) {
+        rc = PMIX_ERR_FATAL;
+        PMIX_ERROR_LOG(rc);
+        return rc;
     }
 
     if (PMIX_RANK_UNDEF == rank) {
@@ -2396,11 +2407,12 @@ inline pmix_status_t _dstore_fetch(const char *nspace, pmix_rank_t rank, const c
         kval_cnt = rinfo->count;
 
         /*  Initialize array for all keys of rank */
-        if ((NULL == key) || (kval_cnt > 0)) {
+        if ((NULL == key) && (kval_cnt > 0)) {
             kval = (pmix_value_t*)malloc(sizeof(pmix_value_t));
             if (NULL == kval) {
                 return PMIX_ERR_NOMEM;
             }
+            PMIX_VALUE_CONSTRUCT(kval);
 
             ninfo = kval_cnt;
             PMIX_INFO_CREATE(info, ninfo);
@@ -2409,7 +2421,6 @@ inline pmix_status_t _dstore_fetch(const char *nspace, pmix_rank_t rank, const c
                 goto done;
             }
 
-            PMIX_VALUE_CONSTRUCT(kval);
             kval->type = PMIX_DATA_ARRAY;
             kval->data.darray = (pmix_data_array_t*)malloc(sizeof(pmix_data_array_t));
             if (NULL == kval->data.darray) {
@@ -2543,10 +2554,11 @@ done:
     }
 
     if( rc != PMIX_SUCCESS ){
-        if( NULL == key ) {
+        if ((NULL == key) && (kval_cnt > 0)) {
             if( NULL != info ) {
                 PMIX_INFO_FREE(info, ninfo);
             }
+            PMIX_VALUE_RELEASE(kval);
         }
         return rc;
     }
