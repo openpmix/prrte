@@ -310,21 +310,43 @@ int opal_hwloc_base_get_topology(void)
             free(shmemfile);
             if (0 != hwloc_shmem_topology_adopt(&opal_hwloc_topology, fd,
                                                 0, (void*)addr, size, 0)) {
-                OPAL_ERROR_LOG(OPAL_ERR_FILE_READ_FAILURE);
-                return OPAL_ERR_FILE_READ_FAILURE;
+                if (4 < opal_output_get_verbosity(opal_hwloc_base_framework.framework_output)) {
+                    FILE *file = fopen("/proc/self/maps", "r");
+                    if (file) {
+                        char line[256];
+                        opal_output(0, "Dumping /proc/self/maps");
+
+                        while (fgets(line, sizeof(line), file) != NULL) {
+                            char *end = strchr(line, '\n');
+                            if (end) {
+                                *end = '\0';
+                            }
+                            opal_output(0, "%s", line);
+                        }
+                        fclose(file);
+                    }
+                }
+                /* failed to adopt from shmem, fallback to other ways to get the topology */
+            } else {
+                opal_output_verbose(2, opal_hwloc_base_framework.framework_output,
+                                    "hwloc:base: topology in shared memory");
+                topo_in_shmem = true;
+                return OPAL_SUCCESS;
             }
-            opal_output_verbose(2, opal_hwloc_base_framework.framework_output,
-                                 "hwloc:base: topology in shared memory");
-            topo_in_shmem = true;
-            return OPAL_SUCCESS;
         }
 #endif
         /* if that isn't available, then try to retrieve
          * the xml representation from the PMIx data store */
         opal_output_verbose(1, opal_hwloc_base_framework.framework_output,
-                            "hwloc:base getting topology XML string");
-        OPAL_MODEX_RECV_VALUE_OPTIONAL(rc, OPAL_PMIX_LOCAL_TOPO,
-                                       &wildcard_rank, &val, OPAL_STRING);
+                            "hwloc:base[%s:%d] getting topology XML string",
+                            __FILE__, __LINE__);
+#if HWLOC_API_VERSION >= 0x20000
+        OPAL_MODEX_RECV_VALUE_IMMEDIATE(rc, OPAL_PMIX_HWLOC_XML_V2,
+                                        &wildcard_rank, &val, OPAL_STRING);
+#else
+        OPAL_MODEX_RECV_VALUE_IMMEDIATE(rc, OPAL_PMIX_HWLOC_XML_V1,
+                                        &wildcard_rank, &val, OPAL_STRING);
+#endif
     } else {
         opal_output_verbose(1, opal_hwloc_base_framework.framework_output,
                             "hwloc:base PMIx not available");

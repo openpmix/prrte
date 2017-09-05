@@ -56,6 +56,7 @@ BEGIN_C_DECLS
 #define CONVERTOR_COMPLETED        0x08000000
 #define CONVERTOR_CUDA_UNIFIED     0x10000000
 #define CONVERTOR_HAS_REMOTE_SIZE  0x20000000
+#define CONVERTOR_SKIP_CUDA_INIT   0x40000000
 
 union dt_elem_desc;
 typedef struct opal_convertor_t opal_convertor_t;

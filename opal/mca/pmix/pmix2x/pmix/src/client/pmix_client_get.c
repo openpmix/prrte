@@ -215,7 +215,7 @@ static pmix_buffer_t* _pack_get(char *nspace, pmix_rank_t rank,
     msg = PMIX_NEW(pmix_buffer_t);
     /* pack the get cmd */
     PMIX_BFROPS_PACK(rc, pmix_client_globals.myserver,
-                     msg, &cmd, 1, PMIX_CMD);
+                     msg, &cmd, 1, PMIX_COMMAND);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(msg);
@@ -398,6 +398,61 @@ static pmix_status_t process_values(pmix_value_t **v, pmix_cb_t *cb)
     return PMIX_SUCCESS;
 }
 
+static void infocb(pmix_status_t status,
+                   pmix_info_t *info, size_t ninfo,
+                   void *cbdata,
+                   pmix_release_cbfunc_t release_fn,
+                   void *release_cbdata)
+{
+    pmix_query_caddy_t *cd = (pmix_query_caddy_t*)cbdata;
+    pmix_value_t *kv = NULL;
+    pmix_status_t rc;
+
+    if (PMIX_SUCCESS == status) {
+        if (NULL != info) {
+            /* there should be only one returned value */
+            if (1 != ninfo) {
+                rc = PMIX_ERR_INVALID_VAL;
+            } else {
+                PMIX_VALUE_CREATE(kv, 1);
+                if (NULL == kv) {
+                    rc = PMIX_ERR_NOMEM;
+                } else {
+                    /* if this is a compressed string, then uncompress it */
+                    if (PMIX_COMPRESSED_STRING == info[0].value.type) {
+                        kv->type = PMIX_STRING;
+                        pmix_util_uncompress_string(&kv->data.string, (uint8_t*)info[0].value.data.bo.bytes, info[0].value.data.bo.size);
+                        if (NULL == kv->data.string) {
+                            PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+                            rc = PMIX_ERR_NOMEM;
+                            PMIX_VALUE_FREE(kv, 1);
+                            kv = NULL;
+                        } else {
+                            rc = PMIX_SUCCESS;
+                        }
+                    } else {
+                        rc = pmix_value_xfer(kv, &info[0].value);
+                    }
+                }
+            }
+        } else {
+            rc = PMIX_ERR_NOT_FOUND;
+        }
+    } else {
+        rc = status;
+    }
+    if (NULL != cd->valcbfunc) {
+        cd->valcbfunc(rc, kv, cd->cbdata);
+    }
+    PMIX_RELEASE(cd);
+    if (NULL != kv) {
+        PMIX_VALUE_FREE(kv, 1);
+    }
+    if (NULL != release_fn) {
+        release_fn(release_cbdata);
+    }
+}
+
 static void _getnbfn(int fd, short flags, void *cbdata)
 {
     pmix_cb_t *cb = (pmix_cb_t*)cbdata;
@@ -409,7 +464,9 @@ static void _getnbfn(int fd, short flags, void *cbdata)
     char *tmp;
     pmix_proc_t proc;
     bool optional = false;
+    bool immediate = false;
     struct timeval tv;
+    pmix_query_caddy_t *cd;
 
     /* cb was passed to us from another thread - acquire it */
     PMIX_ACQUIRE_OBJECT(cb);
@@ -430,6 +487,11 @@ static void _getnbfn(int fd, short flags, void *cbdata)
                 if (PMIX_UNDEF == cb->info[n].value.type ||
                     cb->info[n].value.data.flag) {
                     optional = true;
+                }
+            } else if (0 == strncmp(cb->info[n].key, PMIX_IMMEDIATE, PMIX_MAX_KEYLEN)) {
+                if (PMIX_UNDEF == cb->info[n].value.type ||
+                    cb->info[n].value.data.flag) {
+                    immediate = true;
                 }
             } else if (0 == strncmp(cb->info[n].key, PMIX_TIMEOUT, PMIX_MAX_KEYLEN)) {
                 /* set a timer to kick us out if we don't
@@ -472,8 +534,32 @@ static void _getnbfn(int fd, short flags, void *cbdata)
                  * ask server
                  */
                 goto request;
-            } else {
+            } else if (NULL != cb->key) {
+                /* if immediate was given, then we are being directed to
+                 * check with the server even though the caller is looking for
+                 * job-level info. In some cases, a server may elect not
+                 * to provide info at init to save memory */
+                if (immediate) {
+                    /* the direct modex request doesn't pass a key as it
+                     * was intended to support non-job-level information.
+                     * So instead, we will use the PMIx_Query function
+                     * to request the information */
+                    cd = PMIX_NEW(pmix_query_caddy_t);
+                    cd->cbdata = cb->cbdata;
+                    cd->valcbfunc = cb->cbfunc.valuefn;
+                    PMIX_QUERY_CREATE(cd->queries, 1);
+                    cd->nqueries = 1;
+                    pmix_argv_append_nosize(&cd->queries[0].keys, cb->key);
+                    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(cd->queries, 1, infocb, cd))) {
+                        PMIX_RELEASE(cd);
+                        goto respond;
+                    }
+                    PMIX_RELEASE(cb);
+                    return;
+                }
                 /* we should have had this info, so respond with the error */
+                goto respond;
+            } else {
                 goto respond;
             }
         }
@@ -494,25 +580,25 @@ static void _getnbfn(int fd, short flags, void *cbdata)
   respond:
     /* if a callback was provided, execute it */
     if (NULL != cb->cbfunc.valuefn) {
-      if (NULL != val)  {
-          /* if this is a compressed string, then uncompress it */
-          if (PMIX_COMPRESSED_STRING == val->type) {
-              pmix_util_uncompress_string(&tmp, (uint8_t*)val->data.bo.bytes, val->data.bo.size);
-              if (NULL == tmp) {
-                  PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
-                  rc = PMIX_ERR_NOMEM;
-                  PMIX_VALUE_RELEASE(val);
-                  val = NULL;
-              } else {
-                  PMIX_VALUE_DESTRUCT(val);
-                  PMIX_VAL_ASSIGN(val, string, tmp);
-              }
-          }
-      }
-      cb->cbfunc.valuefn(rc, val, cb->cbdata);
+        if (NULL != val)  {
+            /* if this is a compressed string, then uncompress it */
+            if (PMIX_COMPRESSED_STRING == val->type) {
+                pmix_util_uncompress_string(&tmp, (uint8_t*)val->data.bo.bytes, val->data.bo.size);
+                if (NULL == tmp) {
+                    PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
+                    rc = PMIX_ERR_NOMEM;
+                    PMIX_VALUE_RELEASE(val);
+                    val = NULL;
+                } else {
+                    PMIX_VALUE_DESTRUCT(val);
+                    PMIX_VAL_ASSIGN(val, string, tmp);
+                }
+            }
+        }
+        cb->cbfunc.valuefn(rc, val, cb->cbdata);
     }
     if (NULL != val) {
-      PMIX_VALUE_RELEASE(val);
+        PMIX_VALUE_RELEASE(val);
     }
     PMIX_RELEASE(cb);
     return;
@@ -521,8 +607,8 @@ static void _getnbfn(int fd, short flags, void *cbdata)
     /* if we got here, then we don't have the data for this proc. If we
      * are a server, or we are a client and not connected, then there is
      * nothing more we can do */
-    if (PMIX_PROC_SERVER == pmix_globals.proc_type ||
-        (PMIX_PROC_SERVER != pmix_globals.proc_type && !pmix_globals.connected)) {
+    if (PMIX_PROC_IS_SERVER(pmix_globals.mypeer) ||
+        (!PMIX_PROC_IS_SERVER(pmix_globals.mypeer) && !pmix_globals.connected)) {
         rc = PMIX_ERR_NOT_FOUND;
         goto respond;
     }

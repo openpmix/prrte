@@ -100,7 +100,7 @@ static void pmix_tool_notify_recv(struct pmix_peer_t *peer,
 
     cnt=1;
     PMIX_BFROPS_UNPACK(rc, pmix_client_globals.myserver,
-                       buf, &cmd, &cnt, PMIX_CMD);
+                       buf, &cmd, &cnt, PMIX_COMMAND);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         goto error;
@@ -164,7 +164,9 @@ PMIX_EXPORT int PMIx_tool_init(pmix_proc_t *proc,
     pmix_kval_t *kptr;
     pmix_status_t rc;
     char hostname[PMIX_MAX_NSLEN];
-    bool found;
+    bool found, do_not_connect = false;
+    bool nspace_given = false;
+    bool rank_given = false;
     pmix_info_t ginfo;
     size_t n;
 
@@ -252,7 +254,18 @@ PMIX_EXPORT int PMIx_tool_init(pmix_proc_t *proc,
             if (0 == strncmp(info[n].key, PMIX_GDS_MODULE, PMIX_MAX_KEYLEN)) {
                 PMIX_INFO_LOAD(&ginfo, PMIX_GDS_MODULE, info[n].value.data.string, PMIX_STRING);
                 found = true;
-                break;
+            } else if (0 == strncmp(info[n].key, PMIX_TOOL_DO_NOT_CONNECT, PMIX_MAX_KEYLEN)) {
+                if (PMIX_UNDEF == info[n].value.type) {
+                    do_not_connect = true;
+                } else {
+                    do_not_connect = info[n].value.data.flag;
+                }
+            } else if (0 == strncmp(info[n].key, PMIX_TOOL_NSPACE, PMIX_MAX_KEYLEN)) {
+                (void)strncpy(pmix_globals.myid.nspace, info[n].value.data.string, PMIX_MAX_NSLEN);
+                nspace_given = true;
+            } else if (0 == strncmp(info[n].key, PMIX_TOOL_RANK, PMIX_MAX_KEYLEN)) {
+                pmix_globals.myid.rank = info[n].value.data.rank;
+                rank_given = true;
             }
         }
     }
@@ -267,19 +280,29 @@ PMIX_EXPORT int PMIx_tool_init(pmix_proc_t *proc,
     }
     PMIX_INFO_DESTRUCT(&ginfo);
 
-    /* connect to the server - returns job info if successful */
-    rc = pmix_ptl_base_connect_to_peer((struct pmix_peer_t*)pmix_client_globals.myserver, info, ninfo);
-    if (PMIX_SUCCESS != rc){
-        PMIX_RELEASE_THREAD(&pmix_global_lock);
-        return rc;
+    if (do_not_connect) {
+        /* ensure we mark that we are not connected */
+        pmix_globals.connected = false;
+        /* it is an error if we were not given an nspace/rank */
+        if (!nspace_given || !rank_given) {
+            PMIX_RELEASE_THREAD(&pmix_global_lock);
+            return PMIX_ERR_INIT;
+        }
+    } else {
+        /* connect to the server - returns job info if successful */
+        rc = pmix_ptl_base_connect_to_peer((struct pmix_peer_t*)pmix_client_globals.myserver, info, ninfo);
+        if (PMIX_SUCCESS != rc){
+            PMIX_RELEASE_THREAD(&pmix_global_lock);
+            return rc;
+        }
     }
+    /* Success, so copy the nspace and rank */
+    (void)strncpy(proc->nspace, pmix_globals.myid.nspace, PMIX_MAX_NSLEN);
+    proc->rank = pmix_globals.myid.rank;
 
     /* increment our init reference counter */
     pmix_globals.init_cntr++;
 
-    /* Success, so copy the nspace and rank */
-    (void)strncpy(proc->nspace, pmix_globals.myid.nspace, PMIX_MAX_NSLEN);
-    proc->rank = pmix_globals.myid.rank;
 
     /* now finish the initialization by filling our local
      * datastore with typical job-related info. No point
@@ -642,6 +665,11 @@ PMIX_EXPORT pmix_status_t PMIx_tool_finalize(void)
         return PMIX_SUCCESS;
     }
     pmix_globals.init_cntr = 0;
+    /* if we are not connected, then we are done */
+    if (!pmix_globals.connected) {
+        PMIX_RELEASE_THREAD(&pmix_global_lock);
+        return PMIX_SUCCESS;
+    }
     PMIX_RELEASE_THREAD(&pmix_global_lock);
 
     pmix_output_verbose(2, pmix_globals.debug_output,
@@ -652,7 +680,7 @@ PMIX_EXPORT pmix_status_t PMIx_tool_finalize(void)
     msg = PMIX_NEW(pmix_buffer_t);
     /* pack the cmd */
     PMIX_BFROPS_PACK(rc, pmix_client_globals.myserver,
-                     msg, &cmd, 1, PMIX_CMD);
+                     msg, &cmd, 1, PMIX_COMMAND);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(msg);

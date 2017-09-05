@@ -570,7 +570,9 @@ int32_t opal_convertor_prepare_for_recv( opal_convertor_t* convertor,
 
     convertor->flags |= CONVERTOR_RECV;
 #if OPAL_CUDA_SUPPORT
-    mca_cuda_convertor_init(convertor, pUserBuf);
+    if (!( convertor->flags & CONVERTOR_SKIP_CUDA_INIT )) {
+        mca_cuda_convertor_init(convertor, pUserBuf);
+    }
 #endif
 
     assert(! (convertor->flags & CONVERTOR_SEND));
@@ -608,7 +610,9 @@ int32_t opal_convertor_prepare_for_send( opal_convertor_t* convertor,
 {
     convertor->flags |= CONVERTOR_SEND;
 #if OPAL_CUDA_SUPPORT
-    mca_cuda_convertor_init(convertor, pUserBuf);
+    if (!( convertor->flags & CONVERTOR_SKIP_CUDA_INIT )) {
+        mca_cuda_convertor_init(convertor, pUserBuf);
+    }
 #endif
 
     OPAL_CONVERTOR_PREPARE( convertor, datatype, count, pUserBuf );

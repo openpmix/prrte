@@ -3,6 +3,7 @@
 # Copyright (c) 2015      Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,6 +22,7 @@ sources = \
         pmix2x_component.c \
         pmix2x.c \
         pmix2x_client.c \
+        pmix2x_local.c \
         pmix2x_server_south.c \
         pmix2x_server_north.c
 
@@ -43,7 +45,8 @@ mca_pmix_pmix2x_la_CFLAGS = $(opal_pmix_pmix2x_CFLAGS)
 mca_pmix_pmix2x_la_CPPFLAGS = \
         -I$(srcdir)/pmix/include $(opal_pmix_pmix2x_CPPFLAGS)
 mca_pmix_pmix2x_la_LDFLAGS = -module -avoid-version $(opal_pmix_pmix2x_LDFLAGS)
-mca_pmix_pmix2x_la_LIBADD = $(opal_pmix_pmix2x_LIBS)
+mca_pmix_pmix2x_la_LIBADD = $(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la \
+	$(opal_pmix_pmix2x_LIBS)
 mca_pmix_pmix2x_la_DEPENDENCIES = $(opal_pmix_pmix2x_DEPENDENCIES)
 
 noinst_LTLIBRARIES = $(component_noinst)

@@ -33,13 +33,13 @@
 
 #include <pmix_common.h>
 
-#include "src/mca/bfrops/bfrops.h"
 #include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_list.h"
 #include "src/class/pmix_ring_buffer.h"
 #include "src/event/pmix_event.h"
 #include "src/threads/threads.h"
 
+#include "src/mca/bfrops/bfrops.h"
 #include "src/mca/gds/gds.h"
 #include "src/mca/psec/psec.h"
 #include "src/mca/ptl/ptl.h"
@@ -68,8 +68,7 @@ PMIX_CLASS_DECLARATION(pmix_namelist_t);
 
 /* define a command type for communicating to the
  * pmix server */
-typedef uint32_t pmix_cmd_t;
-#define PMIX_CMD PMIX_UINT32
+typedef uint8_t pmix_cmd_t;
 
 /* define some commands */
 #define PMIX_REQ_CMD             0
@@ -104,20 +103,6 @@ typedef enum {
     PMIX_COLLECT_YES,
     PMIX_COLLECT_MAX
 } pmix_collect_t;
-
-/* define a process type */
-typedef enum {
-    PMIX_PROC_UNDEF,
-    PMIX_PROC_CLIENT,
-    PMIX_PROC_SERVER,
-    PMIX_PROC_TOOL
-} pmix_proc_type_t;
-
-/* defins some convenience macros for testing proc type */
-#define PMIX_PROC_IS_CLIENT     (PMIX_PROC_CLIENT == pmix_globals.proc_type)
-#define PMIX_PROC_IS_SERVER     (PMIX_PROC_SERVER == pmix_globals.proc_type)
-#define PMIX_PROC_IS_TOOL       (PMIX_PROC_TOOL == pmix_globals.proc_type)
-
 
 /****    PEER STRUCTURES    ****/
 
@@ -182,6 +167,7 @@ typedef struct pmix_peer_t {
     pmix_object_t super;
     pmix_nspace_t *nptr;            // point to the nspace object for this process
     pmix_rank_info_t *info;
+    pmix_proc_type_t proc_type;
     int proc_cnt;
     int index;                      // index into the local clients array on the server
     int sd;
@@ -220,6 +206,7 @@ typedef struct {
     pmix_info_t *info;
     size_t ninfo;
     pmix_info_cbfunc_t cbfunc;
+    pmix_value_cbfunc_t valcbfunc;
     pmix_release_cbfunc_t relcbfunc;
     void *cbdata;
 } pmix_query_caddy_t;
@@ -369,7 +356,6 @@ typedef struct {
     int init_cntr;                      // #times someone called Init - #times called Finalize
     pmix_proc_t myid;
     pmix_peer_t *mypeer;                // my own peer object
-    pmix_proc_type_t proc_type;
     uid_t uid;                          // my effective uid
     gid_t gid;                          // my effective gid
     int pindex;

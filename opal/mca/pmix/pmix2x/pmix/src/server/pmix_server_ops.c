@@ -171,6 +171,8 @@ pmix_status_t pmix_server_commit(pmix_peer_t *peer, pmix_buffer_t *buf)
     while (PMIX_SUCCESS == rc) {
         /* unpack and store the blob */
         cnt = 1;
+        PMIX_CONSTRUCT(&b2, pmix_buffer_t);
+        PMIX_BFROPS_ASSIGN_TYPE(peer, &b2);
         PMIX_BFROPS_UNPACK(rc, peer, buf, &b2, &cnt, PMIX_BUFFER);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -1497,7 +1499,7 @@ pmix_status_t pmix_server_register_events(pmix_peer_t *peer,
                 return PMIX_ERR_NOMEM;
             }
             /* pack the info data stored in the event */
-            PMIX_BFROPS_PACK(rc, peer, relay, &cmd, 1, PMIX_CMD);
+            PMIX_BFROPS_PACK(rc, peer, relay, &cmd, 1, PMIX_COMMAND);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 break;
