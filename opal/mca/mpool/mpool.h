@@ -14,6 +14,7 @@
  * Copyright (c) 2011      NVIDIA Corporation.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC.  All rights
  *                         reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,9 +31,6 @@
 #include "opal/mca/mca.h"
 #include "opal/class/opal_free_list.h"
 #include "opal/mca/rcache/base/rcache_base_vma.h"
-
-#include "opal/mca/crs/crs.h"
-#include "opal/mca/crs/base/base.h"
 
 #define MCA_MPOOL_ALLOC_FLAG_DEFAULT      0x00
 #define MCA_MPOOL_ALLOC_FLAG_USER         0x01
@@ -194,4 +192,3 @@ OPAL_DECLSPEC int mca_mpool_base_tree_node_compare(void * key1, void * key2);
     OPAL_MCA_BASE_VERSION_2_1_0("mpool", 3, 0, 0)
 
 #endif /* MCA_MPOOL_H */
-

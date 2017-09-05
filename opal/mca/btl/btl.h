@@ -17,6 +17,7 @@
  * Copyright (c) 2015      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -123,8 +124,6 @@
 #include "opal/mca/mca.h"
 #include "opal/mca/mpool/mpool.h"
 #include "opal/mca/rcache/rcache.h"
-#include "opal/mca/crs/crs.h"
-#include "opal/mca/crs/base/base.h"
 
 BEGIN_C_DECLS
 
