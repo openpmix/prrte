@@ -12,7 +12,7 @@
  * Copyright (c) 2007-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.
  *                         All rights reserved
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,8 +20,8 @@
  * $HEADER$
  */
 
-#ifndef ORTERUN_ORTERUN_H
-#define ORTERUN_ORTERUN_H
+#ifndef PRUN_H
+#define PRUN_H
 
 #include "orte_config.h"
 

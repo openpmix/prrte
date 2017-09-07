@@ -54,13 +54,7 @@
 #include "opal/mca/if/base/base.h"
 #include "opal/dss/dss.h"
 #include "opal/mca/shmem/base/base.h"
-#if OPAL_ENABLE_FT_CR    == 1
-#include "opal/mca/compress/base/base.h"
-#endif
 #include "opal/threads/threads.h"
-
-#include "opal/runtime/opal_cr.h"
-#include "opal/mca/crs/base/base.h"
 
 #include "opal/runtime/opal_progress.h"
 #include "opal/mca/event/base/base.h"
@@ -68,6 +62,7 @@
 
 #include "opal/constants.h"
 #include "opal/util/error.h"
+#include "opal/util/opal_environ.h"
 #include "opal/util/stacktrace.h"
 #include "opal/util/keyval_parse.h"
 #include "opal/util/sys_limits.h"
@@ -593,34 +588,6 @@ opal_init(int* pargc, char*** pargv)
 
     if (OPAL_SUCCESS != (ret = opal_shmem_base_select())) {
         error = "opal_shmem_base_select";
-        goto return_error;
-    }
-
-#if OPAL_ENABLE_FT_CR    == 1
-    /*
-     * Initialize the compression framework
-     * Note: Currently only used in C/R so it has been marked to only
-     *       initialize when C/R is enabled. If other places in the code
-     *       wish to use this framework, it is safe to remove the protection.
-     */
-    if( OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_compress_base_framework, 0)) ) {
-        error = "opal_compress_base_open";
-        goto return_error;
-    }
-    if( OPAL_SUCCESS != (ret = opal_compress_base_select()) ) {
-        error = "opal_compress_base_select";
-        goto return_error;
-    }
-#endif
-
-    /*
-     * Initalize the checkpoint/restart functionality
-     * Note: Always do this so we can detect if the user
-     * attempts to checkpoint a non checkpointable job,
-     * otherwise the tools may hang or not clean up properly.
-     */
-    if (OPAL_SUCCESS != (ret = opal_cr_init() ) ) {
-        error = "opal_cr_init";
         goto return_error;
     }
 

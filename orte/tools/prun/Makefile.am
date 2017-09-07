@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2008-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2015-2016 Intel, Inc.  All rights reserved.
+# Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,7 +26,10 @@
 # post-processed forms of the CFLAGS in the library targets down
 # below.
 
+AM_CPPFLAGS = $(OPAL_PMIX_CPPFLAGS)
+
 CFLAGS = $(CFLAGS_WITHOUT_OPTFLAGS) $(DEBUGGER_CFLAGS)
+AM_LDFLAGS = $(OPAL_PMIX_LDFLAGS)
 
 include $(top_srcdir)/Makefile.ompi-rules
 
@@ -56,7 +59,10 @@ prun_SOURCES = \
 
 prun_LDADD = \
 	$(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la \
-	$(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
+	$(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la \
+	$(OPAL_PMIX_LDADD)
+
+prun_LIBS = $(OPAL_PMIX_LIBS)
 
 distclean-local:
 	rm -f $(man_pages)

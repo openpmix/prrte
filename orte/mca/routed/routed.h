@@ -7,7 +7,7 @@
  * Copyright (c) 2004-2011 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,9 +38,6 @@
 #include "orte/mca/mca.h"
 
 #include "opal/dss/dss_types.h"
-
-#include "opal/mca/crs/crs.h"
-#include "opal/mca/crs/base/base.h"
 
 #include "orte/mca/routed/routed_types.h"
 

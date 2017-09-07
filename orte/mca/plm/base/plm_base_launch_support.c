@@ -38,6 +38,7 @@
 
 #include "opal/hash_string.h"
 #include "opal/util/argv.h"
+#include "opal/util/opal_environ.h"
 #include "opal/class/opal_pointer_array.h"
 #include "opal/dss/dss.h"
 #include "opal/mca/hwloc/hwloc-internal.h"

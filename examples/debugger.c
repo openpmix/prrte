@@ -160,7 +160,7 @@ static pmix_status_t spawn_debugger(char *appspace)
     /* setup the debugger */
     PMIX_APP_CREATE(debugger, 1);
     debugger[0].cmd = strdup("./debuggerd");
-    PMIX_ARGV_APPEND(debugger[0].argv, "./debuggerd");
+    PMIX_ARGV_APPEND(rc, debugger[0].argv, "./debuggerd");
     getcwd(cwd, 1024);  // point us to our current directory
     debugger[0].cwd = strdup(cwd);
     /* provide directives so the daemons go where we want, and
@@ -232,63 +232,8 @@ int main(int argc, char **argv)
             exit(1);
         }
     }
-
-    /* ****************************************************************/
-    /* we want to be able to detect that the PSRVR is up and running
-     * prior to attempting to connect to it. The code logic in ORTE
-     * actually supports such things, but unfortunately will emit
-     * error messages about the contact file missing before we can
-     * arrive at the point where retries can be done. So...let's
-     * setup the path to the contact file here, check to see if it
-     * exists, and then cycle a while if it doesn't. */
-
-    if (NULL != (tdir = getenv("PMIX_SERVER_TMPDIR"))) {
-        sdir = strdup(tdir);
-    } else {
-        /* get the effective uid */
-        uid_t uid = geteuid();
-
-        /* look for the temp directory */
-        if (NULL == (str = getenv("TMPDIR"))) {
-            if (NULL == (str = getenv("TEMP"))) {
-                if (NULL == (str = getenv("TMP"))) {
-                    str = "/tmp";
-                }
-            }
-        }
-        /* get the nodename */
-        gethostname(hostname, sizeof(hostname));
-
-        /* setup the directory */
-        asprintf(&sdir, "%s/ompi.%s.%lu/dvm", str, hostname, (unsigned long)uid);
-        /* setup the contact name */
-        asprintf(&filename, "%s/contact.txt", sdir);
-        if (NULL == filename) {
-            fprintf(stderr, "OUT OF MEMORY\n");
-            exit(1);
-        }
-    }
-    /* check to see if the file exists - loop a few times if it
-     * doesn't, delaying between successive attempts */
-    n = 0;
-    while (n < DBGR_LOOP_LIMIT &&
-           0 != access(filename, R_OK)) {
-        sleep(1);
-        ++n;
-    }
-    /* if we still don't see the file, then give up */
-    if (0 != access(filename, R_OK)) {
-        fprintf(stderr, "PSRVR contact file %s not found - cannot continue\n", filename);
-        exit(1);
-    }
-    free(filename);
-
-    /* init us - pass along the location of the contact file */
-    ninfo = 1;
-    PMIX_INFO_CREATE(info, ninfo);
-    PMIX_INFO_LOAD(&info[0], PMIX_SERVER_TMPDIR, sdir, PMIX_STRING);
-    free(sdir);
-
+    info = NULL;
+    ninfo = 0;
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, info, ninfo))) {
         fprintf(stderr, "PMIx_tool_init failed: %d\n", rc);
         exit(rc);
@@ -296,6 +241,7 @@ int main(int argc, char **argv)
     PMIX_INFO_FREE(info, ninfo);
 
     fprintf(stderr, "Tool ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
+    goto done;
 
     /* register a default event handler */
     active = -1;
@@ -338,8 +284,8 @@ int main(int argc, char **argv)
          * so we know if the RM can stop-on-exec, or only supports stop-in-init */
         nq = 1;
         PMIX_QUERY_CREATE(query, nq);
-        PMIX_ARGV_APPEND(query[0].keys, PMIX_QUERY_SPAWN_SUPPORT);
-        PMIX_ARGV_APPEND(query[0].keys, PMIX_QUERY_DEBUG_SUPPORT);
+        PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_SPAWN_SUPPORT);
+        PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_DEBUG_SUPPORT);
         /* setup the caddy to retrieve the data */
         myquery_data.info = NULL;
         myquery_data.ninfo = 0;
@@ -404,7 +350,7 @@ int main(int argc, char **argv)
             PMIX_APP_CREATE(app, napps);
             /* setup the executable */
             app[0].cmd = strdup("client");
-            PMIX_ARGV_APPEND(app[0].argv, "./client");
+            PMIX_ARGV_APPEND(rc, app[0].argv, "./client");
             getcwd(cwd, 1024);  // point us to our current directory
             app[0].cwd = strdup(cwd);
             app[0].maxprocs = 2;
@@ -458,7 +404,7 @@ static int attach_to_running_job(char *nspace)
      * specified one exists */
     nq = 1;
     PMIX_QUERY_CREATE(query, nq);
-    PMIX_ARGV_APPEND(query[0].keys, PMIX_QUERY_NAMESPACES);
+    PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_NAMESPACES);
 
     q = (myquery_data_t*)malloc(sizeof(myquery_data_t));
     q->active = true;

@@ -13,6 +13,7 @@
 # Copyright (c) 2009-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2012      Los Alamos National Security, LLC.
 #                         All rights reserved.
+# Copyright (c) 2017      Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -32,7 +33,6 @@ headers += \
         runtime/runtime_internals.h \
         runtime/data_type_support/orte_dt_support.h \
 	runtime/orte_wait.h \
-        runtime/orte_cr.h \
         runtime/orte_data_server.h \
         runtime/orte_info_support.h
 
@@ -49,6 +49,5 @@ lib@ORTE_LIB_PREFIX@open_rte_la_SOURCES += \
         runtime/data_type_support/orte_dt_unpacking_fns.c \
         runtime/orte_mca_params.c \
         runtime/orte_wait.c \
-        runtime/orte_cr.c \
         runtime/orte_data_server.c \
         runtime/orte_info_support.c
