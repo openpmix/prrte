@@ -99,6 +99,8 @@ const opal_pmix_base_module_t opal_pmix_pmix2x_module = {
     .resolve_nodes = pmix2x_resolve_nodes,
     .query = pmix2x_query,
     .log = pmix2x_log,
+    .allocate = pmix2x_allocate,
+    .job_control = pmix2x_job_control,
     /* server APIs */
     .server_init = pmix2x_server_init,
     .server_finalize = pmix2x_server_finalize,

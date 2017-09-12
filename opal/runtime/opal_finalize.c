@@ -49,12 +49,7 @@
 #include "opal/mca/event/base/base.h"
 #include "opal/runtime/opal_progress.h"
 #include "opal/mca/shmem/base/base.h"
-#if OPAL_ENABLE_FT_CR    == 1
-#include "opal/mca/compress/base/base.h"
-#endif
 
-#include "opal/runtime/opal_cr.h"
-#include "opal/mca/crs/base/base.h"
 #include "opal/threads/tsd.h"
 
 extern int opal_initialized;
@@ -127,13 +122,6 @@ opal_finalize(void)
     }
 
     opal_progress_finalize();
-
-    /* close the checkpoint and restart service */
-    opal_cr_finalize();
-
-#if OPAL_ENABLE_FT_CR    == 1
-    (void) mca_base_framework_close(&opal_compress_base_framework);
-#endif
 
     (void) mca_base_framework_close(&opal_event_base_framework);
 

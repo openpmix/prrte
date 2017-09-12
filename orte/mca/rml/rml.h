@@ -45,8 +45,6 @@
 #endif
 
 #include "orte/mca/mca.h"
-#include "opal/mca/crs/crs.h"
-#include "opal/mca/crs/base/base.h"
 #include "orte/mca/routed/routed.h"
 
 #include "orte/mca/rml/rml_types.h"

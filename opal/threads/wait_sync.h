@@ -22,6 +22,7 @@
 
 #include "opal/sys/atomic.h"
 #include "opal/threads/condition.h"
+#include "opal/include/opal/constants.h"
 #include <pthread.h>
 
 BEGIN_C_DECLS

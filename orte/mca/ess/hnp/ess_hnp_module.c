@@ -42,13 +42,13 @@
 #include "opal/class/opal_list.h"
 #include "opal/mca/event/event.h"
 #include "opal/runtime/opal.h"
-#include "opal/runtime/opal_cr.h"
 
 #include "opal/util/arch.h"
 #include "opal/util/argv.h"
 #include "opal/util/if.h"
 #include "opal/util/os_path.h"
 #include "opal/util/output.h"
+#include "opal/util/opal_environ.h"
 #include "opal/util/malloc.h"
 #include "opal/util/basename.h"
 #include "opal/util/fd.h"
@@ -71,10 +71,6 @@
 #include "orte/mca/plm/plm.h"
 #include "orte/mca/odls/base/base.h"
 #include "orte/mca/rmaps/base/base.h"
-#if OPAL_ENABLE_FT_CR == 1
-#include "orte/mca/snapc/base/base.h"
-#include "orte/mca/sstore/base/base.h"
-#endif
 #include "orte/mca/filem/base/base.h"
 #include "orte/mca/state/base/base.h"
 #include "orte/mca/state/state.h"
@@ -94,7 +90,6 @@
 #include "orte/runtime/orte_wait.h"
 #include "orte/runtime/orte_globals.h"
 #include "orte/runtime/orte_quit.h"
-#include "orte/runtime/orte_cr.h"
 #include "orte/runtime/orte_locks.h"
 #include "orte/runtime/orte_data_server.h"
 
@@ -681,46 +676,7 @@ static int rte_init(void)
         error = "orte_filem_base_select";
         goto error;
     }
-#if OPAL_ENABLE_FT_CR == 1
-    /*
-     * Setup the SnapC
-     */
-    if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_snapc_base_framework, 0))) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_snapc_base_open";
-        goto error;
-    }
-    if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_sstore_base_framework, 0))) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_sstore_base_open";
-        goto error;
-    }
-    if (ORTE_SUCCESS != (ret = orte_snapc_base_select(ORTE_PROC_IS_HNP, ORTE_PROC_IS_APP))) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_snapc_base_select";
-        goto error;
-    }
-    if (ORTE_SUCCESS != (ret = orte_sstore_base_select())) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_sstore_base_select";
-        goto error;
-    }
 
-    /* For HNP, ORTE doesn't need the OPAL CR stuff */
-    opal_cr_set_enabled(false);
-#else
-    opal_cr_set_enabled(false);
-#endif
-    /*
-     * Initalize the CR setup
-     * Note: Always do this, even in non-FT builds.
-     * If we don't some user level tools may hang.
-     */
-    if (ORTE_SUCCESS != (ret = orte_cr_init())) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_cr_init";
-        goto error;
-    }
     /* setup the dfs framework */
     if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_dfs_base_framework, 0))) {
         ORTE_ERROR_LOG(ret);
@@ -770,7 +726,7 @@ static int rte_init(void)
     opal_progress_set_yield_when_idle(false);
     return ORTE_SUCCESS;
 
- error:
+  error:
     if (ORTE_ERR_SILENT != ret && !orte_report_silent_errors) {
         orte_show_help("help-orte-runtime.txt",
                        "orte_init:startup:internal-failure",
@@ -898,8 +854,6 @@ static void rte_abort(int status, bool report)
      * - Assume errmgr cleans up child processes before we exit.
      */
 
-    /* CRS cleanup since it may have a named pipe and thread active */
-    orte_cr_finalize();
     /* ensure we scrub the session directory tree */
     orte_session_dir_cleanup(ORTE_JOBID_WILDCARD);
     /* - Clean out the global structures
