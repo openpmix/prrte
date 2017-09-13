@@ -180,7 +180,6 @@ int main(int argc, char *argv[])
     char *param, *value;
     orte_job_t *jdata=NULL;
     orte_app_context_t *app;
-    char *uri, *ptr;
 
     /* Setup and parse the command line */
     memset(&myglobals, 0, sizeof(myglobals));
@@ -329,7 +328,7 @@ int main(int argc, char *argv[])
      */
     opal_finalize();
 
-    /* get the daemon job object - was created by ess/hnp component */
+     /* get the daemon job object - was created by ess/hnp component */
     if (NULL == (jdata = orte_get_job_data_object(ORTE_PROC_MY_NAME->jobid))) {
         orte_show_help("help-orterun.txt", "bad-job-object", true,
                        orte_basename);
@@ -494,22 +493,10 @@ static void notify_requestor(int sd, short args, void *cbdata)
     orte_daemon_cmd_flag_t command;
     orte_grpcomm_signature_t *sig;
 
-    if (ORTE_JOBID_INVALID != jdata->originator.jobid &&
-        ORTE_VPID_INVALID != jdata->originator.vpid) {
-        /* notify the requestor */
-        reply = OBJ_NEW(opal_buffer_t);
+opal_output(0, "NOTIFY JOB COMPLETE");
 
-        /* see if there was any problem */
-        if (orte_get_attribute(&jdata->attributes, ORTE_JOB_ABORTED_PROC, (void**)&pptr, OPAL_PTR) && NULL != pptr) {
-            ret = pptr->exit_code;
-        /* or whether we got cancelled by the user */
-        } else if (orte_get_attribute(&jdata->attributes, ORTE_JOB_CANCELLED, NULL, OPAL_BOOL)) {
-            ret = ORTE_ERR_JOB_CANCELLED;
-        } else {
-            ret = 0;
-        }
-        /* return the completion status */
-        opal_dss.pack(reply, &ret, 1, OPAL_INT);
+    /* notify the requestor */
+    reply = OBJ_NEW(opal_buffer_t);
 
         /* pack the jobid to be returned */
         opal_dss.pack(reply, &jdata->jobid, 1, ORTE_JOBID);

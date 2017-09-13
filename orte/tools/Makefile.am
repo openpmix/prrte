@@ -13,7 +13,7 @@
 # Copyright (c) 2006-2008 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
 #                         reserved.
-# Copyright (c) 2014-2016 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -29,11 +29,13 @@ SUBDIRS += \
 	tools/prun \
 	tools/wrappers \
         tools/pinfo \
-        tools/psrvr
+        tools/psrvr \
+        tools/prun
 
 DIST_SUBDIRS += \
 	tools/psrvd \
 	tools/prun \
 	tools/wrappers \
         tools/pinfo \
-        tools/psrvr
+        tools/psrvr \
+	tools/prun
