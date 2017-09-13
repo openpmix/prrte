@@ -29,13 +29,12 @@ SUBDIRS += \
 	tools/prun \
 	tools/wrappers \
         tools/pinfo \
-        tools/psrvr \
-        tools/prun
+        tools/psrvr
 
 DIST_SUBDIRS += \
 	tools/psrvd \
 	tools/prun \
 	tools/wrappers \
         tools/pinfo \
-        tools/psrvr \
-	tools/prun
+        tools/psrvr
+
