@@ -267,9 +267,7 @@ void pmix2x_event_hdlr(size_t evhdlr_registration_id,
     } else {
         if (OPAL_SUCCESS != (rc = opal_convert_string_to_jobid(&cd->pname.jobid, source->nspace))) {
             OPAL_ERROR_LOG(rc);
-            OBJ_RELEASE(cd);
-            OPAL_PMIX_RELEASE_THREAD(&opal_pmix_base.lock);
-            return;
+            cd->pname.jobid = OPAL_NAME_INVALID->jobid;
         }
         cd->pname.vpid = pmix2x_convert_rank(source->rank);
     }
@@ -752,7 +750,7 @@ void pmix2x_value_load(pmix_value_t *v,
             break;
         case OPAL_STATUS:
             v->type = PMIX_STATUS;
-            memcpy(&(v->data.status), &kv->data.status, sizeof(pmix_status_t));
+            v->data.status = pmix2x_convert_opalrc(kv->data.status);
             break;
         case OPAL_VPID:
             v->type = PMIX_PROC_RANK;
@@ -772,7 +770,7 @@ void pmix2x_value_load(pmix_value_t *v,
                 }
             }
             if (!found) {
-                (void)opal_snprintf_jobid(v->data.proc->nspace, PMIX_MAX_NSLEN, kv->data.name.vpid);
+                (void)opal_snprintf_jobid(v->data.proc->nspace, PMIX_MAX_NSLEN, kv->data.name.jobid);
             }
             v->data.proc->rank = pmix2x_convert_opalrank(kv->data.name.vpid);
             break;
@@ -927,7 +925,7 @@ int pmix2x_value_unload(opal_value_t *kv,
         break;
     case PMIX_STATUS:
         kv->type = OPAL_STATUS;
-        memcpy(&kv->data.status, &(v->data.status), sizeof(opal_status_t));
+        kv->data.status = pmix2x_convert_rc(v->data.status);
         break;
     case PMIX_PROC_RANK:
         kv->type = OPAL_VPID;

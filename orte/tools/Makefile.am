@@ -25,15 +25,35 @@
 # orte/Makefile.am
 
 SUBDIRS += \
-	tools/psrvd \
-	tools/prun \
+	tools/orte-checkpoint \
+	tools/orte-clean \
+	tools/orte-ps \
+	tools/orte-restart \
+	tools/orted \
+	tools/orterun \
 	tools/wrappers \
-        tools/pinfo \
-        tools/psrvr
+        tools/orte-top \
+        tools/orte-info \
+        tools/orte-migrate \
+        tools/orte-server
 
 DIST_SUBDIRS += \
-	tools/psrvd \
-	tools/prun \
+	tools/orte-checkpoint \
+	tools/orte-clean \
+	tools/orte-ps \
+	tools/orte-restart \
+	tools/orted \
+	tools/orterun \
 	tools/wrappers \
-        tools/pinfo \
-        tools/psrvr
+        tools/orte-top \
+        tools/orte-info \
+        tools/orte-migrate \
+        tools/orte-server \
+        tools/orte-dvm \
+        tools/prun
+
+if OPAL_WANT_PRUN
+SUBDIRS += \
+	tools/prun \
+        tools/orte-dvm
+endif

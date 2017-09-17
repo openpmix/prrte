@@ -26,7 +26,10 @@
 # post-processed forms of the CFLAGS in the library targets down
 # below.
 
+AM_CPPFLAGS = $(OPAL_PMIX_CPPFLAGS)
+
 CFLAGS = $(CFLAGS_WITHOUT_OPTFLAGS) $(DEBUGGER_CFLAGS)
+AM_LDFLAGS = $(OPAL_PMIX_LDFLAGS)
 
 include $(top_srcdir)/Makefile.ompi-rules
 
@@ -44,6 +47,9 @@ nodist_man_MANS = $(man_pages)
 # therefore the release date or version may have changed)
 $(nodist_man_MANS): $(top_builddir)/opal/include/opal_config.h
 
+dist_ortedata_DATA = help-orterun.txt \
+                     help-orte-top.txt
+
 endif # OPAL_INSTALL_BINARIES
 
 prun_SOURCES = \
@@ -53,7 +59,10 @@ prun_SOURCES = \
 
 prun_LDADD = \
 	$(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la \
-	$(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
+	$(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la \
+	$(OPAL_PMIX_LDADD)
+
+prun_LIBS = $(OPAL_PMIX_LIBS)
 
 distclean-local:
 	rm -f $(man_pages)

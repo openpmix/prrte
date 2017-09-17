@@ -3,6 +3,7 @@
  * Copyright (c) 2013-2016 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -148,8 +149,6 @@ usnic_compat_proc_name_compare(opal_process_name_t a,
 #  define opal_btl_usnic_recv_segment_t_class ompi_btl_usnic_recv_segment_t_class
 #  define opal_btl_usnic_ack_segment_t ompi_btl_usnic_ack_segment_t
 #  define opal_btl_usnic_ack_segment_t_class ompi_btl_usnic_ack_segment_t_class
-
-#  define opal_btl_usnic_graph_t ompi_btl_usnic_graph_t
 
 #  define opal_btl_usnic_run_tests ompi_btl_usnic_run_tests
 
