@@ -1,8 +1,8 @@
 /***************************************************************************
  *                                                                         *
- *          Open MPI: Open Source High Performance Computing               *
+ *          PMIx: Process Management for Exascale Applications             *
  *                                                                         *
- *                   http://www.open-mpi.org/                              *
+ *                   https://pmix.github.io/pmix                           *
  *                                                                         *
  ***************************************************************************/
 
