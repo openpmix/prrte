@@ -649,7 +649,7 @@ int prun(int argc, char *argv[])
 
     /* tell the ess/tool component that we want to connect to a system-level
      * PMIx server */
-    opal_setenv("OMPI_MCA_ess_tool_system_server_only", "1", true, &environ);
+    opal_setenv(OPAL_MCA_PREFIX"ess_tool_system_server_only", "1", true, &environ);
 
     /* now initialize ORTE */
     if (OPAL_SUCCESS != (rc = orte_init(&argc, &argv, ORTE_PROC_TOOL))) {

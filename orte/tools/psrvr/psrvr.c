@@ -283,11 +283,11 @@ int main(int argc, char *argv[])
     }
 
     /* inform ORTE that we renamed orted to be psrvd */
-    opal_setenv("PMIX_MCA_orte_launch_agent", "psrvd", true, &environ);
+    opal_setenv(OPAL_MCA_PREFIX"orte_launch_agent", "psrvd", true, &environ);
     /* we should act as system-level PMIx server */
-    opal_setenv("PMIX_MCA_pmix_system_server", "1", true, &environ);
+    opal_setenv(OPAL_MCA_PREFIX"pmix_system_server", "1", true, &environ);
     /* and as session-level PMIx server */
-    opal_setenv("PMIX_MCA_pmix_session_server", "1", true, &environ);
+    opal_setenv(OPAL_MCA_PREFIX"pmix_session_server", "1", true, &environ);
 
     /* Setup MCA params */
     orte_register_params();

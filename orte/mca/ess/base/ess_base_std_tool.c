@@ -37,6 +37,7 @@
 #include "opal/mca/event/event.h"
 #include "opal/mca/pmix/base/base.h"
 #include "opal/runtime/opal.h"
+#include "opal/runtime/opal_progress_threads.h"
 #include "opal/util/arch.h"
 #include "opal/util/opal_environ.h"
 #include "opal/util/proc.h"
@@ -362,6 +363,7 @@ int orte_ess_base_tool_setup(uint8_t flags)
             error = "orte_iof_base_select";
             goto error;
         }
+
     }
 
     return ORTE_SUCCESS;
