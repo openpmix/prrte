@@ -107,6 +107,7 @@ static struct {
     bool run_as_root;
     bool set_sid;
     bool daemonize;
+    bool system_server;
 } myglobals;
 
 static opal_cmd_line_init_t cmd_line_init[] = {
@@ -166,6 +167,10 @@ static opal_cmd_line_init_t cmd_line_init[] = {
     { NULL, 'H', "host", "host", 1,
       NULL, OPAL_CMD_LINE_TYPE_STRING,
       "List of hosts to invoke processes on" },
+
+    { NULL, '\0', "system-server", "system-server", 0,
+      &myglobals.system_server, OPAL_CMD_LINE_TYPE_BOOL,
+      "Provide a system-level server connection point - only one allowed per node" },
 
     /* End of list */
     { NULL, '\0', NULL, NULL, 0,
@@ -284,9 +289,11 @@ int main(int argc, char *argv[])
 
     /* inform ORTE that we renamed orted to be psrvd */
     opal_setenv(OPAL_MCA_PREFIX"orte_launch_agent", "psrvd", true, &environ);
-    /* we should act as system-level PMIx server */
-    opal_setenv(OPAL_MCA_PREFIX"pmix_system_server", "1", true, &environ);
-    /* and as session-level PMIx server */
+    if (myglobals.system_server) {
+        /* we should act as system-level PMIx server */
+        opal_setenv(OPAL_MCA_PREFIX"pmix_system_server", "1", true, &environ);
+    }
+    /* always act as session-level PMIx server */
     opal_setenv(OPAL_MCA_PREFIX"pmix_session_server", "1", true, &environ);
 
     /* Setup MCA params */
