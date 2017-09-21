@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2014, Cisco Systems, Inc. All rights reserved.
+ * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
+ *                         All Rights reserved.
  *
  * Portions of this software copied from libfabric
  * (https://github.com/ofiwg/libfabric)
@@ -58,23 +60,23 @@ typedef struct nl_sock NL_HANDLE;
 /* err will be returned as -NLE_AGAIN */
 /* if the socket times out */
 #define NL_RECVMSGS(nlh, cb_arg, rc, err, out) \
-	do { \
-		err = nl_recvmsgs_default(nlh); \
-		if (err < 0) { \
+        do { \
+                err = nl_recvmsgs_default(nlh); \
+                if (err < 0) { \
                     opal_output(0, "Failed to receive netlink reply message, error %s\n", \
-				NL_GETERROR(err)); \
-			if (err == -NLE_AGAIN) \
-				err = rc; \
-			goto out; \
-		} \
-	} while (0)
+                                NL_GETERROR(err)); \
+                        if (err == -NLE_AGAIN) \
+                                err = rc; \
+                        goto out; \
+                } \
+        } while (0)
 
-struct usnic_rt_cb_arg {
-	uint32_t		nh_addr;
-	int			oif;
-	int			found;
-	int			replied;
-	struct usnic_nl_sk	*unlsk;
+struct opal_reachable_netlink_rt_cb_arg {
+        int                     oif;
+        int                     found;
+        int                     has_gateway;
+        int                     replied;
+        struct opal_reachable_netlink_sk        *unlsk;
 };
 
 #endif /* LIBNL3_UTILS_H */

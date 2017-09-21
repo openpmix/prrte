@@ -122,8 +122,8 @@ static int rte_init(void)
         val->type = OPAL_PID;
         val->data.pid = mca_ess_tool_component.pid;
         opal_list_append(&flags, &val->super);
+        opal_list_append(&flags, &val->super);
     }
-
 
     /* do the standard tool init */
     if (ORTE_SUCCESS != (ret = orte_ess_base_tool_setup(&flags))) {
