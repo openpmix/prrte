@@ -357,7 +357,6 @@ int prun(int argc, char *argv[])
         free(param);
     }
 
-
     /* now initialize ORTE */
     if (OPAL_SUCCESS != (rc = orte_init(&argc, &argv, ORTE_PROC_TOOL))) {
         OPAL_ERROR_LOG(rc);

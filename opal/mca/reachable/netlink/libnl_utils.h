@@ -2,6 +2,8 @@
  * Copyright (c) 2014-2015 Cisco Systems, Inc. All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
+ *                         All Rights reserved.
  *
  * Portions of this software copied from libfabric
  * (https://github.com/ofiwg/libfabric)
@@ -44,21 +46,33 @@
 #ifndef LIBNL_UTILS_H
 #define LIBNL_UTILS_H
 
-#if !defined (OPAL_HAVE_LIBNL3)
-#error You must define OPAL_HAVE_LIBNL3 to 0 or 1 before including libnl_utils.h
-#elif OPAL_HAVE_LIBNL3
 #include "libnl3_utils.h"
-#else
-#include "libnl1_utils.h"
-#endif
 
-struct usnic_nl_sk {
-    NL_HANDLE	*nlh;
-    uint32_t	seq;
+struct opal_reachable_netlink_sk {
+    NL_HANDLE   *nlh;
+    uint32_t    seq;
 };
 
-int opal_reachable_netlink_nl_rt_lookup(uint32_t src_addr,
-                                        uint32_t dst_addr, int oif,
-                                        uint32_t *nh_addr);
+/* returns 0 if host is reachable, EHOSTUNREACH if the host
+ * is not reachable, non-zero in other errors.
+ *
+ * If the route to the destination is through a gateway, *has_gateway
+ * is set to 1.  Otherwise, it is set to 0.
+ */
+int opal_reachable_netlink_rt_lookup(uint32_t src_addr,
+                                     uint32_t dst_addr, int oif,
+                                     int *has_gateway);
+
+#if OPAL_ENABLE_IPV6
+/* returns 0 if host is reachable, EHOSTUNREACH if the host
+ * is not reachable, non-zero in other errors.
+ *
+ * If the route to the destination is through a gateway, *has_gateway
+ * is set to 1.  Otherwise, it is set to 0.
+ */
+int opal_reachable_netlink_rt_lookup6(struct in6_addr *src_addr,
+                                      struct in6_addr *dst_addr, int oif,
+                                      int *has_gateway);
+#endif
 
 #endif /* LIBNL_UTILS_H */

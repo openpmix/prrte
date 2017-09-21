@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,6 +28,10 @@ OPAL_DECLSPEC extern mca_base_framework_t opal_reachable_base_framework;
  * Select a reachable module
  */
 OPAL_DECLSPEC int opal_reachable_base_select(void);
+
+OPAL_DECLSPEC opal_reachable_t * opal_reachable_allocate(unsigned int num_local,
+                                                         unsigned int num_remote);
+
 
 END_C_DECLS
 
