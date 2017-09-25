@@ -23,7 +23,7 @@
 # via AC_CONFIG_MACRO_DIR in configure.ac.
 ACLOCAL_AMFLAGS = -I ./config
 
-SUBDIRS = config contrib include src
+SUBDIRS = config contrib include src etc
 
 
 headers =
