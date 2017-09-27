@@ -28,20 +28,58 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <pthread.h>
 
 #include <pmix_tool.h>
 
+typedef struct {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    volatile bool active;
+    pmix_status_t status;
+} mylock_t;
+
+#define DEBUG_CONSTRUCT_LOCK(l)                     \
+    do {                                            \
+        pthread_mutex_init(&(l)->mutex, NULL);      \
+        pthread_cond_init(&(l)->cond, NULL);        \
+        (l)->active = true;                         \
+        (l)->status = PMIX_SUCCESS;                 \
+    } while(0)
+
+#define DEBUG_DESTRUCT_LOCK(l)              \
+    do {                                    \
+        pthread_mutex_destroy(&(l)->mutex); \
+        pthread_cond_destroy(&(l)->cond);   \
+    } while(0)
+
+#define DEBUG_WAIT_THREAD(lck)                                      \
+    do {                                                            \
+        pthread_mutex_lock(&(lck)->mutex);                          \
+        while ((lck)->active) {                                     \
+            pthread_cond_wait(&(lck)->cond, &(lck)->mutex);         \
+        }                                                           \
+        pthread_mutex_unlock(&(lck)->mutex);                        \
+    } while(0)
+
+#define DEBUG_WAKEUP_THREAD(lck)                        \
+    do {                                                \
+        pthread_mutex_lock(&(lck)->mutex);              \
+        (lck)->active = false;                          \
+        pthread_cond_broadcast(&(lck)->cond);           \
+        pthread_mutex_unlock(&(lck)->mutex);            \
+    } while(0)
 
 /* define a structure for collecting returned
  * info from a query */
 typedef struct {
-    volatile bool active;
+    mylock_t lock;
     pmix_info_t *info;
     size_t ninfo;
 } myquery_data_t;
 
 static int attach_to_running_job(char *nspace);
-static bool waiting_for_debugger = true;
+static mylock_t waiting_for_debugger;
 static pmix_proc_t myproc;
 
 /* this is a callback function for the PMIx_Query
@@ -84,7 +122,7 @@ static void cbfunc(pmix_status_t status,
     }
 
     /* release the block */
-    mq->active = false;
+    DEBUG_WAKEUP_THREAD(&mq->lock);
 }
 
 /* this is the event notification function we pass down below
@@ -125,7 +163,7 @@ static void release_fn(size_t evhdlr_registration_id,
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
     }
     /* flag that the debugger is complete so we can exit */
-    waiting_for_debugger = false;
+    DEBUG_WAKEUP_THREAD(&waiting_for_debugger);
 }
 
 /* event handler registration is done asynchronously because it
@@ -139,13 +177,14 @@ static void evhandler_reg_callbk(pmix_status_t status,
                                  size_t evhandler_ref,
                                  void *cbdata)
 {
-    volatile int *active = (volatile int*)cbdata;
+    mylock_t *lock = (mylock_t*)cbdata;
 
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
                    myproc.nspace, myproc.rank, status, (unsigned long)evhandler_ref);
     }
-    *active = status;
+    lock->status = status;
+    DEBUG_WAKEUP_THREAD(lock);
 }
 
 static pmix_status_t spawn_debugger(char *appspace)
@@ -201,9 +240,9 @@ int main(int argc, char **argv)
     myquery_data_t myquery_data;
     bool cospawn = false, stop_on_exec = false;
     char cwd[1024];
-    volatile int active;
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
     char hostname[1024];
+    mylock_t mylock;
 
     /* Process any arguments we were given */
     for (i=1; i < argc; i++) {
@@ -234,6 +273,13 @@ int main(int argc, char **argv)
     }
     info = NULL;
     ninfo = 0;
+
+    DEBUG_CONSTRUCT_LOCK(&waiting_for_debugger);
+
+    /* use the system connection first, if available */
+    PMIX_INFO_CREATE(info, 1);
+    PMIX_INFO_LOAD(&info[0], PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
+    /* init as a tool */
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, info, ninfo))) {
         fprintf(stderr, "PMIx_tool_init failed: %d\n", rc);
         exit(rc);
@@ -241,30 +287,21 @@ int main(int argc, char **argv)
     PMIX_INFO_FREE(info, ninfo);
 
     fprintf(stderr, "Tool ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
-    goto done;
 
     /* register a default event handler */
-    active = -1;
+    DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIx_Register_event_handler(NULL, 0, NULL, 0,
-                                notification_fn, evhandler_reg_callbk, (void*)&active);
-    while (-1 == active) {
-        usleep(10);
-    }
-    if (0 != active) {
-        exit(active);
-    }
+                                notification_fn, evhandler_reg_callbk, (void*)&mylock);
+    DEBUG_WAIT_THREAD(&mylock);
+    DEBUG_DESTRUCT_LOCK(&mylock);
 
     /* register another handler specifically for when the debugger
      * job completes */
-    active = -1;
+    DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIx_Register_event_handler(&code, 1, NULL, 0,
-                                release_fn, evhandler_reg_callbk, (void*)&active);
-    while (-1 == active) {
-        usleep(10);
-    }
-    if (0 != active) {
-        exit(active);
-    }
+                                release_fn, evhandler_reg_callbk, (void*)&mylock);
+    DEBUG_WAIT_THREAD(&mylock);
+    DEBUG_DESTRUCT_LOCK(&mylock);
 
     /* if we are attaching to a running job, then attach to it */
     if (NULL != nspace) {
@@ -287,18 +324,17 @@ int main(int argc, char **argv)
         PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_SPAWN_SUPPORT);
         PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_DEBUG_SUPPORT);
         /* setup the caddy to retrieve the data */
+        DEBUG_CONSTRUCT_LOCK(&myquery_data.lock);
         myquery_data.info = NULL;
         myquery_data.ninfo = 0;
-        myquery_data.active = true;
         /* execute the query */
         fprintf(stderr, "Debugger: querying capabilities\n");
         if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void*)&myquery_data))) {
             fprintf(stderr, "PMIx_Query_info failed: %d\n", rc);
             goto done;
         }
-        while (myquery_data.active) {
-            usleep(10);
-        }
+        DEBUG_WAIT_THREAD(&myquery_data.lock);
+        DEBUG_DESTRUCT_LOCK(&myquery_data.lock);
 
         /* we should have received back two info structs, one containing
          * a comma-delimited list of PMIx spawn attributes the RM supports,
@@ -381,12 +417,11 @@ int main(int argc, char **argv)
 
 
         /* this is where a debugger tool would wait until the debug operation is complete */
-        while (waiting_for_debugger) {
-            sleep(1);
-        }
+        DEBUG_WAIT_THREAD(&waiting_for_debugger);
     }
 
   done:
+    DEBUG_DESTRUCT_LOCK(&waiting_for_debugger);
     PMIx_tool_finalize();
 
     return(rc);
@@ -407,16 +442,13 @@ static int attach_to_running_job(char *nspace)
     PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_NAMESPACES);
 
     q = (myquery_data_t*)malloc(sizeof(myquery_data_t));
-    q->active = true;
-
+    DEBUG_CONSTRUCT_LOCK(&q->lock);
     if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void*)q))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Query_info failed: %d\n", myproc.nspace, myproc.rank, rc);
         return -1;
     }
-    /* wait for a response */
-    while (q->active) {
-        usleep(10);
-    }
+    DEBUG_WAIT_THREAD(&q->lock);
+    DEBUG_DESTRUCT_LOCK(&q->lock);
 
     if (NULL == q->info) {
         fprintf(stderr, "Query returned no info\n");
