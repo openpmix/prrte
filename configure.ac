@@ -1183,7 +1183,6 @@ AC_CONFIG_FILES([
     contrib/Makefile
 ])
 
-
 OPAL_CONFIG_FILES
 ORTE_CONFIG_FILES
 
