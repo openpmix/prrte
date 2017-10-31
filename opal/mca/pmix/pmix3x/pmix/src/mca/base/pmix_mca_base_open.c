@@ -49,6 +49,7 @@ int pmix_mca_base_opened = 0;
 char *pmix_mca_base_system_default_path = NULL;
 char *pmix_mca_base_user_default_path = NULL;
 bool pmix_mca_base_component_show_load_errors = (bool) PMIX_SHOW_LOAD_ERRORS_DEFAULT;
+bool pmix_mca_base_component_track_load_errors = false;
 bool pmix_mca_base_component_disable_dlopen = false;
 
 static char *pmix_mca_base_verbose = NULL;
@@ -119,6 +120,14 @@ int pmix_mca_base_open(void)
     (void) pmix_mca_base_var_register_synonym(var_id, "pmix", "mca", NULL, "component_show_load_errors",
                                               PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
+    pmix_mca_base_component_track_load_errors = false;
+    var_id = pmix_mca_base_var_register("pmix", "mca", "base", "component_track_load_errors",
+                                        "Whether to track errors for components that failed to load or not",
+                                        PMIX_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                        PMIX_INFO_LVL_9,
+                                        PMIX_MCA_BASE_VAR_SCOPE_READONLY,
+                                        &pmix_mca_base_component_track_load_errors);
+
     pmix_mca_base_component_disable_dlopen = false;
     var_id = pmix_mca_base_var_register("pmix", "mca", "base", "component_disable_dlopen",
                                    "Whether to attempt to disable opening dynamic components or not",
@@ -171,7 +180,9 @@ static void set_defaults(pmix_output_stream_t *lds)
     /* Load up defaults */
 
     PMIX_CONSTRUCT(lds, pmix_output_stream_t);
+#if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
     lds->lds_syslog_priority = LOG_INFO;
+#endif  /* defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H) */
     lds->lds_syslog_ident = "ompi";
     lds->lds_want_stderr = true;
 }
@@ -202,10 +213,15 @@ static void parse_verbose(char *e, pmix_output_stream_t *lds)
         }
 
         if (0 == strcasecmp(ptr, "syslog")) {
+#if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
             lds->lds_want_syslog = true;
             have_output = true;
+#else
+            pmix_output(0, "syslog support requested but not available on this system");
+#endif  /* defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H) */
         }
         else if (strncasecmp(ptr, "syslogpri:", 10) == 0) {
+#if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
             lds->lds_want_syslog = true;
             have_output = true;
             if (strcasecmp(ptr + 10, "notice") == 0)
@@ -214,9 +230,16 @@ static void parse_verbose(char *e, pmix_output_stream_t *lds)
                 lds->lds_syslog_priority = LOG_INFO;
             else if (strcasecmp(ptr + 10, "DEBUG") == 0)
                 lds->lds_syslog_priority = LOG_DEBUG;
+#else
+            pmix_output(0, "syslog support requested but not available on this system");
+#endif  /* defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H) */
         } else if (strncasecmp(ptr, "syslogid:", 9) == 0) {
+#if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
             lds->lds_want_syslog = true;
             lds->lds_syslog_ident = ptr + 9;
+#else
+            pmix_output(0, "syslog support requested but not available on this system");
+#endif  /* defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H) */
         }
 
         else if (strcasecmp(ptr, "stdout") == 0) {
