@@ -190,7 +190,6 @@ int mca_base_pvar_register (const char *project, const char *framework, const ch
 
     /* assert on usage errors */
     if (!get_value && !ctx) {
-        assert (0);
         return OPAL_ERR_BAD_PARAM;
     }
 
@@ -204,14 +203,12 @@ int mca_base_pvar_register (const char *project, const char *framework, const ch
     case MCA_BASE_PVAR_CLASS_STATE:
         /* states MUST be integers */
         if (MCA_BASE_VAR_TYPE_INT != type) {
-            assert (0);
             return OPAL_ERR_BAD_PARAM;
         }
         break;
     case MCA_BASE_PVAR_CLASS_COUNTER:
         /* counters can have the any of types in the fall-through except double */
         if (MCA_BASE_VAR_TYPE_DOUBLE == type) {
-            assert (0);
             return OPAL_ERR_BAD_PARAM;
         }
         /* fall-through */
@@ -225,14 +222,12 @@ int mca_base_pvar_register (const char *project, const char *framework, const ch
             MCA_BASE_VAR_TYPE_UNSIGNED_LONG != type &&
             MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG != type &&
             MCA_BASE_VAR_TYPE_DOUBLE != type) {
-            assert (0);
             return OPAL_ERR_BAD_PARAM;
         }
         break;
     case MCA_BASE_PVAR_CLASS_PERCENTAGE:
         /* percentages must be doubles */
         if (MCA_BASE_VAR_TYPE_DOUBLE != type) {
-            assert (0);
             return OPAL_ERR_BAD_PARAM;
         }
         break;
@@ -241,8 +236,7 @@ int mca_base_pvar_register (const char *project, const char *framework, const ch
            variables */
         break;
     default:
-        assert (0);
-        break;
+        return OPAL_ERR_BAD_PARAM;
     }
 
     /* update this assert if more MPIT verbosity levels are added */
@@ -254,7 +248,6 @@ int mca_base_pvar_register (const char *project, const char *framework, const ch
         ret = mca_base_pvar_get_internal (ret, &pvar, true);
         if (OPAL_SUCCESS != ret) {
             /* inconsistent internal state */
-            assert (0);
             return OPAL_ERROR;
         }
 
@@ -464,7 +457,7 @@ int mca_base_pvar_handle_alloc (mca_base_pvar_session_t *session, int index, voi
             break;
         }
 
-        pvar_handle->obj_handle = obj_handle;
+        pvar_handle->obj_handle = (NULL == obj_handle ? NULL : *(void**)obj_handle);
         pvar_handle->pvar = pvar;
 
         *handle = pvar_handle;
