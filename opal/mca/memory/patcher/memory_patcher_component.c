@@ -13,7 +13,7 @@
  * Copyright (c) 2009-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2016      Research Organization for Information Science
+ * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  *
@@ -153,6 +153,7 @@ static void *intercept_mmap(void *start, size_t length, int prot, int flags, int
 
 #endif
 
+#if defined (SYS_munmap)
 static int (*original_munmap) (void *, size_t);
 
 static int _intercept_munmap(void *start, size_t length)
@@ -178,6 +179,8 @@ static int intercept_munmap(void *start, size_t length)
     OPAL_PATCHER_END;
     return result;
 }
+
+#endif
 
 #if defined (SYS_mremap)
 
@@ -485,10 +488,12 @@ static int patcher_open (void)
     }
 #endif
 
+#if defined (SYS_munmap)
     rc = opal_patcher->patch_symbol ("munmap", (uintptr_t)intercept_munmap, (uintptr_t *) &original_munmap);
     if (OPAL_SUCCESS != rc) {
         return rc;
     }
+#endif
 
 #if defined (SYS_mremap)
     rc = opal_patcher->patch_symbol ("mremap",(uintptr_t)intercept_mremap, (uintptr_t *) &original_mremap);
