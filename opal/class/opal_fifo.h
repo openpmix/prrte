@@ -14,6 +14,7 @@
  * Copyright (c) 2010      IBM Corporation.  All rights reserved.
  * Copyright (c) 2014-2017 Los Alamos National Security, LLC. All rights
  *                         reseved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow

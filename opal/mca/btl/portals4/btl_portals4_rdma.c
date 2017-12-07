@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2008      UT-Battelle, LLC. All rights reserved.
  * Copyright (c) 2014      Bull SAS.  All rights reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow

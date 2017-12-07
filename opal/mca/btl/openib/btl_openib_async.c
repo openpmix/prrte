@@ -6,7 +6,7 @@
  * Copyright (c) 2009-2010 Oracle and/or its affiliates.  All rights reserved
  * Copyright (c) 2013-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
  * Copyright (c) 2014      Bull SAS.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.

@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2013      Sandia National Laboratories.  All rights reserved.
  * Copyright (c) 2014      Bull SAS.  All rights reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
