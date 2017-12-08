@@ -443,6 +443,15 @@ typedef enum {
     OPAL_PMIX_ALLOC_REAQCUIRE
 } opal_pmix_alloc_directive_t;
 
+/* define a set of bit-mask flags for specifying IO
+ * forwarding channels. These can be OR'd together
+ * to reference multiple channels */
+typedef uint16_t opal_pmix_iof_channel_t;
+#define OPAL_PMIX_FWD_STDIN_CHANNEL      0x01
+#define OPAL_PMIX_FWD_STDOUT_CHANNEL     0x02
+#define OPAL_PMIX_FWD_STDERR_CHANNEL     0x04
+#define OPAL_PMIX_FWD_STDDIAG_CHANNEL    0x08
+
 
 /****    PMIX INFO STRUCT    ****/
 

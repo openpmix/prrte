@@ -733,6 +733,10 @@ typedef int (*opal_pmix_base_module_server_notify_event_fn_t)(int status,
                                                               opal_list_t *info,
                                                               opal_pmix_op_cbfunc_t cbfunc, void *cbdata);
 
+/* push IO to local clients */
+typedef int (*opal_pmix_base_module_server_push_io_fn_t)(const opal_process_name_t *source,
+                                                         opal_pmix_iof_channel_t channel,
+                                                         unsigned char *data, size_t nbytes);
 
 /************************************************************
  *                         TOOL APIs                        *
@@ -917,6 +921,7 @@ typedef struct {
     opal_pmix_base_module_server_setup_fork_fn_t            server_setup_fork;
     opal_pmix_base_module_server_dmodex_request_fn_t        server_dmodex_request;
     opal_pmix_base_module_server_notify_event_fn_t          server_notify_event;
+    opal_pmix_base_module_server_push_io_fn_t               server_iof_push;
     /* tool APIs */
     opal_pmix_base_module_tool_init_fn_t                    tool_init;
     opal_pmix_base_module_tool_fini_fn_t                    tool_finalize;

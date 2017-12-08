@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -130,15 +130,13 @@ int main(int argc, char **argv)
     pmix_info_t *info;
     size_t ninfo;
     volatile int active;
-    pmix_status_t dbg = PMIX_ERR_DEBUGGER_RELEASE;
     pmix_query_t *query;
     size_t nq, n;
     myquery_data_t myquery_data;
+    pid_t pid;
 
-fprintf(stderr, "I AM HERE\n");
-fflush(stderr);
-    sleep(10);
-    exit(0);
+    pid = getpid();
+fprintf(stderr, "DEBUGGER DAEMON STARTED: %lu\n", (unsigned long)pid);
 
     /* init us - since we were launched by the RM, our connection info
      * will have been provided at startup. */
@@ -146,7 +144,7 @@ fflush(stderr);
         fprintf(stderr, "Debugger daemon ns %s rank %d: PMIx_tool_init failed: %d\n", myproc.nspace, myproc.rank, rc);
         exit(0);
     }
-    fprintf(stderr, "Debugger daemon ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
+    fprintf(stderr, "Debugger daemon ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank, (unsigned long)pid);
 
 
     /* register our default event handler */
@@ -164,14 +162,14 @@ fflush(stderr);
     (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
     if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_DEBUG_JOB, NULL, 0, &val))) {
-        fprintf(stderr, "[%s:%d] Failed to get job being debugged - error %d\n", myproc.nspace, myproc.rank, rc);
+        fprintf(stderr, "[%s:%d:%lu] Failed to get job being debugged - error %d\n", myproc.nspace, myproc.rank, (unsigned long)pid, rc);
         goto done;
     }
     if (NULL == val) {
         fprintf(stderr, "Got NULL return\n");
         goto done;
     }
-    fprintf(stderr, "[%s:%d] Debugging %s\n", myproc.nspace, myproc.rank, val->data.string);
+    fprintf(stderr, "[%s:%d:%lu] Debugging %s\n", myproc.nspace, myproc.rank, (unsigned long)pid, val->data.string);
 
     /* get our local proctable - for scalability reasons, we don't want to
      * have our "root" debugger process get the proctable for everybody and
@@ -195,7 +193,7 @@ fflush(stderr);
     while (myquery_data.active) {
         usleep(10);
     }
-    fprintf(stderr, "[%s:%d] Local proctable received\n", myproc.nspace, myproc.rank);
+    fprintf(stderr, "[%s:%d:%lu] Local proctable received\n", myproc.nspace, myproc.rank, (unsigned long)pid);
 
 
     /* now that we have the proctable for our local processes, we can do our
@@ -205,17 +203,18 @@ fflush(stderr);
     (void)strncpy(proc.nspace, val->data.string, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
     /* we send the notification to just the local procs of the job being debugged */
-    ninfo = 1;
+    ninfo = 2;
     PMIX_INFO_CREATE(info, ninfo);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);  // deliver to the target nspace
-    fprintf(stderr, "[%s:%u] Sending release\n", myproc.nspace, myproc.rank);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);  // deliver to the target nspace
+    fprintf(stderr, "[%s:%u%lu] Sending release\n", myproc.nspace, myproc.rank, (unsigned long)pid);
     PMIx_Notify_event(PMIX_ERR_DEBUGGER_RELEASE,
                       NULL, PMIX_RANGE_LOCAL,
                       info, ninfo, NULL, NULL);
 
     /* do some debugger magic */
     n = 0;
-    fprintf(stderr, "[%s:%u] Hanging around awhile, doing debugger magic\n", myproc.nspace, myproc.rank);
+    fprintf(stderr, "[%s:%u:%lu] Hanging around awhile, doing debugger magic\n", myproc.nspace, myproc.rank, (unsigned long)pid);
     while (n < 5) {
         usleep(1000);
         ++n;
@@ -223,11 +222,11 @@ fflush(stderr);
 
   done:
     /* finalize us */
-    fprintf(stderr, "Debugger daemon ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
+    fprintf(stderr, "Debugger daemon ns %s rank %d pid %lu: Finalizing\n", myproc.nspace, myproc.rank, (unsigned long)pid);
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
         fprintf(stderr, "Debugger daemon ns %s rank %d:PMIx_Finalize failed: %d\n", myproc.nspace, myproc.rank, rc);
     } else {
-        fprintf(stderr, "Debugger daemon ns %s rank %d:PMIx_Finalize successfully completed\n", myproc.nspace, myproc.rank);
+        fprintf(stderr, "Debugger daemon ns %s rank %d pid %lu:PMIx_Finalize successfully completed\n", myproc.nspace, myproc.rank, (unsigned long)pid);
     }
     fflush(stderr);
     return(0);

@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -66,6 +66,7 @@ static void release_fn(size_t evhdlr_registration_id,
                        pmix_event_notification_cbfunc_fn_t cbfunc,
                        void *cbdata)
 {
+    fprintf(stderr, "Client %s:%d Debugger release\n", myproc.nspace, myproc.rank);
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
     }
@@ -104,6 +105,10 @@ int main(int argc, char **argv)
     bool flag;
     volatile int active;
     pmix_status_t dbg = PMIX_ERR_DEBUGGER_RELEASE;
+    pid_t pid;
+
+    pid = getpid();
+    fprintf(stderr, "Client %lu: Running\n", (unsigned long)pid);
 
     /* init us - note that the call to "init" includes the return of
      * any job-related info provided by the RM. This includes any
@@ -114,7 +119,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %d\n", myproc.nspace, myproc.rank, rc);
         exit(0);
     }
-    fprintf(stderr, "Client ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
+    fprintf(stderr, "Client ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank, (unsigned long)pid);
 
 
     /* register our default event handler - again, this isn't strictly

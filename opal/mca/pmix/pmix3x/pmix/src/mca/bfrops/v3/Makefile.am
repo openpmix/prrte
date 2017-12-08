@@ -11,7 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
-# Copyright (c) 2013-2016 Intel, Inc. All rights reserved
+# Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -19,24 +19,22 @@
 # $HEADER$
 #
 
-AM_CPPFLAGS = $(psec_munge_CPPFLAGS)
-
-headers = psec_munge.h
+headers = bfrop_pmix3.h
 sources = \
-        psec_munge_component.c \
-        psec_munge.c
+        bfrop_pmix3_component.c \
+        bfrop_pmix3.c
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_pmix_psec_munge_DSO
+if MCA_BUILD_pmix_bfrops_v3_DSO
 lib =
 lib_sources =
-component = mca_psec_munge.la
+component = mca_bfrops_v3.la
 component_sources = $(headers) $(sources)
 else
-lib = libmca_psec_munge.la
+lib = libmca_bfrops_v3.la
 lib_sources = $(headers) $(sources)
 component =
 component_sources =
@@ -44,11 +42,9 @@ endif
 
 mcacomponentdir = $(pmixlibdir)
 mcacomponent_LTLIBRARIES = $(component)
-mca_psec_munge_la_SOURCES = $(component_sources)
-mca_psec_munge_la_LDFLAGS = -module -avoid-version $(psec_munge_LDFLAGS)
-mca_psec_munge_la_LIBADD = $(psec_munge_LIBS)
+mca_bfrops_v3_la_SOURCES = $(component_sources)
+mca_bfrops_v3_la_LDFLAGS = -module -avoid-version
 
 noinst_LTLIBRARIES = $(lib)
-libmca_psec_munge_la_SOURCES = $(lib_sources)
-libmca_psec_munge_la_LDFLAGS = -module -avoid-version $(psec_munge_LDFLAGS)
-libmca_psec_munge_la_LIBADD = $(psec_munge_LIBS)
+libmca_bfrops_v3_la_SOURCES = $(lib_sources)
+libmca_bfrops_v3_la_LDFLAGS = -module -avoid-version

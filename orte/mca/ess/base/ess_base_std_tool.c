@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014      Hochschule Esslingen.  All rights reserved.
  *
  * Copyright (c) 2015      Cisco Systems, Inc.  All rights reserved.
@@ -49,7 +49,6 @@
 #include "orte/mca/rml/base/rml_contact.h"
 #include "orte/mca/routed/base/base.h"
 #include "orte/mca/errmgr/base/base.h"
-#include "orte/mca/iof/base/base.h"
 #include "orte/mca/state/base/base.h"
 #include "orte/util/proc_info.h"
 #include "orte/util/session_dir.h"
@@ -339,18 +338,6 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
         /* set the target hnp as our lifeline so we will terminate if it exits */
         orte_routed.set_lifeline(NULL, ORTE_PROC_MY_HNP);
 
-        /* setup the IOF */
-        if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_iof_base_framework, 0))) {
-            ORTE_ERROR_LOG(ret);
-            error = "orte_iof_base_open";
-            goto error;
-        }
-        if (ORTE_SUCCESS != (ret = orte_iof_base_select())) {
-            ORTE_ERROR_LOG(ret);
-            error = "orte_iof_base_select";
-            goto error;
-        }
-
     }
 
     return ORTE_SUCCESS;
@@ -373,9 +360,6 @@ int orte_ess_base_tool_finalize(void)
      * a very small subset of orte_init - ensure that
      * I only back those elements out
      */
-    if (NULL != orte_process_info.my_hnp_uri) {
-        (void) mca_base_framework_close(&orte_iof_base_framework);
-    }
     (void) mca_base_framework_close(&orte_routed_base_framework);
     (void) mca_base_framework_close(&orte_rml_base_framework);
     (void) mca_base_framework_close(&orte_errmgr_base_framework);
