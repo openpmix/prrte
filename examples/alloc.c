@@ -39,6 +39,20 @@ typedef struct {
     size_t ninfo;
 } mydata_t;
 
+static volatile bool waiting_for_allocation = true;
+
+/* this is a callback function for the PMIx_Query and
+ * PMIx_Allocate APIs. The query will callback with a status indicating
+ * if the request could be fully satisfied, partially
+ * satisfied, or completely failed. The info parameter
+ * contains an array of the returned data, with the
+ * info->key field being the key that was provided in
+ * the query call. Thus, you can correlate the returned
+ * data in the info->value field to the requested key.
+ *
+ * Once we have dealt with the returned data, we must
+ * call the release_fn so that the PMIx library can
+ * cleanup */
 static void infocbfunc(pmix_status_t status,
                        pmix_info_t *info, size_t ninfo,
                        void *cbdata,
@@ -48,12 +62,12 @@ static void infocbfunc(pmix_status_t status,
     mydata_t *mq = (mydata_t*)cbdata;
     size_t n;
 
-    fprintf(stderr, "Allocation request returned %s\n", PMIx_Error_string(status));
+    fprintf(stderr, "Allocation request returned %s", PMIx_Error_string(status));
 
     /* save the returned info - the PMIx library "owns" it
      * and will release it and perform other cleanup actions
      * when release_fn is called */
-    if (PMIX_SUCCESS == status && 0 < ninfo) {
+    if (0 < ninfo) {
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
         for (n=0; n < ninfo; n++) {
@@ -72,6 +86,48 @@ static void infocbfunc(pmix_status_t status,
     mq->active = false;
 }
 
+/* this is an event notification function that we explicitly request
+ * be called when the PMIX_ERR_ALLOC_COMPLETE notification is issued.
+ * We could catch it in the general event notification function and test
+ * the status to see if it was "alloc complete", but it often is simpler
+ * to declare a use-specific notification callback point. In this case,
+ * we are asking to know when the allocation request completes */
+static void release_fn(size_t evhdlr_registration_id,
+                       pmix_status_t status,
+                       const pmix_proc_t *source,
+                       pmix_info_t info[], size_t ninfo,
+                       pmix_info_t results[], size_t nresults,
+                       pmix_event_notification_cbfunc_fn_t cbfunc,
+                       void *cbdata)
+{
+    /* tell the event handler state machine that we are the last step */
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+    /* flag that the allocation is complete so we can exit */
+    waiting_for_allocation = false;
+}
+
+/* event handler registration is done asynchronously because it
+ * may involve the PMIx server registering with the host RM for
+ * external events. So we provide a callback function that returns
+ * the status of the request (success or an error), plus a numerical index
+ * to the registered event. The index is used later on to deregister
+ * an event handler - if we don't explicitly deregister it, then the
+ * PMIx server will do so when it see us exit */
+static void evhandler_reg_callbk(pmix_status_t status,
+                                 size_t evhandler_ref,
+                                 void *cbdata)
+{
+    volatile int *active = (volatile int*)cbdata;
+
+    if (PMIX_SUCCESS != status) {
+        fprintf(stderr, "EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
+                status, (unsigned long)evhandler_ref);
+    }
+    *active = status;
+}
+
 int main(int argc, char **argv)
 {
     pmix_proc_t myproc;
@@ -85,6 +141,8 @@ int main(int argc, char **argv)
     mydata_t mydata;
     pmix_query_t *query;
     char *myallocation = "MYALLOCATION";
+    volatile int active;
+    pmix_status_t code = PMIX_NOTIFY_ALLOC_COMPLETE;
 
     /* init us */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
@@ -115,7 +173,7 @@ int main(int argc, char **argv)
         PMIX_INFO_CREATE(info, 2);
         PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NUM_NODES, &nnodes, PMIX_UINT64);
         PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, myallocation, PMIX_STRING);
-        if (PMIX_SUCCESS != (rc = PMIx_Allocation_request_nb(PMIX_ALLOC_NEW, info, 2, infocbfunc, &mydata))) {
+        if (PMIX_SUCCESS != (rc = PMIx_Allocation_request_nb(PMIX_ALLOC_NEW, info, 2, infocbfunc, NULL))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Allocation_request_nb failed: %d\n", myproc.nspace, myproc.rank, rc);
             goto done;
         }
@@ -125,6 +183,25 @@ int main(int argc, char **argv)
         PMIX_INFO_FREE(info, 2);
         if (NULL != mydata.info) {
             PMIX_INFO_FREE(mydata.info, mydata.ninfo);
+        }
+    } else if (1 == myproc.rank) {
+        /* register a handler specifically for when the allocation
+         * operation completes */
+        PMIX_INFO_CREATE(info, 1);
+        PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, myallocation, PMIX_STRING);
+        active = -1;
+        PMIx_Register_event_handler(&code, 1, info, 1,
+                                    release_fn, evhandler_reg_callbk, (void*)&active);
+        while (-1 == active) {
+            usleep(10);
+        }
+        if (0 != active) {
+            exit(active);
+        }
+        PMIX_INFO_FREE(info, 1);
+        /* now wait to hear that the request is complete */
+        while (waiting_for_allocation) {
+            usleep(10);
         }
     } else {
         /* I am not the root rank, so let me wait a little while and then

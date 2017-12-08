@@ -12,6 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -85,7 +86,7 @@ int orte_odls_default_component_query(mca_base_module_t **module, int *priority)
      * if we do. Hence, we only get here if we CAN build - in which
      * case, we definitely should be considered for selection
      */
-    *priority = 1; /* let others override us - we are the default */
+    *priority = 10; /* let others override us - we are the default */
     *module = (mca_base_module_t *) &orte_odls_default_module;
     return ORTE_SUCCESS;
 }

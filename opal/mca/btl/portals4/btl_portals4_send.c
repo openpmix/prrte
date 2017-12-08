@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2013      Sandia National Laboratories.  All rights reserved.
  * Copyright (c) 2014      Bull SAS.  All rights reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,9 +50,9 @@ int mca_btl_portals4_send(struct mca_btl_base_module_t* btl_base,
     BTL_PORTALS4_SET_SEND_BITS(match_bits, 0, 0, tag, msglen_type);
 
     /* reserve space in the event queue for rdma operations immediately */
-    while (OPAL_THREAD_ADD32(&portals4_btl->portals_outstanding_ops, 1) >
+    while (OPAL_THREAD_ADD_FETCH32(&portals4_btl->portals_outstanding_ops, 1) >
            portals4_btl->portals_max_outstanding_ops) {
-        OPAL_THREAD_ADD32(&portals4_btl->portals_outstanding_ops, -1);
+        OPAL_THREAD_ADD_FETCH32(&portals4_btl->portals_outstanding_ops, -1);
         OPAL_OUTPUT_VERBOSE((90, opal_btl_base_framework.framework_output,
                              "Call to mca_btl_portals4_component_progress (4)\n"));
         mca_btl_portals4_component_progress();

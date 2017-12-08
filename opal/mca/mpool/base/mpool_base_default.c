@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2016      Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +31,11 @@ static void *mca_mpool_default_alloc (mca_mpool_base_module_t *mpool, size_t siz
 #if HAVE_POSIX_MEMALIGN
     void *addr = NULL;
 
-    (void) posix_memalign (&addr, align, size);
+    if (align <= sizeof(void *)) {
+        addr = malloc (size);
+    } else {
+        (void) posix_memalign (&addr, align, size);
+    }
     return addr;
 #else
     void *addr, *ret;

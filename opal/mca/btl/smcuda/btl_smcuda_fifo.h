@@ -15,6 +15,7 @@
  * Copyright (c) 2010-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2010-2012 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +41,7 @@ add_pending(struct mca_btl_base_endpoint_t *ep, void *data, bool resend)
     si = (btl_smcuda_pending_send_item_t*)i;
     si->data = data;
 
-    OPAL_THREAD_ADD32(&mca_btl_smcuda_component.num_pending_sends, +1);
+    OPAL_THREAD_ADD_FETCH32(&mca_btl_smcuda_component.num_pending_sends, +1);
 
     /* if data was on pending send list then prepend it to the list to
      * minimize reordering */

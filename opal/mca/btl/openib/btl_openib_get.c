@@ -17,7 +17,7 @@
  * Copyright (c) 2006-2007 Voltaire All rights reserved.
  * Copyright (c) 2008-2012 Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2009      IBM Corporation.  All rights reserved.
- * Copyright (c) 2013-2014 Intel, Inc. All rights reserved
+ * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
  * Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -148,9 +148,9 @@ int mca_btl_openib_get_internal (mca_btl_base_module_t *btl, struct mca_btl_base
     }
 
     /* check for a get token */
-    if (OPAL_THREAD_ADD32(&ep->get_tokens,-1) < 0) {
+    if (OPAL_THREAD_ADD_FETCH32(&ep->get_tokens,-1) < 0) {
         qp_put_wqe(ep, qp);
-        OPAL_THREAD_ADD32(&ep->get_tokens,1);
+        OPAL_THREAD_ADD_FETCH32(&ep->get_tokens,1);
         return OPAL_ERR_OUT_OF_RESOURCE;
     }
 
@@ -159,7 +159,7 @@ int mca_btl_openib_get_internal (mca_btl_base_module_t *btl, struct mca_btl_base
 
     if (ibv_post_send(ep->qps[qp].qp->lcl_qp, &frag->sr_desc, &bad_wr)) {
         qp_put_wqe(ep, qp);
-        OPAL_THREAD_ADD32(&ep->get_tokens,1);
+        OPAL_THREAD_ADD_FETCH32(&ep->get_tokens,1);
         return OPAL_ERROR;
     }
 
