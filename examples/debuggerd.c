@@ -135,6 +135,11 @@ int main(int argc, char **argv)
     size_t nq, n;
     myquery_data_t myquery_data;
 
+fprintf(stderr, "I AM HERE\n");
+fflush(stderr);
+    sleep(10);
+    exit(0);
+
     /* init us - since we were launched by the RM, our connection info
      * will have been provided at startup. */
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, NULL, 0))) {

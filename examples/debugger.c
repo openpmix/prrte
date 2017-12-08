@@ -216,7 +216,7 @@ static pmix_status_t spawn_debugger(char *appspace)
     if (PMIX_SUCCESS != (rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace))) {
         fprintf(stderr, "Debugger daemons failed to launch with error: %s\n", PMIx_Error_string(rc));
     }
-
+    fprintf(stderr, "SPAWNED DEBUGGERD\n");
     /* cleanup */
     PMIX_INFO_FREE(dinfo, dninfo);
     PMIX_APP_FREE(debugger, 1);
@@ -391,7 +391,7 @@ int main(int argc, char **argv)
             app[0].cwd = strdup(cwd);
             app[0].maxprocs = 2;
             /* provide job-level directives so the apps do what the user requested */
-            ninfo = 2;
+            ninfo = 4;
             PMIX_INFO_CREATE(info, ninfo);
             PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
             if (stop_on_exec) {
@@ -399,6 +399,9 @@ int main(int argc, char **argv)
             } else {
                 PMIX_INFO_LOAD(&info[1], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // procs are to pause in PMIx_Init for debugger attach
             }
+            PMIX_INFO_LOAD(&info[2], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
+            PMIX_INFO_LOAD(&info[3], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
+
             /* spawn the job - the function will return when the app
              * has been launched */
             fprintf(stderr, "Debugger: spawning %s\n", app[0].cmd);
