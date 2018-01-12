@@ -1133,7 +1133,9 @@ out:
 static void *call_disconnect_callback(int fd, int flags, void *v)
 {
     rdmacm_contents_t *contents = (rdmacm_contents_t *) v;
+#if OPAL_ENABLE_DEBUG
     void *tmp = NULL;
+#endif
     id_context_t *context;
     opal_list_item_t *item;
 
@@ -1145,7 +1147,9 @@ static void *call_disconnect_callback(int fd, int flags, void *v)
                      (void*) context->id));
 
         if (!context->already_disconnected) {
+#if OPAL_ENABLE_DEBUG
             tmp = context->id;
+#endif
             rdma_disconnect(context->id);
             context->already_disconnected = true;
         }
@@ -1260,9 +1264,12 @@ static int rdmacm_connect_endpoint(id_context_t *context,
 {
     rdmacm_contents_t *contents = context->contents;
     rdmacm_endpoint_local_cpc_data_t *data;
+
     mca_btl_openib_endpoint_t *endpoint;
+#if OPAL_ENABLE_DEBUG
 #if !BTL_OPENIB_RDMACM_IB_ADDR
     modex_message_t *message;
+#endif
 #endif
 
     if (contents->server) {
@@ -1302,6 +1309,7 @@ static int rdmacm_connect_endpoint(id_context_t *context,
         return OPAL_SUCCESS;
     }
 
+#if OPAL_ENABLE_DEBUG
 #if !BTL_OPENIB_RDMACM_IB_ADDR
     message = (modex_message_t *) endpoint->endpoint_remote_cpc_data->cbm_modex_message;
     BTL_VERBOSE(("%s connected!!! local %x remote %x state = %d",
@@ -1309,6 +1317,7 @@ static int rdmacm_connect_endpoint(id_context_t *context,
                  contents->ipaddr,
                  message->ipaddr,
                  endpoint->endpoint_state));
+#endif
 #endif
 
     /* Ensure that all the writes back to the endpoint and associated
@@ -1489,17 +1498,21 @@ static int finish_connect(id_context_t *context)
     struct rdma_conn_param conn_param;
     private_data_t msg;
     int rc;
+#if OPAL_ENABLE_DEBUG
 #if !BTL_OPENIB_RDMACM_IB_ADDR
     struct sockaddr *peeraddr;
     uint32_t remoteipaddr;
     uint16_t remoteport;
 #endif
+#endif
     modex_message_t *message;
 
+#if OPAL_ENABLE_DEBUG
 #if !BTL_OPENIB_RDMACM_IB_ADDR
-    remoteport = rdma_get_dst_port(context->id);
     peeraddr = rdma_get_peer_addr(context->id);
+    remoteport = rdma_get_dst_port(context->id);
     remoteipaddr = ((struct sockaddr_in *)peeraddr)->sin_addr.s_addr;
+#endif
 #endif
 
     message = (modex_message_t *)
@@ -1661,8 +1674,12 @@ static int event_handler(struct rdma_cm_event *event)
     id_context_t *context = (id_context_t*) event->id->context;
 #if !BTL_OPENIB_RDMACM_IB_ADDR
     rdmacm_contents_t *contents;
-    struct sockaddr *peeraddr, *localaddr;
-    uint32_t peeripaddr, localipaddr;
+    struct sockaddr *localaddr;
+    uint32_t localipaddr;
+#if OPAL_ENABLE_DEBUG
+    struct sockaddr *peeraddr;
+    uint32_t peeripaddr;
+#endif
 #endif
     int rc = -1;
     opal_btl_openib_ini_values_t ini;
@@ -1676,9 +1693,11 @@ static int event_handler(struct rdma_cm_event *event)
     contents = context->contents;
 
     localaddr = rdma_get_local_addr(event->id);
-    peeraddr = rdma_get_peer_addr(event->id);
     localipaddr = ((struct sockaddr_in *)localaddr)->sin_addr.s_addr;
+#if OPAL_ENABLE_DEBUG
+    peeraddr = rdma_get_peer_addr(event->id);
     peeripaddr = ((struct sockaddr_in *)peeraddr)->sin_addr.s_addr;
+#endif
 
     BTL_VERBOSE(("%s event_handler -- %s, status = %d to %x",
                 contents->server?"server":"client",

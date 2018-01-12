@@ -15,7 +15,6 @@
 # Copyright (c) 2010-2017 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      Los Alamos National Security, LLC.  All rights
 #                         reserved.
-# Copyright (c) 2017      Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow

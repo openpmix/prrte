@@ -12,7 +12,7 @@
 # Copyright (c) 2006      Sandia National Laboratories. All rights
 #                         reserved.
 # Copyright (c) 2010-2015 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2015      Intel, Inc. All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
 # Copyright (c) 2017      Los Alamos National Security, LLC.  All rights
 #                         reserved.

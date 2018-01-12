@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
@@ -66,6 +66,7 @@
 #include "orte/mca/ess/base/base.h"
 #include "orte/mca/grpcomm/base/base.h"
 #include "orte/mca/plm/base/base.h"
+#include "orte/mca/regx/regx.h"
 #include "orte/mca/rml/base/rml_contact.h"
 #include "orte/mca/rmaps/rmaps_types.h"
 #include "orte/mca/rmaps/base/base.h"
@@ -78,10 +79,8 @@
 
 #include "orte/util/context_fns.h"
 #include "orte/util/name_fns.h"
-#include "orte/util/regex.h"
 #include "orte/util/session_dir.h"
 #include "orte/util/proc_info.h"
-#include "orte/util/nidmap.h"
 #include "orte/util/show_help.h"
 #include "orte/util/threads.h"
 #include "orte/runtime/orte_globals.h"
@@ -117,9 +116,10 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     void *nptr;
     uint32_t key;
     char *nidmap;
-    orte_proc_t *dmn;
+    orte_proc_t *dmn, *proc;
     opal_value_t *val = NULL, *kv;
     opal_list_t *modex;
+    int n;
 
     /* get the job data pointer */
     if (NULL == (jdata = orte_get_job_data_object(job))) {
@@ -137,7 +137,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     /* if we couldn't provide the allocation regex on the orted
      * cmd line, then we need to provide all the info here */
     if (!orte_nidmap_communicated) {
-        if (ORTE_SUCCESS != (rc = orte_util_nidmap_create(orte_node_pool, &nidmap))) {
+        if (ORTE_SUCCESS != (rc = orte_regx.nidmap_create(orte_node_pool, &nidmap))) {
             ORTE_ERROR_LOG(rc);
             return rc;
         }
@@ -156,7 +156,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         orte_get_attribute(&jdata->attributes, ORTE_JOB_LAUNCHED_DAEMONS, NULL, OPAL_BOOL)) {
         flag = 1;
         opal_dss.pack(buffer, &flag, 1, OPAL_INT8);
-        if (ORTE_SUCCESS != (rc = orte_util_encode_nodemap(buffer))) {
+        if (ORTE_SUCCESS != (rc = orte_regx.encode_nodemap(buffer))) {
             ORTE_ERROR_LOG(rc);
             return rc;
         }
@@ -282,6 +282,17 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
                         OBJ_DESTRUCT(&jobdata);
                         return rc;
                     }
+                    /* pack the location of each proc */
+                    for (n=0; n < jptr->procs->size; n++) {
+                        if (NULL == (proc = (orte_proc_t*)opal_pointer_array_get_item(jptr->procs, n))) {
+                            continue;
+                        }
+                        if (ORTE_SUCCESS != (rc = opal_dss.pack(&jobdata, &proc->parent, 1, ORTE_VPID))) {
+                            ORTE_ERROR_LOG(rc);
+                            OBJ_DESTRUCT(&jobdata);
+                            return rc;
+                        }
+                    }
                     ++numjobs;
                 }
                 rc = opal_hash_table_get_next_key_uint32(orte_job_data, &key, (void **)&jptr, nptr, &nptr);
@@ -324,7 +335,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
 
     if (!orte_get_attribute(&jdata->attributes, ORTE_JOB_FULLY_DESCRIBED, NULL, OPAL_BOOL)) {
         /* compute and pack the ppn regex */
-        if (ORTE_SUCCESS != (rc = orte_util_nidmap_generate_ppn(jdata, &nidmap))) {
+        if (ORTE_SUCCESS != (rc = orte_regx.generate_ppn(jdata, &nidmap))) {
             ORTE_ERROR_LOG(rc);
             return rc;
         }
@@ -355,6 +366,7 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
     orte_std_cntr_t cnt;
     orte_job_t *jdata=NULL, *daemons;
     orte_node_t *node;
+    orte_vpid_t dmnvpid, v;
     int32_t n, k;
     opal_buffer_t *bptr;
     orte_proc_t *pptr, *dmn;
@@ -411,6 +423,31 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
                     /* yep - so we can drop this copy */
                     jdata->jobid = ORTE_JOBID_INVALID;
                     OBJ_RELEASE(jdata);
+                    continue;
+                }
+                /* unpack the location of each proc in this job */
+                for (v=0; v < jdata->num_procs; v++) {
+                    if (NULL == (pptr = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, v))) {
+                        pptr = OBJ_NEW(orte_proc_t);
+                        pptr->name.jobid = jdata->jobid;
+                        pptr->name.vpid = v;
+                        opal_pointer_array_set_item(jdata->procs, v, pptr);
+                    }
+                    cnt=1;
+                    if (ORTE_SUCCESS != (rc = opal_dss.unpack(bptr, &dmnvpid, &cnt, ORTE_VPID))) {
+                        ORTE_ERROR_LOG(rc);
+                        OBJ_RELEASE(jdata);
+                        goto REPORT_ERROR;
+                    }
+                    /* lookup the daemon */
+                    if (NULL == (dmn = (orte_proc_t*)opal_pointer_array_get_item(daemons->procs, dmnvpid))) {
+                        ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
+                        rc = ORTE_ERR_NOT_FOUND;
+                        goto REPORT_ERROR;
+                    }
+                    /* connect the two */
+                    OBJ_RETAIN(dmn->node);
+                    pptr->node = dmn->node;
                 }
             }
             /* release the buffer */
@@ -476,7 +513,7 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
             }
             /* populate the node array of the job map and the proc array of
              * the job object so we know how many procs are on each node */
-            if (ORTE_SUCCESS != (rc = orte_util_nidmap_parse_ppn(jdata, ppn))) {
+            if (ORTE_SUCCESS != (rc = orte_regx.parse_ppn(jdata, ppn))) {
                 ORTE_ERROR_LOG(rc);
                 free(ppn);
                 goto REPORT_ERROR;

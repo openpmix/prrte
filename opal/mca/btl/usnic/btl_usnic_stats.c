@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2017 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2017      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -125,11 +124,11 @@ void opal_btl_usnic_print_stats(
              module->stats.num_badfrag_recvs,
              module->stats.num_ack_recvs,
 
-             module->stats.num_seg_total_completions,
-             module->stats.num_seg_ack_completions,
-             module->stats.num_seg_frag_completions,
-             module->stats.num_seg_chunk_completions,
-             module->stats.num_seg_recv_completions,
+	     module->stats.num_seg_total_completions,
+	     module->stats.num_seg_ack_completions,
+	     module->stats.num_seg_frag_completions,
+	     module->stats.num_seg_chunk_completions,
+	     module->stats.num_seg_recv_completions,
 
              module->stats.num_old_dup_acks,
              module->stats.num_dup_acks,
