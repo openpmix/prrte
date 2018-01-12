@@ -13,6 +13,7 @@
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,7 +37,6 @@ static inline void mca_btl_vader_frag_constructor (mca_btl_vader_frag_t *frag)
 
     frag->base.des_segments      = frag->segments;
     frag->base.des_segment_count = 1;
-    frag->fbox = NULL;
 }
 
 int mca_btl_vader_frag_init (opal_free_list_item_t *item, void *ctx)

@@ -14,7 +14,7 @@
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010-2014 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2017      Intel, Inc. All rights reserved.
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,13 +42,6 @@ int mca_btl_vader_send (struct mca_btl_base_module_t *btl,
 {
     mca_btl_vader_frag_t *frag = (mca_btl_vader_frag_t *) descriptor;
     const size_t total_size = frag->segments[0].seg_len;
-
-    if (OPAL_LIKELY(frag->fbox)) {
-        mca_btl_vader_fbox_send (frag->fbox, tag);
-        mca_btl_vader_frag_complete (frag);
-
-        return 1;
-    }
 
     /* in order to work around a long standing ob1 bug (see #3845) we have to always
      * make the callback. once this is fixed in ob1 we can restore the code below. */

@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -403,7 +403,6 @@ static int orte_rmaps_base_open(mca_base_open_flag_t flags)
             if (opal_hwloc_use_hwthreads_as_cpus) {
                 OPAL_SET_BINDING_POLICY(opal_hwloc_binding_policy, OPAL_BIND_TO_HWTHREAD);
             } else {
-                opal_output(0, "SETTING BINDING TO CORE");
                 OPAL_SET_BINDING_POLICY(opal_hwloc_binding_policy, OPAL_BIND_TO_CORE);
             }
         }

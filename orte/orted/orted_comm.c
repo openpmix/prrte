@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2009      Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -58,7 +58,6 @@
 #include "orte/util/proc_info.h"
 #include "orte/util/session_dir.h"
 #include "orte/util/name_fns.h"
-#include "orte/util/nidmap.h"
 #include "orte/util/compress.h"
 
 #include "orte/mca/errmgr/errmgr.h"
@@ -339,22 +338,6 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
                                  num_new_procs, num_procs));
         }
 
-        break;
-
-        /****    TREE_SPAWN   ****/
-    case ORTE_DAEMON_TREE_SPAWN:
-        if (orte_debug_daemons_flag) {
-            opal_output(0, "%s orted_cmd: received tree_spawn",
-                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
-        }
-        /* if the PLM supports remote spawn, pass it all along */
-        if (NULL != orte_plm.remote_spawn) {
-            if (ORTE_SUCCESS != (ret = orte_plm.remote_spawn(buffer))) {
-                ORTE_ERROR_LOG(ret);
-            }
-        } else {
-            opal_output(0, "%s remote spawn is NULL!", ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
-        }
         break;
 
         /****    EXIT COMMAND    ****/
@@ -1400,8 +1383,6 @@ static char *get_orted_comm_cmd_str(int command)
         return strdup("ORTE_DAEMON_SIGNAL_LOCAL_PROCS");
     case ORTE_DAEMON_ADD_LOCAL_PROCS:
         return strdup("ORTE_DAEMON_ADD_LOCAL_PROCS");
-    case ORTE_DAEMON_TREE_SPAWN:
-        return strdup("ORTE_DAEMON_TREE_SPAWN");
 
     case ORTE_DAEMON_HEARTBEAT_CMD:
         return strdup("ORTE_DAEMON_HEARTBEAT_CMD");

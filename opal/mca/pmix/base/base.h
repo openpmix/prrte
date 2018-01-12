@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -65,6 +65,7 @@ typedef struct {
     opal_mutex_t mutex;
     opal_pmix_condition_t cond;
     volatile bool active;
+    int status;
 } opal_pmix_lock_t;
 
 

@@ -15,7 +15,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -232,6 +232,18 @@
 #    define __opal_attribute_destructor__    __attribute__((__destructor__))
 #else
 #    define __opal_attribute_destructor__
+#endif
+
+#if OPAL_HAVE_ATTRIBUTE_OPTNONE
+#    define __opal_attribute_optnone__    __attribute__((__optnone__))
+#else
+#    define __opal_attribute_optnone__
+#endif
+
+#if OPAL_HAVE_ATTRIBUTE_EXTENSION
+#    define __opal_attribute_extension__    __extension__
+#else
+#    define __opal_attribute_extension__
 #endif
 
 #  if OPAL_C_HAVE_VISIBILITY

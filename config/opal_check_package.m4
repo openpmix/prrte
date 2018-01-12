@@ -12,7 +12,7 @@ dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright (c) 2012-2017 Cisco Systems, Inc.  All rights reserved.
 dnl Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
-dnl Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+dnl Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
 dnl Copyright (c) 2015-2016 Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl $COPYRIGHT$
@@ -49,6 +49,15 @@ AC_DEFUN([_OPAL_CHECK_PACKAGE_HEADER], [
             AS_IF([test "$opal_check_package_header_happy" = "no"],
                   [# no go on the as is - reset the cache and try again
                    unset opal_Header])])
+
+    AS_IF([test "$opal_check_package_header_happy" = "no"],
+          [AS_IF([test "$dir_prefix" != ""],
+                 [$1_CPPFLAGS="$$1_CPPFLAGS -I$dir_prefix"
+                  CPPFLAGS="$CPPFLAGS -I$dir_prefix"])
+          AC_CHECK_HEADERS([$2], [opal_check_package_header_happy="yes"], [], [$6])
+          AS_IF([test "$opal_check_package_header_happy" = "no"],
+                [# no go on the as is - reset the cache and try again
+                 unset opal_Header])])
 
     AS_IF([test "$opal_check_package_header_happy" = "no"],
           [AS_IF([test "$dir_prefix" != ""],

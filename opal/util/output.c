@@ -16,7 +16,8 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2017      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,6 +46,7 @@
 #include "opal/util/output.h"
 #include "opal/threads/mutex.h"
 #include "opal/constants.h"
+#include "opal/mca/pmix/pmix.h"
 
 /*
  * Private data
@@ -786,18 +788,24 @@ static int open_file(int i)
 
         /* Actually open the file */
         info[i].ldi_fd = open(filename, flags, 0644);
-        free(filename);  /* release the filename in all cases */
         if (-1 == info[i].ldi_fd) {
             info[i].ldi_used = false;
+            free(filename);  /* release the filename in all cases */
             return OPAL_ERR_IN_ERRNO;
         }
 
         /* Make the file be close-on-exec to prevent child inheritance
          * problems */
         if (-1 == fcntl(info[i].ldi_fd, F_SETFD, 1)) {
-           return OPAL_ERR_IN_ERRNO;
+            free(filename);  /* release the filename in all cases */
+            return OPAL_ERR_IN_ERRNO;
         }
 
+        /* register it to be ignored */
+        if (NULL != opal_pmix.register_cleanup) {
+            opal_pmix.register_cleanup(filename, false, true, false);
+        }
+        free(filename);  /* release the filename in all cases */
     }
 
     /* Return successfully even if the session dir did not exist yet;
