@@ -12,7 +12,7 @@
  * Copyright (c) 2006      Sandia National Laboratories. All rights
  *                         reserved.
  * Copyright (c) 2013-2016 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2014 Intel, Inc. All rights reserved
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -454,8 +454,8 @@ static int create_proc_module_graph(
     for (i = 0; i < num_modules; ++i) {
         int idx = -1;
         err = opal_bp_graph_add_vertex(g,
-				       mca_btl_usnic_component.usnic_active_modules[i],
-				       &idx);
+                                       mca_btl_usnic_component.usnic_active_modules[i],
+                                       &idx);
         if (OPAL_SUCCESS != err) {
             OPAL_ERROR_LOG(err);
             goto out_free_graph;
@@ -510,8 +510,8 @@ static int create_proc_module_graph(
                                 "btl:usnic:%s: adding edge (%d,%d) with cost=%" PRIi64 " for edge module[%d] <--> endpoint[%d]",
                                 __func__, u, v, cost, i, j);
             err = opal_bp_graph_add_edge(g, u, v, cost,
-					 /*capacity=*/1,
-					 /*e_data=*/NULL);
+                                         /*capacity=*/1,
+                                         /*e_data=*/NULL);
             if (OPAL_SUCCESS != err) {
                 OPAL_ERROR_LOG(err);
                 goto out_free_graph;

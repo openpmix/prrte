@@ -7,7 +7,7 @@
  *                         reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014      Bull SAS.  All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies. All rights reserved.
  *

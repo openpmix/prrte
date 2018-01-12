@@ -7,7 +7,7 @@
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2012-2017 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.

@@ -17,6 +17,7 @@
 # Copyright (c) 2011-2013 NVIDIA Corporation.  All rights reserved.
 # Copyright (c) 2018      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2018      Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow

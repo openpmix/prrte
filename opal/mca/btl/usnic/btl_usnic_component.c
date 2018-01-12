@@ -15,7 +15,7 @@
  * Copyright (c) 2008-2017 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2014 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -619,15 +619,15 @@ static mca_btl_base_module_t** usnic_component_init(int* num_btl_modules,
 
     /* MPI_THREAD_MULTIPLE is only supported in 2.0+ */
     if (want_mpi_threads && !mca_btl_base_thread_multiple_override) {
-	if (OPAL_MAJOR_VERSION >= 2) {
+        if (OPAL_MAJOR_VERSION >= 2) {
             opal_output_verbose(5, USNIC_OUT,
                                 "btl:usnic: MPI_THREAD_MULTIPLE support is in testing phase.");
-	}
-	else {
+        }
+        else {
             opal_output_verbose(5, USNIC_OUT,
                                 "btl:usnic: MPI_THREAD_MULTIPLE is not supported in version < 2.");
-	    return NULL;
-	}
+            return NULL;
+        }
     }
 
     OBJ_CONSTRUCT(&btl_usnic_lock, opal_recursive_mutex_t);
