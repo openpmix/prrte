@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014-2017 Mellanox Technologies, Inc.
@@ -400,7 +400,6 @@ int ext2x_store_local(const opal_process_name_t *proc, opal_value_t *val)
 
     PMIX_VALUE_CONSTRUCT(&kv);
     ext2x_value_load(&kv, val);
-
     /* call the library - this is a blocking call */
     rc = PMIx_Store_internal(&p, val->key, &kv);
     PMIX_VALUE_DESTRUCT(&kv);

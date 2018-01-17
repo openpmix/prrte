@@ -188,23 +188,26 @@ static void evhandler(int status,
                 jobid = val->data.name.jobid;
             }
         }
+        opal_output(0, "NOTIFIED FOR JOBID %s myjobid %s", ORTE_JOBID_PRINT(jobid), ORTE_JOBID_PRINT(myjobid));
         if (orte_cmd_options.verbose && (myjobid != ORTE_JOBID_INVALID && jobid == myjobid)) {
             opal_output(0, "JOB %s COMPLETED WITH STATUS %d",
                         ORTE_JOBID_PRINT(jobid), jobstatus);
         }
     }
 
-    /* we _always_ have to execute the evhandler callback or
-     * else the event progress engine will hang */
-    if (NULL != cbfunc) {
-        cbfunc(OPAL_SUCCESS, NULL, NULL, NULL, cbdata);
-    }
     /* only terminate if this was our job - keep in mind that we
      * can get notifications of job termination prior to our spawn
      * having completed! */
     if (!fired && (myjobid != ORTE_JOBID_INVALID && jobid == myjobid)) {
+        opal_output(0, "EVHANDLER FIRING");
         fired = true;
         active = false;
+    }
+
+    /* we _always_ have to execute the evhandler callback or
+     * else the event progress engine will hang */
+    if (NULL != cbfunc) {
+        cbfunc(OPAL_SUCCESS, NULL, NULL, NULL, cbdata);
     }
 }
 
@@ -639,9 +642,9 @@ int prun(int argc, char *argv[])
     OPAL_LIST_DESTRUCT(&job_info);
     OPAL_LIST_DESTRUCT(&apps);
 
-    if (orte_cmd_options.verbose) {
+   // if (orte_cmd_options.verbose) {
         opal_output(0, "JOB %s EXECUTING", OPAL_JOBID_PRINT(myjobid));
-    }
+   // }
 
     while (active) {
         nanosleep(&tp, NULL);

@@ -364,6 +364,7 @@ int orte_ess_base_tool_finalize(void)
     (void) mca_base_framework_close(&orte_rml_base_framework);
     (void) mca_base_framework_close(&orte_errmgr_base_framework);
 
+    opal_pmix.finalize();
     (void) mca_base_framework_close(&opal_pmix_base_framework);
 
     return ORTE_SUCCESS;
