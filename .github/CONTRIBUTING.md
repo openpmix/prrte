@@ -1,6 +1,6 @@
 ## How to contribute to the PMIx Reference Server
 
-General information about contributing to the Open MPI project can be found at the [Contributing to PMIx webpage](https://pmix.org/code/contribute/).
+General information about contributing to the PMIx project can be found at the [Contributing to PMIx webpage](https://pmix.org/code/contribute/).
 The instructions below are specifically for opening issues and pull requests against the PMIx Reference Server.
 
 #### **Did you find a bug?**
