@@ -231,7 +231,6 @@ void orte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
             if (ORTE_JOBID_INVALID == sink->daemon.jobid) {
                 continue;
             }
-            opal_output(0, "IOF CHECKING SINK %s", ORTE_NAME_PRINT(&sink->name));
             if ((sink->tag & rev->tag) &&
                 sink->name.jobid == proct->name.jobid &&
                 (ORTE_VPID_WILDCARD == sink->name.vpid || sink->name.vpid == proct->name.vpid)) {
@@ -242,23 +241,23 @@ void orte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                  * data came from.
                  */
                 if (NULL != opal_pmix.server_iof_push) {
-                  //  OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
-                                         opal_output(0,
+                    OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
                                          "%s sending data to tool %s",
                                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                                          ORTE_NAME_PRINT(&sink->daemon));
-                    rc = opal_pmix.server_iof_push(&proct->name, rev->tag, data, numbytes);
+                    rc = opal_pmix.server_iof_push(&proct->name, rev->tag, data, numbytes));
                     if (ORTE_SUCCESS != rc) {
                         ORTE_ERROR_LOG(rc);
                     }
-                    if (sink->exclusive) {
-                        exclusive = true;
-                    }
                 } else {
                     OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
-                                         "%s cannot forward IO to tool %s",
+                                         "%s sending data to tool %s",
                                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                                         ORTE_NAME_PRINT(&sink->daemon)));
+                                         ORTE_NAME_PRINT(&sink->daemon));
+                    orte_iof_hnp_send_data_to_endpoint(&sink->daemon, &proct->name, rev->tag, data, numbytes));
+                }
+                if (sink->exclusive) {
+                    exclusive = true;
                 }
             }
         }

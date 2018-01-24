@@ -43,6 +43,7 @@
 #include "opal/util/argv.h"
 #include "opal/util/proc.h"
 
+#include "orte/mca/iof/base/base.h"
 #include "orte/mca/oob/base/base.h"
 #include "orte/mca/plm/base/base.h"
 #include "orte/mca/rml/base/base.h"
@@ -94,8 +95,6 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
     int ret;
     char *error = NULL;
     opal_list_t transports;
-    orte_jobid_t jobid;
-    orte_vpid_t vpid;
     opal_list_t info;
     opal_value_t *kv, *knext, val;
     opal_pmix_query_t *q;
@@ -128,58 +127,8 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
     /* set the event base for the pmix component code */
     opal_pmix_base_set_evbase(orte_event_base);
 
-    /* we have to define our name here */
-    if (NULL != orte_ess_base_jobid &&
-        NULL != orte_ess_base_vpid) {
-        opal_output_verbose(2, orte_ess_base_framework.framework_output,
-                            "ess:tool:obtaining name from environment");
-        if (ORTE_SUCCESS != (ret = orte_util_convert_string_to_jobid(&jobid, orte_ess_base_jobid))) {
-            return(ret);
-        }
-        ORTE_PROC_MY_NAME->jobid = jobid;
-        if (ORTE_SUCCESS != (ret = orte_util_convert_string_to_vpid(&vpid, orte_ess_base_vpid))) {
-            return(ret);
-        }
-        ORTE_PROC_MY_NAME->vpid = vpid;
-    } else {
-        /* If we are a tool with no name, then define it here */
-        uint16_t jobfam;
-        uint32_t hash32;
-        uint32_t bias;
-
-        opal_output_verbose(2, orte_ess_base_framework.framework_output,
-                            "ess:tool:computing name");
-        /* hash the nodename */
-        OPAL_HASH_STR(orte_process_info.nodename, hash32);
-        bias = (uint32_t)orte_process_info.pid;
-        /* fold in the bias */
-        hash32 = hash32 ^ bias;
-
-        /* now compress to 16-bits */
-        jobfam = (uint16_t)(((0x0000ffff & (0xffff0000 & hash32) >> 16)) ^ (0x0000ffff & hash32));
-
-        /* set the name */
-        ORTE_PROC_MY_NAME->jobid = 0xffff0000 & ((uint32_t)jobfam << 16);
-        ORTE_PROC_MY_NAME->vpid = 0;
-    }
-    /* my name is set, xfer it to the OPAL layer */
-    orte_process_info.super.proc_name = *(opal_process_name_t*)ORTE_PROC_MY_NAME;
-
-    /* initialize - PMIx may set our name here if we attach to
-     * a PMIx server */
+    /* initialize */
     OBJ_CONSTRUCT(&info, opal_list_t);
-    /* pass our name so the PMIx layer can use it */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(OPAL_PMIX_TOOL_NSPACE);
-    orte_util_convert_jobid_to_string(&kv->data.string, ORTE_PROC_MY_NAME->jobid);
-    kv->type = OPAL_STRING;
-    opal_list_append(&info, &kv->super);
-    /* ditto for our rank */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(OPAL_PMIX_TOOL_RANK);
-    kv->data.name.vpid = ORTE_PROC_MY_NAME->vpid;
-    kv->type = OPAL_VPID;
-    opal_list_append(&info, &kv->super);
     if (NULL != flags) {
         /* pass along any directives */
         OPAL_LIST_FOREACH_SAFE(kv, knext, flags, opal_value_t) {
@@ -194,9 +143,9 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
         goto error;
     }
     OPAL_LIST_DESTRUCT(&info);
+    /* the PMIx server set our name - record it here */
     ORTE_PROC_MY_NAME->jobid = OPAL_PROC_MY_NAME.jobid;
     ORTE_PROC_MY_NAME->vpid = OPAL_PROC_MY_NAME.vpid;
-
     orte_process_info.super.proc_hostname = strdup(orte_process_info.nodename);
     orte_process_info.super.proc_flags = OPAL_PROC_ALL_LOCAL;
     orte_process_info.super.proc_arch = opal_local_arch;
@@ -292,7 +241,7 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
     }
 
     /* setup I/O forwarding system - must come after we init routes */
-    if (NULL != orte_process_info.my_hnp_uri) {
+    if (NULL != orte_process_info.my_hnp_uri && NULL == opal_pmix.server_iof_push) {
         /* extract the name */
         if (ORTE_SUCCESS != orte_rml_base_parse_uris(orte_process_info.my_hnp_uri, ORTE_PROC_MY_HNP, NULL)) {
             orte_show_help("help-orte-top.txt", "orte-top:hnp-uri-bad", true, orte_process_info.my_hnp_uri);
@@ -338,6 +287,18 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
         /* set the target hnp as our lifeline so we will terminate if it exits */
         orte_routed.set_lifeline(NULL, ORTE_PROC_MY_HNP);
 
+        /* setup the IOF */
+        if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_iof_base_framework, 0))) {
+            ORTE_ERROR_LOG(ret);
+            error = "orte_iof_base_open";
+            goto error;
+        }
+        if (ORTE_SUCCESS != (ret = orte_iof_base_select())) {
+            ORTE_ERROR_LOG(ret);
+            error = "orte_iof_base_select";
+            goto error;
+        }
+
     }
 
     return ORTE_SUCCESS;
@@ -360,6 +321,9 @@ int orte_ess_base_tool_finalize(void)
      * a very small subset of orte_init - ensure that
      * I only back those elements out
      */
+    if (NULL != orte_process_info.my_hnp_uri && NULL == opal_pmix.server_iof_push) {
+        (void) mca_base_framework_close(&orte_iof_base_framework);
+    }
     (void) mca_base_framework_close(&orte_routed_base_framework);
     (void) mca_base_framework_close(&orte_rml_base_framework);
     (void) mca_base_framework_close(&orte_errmgr_base_framework);

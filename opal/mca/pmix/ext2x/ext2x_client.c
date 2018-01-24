@@ -595,7 +595,7 @@ int ext2x_get(const opal_process_name_t *proc, const char *key,
         return OPAL_ERR_NOT_INITIALIZED;
     }
 
-    if (NULL == proc) {
+    if (NULL == proc && NULL != key) {
         /* if they are asking for our jobid, then return it */
         if (0 == strcmp(key, OPAL_PMIX_JOBID)) {
             (*val) = OBJ_NEW(opal_value_t);
@@ -643,7 +643,9 @@ int ext2x_get(const opal_process_name_t *proc, const char *key,
     rc = PMIx_Get(&p, key, pinfo, sz, &pval);
     if (PMIX_SUCCESS == rc) {
         ival = OBJ_NEW(opal_value_t);
-        ival->key = strdup(key);
+        if (NULL != key) {
+            ival->key = strdup(key);
+        }
         if (OPAL_SUCCESS != (ret = ext2x_value_unload(ival, pval))) {
             rc = ext2x_convert_opalrc(ret);
         } else {
