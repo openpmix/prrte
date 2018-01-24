@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016 Cisco Systems, Inc.  All rights reserved.
@@ -74,6 +74,7 @@ mca_pmix_ext2x_component_t mca_pmix_ext2x_component = {
             MCA_BASE_METADATA_PARAM_CHECKPOINT
         }
     },
+    .legacy_get = true,
     .native_launch = false
 };
 
@@ -94,10 +95,20 @@ static int external_register(void)
 
 static int external_open(void)
 {
+    const char *version;
+
     mca_pmix_ext2x_component.evindex = 0;
     OBJ_CONSTRUCT(&mca_pmix_ext2x_component.jobids, opal_list_t);
     OBJ_CONSTRUCT(&mca_pmix_ext2x_component.events, opal_list_t);
     OBJ_CONSTRUCT(&mca_pmix_ext2x_component.dmdx, opal_list_t);
+
+    version = PMIx_Get_version();
+    if ('2' != version[0]) {
+        return OPAL_ERROR;
+    }
+    if (0 == strncmp(version, "2.1", 3)) {
+        mca_pmix_ext2x_component.legacy_get = false;
+    }
 
     return OPAL_SUCCESS;
 }
