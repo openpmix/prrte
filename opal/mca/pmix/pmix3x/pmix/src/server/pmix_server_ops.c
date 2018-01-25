@@ -706,7 +706,6 @@ pmix_status_t pmix_server_fence(pmix_server_caddy_t *cd,
         /* now unload the blob and pass it upstairs */
         PMIX_UNLOAD_BUFFER(&bucket, data, sz);
         PMIX_DESTRUCT(&bucket);
-        pmix_output(0, "UPCALL FENCE");
         pmix_host_server.fence_nb(trk->pcs, trk->npcs,
                                   trk->info, trk->ninfo,
                                   data, sz, trk->modexcbfunc, trk);
@@ -1031,9 +1030,7 @@ static void spcbfunc(pmix_status_t status,
     /* if it was successful, and there are IOF requests, then
      * register them now */
     if (PMIX_SUCCESS == status && PMIX_FWD_NO_CHANNELS != cd->channels) {
-        pmix_output(0, "SPAWN COMPLETE - REGISTERING IOF FOR %s TO GO TO %s:%d",
-                    nspace, cd->peer->info->pname.nspace, cd->peer->info->pname.rank);
-        /* record the request */
+         /* record the request */
         req = PMIX_NEW(pmix_iof_req_t);
         if (NULL != req) {
             PMIX_RETAIN(cd->peer);
@@ -1067,6 +1064,7 @@ pmix_status_t pmix_server_spawn(pmix_peer_t *peer,
     pmix_status_t rc;
     pmix_proc_t proc;
     size_t ninfo, n;
+    bool stdout_found = false, stderr_found = false, stddiag_found = false;
 
     pmix_output_verbose(2, pmix_server_globals.spawn_output,
                         "recvd SPAWN");
@@ -1117,6 +1115,7 @@ pmix_status_t pmix_server_spawn(pmix_peer_t *peer,
         cd->channels = PMIX_FWD_NO_CHANNELS;
         for (n=0; n < cd->ninfo; n++) {
             if (0 == strncmp(cd->info[n].key, PMIX_FWD_STDIN, PMIX_MAX_KEYLEN)) {
+                stdout_found = true;
                 if (PMIX_INFO_TRUE(&cd->info[n])) {
                     cd->channels |= PMIX_FWD_STDIN_CHANNEL;
                 }
@@ -1125,21 +1124,33 @@ pmix_status_t pmix_server_spawn(pmix_peer_t *peer,
                     cd->channels |= PMIX_FWD_STDOUT_CHANNEL;
                 }
             } else if (0 == strncmp(cd->info[n].key, PMIX_FWD_STDERR, PMIX_MAX_KEYLEN)) {
+                stderr_found = true;
                 if (PMIX_INFO_TRUE(&cd->info[n])) {
                     cd->channels |= PMIX_FWD_STDERR_CHANNEL;
                 }
             } else if (0 == strncmp(cd->info[n].key, PMIX_FWD_STDDIAG, PMIX_MAX_KEYLEN)) {
+                stddiag_found = true;
                 if (PMIX_INFO_TRUE(&cd->info[n])) {
                     cd->channels |= PMIX_FWD_STDDIAG_CHANNEL;
                 }
             }
         }
-        pmix_output(0, "CHANNELS: %0x", cd->channels);
         /* we will construct any required iof request tracker upon completion of the spawn */
     }
     /* add the directive to the end */
     if (PMIX_PROC_IS_TOOL(peer)) {
         PMIX_INFO_LOAD(&cd->info[ninfo], PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
+        /* if the requestor is a tool, we default to forwarding all
+         * output IO channels */
+        if (!stdout_found) {
+            cd->channels |= PMIX_FWD_STDOUT_CHANNEL;
+        }
+        if (!stderr_found) {
+            cd->channels |= PMIX_FWD_STDERR_CHANNEL;
+        }
+        if (!stddiag_found) {
+            cd->channels |= PMIX_FWD_STDDIAG_CHANNEL;
+        }
     } else {
         PMIX_INFO_LOAD(&cd->info[ninfo], PMIX_REQUESTOR_IS_CLIENT, NULL, PMIX_BOOL);
     }

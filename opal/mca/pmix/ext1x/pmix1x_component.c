@@ -21,6 +21,7 @@
 #include "opal/constants.h"
 #include "opal/class/opal_list.h"
 #include "opal/util/proc.h"
+#include "opal/util/show_help.h"
 #include "opal/mca/pmix/pmix.h"
 #include "pmix1x.h"
 
@@ -83,6 +84,8 @@ static int external_open(void)
 
     version = PMIx_Get_version();
     if (0 != strncmp(version, "1.2", 3)) {
+        opal_show_help("help-pmix-base.txt",
+                       "old-pmix", true, version, "v1.2");
         return OPAL_ERROR;
     }
     return OPAL_SUCCESS;

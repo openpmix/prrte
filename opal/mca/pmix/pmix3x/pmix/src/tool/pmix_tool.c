@@ -200,13 +200,11 @@ static void tool_iof_handler(struct pmix_peer_t *pr,
     int32_t cnt;
     pmix_status_t rc;
 
-   // pmix_output_verbose(2, pmix_client_globals.iof_output,
-    pmix_output(0,
+    pmix_output_verbose(2, pmix_client_globals.iof_output,
                         "recvd IOF");
 
     /* if the buffer is empty, they are simply closing the channel */
     if (0 == buf->bytes_used) {
-        pmix_output(0, "IOF recvd: close channel");
         return;
     }
 
@@ -228,7 +226,14 @@ static void tool_iof_handler(struct pmix_peer_t *pr,
         PMIX_ERROR_LOG(rc);
         return;
     }
-    pmix_output(0, "IOF: %s", bo.bytes);
+    if (NULL != bo.bytes && 0 < bo.size) {
+        if (channel & PMIX_FWD_STDOUT_CHANNEL) {
+            write(fileno(stdout), bo.bytes, bo.size);
+        } else {
+            fprintf(stderr, "%s", bo.bytes);
+        }
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
 }
 
 PMIX_EXPORT int PMIx_tool_init(pmix_proc_t *proc,

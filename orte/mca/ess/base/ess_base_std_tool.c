@@ -120,8 +120,10 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
     }
     if (NULL == opal_pmix.tool_init) {
         /* we no longer support non-pmix tools */
+        orte_show_help("help-ess-base.txt",
+                       "legacy-tool", true);
+        ret = ORTE_ERR_SILENT;
         error = "opal_pmix.tool_init";
-        ret = ORTE_ERR_NOT_SUPPORTED;
         goto error;
     }
     /* set the event base for the pmix component code */

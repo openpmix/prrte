@@ -580,8 +580,7 @@ int pmix3x_server_iof_push(const opal_process_name_t *source,
     pmix_status_t rc;
     int ret;
 
-   // opal_output_verbose(2, opal_pmix_base_framework.framework_output,
-                        opal_output(0,
+    opal_output_verbose(2, opal_pmix_base_framework.framework_output,
                         "%s IOF push from %s with %d bytes",
                         OPAL_NAME_PRINT(OPAL_PROC_MY_NAME),
                         OPAL_NAME_PRINT(*source), (int)nbytes);
@@ -615,7 +614,9 @@ int pmix3x_server_iof_push(const opal_process_name_t *source,
 
     /* setup the byte object */
     PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-    bo.bytes = (char*)data;
+    if (0 < nbytes) {
+        bo.bytes = (char*)data;
+    }
     bo.size = nbytes;
 
     /* push the IO */
