@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -121,7 +121,6 @@ static int rte_init(void)
         val->key = strdup(OPAL_PMIX_SERVER_PIDINFO);
         val->type = OPAL_PID;
         val->data.pid = mca_ess_tool_component.pid;
-        opal_list_append(&flags, &val->super);
         opal_list_append(&flags, &val->super);
     }
 
