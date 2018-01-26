@@ -169,7 +169,7 @@ opal_progress_finalize(void)
     return OPAL_SUCCESS;
 }
 
-static int opal_progress_events()
+static int opal_progress_events(void)
 {
     int events = 0;
 

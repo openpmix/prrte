@@ -145,6 +145,7 @@ static int rte_init(void)
     orte_topology_t *t;
     opal_list_t transports;
     orte_ess_base_signal_t *sig;
+    opal_value_t val;
 
     /* run the prolog */
     if (ORTE_SUCCESS != (ret = orte_ess_base_std_prolog())) {
@@ -468,6 +469,22 @@ static int rte_init(void)
     proc->pid = orte_process_info.pid;
     orte_oob_base_get_addr(&proc->rml_uri);
     orte_process_info.my_hnp_uri = strdup(proc->rml_uri);
+    /* store it in the local PMIx repo for later retrieval */
+    OBJ_CONSTRUCT(&val, opal_value_t);
+    val.key = OPAL_PMIX_PROC_URI;
+    val.type = OPAL_STRING;
+    val.data.string = proc->rml_uri;
+    if (OPAL_SUCCESS != (ret = opal_pmix.store_local(ORTE_PROC_MY_NAME, &val))) {
+        ORTE_ERROR_LOG(ret);
+        val.key = NULL;
+        val.data.string = NULL;
+        OBJ_DESTRUCT(&val);
+        error = "store uri";
+        goto error;
+    }
+    val.key = NULL;
+    val.data.string = NULL;
+    OBJ_DESTRUCT(&val);
     /* we are also officially a daemon, so better update that field too */
     orte_process_info.my_daemon_uri = strdup(proc->rml_uri);
     proc->state = ORTE_PROC_STATE_RUNNING;

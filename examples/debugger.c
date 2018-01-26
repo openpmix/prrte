@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -79,8 +79,10 @@ typedef struct {
 } myquery_data_t;
 
 static int attach_to_running_job(char *nspace);
-static mylock_t waiting_for_debugger;
+static mylock_t waiting_for_debugger, waiting_for_client;
 static pmix_proc_t myproc;
+static char dspace[PMIX_MAX_NSLEN+1];
+static char clientspace[PMIX_MAX_NSLEN+1];
 
 /* this is a callback function for the PMIx_Query
  * API. The query will callback with a status indicating
@@ -162,8 +164,14 @@ static void release_fn(size_t evhdlr_registration_id,
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
     }
-    /* flag that the debugger is complete so we can exit */
-    DEBUG_WAKEUP_THREAD(&waiting_for_debugger);
+    /* if this was the debugger daemon, then flag it */
+    if (0 == strncmp(source->nspace, dspace, PMIX_MAX_NSLEN)) {
+        fprintf(stderr, "DEBUGGER DAEMON HAS EXITED\n");
+        DEBUG_WAKEUP_THREAD(&waiting_for_debugger);
+    } else if (0 == strncmp(source->nspace, clientspace, PMIX_MAX_NSLEN)) {
+        fprintf(stderr, "CLIENT JOB HAS EXITED\n");
+        DEBUG_WAKEUP_THREAD(&waiting_for_client);
+    }
 }
 
 /* event handler registration is done asynchronously because it
@@ -194,7 +202,6 @@ static pmix_status_t spawn_debugger(char *appspace)
     pmix_app_t *debugger;
     size_t dninfo;
     char cwd[1024];
-    char dspace[PMIX_MAX_NSLEN+1];
 
     /* setup the debugger */
     PMIX_APP_CREATE(debugger, 1);
@@ -204,13 +211,15 @@ static pmix_status_t spawn_debugger(char *appspace)
     debugger[0].cwd = strdup(cwd);
     /* provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
-    dninfo = 5;
+    dninfo = 6;
     PMIX_INFO_CREATE(dinfo, dninfo);
     PMIX_INFO_LOAD(&dinfo[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
     PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
-    PMIX_INFO_LOAD(&dinfo[2], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
-    PMIX_INFO_LOAD(&dinfo[3], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
-    PMIX_INFO_LOAD(&dinfo[4], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
+    PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
+    PMIX_INFO_LOAD(&dinfo[2], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
+    PMIX_INFO_LOAD(&dinfo[3], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
+    PMIX_INFO_LOAD(&dinfo[4], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
+    PMIX_INFO_LOAD(&dinfo[5], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
     /* spawn the daemons */
     fprintf(stderr, "Debugger: spawning %s\n", debugger[0].cmd);
     if (PMIX_SUCCESS != (rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace))) {
@@ -232,8 +241,7 @@ int main(int argc, char **argv)
     pmix_info_t *info;
     pmix_app_t *app;
     size_t ninfo, napps;
-    char *tdir, *filename, *sdir, *str, *nspace = NULL;
-    char appspace[PMIX_MAX_NSLEN+1];
+    char *nspace = NULL;
     int i;
     pmix_query_t *query;
     size_t nq, n;
@@ -241,8 +249,10 @@ int main(int argc, char **argv)
     bool cospawn = false, stop_on_exec = false;
     char cwd[1024];
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
-    char hostname[1024];
     mylock_t mylock;
+    pid_t pid;
+
+    pid = getpid();
 
     /* Process any arguments we were given */
     for (i=1; i < argc; i++) {
@@ -275,6 +285,7 @@ int main(int argc, char **argv)
     ninfo = 0;
 
     DEBUG_CONSTRUCT_LOCK(&waiting_for_debugger);
+    DEBUG_CONSTRUCT_LOCK(&waiting_for_client);
 
     /* use the system connection first, if available */
     PMIX_INFO_CREATE(info, 1);
@@ -286,7 +297,7 @@ int main(int argc, char **argv)
     }
     PMIX_INFO_FREE(info, ninfo);
 
-    fprintf(stderr, "Tool ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
+    fprintf(stderr, "Tool ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank, (unsigned long)pid);
 
     /* register a default event handler */
     DEBUG_CONSTRUCT_LOCK(&mylock);
@@ -391,7 +402,7 @@ int main(int argc, char **argv)
             app[0].cwd = strdup(cwd);
             app[0].maxprocs = 2;
             /* provide job-level directives so the apps do what the user requested */
-            ninfo = 4;
+            ninfo = 5;
             PMIX_INFO_CREATE(info, ninfo);
             PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
             if (stop_on_exec) {
@@ -401,11 +412,12 @@ int main(int argc, char **argv)
             }
             PMIX_INFO_LOAD(&info[2], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
             PMIX_INFO_LOAD(&info[3], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
+            PMIX_INFO_LOAD(&info[4], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the job completes
 
             /* spawn the job - the function will return when the app
              * has been launched */
             fprintf(stderr, "Debugger: spawning %s\n", app[0].cmd);
-            if (PMIX_SUCCESS != (rc = PMIx_Spawn(info, ninfo, app, napps, appspace))) {
+            if (PMIX_SUCCESS != (rc = PMIx_Spawn(info, ninfo, app, napps, clientspace))) {
                 fprintf(stderr, "Application failed to launch with error: %s(%d)\n", PMIx_Error_string(rc), rc);
                 goto done;
             }
@@ -413,7 +425,7 @@ int main(int argc, char **argv)
             PMIX_APP_FREE(app, napps);
 
             /* now launch the debugger daemons */
-            if (PMIX_SUCCESS != (rc = spawn_debugger(appspace))) {
+            if (PMIX_SUCCESS != (rc = spawn_debugger(clientspace))) {
                 goto done;
             }
         }
@@ -421,6 +433,7 @@ int main(int argc, char **argv)
 
         /* this is where a debugger tool would wait until the debug operation is complete */
         DEBUG_WAIT_THREAD(&waiting_for_debugger);
+        DEBUG_WAIT_THREAD(&waiting_for_client);
     }
 
   done:
