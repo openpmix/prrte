@@ -123,7 +123,9 @@ examples/dynamic
 examples/fault
 examples/launcher
 examples/pmi1client
+examples/probe
 examples/pub
+examples/target
 examples/tool
 
 ompi/debuggers/*.in

@@ -13,7 +13,7 @@
 # Copyright (c) 2011-2016 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.  All rights reserved.
-# Copyright (c) 2016-2017 Intel, Inc.  All rights reserved.
+# Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -42,7 +42,9 @@ EXAMPLES = \
 	 pmi1client \
 	 pub \
 	 tool \
-	 alloc
+	 alloc \
+         probe \
+         target
 
 all: $(EXAMPLES)
 
