@@ -81,9 +81,9 @@ static pmix_status_t nspace_add(const char *nspace,
 static pmix_status_t nspace_del(const char *nspace);
 
 static pmix_status_t assemb_kvs_req(const pmix_proc_t *proc,
-                              pmix_list_t *kvs,
-                              pmix_buffer_t *bo,
-                              void *cbdata);
+                                    pmix_list_t *kvs,
+                                    pmix_buffer_t *bo,
+                                    void *cbdata);
 
 static pmix_status_t accept_kvs_resp(pmix_buffer_t *buf);
 
@@ -1447,9 +1447,9 @@ static pmix_status_t nspace_del(const char *nspace)
 }
 
 static pmix_status_t assemb_kvs_req(const pmix_proc_t *proc,
-                              pmix_list_t *kvs,
-                              pmix_buffer_t *buf,
-                              void *cbdata)
+                                    pmix_list_t *kvs,
+                                    pmix_buffer_t *buf,
+                                    void *cbdata)
 {
     pmix_status_t rc = PMIX_SUCCESS;
     pmix_server_caddy_t *cd = (pmix_server_caddy_t*)cbdata;
