@@ -569,7 +569,6 @@ int pmix3x_server_notify_event(int status,
     return pmix3x_convert_rc(rc);
 }
 
-#if 0
 int pmix3x_server_iof_push(const opal_process_name_t *source,
                            opal_pmix_iof_channel_t channel,
                            unsigned char *data, size_t nbytes)
@@ -622,7 +621,7 @@ int pmix3x_server_iof_push(const opal_process_name_t *source,
 
     /* push the IO */
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
-    rc = PMIx_IOF_push(&op->p, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
+    rc = PMIx_server_IOF_deliver(&op->p, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
     if (PMIX_SUCCESS != rc) {
         ret = pmix3x_convert_rc(rc);
     } else {
@@ -636,4 +635,3 @@ int pmix3x_server_iof_push(const opal_process_name_t *source,
 
     return ret;
 }
-#endif
