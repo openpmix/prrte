@@ -477,7 +477,17 @@ int prun(int argc, char *argv[])
         val = OBJ_NEW(opal_value_t);
         val->key = strdup(OPAL_PMIX_OUTPUT_TO_FILE);
         val->type = OPAL_STRING;
-        val->data.string = strdup(orte_cmd_options.output_filename);
+        /* if the given filename isn't an absolute path, then
+         * convert it to one so the name will be relative to
+         * the directory where prun was given as that is what
+         * the user will have seen */
+        if (!opal_path_is_absolute(orte_cmd_options.output_filename)) {
+            char cwd[OPAL_PATH_MAX];
+            getcwd(cwd, sizeof(cwd));
+            val->data.string = opal_os_path(false, cwd, orte_cmd_options.output_filename, NULL);
+        } else {
+            val->data.string = strdup(orte_cmd_options.output_filename);
+        }
         opal_list_append(&job_info, &val->super);
     }
     /* if we were asked to merge stderr to stdout, mark it so */
