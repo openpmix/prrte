@@ -14,9 +14,10 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
- * Copyright (c) 2016      Los Alamos National Security, LLC. All rights
+ * Copyright (c) 2016-2018 Los Alamos National Security, LLC. All rights
  *                         reserved.
  *
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,34 +69,34 @@ int mca_btl_base_param_register(mca_base_component_t *version,
                                            &module->btl_eager_limit);
 
     if ((module->btl_flags & MCA_BTL_FLAGS_GET) && module->btl_get) {
-	if (0 == module->btl_get_limit) {
-	    module->btl_get_limit = SIZE_MAX;
-	}
+        if (0 == module->btl_get_limit) {
+            module->btl_get_limit = SIZE_MAX;
+        }
 
-	(void) mca_base_component_var_register(version, "get_limit", "Maximum size (in bytes) for btl get",
-					       MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0, OPAL_INFO_LVL_4,
-					       MCA_BASE_VAR_SCOPE_READONLY, &module->btl_get_limit);
+        (void) mca_base_component_var_register(version, "get_limit", "Maximum size (in bytes) for btl get",
+                                               MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0, OPAL_INFO_LVL_4,
+                                               MCA_BASE_VAR_SCOPE_READONLY, &module->btl_get_limit);
 
-	/* Allow the user to set the alignment. The BTL should double-check the alignment in its open
-	 * function. */
-	(void) mca_base_component_var_register(version, "get_alignment", "Alignment required for btl get",
-					       MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0, OPAL_INFO_LVL_6,
-					       MCA_BASE_VAR_SCOPE_CONSTANT, &module->btl_get_alignment);
+        /* Allow the user to set the alignment. The BTL should double-check the alignment in its open
+         * function. */
+        (void) mca_base_component_var_register(version, "get_alignment", "Alignment required for btl get",
+                                               MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0, OPAL_INFO_LVL_6,
+                                               MCA_BASE_VAR_SCOPE_CONSTANT, &module->btl_get_alignment);
     }
 
     if ((module->btl_flags & MCA_BTL_FLAGS_PUT) && module->btl_put) {
-	if (0 == module->btl_put_limit) {
-	    module->btl_put_limit = SIZE_MAX;
-	}
-	(void) mca_base_component_var_register(version, "put_limit", "Maximum size (in bytes) for btl put",
-					       MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0, OPAL_INFO_LVL_4,
-					       MCA_BASE_VAR_SCOPE_READONLY, &module->btl_put_limit);
+        if (0 == module->btl_put_limit) {
+            module->btl_put_limit = SIZE_MAX;
+        }
+        (void) mca_base_component_var_register(version, "put_limit", "Maximum size (in bytes) for btl put",
+                                               MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0, OPAL_INFO_LVL_4,
+                                               MCA_BASE_VAR_SCOPE_READONLY, &module->btl_put_limit);
 
-	/* Allow the user to set the alignment. The BTL should double-check the alignment in its open
-	 * function. */
-	(void) mca_base_component_var_register(version, "put_alignment", "Alignment required for btl put",
-					       MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0, OPAL_INFO_LVL_6,
-					       MCA_BASE_VAR_SCOPE_CONSTANT, &module->btl_put_alignment);
+        /* Allow the user to set the alignment. The BTL should double-check the alignment in its open
+         * function. */
+        (void) mca_base_component_var_register(version, "put_alignment", "Alignment required for btl put",
+                                               MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0, OPAL_INFO_LVL_6,
+                                               MCA_BASE_VAR_SCOPE_CONSTANT, &module->btl_put_alignment);
     }
 
 
@@ -182,16 +183,20 @@ int mca_btl_base_param_verify(mca_btl_base_module_t *module)
         module->btl_flags &= ~MCA_BTL_FLAGS_GET;
     }
 
+    if (NULL == module->btl_flush) {
+        module->btl_flags &= ~MCA_BTL_FLAGS_RDMA_FLUSH;
+    }
+
     if (0 == module->btl_atomic_flags) {
         module->btl_flags &= ~MCA_BTL_FLAGS_ATOMIC_OPS;
     }
 
     if (0 == module->btl_get_limit) {
-	module->btl_get_limit = SIZE_MAX;
+        module->btl_get_limit = SIZE_MAX;
     }
 
     if (0 == module->btl_put_limit) {
-	module->btl_put_limit = SIZE_MAX;
+        module->btl_put_limit = SIZE_MAX;
     }
 
     return OPAL_SUCCESS;
