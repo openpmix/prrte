@@ -910,6 +910,17 @@ void pmix3x_value_load(pmix_value_t *v,
                 v->data.darray->array = NULL;
             }
             break;
+        case OPAL_ENVAR:
+            v->type = PMIX_ENVAR;
+            PMIX_ENVAR_CONSTRUCT(&v->data.envar);
+            if (NULL != kv->data.envar.envar) {
+                v->data.envar.envar = strdup(kv->data.envar.envar);
+            }
+            if (NULL != kv->data.envar.value) {
+                v->data.envar.value = strdup(kv->data.envar.value);
+            }
+            v->data.envar.separator = kv->data.envar.separator;
+            break;
         default:
             /* silence warnings */
             break;
@@ -917,7 +928,7 @@ void pmix3x_value_load(pmix_value_t *v,
 }
 
 int pmix3x_value_unload(opal_value_t *kv,
-                       const pmix_value_t *v)
+                        const pmix_value_t *v)
 {
     int rc=OPAL_SUCCESS;
     bool found;
@@ -1091,6 +1102,17 @@ int pmix3x_value_unload(opal_value_t *kv,
                 }
             }
         }
+        break;
+    case PMIX_ENVAR:
+        kv->type = OPAL_ENVAR;
+        OBJ_CONSTRUCT(&kv->data.envar, opal_envar_t);
+        if (NULL != v->data.envar.envar) {
+            kv->data.envar.envar = strdup(v->data.envar.envar);
+        }
+        if (NULL != v->data.envar.value) {
+            kv->data.envar.value = strdup(v->data.envar.value);
+        }
+        kv->data.envar.separator = v->data.envar.separator;
         break;
     default:
         /* silence warnings */

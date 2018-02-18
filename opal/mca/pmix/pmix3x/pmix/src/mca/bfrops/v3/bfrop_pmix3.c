@@ -380,6 +380,14 @@ static pmix_status_t init(void)
                        pmix_bfrops_base_print_iof_channel,
                        &mca_bfrops_v3_component.types);
 
+    PMIX_REGISTER_TYPE("PMIX_ENVAR",
+                       PMIX_ENVAR,
+                       pmix_bfrops_base_pack_envar,
+                       pmix_bfrops_base_unpack_envar,
+                       pmix_bfrops_base_copy_envar,
+                       pmix_bfrops_base_print_envar,
+                       &mca_bfrops_v3_component.types);
+
     /**** DEPRECATED ****/
     PMIX_REGISTER_TYPE("PMIX_INFO_ARRAY", PMIX_INFO_ARRAY,
                        pmix_bfrops_base_pack_array,
