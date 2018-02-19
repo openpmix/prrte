@@ -278,6 +278,17 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_MAX_RESTARTS                  "pmix.maxrestarts"      // (uint32_t) max number of times to restart a job
 
 
+/* environmental variable operation attributes */
+#define OPAL_PMIX_SET_ENVAR                     "pmix.envar.set"        // (pmix_envar_t*) set the envar to the given value,
+                                                                        //                 overwriting any pre-existing one
+#define OPAL_PMIX_UNSET_ENVAR                   "pmix.envar.unset"      // (char*) unset the envar, if present
+#define OPAL_PMIX_PREPEND_ENVAR                 "pmix.envar.prepnd"     // (pmix_envar_t*) prepend the given value to the
+                                                                        //                 specified envar using the separator
+                                                                        //                 character, creating the envar if it doesn't already exist
+#define OPAL_PMIX_APPEND_ENVAR                  "pmix.envar.appnd"      // (pmix_envar_t*) append the given value to the specified
+                                                                        //                 envar using the separator character,
+                                                                        //                 creating the envar if it doesn't already exist
+
 /* query attributes */
 #define OPAL_PMIX_QUERY_NAMESPACES              "pmix.qry.ns"           // (char*) request a comma-delimited list of active nspaces
 #define OPAL_PMIX_QUERY_JOB_STATUS              "pmix.qry.jst"          // (pmix_status_t) status of a specified currently executing job
@@ -323,11 +334,6 @@ BEGIN_C_DECLS
 /* Resource Manager identification */
 #define OPAL_PMIX_RM_NAME                       "pmix.rm.name"          // (char*) string name of the resource manager
 #define OPAL_PMIX_RM_VERSION                    "pmix.rm.version"       // (char*) RM version string
-
-
-/* attributes for setting envars */
-#define OPAL_PMIX_SET_ENVAR                     "pmix.set.envar"        // (char*) string "key=value" value shall be put into the environment
-#define OPAL_PMIX_UNSET_ENVAR                   "pmix.unset.envar"      // (char*) unset envar specified in string
 
 
 /* attributes relating to allocations */
