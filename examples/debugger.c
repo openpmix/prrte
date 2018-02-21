@@ -238,7 +238,7 @@ static pmix_status_t spawn_debugger(char *appspace)
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
-    pmix_info_t *info;
+    pmix_info_t *info, *iptr;
     pmix_app_t *app;
     size_t ninfo, napps;
     char *nspace = NULL;
@@ -251,6 +251,17 @@ int main(int argc, char **argv)
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
     mylock_t mylock;
     pid_t pid;
+    pmix_envar_t envar;
+    char *launchers[] = {
+        "prun",
+        "mpirun",
+        "mpiexec",
+        "orterun",
+        NULL
+    };
+    pmix_proc_t proc;
+    bool found;
+    pmix_data_array_t darray;
 
     pid = getpid();
 
@@ -277,8 +288,7 @@ int main(int argc, char **argv)
             }
             nspace = strdup(argv[i]);
         } else {
-            fprintf(stderr, "Unknown option: %s\n", argv[i]);
-            exit(1);
+            break;
         }
     }
     info = NULL;
@@ -321,6 +331,79 @@ int main(int argc, char **argv)
                     nspace, rc);
             goto done;
         }
+        goto rundebugger;
+    }
+
+    /* check to see if we are using an intermediate launcher - we only
+     * support those we recognize */
+    found = false;
+    for (n=0; NULL != launchers[n]; n++) {
+        if (0 == strcmp(argv[1], launchers[n])) {
+            found = true;
+        }
+    }
+    if (found) {
+        /* we are using an intermediate launcher - we will use the
+         * reference server to start it, but tell it to wait after
+         * launch for directive prior to spawning the application */
+        napps = 1;
+        PMIX_APP_CREATE(app, napps);
+        /* setup the executable */
+        app[0].cmd = strdup(argv[1]);
+        PMIX_ARGV_APPEND(rc, app[0].argv, argv[1]);
+        for (n=2; n < argc; n++) {
+            PMIX_ARGV_APPEND(rc, app[0].argv, argv[n]);
+        }
+        getcwd(cwd, 1024);  // point us to our current directory
+        app[0].cwd = strdup(cwd);
+        app[0].maxprocs = 1;
+        /* provide job-level directives so the apps do what the user requested */
+        ninfo = 5;
+        PMIX_INFO_CREATE(info, ninfo);
+        PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
+        PMIX_ENVAR_LOAD(&envar, "PMIX_LAUNCHER_PAUSE_FOR_TOOL", "1", ':');
+        PMIX_INFO_LOAD(&info[1], PMIX_SET_ENVAR, &envar, PMIX_ENVAR);  // launcher is to wait for directives
+        PMIX_ENVAR_DESTRUCT(&envar);
+        PMIX_INFO_LOAD(&info[2], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
+        PMIX_INFO_LOAD(&info[3], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
+        PMIX_INFO_LOAD(&info[4], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the job completes
+
+        /* spawn the job - the function will return when the launcher
+         * has been launched */
+        fprintf(stderr, "Debugger: spawning %s\n", app[0].cmd);
+        if (PMIX_SUCCESS != (rc = PMIx_Spawn(info, ninfo, app, napps, clientspace))) {
+            fprintf(stderr, "Application failed to launch with error: %s(%d)\n", PMIx_Error_string(rc), rc);
+            goto done;
+        }
+        PMIX_INFO_FREE(info, ninfo);
+        PMIX_APP_FREE(app, napps);
+        /* send the launch directives */
+        ninfo = 3;
+        PMIX_INFO_CREATE(info, ninfo);
+        PMIX_PROC_LOAD(&proc, clientspace, 0);
+        PMIX_INFO_LOAD(&info[0], PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);  // deliver to the target launcher
+        PMIX_INFO_LOAD(&info[1], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);  // only non-default handlers
+        /* provide a few job-level directives */
+        darray.type = PMIX_INFO;
+        darray.size = 2;
+        PMIX_INFO_CREATE(darray.array, 2);
+        iptr = (pmix_info_t*)darray.array;
+        PMIX_ENVAR_LOAD(&envar, "FOOBAR", "1", ':');
+        PMIX_INFO_LOAD(&iptr[0], PMIX_SET_ENVAR, &envar, PMIX_ENVAR);
+        PMIX_ENVAR_DESTRUCT(&envar);
+        PMIX_ENVAR_LOAD(&envar, "PATH", "/home/common/local/toad", ':');
+        PMIX_INFO_LOAD(&iptr[1], PMIX_PREPEND_ENVAR, &envar, PMIX_ENVAR);
+        PMIX_ENVAR_DESTRUCT(&envar);
+
+        PMIX_INFO_LOAD(&info[2], PMIX_DEBUG_JOB_DIRECTIVES, &darray, PMIX_DATA_ARRAY);
+        /* provide a few app-level directives */
+    //    PMIX_INFO_LOAD(&info[3], PMIX_DEBUG_APP_DIRECTIVES, &darray, PMIX_DATA_ARRAY);
+
+        fprintf(stderr, "[%s:%u%lu] Sending release\n", myproc.nspace, myproc.rank, (unsigned long)pid);
+        PMIx_Notify_event(PMIX_LAUNCH_DIRECTIVE,
+                          NULL, PMIX_RANGE_LOCAL,
+                          info, ninfo, NULL, NULL);
+        PMIX_INFO_FREE(info, ninfo);
     } else {
         /* this is an initial launch - we need to launch the application
          * plus the debugger daemons, letting the RM know we are debugging
@@ -429,12 +512,12 @@ int main(int argc, char **argv)
                 goto done;
             }
         }
-
-
-        /* this is where a debugger tool would wait until the debug operation is complete */
-        DEBUG_WAIT_THREAD(&waiting_for_debugger);
-        DEBUG_WAIT_THREAD(&waiting_for_client);
     }
+
+  rundebugger:
+    /* this is where a debugger tool would wait until the debug operation is complete */
+    DEBUG_WAIT_THREAD(&waiting_for_debugger);
+    DEBUG_WAIT_THREAD(&waiting_for_client);
 
   done:
     DEBUG_DESTRUCT_LOCK(&waiting_for_debugger);

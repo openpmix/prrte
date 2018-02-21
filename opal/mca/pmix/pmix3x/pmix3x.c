@@ -516,6 +516,9 @@ pmix_status_t pmix3x_convert_opalrc(int rc)
     case OPAL_ERR_MODEL_DECLARED:
         return PMIX_MODEL_DECLARED;
 
+    case OPAL_PMIX_LAUNCH_DIRECTIVE:
+        return PMIX_LAUNCH_DIRECTIVE;
+
     case OPAL_ERROR:
         return PMIX_ERROR;
     case OPAL_SUCCESS:
@@ -609,6 +612,8 @@ int pmix3x_convert_rc(pmix_status_t rc)
     case PMIX_MODEL_DECLARED:
         return OPAL_ERR_MODEL_DECLARED;
 
+    case PMIX_LAUNCH_DIRECTIVE:
+        return OPAL_PMIX_LAUNCH_DIRECTIVE;
 
     case PMIX_ERROR:
         return OPAL_ERROR;
