@@ -146,6 +146,24 @@ int orte_add_attribute(opal_list_t *attributes,
     return ORTE_SUCCESS;
 }
 
+int orte_prepend_attribute(opal_list_t *attributes,
+                           orte_attribute_key_t key, bool local,
+                           void *data, opal_data_type_t type)
+{
+    orte_attribute_t *kv;
+    int rc;
+
+    kv = OBJ_NEW(orte_attribute_t);
+    kv->key = key;
+    kv->local = local;
+    if (OPAL_SUCCESS != (rc = orte_attr_load(kv, data, type))) {
+        OBJ_RELEASE(kv);
+        return rc;
+    }
+    opal_list_prepend(attributes, &kv->super);
+    return ORTE_SUCCESS;
+}
+
 void orte_remove_attribute(opal_list_t *attributes, orte_attribute_key_t key)
 {
     orte_attribute_t *kv;
@@ -229,6 +247,8 @@ const char *orte_attr_key_to_str(orte_attribute_key_t key)
             return "ORTE_APP_PREPEND_ENVAR";
         case ORTE_APP_APPEND_ENVAR:
             return "ORTE_APP_APPEND_ENVAR";
+        case ORTE_APP_ADD_ENVAR:
+            return "ORTE_APP_ADD_ENVAR";
 
         case ORTE_NODE_USERNAME:
             return "NODE-USERNAME";
@@ -357,6 +377,10 @@ const char *orte_attr_key_to_str(orte_attribute_key_t key)
             return "ORTE_JOB_PREPEND_ENVAR";
         case ORTE_JOB_APPEND_ENVAR:
             return "ORTE_JOB_APPEND_ENVAR";
+        case ORTE_JOB_ADD_ENVAR:
+            return "ORTE_APP_ADD_ENVAR";
+        case ORTE_JOB_APP_SETUP_DATA:
+            return "ORTE_JOB_APP_SETUP_DATA";
 
         case ORTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

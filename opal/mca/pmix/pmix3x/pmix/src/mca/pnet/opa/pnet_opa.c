@@ -39,15 +39,18 @@
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/pnet/pnet.h"
+#include "src/mca/pnet/base/base.h"
 #include "pnet_opa.h"
 
 static pmix_status_t opa_init(void);
 static void opa_finalize(void);
-static pmix_status_t setup_app(char *nspace, pmix_list_t *ilist);
-static pmix_status_t setup_local_network(char *nspace,
+static pmix_status_t setup_app(pmix_nspace_t *nptr,
+                               pmix_info_t info[], size_t ninfo,
+                               pmix_list_t *ilist);
+static pmix_status_t setup_local_network(pmix_nspace_t *nptr,
                                          pmix_info_t info[],
                                          size_t ninfo);
-static pmix_status_t setup_fork(const pmix_proc_t *peer, char ***env);
+static pmix_status_t setup_fork(pmix_nspace_t *nptr, char ***env);
 static void child_finalized(pmix_peer_t *peer);
 static void local_app_finalized(char *nspace);
 
@@ -63,14 +66,14 @@ pmix_pnet_module_t pmix_opa_module = {
 
 static pmix_status_t opa_init(void)
 {
-    pmix_output_verbose(2, pmix_globals.debug_output,
+    pmix_output_verbose(2, pmix_pnet_base_framework.framework_output,
                         "pnet: opa init");
     return PMIX_SUCCESS;
 }
 
 static void opa_finalize(void)
 {
-    pmix_output_verbose(2, pmix_globals.debug_output,
+    pmix_output_verbose(2, pmix_pnet_base_framework.framework_output,
                         "pnet: opa finalize");
 }
 
@@ -157,75 +160,163 @@ static char* transports_print(uint64_t *unique_key)
     return string_key;
 }
 
-static pmix_status_t setup_app(char *nspace, pmix_list_t *ilist)
+/* NOTE: if there is any binary data to be transferred, then
+ * this function MUST pack it for transport as the host will
+ * not know how to do so */
+static pmix_status_t setup_app(pmix_nspace_t *nptr,
+                               pmix_info_t info[], size_t ninfo,
+                               pmix_list_t *ilist)
 {
     uint64_t unique_key[2];
     char *string_key, *cs_env;
     int fd_rand;
-    size_t bytes_read;
+    size_t n, bytes_read;
     pmix_kval_t *kv;
+    int i;
+    bool envars, seckeys;
 
-    /* put the number here - or else create an appropriate string. this just needs to
-     * eventually be a string variable
-     */
-    if(-1 == (fd_rand = open("/dev/urandom", O_RDONLY))) {
-        transports_use_rand(unique_key);
+    if (NULL == info) {
+        envars = true;
+        seckeys = true;
     } else {
-        bytes_read = read(fd_rand, (char *) unique_key, 16);
-        if(bytes_read != 16) {
-            transports_use_rand(unique_key);
+        envars = false;
+        seckeys = false;
+        for (n=0; n < ninfo; n++) {
+            if (0 == strncmp(info[n].key, PMIX_SETUP_APP_ENVARS, PMIX_MAX_KEYLEN)) {
+                envars = PMIX_INFO_TRUE(&info[n]);
+            } else if (0 == strncmp(info[n].key, PMIX_SETUP_APP_ALL, PMIX_MAX_KEYLEN)) {
+                envars = PMIX_INFO_TRUE(&info[n]);
+                seckeys = PMIX_INFO_TRUE(&info[n]);
+            } else if (0 == strncmp(info[n].key, PMIX_SETUP_APP_NONENVARS, PMIX_MAX_KEYLEN)) {
+                seckeys = PMIX_INFO_TRUE(&info[n]);
+            }
         }
-        close(fd_rand);
     }
 
-    if (NULL == (string_key = transports_print(unique_key))) {
-        PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
-        return PMIX_ERR_OUT_OF_RESOURCE;
+    if (seckeys) {
+        /* put the number here - or else create an appropriate string. this just needs to
+         * eventually be a string variable
+         */
+        if(-1 == (fd_rand = open("/dev/urandom", O_RDONLY))) {
+            transports_use_rand(unique_key);
+        } else {
+            bytes_read = read(fd_rand, (char *) unique_key, 16);
+            if(bytes_read != 16) {
+                transports_use_rand(unique_key);
+            }
+            close(fd_rand);
+        }
+
+        if (NULL == (string_key = transports_print(unique_key))) {
+            PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            return PMIX_ERR_OUT_OF_RESOURCE;
+        }
+
+        if (PMIX_SUCCESS != pmix_mca_base_var_env_name("opa_precondition_transports", &cs_env)) {
+            PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
+            free(string_key);
+            return PMIX_ERR_OUT_OF_RESOURCE;
+        }
+
+        kv = PMIX_NEW(pmix_kval_t);
+        if (NULL == kv) {
+            free(string_key);
+            free(cs_env);
+            return PMIX_ERR_OUT_OF_RESOURCE;
+        }
+        kv->key = strdup(PMIX_SET_ENVAR);
+        kv->value = (pmix_value_t*)malloc(sizeof(pmix_value_t));
+        if (NULL == kv->value) {
+            free(string_key);
+            free(cs_env);
+            PMIX_RELEASE(kv);
+            return PMIX_ERR_OUT_OF_RESOURCE;
+        }
+        kv->value->type = PMIX_ENVAR;
+        PMIX_ENVAR_LOAD(&kv->value->data.envar, cs_env, string_key, ':');
+        pmix_list_append(ilist, &kv->super);
+        free(cs_env);
+        free(string_key);
     }
 
-    if (PMIX_SUCCESS != pmix_mca_base_var_env_name("pmix_precondition_transports", &cs_env)) {
-        PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
-        free(string_key);
-        return PMIX_ERR_OUT_OF_RESOURCE;
+    if (envars) {
+        /* harvest any PSM_* or PSM2_* envars to pass along */
+        for (i = 0; NULL != environ[i]; ++i) {
+            if (0 == strncmp("PSM_", environ[i], 4) ||
+                0 == strncmp("PSM2_", environ[i], 5)) {
+                kv = PMIX_NEW(pmix_kval_t);
+                if (NULL == kv) {
+                    return PMIX_ERR_OUT_OF_RESOURCE;
+                }
+                kv->key = strdup(PMIX_SET_ENVAR);
+                kv->value = (pmix_value_t*)malloc(sizeof(pmix_value_t));
+                if (NULL == kv->value) {
+                    PMIX_RELEASE(kv);
+                    return PMIX_ERR_OUT_OF_RESOURCE;
+                }
+                kv->value->type = PMIX_ENVAR;
+                cs_env = strdup(environ[i]);
+                string_key = strchr(cs_env, '=');
+                *string_key = '\0';
+                ++string_key;
+                PMIX_ENVAR_LOAD(&kv->value->data.envar, cs_env, string_key, ':');
+                pmix_list_append(ilist, &kv->super);
+                free(cs_env);
+            }
+        }
     }
-
-    kv = PMIX_NEW(pmix_kval_t);
-    if (NULL == kv) {
-        free(string_key);
-        free(cs_env);
-        return PMIX_ERR_OUT_OF_RESOURCE;
-    }
-    kv->key = strdup(PMIX_SET_ENVAR);
-    kv->value = (pmix_value_t*)malloc(sizeof(pmix_value_t));
-    if (NULL == kv->value) {
-        free(string_key);
-        free(cs_env);
-        PMIX_RELEASE(kv);
-        return PMIX_ERR_OUT_OF_RESOURCE;
-    }
-    kv->value->type = PMIX_STRING;
-    if (0 > asprintf(&kv->value->data.string, "%s=%s", cs_env, string_key)) {
-        free(string_key);
-        free(cs_env);
-        PMIX_RELEASE(kv);
-        return PMIX_ERR_OUT_OF_RESOURCE;
-    }
-    pmix_list_append(ilist, &kv->super);
-    free(cs_env);
-    free(string_key);
 
     return PMIX_SUCCESS;
 }
 
-static pmix_status_t setup_local_network(char *nspace,
+static pmix_status_t setup_local_network(pmix_nspace_t *nptr,
                                          pmix_info_t info[],
                                          size_t ninfo)
 {
+    size_t n;
+    pmix_status_t rc;
+    pmix_kval_t *kv;
+
+    if (NULL != info) {
+        for (n=0; n < ninfo; n++) {
+            if (0 == strncmp(info[n].key, PMIX_PNET_OPA_BLOB, PMIX_MAX_KEYLEN)) {
+                /* the byte object contains a packed blob that needs to be
+                 * cached until we determine we have local procs for this
+                 * nspace, and then delivered to the local OPA driver when
+                 * we have a means for doing so */
+                kv = PMIX_NEW(pmix_kval_t);
+                if (NULL == kv) {
+                    return PMIX_ERR_NOMEM;
+                }
+                kv->key = strdup(info[n].key);
+                kv->value = (pmix_value_t*)malloc(sizeof(pmix_value_t));
+                if (NULL == kv->value) {
+                    PMIX_RELEASE(kv);
+                    return PMIX_ERR_NOMEM;
+                }
+                pmix_value_xfer(kv->value, &info[n].value);
+                pmix_list_append(&nptr->setup_data, &kv->super);
+            }
+        }
+    }
     return PMIX_SUCCESS;
 }
 
-static pmix_status_t setup_fork(const pmix_proc_t *peer, char ***env)
+static pmix_status_t setup_fork(pmix_nspace_t *nptr, char ***env)
 {
+    pmix_kval_t *kv, *next;
+
+    /* if there are any cached nspace prep blobs, execute them,
+     * ensuring that we only do so once per nspace - note that
+     * we don't expect to find any envars here, though we could
+     * have included some if we needed to set them per-client */
+    PMIX_LIST_FOREACH_SAFE(kv, next, &nptr->setup_data, pmix_kval_t) {
+        if (0 == strcmp(kv->key, PMIX_PNET_OPA_BLOB)) {
+            pmix_list_remove_item(&nptr->setup_data, &kv->super);
+            /* deliver to the local lib */
+            PMIX_RELEASE(kv);
+        }
+    }
     return PMIX_SUCCESS;
 }
 

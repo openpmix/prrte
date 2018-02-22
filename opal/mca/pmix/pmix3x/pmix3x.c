@@ -121,6 +121,8 @@ const opal_pmix_base_module_t opal_pmix_pmix3x_module = {
     .server_dmodex_request = pmix3x_server_dmodex,
     .server_notify_event = pmix3x_server_notify_event,
     .server_iof_push = pmix3x_server_iof_push,
+    .server_setup_application = pmix3x_server_setup_application,
+    .server_setup_local_support = pmix3x_server_setup_local_support,
     /* tool APIs */
     .tool_init = pmix3x_tool_init,
     .tool_finalize = pmix3x_tool_fini,

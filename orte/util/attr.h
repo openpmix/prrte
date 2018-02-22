@@ -51,6 +51,7 @@ typedef uint8_t orte_app_context_flags_t;
 #define ORTE_APP_UNSET_ENVAR        18    // string - name of envar to unset, if present
 #define ORTE_APP_PREPEND_ENVAR      19    // opal_envar_t - prepend the specified value to the given envar
 #define ORTE_APP_APPEND_ENVAR       20    // opal_envar_t - append the specified value to the given envar
+#define ORTE_APP_ADD_ENVAR          21    // opal_envar_t - add envar, do not override pre-existing one
 
 #define ORTE_APP_MAX_KEY        100
 
@@ -154,6 +155,8 @@ typedef uint16_t orte_job_flags_t;
 #define ORTE_JOB_UNSET_ENVAR            (ORTE_JOB_START_KEY + 56)    // string - name of envar to unset, if present
 #define ORTE_JOB_PREPEND_ENVAR          (ORTE_JOB_START_KEY + 57)    // opal_envar_t - prepend the specified value to the given envar
 #define ORTE_JOB_APPEND_ENVAR           (ORTE_JOB_START_KEY + 58)    // opal_envar_t - append the specified value to the given envar
+#define ORTE_JOB_ADD_ENVAR              (ORTE_JOB_START_KEY + 59)    // opal_envar_t - add envar, do not override pre-existing one
+#define ORTE_JOB_APP_SETUP_DATA         (ORTE_JOB_START_KEY + 60)    // opal_byte_object_t - blob containing app setup data
 
 #define ORTE_JOB_MAX_KEY   300
 
@@ -236,6 +239,10 @@ ORTE_DECLSPEC orte_attribute_t* orte_fetch_attribute(opal_list_t *attributes,
 ORTE_DECLSPEC int orte_add_attribute(opal_list_t *attributes,
                                      orte_attribute_key_t key, bool local,
                                      void *data, opal_data_type_t type);
+
+ORTE_DECLSPEC int orte_prepend_attribute(opal_list_t *attributes,
+                                         orte_attribute_key_t key, bool local,
+                                         void *data, opal_data_type_t type);
 
 ORTE_DECLSPEC int orte_attr_load(orte_attribute_t *kv,
                                  void *data, opal_data_type_t type);

@@ -111,6 +111,7 @@ pmix_status_t pmix_bfrops_base_unpack(pmix_pointer_array_t *regtypes,
         }
         if (PMIX_INT32 != local_type) { /* if the length wasn't first, then error */
             *num_vals = 0;
+            PMIX_ERROR_LOG(PMIX_ERR_UNPACK_FAILURE);
             return PMIX_ERR_UNPACK_FAILURE;
         }
     }
@@ -753,13 +754,13 @@ pmix_status_t pmix_bfrops_base_unpack_val(pmix_buffer_t *buffer,
                 return ret;
             }
             break;
-        case PMIX_QUERY:
-            if (PMIX_SUCCESS != (ret = pmix_bfrops_base_unpack_query(buffer, val->data.darray, &m, PMIX_QUERY))) {
+        case PMIX_ALLOC_DIRECTIVE:
+            if (PMIX_SUCCESS != (ret = pmix_bfrops_base_unpack_alloc_directive(buffer, &val->data.adir, &m, PMIX_ALLOC_DIRECTIVE))) {
                 return ret;
             }
             break;
         case PMIX_ENVAR:
-            if (PMIX_SUCCESS != (ret = pmix_bfrops_base_unpack_envar(buffer, val->data.darray, &m, PMIX_ENVAR))) {
+            if (PMIX_SUCCESS != (ret = pmix_bfrops_base_unpack_envar(buffer, &val->data.envar, &m, PMIX_ENVAR))) {
                 return ret;
             }
             break;

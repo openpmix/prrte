@@ -209,6 +209,35 @@ static void evhandler(int status,
     }
 }
 
+typedef struct {
+    opal_pmix_lock_t lock;
+    opal_list_t list;
+} mylock_t;
+
+
+static void setupcbfunc(int status,
+                        opal_list_t *info,
+                        void *provided_cbdata,
+                        opal_pmix_op_cbfunc_t cbfunc, void *cbdata)
+{
+    mylock_t *mylock = (mylock_t*)provided_cbdata;
+    opal_value_t *kv;
+
+    if (NULL != info) {
+        /* cycle across the provided info */
+        while (NULL != (kv = (opal_value_t*)opal_list_remove_first(info))) {
+            opal_dss.dump(0, kv, OPAL_VALUE);
+            opal_list_append(&mylock->list, &kv->super);
+        }
+    }
+
+    /* release the caller */
+    if (NULL != cbfunc) {
+        cbfunc(OPAL_SUCCESS, cbdata);
+    }
+
+    OPAL_PMIX_WAKEUP_THREAD(&mylock->lock);
+}
 
 int prun(int argc, char *argv[])
 {
@@ -220,6 +249,7 @@ int prun(int argc, char *argv[])
     opal_value_t *val;
     opal_list_t info;
     struct timespec tp = {0, 100000};
+    mylock_t mylock;
 
     /* init the globals */
     memset(&orte_cmd_options, 0, sizeof(orte_cmd_options));
@@ -641,6 +671,42 @@ int prun(int argc, char *argv[])
         val->type = OPAL_BOOL;
         val->data.flag = true;
         opal_list_append(&job_info, &val->super);
+    }
+
+    /* pickup any relevant envars */
+    if (NULL != opal_pmix.server_setup_application) {
+        OBJ_CONSTRUCT(&info, opal_list_t);
+        val = OBJ_NEW(opal_value_t);
+        val->key = strdup(OPAL_PMIX_SETUP_APP_ENVARS);
+        val->type = OPAL_BOOL;
+        val->data.flag = true;
+        opal_list_append(&info, &val->super);
+
+        OPAL_PMIX_CONSTRUCT_LOCK(&mylock.lock);
+        OBJ_CONSTRUCT(&mylock.list, opal_list_t);
+        rc = opal_pmix.server_setup_application(ORTE_PROC_MY_NAME->jobid,
+                                                &info, setupcbfunc, &mylock);
+        if (OPAL_SUCCESS != rc) {
+            OPAL_LIST_DESTRUCT(&info);
+            OPAL_PMIX_DESTRUCT_LOCK(&mylock.lock);
+            OBJ_DESTRUCT(&mylock.list);
+            goto DONE;
+        }
+        OPAL_PMIX_WAIT_THREAD(&mylock.lock);
+        OPAL_PMIX_DESTRUCT_LOCK(&mylock.lock);
+        /* transfer any returned ENVARS to the job_info */
+        while (NULL != (val = (opal_value_t*)opal_list_remove_first(&mylock.list))) {
+            if (0 == strcmp(val->key, OPAL_PMIX_SET_ENVAR) ||
+                0 == strcmp(val->key, OPAL_PMIX_ADD_ENVAR) ||
+                0 == strcmp(val->key, OPAL_PMIX_UNSET_ENVAR) ||
+                0 == strcmp(val->key, OPAL_PMIX_PREPEND_ENVAR) ||
+                0 == strcmp(val->key, OPAL_PMIX_APPEND_ENVAR)) {
+                opal_list_append(&job_info, &val->super);
+            } else {
+                OBJ_RELEASE(val);
+            }
+        }
+        OPAL_LIST_DESTRUCT(&mylock.list);
     }
 
     if (OPAL_SUCCESS != (rc = opal_pmix.spawn(&job_info, &apps, &myjobid))) {
