@@ -226,7 +226,6 @@ static void setupcbfunc(int status,
     if (NULL != info) {
         /* cycle across the provided info */
         while (NULL != (kv = (opal_value_t*)opal_list_remove_first(info))) {
-            opal_dss.dump(0, kv, OPAL_VALUE);
             opal_list_append(&mylock->list, &kv->super);
         }
     }
