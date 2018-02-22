@@ -601,51 +601,51 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
     }
     free(ppn);
 
-    /* unpack the buffer containing any application setup info */
+    /* unpack the buffer containing any application setup info - there
+     * might not be any, so it isn't an error if we don't find things */
     cnt=1;
-    if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &bptr, &cnt, OPAL_BUFFER))) {
-        *job = ORTE_JOBID_INVALID;
-        ORTE_ERROR_LOG(rc);
-        goto REPORT_ERROR;
-    }
-    cnt=1;
-    OBJ_CONSTRUCT(&cache, opal_list_t);
-    while (ORTE_SUCCESS == (rc = opal_dss.unpack(bptr, &kv, &cnt, OPAL_VALUE))) {
-        /* if this is an envar operation, cache it in reverse order
-         * so that the order the user provided is preserved */
-        if (0 == strcmp(kv->key, OPAL_PMIX_SET_ENVAR) ||
-            0 == strcmp(kv->key, OPAL_PMIX_ADD_ENVAR) ||
-            0 == strcmp(kv->key, OPAL_PMIX_UNSET_ENVAR) ||
-            0 == strcmp(kv->key, OPAL_PMIX_PREPEND_ENVAR) ||
-            0 == strcmp(kv->key, OPAL_PMIX_APPEND_ENVAR)) {
-            opal_list_prepend(&cache, &kv->super);
-        } else {
-            /* need to pass it to pmix.setup_local_support */
-            opal_list_append(&local_support, &kv->super);
+    rc = opal_dss.unpack(buffer, &bptr, &cnt, OPAL_BUFFER);
+    if (OPAL_SUCCESS == rc) {
+        /* there was setup data - process it */
+        cnt=1;
+        OBJ_CONSTRUCT(&cache, opal_list_t);
+        while (ORTE_SUCCESS == (rc = opal_dss.unpack(bptr, &kv, &cnt, OPAL_VALUE))) {
+            /* if this is an envar operation, cache it in reverse order
+             * so that the order the user provided is preserved */
+            if (0 == strcmp(kv->key, OPAL_PMIX_SET_ENVAR) ||
+                0 == strcmp(kv->key, OPAL_PMIX_ADD_ENVAR) ||
+                0 == strcmp(kv->key, OPAL_PMIX_UNSET_ENVAR) ||
+                0 == strcmp(kv->key, OPAL_PMIX_PREPEND_ENVAR) ||
+                0 == strcmp(kv->key, OPAL_PMIX_APPEND_ENVAR)) {
+                opal_list_prepend(&cache, &kv->super);
+            } else {
+                /* need to pass it to pmix.setup_local_support */
+                opal_list_append(&local_support, &kv->super);
+            }
         }
-    }
-    OBJ_RELEASE(bptr);
-    /* add any cache'd values  to the front of the job attributes  */
-    while (NULL != (kv = (opal_value_t*)opal_list_remove_first(&cache))) {
-        if (0 == strcmp(kv->key, OPAL_PMIX_SET_ENVAR)) {
-            orte_prepend_attribute(&jdata->attributes, ORTE_JOB_SET_ENVAR,
-                                   ORTE_ATTR_GLOBAL, &kv->data.envar, OPAL_ENVAR);
-        } else if (0 == strcmp(kv->key, OPAL_PMIX_ADD_ENVAR)) {
-            orte_prepend_attribute(&jdata->attributes, ORTE_JOB_ADD_ENVAR,
-                                   ORTE_ATTR_GLOBAL, &kv->data.envar, OPAL_ENVAR);
-        } else if (0 == strcmp(kv->key, OPAL_PMIX_UNSET_ENVAR)) {
-            orte_prepend_attribute(&jdata->attributes, ORTE_JOB_UNSET_ENVAR,
-                                   ORTE_ATTR_GLOBAL, kv->data.string, OPAL_STRING);
-        } else if (0 == strcmp(kv->key, OPAL_PMIX_PREPEND_ENVAR)) {
-            orte_prepend_attribute(&jdata->attributes, ORTE_JOB_PREPEND_ENVAR,
-                                   ORTE_ATTR_GLOBAL, &kv->data.envar, OPAL_ENVAR);
-        } else if (0 == strcmp(kv->key, OPAL_PMIX_APPEND_ENVAR)) {
-            orte_prepend_attribute(&jdata->attributes, ORTE_JOB_APPEND_ENVAR,
-                                   ORTE_ATTR_GLOBAL, &kv->data.envar, OPAL_ENVAR);
+        OBJ_RELEASE(bptr);
+        /* add any cache'd values  to the front of the job attributes  */
+        while (NULL != (kv = (opal_value_t*)opal_list_remove_first(&cache))) {
+            if (0 == strcmp(kv->key, OPAL_PMIX_SET_ENVAR)) {
+                orte_prepend_attribute(&jdata->attributes, ORTE_JOB_SET_ENVAR,
+                                       ORTE_ATTR_GLOBAL, &kv->data.envar, OPAL_ENVAR);
+            } else if (0 == strcmp(kv->key, OPAL_PMIX_ADD_ENVAR)) {
+                orte_prepend_attribute(&jdata->attributes, ORTE_JOB_ADD_ENVAR,
+                                       ORTE_ATTR_GLOBAL, &kv->data.envar, OPAL_ENVAR);
+            } else if (0 == strcmp(kv->key, OPAL_PMIX_UNSET_ENVAR)) {
+                orte_prepend_attribute(&jdata->attributes, ORTE_JOB_UNSET_ENVAR,
+                                       ORTE_ATTR_GLOBAL, kv->data.string, OPAL_STRING);
+            } else if (0 == strcmp(kv->key, OPAL_PMIX_PREPEND_ENVAR)) {
+                orte_prepend_attribute(&jdata->attributes, ORTE_JOB_PREPEND_ENVAR,
+                                       ORTE_ATTR_GLOBAL, &kv->data.envar, OPAL_ENVAR);
+            } else if (0 == strcmp(kv->key, OPAL_PMIX_APPEND_ENVAR)) {
+                orte_prepend_attribute(&jdata->attributes, ORTE_JOB_APPEND_ENVAR,
+                                       ORTE_ATTR_GLOBAL, &kv->data.envar, OPAL_ENVAR);
+            }
+            OBJ_RELEASE(kv);
         }
-        OBJ_RELEASE(kv);
+        OPAL_LIST_DESTRUCT(&cache);
     }
-    OPAL_LIST_DESTRUCT(&cache);
     if (0 < opal_list_get_size(&local_support) &&
         NULL != opal_pmix.server_setup_local_support) {
         if (OPAL_SUCCESS != (rc = opal_pmix.server_setup_local_support(jdata->jobid, &local_support,
