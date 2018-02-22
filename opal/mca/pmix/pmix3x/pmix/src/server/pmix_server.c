@@ -1331,19 +1331,20 @@ static void _setup_op(pmix_status_t rc, void *cbdata)
 static void _setup_app(int sd, short args, void *cbdata)
 {
     pmix_setup_caddy_t *cd = (pmix_setup_caddy_t*)cbdata;
-    pmix_buffer_t buffer;
-    pmix_byte_object_t blob;
     pmix_setup_caddy_t *fcd = NULL;
     pmix_status_t rc;
     pmix_list_t ilist;
     pmix_kval_t *kv;
+    size_t n;
 
     PMIX_ACQUIRE_OBJECT(cd);
 
     PMIX_CONSTRUCT(&ilist, pmix_list_t);
 
     /* pass to the network libraries */
-    if (PMIX_SUCCESS != (rc = pmix_pnet.setup_app(cd->nspace, &ilist))) {
+    if (PMIX_SUCCESS != (rc = pmix_pnet.setup_app(cd->nspace,
+                                                  cd->info, cd->ninfo,
+                                                  &ilist))) {
         goto depart;
     }
 
@@ -1355,31 +1356,20 @@ static void _setup_app(int sd, short args, void *cbdata)
         goto depart;
     }
 
-    /* if anything came back, construct the blob */
-    if (0 < pmix_list_get_size(&ilist)) {
-        PMIX_CONSTRUCT(&buffer, pmix_buffer_t);
-        PMIX_LIST_FOREACH(kv, &ilist, pmix_kval_t) {
-            PMIX_BFROPS_PACK(rc, pmix_globals.mypeer, &buffer, kv, 1, PMIX_KVAL);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_DESTRUCT(&blob);
-                PMIX_RELEASE(fcd);
-                fcd = NULL;
-                goto depart;
-            }
-        }
-        PMIX_INFO_CREATE(fcd->info, 1);
+    /* if anything came back, construct an info array */
+    if (0 < (fcd->ninfo = pmix_list_get_size(&ilist))) {
+        PMIX_INFO_CREATE(fcd->info, fcd->ninfo);
         if (NULL == fcd->info) {
-            PMIX_DESTRUCT(&blob);
+            rc = PMIX_ERR_NOMEM;
             PMIX_RELEASE(fcd);
-            fcd = NULL;
             goto depart;
         }
-        fcd->ninfo = 1;
-        PMIX_BYTE_OBJECT_CONSTRUCT(&blob);
-        PMIX_BYTE_OBJECT_LOAD(&blob, buffer.base_ptr, buffer.bytes_used);
-        PMIX_DESTRUCT(&buffer);
-        PMIX_INFO_LOAD(&fcd->info[0], PMIX_PNET_SETUP_APP, &blob, PMIX_BYTE_OBJECT);
-        PMIX_BYTE_OBJECT_DESTRUCT(&blob);
+        n = 0;
+        PMIX_LIST_FOREACH(kv, &ilist, pmix_kval_t) {
+            (void)strncpy(fcd->info[n].key, kv->key, PMIX_MAX_KEYLEN);
+            pmix_value_xfer(&fcd->info[n].value, kv->value);
+            ++n;
+        }
     }
 
   depart:

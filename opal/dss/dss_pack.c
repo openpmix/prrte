@@ -992,16 +992,16 @@ int opal_dss_pack_envar(opal_buffer_t *buffer, const void *src,
 {
     int ret;
     int32_t n;
-    opal_envar_t **ptr = (opal_envar_t**)src;
+    opal_envar_t *ptr = (opal_envar_t*)src;
 
     for (n=0; n < num_vals; n++) {
-        if (OPAL_SUCCESS != (ret = opal_dss_pack_string(buffer, &ptr[n]->envar, 1, OPAL_STRING))) {
+        if (OPAL_SUCCESS != (ret = opal_dss_pack_string(buffer, &ptr[n].envar, 1, OPAL_STRING))) {
             return ret;
         }
-        if (OPAL_SUCCESS != (ret = opal_dss_pack_string(buffer, &ptr[n]->value, 1, OPAL_STRING))) {
+        if (OPAL_SUCCESS != (ret = opal_dss_pack_string(buffer, &ptr[n].value, 1, OPAL_STRING))) {
             return ret;
         }
-        if (OPAL_SUCCESS != (ret = opal_dss_pack_byte(buffer, &ptr[n]->separator, 1, OPAL_BYTE))) {
+        if (OPAL_SUCCESS != (ret = opal_dss_pack_byte(buffer, &ptr[n].separator, 1, OPAL_BYTE))) {
             return ret;
         }
     }

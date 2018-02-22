@@ -1271,31 +1271,26 @@ int opal_dss_unpack_status(opal_buffer_t *buffer, void *dest,
 int opal_dss_unpack_envar(opal_buffer_t *buffer, void *dest,
                           int32_t *num_vals, opal_data_type_t type)
 {
-    opal_envar_t **ptr;
+    opal_envar_t *ptr;
     int32_t i, n, m;
     int ret;
 
-    ptr = (opal_envar_t **) dest;
+    ptr = (opal_envar_t *) dest;
     n = *num_vals;
 
     for (i = 0; i < n; ++i) {
-        /* allocate the new object */
-        ptr[i] = OBJ_NEW(opal_envar_t);
-        if (NULL == ptr[i]) {
-            return OPAL_ERR_OUT_OF_RESOURCE;
-        }
         m=1;
-        if (OPAL_SUCCESS != (ret = opal_dss_unpack_string(buffer, &ptr[i]->envar, &m, OPAL_STRING))) {
+        if (OPAL_SUCCESS != (ret = opal_dss_unpack_string(buffer, &ptr[i].envar, &m, OPAL_STRING))) {
             OPAL_ERROR_LOG(ret);
             return ret;
         }
         m=1;
-        if (OPAL_SUCCESS != (ret = opal_dss_unpack_string(buffer, &ptr[i]->value, &m, OPAL_STRING))) {
+        if (OPAL_SUCCESS != (ret = opal_dss_unpack_string(buffer, &ptr[i].value, &m, OPAL_STRING))) {
             OPAL_ERROR_LOG(ret);
             return ret;
         }
         m=1;
-        if (OPAL_SUCCESS != (ret = opal_dss_unpack_byte(buffer, &ptr[i]->separator, &m, OPAL_BYTE))) {
+        if (OPAL_SUCCESS != (ret = opal_dss_unpack_byte(buffer, &ptr[i].separator, &m, OPAL_BYTE))) {
             OPAL_ERROR_LOG(ret);
             return ret;
         }

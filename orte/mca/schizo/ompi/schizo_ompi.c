@@ -1053,6 +1053,8 @@ static int setup_fork(orte_job_t *jdata,
     OPAL_LIST_FOREACH(attr, &jdata->attributes, orte_attribute_t) {
         if (ORTE_JOB_SET_ENVAR == attr->key) {
             opal_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
+        } else if (ORTE_JOB_ADD_ENVAR == attr->key) {
+            opal_setenv(attr->data.envar.envar, attr->data.envar.value, false, &app->env);
         } else if (ORTE_JOB_UNSET_ENVAR == attr->key) {
             opal_unsetenv(attr->data.string, &app->env);
         } else if (ORTE_JOB_PREPEND_ENVAR == attr->key) {
@@ -1112,6 +1114,8 @@ static int setup_fork(orte_job_t *jdata,
     OPAL_LIST_FOREACH(attr, &app->attributes, orte_attribute_t) {
         if (ORTE_APP_SET_ENVAR == attr->key) {
             opal_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
+        } else if (ORTE_APP_ADD_ENVAR == attr->key) {
+            opal_setenv(attr->data.envar.envar, attr->data.envar.value, false, &app->env);
         } else if (ORTE_APP_UNSET_ENVAR == attr->key) {
             opal_unsetenv(attr->data.string, &app->env);
         } else if (ORTE_APP_PREPEND_ENVAR == attr->key) {
