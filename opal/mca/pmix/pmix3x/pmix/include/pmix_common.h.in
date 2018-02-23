@@ -422,7 +422,8 @@ typedef uint32_t pmix_rank_t;
 #define PMIX_DEBUG_WAIT_FOR_NOTIFY          "pmix.dbg.notify"       // (bool) block at desired point until receiving debugger release notification
 #define PMIX_DEBUG_JOB                      "pmix.dbg.job"          // (char*) nspace of the job to be debugged - the RM/PMIx server are
 #define PMIX_DEBUG_WAITING_FOR_NOTIFY       "pmix.dbg.waiting"      // (bool) job to be debugged is waiting for a release
-
+#define PMIX_DEBUG_JOB_DIRECTIVES           "pmix.dbg.jdirs"        // (pmix_data_array_t) array of job-level directives
+#define PMIX_DEBUG_APP_DIRECTIVES           "pmix.dbg.adirs"        // (pmix_data_array_t) array of app-level directives
 
 /* Resource Manager identification */
 #define PMIX_RM_NAME                        "pmix.rm.name"          // (char*) string name of the resource manager
@@ -679,6 +680,7 @@ typedef int pmix_status_t;
 #define PMIX_GDS_ACTION_COMPLETE                (PMIX_ERR_OP_BASE - 18)
 #define PMIX_PROC_HAS_CONNECTED                 (PMIX_ERR_OP_BASE - 19)
 #define PMIX_CONNECT_REQUESTED                  (PMIX_ERR_OP_BASE - 20)
+#define PMIX_LAUNCH_DIRECTIVE                   (PMIX_ERR_OP_BASE - 21)
 
 /* define a starting point for system error constants so
  * we avoid renumbering when making additions */
@@ -1101,6 +1103,17 @@ typedef struct pmix_data_array {
     size_t size;
     void *array;
 } pmix_data_array_t;
+#define PMIX_DATA_ARRAY_CONSTRUCT(m, n, t)         \
+    do {                                           \
+        (m)->type = (t);                           \
+        (m)->size = (n);                           \
+    } while(0)
+#define PMIX_DATA_ARRAY_CREATE(m, n, t)                                   \
+    do {                                                                  \
+        (m) = (pmix_data_array_t*)calloc(1, sizeof(pmix_data_array_t));   \
+        PMIX_DATA_ARRAY_CONSTRUCT((m), (n), (t));                         \
+    } while(0)
+
 
 typedef struct pmix_info_array {
     size_t size;

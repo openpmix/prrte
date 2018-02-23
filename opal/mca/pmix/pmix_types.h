@@ -327,6 +327,8 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_DEBUG_WAIT_FOR_NOTIFY         "pmix.dbg.notify"       // (bool) block at desired point until receiving debugger release notification
 #define OPAL_PMIX_DEBUG_JOB                     "pmix.dbg.job"          // (char*) nspace of the job to be debugged - the RM/PMIx server are
 #define OPAL_PMIX_DEBUG_WAITING_FOR_NOTIFY      "pmix.dbg.waiting"      // (bool) job to be debugged is waiting for a release
+#define OPAL_PMIX_DEBUG_JOB_DIRECTIVES          "pmix.dbg.jdirs"        // (opal_list_t*) list of job-level directives
+#define OPAL_PMIX_DEBUG_APP_DIRECTIVES          "pmix.dbg.adirs"        // (opal_list_t*) list of app-level directives
 
 
 /* Resource Manager identification */

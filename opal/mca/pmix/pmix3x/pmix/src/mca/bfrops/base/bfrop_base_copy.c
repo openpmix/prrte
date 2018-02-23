@@ -367,18 +367,22 @@ pmix_status_t pmix_bfrops_base_copy_pinfo(pmix_proc_info_t **dest,
                                           pmix_proc_info_t *src,
                                           pmix_data_type_t type)
 {
-    *dest = (pmix_proc_info_t*)malloc(sizeof(pmix_proc_info_t));
-    (void)strncpy((*dest)->proc.nspace, src->proc.nspace, PMIX_MAX_NSLEN);
-    (*dest)->proc.rank = src->proc.rank;
+    pmix_proc_info_t *p;
+
+    PMIX_PROC_INFO_CREATE(p, 1);
+    if (NULL == p) {
+        return PMIX_ERR_NOMEM;
+    }
     if (NULL != src->hostname) {
-        (*dest)->hostname = strdup(src->hostname);
+        p->hostname = strdup(src->hostname);
     }
     if (NULL != src->executable_name) {
-        (*dest)->executable_name = strdup(src->executable_name);
+        p->executable_name = strdup(src->executable_name);
     }
-    (*dest)->pid = src->pid;
-    (*dest)->exit_code = src->exit_code;
-    (*dest)->state = src->state;
+    memcpy(&p->pid, &src->pid, sizeof(pid_t));
+    memcpy(&p->exit_code, &src->exit_code, sizeof(int));
+    memcpy(&p->state, &src->state, sizeof(pmix_proc_state_t));
+    *dest = p;
     return PMIX_SUCCESS;
 }
 
@@ -901,7 +905,7 @@ pmix_status_t pmix_bfrops_base_copy_envar(pmix_envar_t **dest,
                                           pmix_envar_t *src,
                                           pmix_data_type_t type)
 {
-    *dest = (pmix_envar_t*)malloc(sizeof(pmix_envar_t));
+    PMIX_ENVAR_CREATE(*dest, 1);
     if (NULL == (*dest)) {
         return PMIX_ERR_NOMEM;
     }
