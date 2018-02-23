@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  *
  * $COPYRIGHT$
@@ -170,9 +170,9 @@ static pmix_status_t setup_app(pmix_nspace_t *nptr,
     uint64_t unique_key[2];
     char *string_key, *cs_env;
     int fd_rand;
-    size_t n, bytes_read;
-    pmix_kval_t *kv;
-    int i;
+    size_t n, bytes_read, len;
+    pmix_kval_t *kv, *next;
+    int i, j;
     bool envars, seckeys;
 
     if (NULL == info) {
@@ -240,28 +240,50 @@ static pmix_status_t setup_app(pmix_nspace_t *nptr,
     }
 
     if (envars) {
-        /* harvest any PSM_* or PSM2_* envars to pass along */
-        for (i = 0; NULL != environ[i]; ++i) {
-            if (0 == strncmp("PSM_", environ[i], 4) ||
-                0 == strncmp("PSM2_", environ[i], 5)) {
-                kv = PMIX_NEW(pmix_kval_t);
-                if (NULL == kv) {
-                    return PMIX_ERR_OUT_OF_RESOURCE;
+        /* harvest envars to pass along */
+        if (NULL != mca_pnet_opa_component.include) {
+            for (j=0; NULL != mca_pnet_opa_component.include[j]; j++) {
+                len = strlen(mca_pnet_opa_component.include[j]);
+                if ('*' == mca_pnet_opa_component.include[j][len-1]) {
+                    --len;
                 }
-                kv->key = strdup(PMIX_SET_ENVAR);
-                kv->value = (pmix_value_t*)malloc(sizeof(pmix_value_t));
-                if (NULL == kv->value) {
-                    PMIX_RELEASE(kv);
-                    return PMIX_ERR_OUT_OF_RESOURCE;
+                for (i = 0; NULL != environ[i]; ++i) {
+                    if (0 == strncmp(environ[i], mca_pnet_opa_component.include[j], len)) {
+                        cs_env = strdup(environ[i]);
+                        kv = PMIX_NEW(pmix_kval_t);
+                        if (NULL == kv) {
+                            return PMIX_ERR_OUT_OF_RESOURCE;
+                        }
+                        kv->key = strdup(PMIX_SET_ENVAR);
+                        kv->value = (pmix_value_t*)malloc(sizeof(pmix_value_t));
+                        if (NULL == kv->value) {
+                            PMIX_RELEASE(kv);
+                            return PMIX_ERR_OUT_OF_RESOURCE;
+                        }
+                        kv->value->type = PMIX_ENVAR;
+                        string_key = strchr(cs_env, '=');
+                        *string_key = '\0';
+                        ++string_key;
+                        PMIX_ENVAR_LOAD(&kv->value->data.envar, cs_env, string_key, ':');
+                        pmix_list_append(ilist, &kv->super);
+                        free(cs_env);
+                    }
                 }
-                kv->value->type = PMIX_ENVAR;
-                cs_env = strdup(environ[i]);
-                string_key = strchr(cs_env, '=');
-                *string_key = '\0';
-                ++string_key;
-                PMIX_ENVAR_LOAD(&kv->value->data.envar, cs_env, string_key, ':');
-                pmix_list_append(ilist, &kv->super);
-                free(cs_env);
+            }
+        }
+        /* now check the exclusions and remove any that match */
+        if (NULL != mca_pnet_opa_component.exclude) {
+            for (j=0; NULL != mca_pnet_opa_component.exclude[j]; j++) {
+                len = strlen(mca_pnet_opa_component.exclude[j]);
+                if ('*' == mca_pnet_opa_component.exclude[j][len-1]) {
+                    --len;
+                }
+                PMIX_LIST_FOREACH_SAFE(kv, next, ilist, pmix_kval_t) {
+                    if (0 == strncmp(kv->value->data.envar.envar, mca_pnet_opa_component.exclude[j], len)) {
+                        pmix_list_remove_item(ilist, &kv->super);
+                        PMIX_RELEASE(kv);
+                    }
+                }
             }
         }
     }
