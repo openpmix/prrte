@@ -44,7 +44,8 @@ EXAMPLES = \
 	 tool \
 	 alloc \
          probe \
-         target
+         target \
+         hello
 
 all: $(EXAMPLES)
 

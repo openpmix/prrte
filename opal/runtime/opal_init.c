@@ -303,6 +303,9 @@ opal_err2str(int errnum, const char **errmsg)
     case OPAL_PMIX_LAUNCH_DIRECTIVE:
         retval = "Launch directive";
         break;
+    case OPAL_PMIX_LAUNCHER_READY:
+        retval = "Launcher ready";
+        break;
     default:
         retval = "UNRECOGNIZED";
     }

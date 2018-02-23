@@ -114,8 +114,12 @@ static struct {
     int pid;
 } myoptions;
 
+typedef struct {
+    opal_pmix_lock_t lock;
+    opal_list_t list;
+} mylock_t;
+
 static opal_list_t job_info;
-static volatile bool active = false;
 static orte_jobid_t myjobid = ORTE_JOBID_INVALID;
 static myinfo_t myinfo;
 
@@ -186,13 +190,13 @@ static void opcbfunc(int status, void *cbdata)
     OPAL_PMIX_WAKEUP_THREAD(lock);
 }
 
-static bool fired = false;
 static void evhandler(int status,
                       const opal_process_name_t *source,
                       opal_list_t *info, opal_list_t *results,
                       opal_pmix_notification_complete_fn_t cbfunc,
                       void *cbdata)
 {
+    opal_pmix_lock_t *lock = NULL;
     opal_value_t *val;
     int jobstatus=0;
     orte_jobid_t jobid = ORTE_JOBID_INVALID;
@@ -205,6 +209,8 @@ static void evhandler(int status,
                 jobstatus = val->data.integer;
             } else if (0 == strcmp(val->key, OPAL_PMIX_PROCID)) {
                 jobid = val->data.name.jobid;
+            } else if (0 == strcmp(val->key, OPAL_PMIX_EVENT_RETURN_OBJECT)) {
+                lock = (opal_pmix_lock_t*)val->data.ptr;
             }
         }
         if (orte_cmd_options.verbose && (myjobid != ORTE_JOBID_INVALID && jobid == myjobid)) {
@@ -212,14 +218,8 @@ static void evhandler(int status,
                         ORTE_JOBID_PRINT(jobid), jobstatus);
         }
     }
-
-    /* only terminate if this was our job - keep in mind that we
-     * can get notifications of job termination prior to our spawn
-     * having completed! */
-    if (!fired && (myjobid != ORTE_JOBID_INVALID && jobid == myjobid)) {
-        fired = true;
-        active = false;
-    }
+    /* release the lock */
+    OPAL_PMIX_WAKEUP_THREAD(lock);
 
     /* we _always_ have to execute the evhandler callback or
      * else the event progress engine will hang */
@@ -227,12 +227,6 @@ static void evhandler(int status,
         cbfunc(OPAL_SUCCESS, NULL, NULL, NULL, cbdata);
     }
 }
-
-typedef struct {
-    opal_pmix_lock_t lock;
-    opal_list_t list;
-} mylock_t;
-
 
 static void setupcbfunc(int status,
                         opal_list_t *info,
@@ -284,14 +278,14 @@ static void launchhandler(int status,
 int prun(int argc, char *argv[])
 {
     int rc, i;
-    char *param;
-    opal_pmix_lock_t lock;
+    char *param, *ptr;
+    opal_pmix_lock_t lock, rellock;
     opal_list_t apps, *lt;
     opal_pmix_app_t *app;
     opal_value_t *val, *kv, *kv2;
     opal_list_t info, codes;
-    struct timespec tp = {0, 100000};
     mylock_t mylock;
+    opal_process_name_t proc;
 
     /* init the globals */
     memset(&orte_cmd_options, 0, sizeof(orte_cmd_options));
@@ -455,8 +449,9 @@ int prun(int argc, char *argv[])
         opal_setenv("PMIX_MCA_ptl_tcp_server_uri", orte_cmd_options.hnp, true, &environ);
     }
 
-    /* now initialize ORTE */
-    if (OPAL_SUCCESS != (rc = orte_init(&argc, &argv, ORTE_PROC_TOOL))) {
+    /* now initialize ORTE - we have to indicate we are a launcher so that we
+     * will provide rendezvous points for tools to connect to us */
+    if (OPAL_SUCCESS != (rc = orte_init(&argc, &argv, ORTE_PROC_LAUNCHER))) {
         OPAL_ERROR_LOG(rc);
         return rc;
     }
@@ -493,23 +488,6 @@ int prun(int argc, char *argv[])
         opal_output(0, "No application specified!");
         goto DONE;
     }
-
-    /* init flag */
-    active = true;
-
-    /* register for job terminations so we get notified when
-     * our job completes */
-    OPAL_PMIX_CONSTRUCT_LOCK(&lock);
-    OBJ_CONSTRUCT(&info, opal_list_t);
-    val = OBJ_NEW(opal_value_t);
-    val->key = strdup("foo");
-    val->type = OPAL_INT;
-    val->data.integer = OPAL_ERR_JOB_TERMINATED;
-    opal_list_append(&info, &val->super);
-    opal_pmix.register_evhandler(&info, NULL, evhandler, regcbfunc, &lock);
-    OPAL_PMIX_WAIT_THREAD(&lock);
-    OPAL_PMIX_DESTRUCT_LOCK(&lock);
-    OPAL_LIST_DESTRUCT(&info);
 
     /* we want to be notified upon job completion */
     val = OBJ_NEW(opal_value_t);
@@ -754,8 +732,7 @@ int prun(int argc, char *argv[])
     /* if we were launched by a tool wanting to direct our
      * operation, then we need to pause here and give it
      * a chance to tell us what we need to do */
-    if (NULL != (param = getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) &&
-        0 == strcmp(param, "1")) {
+    if (NULL != (param = getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL"))) {
         /* register for the PMIX_LAUNCH_DIRECTIVE event */
         OPAL_PMIX_CONSTRUCT_LOCK(&lock);
         OBJ_CONSTRUCT(&codes, opal_list_t);
@@ -773,6 +750,14 @@ int prun(int argc, char *argv[])
         OPAL_PMIX_WAIT_THREAD(&lock);
         OPAL_PMIX_DESTRUCT_LOCK(&lock);
         OPAL_LIST_DESTRUCT(&codes);
+        /* notify the tool that we are ready */
+        ptr = strdup(param);
+        param = strchr(ptr, ':');
+        *param = '\0';
+        ++param;
+        opal_convert_string_to_jobid(&proc.jobid, ptr);
+        proc.vpid = strtoul(param, NULL, 10);
+        opal_pmix.notify_event(OPAL_PMIX_LAUNCHER_READY, &proc, OPAL_PMIX_RANGE_SESSION, NULL, NULL, NULL);
         /* now wait for the launch directives to arrive */
         OPAL_PMIX_WAIT_THREAD(&myinfo.lock);
         /* process the returned directives */
@@ -781,14 +766,12 @@ int prun(int argc, char *argv[])
                 /* there will be a pointer to a list containing the directives */
                 lt = (opal_list_t*)val->data.ptr;
                 while (NULL != (kv = (opal_value_t*)opal_list_remove_first(lt))) {
-                    opal_output(0, "JOB DIRECTIVE: %s", kv->key);
                     opal_list_append(&job_info, &kv->super);
                 }
             } else if (0 == strcmp(val->key, OPAL_PMIX_DEBUG_APP_DIRECTIVES)) {
                 /* there will be a pointer to a list containing the directives */
                 lt = (opal_list_t*)val->data.ptr;
                 OPAL_LIST_FOREACH(kv, lt, opal_value_t) {
-                    opal_output(0, "APP DIRECTIVE: %s", kv->key);
                     OPAL_LIST_FOREACH(app, &apps, opal_pmix_app_t) {
                         /* the value can only be on one list at a time, so replicate it */
                         kv2 = OBJ_NEW(opal_value_t);
@@ -806,14 +789,50 @@ int prun(int argc, char *argv[])
     }
     OPAL_LIST_DESTRUCT(&job_info);
     OPAL_LIST_DESTRUCT(&apps);
+    /* register to be notified when
+     * our job completes */
+    OBJ_CONSTRUCT(&codes, opal_list_t);
+    val = OBJ_NEW(opal_value_t);
+    val->key = strdup("foo");
+    val->type = OPAL_INT;
+    val->data.integer = OPAL_ERR_JOB_TERMINATED;
+    opal_list_append(&codes, &val->super);
+    /* give the handler a name */
+    OBJ_CONSTRUCT(&info, opal_list_t);
+    val = OBJ_NEW(opal_value_t);
+    val->key = strdup(OPAL_PMIX_EVENT_HDLR_NAME);
+    val->type = OPAL_STRING;
+    val->data.string = strdup("JOB_TERMINATION_EVENT");
+    opal_list_append(&info, &val->super);
+    /* specify we only want to be notified when our
+     * job terminates */
+    val = OBJ_NEW(opal_value_t);
+    val->key = strdup(OPAL_PMIX_JOBID);
+    val->type = OPAL_JOBID;
+    val->data.name.jobid = myjobid;
+    opal_list_append(&info, &val->super);
+    /* request that they return our lock object */
+    OPAL_PMIX_CONSTRUCT_LOCK(&rellock);
+    val = OBJ_NEW(opal_value_t);
+    val->key = strdup(OPAL_PMIX_EVENT_RETURN_OBJECT);
+    val->type = OPAL_PTR;
+    val->data.ptr = &rellock;
+    opal_list_append(&info, &val->super);
+    /* do the registration */
+    OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+    opal_pmix.register_evhandler(&codes, &info, evhandler, regcbfunc, &lock);
+    OPAL_PMIX_WAIT_THREAD(&lock);
+    OPAL_PMIX_DESTRUCT_LOCK(&lock);
+    OPAL_LIST_DESTRUCT(&info);
+    OPAL_LIST_DESTRUCT(&codes);
 
     if (orte_cmd_options.verbose) {
         opal_output(0, "JOB %s EXECUTING", OPAL_JOBID_PRINT(myjobid));
     }
 
-    while (active) {
-        nanosleep(&tp, NULL);
-    }
+    OPAL_PMIX_WAIT_THREAD(&rellock);
+    OPAL_PMIX_DESTRUCT_LOCK(&rellock);
+
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
     opal_pmix.deregister_evhandler(evid, opcbfunc, &lock);
     OPAL_PMIX_WAIT_THREAD(&lock);

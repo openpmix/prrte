@@ -267,12 +267,12 @@ void orte_iof_hnp_recv(int status, orte_process_name_t* sender,
         }
     }
     /* if the user doesn't want a copy written to the screen, then we are done */
-    if (!proct->copy) {
+    if (0) {
         return;
     }
 
     /* output this to our local output unless one of the sinks was exclusive */
-    if (!exclusive) {
+    if (1) {
         if (ORTE_IOF_STDOUT & stream || orte_xml_output) {
             orte_iof_base_write_output(&origin, stream, data, numbytes, orte_iof_base.iof_write_stdout->wev);
         } else {

@@ -33,6 +33,8 @@
 
 #include "opal/runtime/opal_progress_threads.h"
 #include "opal/mca/pmix/pmix_types.h"
+#include "opal/util/opal_environ.h"
+#include "opal/util/os_path.h"
 
 #include "orte/util/show_help.h"
 #include "orte/mca/plm/base/base.h"
@@ -81,8 +83,10 @@ static int rte_init(void)
         progress_thread_running = true;
     }
 
-    /* setup the tool connection flags */
+    /* set the flags to pass down to the tool */
     OBJ_CONSTRUCT(&flags, opal_list_t);
+
+    /* setup the tool connection flags */
     if (mca_ess_tool_component.do_not_connect) {
         val = OBJ_NEW(opal_value_t);
         val->key = strdup(OPAL_PMIX_TOOL_DO_NOT_CONNECT);
@@ -121,6 +125,34 @@ static int rte_init(void)
         val->key = strdup(OPAL_PMIX_SERVER_PIDINFO);
         val->type = OPAL_PID;
         val->data.pid = mca_ess_tool_component.pid;
+        opal_list_append(&flags, &val->super);
+    }
+    /* ensure we don't try to use the usock PTL component */
+    val = OBJ_NEW(opal_value_t);
+    val->key = strdup(OPAL_PMIX_USOCK_DISABLE);
+    val->type = OPAL_BOOL;
+    val->data.flag = true;
+    opal_list_append(&flags, &val->super);
+
+    /* if we are also a launcher, pass that down so PMIx knows
+     * to setup rendezvous points */
+    if (ORTE_PROC_IS_LAUNCHER) {
+        val = OBJ_NEW(opal_value_t);
+        val->key = strdup(OPAL_PMIX_LAUNCHER);
+        val->type = OPAL_BOOL;
+        val->data.flag = true;
+        opal_list_append(&flags, &val->super);
+        /* we always support session-level rendezvous */
+        val = OBJ_NEW(opal_value_t);
+        val->key = strdup(OPAL_PMIX_SERVER_TOOL_SUPPORT);
+        val->type = OPAL_BOOL;
+        val->data.flag = true;
+        opal_list_append(&flags, &val->super);
+        /* use only one listener */
+        val = OBJ_NEW(opal_value_t);
+        val->key = strdup(OPAL_PMIX_SINGLE_LISTENER);
+        val->type = OPAL_BOOL;
+        val->data.flag = true;
         opal_list_append(&flags, &val->super);
     }
 

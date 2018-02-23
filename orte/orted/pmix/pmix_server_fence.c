@@ -199,7 +199,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
      * any local procs. There is no need to request the data as we already have
      * it - so just register the nspace so the local PMIx server gets it */
     if (ORTE_VPID_WILDCARD == req->target.vpid) {
-        rc = orte_pmix_server_register_nspace(jdata, true);
+        rc = orte_pmix_server_register_nspace(jdata);
         if (ORTE_SUCCESS != rc) {
             goto callback;
         }

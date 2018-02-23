@@ -54,7 +54,7 @@
 static void mycbfunc(int status, void *cbdata);
 
 /* stuff proc attributes for sending back to a proc */
-int orte_pmix_server_register_nspace(orte_job_t *jdata, bool force)
+int orte_pmix_server_register_nspace(orte_job_t *jdata)
 {
     int rc;
     orte_proc_t *pptr;
@@ -439,7 +439,7 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata, bool force)
             kv = OBJ_NEW(opal_value_t);
             kv->key = strdup(OPAL_PMIX_NODE_RANK);
             kv->type = OPAL_UINT16;
-            kv->data.uint32 = pptr->node_rank;
+            kv->data.uint16 = pptr->node_rank;
             opal_list_append(pmap, &kv->super);
 
             /* node ID */

@@ -75,11 +75,14 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_CONNECT_RETRY_DELAY           "pmix.tool.retry"       // (uint32_t) time in seconds between connection attempts
 #define OPAL_PMIX_TOOL_DO_NOT_CONNECT           "pmix.tool.nocon"       // (bool) the tool wants to use internal PMIx support, but does
                                                                         //        not want to connect to a PMIx server
+#define OPAL_PMIX_RECONNECT_SERVER              "pmix.cnct.recon"       // (bool) tool is requesting to change server connections
+#define OPAL_PMIX_LAUNCHER                      "pmix.tool.launcher"    // (bool) tool is a launcher and needs rendezvous files created
 
 
 /* identification attributes */
 #define OPAL_PMIX_USERID                        "pmix.euid"             // (uint32_t) effective user id
 #define OPAL_PMIX_GRPID                         "pmix.egid"             // (uint32_t) effective group id
+#define OPAL_PMIX_VERSION_INFO                  "pmix.version"          // (char*) PMIx version of contactor
 #define OPAL_PMIX_PROGRAMMING_MODEL             "pmix.pgm.model"        // (char*) programming model being initialized (e.g., "MPI" or "OpenMP")
 #define OPAL_PMIX_MODEL_LIBRARY_NAME            "pmix.mdl.name"         // (char*) programming model implementation ID (e.g., "OpenMPI" or "MPICH")
 #define OPAL_PMIX_MODEL_LIBRARY_VERSION         "pmix.mld.vrs"          // (char*) programming model version string (e.g., "2.1.1")
@@ -145,6 +148,7 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_PROC_URI                      "opal.puri"             // (char*) URI containing contact info for proc - NOTE: this is published by procs and
                                                                         //            thus cannot be prefixed with "pmix"
 #define OPAL_PMIX_LOCALITY                      "pmix.loc"              // (uint16_t) relative locality of two procs
+#define OPAL_PMIX_APPNAME                       "pmix.appname"          // (char*) argv[0] of the application
 
 
 /* Memory info */

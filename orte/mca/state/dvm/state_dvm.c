@@ -562,35 +562,19 @@ static void cleanup_job(int sd, short args, void *cbdata)
     OBJ_RELEASE(caddy);
 }
 
-typedef struct {
-    opal_list_t *info;
-    orte_job_t *jdata;
-} mycaddy_t;
-
-static void notify_complete(int status, void *cbdata)
-{
-    mycaddy_t *mycaddy = (mycaddy_t*)cbdata;
-
-    OPAL_LIST_RELEASE(mycaddy->info);
-    ORTE_ACTIVATE_JOB_STATE(mycaddy->jdata, ORTE_JOB_STATE_NOTIFIED);
-    OBJ_RELEASE(mycaddy->jdata);
-    free(mycaddy);
-}
-
 static void dvm_notify(int sd, short args, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
     orte_job_t *jdata = caddy->jdata;
     orte_proc_t *pptr=NULL;
-    int ret;
+    int ret, rc;
     opal_buffer_t *reply;
     orte_daemon_cmd_flag_t command;
     orte_grpcomm_signature_t *sig;
     bool notify = true;
     opal_list_t *info;
     opal_value_t *val;
-    opal_process_name_t pname, *proc, pnotify;
-    mycaddy_t *mycaddy;
+    opal_process_name_t *proc, pnotify;
 
     /* see if there was any problem */
     if (orte_get_attribute(&jdata->attributes, ORTE_JOB_ABORTED_PROC, (void**)&pptr, OPAL_PTR) && NULL != pptr) {
@@ -614,10 +598,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
     }
 
     if (notify) {
-        /* the source is the job that terminated */
-        pname.jobid = jdata->jobid;
-        pname.vpid = OPAL_VPID_WILDCARD;
-
+        /* construct the info to be provided */
         info = OBJ_NEW(opal_list_t);
         /* ensure this only goes to the job terminated event handler */
         val = OBJ_NEW(opal_value_t);
@@ -625,6 +606,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         val->type = OPAL_BOOL;
         val->data.flag = true;
         opal_list_append(info, &val->super);
+#if 0
         /* tell the server not to cache the event as subsequent jobs
          * do not need to know about it */
         val = OBJ_NEW(opal_value_t);
@@ -632,6 +614,15 @@ static void dvm_notify(int sd, short args, void *cbdata)
         val->type = OPAL_BOOL;
         val->data.flag = true;
         opal_list_append(info, &val->super);
+        /* guarantee delivery to the requestor, even if they
+         * register for notification late */
+        val = OBJ_NEW(opal_value_t);
+        val->key = strdup(OPAL_PMIX_EVENT_GUARANTEE_DELIVERY);
+        val->type = OPAL_NAME;
+        val->data.name.jobid = pnotify.jobid;
+        val->data.name.vpid = pnotify.vpid;
+        opal_list_append(info, &val->super);
+#endif
         /* provide the status */
         val = OBJ_NEW(opal_value_t);
         val->key = strdup(OPAL_PMIX_JOB_TERM_STATUS);
@@ -640,7 +631,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         opal_list_append(info, &val->super);
         /* tell the requestor which job or proc  */
         val = OBJ_NEW(opal_value_t);
-        val->key = strdup(OPAL_PMIX_PROCID);
+        val->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
         val->type = OPAL_NAME;
         val->data.name.jobid = jdata->jobid;
         if (NULL != pptr) {
@@ -649,20 +640,67 @@ static void dvm_notify(int sd, short args, void *cbdata)
             val->data.name.vpid = ORTE_VPID_WILDCARD;
         }
         opal_list_append(info, &val->super);
-        /* pass along the proc to be notified */
-        val = OBJ_NEW(opal_value_t);
-        val->key = strdup(OPAL_PMIX_EVENT_CUSTOM_RANGE);
-        val->type = OPAL_NAME;
-        val->data.name.jobid = pnotify.jobid;
-        val->data.name.vpid = pnotify.vpid;
-        opal_list_append(info, &val->super);
-        /* setup the caddy */
-        mycaddy = (mycaddy_t*)malloc(sizeof(mycaddy_t));
-        mycaddy->info = info;
-        OBJ_RETAIN(jdata);
-        mycaddy->jdata = jdata;
-        opal_pmix.server_notify_event(OPAL_ERR_JOB_TERMINATED, &pname,
-                                      info, notify_complete, mycaddy);
+
+        /* we have to send the notification to all daemons so that
+         * anyone watching for it can receive it */
+        reply = OBJ_NEW(opal_buffer_t);
+        /* pack the status code */
+        ret = OPAL_ERR_JOB_TERMINATED;
+        if (OPAL_SUCCESS != (rc = opal_dss.pack(reply, &ret, 1, OPAL_INT))) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_RELEASE(reply);
+            return;
+        }
+        /* pack the source - it cannot be me as that will cause
+         * the pmix server to upcall the event back to me */
+        pnotify.jobid = jdata->jobid;
+        pnotify.vpid = 0;
+        if (OPAL_SUCCESS != (rc = opal_dss.pack(reply, &pnotify, 1, ORTE_NAME))) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_RELEASE(reply);
+            return;
+        }
+
+        /* pack the number of infos */
+        ret = opal_list_get_size(info);
+        if (OPAL_SUCCESS != (rc = opal_dss.pack(reply, &ret, 1, OPAL_INT))) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_RELEASE(reply);
+            return;
+        }
+        /* pack the infos themselves */
+        OPAL_LIST_FOREACH(val, info, opal_value_t) {
+            if (OPAL_SUCCESS != (rc = opal_dss.pack(reply, &val, 1, OPAL_VALUE))) {
+                ORTE_ERROR_LOG(rc);
+                OBJ_RELEASE(reply);
+                return;
+            }
+        }
+
+        /* goes to all daemons */
+        sig = OBJ_NEW(orte_grpcomm_signature_t);
+        if (NULL == sig) {
+            OBJ_RELEASE(reply);
+            return;
+        }
+        sig->signature = (orte_process_name_t*)malloc(sizeof(orte_process_name_t));
+        if (NULL == sig->signature) {
+            OBJ_RELEASE(reply);
+            OBJ_RELEASE(sig);
+            return;
+        }
+        sig->signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
+        sig->signature[0].vpid = ORTE_VPID_WILDCARD;
+        sig->sz = 1;
+        if (ORTE_SUCCESS != (rc = orte_grpcomm.xcast(sig, ORTE_RML_TAG_NOTIFICATION, reply))) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_RELEASE(reply);
+            OBJ_RELEASE(sig);
+            return;
+        }
+        OBJ_RELEASE(reply);
+        /* maintain accounting */
+        OBJ_RELEASE(sig);
     }
 
     /* now ensure that _all_ daemons know that this job has terminated so even

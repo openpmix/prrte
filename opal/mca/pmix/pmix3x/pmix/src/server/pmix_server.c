@@ -83,10 +83,6 @@ static char *bfrops_mode = NULL;
 static char *gds_mode = NULL;
 static pid_t mypid;
 
-static void pmix_server_message_handler(struct pmix_peer_t *pr,
-                                 pmix_ptl_hdr_t *hdr,
-                                 pmix_buffer_t *buf, void *cbdata);
-
 // local functions for connection support
 static void iof_eviction_cbfunc(struct pmix_hotel_t *hotel,
                                 int room_num,
@@ -1063,6 +1059,12 @@ PMIX_EXPORT pmix_status_t PMIx_server_setup_fork(const pmix_proc_t *proc, char *
     /* pass our available gds modules */
     pmix_setenv("PMIX_GDS_MODULE", gds_mode, true, env);
 
+    /* get any PTL contribution such as tmpdir settings for session files */
+    if (PMIX_SUCCESS != (rc = pmix_ptl_base_setup_fork(proc, env))) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
+    }
+
     /* get any network contribution */
     if (PMIX_SUCCESS != (rc = pmix_pnet.setup_fork(proc, env))) {
         PMIX_ERROR_LOG(rc);
@@ -1519,7 +1521,6 @@ static void _iofdeliver(int sd, short args, void *cbdata)
             cd->procs->rank == req->peer->info->pname.rank) {
             continue;
         }
-
         found = true;
         /* setup the msg */
         if (NULL == (msg = PMIX_NEW(pmix_buffer_t))) {
@@ -2877,7 +2878,7 @@ static pmix_status_t server_switchyard(pmix_peer_t *peer, uint32_t tag,
     return PMIX_ERR_NOT_SUPPORTED;
 }
 
-static void pmix_server_message_handler(struct pmix_peer_t *pr,
+void pmix_server_message_handler(struct pmix_peer_t *pr,
                                  pmix_ptl_hdr_t *hdr,
                                  pmix_buffer_t *buf, void *cbdata)
 {

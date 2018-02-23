@@ -46,6 +46,7 @@ typedef struct {
     bool disable_ipv6_family;
     struct sockaddr_storage connection;
     char *session_filename;
+    char *nspace_filename;
     char *system_filename;
     int wait_to_connect;
     int max_retries;

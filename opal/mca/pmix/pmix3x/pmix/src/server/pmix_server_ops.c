@@ -1057,6 +1057,12 @@ static void spcbfunc(pmix_status_t status,
                     (PMIX_RANK_WILDCARD != req->pname.rank && occupant->procs->rank != req->pname.rank)) {
                     continue;
                 }
+                /* never forward back to the source! This can happen if the source
+                 * is a launcher */
+                if (0 == strncmp(occupant->procs->nspace, req->peer->info->pname.nspace, PMIX_MAX_NSLEN) &&
+                    occupant->procs->rank == req->peer->info->pname.rank) {
+                    continue;
+                }
                 /* setup the msg */
                 if (NULL == (msg = PMIX_NEW(pmix_buffer_t))) {
                     PMIX_ERROR_LOG(PMIX_ERR_OUT_OF_RESOURCE);
@@ -1122,7 +1128,7 @@ pmix_status_t pmix_server_spawn(pmix_peer_t *peer,
     bool stdout_found = false, stderr_found = false, stddiag_found = false;
 
     pmix_output_verbose(2, pmix_server_globals.spawn_output,
-                        "recvd SPAWN");
+                        "recvd SPAWN from %s:%d", peer->info->pname.nspace, peer->info->pname.rank);
 
     if (NULL == pmix_host_server.spawn) {
         PMIX_ERROR_LOG(PMIX_ERR_NOT_SUPPORTED);
@@ -1166,15 +1172,16 @@ pmix_status_t pmix_server_spawn(pmix_peer_t *peer,
         }
         /* run a quick check of the directives to see if any IOF
          * requests were included so we can set that up now - helps
-         * to catch any early output */
+         * to catch any early output - and a request for notification
+         * of job termination so we can setup the event registration */
         cd->channels = PMIX_FWD_NO_CHANNELS;
         for (n=0; n < cd->ninfo; n++) {
             if (0 == strncmp(cd->info[n].key, PMIX_FWD_STDIN, PMIX_MAX_KEYLEN)) {
-                stdout_found = true;
                 if (PMIX_INFO_TRUE(&cd->info[n])) {
                     cd->channels |= PMIX_FWD_STDIN_CHANNEL;
                 }
             } else if (0 == strncmp(cd->info[n].key, PMIX_FWD_STDOUT, PMIX_MAX_KEYLEN)) {
+                stdout_found = true;
                 if (PMIX_INFO_TRUE(&cd->info[n])) {
                     cd->channels |= PMIX_FWD_STDOUT_CHANNEL;
                 }
