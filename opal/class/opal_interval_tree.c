@@ -27,6 +27,8 @@
 
 #include "opal/class/opal_interval_tree.h"
 #include <limits.h>
+#include <stddef.h>
+#include <string.h>
 
 /* Private functions */
 static void opal_interval_tree_insert_node (opal_interval_tree_t *tree, opal_interval_tree_node_t *node);
