@@ -74,6 +74,7 @@ typedef struct {
  * info from a query */
 typedef struct {
     mylock_t lock;
+    pmix_status_t status;
     pmix_info_t *info;
     size_t ninfo;
 } myquery_data_t;
@@ -105,6 +106,7 @@ static void cbfunc(pmix_status_t status,
     myquery_data_t *mq = (myquery_data_t*)cbdata;
     size_t n;
 
+    mq->status = status;
     /* save the returned info - the PMIx library "owns" it
      * and will release it and perform other cleanup actions
      * when release_fn is called */
@@ -112,7 +114,6 @@ static void cbfunc(pmix_status_t status,
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
         for (n=0; n < ninfo; n++) {
-            fprintf(stderr, "Transferring %s\n", info[n].key);
             PMIX_INFO_XFER(&mq->info[n], &info[n]);
         }
     }
@@ -337,9 +338,11 @@ int main(int argc, char **argv)
     /* check to see if we are using an intermediate launcher - we only
      * support those we recognize */
     found = false;
-    for (n=0; NULL != launchers[n]; n++) {
-        if (0 == strcmp(argv[1], launchers[n])) {
-            found = true;
+    if (1 < argc) {
+        for (n=0; NULL != launchers[n]; n++) {
+            if (0 == strcmp(argv[1], launchers[n])) {
+                found = true;
+            }
         }
     }
     if (found) {
@@ -506,6 +509,61 @@ int main(int argc, char **argv)
             }
             PMIX_INFO_FREE(info, ninfo);
             PMIX_APP_FREE(app, napps);
+
+            /* get the proctable for this nspace */
+            PMIX_QUERY_CREATE(query, 1);
+            PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_PROC_TABLE);
+            query[0].nqual = 1;
+            PMIX_INFO_CREATE(query->qualifiers, query[0].nqual);
+            PMIX_INFO_LOAD(&query->qualifiers[0], PMIX_NSPACE, clientspace, PMIX_STRING);
+
+            DEBUG_CONSTRUCT_LOCK(&myquery_data.lock);
+            myquery_data.info = NULL;
+            myquery_data.ninfo = 0;
+
+            if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, 1, cbfunc, (void*)&myquery_data))) {
+                fprintf(stderr, "Debugger[%s:%d] Proctable query failed: %d\n", myproc.nspace, myproc.rank, rc);
+                goto done;
+            }
+            /* wait to get a response */
+            DEBUG_WAIT_THREAD(&myquery_data.lock);
+            DEBUG_DESTRUCT_LOCK(&myquery_data.lock);
+
+            /* we should have gotten a response */
+            if (PMIX_SUCCESS != myquery_data.status) {
+                fprintf(stderr, "Debugger[%s:%d] Proctable query failed: %s\n",
+                        myproc.nspace, myproc.rank, PMIx_Error_string(myquery_data.status));
+                goto done;
+            }
+            /* there should hvae been data */
+            if (NULL == myquery_data.info || 0 == myquery_data.ninfo) {
+                fprintf(stderr, "Debugger[%s:%d] Proctable query return no results\n",
+                        myproc.nspace, myproc.rank);
+                goto done;
+            }
+            /* the query should have returned a data_array */
+            if (PMIX_DATA_ARRAY != myquery_data.info[0].value.type) {
+                fprintf(stderr, "Debugger[%s:%d] Query returned incorrect data type: %s\n", PMIx_Data_type_string(myquery_data.info[0].value.type));
+                return -1;
+            }
+            if (NULL == myquery_data.info[0].value.data.darray->array) {
+                fprintf(stderr, "Debugger[%s:%d] Query returned no proctable info\n");
+                goto done;
+            }
+            /* the data array consists of a struct:
+             *     size_t size;
+             *     void* array;
+             *
+             * In this case, the array is composed of pmix_proc_info_t structs:
+             *     pmix_proc_t proc;   // contains the nspace,rank of this proc
+             *     char* hostname;
+             *     char* executable_name;
+             *     pid_t pid;
+             *     int exit_code;
+             *     pmix_proc_state_t state;
+             */
+            fprintf(stderr, "Received %d array elements\n", (int)myquery_data.info[0].value.data.darray->size);
+            goto done;
 
             /* now launch the debugger daemons */
             if (PMIX_SUCCESS != (rc = spawn_debugger(clientspace))) {
