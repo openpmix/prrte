@@ -1501,7 +1501,6 @@ static void _iofdeliver(int sd, short args, void *cbdata)
     /* cycle across our list of IOF requestors and see who wants
      * this channel from this source */
     PMIX_LIST_FOREACH(req, &pmix_globals.iof_requests, pmix_iof_req_t) {
-        pmix_output(0, "CHECKING REQUEST FROM %s:%d CHANNELS %0x", req->pname.nspace, req->pname.rank, req->channels);
         /* if the channel wasn't included, then ignore it */
         if (!(cd->channels & req->channels)) {
             continue;
@@ -1550,7 +1549,6 @@ static void _iofdeliver(int sd, short args, void *cbdata)
             break;
         }
         /* send it to the requestor */
-        pmix_output(0, "SENDING TO %s:%d", req->peer->info->pname.nspace, req->peer->info->pname.rank);
         PMIX_PTL_SEND_ONEWAY(rc, req->peer, msg, PMIX_PTL_TAG_IOF);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -1560,7 +1558,6 @@ static void _iofdeliver(int sd, short args, void *cbdata)
 
     /* if nobody has registered for this yet, then cache it */
     if (!found) {
-        pmix_output(0, "CACHING");
         /* add this output to our hotel so it is cached until someone
          * registers to receive it */
         if (PMIX_SUCCESS != (rc = pmix_hotel_checkin(&pmix_server_globals.iof, cd, &ignore))) {
