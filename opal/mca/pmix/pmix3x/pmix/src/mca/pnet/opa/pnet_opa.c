@@ -51,7 +51,9 @@ static pmix_status_t setup_app(pmix_nspace_t *nptr,
 static pmix_status_t setup_local_network(pmix_nspace_t *nptr,
                                          pmix_info_t info[],
                                          size_t ninfo);
-static pmix_status_t setup_fork(pmix_nspace_t *nptr, char ***env);
+static pmix_status_t setup_fork(pmix_nspace_t *nptr,
+                                const pmix_proc_t *proc,
+                                char ***env);
 static void child_finalized(pmix_peer_t *peer);
 static void local_app_finalized(char *nspace);
 
@@ -330,7 +332,9 @@ static pmix_status_t setup_local_network(pmix_nspace_t *nptr,
     return PMIX_SUCCESS;
 }
 
-static pmix_status_t setup_fork(pmix_nspace_t *nptr, char ***env)
+static pmix_status_t setup_fork(pmix_nspace_t *nptr,
+                                const pmix_proc_t *proc,
+                                char ***env)
 {
     pmix_kval_t *kv, *next;
 

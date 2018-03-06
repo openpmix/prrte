@@ -35,6 +35,7 @@
 #include "src/util/alfg.h"
 #include "src/util/argv.h"
 #include "src/util/error.h"
+#include "src/util/name_fns.h"
 #include "src/util/output.h"
 #include "src/util/pmix_environ.h"
 #include "src/mca/preg/preg.h"
@@ -51,7 +52,9 @@ static pmix_status_t setup_app(pmix_nspace_t *nptr,
 static pmix_status_t setup_local_network(pmix_nspace_t *nptr,
                                          pmix_info_t info[],
                                          size_t ninfo);
-static pmix_status_t setup_fork(pmix_nspace_t *nptr, char ***env);
+static pmix_status_t setup_fork(pmix_nspace_t *nptr,
+                                const pmix_proc_t *proc,
+                                char ***env);
 static void child_finalized(pmix_peer_t *peer);
 static void local_app_finalized(char *nspace);
 
@@ -205,8 +208,50 @@ static pmix_status_t setup_local_network(pmix_nspace_t *nptr,
     return PMIX_SUCCESS;
 }
 
-static pmix_status_t setup_fork(pmix_nspace_t *nptr, char ***env)
+static pmix_status_t setup_fork(pmix_nspace_t *nptr,
+                                const pmix_proc_t *proc,
+                                char ***env)
 {
+    pmix_cb_t cb;
+    pmix_status_t rc;
+    pmix_kval_t *kv;
+    uint16_t localrank;
+
+    PMIX_CONSTRUCT(&cb, pmix_cb_t);
+
+    cb.key = strdup(PMIX_LOCAL_RANK);
+    /* this data isn't going anywhere, so we don't require a copy */
+    cb.copy = false;
+    /* scope is irrelevant as the info we seek must be local */
+    cb.scope = PMIX_SCOPE_UNDEF;
+    /* ask for the value for the given proc */
+    cb.proc = (pmix_proc_t*)proc;
+
+    PMIX_GDS_FETCH_KV(rc, pmix_globals.mypeer, &cb);
+    if (PMIX_SUCCESS != rc) {
+        if (PMIX_ERR_INVALID_NAMESPACE != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+        PMIX_DESTRUCT(&cb);
+        return rc;
+    }
+    /* should just be the one value on the list */
+    if (1 != pmix_list_get_size(&cb.kvs)) {
+        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        PMIX_DESTRUCT(&cb);
+        return PMIX_ERR_BAD_PARAM;
+    }
+    kv = (pmix_kval_t*)pmix_list_get_first(&cb.kvs);
+    if (PMIX_UINT16 != kv->value->type) {
+        PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
+        PMIX_DESTRUCT(&cb);
+        return PMIX_ERR_BAD_PARAM;
+    }
+    localrank = kv->value->data.uint16;
+
+    pmix_output(0, "LOCAL RANK FOR PROC %s: %d", PMIX_NAME_PRINT(proc), (int)localrank);
+
+    PMIX_DESTRUCT(&cb);
     return PMIX_SUCCESS;
 }
 
