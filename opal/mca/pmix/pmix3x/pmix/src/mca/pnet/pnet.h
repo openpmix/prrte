@@ -72,7 +72,9 @@ typedef pmix_status_t (*pmix_pnet_base_module_setup_local_net_fn_t)(pmix_nspace_
  * Give the local network library an opportunity to add any envars to the
  * environment of a local application process prior to fork/exec
  */
-typedef pmix_status_t (*pmix_pnet_base_module_setup_fork_fn_t)(pmix_nspace_t *nptr, char ***env);
+typedef pmix_status_t (*pmix_pnet_base_module_setup_fork_fn_t)(pmix_nspace_t *nptr,
+                                                               const pmix_proc_t *proc,
+                                                               char ***env);
 
 /**
  * Provide an opportunity for the local network library to cleanup when a
