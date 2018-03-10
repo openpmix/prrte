@@ -175,7 +175,7 @@ void pmix_bfrops_base_value_load(pmix_value_t *v, const void *data,
             memcpy(&(v->data.pinfo->exit_code), &pi->exit_code, sizeof(int));
             break;
         case PMIX_POINTER:
-            memcpy(&(v->data.ptr), data, sizeof(void*));
+            v->data.ptr = (void*)data;
             break;
         case PMIX_ENVAR:
             envar = (pmix_envar_t*)data;
@@ -324,7 +324,7 @@ pmix_status_t pmix_bfrops_base_value_unload(pmix_value_t *kv,
             *sz = sizeof(pmix_proc_state_t);
             break;
         case PMIX_POINTER:
-            memcpy(*data, &(kv->data.ptr), sizeof(void*));
+            *data = (void*)kv->data.ptr;
             *sz = sizeof(void*);
             break;
         case PMIX_DATA_ARRAY:

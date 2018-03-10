@@ -121,6 +121,7 @@ examples/debuggerd
 examples/dmodex
 examples/dynamic
 examples/fault
+examples/hello
 examples/launcher
 examples/pmi1client
 examples/probe

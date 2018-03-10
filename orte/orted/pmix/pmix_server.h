@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +35,7 @@ ORTE_DECLSPEC void pmix_server_finalize(void);
 ORTE_DECLSPEC void pmix_server_register_params(void);
 
 
-ORTE_DECLSPEC int orte_pmix_server_register_nspace(orte_job_t *jdata, bool force);
+ORTE_DECLSPEC int orte_pmix_server_register_nspace(orte_job_t *jdata);
 
 END_C_DECLS
 

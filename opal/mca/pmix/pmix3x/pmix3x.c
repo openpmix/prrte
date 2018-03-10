@@ -896,7 +896,14 @@ void pmix3x_value_load(pmix_value_t *v,
             memcpy(&v->data.state, &kv->data.uint8, sizeof(uint8_t));
             break;
         case OPAL_PTR:
-            /* if someone returned a pointer, it must be to a list of
+            /* if the opal_value_t is passing a true pointer, then
+             * respect that request and pass it along */
+            if (0 == strcmp(kv->key, OPAL_PMIX_EVENT_RETURN_OBJECT)) {
+                v->type = PMIX_POINTER;
+                v->data.ptr = kv->data.ptr;
+                break;
+            }
+            /* otherwise, it must be to a list of
              * opal_value_t's that we need to convert to a pmix_data_array
              * of pmix_info_t structures */
             list = (opal_list_t*)kv->data.ptr;

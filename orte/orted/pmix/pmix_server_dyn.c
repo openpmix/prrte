@@ -567,7 +567,7 @@ static void _cnlk(int status, opal_list_t *data, void *cbdata)
         goto release;
     }
     OBJ_DESTRUCT(&buf);
-    if (ORTE_SUCCESS != (rc = orte_pmix_server_register_nspace(jdata, true))) {
+    if (ORTE_SUCCESS != (rc = orte_pmix_server_register_nspace(jdata))) {
         OBJ_RELEASE(jdata);
         goto release;
     }
@@ -644,7 +644,7 @@ static void _cnct(int sd, short args, void *cbdata)
          * registered with the local PMIx server */
         if (!orte_get_attribute(&jdata->attributes, ORTE_JOB_NSPACE_REGISTERED, NULL, OPAL_BOOL)) {
             /* it hasn't been registered yet, so register it now */
-            if (ORTE_SUCCESS != (rc = orte_pmix_server_register_nspace(jdata, true))) {
+            if (ORTE_SUCCESS != (rc = orte_pmix_server_register_nspace(jdata))) {
                 goto release;
             }
         }

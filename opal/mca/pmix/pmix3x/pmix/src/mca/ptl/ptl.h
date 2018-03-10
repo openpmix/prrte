@@ -171,6 +171,10 @@ extern pmix_status_t pmix_ptl_base_connect_to_peer(struct pmix_peer_t* peer,
 typedef pmix_status_t (*pmix_ptl_base_setup_listener_fn_t)(pmix_info_t info[], size_t ninfo,
                                                            bool *need_listener);
 
+/* define a component-level API for obtaining any envars that are to
+ * be passed to client procs upon fork */
+typedef pmix_status_t (*pmix_ptl_base_setup_fork_fn_t)(const pmix_proc_t *proc, char ***env);
+
 /*
  * the standard component data structure
  */
@@ -180,6 +184,8 @@ struct pmix_ptl_base_component_t {
     int                                             priority;
     char*                                           uri;
     pmix_ptl_base_setup_listener_fn_t               setup_listener;
+    pmix_ptl_base_setup_fork_fn_t                   setup_fork;
+
 };
 typedef struct pmix_ptl_base_component_t pmix_ptl_base_component_t;
 

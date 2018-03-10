@@ -111,6 +111,7 @@ PMIX_EXPORT pmix_status_t PMIx_Get(const pmix_proc_t *proc, const char key[],
     rc = cb->status;
     if (NULL != val) {
         *val = cb->value;
+        cb->value = NULL;
     }
     PMIX_RELEASE(cb);
 
