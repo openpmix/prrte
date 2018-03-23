@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2016      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2018 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -301,6 +301,12 @@ int main(int argc, char **argv)
                 put_loc_time/put_loc_cnt, put_rem_time/put_rem_cnt,
                 commit_time, fence_time);
     }
+
+    /*
+     * The barrier ensures that all procs finished key fetching
+     * we had issues with dstor/lockless case evaluation
+     */
+    pmi_fence( 0 );
 
     /* Out of the perf path - send our results to rank 0 using same PMI */
     char key[128];

@@ -76,7 +76,7 @@ static int component_register(void);
 static int component_query(pmix_mca_base_module_t **module, int *priority);
 static pmix_status_t setup_listener(pmix_info_t info[], size_t ninfo,
                                     bool *need_listener);
-static pmix_status_t setup_fork(const pmix_proc_t *proc, char ***env);
+
 /*
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
@@ -101,8 +101,7 @@ static pmix_status_t setup_fork(const pmix_proc_t *proc, char ***env);
         },
         .priority = 30,
         .uri = NULL,
-        .setup_listener = setup_listener,
-        .setup_fork = setup_fork
+        .setup_listener = setup_listener
     },
     .session_tmpdir = NULL,
     .system_tmpdir = NULL,
@@ -113,7 +112,6 @@ static pmix_status_t setup_fork(const pmix_proc_t *proc, char ***env);
     .disable_ipv4_family = false,
     .disable_ipv6_family = true,
     .session_filename = NULL,
-    .nspace_filename = NULL,
     .system_filename = NULL,
     .wait_to_connect = 4,
     .max_retries = 2,
@@ -270,9 +268,6 @@ pmix_status_t component_close(void)
     if (NULL != mca_ptl_tcp_component.session_filename) {
         unlink(mca_ptl_tcp_component.session_filename);
     }
-    if (NULL != mca_ptl_tcp_component.nspace_filename) {
-        unlink(mca_ptl_tcp_component.nspace_filename);
-    }
     if (NULL != urifile) {
         /* remove the file */
         unlink(urifile);
@@ -285,25 +280,6 @@ pmix_status_t component_close(void)
 static int component_query(pmix_mca_base_module_t **module, int *priority)
 {
     *module = (pmix_mca_base_module_t*)&pmix_ptl_tcp_module;
-    return PMIX_SUCCESS;
-}
-
-static pmix_status_t setup_fork(const pmix_proc_t *proc, char ***env)
-{
-    char *evar;
-
-    if (0 > asprintf(&evar, "PMIX_SERVER_TMPDIR=%s", mca_ptl_tcp_component.session_tmpdir)) {
-        return PMIX_ERR_NOMEM;
-    }
-    pmix_argv_append_nosize(env, evar);
-    free(evar);
-
-    if (0 > asprintf(&evar, "PMIX_SYSTEM_TMPDIR=%s", mca_ptl_tcp_component.system_tmpdir)) {
-        return PMIX_ERR_NOMEM;
-    }
-    pmix_argv_append_nosize(env, evar);
-    free(evar);
-
     return PMIX_SUCCESS;
 }
 
@@ -528,7 +504,7 @@ static pmix_status_t setup_listener(pmix_info_t info[], size_t ninfo,
     }
 
     lt = PMIX_NEW(pmix_listener_t);
-    lt->varname = strdup("PMIX_SERVER_URI3:PMIX_SERVER_URI2:PMIX_SERVER_URI21");
+    lt->varname = strdup("PMIX_SERVER_URI2:PMIX_SERVER_URI21");
     lt->protocol = PMIX_PROTOCOL_V2;
     lt->ptl = (struct pmix_ptl_module_t*)&pmix_ptl_tcp_module;
     lt->cbfunc = connection_handler;
@@ -540,7 +516,6 @@ static pmix_status_t setup_listener(pmix_info_t info[], size_t ninfo,
         printf("%s:%d socket() failed\n", __FILE__, __LINE__);
         goto sockerror;
     }
-
     /* set reusing ports flag */
     if (setsockopt (lt->socket, SOL_SOCKET, SO_REUSEADDR, (const char *)&flags, sizeof(flags)) < 0) {
         pmix_output(0, "ptl:tcp:create_listen: unable to set the "
@@ -681,7 +656,6 @@ static pmix_status_t setup_listener(pmix_info_t info[], size_t ninfo,
         FILE *fp;
         pid_t mypid;
 
-        /* first output to a file based on pid */
         mypid = getpid();
         if (0 > asprintf(&mca_ptl_tcp_component.session_filename, "%s/pmix.%s.tool.%d",
                          mca_ptl_tcp_component.session_tmpdir, myhost, mypid)) {
@@ -710,45 +684,10 @@ static pmix_status_t setup_listener(pmix_info_t info[], size_t ninfo,
         if (0 != chmod(mca_ptl_tcp_component.session_filename, S_IRUSR | S_IWUSR | S_IRGRP)) {
             PMIX_ERROR_LOG(PMIX_ERR_FILE_OPEN_FAILURE);
             CLOSE_THE_SOCKET(lt->socket);
-            free(mca_ptl_tcp_component.session_filename);
-            mca_ptl_tcp_component.session_filename = NULL;
+            free(mca_ptl_tcp_component.system_filename);
+            mca_ptl_tcp_component.system_filename = NULL;
             goto sockerror;
         }
-
-        /* now output it into a file based on my nspace */
-
-        if (0 > asprintf(&mca_ptl_tcp_component.nspace_filename, "%s/pmix.%s.tool.%s",
-                         mca_ptl_tcp_component.session_tmpdir, myhost, pmix_globals.myid.nspace)) {
-            CLOSE_THE_SOCKET(lt->socket);
-            goto sockerror;
-        }
-        pmix_output_verbose(2, pmix_ptl_base_framework.framework_output,
-                            "WRITING TOOL FILE %s",
-                            mca_ptl_tcp_component.nspace_filename);
-        fp = fopen(mca_ptl_tcp_component.nspace_filename, "w");
-        if (NULL == fp) {
-            pmix_output(0, "Impossible to open the file %s in write mode\n", mca_ptl_tcp_component.nspace_filename);
-            PMIX_ERROR_LOG(PMIX_ERR_FILE_OPEN_FAILURE);
-            CLOSE_THE_SOCKET(lt->socket);
-            free(mca_ptl_tcp_component.nspace_filename);
-            mca_ptl_tcp_component.nspace_filename = NULL;
-            goto sockerror;
-        }
-
-        /* output my URI */
-        fprintf(fp, "%s\n", lt->uri);
-        /* add a flag that indicates we accept v2.1 protocols */
-        fprintf(fp, "%s\n", PMIX_VERSION);
-        fclose(fp);
-        /* set the file mode */
-        if (0 != chmod(mca_ptl_tcp_component.nspace_filename, S_IRUSR | S_IWUSR | S_IRGRP)) {
-            PMIX_ERROR_LOG(PMIX_ERR_FILE_OPEN_FAILURE);
-            CLOSE_THE_SOCKET(lt->socket);
-            free(mca_ptl_tcp_component.nspace_filename);
-            mca_ptl_tcp_component.nspace_filename = NULL;
-            goto sockerror;
-        }
-
     }
 
     /* we need listener thread support */
@@ -885,7 +824,6 @@ static void connection_handler(int sd, short args, void *cbdata)
     pmix_info_t ginfo;
     pmix_proc_type_t proc_type;
     pmix_byte_object_t cred;
-    size_t ninfo;
 
     /* acquire the object */
     PMIX_ACQUIRE_OBJECT(pnd);
@@ -992,7 +930,6 @@ static void connection_handler(int sd, short args, void *cbdata)
 
     if (0 == flag) {
         /* they must be a client, so get their nspace/rank */
-        proc_type = PMIX_PROC_CLIENT;
         PMIX_STRNLEN(msglen, mg, cnt);
         if (msglen < cnt) {
             nspace = mg;
@@ -1019,33 +956,6 @@ static void connection_handler(int sd, short args, void *cbdata)
         }
     } else if (1 == flag) {
         /* they are a tool */
-        proc_type = PMIX_PROC_TOOL;
-        /* extract the uid/gid */
-        if (sizeof(uint32_t) <= cnt) {
-            memcpy(&u32, mg, sizeof(uint32_t));
-            mg += sizeof(uint32_t);
-            cnt -= sizeof(uint32_t);
-            pnd->uid = ntohl(u32);
-        } else {
-           free(msg);
-           /* send an error reply to the client */
-           rc = PMIX_ERR_BAD_PARAM;
-           goto error;
-        }
-        if (sizeof(uint32_t) <= cnt) {
-            memcpy(&u32, mg, sizeof(uint32_t));
-            mg += sizeof(uint32_t);
-            cnt -= sizeof(uint32_t);
-            pnd->gid = ntohl(u32);
-        } else {
-           free(msg);
-           /* send an error reply to the client */
-           rc = PMIX_ERR_BAD_PARAM;
-           goto error;
-        }
-    } else if (2 == flag) {
-        /* they are a launcher */
-        proc_type = PMIX_PROC_LAUNCHER;
         /* extract the uid/gid */
         if (sizeof(uint32_t) <= cnt) {
             memcpy(&u32, mg, sizeof(uint32_t));
@@ -1092,15 +1002,15 @@ static void connection_handler(int sd, short args, void *cbdata)
 
     if (0 == strncmp(version, "2.0", 3)) {
         /* the 2.0 release handshake ends with the version string */
-        proc_type = proc_type | PMIX_PROC_V20;
+        proc_type = PMIX_PROC_V20;
         bfrops = "v20";
         bftype = pmix_bfrops_globals.default_type;  // we can't know any better
         gds = NULL;
     } else {
         if (0 == strncmp(version, "2.1", 3)) {
-            proc_type = proc_type | PMIX_PROC_V21;
+            proc_type = PMIX_PROC_V21;
         } else if (0 == strncmp(version, "3", 1)) {
-            proc_type = proc_type | PMIX_PROC_V3;
+            proc_type = PMIX_PROC_V3;
         } else {
             free(msg);
             rc = PMIX_ERR_NOT_SUPPORTED;
@@ -1149,79 +1059,38 @@ static void connection_handler(int sd, short args, void *cbdata)
     }
 
     /* see if this is a tool connection request */
-    if (0 != flag) {
+    if (1 == flag) {
         /* does the server support tool connections? */
         if (NULL == pmix_host_server.tool_connected) {
             /* send an error reply to the client */
             rc = PMIX_ERR_NOT_SUPPORTED;
             goto error;
         }
-
-        if (PMIX_PROC_V3 & proc_type) {
-            /* the caller will have provided a flag indicating
-             * whether or not they have an assigned nspace/rank */
-            if (cnt < 1) {
-                PMIX_ERROR_LOG(PMIX_ERR_BAD_PARAM);
-                free(msg);
-                /* send an error reply to the client */
-                rc = PMIX_ERR_BAD_PARAM;
-                goto error;
-            }
-            memcpy(&flag, mg, 1);
-            ++mg;
-            --cnt;
-            if (flag) {
-                PMIX_STRNLEN(msglen, mg, cnt);
-                if (msglen < cnt) {
-                    nspace = mg;
-                    mg += strlen(nspace) + 1;
-                    cnt -= strlen(nspace) + 1;
-                } else {
-                    free(msg);
-                    /* send an error reply to the client */
-                    rc = PMIX_ERR_BAD_PARAM;
-                    goto error;
-                }
-                if (sizeof(pmix_rank_t) <= cnt) {
-                    /* have to convert this to host order */
-                    memcpy(&u32, mg, sizeof(uint32_t));
-                    rank = ntohl(u32);
-                    mg += sizeof(uint32_t);
-                    cnt -= sizeof(uint32_t);
-                } else {
-                    free(msg);
-                    /* send an error reply to the client */
-                    rc = PMIX_ERR_BAD_PARAM;
-                    goto error;
-                }
-                pnd->ninfo = 5;
-            } else {
-                pnd->ninfo = 3;
-            }
+        /* setup the info array to pass the relevant info
+         * to the server - starting with the version, if present */
+        n = 0;
+        PMIX_STRNLEN(msglen, mg, cnt);
+        if (msglen < cnt) {
+            pnd->ninfo = 4;
+            PMIX_INFO_CREATE(pnd->info, pnd->ninfo);
+            (void)strncpy(pnd->info[n].key, PMIX_VERSION_INFO, PMIX_MAX_KEYLEN);
+            pnd->info[n].value.type = PMIX_STRING;
+            pnd->info[n].value.data.string = strdup(mg);
+            ++n;
         } else {
             pnd->ninfo = 3;
+            PMIX_INFO_CREATE(pnd->info, pnd->ninfo);
         }
-
-        /* setup the info array to pass the relevant info
-         * to the server */
-        n = 0;
-        PMIX_INFO_CREATE(pnd->info, pnd->ninfo);
-        /* provide the version */
-        PMIX_INFO_LOAD(&pnd->info[n], PMIX_VERSION_INFO, version, PMIX_STRING);
-        ++n;
         /* provide the user id */
-        PMIX_INFO_LOAD(&pnd->info[n], PMIX_USERID, &pnd->uid, PMIX_UINT32);
+        (void)strncpy(pnd->info[n].key, PMIX_USERID, PMIX_MAX_KEYLEN);
+        pnd->info[n].value.type = PMIX_UINT32;
+        pnd->info[n].value.data.uint32 = pnd->uid;
         ++n;
         /* and the group id */
-        PMIX_INFO_LOAD(&pnd->info[n], PMIX_GRPID, &pnd->gid, PMIX_UINT32);
+        (void)strncpy(pnd->info[n].key, PMIX_GRPID, PMIX_MAX_KEYLEN);
+        pnd->info[n].value.type = PMIX_UINT32;
+        pnd->info[n].value.data.uint32 = pnd->gid;
         ++n;
-        /* if we have it, pass along our ID */
-        if (flag) {
-            PMIX_INFO_LOAD(&pnd->info[n], PMIX_NSPACE, nspace, PMIX_STRING);
-            ++n;
-            PMIX_INFO_LOAD(&pnd->info[n], PMIX_RANK, &rank, PMIX_PROC_RANK);
-            ++n;
-        }
         /* pass along the proc_type */
         pnd->proc_type = proc_type;
         /* pass along the bfrop, buffer_type, and sec fields so
@@ -1237,8 +1106,7 @@ static void connection_handler(int sd, short args, void *cbdata)
         /* release the msg */
         free(msg);
         /* request an nspace for this requestor - it will
-         * automatically be assigned rank=0 if the rank
-         * isn't already known */
+         * automatically be assigned rank=0 */
         pmix_host_server.tool_connected(pnd->info, pnd->ninfo, cnct_cbfunc, pnd);
         return;
     }
@@ -1288,7 +1156,7 @@ static void connection_handler(int sd, short args, void *cbdata)
         return;
     }
     /* mark that this peer is a client of the given type */
-    peer->proc_type = proc_type;
+    peer->proc_type = PMIX_PROC_CLIENT | proc_type;
     /* save the protocol */
     peer->protocol = pnd->protocol;
     /* add in the nspace pointer */
@@ -1546,7 +1414,7 @@ static void process_cbfunc(int sd, short args, void *cbdata)
         return;
     }
     /* mark the peer proc type */
-    peer->proc_type = pnd->proc_type;
+    peer->proc_type = PMIX_PROC_TOOL | pnd->proc_type;
     /* save the protocol */
     peer->protocol = pnd->protocol;
     /* add in the nspace pointer */

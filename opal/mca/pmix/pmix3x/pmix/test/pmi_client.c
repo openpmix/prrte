@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * $COPYRIGHT$
@@ -341,7 +341,7 @@ static int test_item5(void)
     };
     const char **ptr = tkeys;
 
-    if (_legacy || !_legacy) {
+    if (!_legacy) {
         log_error("%s\n", "PMIx and SLURM/PMI1 do not set 'PMI_process_mapping' (Do not mark test as failed)");
         return rc;
     }

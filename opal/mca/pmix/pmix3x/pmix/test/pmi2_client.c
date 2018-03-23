@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * $COPYRIGHT$
@@ -263,7 +263,7 @@ static int test_item3(void)
     };
     const char **ptr = tkeys;
 
-    if (_legacy || !_legacy) {
+    if (!_legacy) {
         log_error("%s\n", "PMIx and SLURM/PMI2 does not set Job Attributes (Do not mark test as failed)");
         return rc;
     }
@@ -298,7 +298,7 @@ static int test_item4(void)
     };
     const char **ptr = tkeys;
 
-    if (_legacy || !_legacy) {
+    if (!_legacy) {
         log_error("%s\n", "PMIx and SLURM/PMI2 does not set Node Attributes (Do not mark test as failed)");
         return rc;
     }
