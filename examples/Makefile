@@ -34,12 +34,9 @@ CFLAGS = -g
 
 EXAMPLES = \
 	 client \
-	 debugger \
-	 debuggerd \
 	 dmodex \
 	 dynamic \
 	 fault \
-	 pmi1client \
 	 pub \
 	 tool \
 	 alloc \
