@@ -4,7 +4,7 @@
 # Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
-# Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
 # Copyright (c) 2015-2016 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2015      IBM Corporation.  All rights reserved.
@@ -971,8 +971,8 @@ if (!$ok || $help_arg) {
 #---------------------------------------------------------------------------
 
 # Check for project existence
-my $project_name_long = "PMIx-Reference-Server";
-my $project_name_short = "psrvr";
+my $project_name_long = "PMIx-Runtime-Environment";
+my $project_name_short = "prte";
 
 #---------------------------------------------------------------------------
 
@@ -994,10 +994,10 @@ $dnl_line\n\n";
 
 # Verify that we're in the root directorty by checking for a token file.
 
-my_die "Not at the root directory of the PMIx reference server source tree"
+my_die "Not at the root directory of the PRTE source tree"
     if (! -f "config/opal_try_assemble.m4");
 
-my_die "autogen.pl has been invoked in the source tree of PMIx reference server distribution tarball; aborting...
+my_die "autogen.pl has been invoked in the source tree of PRTE distribution tarball; aborting...
 You likely do not need to invoke \"autogen.pl\" -- you can probably run \"configure\" directly.
 If you really know what you are doing, and really need to run autogen.pl, use the \"--force\" flag."
     if (!$force_arg && in_tarball());
@@ -1009,7 +1009,7 @@ $sentinel = Cwd::cwd() . "/configure";
 #---------------------------------------------------------------------------
 
 my $step = 1;
-verbose "PMIx Reference Server autogen (buckle up!)
+verbose "PMIx RTE autogen (buckle up!)
 
 $step. Checking tool versions\n\n";
 
@@ -1174,7 +1174,7 @@ patch_autotools_output(".");
 
 verbose "
 ================================================
-PMIx Reference Server autogen: completed successfully.  w00t!
+PMIx RTE autogen: completed successfully.  w00t!
 ================================================\n\n";
 
 # Done!

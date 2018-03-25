@@ -231,14 +231,14 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
 
     AC_ARG_WITH([pmix],
                 [AC_HELP_STRING([--with-pmix(=DIR)],
-                                [Build PMIx support.  DIR can take one of three values: "internal", "external", or a valid directory name.  "internal" (or no DIR value) forces Open MPI to use its internal copy of PMIx.  "external" forces Open MPI to use an external installation of PMIx.  Supplying a valid directory name also forces Open MPI to use an external installation of PMIx, and adds DIR/include, DIR/lib, and DIR/lib64 to the search path for headers and libraries. Note that Open MPI does not support --without-pmix.])])
+                                [Build PMIx support.  DIR can take one of three values: "internal", "external", or a valid directory name.  "internal" (or no DIR value) forces PRTE to use its internal copy of PMIx.  "external" forces PRTE to use an external installation of PMIx.  Supplying a valid directory name also forces PRTE to use an external installation of PMIx, and adds DIR/include, DIR/lib, and DIR/lib64 to the search path for headers and libraries. Note that PRTE does not support --without-pmix.])])
 
     AC_ARG_WITH([pmix-libdir],
                 [AC_HELP_STRING([--with-pmix-libdir=DIR],
                                 [Look for libpmix the given directory DIR, DIR/lib or DIR/lib64])])
 
     AS_IF([test "$with_pmix" = "no"],
-          [AC_MSG_WARN([Open MPI requires PMIx support. It can be built])
+          [AC_MSG_WARN([PRTE requires PMIx support. It can be built])
            AC_MSG_WARN([with either its own internal copy of PMIx, or with])
            AC_MSG_WARN([an external copy that you supply.])
            AC_MSG_ERROR([Cannot continue])])
@@ -307,7 +307,7 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
            CPPFLAGS="-I$pmix_ext_install_dir/include $CPPFLAGS"
            AS_IF([test "x`ls $pmix_ext_install_dir/include/pmix_version.h 2> /dev/null`" = "x"],
                  [AC_MSG_RESULT([not found - assuming pre-v2.0])
-                  AC_MSG_WARN([PMIx Launcher does not support PMIx versions])
+                  AC_MSG_WARN([PRTE does not support PMIx versions])
                   AC_MSG_WARN([less than v2.0 as only PMIx-based tools can])
                   AC_MSG_WARN([can connect to the server.])
                   AC_MSG_ERROR([Please select a newer version and configure again])],
@@ -352,7 +352,7 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
                                                       #endif
                                                       ], [])],
                                     [AC_MSG_RESULT([found])
-                                     AC_MSG_WARN([PMIx Launcher does not support PMIx versions])
+                                     AC_MSG_WARN([PRTE does not support PMIx versions])
                                      AC_MSG_WARN([less than v2.0 as only PMIx-based tools can])
                                      AC_MSG_WARN([can connect to the server.])
                                      AC_MSG_ERROR([Please select a newer version and configure again])],
@@ -374,8 +374,6 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
            opal_external_pmix_LIBS=-lpmix
            opal_external_pmix_happy=yes])
 
-    AC_DEFINE_UNQUOTED([OPAL_PMIX_V1],[$opal_external_have_pmix1],
-                       [Whether the external PMIx library is v1])
     AM_CONDITIONAL([OPAL_WANT_PRUN], [test "$opal_prun_happy" = "yes"])
     OPAL_VAR_SCOPE_POP
 ])
