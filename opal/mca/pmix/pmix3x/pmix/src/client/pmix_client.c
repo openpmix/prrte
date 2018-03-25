@@ -66,7 +66,6 @@ static const char pmix_version_string[] = PMIX_VERSION;
 #include "src/util/compress.h"
 #include "src/util/error.h"
 #include "src/util/hash.h"
-#include "src/util/name_fns.h"
 #include "src/util/output.h"
 #include "src/runtime/pmix_progress_threads.h"
 #include "src/runtime/pmix_rte.h"
@@ -99,8 +98,7 @@ static void pmix_client_notify_recv(struct pmix_peer_t *peer,
     pmix_event_chain_t *chain;
     size_t ninfo;
 
-   // pmix_output_verbose(2, pmix_client_globals.base_output,
-    pmix_output(0,
+    pmix_output_verbose(2, pmix_client_globals.base_output,
                         "pmix:client_notify_recv - processing event");
 
     /* a zero-byte buffer indicates that this recv is being
@@ -156,9 +154,9 @@ static void pmix_client_notify_recv(struct pmix_peer_t *peer,
         goto error;
     }
 
-    /* we always leave space for event hdlr name and a callback object */
-    chain->nallocated = ninfo + 2;
-    PMIX_INFO_CREATE(chain->info, chain->nallocated);
+    /* we always leave space for a callback object */
+    chain->ninfo = ninfo + 1;
+    PMIX_INFO_CREATE(chain->info, chain->ninfo);
     if (NULL == chain->info) {
         PMIX_ERROR_LOG(PMIX_ERR_NOMEM);
         PMIX_RELEASE(chain);
@@ -166,7 +164,6 @@ static void pmix_client_notify_recv(struct pmix_peer_t *peer,
     }
 
     if (0 < ninfo) {
-        chain->ninfo = ninfo;
         cnt = ninfo;
         PMIX_BFROPS_UNPACK(rc, pmix_client_globals.myserver,
                            buf, chain->info, &cnt, PMIX_INFO);
@@ -183,11 +180,12 @@ static void pmix_client_notify_recv(struct pmix_peer_t *peer,
             }
         }
     }
+    /* now put the callback object tag in the last element */
+    PMIX_INFO_LOAD(&chain->info[ninfo], PMIX_EVENT_RETURN_OBJECT, NULL, PMIX_POINTER);
 
-   // pmix_output_verbose(2, pmix_client_globals.base_output,
-    pmix_output(0,
-                        "[%s:%d] pmix:client_notify_recv - processing event %s, calling errhandler",
-                        pmix_globals.myid.nspace, pmix_globals.myid.rank, PMIx_Error_string(chain->status));
+    pmix_output_verbose(2, pmix_client_globals.base_output,
+                        "[%s:%d] pmix:client_notify_recv - processing event %d, calling errhandler",
+                        pmix_globals.myid.nspace, pmix_globals.myid.rank, chain->status);
 
     pmix_invoke_local_event_hdlr(chain);
     return;
@@ -255,19 +253,6 @@ PMIX_EXPORT const char* PMIx_Get_version(void)
     return pmix_version_string;
 }
 
-/* event handler registration callback */
-static void evhandler_reg_callbk(pmix_status_t status,
-                                 size_t evhandler_ref,
-                                 void *cbdata)
-{
-    pmix_lock_t *lock = (pmix_lock_t*)cbdata;
-
-    pmix_output(0, "REGISTRATION COMPLETE");
-    lock->status = status;
-    PMIX_WAKEUP_THREAD(lock);
-}
-
-
 static void notification_fn(size_t evhdlr_registration_id,
                             pmix_status_t status,
                             const pmix_proc_t *source,
@@ -276,43 +261,13 @@ static void notification_fn(size_t evhdlr_registration_id,
                             pmix_event_notification_cbfunc_fn_t cbfunc,
                             void *cbdata)
 {
-    pmix_lock_t *lock=NULL;
-    char *name = NULL;
-    size_t n;
-
-pmix_output(0, "CLIENT %s RECVD NOTIFICATION STATUS %s",
-            PMIX_NAME_PRINT(&pmix_globals.myid), PMIx_Error_string(status));
-    if (NULL != info) {
-        lock = NULL;
-        for (n=0; n < ninfo; n++) {
-            if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
-                lock = (pmix_lock_t*)info[n].value.data.ptr;
-                pmix_output(0, "GOT RETRUN OBJECT");
-            } else if (0 == strncmp(info[n].key, PMIX_EVENT_HDLR_NAME, PMIX_MAX_KEYLEN)) {
-                name = info[n].value.data.string;
-                pmix_output(0, "GOT EVHDLR NAME %s", (NULL == name) ? "NULL" : name);
-            }
-        }
-        /* if the object wasn't returned, then that is an error */
-        if (NULL == lock) {
-            fprintf(stderr, "LOCK WASN'T RETURNED IN RELEASE CALLBACK\n");
-            /* let the event handler progress */
-            if (NULL != cbfunc) {
-                cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
-            }
-            return;
-        }
-    }
-    pmix_output(0, "CLIENT %s RELEASING %s %s", PMIX_NAME_PRINT(&pmix_globals.myid),
-                (NULL == name) ? "NULL" : name,
-                (NULL == lock) ? "NULL" : "NON-NULL");
-    if (NULL != lock) {
-        PMIX_WAKEUP_THREAD(lock);
-    }
+    pmix_lock_t *reglock = (pmix_lock_t*)cbdata;
 
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
     }
+    PMIX_WAKEUP_THREAD(reglock);
+
 }
 
 typedef struct {
@@ -446,9 +401,9 @@ PMIX_EXPORT pmix_status_t PMIx_Init(pmix_proc_t *proc,
     pmix_cmd_t cmd = PMIX_REQ_CMD;
     pmix_status_t code = PMIX_ERR_DEBUGGER_RELEASE;
     pmix_proc_t wildcard;
-    pmix_info_t ginfo, evinfo[2];
+    pmix_info_t ginfo;
     pmix_value_t *val = NULL;
-    pmix_lock_t reglock, releaselock;
+    pmix_lock_t reglock;
     size_t n;
     bool found;
     pmix_ptl_posted_recv_t *rcv;
@@ -517,6 +472,9 @@ PMIX_EXPORT pmix_status_t PMIx_Init(pmix_proc_t *proc,
         PMIX_RELEASE_THREAD(&pmix_global_lock);
         return PMIX_ERR_NOMEM;
     }
+    /* construct the global notification ring buffer */
+    PMIX_CONSTRUCT(&pmix_globals.notifications, pmix_ring_buffer_t);
+    pmix_ring_buffer_init(&pmix_globals.notifications, 256);
 
     pmix_output_verbose(2, pmix_client_globals.base_output,
                         "pmix: init called");
@@ -685,23 +643,12 @@ PMIX_EXPORT pmix_status_t PMIx_Init(pmix_proc_t *proc,
         /* if the value was found, then we need to wait for debugger attach here */
         /* register for the debugger release notification */
         PMIX_CONSTRUCT_LOCK(&reglock);
-        PMIX_CONSTRUCT_LOCK(&releaselock);
-        PMIX_INFO_LOAD(&evinfo[0], PMIX_EVENT_RETURN_OBJECT, &releaselock, PMIX_POINTER);
-        PMIX_INFO_LOAD(&evinfo[1], PMIX_EVENT_HDLR_NAME, "WAIT-FOR-DEBUGGER", PMIX_STRING);
-
-        pmix_output(0, "CLIENT %s WAITING FOR RELEASE", PMIX_NAME_PRINT(&pmix_globals.myid));
-        PMIx_Register_event_handler(&code, 1, evinfo, 2,
-                                    notification_fn, evhandler_reg_callbk, (void*)&reglock);
-        /* wait for registration to complete */
+        PMIX_POST_OBJECT(&reglock);
+        PMIx_Register_event_handler(&code, 1, NULL, 0,
+                                    notification_fn, NULL, (void*)&reglock);
+        /* wait for it to arrive */
         PMIX_WAIT_THREAD(&reglock);
         PMIX_DESTRUCT_LOCK(&reglock);
-        pmix_output(0, "REG RELEASE COMPLETE");
-        PMIX_INFO_DESTRUCT(&evinfo[0]);
-        PMIX_INFO_DESTRUCT(&evinfo[1]);
-        /* wait for release to arrive */
-        PMIX_WAIT_THREAD(&releaselock);
-        PMIX_DESTRUCT_LOCK(&releaselock);
-        pmix_output(0, "CLIENT RELEASE COMPLETE");
     }
     PMIX_INFO_DESTRUCT(&ginfo);
 
@@ -1228,27 +1175,11 @@ static void _commitfn(int sd, short args, void *cbdata)
     return rc;
 }
 
-static void _resolve_peers(int sd, short args, void *cbdata)
-{
-    pmix_cb_t *cb = (pmix_cb_t*)cbdata;
-    pmix_status_t rc;
-
-    cb->status = pmix_preg.resolve_peers(cb->key, cb->pname.nspace,
-                                         &cb->procs, &cb->nprocs);
-    /* post the data so the receiving thread can acquire it */
-    PMIX_POST_OBJECT(cb);
-    PMIX_WAKEUP_THREAD(&cb->lock);
-}
-
 /* need to thread-shift this request */
 PMIX_EXPORT pmix_status_t PMIx_Resolve_peers(const char *nodename,
                                              const char *nspace,
                                              pmix_proc_t **procs, size_t *nprocs)
 {
-    pmix_cb_t *cb;
-    pmix_status_t rc;
-    pmix_proc_t proc;
-
     PMIX_ACQUIRE_THREAD(&pmix_global_lock);
     if (pmix_globals.init_cntr <= 0) {
         PMIX_RELEASE_THREAD(&pmix_global_lock);
@@ -1256,71 +1187,16 @@ PMIX_EXPORT pmix_status_t PMIx_Resolve_peers(const char *nodename,
     }
     PMIX_RELEASE_THREAD(&pmix_global_lock);
 
+    /* set default */
+    *procs = NULL;
+    *nprocs = 0;
 
-    cb = PMIX_NEW(pmix_cb_t);
-    cb->key = (char*)nodename;
-    cb->pname.nspace = strdup(nspace);
-
-    PMIX_THREADSHIFT(cb, _resolve_peers);
-
-    /* wait for the result */
-    PMIX_WAIT_THREAD(&cb->lock);
-
-    /* if the nspace wasn't found, then we need to
-     * ask the server for that info */
-    if (PMIX_ERR_INVALID_NAMESPACE == cb->status) {
-        (void)strncpy(proc.nspace, nspace, PMIX_MAX_NSLEN);
-        proc.rank = PMIX_RANK_WILDCARD;
-        /* any key will suffice as it will bring down
-         * the entire data blob */
-        rc = PMIx_Get(&proc, PMIX_UNIV_SIZE, NULL, 0, NULL);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_RELEASE(cb);
-            return rc;
-        }
-        /* retry the fetch */
-        cb->lock.active = true;
-        PMIX_THREADSHIFT(cb, _resolve_peers);
-        PMIX_WAIT_THREAD(&cb->lock);
-    }
-    *procs = cb->procs;
-    *nprocs = cb->nprocs;
-
-    rc = cb->status;
-    PMIX_RELEASE(cb);
-    return rc;
-}
-
-static void _resolve_nodes(int fd, short args, void *cbdata)
-{
-    pmix_cb_t *cb = (pmix_cb_t*)cbdata;
-    char *regex, **names;
-
-    /* get a regular expression describing the PMIX_NODE_MAP */
-    cb->status = pmix_preg.resolve_nodes(cb->pname.nspace, &regex);
-    if (PMIX_SUCCESS == cb->status) {
-        /* parse it into an argv array of names */
-        cb->status = pmix_preg.parse_nodes(regex, &names);
-        if (PMIX_SUCCESS == cb->status) {
-            /* assemble it into a comma-delimited list */
-            cb->key = pmix_argv_join(names, ',');
-            pmix_argv_free(names);
-        } else {
-            free(regex);
-        }
-    }
-    /* post the data so the receiving thread can acquire it */
-    PMIX_POST_OBJECT(cb);
-    PMIX_WAKEUP_THREAD(&cb->lock);
+    return pmix_preg.resolve_peers(nodename, nspace, procs, nprocs);
 }
 
 /* need to thread-shift this request */
 PMIX_EXPORT pmix_status_t PMIx_Resolve_nodes(const char *nspace, char **nodelist)
 {
-    pmix_cb_t *cb;
-    pmix_status_t rc;
-    pmix_proc_t proc;
-
     PMIX_ACQUIRE_THREAD(&pmix_global_lock);
     if (pmix_globals.init_cntr <= 0) {
         PMIX_RELEASE_THREAD(&pmix_global_lock);
@@ -1328,35 +1204,8 @@ PMIX_EXPORT pmix_status_t PMIx_Resolve_nodes(const char *nspace, char **nodelist
     }
     PMIX_RELEASE_THREAD(&pmix_global_lock);
 
-    cb = PMIX_NEW(pmix_cb_t);
-    cb->pname.nspace = strdup(nspace);
+    /* set default */
+    *nodelist = NULL;
 
-    PMIX_THREADSHIFT(cb, _resolve_nodes);
-
-    /* wait for the result */
-    PMIX_WAIT_THREAD(&cb->lock);
-
-    /* if the nspace wasn't found, then we need to
-     * ask the server for that info */
-    if (PMIX_ERR_INVALID_NAMESPACE == cb->status) {
-        (void)strncpy(proc.nspace, nspace, PMIX_MAX_NSLEN);
-        proc.rank = PMIX_RANK_WILDCARD;
-        /* any key will suffice as it will bring down
-         * the entire data blob */
-        rc = PMIx_Get(&proc, PMIX_UNIV_SIZE, NULL, 0, NULL);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_RELEASE(cb);
-            return rc;
-        }
-        /* retry the fetch */
-        cb->lock.active = true;
-        PMIX_THREADSHIFT(cb, _resolve_nodes);
-        PMIX_WAIT_THREAD(&cb->lock);
-    }
-    /* the string we want is in the key field */
-    *nodelist = cb->key;
-
-    rc = cb->status;
-    PMIX_RELEASE(cb);
-    return rc;
+    return pmix_preg.resolve_nodes(nspace, nodelist);
 }

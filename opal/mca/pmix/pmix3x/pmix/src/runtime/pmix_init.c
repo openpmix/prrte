@@ -151,8 +151,7 @@ int pmix_rte_init(pmix_proc_type_t type,
     }
 
     /* setup the globals structure */
-    memset(&pmix_globals.myid.nspace, 0, PMIX_MAX_NSLEN+1);
-    pmix_globals.myid.rank = PMIX_RANK_INVALID;
+    memset(&pmix_globals.myid, 0, sizeof(pmix_proc_t));
     PMIX_CONSTRUCT(&pmix_globals.events, pmix_events_t);
     pmix_globals.event_window.tv_sec = pmix_event_caching_window;
     pmix_globals.event_window.tv_usec = 0;

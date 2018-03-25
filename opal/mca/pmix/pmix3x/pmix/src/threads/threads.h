@@ -65,7 +65,6 @@ typedef pthread_cond_t pmix_condition_t;
 #define PMIX_CONDITION_STATIC_INIT PTHREAD_COND_INITIALIZER
 
 typedef struct {
-    pmix_status_t status;
     pmix_mutex_t mutex;
     pmix_condition_t cond;
     volatile bool active;

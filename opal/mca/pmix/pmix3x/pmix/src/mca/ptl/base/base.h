@@ -100,7 +100,7 @@ PMIX_EXPORT pmix_status_t pmix_ptl_base_cancel_recv(struct pmix_peer_t *peer,
 
 PMIX_EXPORT pmix_status_t pmix_ptl_base_start_listening(pmix_info_t *info, size_t ninfo);
 PMIX_EXPORT void pmix_ptl_base_stop_listening(void);
-PMIX_EXPORT pmix_status_t pmix_ptl_base_setup_fork(const pmix_proc_t *proc, char ***env);
+
 
 /* base support functions */
 PMIX_EXPORT void pmix_ptl_base_send(int sd, short args, void *cbdata);

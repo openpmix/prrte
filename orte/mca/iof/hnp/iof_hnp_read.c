@@ -308,9 +308,9 @@ void orte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
         return;
     }
 
-    if (1) {
+    if (proct->copy) {
         if (NULL != proct->subscribers) {
-            if (1) {
+            if (!exclusive) {
                 /* output this to our local output */
                 if (ORTE_IOF_STDOUT & rev->tag || orte_xml_output) {
                     orte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, orte_iof_base.iof_write_stdout->wev);

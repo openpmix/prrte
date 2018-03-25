@@ -53,22 +53,7 @@ typedef struct {
     size_t index;
     uint8_t precedence;
     char *locator;
-    pmix_proc_t source;  // who generated this event
-    /* When registering for events, callers can specify
-     * the range of sources from which they are willing
-     * to receive notifications - e.g., for callers to
-     * define different handlers for events coming from
-     * the RM vs those coming from their peers. We use
-     * the rng field to track these values upon registration.
-     */
     pmix_range_trkr_t rng;
-    /* For registration, we use the affected field to track
-     * the range of procs that, if affected by the event,
-     * should cause the handler to be called (subject, of
-     * course, to any rng constraints).
-     */
-    pmix_proc_t *affected;
-    size_t naffected;
     pmix_notification_fn_t evhdlr;
     void *cbobject;
     pmix_status_t *codes;
@@ -117,11 +102,8 @@ typedef struct pmix_event_chain_t {
     bool endchain;
     pmix_proc_t source;
     pmix_data_range_t range;
-    pmix_proc_t *affected;
-    size_t naffected;
     pmix_info_t *info;
     size_t ninfo;
-    size_t nallocated;
     pmix_info_t *results;
     size_t nresults;
     pmix_event_hdlr_t *evhdlr;

@@ -31,7 +31,7 @@
 #include <src/include/pmix_config.h>
 #include "pmix_common.h"
 
-#include "src/include/pmix_globals.h"
+
 #include "src/mca/gds/gds.h"
 #include "gds_dstore.h"
 
@@ -74,13 +74,6 @@ static int component_open(void)
 
 static int component_query(pmix_mca_base_module_t **module, int *priority)
 {
-    /* launchers cannot use the dstore */
-    if (PMIX_PROC_IS_LAUNCHER(pmix_globals.mypeer)) {
-        *priority = 0;
-        *module = NULL;
-        return PMIX_ERROR;
-    }
-
     *priority = 20;
     *module = (pmix_mca_base_module_t *)&pmix_ds12_module;
     return PMIX_SUCCESS;

@@ -264,15 +264,20 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
                  [AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir])
                   files=`ls $with_pmix_libdir/libpmix.* 2> /dev/null | wc -l`
                   AS_IF([test "$files" -gt 0],
-                        [pmix_ext_install_libdir=$with_pmix_libdir],
-                        [AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir/lib64])
+                        [AC_MSG_RESULT([found])
+                         pmix_ext_install_libdir=$with_pmix_libdir],
+                        [AC_MSG_RESULT([not found])
+                         AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir/lib64])
                          files=`ls $with_pmix_libdir/lib64/libpmix.* 2> /dev/null | wc -l`
                          AS_IF([test "$files" -gt 0],
-                               [pmix_ext_install_libdir=$with_pmix_libdir/lib64],
-                               [AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir/lib])
+                               [AC_MSG_RESULT([found])
+                                pmix_ext_install_libdir=$with_pmix_libdir/lib64],
+                               [AC_MSG_RESULT([not found])
+                                AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir/lib])
                                 files=`ls $with_pmix_libdir/lib/libpmix.* 2> /dev/null | wc -l`
                                 AS_IF([test "$files" -gt 0],
-                                      [pmix_ext_install_libdir=$with_pmix_libdir/lib],
+                                      [AC_MSG_RESULT([found])
+                                       pmix_ext_install_libdir=$with_pmix_libdir/lib],
                                       [AC_MSG_RESULT([not found])
                                        AC_MSG_ERROR([Cannot continue])])])])],
                  [# check for presence of lib64 directory - if found, see if the
@@ -280,11 +285,14 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
                   AC_MSG_CHECKING([libpmix.* in $pmix_ext_install_dir/lib64])
                   files=`ls $pmix_ext_install_dir/lib64/libpmix.* 2> /dev/null | wc -l`
                   AS_IF([test "$files" -gt 0],
-                        [pmix_ext_install_libdir=$pmix_ext_install_dir/lib64],
-                        [AC_MSG_CHECKING([libpmix.* in $pmix_ext_install_dir/lib])
+                        [AC_MSG_RESULT([found])
+                         pmix_ext_install_libdir=$pmix_ext_install_dir/lib64],
+                        [AC_MSG_RESULT([not found])
+                         AC_MSG_CHECKING([libpmix.* in $pmix_ext_install_dir/lib])
                          files=`ls $pmix_ext_install_dir/lib/libpmix.* 2> /dev/null | wc -l`
                          AS_IF([test "$files" -gt 0],
-                               [pmix_ext_install_libdir=$pmix_ext_install_dir/lib],
+                               [AC_MSG_RESULT([found])
+                                pmix_ext_install_libdir=$pmix_ext_install_dir/lib],
                                [AC_MSG_RESULT([not found])
                                 AC_MSG_ERROR([Cannot continue])])])])
 
@@ -295,14 +303,15 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
 
            # if the pmix_version.h file does not exist, then
            # this must be from a pre-1.1.5 version
-           AC_MSG_CHECKING([PMIx version])
+           AC_MSG_CHECKING([for PMIx version file])
            CPPFLAGS="-I$pmix_ext_install_dir/include $CPPFLAGS"
            AS_IF([test "x`ls $pmix_ext_install_dir/include/pmix_version.h 2> /dev/null`" = "x"],
-                 [AC_MSG_RESULT([version file not found - assuming v1.1.4])
-                  opal_external_pmix_version_found=1
-                  opal_external_pmix_version=114
-                  opal_external_have_pmix1=1],
-                 [AC_MSG_RESULT([version file found])
+                 [AC_MSG_RESULT([not found - assuming pre-v2.0])
+                  AC_MSG_WARN([PMIx Launcher does not support PMIx versions])
+                  AC_MSG_WARN([less than v2.0 as only PMIx-based tools can])
+                  AC_MSG_WARN([can connect to the server.])
+                  AC_MSG_ERROR([Please select a newer version and configure again])],
+                 [AC_MSG_RESULT([not found])
                   opal_external_pmix_version_found=0])
 
            # if it does exist, then we need to parse it to find
@@ -343,9 +352,10 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
                                                       #endif
                                                       ], [])],
                                     [AC_MSG_RESULT([found])
-                                     opal_external_pmix_version=1x
-                                     opal_external_pmix_version_found=1
-                                     opal_external_have_pmix1=1],
+                                     AC_MSG_WARN([PMIx Launcher does not support PMIx versions])
+                                     AC_MSG_WARN([less than v2.0 as only PMIx-based tools can])
+                                     AC_MSG_WARN([can connect to the server.])
+                                     AC_MSG_ERROR([Please select a newer version and configure again])],
                                     [AC_MSG_RESULT([not found])])])
 
            AS_IF([test "x$opal_external_pmix_version" = "x"],
