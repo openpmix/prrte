@@ -4,7 +4,7 @@
  * Copyright (c) 2007      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2014 Intel, Inc. All rights reserved
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
@@ -31,6 +31,9 @@
 #include "opal/util/output.h"
 #include "opal/util/proc.h"
 #include "opal/util/show_help.h"
+
+#include "opal/util/sys_limits.h"
+#include "opal/align.h"
 
 /*
  * Array of all possible connection functions
@@ -421,10 +424,27 @@ int opal_btl_openib_connect_base_alloc_cts(mca_btl_base_endpoint_t *endpoint)
         sizeof(mca_btl_openib_footer_t) +
         mca_btl_openib_component.qp_infos[mca_btl_openib_component.credits_qp].size;
 
+    int align_it = 0;
+    int page_size;
+
+    page_size = opal_getpagesize();
+    if (length >= page_size / 2) { align_it = 1; }
+    if (align_it) {
+// I think this is only active for ~64k+ buffers anyway, but I'm not
+// positive, so I'm only increasing the buffer size and alignment if
+// it's not too small. That way we'd avoid wasting excessive memory
+// in case this code was active for tiny buffers.
+        length = OPAL_ALIGN(length, page_size, int);
+    }
+
     /* Explicitly don't use the mpool registration */
     fli = &(endpoint->endpoint_cts_frag.super.super.base.super);
     fli->registration = NULL;
-    fli->ptr = malloc(length);
+    if (!align_it) {
+        fli->ptr = malloc(length);
+    } else {
+        posix_memalign((void**)&(fli->ptr), page_size, length);
+    }
     if (NULL == fli->ptr) {
         BTL_ERROR(("malloc failed"));
         return OPAL_ERR_OUT_OF_RESOURCE;

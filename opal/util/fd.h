@@ -1,9 +1,9 @@
 /*
- * Copyright (c) 2008-2014 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2009 Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  *
- * Copyright (c) 2017      Intel, Inc. All rights reserved.
+ * Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -95,6 +95,15 @@ OPAL_DECLSPEC bool opal_fd_is_chardev(int fd);
  */
 OPAL_DECLSPEC bool opal_fd_is_blkdev(int fd);
 
+/**
+ * Convenience function to get a string name of the peer on the other
+ * end of this internet socket.
+ *
+ * @param fd File descriptor of an AF_INET/AF_INET6 socket
+ *
+ * @returns resolvable IP name, or "a.b.c.d".  This string must be freed by the caller.
+ */
+OPAL_DECLSPEC const char *opal_fd_get_peer_name(int fd);
 
 END_C_DECLS
 

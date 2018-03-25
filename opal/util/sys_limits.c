@@ -13,7 +13,7 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2013-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -235,13 +235,20 @@ out:
 
 int opal_getpagesize(void)
 {
+    static int page_size = -1;
+
+    if (page_size != -1) {
+// testing in a loop showed sysconf() took ~5 usec vs ~0.3 usec with it cached
+        return page_size;
+    }
+
 #ifdef HAVE_GETPAGESIZE
-    return getpagesize();
+    return page_size = getpagesize();
 #elif defined(_SC_PAGESIZE )
-    return sysconf(_SC_PAGESIZE);
+    return page_size = sysconf(_SC_PAGESIZE);
 #elif defined(_SC_PAGE_SIZE)
-    return sysconf(_SC_PAGE_SIZE);
+    return page_size = sysconf(_SC_PAGE_SIZE);
 #else
-    return 65536; /* safer to overestimate than under */
+    return page_size = 65536; /* safer to overestimate than under */
 #endif
 }
