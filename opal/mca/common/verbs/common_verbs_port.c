@@ -18,6 +18,7 @@
  * Copyright (c) 2011      NVIDIA Corporation.  All rights reserved.
  * Copyright (c) 2012      Oak Ridge National Laboratory.  All rights reserved
  *
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -67,6 +68,10 @@ int opal_common_verbs_port_bw(struct ibv_port_attr *port_attr,
     case 32:
         /* EDR: 25.78125 Gbps * 64/66, in megabits */
         *bandwidth = 25000;
+        break;
+    case 64:
+        /* HDR: 50Gbps * 64/66, in megabits */
+        *bandwidth = 50000;
         break;
     default:
         /* Who knows? */
