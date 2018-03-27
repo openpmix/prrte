@@ -14,6 +14,7 @@
  * Copyright (c) 2010-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -248,7 +249,7 @@ static inline opal_free_list_item_t *opal_free_list_get (opal_free_list_t *flist
 static inline opal_free_list_item_t *opal_free_list_wait_mt (opal_free_list_t *fl)
 {
     opal_free_list_item_t *item =
-        (opal_free_list_item_t *) opal_lifo_pop (&fl->super);
+        (opal_free_list_item_t *) opal_lifo_pop_atomic (&fl->super);
 
     while (NULL == item) {
         if (!opal_mutex_trylock (&fl->fl_lock)) {
@@ -274,7 +275,7 @@ static inline opal_free_list_item_t *opal_free_list_wait_mt (opal_free_list_t *f
             opal_mutex_lock (&fl->fl_lock);
         }
         opal_mutex_unlock (&fl->fl_lock);
-        item = (opal_free_list_item_t *) opal_lifo_pop (&fl->super);
+        item = (opal_free_list_item_t *) opal_lifo_pop_atomic (&fl->super);
     }
 
     return item;
@@ -364,4 +365,3 @@ static inline void opal_free_list_return (opal_free_list_t *flist,
 
 END_C_DECLS
 #endif
-
