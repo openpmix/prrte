@@ -67,7 +67,6 @@ int orte_ess_base_app_setup(bool db_restrict_local)
 {
     int ret;
     char *error = NULL;
-    opal_list_t transports;
 
     OPAL_TIMING_ENV_INIT(ess_base_setup);
     /*

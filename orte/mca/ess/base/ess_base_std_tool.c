@@ -88,12 +88,10 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
 {
     int ret;
     char *error = NULL;
-    opal_list_t transports;
     opal_list_t info;
-    opal_value_t *kv, *knext, val;
+    opal_value_t *kv, *knext;
     opal_pmix_query_t *q;
     opal_pmix_lock_t lock;
-    opal_buffer_t *buf;
 
     /* we need an external progress thread to ensure that things run
      * async with the PMIx code */
