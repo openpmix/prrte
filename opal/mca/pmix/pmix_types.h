@@ -362,6 +362,8 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_ALLOC_BANDWIDTH               "pmix.alloc.bw"         // (float) Mbits/sec
 #define OPAL_PMIX_ALLOC_NETWORK_QOS             "pmix.alloc.netqos"     // (char*) quality of service level
 #define OPAL_PMIX_ALLOC_TIME                    "pmix.alloc.time"       // (uint32_t) time in seconds
+#define OPAL_PMIX_ALLOC_NETWORK_TYPE            "pmix.alloc.nettype"    // (char*) type of desired transport
+#define OPAL_PMIX_ALLOC_NETWORK_ENDPTS          "pmix.alloc.endpts"     // (size_t) number of endpoints to allocate
 
 
 /* job control attributes */

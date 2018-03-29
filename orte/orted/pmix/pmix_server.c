@@ -297,6 +297,14 @@ int pmix_server_init(void)
         kv->data.flag = true;
         opal_list_append(&info, &kv->super);
     }
+    /* if we are the HNP or master, then we are a gateway */
+    if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
+        kv = OBJ_NEW(opal_value_t);
+        kv->key = strdup(OPAL_PMIX_SERVER_GATEWAY);
+        kv->type = OPAL_BOOL;
+        kv->data.flag = true;
+        opal_list_append(&info, &kv->super);
+    }
 
     /* if we are the HNP or MASTER, then we are a gateway */
     if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
