@@ -13,7 +13,7 @@
 # Copyright (c) 2006-2008 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
 #                         reserved.
-# Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -25,15 +25,15 @@
 # orte/Makefile.am
 
 SUBDIRS += \
-	tools/psrvd \
+	tools/prted \
 	tools/prun \
 	tools/wrappers \
         tools/pinfo \
-        tools/psrvr
+        tools/prte
 
 DIST_SUBDIRS += \
-	tools/psrvd \
+	tools/prted \
 	tools/prun \
 	tools/wrappers \
         tools/pinfo \
-        tools/psrvr
+        tools/prte

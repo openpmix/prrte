@@ -500,10 +500,10 @@ orte/tools/prun/prun
 orte/tools/prun/prun.1
 orte/tools/pinfo/pinfo
 orte/tools/pinfo/pinfo.1
-orte/tools/psrvd/psrvd
-orte/tools/psrvd/psrvd.1
-orte/tools/psrvr/psrvr
-orte/tools/psrvr/psrvr.1
+orte/tools/prted/prted
+orte/tools/prted/prted.1
+orte/tools/prte/prte
+orte/tools/prte/prte.1
 orte/tools/wrappers/pcc-wrapper-data.txt
 orte/tools/wrappers/pcc_wrapper_script
 orte/tools/wrappers/pcc.pc

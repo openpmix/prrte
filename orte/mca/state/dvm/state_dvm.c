@@ -606,7 +606,6 @@ static void dvm_notify(int sd, short args, void *cbdata)
         val->type = OPAL_BOOL;
         val->data.flag = true;
         opal_list_append(info, &val->super);
-#if 0
         /* tell the server not to cache the event as subsequent jobs
          * do not need to know about it */
         val = OBJ_NEW(opal_value_t);
@@ -614,6 +613,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         val->type = OPAL_BOOL;
         val->data.flag = true;
         opal_list_append(info, &val->super);
+#if 0
         /* guarantee delivery to the requestor, even if they
          * register for notification late */
         val = OBJ_NEW(opal_value_t);

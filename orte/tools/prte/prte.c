@@ -14,7 +14,7 @@
  * Copyright (c) 2007-2009 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2007-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -275,12 +275,7 @@ int main(int argc, char *argv[])
     /* Check for help request */
     if (myglobals.help) {
         char *str, *args = NULL;
-        char *project_name = NULL;
-        if (0 == strcmp(orte_basename, "mpirun")) {
-            project_name = "Open MPI";
-        } else {
-            project_name = "OpenRTE";
-        }
+        char *project_name = "PMIx Reference RTE";
         args = opal_cmd_line_get_usage_msg(&cmd_line);
         str = opal_show_help_string("help-orterun.txt", "orterun:usage", false,
                                     orte_basename, project_name, OPAL_VERSION,
@@ -296,8 +291,8 @@ int main(int argc, char *argv[])
         exit(0);
     }
 
-    /* inform ORTE that we renamed orted to be psrvd */
-    opal_setenv(OPAL_MCA_PREFIX"orte_launch_agent", "psrvd", true, &environ);
+    /* inform ORTE that we renamed orted to be prted */
+    opal_setenv(OPAL_MCA_PREFIX"orte_launch_agent", "prted", true, &environ);
     if (myglobals.system_server) {
         /* we should act as system-level PMIx server */
         opal_setenv(OPAL_MCA_PREFIX"pmix_system_server", "1", true, &environ);

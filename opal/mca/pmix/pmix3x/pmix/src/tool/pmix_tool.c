@@ -176,8 +176,9 @@ static void pmix_tool_notify_recv(struct pmix_peer_t *peer,
     PMIX_INFO_LOAD(&chain->info[ninfo], PMIX_EVENT_RETURN_OBJECT, NULL, PMIX_POINTER);
 
     pmix_output_verbose(2, pmix_client_globals.event_output,
-                        "[%s:%d] pmix:tool_notify_recv - processing event %d, calling errhandler",
-                        pmix_globals.myid.nspace, pmix_globals.myid.rank, chain->status);
+                        "[%s:%d] pmix:tool_notify_recv - processing event %s from source %s:%d, calling errhandler",
+                        pmix_globals.myid.nspace, pmix_globals.myid.rank, PMIx_Error_string(chain->status),
+                        chain->source.nspace, chain->source.rank);
 
     pmix_invoke_local_event_hdlr(chain);
     return;

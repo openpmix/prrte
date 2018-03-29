@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2007-2016 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
-# Copyright (c) 2017      Intel, Inc. All rights reserved.
+# Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -22,13 +22,13 @@
 # This is the US/English general help file for Open RTE's orterun.
 #
 [orterun:init-failure]
-Open RTE was unable to initialize properly.  The error occured while
+The PMIx Reference RTE was unable to initialize properly.  The error occured while
 attempting to %s.  Returned value %d instead of ORTE_SUCCESS.
 [orterun:usage]
 %s (%s) %s
 
-Usage: %s [OPTION]...  [PROGRAM]...
-Start the given program using Open RTE
+Usage: %s [OPTION]...
+Start the PMIx Reference RTE
 
 %s
 
