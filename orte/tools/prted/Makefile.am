@@ -9,9 +9,9 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2008-2014 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2007-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2015-2016 Intel, Inc.  All rights reserved.
+# Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -19,23 +19,14 @@
 # $HEADER$
 #
 
-# This is not quite in the Automake spirit, but we have to do it.
-# Since the totalview portion of the library must be built with -g, we
-# must eliminate the CFLAGS that are passed in here by default (which
-# may already have debugging and/or optimization flags).  We use
-# post-processed forms of the CFLAGS in the library targets down
-# below.
-
-CFLAGS = $(CFLAGS_WITHOUT_OPTFLAGS) $(DEBUGGER_CFLAGS)
-
 include $(top_srcdir)/Makefile.ompi-rules
 
-man_pages = psrvr.1
+man_pages = prted.1
 EXTRA_DIST = $(man_pages:.1=.1in)
 
 if OPAL_INSTALL_BINARIES
 
-bin_PROGRAMS = psrvr
+bin_PROGRAMS = prted
 
 nodist_man_MANS = $(man_pages)
 
@@ -46,10 +37,15 @@ $(nodist_man_MANS): $(top_builddir)/opal/include/opal_config.h
 
 endif # OPAL_INSTALL_BINARIES
 
-psrvr_SOURCES = \
-        psrvr.c
-
-psrvr_LDADD = \
+prted_SOURCES = prted.c
+# the following empty prted_LDFLAGS is used
+#  so that the prted can be compiled statically
+#  by simply changing the value of this from
+#  nothing to -all-static in the Makefile.in
+#  nice for systems that don't have all the shared
+#  libraries on the computes
+prted_LDFLAGS =
+prted_LDADD = \
 	$(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la \
 	$(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
 

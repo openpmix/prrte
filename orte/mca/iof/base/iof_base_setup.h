@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2008      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2016-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,9 +35,6 @@ struct orte_iof_base_io_conf_t {
     int p_stdin[2];
     int p_stdout[2];
     int p_stderr[2];
-#if OPAL_PMIX_V1
-    int p_internal[2];
-#endif
 };
 typedef struct orte_iof_base_io_conf_t orte_iof_base_io_conf_t;
 

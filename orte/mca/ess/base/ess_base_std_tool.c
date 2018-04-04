@@ -43,12 +43,6 @@
 #include "opal/util/argv.h"
 #include "opal/util/proc.h"
 
-#include "orte/mca/iof/base/base.h"
-#include "orte/mca/oob/base/base.h"
-#include "orte/mca/plm/base/base.h"
-#include "orte/mca/rml/base/base.h"
-#include "orte/mca/rml/base/rml_contact.h"
-#include "orte/mca/routed/base/base.h"
 #include "orte/mca/errmgr/base/base.h"
 #include "orte/mca/state/base/base.h"
 #include "orte/util/proc_info.h"
@@ -94,12 +88,10 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
 {
     int ret;
     char *error = NULL;
-    opal_list_t transports;
     opal_list_t info;
-    opal_value_t *kv, *knext, val;
+    opal_value_t *kv, *knext;
     opal_pmix_query_t *q;
     opal_pmix_lock_t lock;
-    opal_buffer_t *buf;
 
     /* we need an external progress thread to ensure that things run
      * async with the PMIx code */
@@ -188,46 +180,6 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
         error = "orte_errmgr_base_select";
         goto error;
     }
-    /* Setup the communication infrastructure */
-    /* Routed system */
-    if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_routed_base_framework, 0))) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_rml_base_open";
-        goto error;
-    }
-    if (ORTE_SUCCESS != (ret = orte_routed_base_select())) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_routed_base_select";
-        goto error;
-    }
-    if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_oob_base_framework, 0))) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_oob_base_open";
-        goto error;
-    }
-    if (ORTE_SUCCESS != (ret = orte_oob_base_select())) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_oob_base_select";
-        goto error;
-    }
-    /* Runtime Messaging Layer */
-    if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_rml_base_framework, 0))) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_rml_base_open";
-        goto error;
-    }
-    if (ORTE_SUCCESS != (ret = orte_rml_base_select())) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_rml_base_select";
-        goto error;
-    }
-
-    /* get a conduit for our use - we never route IO over fabric */
-    OBJ_CONSTRUCT(&transports, opal_list_t);
-    orte_set_attribute(&transports, ORTE_RML_TRANSPORT_TYPE,
-                       ORTE_ATTR_LOCAL, orte_mgmt_transport, OPAL_STRING);
-    orte_mgmt_conduit = orte_rml.open_conduit(&transports);
-    OPAL_LIST_DESTRUCT(&transports);
 
     /* we -may- need to know the name of the head
      * of our session directory tree, particularly the
@@ -240,67 +192,6 @@ int orte_ess_base_tool_setup(opal_list_t *flags)
         ORTE_ERROR_LOG(ret);
         error = "define session dir names";
         goto error;
-    }
-
-    /* setup I/O forwarding system - must come after we init routes */
-    if (NULL != orte_process_info.my_hnp_uri && NULL == opal_pmix.server_iof_push) {
-        /* extract the name */
-        if (ORTE_SUCCESS != orte_rml_base_parse_uris(orte_process_info.my_hnp_uri, ORTE_PROC_MY_HNP, NULL)) {
-            orte_show_help("help-orte-top.txt", "orte-top:hnp-uri-bad", true, orte_process_info.my_hnp_uri);
-            exit(1);
-        }
-        /* Set the contact info in the RML - this won't actually establish
-         * the connection, but just tells the RML how to reach the HNP
-         * if/when we attempt to send to it
-         */
-        OBJ_CONSTRUCT(&val, opal_value_t);
-        val.key = OPAL_PMIX_PROC_URI;
-        val.type = OPAL_STRING;
-        val.data.string = orte_process_info.my_hnp_uri;
-        if (OPAL_SUCCESS != (ret = opal_pmix.store_local(ORTE_PROC_MY_HNP, &val))) {
-            ORTE_ERROR_LOG(ret);
-            val.key = NULL;
-            val.data.string = NULL;
-            OBJ_DESTRUCT(&val);
-            error = "store HNP URI";
-            goto error;
-        }
-        val.key = NULL;
-        val.data.string = NULL;
-        OBJ_DESTRUCT(&val);
-        /* set the route to be direct */
-        if (ORTE_SUCCESS != orte_routed.update_route(NULL, ORTE_PROC_MY_HNP, ORTE_PROC_MY_HNP)) {
-            orte_show_help("help-orte-top.txt", "orte-top:hnp-uri-bad", true, orte_process_info.my_hnp_uri);
-            orte_finalize();
-            exit(1);
-        }
-
-        /* connect to the HNP so we can recv forwarded output */
-        buf = OBJ_NEW(opal_buffer_t);
-        ret = orte_rml.send_buffer_nb(orte_mgmt_conduit, ORTE_PROC_MY_HNP,
-                                      buf, ORTE_RML_TAG_WARMUP_CONNECTION,
-                                      orte_rml_send_callback, NULL);
-        if (ORTE_SUCCESS != ret) {
-            ORTE_ERROR_LOG(ret);
-            error = "warmup connection";
-            goto error;
-        }
-
-        /* set the target hnp as our lifeline so we will terminate if it exits */
-        orte_routed.set_lifeline(NULL, ORTE_PROC_MY_HNP);
-
-        /* setup the IOF */
-        if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_iof_base_framework, 0))) {
-            ORTE_ERROR_LOG(ret);
-            error = "orte_iof_base_open";
-            goto error;
-        }
-        if (ORTE_SUCCESS != (ret = orte_iof_base_select())) {
-            ORTE_ERROR_LOG(ret);
-            error = "orte_iof_base_select";
-            goto error;
-        }
-
     }
 
     return ORTE_SUCCESS;
@@ -317,17 +208,10 @@ int orte_ess_base_tool_finalize(void)
 {
     orte_wait_finalize();
 
-    orte_rml.close_conduit(orte_mgmt_conduit);
-
     /* if I am a tool, then all I will have done is
      * a very small subset of orte_init - ensure that
      * I only back those elements out
      */
-    if (NULL != orte_process_info.my_hnp_uri && NULL == opal_pmix.server_iof_push) {
-        (void) mca_base_framework_close(&orte_iof_base_framework);
-    }
-    (void) mca_base_framework_close(&orte_routed_base_framework);
-    (void) mca_base_framework_close(&orte_rml_base_framework);
     (void) mca_base_framework_close(&orte_errmgr_base_framework);
 
     opal_pmix.finalize();

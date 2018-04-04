@@ -15,7 +15,7 @@
  * Copyright (c) 2010      IBM Corporation.  All rights reserved.
  * Copyright (c) 2011-2014 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2017      Rutgers, The State University of New Jersey.
  *                         All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
@@ -334,9 +334,6 @@ static int close_open_file_descriptors(int write_fd, orte_iof_base_io_conf_t opt
             (fd == alps_app_filedes[1])) continue;
 
         if (fd >=3 &&
-#if OPAL_PMIX_V1
-            fd != opts.p_internal[1] &&
-#endif
             fd != write_fd) {
                         close(fd);
         }
@@ -390,13 +387,6 @@ static int do_child(orte_odls_spawn_caddy_t *cd, int write_fd)
             }
             close(fdnull);
         }
-#if OPAL_PMIX_V1
-        fdnull = open("/dev/null", O_RDONLY, 0);
-        if (fdnull > cd->opts.p_internal[1]) {
-            dup2(fdnull, cd->opts.p_internal[1]);
-        }
-        close(fdnull);
-#endif
     }
 
     if (ORTE_SUCCESS != close_open_file_descriptors(write_fd, cd->opts)) {
@@ -481,9 +471,6 @@ static int do_parent(orte_odls_spawn_caddy_t *cd, int read_fd)
     if( !orte_iof_base.redirect_app_stderr_to_stdout ) {
         close(cd->opts.p_stderr[1]);
     }
-#if OPAL_PMIX_V1
-    close(cd->opts.p_internal[1]);
-#endif
 
     /* Block reading a message from the pipe */
     while (1) {

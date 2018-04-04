@@ -66,7 +66,7 @@ OPAL_LOAD_PLATFORM
 
 AC_CHECK_PROG([PERL],[perl],[perl],[no])
 AS_IF([test "X$PERL" = "Xno"],
-      [AC_MSG_ERROR(["Open MPI requires perl. Aborting"])])
+      [AC_MSG_ERROR(["PRTE requires perl. Aborting"])])
 
 OPAL_CONFIGURE_SETUP
 
@@ -80,7 +80,7 @@ opal_show_subtitle "Startup tests"
 
 AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
-AC_DEFINE_UNQUOTED(OPAL_ARCH, "$target", [PMIx Reference Server architecture string])
+AC_DEFINE_UNQUOTED(OPAL_ARCH, "$target", [PRTE architecture string])
 
 AS_IF([test "$host" != "$target"],
       [AC_MSG_WARN([Cross-compile detected])
@@ -130,7 +130,7 @@ AC_SUBST([CONFIGURE_DEPENDENCIES], ['$(top_srcdir)/VERSION'])
 
 opal_show_subtitle "Checking versions"
 
-# Get the version of PMIx Reference Server that we are installing
+# Get the version of PRTE that we are installing
 OPAL_SAVE_VERSION([ORTE], [Open Run-Time Environment],
                           [$srcdir/VERSION],
                           [orte/include/orte/version.h])
@@ -254,8 +254,8 @@ fi
 # The library prefixes must be set before we call OPAL MCA.  Here is
 # as good a place as any.
 
-OPAL_SET_LIB_PREFIX([psrvr])
-ORTE_SET_LIB_PREFIX([psrvr])
+OPAL_SET_LIB_PREFIX([prte])
+ORTE_SET_LIB_PREFIX([prte])
 
 ############################################################################
 # Libtool: part one
@@ -289,7 +289,7 @@ OPAL_SETUP_WRAPPER_INIT
 case $host_os in
 # Corresponds to OS X 10.0 - 10.4 (additional [] quoting for m4)
 darwin[[45678]]*)
-    AC_MSG_WARN([Open MPI does not support OS X prior to version 10.5 (Leopard)])
+    AC_MSG_WARN([PRTE does not support OS X prior to version 10.5 (Leopard)])
     AC_MSG_ERROR([Cannot continue])
 esac
 
@@ -894,7 +894,7 @@ if test -z "$LEX" || \
    test "`basename $LEX`" != "flex"; then
     if test ! -f "$srcdir/opal/util/show_help_lex.c"; then
         AC_MSG_WARN([*** Could not find Flex on your system.])
-        AC_MSG_WARN([*** Flex is required for developer builds of Open MPI.])
+        AC_MSG_WARN([*** Flex is required for developer builds of PRTE.])
         AC_MSG_WARN([*** Other versions of Lex are not supported.])
         AC_MSG_WARN([*** YOU DO NOT NEED FLEX WHEN BUILDING DISTRIBUTION TARBALLS!])
         AC_MSG_ERROR([Cannot continue])
@@ -1012,10 +1012,10 @@ opal_show_title "Symbol visibility feature"
 OPAL_CHECK_VISIBILITY
 
 ############################################################################
-# Final top-level PMIx Reference Server configuration
+# Final top-level PRTE configuration
 ############################################################################
 
-opal_show_title "Final top-level PMIx Reference Server configuration"
+opal_show_title "Final top-level PRTE configuration"
 
 ############################################################################
 # Libtool: part two
@@ -1024,7 +1024,7 @@ opal_show_title "Final top-level PMIx Reference Server configuration"
 opal_show_subtitle "Libtool configuration"
 
 # Use the undocumented solaris_use_stlport4 libtool variable to turn off any
-# Cstd/stlport4 linkage. This allows Open MPI to be C++ STL agnostic.
+# Cstd/stlport4 linkage. This allows PRTE to be C++ STL agnostic.
 if test "x$opal_cv_c_compiler_vendor" = "xsun"; then
     solaris_use_stlport4="yes"
 fi

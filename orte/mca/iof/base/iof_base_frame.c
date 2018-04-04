@@ -179,9 +179,6 @@ static void orte_iof_base_proc_construct(orte_iof_proc_t* ptr)
     ptr->stdinev = NULL;
     ptr->revstdout = NULL;
     ptr->revstderr = NULL;
-#if OPAL_PMIX_V1
-    ptr->revstddiag = NULL;
-#endif
     ptr->subscribers = NULL;
     ptr->copy = true;
 }
@@ -196,11 +193,6 @@ static void orte_iof_base_proc_destruct(orte_iof_proc_t* ptr)
     if (NULL != ptr->revstderr) {
         OBJ_RELEASE(ptr->revstderr);
     }
-#if OPAL_PMIX_V1
-    if (NULL != ptr->revstddiag) {
-        OBJ_RELEASE(ptr->revstddiag);
-    }
-#endif
     if (NULL != ptr->subscribers) {
         OPAL_LIST_RELEASE(ptr->subscribers);
     }
