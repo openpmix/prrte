@@ -1004,7 +1004,7 @@ static void _toolconn(int sd, short args, void *cbdata)
         flag = true;
         orte_set_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION,
                            ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
-        }
+    }
 
     if (NULL != cd->toolcbfunc) {
         cd->toolcbfunc(rc, tool, cd->cbdata);
@@ -1036,6 +1036,16 @@ void pmix_tool_connected_fn(opal_list_t *info,
 
 }
 
+static void lgcbfn(int sd, short args, void *cbdata)
+{
+    orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
+
+    if (NULL != cd->cbfunc) {
+        cd->cbfunc(cd->status, cd->cbdata);
+    }
+    OBJ_RELEASE(cd);
+}
+
 void pmix_server_log_fn(opal_process_name_t *requestor,
                         opal_list_t *info,
                         opal_list_t *directives,
@@ -1043,8 +1053,8 @@ void pmix_server_log_fn(opal_process_name_t *requestor,
                         void *cbdata)
 {
     opal_value_t *val;
-    opal_buffer_t *buf;
-    int rc;
+    opal_buffer_t *buf, *xmit = NULL;
+    int rc = ORTE_SUCCESS;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s logging info",
@@ -1055,7 +1065,7 @@ void pmix_server_log_fn(opal_process_name_t *requestor,
             ORTE_ERROR_LOG(ORTE_ERR_BAD_PARAM);
             continue;
         }
-        if (0 == strcmp(val->key, OPAL_PMIX_LOG_MSG)) {
+        if (0 == strcmp(val->key, OPAL_PMIX_SHOW_HELP)) {
             /* pull out the blob */
             if (OPAL_BYTE_OBJECT != val->type) {
                 continue;
@@ -1070,20 +1080,33 @@ void pmix_server_log_fn(opal_process_name_t *requestor,
                 ORTE_ERROR_LOG(rc);
                 OBJ_RELEASE(buf);
             }
-        } else if (0 == strcmp(val->key, OPAL_PMIX_LOG_STDERR)) {
-            if (ORTE_SUCCESS != (rc = orte_iof.output(requestor, ORTE_IOF_STDERR, val->data.string))) {
-                ORTE_ERROR_LOG(rc);
+        } else if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
+            /* we can't support this */
+            rc = ORTE_ERR_NOT_SUPPORTED;
+        } else {
+            /* we need to ship this to our HNP/MASTER for processing */
+            if (NULL == xmit) {
+                xmit = OBJ_NEW(opal_buffer_t);
             }
-        } else if (0 == strcmp(val->key, OPAL_PMIX_LOG_STDOUT)) {
-            if (ORTE_SUCCESS != (rc = orte_iof.output(requestor, ORTE_IOF_STDOUT, val->data.string))) {
-                ORTE_ERROR_LOG(rc);
-            }
+            opal_dss.pack(xmit, &val, 1, OPAL_VALUE);
         }
     }
-
-    if (NULL != cbfunc) {
-        cbfunc(OPAL_SUCCESS, cbdata);
+    if (NULL != xmit) {
+        rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                     ORTE_PROC_MY_HNP, xmit,
+                                     ORTE_RML_TAG_LOGGING,
+                                     orte_rml_send_callback, NULL);
+        if (ORTE_SUCCESS != rc) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_RELEASE(xmit);
+        }
     }
+    /* we cannot directly execute the callback here
+     * as it would threadlock - so shift to somewhere
+     * safe */
+    ORTE_PMIX_THREADSHIFT(requestor, NULL, rc,
+                          NULL, NULL, lgcbfn,
+                          cbfunc, cbdata);
 }
 
 int pmix_server_job_ctrl_fn(const opal_process_name_t *requestor,

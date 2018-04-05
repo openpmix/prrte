@@ -180,6 +180,9 @@ BEGIN_C_DECLS
 /* node regex report */
 #define ORTE_RML_TAG_NODE_REGEX_REPORT      64
 
+/* pmix log requests */
+#define ORTE_RML_TAG_LOGGING                65
+
 #define ORTE_RML_TAG_MAX                   100
 
 

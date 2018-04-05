@@ -207,7 +207,7 @@ static void evhandler(int status,
         OPAL_LIST_FOREACH(val, info, opal_value_t) {
             if (0 == strcmp(val->key, OPAL_PMIX_JOB_TERM_STATUS)) {
                 jobstatus = val->data.integer;
-            } else if (0 == strcmp(val->key, OPAL_PMIX_PROCID)) {
+            } else if (0 == strcmp(val->key, OPAL_PMIX_EVENT_AFFECTED_PROC)) {
                 jobid = val->data.name.jobid;
             } else if (0 == strcmp(val->key, OPAL_PMIX_EVENT_RETURN_OBJECT)) {
                 lock = (opal_pmix_lock_t*)val->data.ptr;
@@ -784,11 +784,14 @@ int prun(int argc, char *argv[])
     }
 
     if (OPAL_SUCCESS != (rc = opal_pmix.spawn(&job_info, &apps, &myjobid))) {
-        opal_output(0, "Job failed to spawn: %s", opal_strerror(rc));
+        if (OPAL_ERR_SILENT != rc) {
+            opal_output(0, "Job failed to spawn: %s", opal_strerror(rc));
+        }
         goto DONE;
     }
     OPAL_LIST_DESTRUCT(&job_info);
     OPAL_LIST_DESTRUCT(&apps);
+
     /* register to be notified when
      * our job completes */
     OBJ_CONSTRUCT(&codes, opal_list_t);
@@ -807,8 +810,8 @@ int prun(int argc, char *argv[])
     /* specify we only want to be notified when our
      * job terminates */
     val = OBJ_NEW(opal_value_t);
-    val->key = strdup(OPAL_PMIX_JOBID);
-    val->type = OPAL_JOBID;
+    val->key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
+    val->type = OPAL_NAME;
     val->data.name.jobid = myjobid;
     opal_list_append(&info, &val->super);
     /* request that they return our lock object */

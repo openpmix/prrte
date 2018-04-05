@@ -306,6 +306,8 @@ int main(int argc, char *argv[])
     if (myglobals.remote_connections) {
         opal_setenv("PMIX_MCA_ptl_tcp_remote_connections", "1", true, &environ);
     }
+    /* don't aggregate help messages as that will apply job-to-job */
+    opal_setenv(OPAL_MCA_PREFIX"orte_base_help_aggregate", 0, true, &environ);
 
     /* Setup MCA params */
     orte_register_params();

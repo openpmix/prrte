@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014-2017 Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
@@ -84,6 +84,9 @@ static void pmix_server_dmdx_recv(int status, orte_process_name_t* sender,
 static void pmix_server_dmdx_resp(int status, orte_process_name_t* sender,
                                   opal_buffer_t *buffer,
                                   orte_rml_tag_t tg, void *cbdata);
+static void pmix_server_log(int status, orte_process_name_t* sender,
+                            opal_buffer_t *buffer,
+                            orte_rml_tag_t tg, void *cbdata);
 
 #define ORTE_PMIX_SERVER_MIN_ROOMS    4096
 
@@ -295,6 +298,15 @@ int pmix_server_init(void)
         opal_list_append(&info, &kv->super);
     }
 
+    /* if we are the HNP or MASTER, then we are a gateway */
+    if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
+        kv = OBJ_NEW(opal_value_t);
+        kv->key = strdup(OPAL_PMIX_SERVER_GATEWAY);
+        kv->type = OPAL_BOOL;
+        kv->data.flag = true;
+        opal_list_append(&info, &kv->super);
+    }
+
     /* setup the local server */
     if (ORTE_SUCCESS != (rc = opal_pmix.server_init(&pmix_server, &info))) {
         /* pmix will provide a nice show_help output here */
@@ -311,24 +323,30 @@ void pmix_server_start(void)
     orte_data_server_init();
 
     /* setup recv for direct modex requests */
-     orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_DIRECT_MODEX,
-                             ORTE_RML_PERSISTENT, pmix_server_dmdx_recv, NULL);
+    orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_DIRECT_MODEX,
+                            ORTE_RML_PERSISTENT, pmix_server_dmdx_recv, NULL);
 
-     /* setup recv for replies to direct modex requests */
-     orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_DIRECT_MODEX_RESP,
-                             ORTE_RML_PERSISTENT, pmix_server_dmdx_resp, NULL);
+    /* setup recv for replies to direct modex requests */
+    orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_DIRECT_MODEX_RESP,
+                            ORTE_RML_PERSISTENT, pmix_server_dmdx_resp, NULL);
 
-     /* setup recv for replies to proxy launch requests */
-     orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_LAUNCH_RESP,
-                             ORTE_RML_PERSISTENT, pmix_server_launch_resp, NULL);
+    /* setup recv for replies to proxy launch requests */
+    orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_LAUNCH_RESP,
+                            ORTE_RML_PERSISTENT, pmix_server_launch_resp, NULL);
 
-     /* setup recv for replies from data server */
-     orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_DATA_CLIENT,
-                             ORTE_RML_PERSISTENT, pmix_server_keyval_client, NULL);
+    /* setup recv for replies from data server */
+    orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_DATA_CLIENT,
+                            ORTE_RML_PERSISTENT, pmix_server_keyval_client, NULL);
 
-     /* setup recv for notifications */
-     orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_NOTIFICATION,
-                             ORTE_RML_PERSISTENT, pmix_server_notify, NULL);
+    /* setup recv for notifications */
+    orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_NOTIFICATION,
+                            ORTE_RML_PERSISTENT, pmix_server_notify, NULL);
+
+    if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
+        /* setup recv for logging requests */
+        orte_rml.recv_buffer_nb(ORTE_NAME_WILDCARD, ORTE_RML_TAG_LOGGING,
+                                ORTE_RML_PERSISTENT, pmix_server_log, NULL);
+    }
 }
 
 void pmix_server_finalize(void)
@@ -347,6 +365,9 @@ void pmix_server_finalize(void)
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_LAUNCH_RESP);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_DATA_CLIENT);
     orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_NOTIFICATION);
+    if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
+        orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_LOGGING);
+    }
 
     /* finalize our local data server */
     orte_data_server_finalize();
@@ -659,6 +680,39 @@ static void pmix_server_dmdx_resp(int status, orte_process_name_t* sender,
     OBJ_RELEASE(d);  // maintain accounting
 }
 
+static void cbfunc(int status, void *cbdata)
+{
+    opal_list_t *values = (opal_list_t*)cbdata;
+    OPAL_LIST_RELEASE(values);
+}
+
+static void pmix_server_log(int status, orte_process_name_t* sender,
+                            opal_buffer_t *buffer,
+                            orte_rml_tag_t tg, void *cbdata)
+{
+    int rc;
+    int32_t cnt;
+    opal_value_t *val;
+    opal_list_t *values;
+
+    values = OBJ_NEW(opal_list_t);
+
+    /* unpack the values and assemble them onto a list */
+    cnt = 1;
+    while (OPAL_SUCCESS == (rc = opal_dss.unpack(buffer, &val, &cnt, OPAL_VALUE))) {
+        opal_list_append(values, &val->super);
+    }
+    if (ORTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
+        ORTE_ERROR_LOG(rc);
+        OPAL_LIST_RELEASE(values);
+        return;
+    }
+    /* pass the list down to be logged */
+    opal_pmix.log(values, cbfunc, (void*)values);
+}
+
+
+/****    INSTANTIATE LOCAL OBJECTS    ****/
 static void opcon(orte_pmix_server_op_caddy_t *p)
 {
     p->procs = NULL;

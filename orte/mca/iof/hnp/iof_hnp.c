@@ -42,6 +42,7 @@
 #endif
 
 #include "opal/mca/event/event.h"
+#include "opal/mca/pmix/pmix.h"
 
 #include "orte/runtime/orte_globals.h"
 #include "orte/mca/errmgr/errmgr.h"
@@ -614,11 +615,15 @@ static int hnp_output(const orte_process_name_t* peer,
                       orte_iof_tag_t source_tag,
                       const char *msg)
 {
-    /* output this to our local output */
-    if (ORTE_IOF_STDOUT & source_tag || orte_xml_output) {
-        orte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), orte_iof_base.iof_write_stdout->wev);
+    if (ORTE_PROC_IS_MASTER && NULL != opal_pmix.server_iof_push) {
+        opal_pmix.server_iof_push(peer, source_tag, (unsigned char*)msg, strlen(msg));
     } else {
-        orte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), orte_iof_base.iof_write_stderr->wev);
+        /* output this to our local output */
+        if (ORTE_IOF_STDOUT & source_tag || orte_xml_output) {
+            orte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), orte_iof_base.iof_write_stdout->wev);
+        } else {
+            orte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), orte_iof_base.iof_write_stderr->wev);
+        }
     }
 
     return ORTE_SUCCESS;

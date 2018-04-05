@@ -12,7 +12,7 @@
  * Copyright (c) 2008-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
@@ -35,6 +35,7 @@
 #include "opal/mca/pmix/pmix.h"
 
 #include "orte/mca/errmgr/errmgr.h"
+#include "orte/mca/iof/iof.h"
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/rml/rml_types.h"
 #include "orte/mca/routed/routed.h"
@@ -366,7 +367,7 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
             tli->tli_count_since_last_display = 0;
 
             if (first) {
-                if (orte_xml_output) {
+               if (orte_xml_output) {
                     fprintf(orte_xml_fp, "<stderr>Set MCA parameter \"orte_base_help_aggregate\" to 0 to see all help / error messages</stderr>\n");
                     fflush(orte_xml_fp);
                 } else {
@@ -443,14 +444,18 @@ static int show_help(const char *filename, const char *topic,
     }
     /* Not already displayed */
     else if (ORTE_ERR_NOT_FOUND == rc) {
-        if (orte_xml_output) {
-            char *tmp;
-            tmp = xml_format((unsigned char*)output);
-            fprintf(orte_xml_fp, "%s", tmp);
-            fflush(orte_xml_fp);
-            free(tmp);
+        if (NULL != orte_iof.output) {
+            orte_iof.output(sender, ORTE_IOF_STDDIAG, output);
         } else {
-            opal_output(orte_help_output, "%s", output);
+            if (orte_xml_output) {
+                char *tmp;
+                tmp = xml_format((unsigned char*)output);
+                fprintf(orte_xml_fp, "%s", tmp);
+                fflush(orte_xml_fp);
+                free(tmp);
+            } else {
+                opal_output(orte_help_output, "%s", output);
+            }
         }
         if (!show_help_timer_set) {
             show_help_time_last_displayed = now;
@@ -709,7 +714,7 @@ int orte_show_help_norender(const char *filename, const char *topic,
             if (NULL != opal_pmix.log) {
                 OBJ_CONSTRUCT(&info, opal_list_t);
                 kv = OBJ_NEW(opal_value_t),
-                kv->key = strdup(OPAL_PMIX_LOG_MSG);
+                kv->key = strdup(OPAL_PMIX_SHOW_HELP);
                 kv->type = OPAL_BYTE_OBJECT;
                 opal_dss.unload(buf, (void**)&kv->data.bo.bytes, &kv->data.bo.size);
                 opal_list_append(&info, &kv->super);
