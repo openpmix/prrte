@@ -15,7 +15,7 @@ dnl Copyright (c) 2015-2017 Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2014-2017 Los Alamos National Security, LLC. All rights
 dnl                         reserved.
-dnl Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
+dnl Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
 dnl Copyright (c) 2017      Amazon.com, Inc. or its affiliates.  All Rights
 dnl                         reserved.
 dnl $COPYRIGHT$
@@ -533,7 +533,7 @@ dnl OPAL_CHECK_ASM_TYPE
 dnl
 dnl Sets OPAL_ASM_TYPE to the prefix for the function type to
 dnl set a symbol's type as function (needed on ELF for shared
-dnl libaries).  If no .type directive is needed, sets OPAL_ASM_TYPE
+dnl libraries).  If no .type directive is needed, sets OPAL_ASM_TYPE
 dnl to an empty string
 dnl
 dnl We look for @ \# %
@@ -832,7 +832,7 @@ dnl
 dnl Check if the compiler is capable of doing GCC-style inline
 dnl assembly.  Some compilers emit a warning and ignore the inline
 dnl assembly (xlc on OS X) and compile without error.  Therefore,
-dnl the test attempts to run the emited code to check that the
+dnl the test attempts to run the emitted code to check that the
 dnl assembly is actually run.  To run this test, one argument to
 dnl the macro must be an assembly instruction in gcc format to move
 dnl the value 0 into the register containing the variable ret.

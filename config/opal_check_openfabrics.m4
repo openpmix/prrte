@@ -19,7 +19,7 @@
 # Copyright (c) 2014      Bull SAS.  All rights reserved.
 # Copyright (c) 2014-2016 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2017      Intel, Inc. All rights reserved.
+# Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -58,7 +58,7 @@ AC_DEFUN([OPAL_CHECK_OPENFABRICS],[
             # Enable padding for SPARC platforms by default  because the
             # btl will segv otherwise.  Keep padding disabled for other
             # platforms since there are some performance implications with
-            #  padding on for those plaforms.
+            #  padding on for those platforms.
             #
             case "${host}" in
 		sparc*)

@@ -17,7 +17,7 @@ dnl Copyright (c) 2009      Los Alamos National Security, LLC.  All rights
 dnl                         reserved.
 dnl Copyright (c) 2009-2011 Oak Ridge National Labs.  All rights reserved.
 dnl Copyright (c) 2011-2013 NVIDIA Corporation.  All rights reserved.
-dnl Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
 dnl Copyright (c) 2015      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl
@@ -391,7 +391,7 @@ AM_CONDITIONAL([OPAL_WANT_SCRIPT_WRAPPER_COMPILERS], [test "$enable_script_wrapp
 #
 AC_ARG_ENABLE([per-user-config-files],
    [AC_HELP_STRING([--enable-per-user-config-files],
-      [Disable per-user configuration files, to save disk accesses during job start-up.  This is likely desirable for large jobs.  Note that this can also be acheived by environment variables at run-time.  (default: enabled)])])
+      [Disable per-user configuration files, to save disk accesses during job start-up.  This is likely desirable for large jobs.  Note that this can also be achieved by environment variables at run-time.  (default: enabled)])])
 if test "$enable_per_user_config_files" = "no" ; then
   result=0
 else
