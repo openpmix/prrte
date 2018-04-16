@@ -41,6 +41,7 @@
 #include "orte/mca/plm/base/plm_private.h"
 #include "orte/mca/plm/plm.h"
 #include "orte/mca/errmgr/errmgr.h"
+#include "orte/orted/orted_submit.h"
 #include "orte/util/proc_info.h"
 
 #include "orte/mca/ess/ess.h"
@@ -151,6 +152,28 @@ static int rte_init(void)
         /* use only one listener */
         val = OBJ_NEW(opal_value_t);
         val->key = strdup(OPAL_PMIX_SINGLE_LISTENER);
+        val->type = OPAL_BOOL;
+        val->data.flag = true;
+        opal_list_append(&flags, &val->super);
+    }
+    /* setup any output format requests */
+    if (orte_cmd_options.tag_output) {
+        val = OBJ_NEW(opal_value_t);
+        val->key = strdup(OPAL_PMIX_IOF_TAG_OUTPUT);
+        val->type = OPAL_BOOL;
+        val->data.flag = true;
+        opal_list_append(&flags, &val->super);
+    }
+    if (orte_cmd_options.timestamp_output) {
+        val = OBJ_NEW(opal_value_t);
+        val->key = strdup(OPAL_PMIX_IOF_TIMESTAMP_OUTPUT);
+        val->type = OPAL_BOOL;
+        val->data.flag = true;
+        opal_list_append(&flags, &val->super);
+    }
+    if (orte_xml_output) {
+        val = OBJ_NEW(opal_value_t);
+        val->key = strdup(OPAL_PMIX_IOF_XML_OUTPUT);
         val->type = OPAL_BOOL;
         val->data.flag = true;
         opal_list_append(&flags, &val->super);

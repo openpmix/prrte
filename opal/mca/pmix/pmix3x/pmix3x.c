@@ -1329,7 +1329,7 @@ static int notify_event(int status,
         OPAL_PMIX_RELEASE_THREAD(&opal_pmix_base.lock);
         return OPAL_ERR_NOT_INITIALIZED;
     }
-
+opal_output(0, "NOTIFY CLIENTS");
     op = OBJ_NEW(pmix3x_opcaddy_t);
     op->opcbfunc = cbfunc;
     op->cbdata = cbdata;

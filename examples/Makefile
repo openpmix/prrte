@@ -42,7 +42,8 @@ EXAMPLES = \
 	 alloc \
          probe \
          target \
-         hello
+         hello \
+         log
 
 all: $(EXAMPLES)
 

@@ -606,23 +606,6 @@ static void dvm_notify(int sd, short args, void *cbdata)
         val->type = OPAL_BOOL;
         val->data.flag = true;
         opal_list_append(info, &val->super);
-        /* tell the server not to cache the event as subsequent jobs
-         * do not need to know about it */
-        val = OBJ_NEW(opal_value_t);
-        val->key = strdup(OPAL_PMIX_EVENT_DO_NOT_CACHE);
-        val->type = OPAL_BOOL;
-        val->data.flag = true;
-        opal_list_append(info, &val->super);
-#if 0
-        /* guarantee delivery to the requestor, even if they
-         * register for notification late */
-        val = OBJ_NEW(opal_value_t);
-        val->key = strdup(OPAL_PMIX_EVENT_GUARANTEE_DELIVERY);
-        val->type = OPAL_NAME;
-        val->data.name.jobid = pnotify.jobid;
-        val->data.name.vpid = pnotify.vpid;
-        opal_list_append(info, &val->super);
-#endif
         /* provide the status */
         val = OBJ_NEW(opal_value_t);
         val->key = strdup(OPAL_PMIX_JOB_TERM_STATUS);

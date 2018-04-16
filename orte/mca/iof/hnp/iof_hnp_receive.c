@@ -252,7 +252,12 @@ void orte_iof_hnp_recv(int status, orte_process_name_t* sender,
                 if (NULL != opal_pmix.server_iof_push) {
                     /* don't pass along zero byte blobs */
                     if (0 < numbytes) {
-                        rc = opal_pmix.server_iof_push(&proct->name, stream, data, numbytes);
+                        OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
+                                             "%s sending data from proc %s of size %d via PMIx to tool %s",
+                                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                                             ORTE_NAME_PRINT(&origin), (int)numbytes,
+                                             ORTE_NAME_PRINT(&sink->daemon)));
+                        rc = opal_pmix.server_iof_push(&origin, stream, data, numbytes);
                         if (ORTE_SUCCESS != rc) {
                             ORTE_ERROR_LOG(rc);
                         }

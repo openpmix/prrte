@@ -156,16 +156,19 @@ static void spawn(int sd, short args, void *cbdata)
 
   callback:
     /* this section gets executed solely upon an error */
-    if (NULL != req->mdxcbfunc) {
-        req->mdxcbfunc(rc, NULL, 0, req->cbdata, NULL, NULL);
+    if (NULL != req->spcbfunc) {
+        req->spcbfunc(rc, ORTE_JOBID_INVALID, req->cbdata);
     }
     OBJ_RELEASE(req);
 }
 
-int pmix_server_spawn_fn(opal_process_name_t *requestor,
-                         opal_list_t *job_info, opal_list_t *apps,
-                         opal_pmix_spawn_cbfunc_t cbfunc, void *cbdata)
+static void interim(int sd, short args, void *cbdata)
 {
+    orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
+    opal_process_name_t *requestor = &cd->proc;
+    opal_list_t *apps = cd->procs;
+    opal_list_t *job_info = cd->info;
+
     orte_job_t *jdata;
     orte_app_context_t *app;
     opal_pmix_app_t *papp;
@@ -195,7 +198,8 @@ int pmix_server_spawn_fn(opal_process_name_t *requestor,
                    NULL == papp->argv[0]) {
             ORTE_ERROR_LOG(ORTE_ERR_BAD_PARAM);
             OBJ_RELEASE(jdata);
-            return ORTE_ERR_BAD_PARAM;
+            rc = ORTE_ERR_BAD_PARAM;
+            goto complete;
         } else {
             app->app = strdup(papp->argv[0]);
         }
@@ -234,7 +238,7 @@ int pmix_server_spawn_fn(opal_process_name_t *requestor,
                     if (OPAL_SUCCESS != (rc = opal_getcwd(cwd, sizeof(cwd)))) {
                         orte_show_help("help-orted.txt", "cwd", true, "spawn", rc);
                         OBJ_RELEASE(jdata);
-                        return rc;
+                        goto complete;
                     }
                     /* construct the absolute path */
                     app->cwd = opal_os_path(false, cwd, info->data.string, NULL);
@@ -294,7 +298,8 @@ int pmix_server_spawn_fn(opal_process_name_t *requestor,
                 orte_show_help("help-orte-rmaps-base.txt", "redefining-policy",
                                true, "mapping", info->data.string,
                                orte_rmaps_base_print_mapping(orte_rmaps_base.mapping));
-                return ORTE_ERR_BAD_PARAM;
+                rc = ORTE_ERR_BAD_PARAM;
+                goto complete;
             }
             ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_PPR);
             jdata->map->ppr = strdup(info->data.string);
@@ -306,13 +311,12 @@ int pmix_server_spawn_fn(opal_process_name_t *requestor,
                 orte_show_help("help-orte-rmaps-base.txt", "redefining-policy",
                                true, "mapping", info->data.string,
                                orte_rmaps_base_print_mapping(orte_rmaps_base.mapping));
-                return ORTE_ERR_BAD_PARAM;
+                rc = ORTE_ERR_BAD_PARAM;
+                goto complete;
             }
             rc = orte_rmaps_base_set_mapping_policy(&jdata->map->mapping,
                                                     NULL, info->data.string);
-            if (ORTE_SUCCESS != rc) {
-                return rc;
-            }
+            goto complete;
 
         /***   RANK-BY   ***/
         } else if (0 == strcmp(info->key, OPAL_PMIX_RANKBY)) {
@@ -321,13 +325,14 @@ int pmix_server_spawn_fn(opal_process_name_t *requestor,
                 orte_show_help("help-orte-rmaps-base.txt", "redefining-policy",
                                true, "ranking", info->data.string,
                                orte_rmaps_base_print_ranking(orte_rmaps_base.ranking));
-                return ORTE_ERR_BAD_PARAM;
+                rc = ORTE_ERR_BAD_PARAM;
+                goto complete;
             }
             rc = orte_rmaps_base_set_ranking_policy(&jdata->map->ranking,
                                                     jdata->map->mapping,
                                                     info->data.string);
             if (ORTE_SUCCESS != rc) {
-                return rc;
+                goto complete;
             }
 
         /***   BIND-TO   ***/
@@ -337,12 +342,13 @@ int pmix_server_spawn_fn(opal_process_name_t *requestor,
                 orte_show_help("help-opal-hwloc-base.txt", "redefining-policy", true,
                                info->data.string,
                                opal_hwloc_base_print_binding(opal_hwloc_binding_policy));
-                return ORTE_ERR_BAD_PARAM;
+                rc = ORTE_ERR_BAD_PARAM;
+                goto complete;
             }
             rc = opal_hwloc_base_set_binding_policy(&jdata->map->binding,
                                                     info->data.string);
             if (ORTE_SUCCESS != rc) {
-                return rc;
+                goto complete;
             }
 
         /***   CPUS/RANK   ***/
@@ -433,7 +439,8 @@ int pmix_server_spawn_fn(opal_process_name_t *requestor,
         /***   STOP ON EXEC FOR DEBUGGER   ***/
         } else if (0 == strcmp(info->key, OPAL_PMIX_DEBUG_STOP_ON_EXEC)) {
             /* we don't know how to do this */
-            return ORTE_ERR_NOT_SUPPORTED;
+            rc = ORTE_ERR_NOT_SUPPORTED;
+            goto complete;
 
         /***   TAG STDOUT   ***/
         } else if (0 == strcmp(info->key, OPAL_PMIX_TAG_OUTPUT)) {
@@ -524,9 +531,35 @@ int pmix_server_spawn_fn(opal_process_name_t *requestor,
     /* setup a spawn tracker so we know who to call back when this is done
      * and thread-shift the entire thing so it can be safely added to
      * our tracking list */
-    ORTE_SPN_REQ(jdata, spawn, cbfunc, cbdata);
+    ORTE_SPN_REQ(jdata, spawn, cd->spcbfunc, cd->cbdata);
+    OBJ_RELEASE(cd);
+    return;
 
-    return OPAL_SUCCESS;
+  complete:
+    if (NULL != cd->spcbfunc) {
+        cd->spcbfunc(rc, ORTE_JOBID_INVALID, cd->cbdata);
+    }
+    OBJ_RELEASE(cd);
+}
+
+int pmix_server_spawn_fn(opal_process_name_t *requestor,
+                         opal_list_t *job_info, opal_list_t *apps,
+                         opal_pmix_spawn_cbfunc_t cbfunc, void *cbdata)
+{
+    orte_pmix_server_op_caddy_t *cd;
+
+    cd = OBJ_NEW(orte_pmix_server_op_caddy_t);
+    cd->proc = *requestor;
+    cd->info = job_info;
+    cd->procs = apps;
+    cd->spcbfunc = cbfunc;
+    cd->cbdata = cbdata;
+    opal_event_set(orte_event_base, &cd->ev, -1,
+                   OPAL_EV_WRITE, interim, cd);
+    opal_event_set_priority(&cd->ev, ORTE_MSG_PRI);
+    ORTE_POST_OBJECT(cd);
+    opal_event_active(&cd->ev, OPAL_EV_WRITE, 1);
+    return ORTE_SUCCESS;
 }
 
 static void _cnct(int sd, short args, void *cbdata);

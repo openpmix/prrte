@@ -123,6 +123,7 @@ examples/dynamic
 examples/fault
 examples/hello
 examples/launcher
+examples/log
 examples/pmi1client
 examples/probe
 examples/pub

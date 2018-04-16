@@ -61,6 +61,9 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_SERVER_ENABLE_MONITORING      "pmix.srv.monitor"      // (bool) Enable PMIx internal monitoring by server
 #define OPAL_PMIX_SERVER_NSPACE                 "pmix.srv.nspace"       // (char*) Name of the nspace to use for this server
 #define OPAL_PMIX_SERVER_RANK                   "pmix.srv.rank"         // (uint32_t) Rank of this server
+#define OPAL_PMIX_SERVER_GATEWAY                "pmix.srv.gway"         // (bool) Server is acting as a gateway for PMIx requests
+                                                                        //        that cannot be serviced on backend nodes
+                                                                        //        (e.g., logging to email)
 
 /* tool-related attributes */
 #define OPAL_PMIX_TOOL_NSPACE                   "pmix.tool.nspace"      // (char*) Name of the nspace to use for this tool
@@ -323,6 +326,8 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_LOG_EMAIL_ADDR                "pmix.log.emaddr"       // (char*) comma-delimited list of email addresses that are to recv msg
 #define OPAL_PMIX_LOG_EMAIL_SUBJECT             "pmix.log.emsub"        // (char*) subject line for email
 #define OPAL_PMIX_LOG_EMAIL_MSG                 "pmix.log.emmsg"        // (char*) msg to be included in email
+/* OPAL-SPECIFIC */
+#define OPAL_PMIX_SHOW_HELP                     "opal.pmix.shelp"       // (opal_byte_object_t) packed show help message buffer
 
 
 /* debugger attributes */
@@ -429,6 +434,10 @@ BEGIN_C_DECLS
 #define OPAL_PMIX_IOF_PUSH_STDIN                "pmix.iof.stdin"        // (bool) Used by a tool to request that the PMIx library collect
                                                                         //        the tool's stdin and forward it to the procs specified in
                                                                         //        the PMIx_IOF_push call
+#define OPAL_PMIX_IOF_TAG_OUTPUT                "pmix.iof.tag"          // (bool) label the output stream with the channel name (e.g., "stdout")
+#define OPAL_PMIX_IOF_TIMESTAMP_OUTPUT          "pmix.iof.tsout"        // (bool) print timestamp in output string
+#define OPAL_PMIX_IOF_XML_OUTPUT                "pmix.iof.xml"          // (bool) print the output stream in xml format
+
 
 /* Attributes for controlling contents of application setup data */
 #define OPAL_PMIX_SETUP_APP_ENVARS              "pmix.setup.env"        // (bool) harvest and include relevant envars
