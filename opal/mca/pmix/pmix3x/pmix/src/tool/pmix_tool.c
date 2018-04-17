@@ -200,7 +200,7 @@ static void pmix_tool_notify_recv(struct pmix_peer_t *peer,
     pmix_invoke_local_event_hdlr(chain);
     return;
 
-  error:
+    error:
     /* we always need to return */
     pmix_output_verbose(2, pmix_client_globals.event_output,
                         "pmix:tool_notify_recv - unpack error status =%d, calling def errhandler", rc);
@@ -208,7 +208,6 @@ static void pmix_tool_notify_recv(struct pmix_peer_t *peer,
     chain->status = rc;
     pmix_invoke_local_event_hdlr(chain);
 }
-
 
 static void tool_iof_handler(struct pmix_peer_t *pr,
                              pmix_ptl_hdr_t *hdr,
@@ -296,12 +295,6 @@ PMIX_EXPORT int PMIx_tool_init(pmix_proc_t *proc,
     bool nspace_in_enviro = false;
     bool rank_given = false;
     bool fwd_stdin = false;
-    bool tag_output = false;
-    bool tag_output_given = false;
-    bool xml_output = false;
-    bool xml_output_given = false;
-    bool timestamp_output = false;
-    bool timestamp_output_given = false;
     pmix_info_t ginfo;
     size_t n;
     pmix_ptl_posted_recv_t *rcv;
@@ -348,21 +341,10 @@ PMIX_EXPORT int PMIx_tool_init(pmix_proc_t *proc,
                 rank = info[n].value.data.rank;
                 rank_given = true;
             } else if (0 == strncmp(info[n].key, PMIX_FWD_STDIN, PMIX_MAX_KEYLEN)) {
-                /* see if they want us to forward our stdin to someone */
-                fwd_stdin = PMIX_INFO_TRUE(&info[n]);
+                /* they want us to forward our stdin to someone */
+                fwd_stdin = true;
             } else if (0 == strncmp(info[n].key, PMIX_LAUNCHER, PMIX_MAX_KEYLEN)) {
-                if (PMIX_INFO_TRUE(&info[n])) {
-                    ptype = PMIX_PROC_LAUNCHER;
-                }
-            } else if (0 == strncmp(info[n].key, PMIX_IOF_TAG_OUTPUT, PMIX_MAX_KEYLEN)) {
-                tag_output = PMIX_INFO_TRUE(&info[n]);
-                tag_output_given = true;
-            } else if (0 == strncmp(info[n].key, PMIX_IOF_TIMESTAMP_OUTPUT, PMIX_MAX_KEYLEN)) {
-                timestamp_output = PMIX_INFO_TRUE(&info[n]);
-                timestamp_output_given = true;
-            } else if (0 == strncmp(info[n].key, PMIX_IOF_XML_OUTPUT, PMIX_MAX_KEYLEN)) {
-                xml_output = PMIX_INFO_TRUE(&info[n]);
-                xml_output_given = true;
+                ptype = PMIX_PROC_LAUNCHER;
             }
         }
     }
@@ -433,17 +415,6 @@ PMIX_EXPORT int PMIx_tool_init(pmix_proc_t *proc,
         }
         /* setup the function pointers */
         memset(&pmix_host_server, 0, sizeof(pmix_server_module_t));
-    }
-
-    /* set the output format flags */
-    if (tag_output_given) {
-        pmix_globals.tag_output = tag_output;
-    }
-    if (timestamp_output_given) {
-        pmix_globals.timestamp_output = timestamp_output;
-    }
-    if (xml_output_given) {
-        pmix_globals.xml_output = xml_output;
     }
 
     /* setup the IO Forwarding recv */
@@ -703,6 +674,7 @@ PMIX_EXPORT int PMIx_tool_init(pmix_proc_t *proc,
             PMIX_IOF_READ_ACTIVATE(&stdinev);
         }
     }
+
     /* increment our init reference counter */
     pmix_globals.init_cntr++;
 
