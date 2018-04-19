@@ -12,7 +12,7 @@
  * Copyright (c) 2008-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
@@ -36,22 +36,16 @@
 #include "opal/util/proc.h"
 #include "opal/util/keyval_parse.h"
 #include "opal/util/show_help.h"
-#include "opal/memoryhooks/memory.h"
 #include "opal/mca/base/base.h"
 #include "opal/runtime/opal.h"
 #include "opal/constants.h"
-#include "opal/datatype/opal_datatype.h"
 #include "opal/mca/if/base/base.h"
 #include "opal/mca/installdirs/base/base.h"
-#include "opal/mca/memchecker/base/base.h"
-#include "opal/mca/memcpy/base/base.h"
 #include "opal/mca/backtrace/base/base.h"
-#include "opal/mca/reachable/base/base.h"
 #include "opal/mca/timer/base/base.h"
 #include "opal/mca/hwloc/base/base.h"
 #include "opal/mca/event/base/base.h"
 #include "opal/runtime/opal_progress.h"
-#include "opal/mca/shmem/base/base.h"
 
 #include "opal/threads/tsd.h"
 
@@ -102,8 +96,6 @@ opal_finalize_util(void)
     /* close the dss */
     opal_dss_close();
 
-    opal_datatype_finalize();
-
     /* finalize the class/object system */
     opal_class_finalize();
 
@@ -126,27 +118,15 @@ opal_finalize(void)
 
     opal_progress_finalize();
 
-    (void) mca_base_framework_close(&opal_reachable_base_framework);
-
     (void) mca_base_framework_close(&opal_event_base_framework);
 
     /* close high resolution timers */
     (void) mca_base_framework_close(&opal_timer_base_framework);
 
     (void) mca_base_framework_close(&opal_backtrace_base_framework);
-    (void) mca_base_framework_close(&opal_memchecker_base_framework);
-
-    /* close the memcpy framework */
-    (void) mca_base_framework_close(&opal_memcpy_base_framework);
-
-    /* finalize the memory manager / tracker */
-    opal_mem_hooks_finalize();
 
     /* close the hwloc framework */
     (void) mca_base_framework_close(&opal_hwloc_base_framework);
-
-    /* close the shmem framework */
-    (void) mca_base_framework_close(&opal_shmem_base_framework);
 
     /* cleanup the main thread specific stuff */
     opal_tsd_keys_destruct();

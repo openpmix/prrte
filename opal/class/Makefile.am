@@ -27,7 +27,6 @@
 # Source code files
 headers += \
         class/opal_bitmap.h \
-        class/opal_free_list.h \
         class/opal_hash_table.h \
         class/opal_hotel.h \
         class/opal_tree.h \
@@ -38,13 +37,10 @@ headers += \
         class/opal_fifo.h \
         class/opal_pointer_array.h \
         class/opal_value_array.h \
-        class/opal_ring_buffer.h \
-        class/opal_rb_tree.h \
-        class/opal_interval_tree.h
+        class/opal_ring_buffer.h
 
 lib@OPAL_LIB_PREFIX@open_pal_la_SOURCES += \
         class/opal_bitmap.c \
-        class/opal_free_list.c \
         class/opal_hash_table.c \
         class/opal_hotel.c \
         class/opal_tree.c \
@@ -55,6 +51,4 @@ lib@OPAL_LIB_PREFIX@open_pal_la_SOURCES += \
         class/opal_fifo.c \
         class/opal_pointer_array.c \
         class/opal_value_array.c \
-        class/opal_ring_buffer.c \
-        class/opal_rb_tree.c \
-        class/opal_interval_tree.c
+        class/opal_ring_buffer.c

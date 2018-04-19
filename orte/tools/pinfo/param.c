@@ -13,6 +13,7 @@
  * Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2015-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +41,6 @@
 #include "opal/class/opal_value_array.h"
 #include "opal/class/opal_pointer_array.h"
 #include "opal/util/printf.h"
-#include "opal/memoryhooks/memory.h"
 #include "opal/opal_portable_platform.h"
 
 #include "orte/util/show_help.h"
@@ -324,8 +324,8 @@ void orte_info_do_hostname()
 /*
  * do_config
  * Accepts:
- *	- want_all: boolean flag; TRUE -> display all options
- *				  FALSE -> display selected options
+ *      - want_all: boolean flag; TRUE -> display all options
+ *                                FALSE -> display selected options
  *
  * This function displays all the options with which the current
  * installation of orte was configured. There are many options here

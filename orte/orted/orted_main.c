@@ -107,6 +107,10 @@
 
 #include "orte/orted/orted.h"
 #include "orte/orted/pmix/pmix_server.h"
+#include "orte/orted/orted_submit.h"
+
+orte_cmd_options_t orte_cmd_options = {0};
+opal_cmd_line_t *orte_cmd_line = NULL;
 
 /*
  * Globals

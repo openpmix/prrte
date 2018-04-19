@@ -22,7 +22,7 @@
  * Copyright (c) 2015      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2017      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,11 +37,9 @@
 
 #include "opal/constants.h"
 #include "opal/runtime/opal.h"
-#include "opal/datatype/opal_datatype.h"
 #include "opal/mca/base/mca_base_var.h"
 #include "opal/threads/mutex.h"
 #include "opal/threads/threads.h"
-#include "opal/mca/shmem/base/base.h"
 #include "opal/mca/base/mca_base_var.h"
 #include "opal/runtime/opal_params.h"
 #include "opal/dss/dss.h"
@@ -60,19 +58,8 @@ char *opal_timing_output = NULL;
 bool opal_timing_overhead = true;
 #endif
 
-bool opal_built_with_cuda_support = OPAL_INT_TO_BOOL(OPAL_CUDA_SUPPORT);
-bool opal_cuda_support = false;
-#if OPAL_ENABLE_FT_CR == 1
-bool opal_base_distill_checkpoint_ready = false;
-#endif
-
-/**
- * Globals imported from the OMPI layer.
- */
-int opal_leave_pinned = -1;
-bool opal_leave_pinned_pipeline = false;
-bool opal_abort_print_stack = false;
 int opal_abort_delay = 0;
+bool opal_abort_print_stack = false;
 
 static bool opal_register_done = false;
 
@@ -184,19 +171,6 @@ int opal_register_params(void)
     }
 #endif
 
-#if OPAL_ENABLE_FT_CR == 1
-    opal_base_distill_checkpoint_ready = false;
-    ret = mca_base_var_register("opal", "opal", "base", "distill_checkpoint_ready",
-                                "Distill only those components that are Checkpoint Ready",
-                                MCA_BASE_VAR_TYPE_BOOL, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
-                                OPAL_INFO_LVL_8, MCA_BASE_VAR_SCOPE_LOCAL,
-                                &opal_base_distill_checkpoint_ready);
-
-    if (0 > ret) {
-        return ret;
-    }
-#endif
-
     /* RFC1918 defines
        - 10.0.0./8
        - 172.16.0.0/12
@@ -225,61 +199,6 @@ int opal_register_params(void)
     if (0 > ret) {
         return ret;
     }
-
-    ret = mca_base_var_register("opal", "opal", NULL, "built_with_cuda_support",
-                                "Whether CUDA GPU buffer support is built into library or not",
-                                MCA_BASE_VAR_TYPE_BOOL, NULL, 0, MCA_BASE_VAR_FLAG_DEFAULT_ONLY,
-                                OPAL_INFO_LVL_4, MCA_BASE_VAR_SCOPE_CONSTANT,
-                                &opal_built_with_cuda_support);
-    if (0 > ret) {
-        return ret;
-    }
-
-    /* Current default is to enable CUDA support if it is built into library */
-    opal_cuda_support = opal_built_with_cuda_support;
-    ret = mca_base_var_register ("opal", "opal", NULL, "cuda_support",
-                                 "Whether CUDA GPU buffer support is enabled or not",
-                                 MCA_BASE_VAR_TYPE_BOOL, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
-                                 OPAL_INFO_LVL_3, MCA_BASE_VAR_SCOPE_ALL_EQ,
-                                 &opal_cuda_support);
-    if (0 > ret) {
-        return ret;
-    }
-
-    /* Leave pinned parameter */
-    opal_leave_pinned = -1;
-    ret = mca_base_var_register("ompi", "mpi", NULL, "leave_pinned",
-                                "Whether to use the \"leave pinned\" protocol or not.  Enabling this setting can help bandwidth performance when repeatedly sending and receiving large messages with the same buffers over RDMA-based networks (false = do not use \"leave pinned\" protocol, true = use \"leave pinned\" protocol, auto = allow network to choose at runtime).",
-                                MCA_BASE_VAR_TYPE_INT, &mca_base_var_enum_auto_bool, 0, 0,
-                                OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_READONLY,
-                                &opal_leave_pinned);
-    mca_base_var_register_synonym(ret, "opal", "opal", NULL, "leave_pinned",
-                                  MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-
-    opal_leave_pinned_pipeline = false;
-    ret = mca_base_var_register("ompi", "mpi", NULL, "leave_pinned_pipeline",
-                                "Whether to use the \"leave pinned pipeline\" protocol or not.",
-                                 MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                 OPAL_INFO_LVL_9,
-                                 MCA_BASE_VAR_SCOPE_READONLY,
-                                 &opal_leave_pinned_pipeline);
-    mca_base_var_register_synonym(ret, "opal", "opal", NULL, "leave_pinned_pipeline",
-                                  MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-
-    if (opal_leave_pinned > 0 && opal_leave_pinned_pipeline) {
-        opal_leave_pinned_pipeline = 0;
-        opal_show_help("help-opal-runtime.txt",
-                       "mpi-params:leave-pinned-and-pipeline-selected",
-                       true);
-    }
-
-    opal_warn_on_fork = true;
-    (void) mca_base_var_register("ompi", "mpi", NULL, "warn_on_fork",
-                                 "If nonzero, issue a warning if program forks under conditions that could cause system errors",
-                                 MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                 OPAL_INFO_LVL_9,
-                                 MCA_BASE_VAR_SCOPE_READONLY,
-                                 &opal_warn_on_fork);
 
     opal_abort_delay = 0;
     ret = mca_base_var_register("opal", "opal", NULL, "abort_delay",
@@ -347,12 +266,6 @@ int opal_register_params(void)
             "Store SHELL env variables from amca conf file",
             MCA_BASE_VAR_TYPE_STRING, NULL, 0, MCA_BASE_VAR_FLAG_INTERNAL, OPAL_INFO_LVL_3,
             MCA_BASE_VAR_SCOPE_READONLY, &mca_base_env_list_internal);
-
-    /* The ddt engine has a few parameters */
-    ret = opal_datatype_register_params();
-    if (OPAL_SUCCESS != ret) {
-        return ret;
-    }
 
     /* dss has parameters */
     ret = opal_dss_register_vars ();
