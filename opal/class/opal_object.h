@@ -15,7 +15,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2017      Intel, Inc. All rights reserved.
+ * Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  * Additional copyrights may follow
  * $HEADER$
@@ -481,11 +481,7 @@ static inline opal_object_t *opal_obj_new(opal_class_t * cls)
     opal_object_t *object;
     assert(cls->cls_sizeof >= sizeof(opal_object_t));
 
-#if OPAL_WANT_MEMCHECKER
     object = (opal_object_t *) calloc(1, cls->cls_sizeof);
-#else
-    object = (opal_object_t *) malloc(cls->cls_sizeof);
-#endif
     if (opal_class_init_epoch != cls->cls_initialized) {
         opal_class_initialize(cls);
     }

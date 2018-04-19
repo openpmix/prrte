@@ -54,7 +54,6 @@
 #include "opal/util/sys_limits.h"
 #include "opal/dss/dss.h"
 #include "opal/mca/hwloc/hwloc-internal.h"
-#include "opal/mca/shmem/base/base.h"
 #include "opal/mca/pstat/pstat.h"
 #include "opal/mca/pmix/base/base.h"
 

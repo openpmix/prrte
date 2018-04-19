@@ -42,23 +42,15 @@
 #include "opal/util/output.h"
 #include "opal/util/show_help.h"
 #include "opal/util/proc.h"
-#include "opal/memoryhooks/memory.h"
 #include "opal/mca/base/base.h"
 #include "opal/mca/base/mca_base_var.h"
 #include "opal/runtime/opal.h"
 #include "opal/util/net.h"
-#include "opal/datatype/opal_datatype.h"
 #include "opal/mca/installdirs/base/base.h"
-#include "opal/mca/memory/base/base.h"
-#include "opal/mca/patcher/base/base.h"
-#include "opal/mca/memcpy/base/base.h"
 #include "opal/mca/hwloc/base/base.h"
-#include "opal/mca/reachable/base/base.h"
 #include "opal/mca/timer/base/base.h"
-#include "opal/mca/memchecker/base/base.h"
 #include "opal/mca/if/base/base.h"
 #include "opal/dss/dss.h"
-#include "opal/mca/shmem/base/base.h"
 #include "opal/threads/threads.h"
 
 #include "opal/runtime/opal_progress.h"
@@ -317,34 +309,6 @@ opal_err2str(int errnum, const char **errmsg)
 }
 
 
-int opal_init_psm(void)
-{
-    /* Very early in the init sequence -- before *ANY* MCA components
-       are opened -- we need to disable some behavior from the PSM and
-       PSM2 libraries (by default): at least some old versions of
-       these libraries hijack signal handlers during their library
-       constructors and then do not un-hijack them when the libraries
-       are unloaded.
-
-       It is a bit of an abstraction break that we have to put
-       vendor/transport-specific code in the OPAL core, but we're
-       out of options, unfortunately.
-
-       NOTE: We only disable this behavior if the corresponding
-       environment variables are not already set (i.e., if the
-       user/environment has indicated a preference for this behavior,
-       we won't override it). */
-    if (NULL == getenv("IPATH_NO_BACKTRACE")) {
-        opal_setenv("IPATH_NO_BACKTRACE", "1", true, &environ);
-    }
-    if (NULL == getenv("HFI_NO_BACKTRACE")) {
-        opal_setenv("HFI_NO_BACKTRACE", "1", true, &environ);
-    }
-
-    return OPAL_SUCCESS;
-}
-
-
 int
 opal_init_util(int* pargc, char*** pargv)
 {
@@ -405,12 +369,6 @@ opal_init_util(int* pargc, char*** pargv)
         goto return_error;
     }
 
-    // Disable PSM signal hijacking (see comment in function for more
-    // details)
-    opal_init_psm();
-
-    OPAL_TIMING_ENV_NEXT(otmng, "opal_init_psm");
-
     /* Setup the parameter system */
     if (OPAL_SUCCESS != (ret = mca_base_var_init())) {
         error = "mca_base_var_init";
@@ -463,14 +421,6 @@ opal_init_util(int* pargc, char*** pargv)
     }
 
     OPAL_TIMING_ENV_NEXT(otmng, "opal_arch_init");
-
-    /* initialize the datatype engine */
-    if (OPAL_SUCCESS != (ret = opal_datatype_init ())) {
-        error = "opal_datatype_init";
-        goto return_error;
-    }
-
-    OPAL_TIMING_ENV_NEXT(otmng, "opal_datatype_init");
 
     /* Initialize the data storage service. */
     if (OPAL_SUCCESS != (ret = opal_dss_open())) {
@@ -535,33 +485,6 @@ opal_init(int* pargc, char*** pargv)
         goto return_error;
     }
 
-    /* the memcpy component should be one of the first who get
-     * loaded in order to make sure we have all the available
-     * versions of memcpy correctly configured.
-     */
-    if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_memcpy_base_framework, 0))) {
-        error = "opal_memcpy_base_open";
-        goto return_error;
-    }
-
-    /* initialize the memory manager / tracker */
-    if (OPAL_SUCCESS != (ret = opal_mem_hooks_init())) {
-        error = "opal_mem_hooks_init";
-        goto return_error;
-    }
-
-    /* initialize the memory checker, to allow early support for annotation */
-    if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_memchecker_base_framework, 0))) {
-        error = "opal_memchecker_base_open";
-        goto return_error;
-    }
-
-    /* select the memory checker */
-    if (OPAL_SUCCESS != (ret = opal_memchecker_base_select())) {
-        error = "opal_memchecker_base_select";
-        goto return_error;
-    }
-
     if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_backtrace_base_framework, 0))) {
         error = "opal_backtrace_base_open";
         goto return_error;
@@ -594,27 +517,6 @@ opal_init(int* pargc, char*** pargv)
     }
     /* we want to tick the event library whenever possible */
     opal_progress_event_users_increment();
-
-    /* setup the shmem framework */
-    if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_shmem_base_framework, 0))) {
-        error = "opal_shmem_base_open";
-        goto return_error;
-    }
-
-    if (OPAL_SUCCESS != (ret = opal_shmem_base_select())) {
-        error = "opal_shmem_base_select";
-        goto return_error;
-    }
-
-    /* Load reachable framework */
-    if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_reachable_base_framework, 0))){
-        error = "opal_reachable_base_framework";
-        goto return_error;
-    }
-    if (OPAL_SUCCESS != (ret = opal_reachable_base_select())) {
-        error = "opal_reachable_base_select";
-        goto return_error;
-    }
 
     return OPAL_SUCCESS;
 

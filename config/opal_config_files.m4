@@ -1,7 +1,7 @@
 # -*- shell-script -*-
 #
 # Copyright (c) 2009-2010 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -16,7 +16,6 @@ AC_DEFUN([OPAL_CONFIG_FILES],[
         opal/Makefile
         opal/etc/Makefile
         opal/include/Makefile
-        opal/datatype/Makefile
         opal/util/Makefile
         opal/util/keyval/Makefile
         opal/mca/base/Makefile

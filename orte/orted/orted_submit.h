@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2016      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -24,24 +24,6 @@
 
 BEGIN_C_DECLS
 
-
-typedef void (*orte_submit_cbfunc_t)(int index, orte_job_t *jdata, int ret, void *cbdata);
-
-ORTE_DECLSPEC int orte_submit_init(int argc, char *argv[],
-                                   opal_cmd_line_init_t *opts);
-ORTE_DECLSPEC int orte_submit_cancel(int index);
-ORTE_DECLSPEC void orte_submit_finalize(void);
-ORTE_DECLSPEC int orte_submit_job(char *cmd[], int *index,
-                                  orte_submit_cbfunc_t launch_cb, void *launch_cbdata,
-                                  orte_submit_cbfunc_t complete_cb, void *complete_cbdata);
-ORTE_DECLSPEC int orte_submit_halt(void);
-ORTE_DECLSPEC void orte_debugger_init_after_spawn(int fd, short event, void *arg);
-ORTE_DECLSPEC void orte_debugger_detached(int fd, short event, void *arg);
-
-extern int orte_debugger_attach_fd;
-extern bool orte_debugger_fifo_active;
-extern opal_event_t *orte_debugger_attach;
-extern char MPIR_attach_fifo[];
 
 /**
  * Global struct for caching orte command line options.

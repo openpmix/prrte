@@ -39,7 +39,6 @@
 #include "opal/util/opal_environ.h"
 #include "opal/util/os_dirpath.h"
 #include "opal/util/show_help.h"
-#include "opal/mca/shmem/base/base.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/ess/base/base.h"
@@ -958,17 +957,6 @@ static int setup_fork(orte_job_t *jdata,
         if (NULL != orte_local_cpu_model) {
             opal_setenv("OMPI_MCA_orte_cpu_model", orte_local_cpu_model, true, &app->env);
         }
-    }
-
-    /* get shmem's best component name so we can provide a hint to the shmem
-     * framework. the idea here is to have someone figure out what component to
-     * select (via the shmem framework) and then have the rest of the
-     * components in shmem obey that decision. for more details take a look at
-     * the shmem framework in opal.
-     */
-    if (NULL != (param = opal_shmem_base_best_runnable_component_name())) {
-        opal_setenv("OMPI_MCA_shmem_RUNTIME_QUERY_hint", param, true, &app->env);
-        free(param);
     }
 
     /* Set an info MCA param that tells the launched processes that
