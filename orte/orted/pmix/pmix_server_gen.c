@@ -945,6 +945,9 @@ static void _toolconn(int sd, short args, void *cbdata)
     proc->name.vpid = tool.vpid;
     proc->parent = ORTE_PROC_MY_NAME->vpid;
     ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_ALIVE);
+    /* mark as tool - it does not count as a slot, even
+     * though we will track it as being on a node */
+    ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_TOOL);
     proc->state = ORTE_PROC_STATE_RUNNING;
     proc->app_idx = 0;
     if (NULL == hostname) {
