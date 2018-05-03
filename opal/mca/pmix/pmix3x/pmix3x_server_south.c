@@ -694,6 +694,7 @@ int pmix3x_server_setup_application(opal_jobid_t jobid,
     size_t sz, n;
     pmix_status_t rc;
     pmix3x_opcaddy_t *op;
+    char nspace[PMIX_MAX_NSLEN+1];
 
     opal_output_verbose(2, opal_pmix_base_framework.framework_output,
                         "%s setup application for job %s",
@@ -709,6 +710,7 @@ int pmix3x_server_setup_application(opal_jobid_t jobid,
 
     /* convert the list to an array of pmix_info_t */
     if (NULL != info && 0 < (sz = opal_list_get_size(info))) {
+        ++sz;
         PMIX_INFO_CREATE(pinfo, sz);
         n = 0;
         OPAL_LIST_FOREACH(kv, info, opal_value_t) {
@@ -716,10 +718,18 @@ int pmix3x_server_setup_application(opal_jobid_t jobid,
             pmix3x_value_load(&pinfo[n].value, kv);
             ++n;
         }
+        /* add the jobid as the allocation id key */
+        (void)strncpy(pinfo[n].key, PMIX_ALLOC_NETWORK_ID, PMIX_MAX_KEYLEN);
+        (void)opal_snprintf_jobid(nspace, PMIX_MAX_NSLEN, jobid);
+        PMIX_VALUE_LOAD(&pinfo[n].value, nspace, PMIX_STRING);
     } else {
-        sz = 0;
-        pinfo = NULL;
+        sz = 1;
+        PMIX_INFO_CREATE(pinfo, sz);
+        (void)strncpy(pinfo[0].key, PMIX_ALLOC_NETWORK_ID, PMIX_MAX_KEYLEN);
+        (void)opal_snprintf_jobid(nspace, PMIX_MAX_NSLEN, jobid);
+        PMIX_VALUE_LOAD(&pinfo[0].value, nspace, PMIX_STRING);
     }
+
     /* setup the caddy */
     op = OBJ_NEW(pmix3x_opcaddy_t);
     op->info = pinfo;
