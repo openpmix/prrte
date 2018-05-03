@@ -68,7 +68,6 @@ struct pmix_pnet_base_active_module_t {
 typedef struct pmix_pnet_base_active_module_t pmix_pnet_base_active_module_t;
 PMIX_CLASS_DECLARATION(pmix_pnet_base_active_module_t);
 
-
 /* framework globals */
 struct pmix_pnet_globals_t {
   pmix_list_t actives;
@@ -86,10 +85,11 @@ PMIX_EXPORT pmix_status_t pmix_pnet_base_setup_local_network(char *nspace,
                                                              size_t ninfo);
 PMIX_EXPORT pmix_status_t pmix_pnet_base_setup_fork(const pmix_proc_t *peer, char ***env);
 PMIX_EXPORT void pmix_pnet_base_child_finalized(pmix_peer_t *peer);
-PMIX_EXPORT void pmix_pnet_base_local_app_finalized(char *nspace);
+PMIX_EXPORT void pmix_pnet_base_local_app_finalized(pmix_nspace_t *nptr);
 PMIX_EXPORT void pmix_pnet_base_deregister_nspace(char *nspace);
 PMIX_EXPORT void pmix_pnet_base_collect_inventory(pmix_info_t directives[], size_t ndirs,
-                                                  pmix_info_cbfunc_t cbfunc, void *cbdata);
+                                                  pmix_inventory_cbfunc_t cbfunc,
+                                                  void *cbdata);
 PMIX_EXPORT pmix_status_t pmix_pnet_base_harvest_envars(char **incvars, char **excvars,
                                                         pmix_list_t *ilist);
 
