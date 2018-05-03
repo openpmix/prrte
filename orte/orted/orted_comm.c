@@ -586,8 +586,10 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
                         /* skip procs from another job */
                         continue;
                     }
-                    node->slots_inuse--;
-                    node->num_procs--;
+                    if (!ORTE_FLAG_TEST(proct, ORTE_PROC_FLAG_TOOL)) {
+                        node->slots_inuse--;
+                        node->num_procs--;
+                    }
                     /* set the entry in the node array to NULL */
                     opal_pointer_array_set_item(node->procs, i, NULL);
                     /* release the proc once for the map entry */
