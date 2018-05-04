@@ -4,7 +4,7 @@
 # Copyright (c) 2014-2017 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 #
-# Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2018      Intel, Inc. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -64,12 +64,17 @@ AC_DEFUN([MCA_opal_hwloc_external_POST_CONFIG],[
            # the MCA_hwloc_external_openfabrics_helper define).
            AS_IF([test "$opal_hwloc_dir" != ""],
                  [opal_hwloc_include="$opal_hwloc_dir/include/hwloc.h"
+                  opal_hwloc_shmem_include="$opal_hwloc_dir/include/hwloc/shmem.h"
                   opal_hwloc_openfabrics_include="$opal_hwloc_dir/include/hwloc/openfabrics-verbs.h"],
                  [opal_hwloc_include="hwloc.h"
+                  opal_hwloc_shmem_include="hwloc/shmem.h"
                   opal_hwloc_openfabrics_include="hwloc/openfabrics-verbs.h"])
            AC_DEFINE_UNQUOTED(MCA_hwloc_external_header,
                   ["$opal_hwloc_include"],
                   [Location of external hwloc header])
+           AC_DEFINE_UNQUOTED(MCA_hwloc_external_shmem_header,
+                  ["$opal_hwloc_shmem_include"],
+                  [Location of external hwloc shmem header])
            AC_DEFINE_UNQUOTED(MCA_hwloc_external_openfabrics_header,
                   ["$opal_hwloc_openfabrics_include"],
                   [Location of external hwloc OpenFabrics header])

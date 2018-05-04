@@ -3,7 +3,7 @@
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,6 +46,15 @@ BEGIN_C_DECLS
 #if HWLOC_API_VERSION < 0x00010b00
 #define HWLOC_OBJ_NUMANODE HWLOC_OBJ_NODE
 #define HWLOC_OBJ_PACKAGE HWLOC_OBJ_SOCKET
+#endif
+
+#if defined(OPAL_HWLOC_WANT_SHMEM) && OPAL_HWLOC_WANT_SHMEM
+#    if HWLOC_API_VERSION >= 0x20000
+#        include MCA_hwloc_external_shmem_header
+#    else
+// JMS This isn't going to work - it will be an error if we use hwloc >= 2.0
+#        error Tried to include hwloc shmem header, but hwloc < 2.0 found
+#    endif
 #endif
 
 END_C_DECLS
