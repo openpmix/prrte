@@ -13,7 +13,7 @@
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2010-2015 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
 # Copyright (c) 2015-2017 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2014-2015 Mellanox Technologies, Inc.
@@ -35,20 +35,12 @@ AC_DEFUN([MCA_opal_pmix_ext3x_CONFIG],[
            AC_MSG_CHECKING([if external component is version 3.x])
            AS_IF([test "$opal_external_pmix_version" = "3x"],
                  [AC_MSG_RESULT([yes])
-                  AS_IF([test "$opal_event_external_support" != "yes"],
-                        [AC_MSG_WARN([EXTERNAL PMIX SUPPORT REQUIRES USE OF EXTERNAL LIBEVENT])
-                         AC_MSG_WARN([LIBRARY. THIS LIBRARY MUST POINT TO THE SAME ONE USED])
-                         AC_MSG_WARN([TO BUILD PMIX OR ELSE UNPREDICTABLE BEHAVIOR MAY RESULT])
-                         AC_MSG_ERROR([PLEASE CORRECT THE CONFIGURE COMMAND LINE AND REBUILD])])
                   opal_pmix_external_3x_happy=yes],
                  [AC_MSG_RESULT([no])
                   opal_pmix_external_3x_happy=no])
 
            AS_IF([test "$opal_pmix_external_3x_happy" = "yes"],
-                 [$1
-                  # need to set the wrapper flags for static builds
-                  pmix_ext3x_WRAPPER_EXTRA_LDFLAGS=$opal_external_pmix_LDFLAGS
-                  pmix_ext3x_WRAPPER_EXTRA_LIBS=$opal_external_pmix_LIBS],
+                 [$1]
                  [$2])],
           [$2])
 

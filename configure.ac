@@ -974,6 +974,22 @@ AC_INCLUDES_DEFAULT
 AC_CACHE_SAVE
 
 ##################################
+# Libevent
+##################################
+
+opal_show_title "Configure libevent"
+
+OPAL_LIBEVENT_CONFIG
+
+##################################
+# PMIx
+##################################
+
+opal_show_title "Configure PMIx"
+
+OPAL_CHECK_PMIX
+
+##################################
 # MCA
 ##################################
 
@@ -998,22 +1014,6 @@ AC_CACHE_SAVE
 opal_show_title "Symbol visibility feature"
 
 OPAL_CHECK_VISIBILITY
-
-##################################
-# Libevent
-##################################
-
-opal_show_title "Configure libevent"
-
-OPAL_LIBEVENT_CONFIG
-
-##################################
-# PMIx
-##################################
-
-opal_show_title "Configure PMIx"
-
-OPAL_CHECK_PMIX
 
 ############################################################################
 # Final top-level PRTE configuration

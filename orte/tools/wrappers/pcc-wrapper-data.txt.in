@@ -5,8 +5,8 @@
 #    https://github.com/open-mpi/ompi/wiki/compilerwrapper3264
 # for more information.
 
-project=PMIx Reference Server (PMIxSrvr)
-project_short=PMIxSrvr
+project=PMIx Reference RunTime Environment (PRRTE)
+project_short=PRRTE
 version=@ORTE_VERSION@
 language=C
 compiler_env=CC

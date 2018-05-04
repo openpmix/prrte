@@ -67,11 +67,15 @@ AC_DEFUN([OPAL_LIBEVENT_CONFIG],[
                        [opal_libevent_support=0])
     if test $opal_libevent_support = "1"; then
         LIBS="$LIBS $opal_libevent_LIBS"
+        OPAL_WRAPPER_FLAGS_ADD([CFLAGS], [$opal_libevent_LIBS])
+
         if test "$opal_libevent_standard_header_location" != "yes"; then
             CPPFLAGS="$CPPFLAGS $opal_libevent_CPPFLAGS"
+            OPAL_WRAPPER_FLAGS_ADD([CPPFLAGS], [$opal_libevent_CPPFLAGS])
         fi
         if test "$opal_libevent_standard_lib_location" != "yes"; then
             LDFLAGS="$LDFLAGS $opal_libevent_LDFLAGS"
+            OPAL_WRAPPER_FLAGS_ADD([LDFLAGS], [$opal_libevent_LDFLAGS])
         fi
     fi
 

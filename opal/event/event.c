@@ -49,7 +49,7 @@ int opal_event_base_open(void)
 int opal_event_base_close(void)
 {
     if (!initialized) {
-        return;
+        return OPAL_SUCCESS;
     }
     opal_event_base_free(opal_sync_event_base);
 
