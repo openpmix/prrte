@@ -15,22 +15,22 @@
 #include <errno.h>
 
 #include "opal/runtime/opal.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 
 #include "orte/runtime/orte_globals.h"
 
 int called = 0;
 
-#define NEVENT	2000
+#define NEVENT  2000
 
 opal_event_t* ev[NEVENT];
 
 static int rand_int(int n)
 {
 #ifdef WIN32
-	return (int)(rand() % n);
+        return (int)(rand() % n);
 #else
-	return (int)(random() % n);
+        return (int)(random() % n);
 #endif
 }
 
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 #ifdef WIN32
     WORD wVersionRequested;
     WSADATA wsaData;
-    int	err;
+    int err;
 
     wVersionRequested = MAKEWORD(2, 2);
 
@@ -85,4 +85,3 @@ int main(int argc, char **argv)
     opal_finalize();
     return (called < NEVENT);
 }
-

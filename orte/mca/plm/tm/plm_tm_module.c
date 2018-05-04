@@ -12,7 +12,7 @@
  * Copyright (c) 2006      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2007-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,7 +55,7 @@
 #include <tm.h>
 
 #include "opal/mca/installdirs/installdirs.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/util/argv.h"
 #include "opal/util/output.h"
 #include "orte/util/show_help.h"

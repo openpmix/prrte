@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -57,7 +58,7 @@
 #include "orte/types.h"
 
 #include "orte/mca/mca.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/class/opal_list.h"
 
 #include "orte/runtime/orte_globals.h"
@@ -139,4 +140,3 @@ typedef orte_ras_base_component_2_0_0_t orte_ras_base_component_t;
 END_C_DECLS
 
 #endif
-

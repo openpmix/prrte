@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 #include "opal/runtime/opal.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "orte/mca/state/state_types.h"
 
 #define SIGPRI 0

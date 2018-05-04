@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2014-2016 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +28,7 @@
 #include "orte_config.h"
 
 #include "opal/dss/dss_types.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 
 #include "orte/mca/oob/oob.h"
 

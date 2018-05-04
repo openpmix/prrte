@@ -45,7 +45,7 @@
 #include "opal/class/opal_value_array.h"
 #include "opal/class/opal_ring_buffer.h"
 #include "opal/threads/threads.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/mca/hwloc/hwloc-internal.h"
 #include "opal/mca/hwloc/base/base.h"
 

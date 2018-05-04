@@ -50,7 +50,7 @@
 #endif  /* HAVE_SYS_TIME_H */
 
 
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/mca/base/base.h"
 #include "opal/util/output.h"
 #include "opal/util/cmd_line.h"

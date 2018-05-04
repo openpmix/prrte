@@ -13,7 +13,7 @@
  * Copyright (c) 2007      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2016      Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,7 +25,7 @@
 
 #include "opal/mca/base/base.h"
 #include "opal/util/output.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 
 #include "orte/util/proc_info.h"
 

@@ -44,7 +44,7 @@
 #include "opal/mca/backtrace/base/base.h"
 #include "opal/mca/timer/base/base.h"
 #include "opal/mca/hwloc/base/base.h"
-#include "opal/mca/event/base/base.h"
+#include "opal/event/event-internal.h"
 #include "opal/runtime/opal_progress.h"
 
 #include "opal/threads/tsd.h"
@@ -66,7 +66,7 @@ opal_finalize_util(void)
     /* close interfaces code. */
     (void) mca_base_framework_close(&opal_if_base_framework);
 
-    (void) mca_base_framework_close(&opal_event_base_framework);
+    opal_event_base_close();
 
     /* Clear out all the registered MCA params */
     opal_deregister_params();
@@ -118,7 +118,7 @@ opal_finalize(void)
 
     opal_progress_finalize();
 
-    (void) mca_base_framework_close(&opal_event_base_framework);
+    opal_event_base_close();
 
     /* close high resolution timers */
     (void) mca_base_framework_close(&opal_timer_base_framework);

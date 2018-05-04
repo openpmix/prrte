@@ -29,7 +29,7 @@
 
 #include "opal/mca/base/base.h"
 #include "opal/class/opal_hash_table.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 
 #include "orte/mca/oob/oob.h"
 #include "orte/mca/oob/base/base.h"

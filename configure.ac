@@ -232,7 +232,6 @@ AC_SUBST(ORTE_TOP_BUILDDIR)
 
 OPAL_CONFIGURE_OPTIONS
 OPAL_CHECK_OS_FLAVORS
-OPAL_CHECK_PMIX
 ORTE_CONFIGURE_OPTIONS
 
 if test "$enable_binaries" = "no" && test "$enable_dist" = "yes"; then
@@ -999,6 +998,22 @@ AC_CACHE_SAVE
 opal_show_title "Symbol visibility feature"
 
 OPAL_CHECK_VISIBILITY
+
+##################################
+# Libevent
+##################################
+
+opal_show_title "Configure libevent"
+
+OPAL_LIBEVENT_CONFIG
+
+##################################
+# PMIx
+##################################
+
+opal_show_title "Configure PMIx"
+
+OPAL_CHECK_PMIX
 
 ############################################################################
 # Final top-level PRTE configuration

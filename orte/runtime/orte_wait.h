@@ -13,7 +13,7 @@
  *                         et Automatique. All rights reserved.
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +43,7 @@
 #include "opal/dss/dss.h"
 #include "opal/util/output.h"
 #include "opal/sys/atomic.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 
 #include "orte/types.h"
 #include "orte/mca/rml/rml_types.h"

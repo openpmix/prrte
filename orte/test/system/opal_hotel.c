@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/class/opal_hotel.h"
 #include "opal/runtime/opal.h"
 #include "opal/runtime/opal_progress.h"

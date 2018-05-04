@@ -54,7 +54,7 @@
 #include "opal/threads/threads.h"
 
 #include "opal/runtime/opal_progress.h"
-#include "opal/mca/event/base/base.h"
+#include "opal/event/event-internal.h"
 #include "opal/mca/backtrace/base/base.h"
 
 #include "opal/constants.h"
@@ -503,7 +503,7 @@ opal_init(int* pargc, char*** pargv)
     /*
      * Initialize the event library
      */
-    if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_event_base_framework, 0))) {
+    if (OPAL_SUCCESS != (ret = opal_event_base_open())) {
         error = "opal_event_base_open";
         goto return_error;
     }
@@ -597,7 +597,7 @@ int opal_init_test(void)
         goto return_error;
     }
 
-    if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_event_base_framework, 0))) {
+    if (OPAL_SUCCESS != (ret = opal_event_base_open())) {
         error = "opal_event_base_open";
         goto return_error;
     }

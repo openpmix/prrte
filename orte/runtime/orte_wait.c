@@ -13,7 +13,7 @@
  *                         reserved.
  * Copyright (c) 2008      Institut National de Recherche en Informatique
  *                         et Automatique. All rights reserved.
- * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -52,7 +52,7 @@
 #include "opal/class/opal_object.h"
 #include "opal/util/output.h"
 #include "opal/class/opal_list.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/threads/mutex.h"
 #include "opal/threads/condition.h"
 #include "opal/sys/atomic.h"

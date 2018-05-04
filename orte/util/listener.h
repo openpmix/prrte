@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2015      Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,7 +33,7 @@
 #endif
 
 #include "opal/class/opal_list.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 
 /* callback prototype */
 typedef void (*orte_listener_callback_fn_t)(int sd, short args, void *cbdata);

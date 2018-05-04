@@ -28,7 +28,7 @@
 
 #include "opal/class/opal_list.h"
 #include "opal/mca/mca.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/util/proc.h"
 
 #include "opal/mca/pmix/base/base.h"

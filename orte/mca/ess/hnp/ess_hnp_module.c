@@ -40,7 +40,7 @@
 #include "opal/hash_string.h"
 #include "opal/class/opal_hash_table.h"
 #include "opal/class/opal_list.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/runtime/opal.h"
 
 #include "opal/util/arch.h"
