@@ -36,7 +36,7 @@
 
 #include "opal/util/if.h"
 #include "opal/util/net.h"
-#include "opal/mca/hwloc/hwloc-internal.h"
+#include "opal/hwloc/hwloc-internal.h"
 
 #include "orte/util/show_help.h"
 #include "orte/mca/errmgr/errmgr.h"

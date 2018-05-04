@@ -20,7 +20,7 @@
 #include <ctype.h>
 
 #include "opal/class/opal_list.h"
-#include "opal/mca/hwloc/hwloc-internal.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/util/argv.h"
 
 #include "orte/mca/errmgr/errmgr.h"

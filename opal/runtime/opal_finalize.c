@@ -43,7 +43,7 @@
 #include "opal/mca/installdirs/base/base.h"
 #include "opal/mca/backtrace/base/base.h"
 #include "opal/mca/timer/base/base.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/event/event-internal.h"
 #include "opal/runtime/opal_progress.h"
 
@@ -125,8 +125,8 @@ opal_finalize(void)
 
     (void) mca_base_framework_close(&opal_backtrace_base_framework);
 
-    /* close the hwloc framework */
-    (void) mca_base_framework_close(&opal_hwloc_base_framework);
+    /* close hwloc */
+    opal_hwloc_base_close();
 
     /* cleanup the main thread specific stuff */
     opal_tsd_keys_destruct();

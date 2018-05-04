@@ -39,7 +39,7 @@
 #include "opal/util/argv.h"
 #include "opal/util/output.h"
 #include "opal/util/error.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/mca/pmix/pmix.h"
 
 #include "orte/util/name_fns.h"

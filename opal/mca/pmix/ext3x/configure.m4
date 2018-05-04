@@ -40,7 +40,7 @@ AC_DEFUN([MCA_opal_pmix_ext3x_CONFIG],[
                   opal_pmix_external_3x_happy=no])
 
            AS_IF([test "$opal_pmix_external_3x_happy" = "yes"],
-                 [$1]
+                 [$1],
                  [$2])],
           [$2])
 

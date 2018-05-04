@@ -48,7 +48,7 @@
 #include "opal/util/argv.h"
 #include "opal/runtime/opal_progress_threads.h"
 #include "opal/class/opal_pointer_array.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/util/printf.h"
 #include "opal/util/proc.h"
 #include "opal/mca/pmix/pmix.h"

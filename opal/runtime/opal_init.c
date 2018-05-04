@@ -47,7 +47,7 @@
 #include "opal/runtime/opal.h"
 #include "opal/util/net.h"
 #include "opal/mca/installdirs/base/base.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/mca/timer/base/base.h"
 #include "opal/mca/if/base/base.h"
 #include "opal/dss/dss.h"
@@ -390,6 +390,11 @@ opal_init_util(int* pargc, char*** pargv)
         error = "opal_register_params";
         goto return_error;
     }
+    if (OPAL_SUCCESS != (ret = opal_hwloc_base_register())) {
+        error = "opal_hwloc_base_register";
+        goto return_error;
+    }
+
 
     if (OPAL_SUCCESS != (ret = opal_net_init())) {
         error = "opal_net_init";
@@ -477,13 +482,8 @@ opal_init(int* pargc, char*** pargv)
         return ret;
     }
 
-    /* open hwloc - since this is a static framework, no
-     * select is required
-     */
-    if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_hwloc_base_framework, 0))) {
-        error = "opal_hwloc_base_open";
-        goto return_error;
-    }
+    /* open hwloc */
+    opal_hwloc_base_open();
 
     if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_backtrace_base_framework, 0))) {
         error = "opal_backtrace_base_open";

@@ -27,7 +27,7 @@
 
 #include "opal/dss/dss.h"
 #include "opal/dss/dss_internal.h"
-#include "opal/mca/hwloc/hwloc-internal.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/util/argv.h"
 
 #include "orte/mca/errmgr/errmgr.h"

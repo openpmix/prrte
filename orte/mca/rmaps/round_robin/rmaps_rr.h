@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2017      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
@@ -27,7 +27,7 @@
 
 #include "orte_config.h"
 
-#include "opal/mca/hwloc/hwloc-internal.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/class/opal_list.h"
 
 #include "orte/mca/rmaps/rmaps.h"

@@ -54,7 +54,7 @@
 #include "opal/util/fd.h"
 #include "opal/mca/pmix/base/base.h"
 #include "opal/mca/pstat/base/base.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 
 #include "orte/mca/oob/base/base.h"
 #include "orte/mca/rml/base/base.h"

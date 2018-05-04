@@ -29,7 +29,7 @@
 #include "orte/constants.h"
 
 #include "opal/class/opal_pointer_array.h"
-#include "opal/mca/hwloc/hwloc-internal.h"
+#include "opal/hwloc/hwloc-internal.h"
 
 #include "orte/runtime/orte_globals.h"
 
@@ -105,7 +105,7 @@ ORTE_DECLSPEC OBJ_CLASS_DECLARATION(orte_job_map_t);
 /* round-robin policies */
 /* start with hardware-based options
  * so the values match the corresponding
- * levels in opal/mca/hwloc/hwloc-internal.h
+ * levels in opal/hwloc/hwloc-internal.h
  */
 #define ORTE_MAPPING_BYNODE            1
 #define ORTE_MAPPING_BYBOARD           2

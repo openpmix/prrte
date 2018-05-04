@@ -32,7 +32,7 @@
 
 #include "opal/class/opal_list.h"
 #include "opal/dss/dss_types.h"
-#include "opal/mca/hwloc/hwloc-internal.h"
+#include "opal/hwloc/hwloc-internal.h"
 #if HWLOC_API_VERSION >= 0x20000
 #include "hwloc/shmem.h"
 #endif

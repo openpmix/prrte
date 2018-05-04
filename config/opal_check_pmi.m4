@@ -42,10 +42,12 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
            AC_MSG_WARN([an external copy that you supply.])
            AC_MSG_ERROR([Cannot continue])])
 
-    AC_MSG_CHECKING([for PMIx support($with_pmix)])
     opal_prun_happy=no
     opal_external_have_pmix1=0
-    pmix_ext_install_dir=$with_pmix
+
+    AS_IF([test -n "$with_pmix"],
+          [pmix_ext_install_dir=$with_pmix],
+          [pmix_ext_install_dir=/usr])
 
     # Make sure we have the headers and libs in the correct location
     OPAL_CHECK_WITHDIR([external-pmix], [$pmix_ext_install_dir/include], [pmix.h])

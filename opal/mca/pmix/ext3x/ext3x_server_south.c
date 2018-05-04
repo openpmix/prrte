@@ -29,7 +29,7 @@
 
 #include "opal/dss/dss.h"
 #include "opal/event/event-internal.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/runtime/opal.h"
 #include "opal/runtime/opal_progress_threads.h"
 #include "opal/threads/threads.h"

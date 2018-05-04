@@ -22,6 +22,8 @@
 #include "opal/class/opal_list.h"
 #include "opal/util/proc.h"
 #include "opal/util/show_help.h"
+#include "opal/mca/mca.h"
+#include "opal/mca/base/mca_base_var.h"
 #include "opal/mca/pmix/pmix.h"
 #include "ext3x.h"
 

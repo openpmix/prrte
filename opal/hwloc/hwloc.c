@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -22,16 +22,7 @@
 #include "opal/mca/base/base.h"
 #include "opal/threads/tsd.h"
 
-#include "opal/mca/hwloc/hwloc-internal.h"
-#include "opal/mca/hwloc/base/base.h"
-
-
-/*
- * The following file was created by configure.  It contains extern
- * statements and the definition of an array of pointers to each
- * component's public mca_base_component_t struct.
- */
-#include "opal/mca/hwloc/base/static-components.h"
+#include "opal/hwloc/hwloc-internal.h"
 
 
 /*
@@ -58,6 +49,7 @@ hwloc_obj_type_t opal_hwloc_levels[] = {
 };
 bool opal_hwloc_use_hwthreads_as_cpus = false;
 char *opal_hwloc_base_topo_file = NULL;
+int opal_hwloc_base_output = -1;
 
 static mca_base_var_enum_value_t hwloc_base_map[] = {
     {OPAL_HWLOC_BASE_MAP_NONE, "none"},
@@ -72,21 +64,25 @@ static mca_base_var_enum_value_t hwloc_failure_action[] = {
     {0, NULL}
 };
 
-static int opal_hwloc_base_register(mca_base_register_flag_t flags);
-static int opal_hwloc_base_open(mca_base_open_flag_t flags);
-static int opal_hwloc_base_close(void);
-
-MCA_BASE_FRAMEWORK_DECLARE(opal, hwloc, NULL, opal_hwloc_base_register, opal_hwloc_base_open, opal_hwloc_base_close,
-                           mca_hwloc_base_static_components, 0);
-
 static char *opal_hwloc_base_binding_policy = NULL;
 static bool opal_hwloc_base_bind_to_core = false;
 static bool opal_hwloc_base_bind_to_socket = false;
+static int verbosity = 0;
 
-static int opal_hwloc_base_register(mca_base_register_flag_t flags)
+int opal_hwloc_base_register(void)
 {
     mca_base_var_enum_t *new_enum;
     int ret, varid;
+
+    /* debug output */
+    (void) mca_base_var_register("opal", "hwloc", "base", "verbose",
+                                 "Debug verbosity",
+                                 MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, OPAL_INFO_LVL_9,
+                                 MCA_BASE_VAR_SCOPE_READONLY, &verbosity);
+    if (0 < verbosity) {
+        opal_hwloc_base_output = opal_output_open(NULL);
+        opal_output_set_verbosity(opal_hwloc_base_output, verbosity);
+    }
 
     /* hwloc_base_mbind_policy */
 
@@ -166,7 +162,7 @@ static int opal_hwloc_base_register(mca_base_register_flag_t flags)
     return OPAL_SUCCESS;
 }
 
-static int opal_hwloc_base_open(mca_base_open_flag_t flags)
+int opal_hwloc_base_open(void)
 {
     int rc;
     opal_data_type_t tmp;
@@ -225,14 +221,6 @@ static int opal_hwloc_base_open(mca_base_open_flag_t flags)
         opal_hwloc_use_hwthreads_as_cpus = true;
     }
 
-    /* to support tools such as ompi_info, add the components
-     * to a list
-     */
-    if (OPAL_SUCCESS !=
-        mca_base_framework_components_open(&opal_hwloc_base_framework, flags)) {
-        return OPAL_ERROR;
-    }
-
     /* declare the hwloc data types */
     tmp = OPAL_HWLOC_TOPO;
     if (OPAL_SUCCESS != (rc = opal_dss.register_type(opal_hwloc_pack,
@@ -248,19 +236,10 @@ static int opal_hwloc_base_open(mca_base_open_flag_t flags)
     return OPAL_SUCCESS;
 }
 
-static int opal_hwloc_base_close(void)
+void opal_hwloc_base_close(void)
 {
-    int ret;
     if (!opal_hwloc_base_inited) {
-        return OPAL_SUCCESS;
-    }
-
-    /* no need to close the component as it was statically opened */
-
-    /* for support of tools such as ompi_info */
-    ret = mca_base_framework_components_close (&opal_hwloc_base_framework, NULL);
-    if (OPAL_SUCCESS != ret) {
-        return ret;
+        return;
     }
 
     /* free memory */
@@ -278,7 +257,6 @@ static int opal_hwloc_base_close(void)
 
     /* All done */
     opal_hwloc_base_inited = false;
-    return OPAL_SUCCESS;
 }
 
 static bool fns_init=false;

@@ -67,6 +67,7 @@ endif
 
 include class/Makefile.am
 include event/Makefile.am
+include hwloc/Makefile.am
 include runtime/Makefile.am
 include threads/Makefile.am
 include mca/Makefile.am

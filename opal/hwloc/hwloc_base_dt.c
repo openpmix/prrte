@@ -15,7 +15,7 @@
 #include "opal/util/output.h"
 
 #include "opal/dss/dss.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 
 int opal_hwloc_pack(opal_buffer_t *buffer, const void *src,
                     int32_t num_vals,
@@ -224,7 +224,7 @@ int opal_hwloc_compare(const hwloc_topology_t topo1,
         s1->cpubind->set_thisthread_cpubind != s2->cpubind->set_thisthread_cpubind ||
         s1->membind->set_thisproc_membind != s2->membind->set_thisproc_membind ||
         s1->membind->set_thisthread_membind != s2->membind->set_thisthread_membind) {
-        OPAL_OUTPUT_VERBOSE((5, opal_hwloc_base_framework.framework_output,
+        OPAL_OUTPUT_VERBOSE((5, opal_hwloc_base_output,
                              "hwloc:base:compare BINDING CAPABILITIES DIFFER"));
         return OPAL_VALUE1_GREATER;
     }

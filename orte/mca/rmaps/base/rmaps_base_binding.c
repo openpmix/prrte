@@ -35,7 +35,7 @@
 #include "opal/util/output.h"
 #include "orte/mca/mca.h"
 #include "opal/mca/base/base.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/threads/tsd.h"
 
 #include "orte/types.h"

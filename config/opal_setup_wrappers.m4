@@ -35,7 +35,6 @@ dnl
 AC_DEFUN([OPAL_WRAPPER_FLAGS_ADD], [
     m4_ifdef([mca_component_configure_active],
         [m4_fatal([OPAL_WRAPPER_FLAGS_ADD can not be called from a component configure])])
-    AC_MSG_WARN([FLAGS ADD $1 $2])
     m4_if([$1], [CPPFLAGS], [OPAL_FLAGS_APPEND_UNIQ([wrapper_extra_cppflags], [$2])],
           [$1], [CFLAGS], [OPAL_FLAGS_APPEND_UNIQ([wrapper_extra_cflags], [$2])],
           [$1], [CXXFLAGS], [OPAL_FLAGS_APPEND_UNIQ([wrapper_extra_cxxflags], [$2])],

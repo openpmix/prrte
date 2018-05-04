@@ -990,6 +990,14 @@ opal_show_title "Configure PMIx"
 OPAL_CHECK_PMIX
 
 ##################################
+# HWLOC
+##################################
+
+opal_show_title "Configure HWLOC"
+
+OPAL_HWLOC_CONFIG
+
+##################################
 # MCA
 ##################################
 
