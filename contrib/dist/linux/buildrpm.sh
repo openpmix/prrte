@@ -20,7 +20,7 @@
 # -n name
 #    This option will change the name of the produced RPM to the "name".
 #    It is useful to use with "-o" and "-m" options if you want to have
-#    multiple Open MPI versions installed simultaneously in the same
+#    multiple PRRTE versions installed simultaneously in the same
 #    enviroment. Requires use of option "-b".
 #
 # -o
@@ -67,8 +67,8 @@
 # The following vars can be set from outside and will affect script behave:
 # prefix,rpmbuild_options,configure_options,build_srpm,build_single,build_multiple,rpmtopdir
 #
-specfile="prrte.spec"
-prefix=${prefix:-"/opt/prrte"}
+specfile="prte.spec"
+prefix=${prefix:-"/opt/prte"}
 rpmbuild_options=${rpmbuild_options:-"--define 'mflags -j4' --define '_source_filedigest_algorithm md5'  --define '_binary_filedigest_algorithm md5'"}
 configure_options=${configure_options:-""}
 unpack_spec=0
@@ -137,8 +137,8 @@ usage="Usage: $0 [-b][-o][-m][-d][-u][-s][-h] [-n name][-f lf_location][-t tm_lo
   -d         build with Debugging support
              {default: without debugging support}
 
-  -s         try to unpack prrte.spec file from tarball
-             {default: search for prrte.spec in current directory}
+  -s         try to unpack prte.spec file from tarball
+             {default: search for prte.spec in current directory}
 
   -c parameter
              add custom configure parameter
@@ -148,7 +148,7 @@ usage="Usage: $0 [-b][-o][-m][-d][-u][-s][-h] [-n name][-f lf_location][-t tm_lo
 
   -h         print this message and exit
 
-  tarball    path to Open MPI source tarball
+  tarball    path to PRRTE source tarball
   "
 
 #
@@ -222,7 +222,7 @@ fi
 first="`basename $tarball | cut -d- -f2`"
 version="`echo $first | sed -e 's/\.tar\.'$extension'//'`"
 unset first
-echo "--> Found Open MPI version: $version"
+echo "--> Found PRRTE version: $version"
 
 #
 # Try to unpack spec file from tarball
@@ -360,7 +360,7 @@ fi
 # from the specfile
 #
 
-specdest="$rpmtopdir/SPECS/prrte-$version.spec"
+specdest="$rpmtopdir/SPECS/prte-$version.spec"
 sed -e 's/\$VERSION/'$version'/g' \
     -e 's/\$EXTENSION/'$extension'/g' \
     $specfile > "$specdest"
@@ -389,7 +389,7 @@ fi
 #
 
 if test "$build_srpm" = "yes"; then
-    echo "--> Building the Open MPI SRPM"
+    echo "--> Building the PRRTE SRPM"
     rpmbuild_options="$rpmbuild_options --define 'dist %{nil}'"
     cmd="$rpm_cmd $rpmbuild_options -bs $specdest"
     echo "--> $cmd"
@@ -408,7 +408,7 @@ fi
 #
 
 if test "$build_single" = "yes"; then
-    echo "--> Building the single Open MPI RPM"
+    echo "--> Building the single PRRTE RPM"
     cmd="$rpm_cmd -bb $rpmbuild_options --define 'build_all_in_one_rpm 1'"
     if test "$configure_options" != ""; then
         cmd="$cmd --define 'configure_options $configure_options'"
@@ -430,7 +430,7 @@ fi
 #
 
 if test "$build_multiple" = "yes"; then
-    echo "--> Building the multiple Open MPI RPM"
+    echo "--> Building the multiple PRRTE RPM"
     cmd="$rpm_cmd -bb $rpmbuild_options --define 'build_all_in_one_rpm 0'"
     if test "$configure_options" != ""; then
         cmd="$cmd --define 'configure_options $configure_options'"
@@ -454,7 +454,7 @@ fi
 cat <<EOF
 
 ------------------------------------------------------------------------------
-====                FINISHED BUILDING Open MPI RPM                        ====
+====                FINISHED BUILDING PRRTE RPM                        ====
 ------------------------------------------------------------------------------
 A copy of the tarball is located in: $rpmtopdir/SOURCES/
 The completed rpms are located in:   $rpmtopdir/RPMS/i<something>86/
