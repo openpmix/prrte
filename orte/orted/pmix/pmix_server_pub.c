@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
@@ -326,9 +326,9 @@ int pmix_server_publish_fn(opal_process_name_t *proc,
 
 }
 
-int pmix_server_lookup_fn(opal_process_name_t *proc, char **keys,
-                          opal_list_t *info,
-                          opal_pmix_lookup_cbfunc_t cbfunc, void *cbdata)
+int pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
+                          const pmix_info_t info[], size_t ninfo,
+                          pmix_lookup_cbfunc_t cbfunc, void *cbdata)
 {
     pmix_server_req_t *req;
     int rc;

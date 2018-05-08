@@ -36,12 +36,13 @@
 #ifdef HAVE_SYS_UN_H
 #include <sys/un.h>
 #endif
+#include <pmix_server.h>
 
 #include "opal/types.h"
 #include "opal/class/opal_hotel.h"
 #include "opal/mca/base/base.h"
-#include "opal/event/event-internal.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/mca/event/event.h"
+#include "opal/pmix/pmix-internal.h"
 #include "opal/util/proc.h"
 #include "opal/sys/atomic.h"
 
@@ -70,16 +71,16 @@ BEGIN_C_DECLS
     int timeout;
     int room_num;
     int remote_room_num;
-    opal_pmix_data_range_t range;
+    pmix_data_range_t range;
     orte_process_name_t proxy;
     orte_process_name_t target;
     orte_job_t *jdata;
     opal_buffer_t msg;
-    opal_pmix_op_cbfunc_t opcbfunc;
-    opal_pmix_modex_cbfunc_t mdxcbfunc;
-    opal_pmix_spawn_cbfunc_t spcbfunc;
-    opal_pmix_lookup_cbfunc_t lkcbfunc;
-    opal_pmix_release_cbfunc_t rlcbfunc;
+    pmix_op_cbfunc_t opcbfunc;
+    pmix_modex_cbfunc_t mdxcbfunc;
+    pmix_spawn_cbfunc_t spcbfunc;
+    pmix_lookup_cbfunc_t lkcbfunc;
+    pmix_release_cbfunc_t rlcbfunc;
     void *cbdata;
 } pmix_server_req_t;
 OBJ_CLASS_DECLARATION(pmix_server_req_t);
@@ -92,13 +93,18 @@ typedef struct {
     opal_process_name_t proc;
     const char *msg;
     void *server_object;
-    opal_list_t *procs;
-    opal_list_t *eprocs;
-    opal_list_t *info;
-    opal_pmix_op_cbfunc_t cbfunc;
-    opal_pmix_info_cbfunc_t infocbfunc;
-    opal_pmix_tool_connection_cbfunc_t toolcbfunc;
-    opal_pmix_spawn_cbfunc_t spcbfunc;
+    pmix_proc_t *procs;
+    size_t nprocs;
+    pmix_proc_t *eprocs;
+    size_t neprocs;
+    pmix_info_t *info;
+    size_t ninfo;
+    pmix_app_t *apps;
+    size_t napps;
+    pmix_op_cbfunc_t cbfunc;
+    pmix_info_cbfunc_t infocbfunc;
+    pmix_tool_connection_cbfunc_t toolcbfunc;
+    pmix_spawn_cbfunc_t spcbfunc;
     void *cbdata;
 } orte_pmix_server_op_caddy_t;
 OBJ_CLASS_DECLARATION(orte_pmix_server_op_caddy_t);
@@ -106,7 +112,7 @@ OBJ_CLASS_DECLARATION(orte_pmix_server_op_caddy_t);
 typedef struct {
     opal_object_t super;
     orte_grpcomm_signature_t *sig;
-    opal_pmix_modex_cbfunc_t cbfunc;
+    pmix_modex_cbfunc_t cbfunc;
     void *cbdata;
 } orte_pmix_mdx_caddy_t;
 OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
@@ -141,12 +147,14 @@ OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
         opal_event_active(&(_req->ev), OPAL_EV_WRITE, 1);    \
     } while(0);
 
-#define ORTE_PMIX_OPERATION(p, i, fn, cf, cb)                   \
+#define ORTE_PMIX_OPERATION(p, np, i, ni, fn, cf, cb)           \
     do {                                                        \
         orte_pmix_server_op_caddy_t *_cd;                       \
         _cd = OBJ_NEW(orte_pmix_server_op_caddy_t);             \
         _cd->procs = (p);                                       \
+        _cd->nprocs = (np);                                     \
         _cd->info = (i);                                        \
+        _cd->ninfo = (ni);                                      \
         _cd->cbfunc = (cf);                                     \
         _cd->cbdata = (cb);                                     \
         opal_event_set(orte_event_base, &(_cd->ev), -1,         \
@@ -176,68 +184,72 @@ OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
     } while(0);
 
 /* define the server module functions */
-extern int pmix_server_client_connected_fn(opal_process_name_t *proc, void* server_object,
-                                           opal_pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_client_finalized_fn(opal_process_name_t *proc, void* server_object,
-                                           opal_pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_abort_fn(opal_process_name_t *proc, void *server_object,
+extern int pmix_server_client_connected_fn(const pmix_proc_t *proc, void* server_object,
+                                           pmix_op_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_client_finalized_fn(const pmix_proc_t *proc, void* server_object,
+                                           pmix_op_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_abort_fn(const pmix_proc_t *proc, void *server_object,
                                 int status, const char msg[],
-                                opal_list_t *procs_to_abort,
-                                opal_pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_fencenb_fn(opal_list_t *procs, opal_list_t *info,
+                                pmix_proc_t procs[], size_t nprocs,
+                                pmix_op_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
+                                  const pmix_info_t info[], size_t ninfo,
                                   char *data, size_t ndata,
-                                  opal_pmix_modex_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_dmodex_req_fn(opal_process_name_t *proc, opal_list_t *info,
-                                     opal_pmix_modex_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_publish_fn(opal_process_name_t *proc,
-                                  opal_list_t *info,
-                                  opal_pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_lookup_fn(opal_process_name_t *proc, char **keys,
-                                 opal_list_t *info,
-                                 opal_pmix_lookup_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_unpublish_fn(opal_process_name_t *proc, char **keys,
-                                    opal_list_t *info,
-                                    opal_pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_spawn_fn(opal_process_name_t *requestor,
-                                opal_list_t *job_info, opal_list_t *apps,
-                                opal_pmix_spawn_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_connect_fn(opal_list_t *procs, opal_list_t *info,
-                                  opal_pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_disconnect_fn(opal_list_t *procs, opal_list_t *info,
-                                     opal_pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_register_events_fn(opal_list_t *info,
-                                          opal_pmix_op_cbfunc_t cbfunc,
-                                          void *cbdata);
-extern int pmix_server_deregister_events_fn(opal_list_t *info,
-                                            opal_pmix_op_cbfunc_t cbfunc,
-                                            void *cbdata);
-extern int pmix_server_notify_event(int code, opal_process_name_t *source,
-                                    opal_list_t *info,
-                                    opal_pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern int pmix_server_query_fn(opal_process_name_t *requestor,
-                                opal_list_t *queries,
-                                opal_pmix_info_cbfunc_t cbfunc, void *cbdata);
-extern void pmix_tool_connected_fn(opal_list_t *info,
-                                   opal_pmix_tool_connection_cbfunc_t cbfunc,
-                                   void *cbdata);
-
-extern void pmix_server_log_fn(opal_process_name_t *requestor,
-                               opal_list_t *info,
-                               opal_list_t *directives,
-                               opal_pmix_op_cbfunc_t cbfunc,
-                               void *cbdata);
-
-extern int pmix_server_alloc_fn(const opal_process_name_t *requestor,
-                                opal_pmix_alloc_directive_t dir,
-                                opal_list_t *info,
-                                opal_pmix_info_cbfunc_t cbfunc,
+                                  pmix_modex_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_dmodex_req_fn(const pmix_proc_t *proc,
+                                     const pmix_info_t info[], size_t ninfo,
+                                     pmix_modex_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_publish_fn(const pmix_proc_t *proc,
+                                  const pmix_info_t info[], size_t ninfo,
+                                  pmix_op_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
+                                 const pmix_info_t info[], size_t ninfo,
+                                 pmix_lookup_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
+                                    const pmix_info_t info[], size_t ninfo,
+                                    pmix_op_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_spawn_fn(const pmix_proc_t *proc,
+                                const pmix_info_t job_info[], size_t ninfo,
+                                const pmix_app_t apps[], size_t napps,
+                                pmix_spawn_cbfunc_t cbfunc, void *cbdata);
+extern pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
+                                            const pmix_info_t info[], size_t ninfo,
+                                            pmix_connect_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_disconnect_fn(const char nspace[],
+                                     const pmix_info_t info[], size_t ninfo,
+                                     pmix_op_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_register_events_fn(pmix_status_t *codes, size_t ncodes,
+                                          const pmix_info_t info[], size_t ninfo,
+                                          pmix_op_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_deregister_events_fn(pmix_status_t *codes, size_t ncodes,
+                                            pmix_op_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_notify_event(pmix_status_t code,
+                                    const pmix_proc_t *source,
+                                    pmix_data_range_t range,
+                                    pmix_info_t info[], size_t ninfo,
+                                    pmix_op_cbfunc_t cbfunc, void *cbdata);
+extern int pmix_server_query_fn(pmix_proc_t *proct,
+                                pmix_query_t *queries, size_t nqueries,
+                                pmix_info_cbfunc_t cbfunc,
                                 void *cbdata);
-
-extern int pmix_server_job_ctrl_fn(const opal_process_name_t *requestor,
-                                   opal_list_t *targets,
-                                   opal_list_t *info,
-                                   opal_pmix_info_cbfunc_t cbfunc,
+extern void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo,
+                                   pmix_tool_connection_cbfunc_t cbfunc,
                                    void *cbdata);
+
+extern void pmix_server_log_fn(const pmix_proc_t *client,
+                               const pmix_info_t data[], size_t ndata,
+                               const pmix_info_t directives[], size_t ndirs,
+                               pmix_op_cbfunc_t cbfunc, void *cbdata);
+
+extern int pmix_server_alloc_fn(const pmix_proc_t *client,
+                                pmix_alloc_directive_t directive,
+                                const pmix_info_t data[], size_t ndata,
+                                pmix_info_cbfunc_t cbfunc, void *cbdata);
+
+extern int pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
+                                   const pmix_proc_t targets[], size_t ntargets,
+                                   const pmix_info_t directives[], size_t ndirs,
+                                   pmix_info_cbfunc_t cbfunc, void *cbdata);
 
 /* declare the RML recv functions for responses */
 extern void pmix_server_launch_resp(int status, orte_process_name_t* sender,

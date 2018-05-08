@@ -35,7 +35,7 @@
 #include "opal/util/argv.h"
 #include "opal/util/output.h"
 #include "opal/dss/dss.h"
-#include "opal/hwloc/hwloc-internal.h"
+#include "opal/mca/hwloc/hwloc-internal.h"
 #include "opal/mca/pstat/pstat.h"
 
 #include "orte/mca/errmgr/errmgr.h"
@@ -528,6 +528,7 @@ static void _query(int sd, short args, void *cbdata)
                 opal_argv_append_nosize(&ans, OPAL_PMIX_MAPBY);
                 opal_argv_append_nosize(&ans, OPAL_PMIX_RANKBY);
                 opal_argv_append_nosize(&ans, OPAL_PMIX_BINDTO);
+                opal_argv_append_nosize(&ans, OPAL_PMIX_COSPAWN_APP);
                 /* create the return kv */
                 kv = OBJ_NEW(opal_value_t);
                 kv->key = strdup(OPAL_PMIX_QUERY_SPAWN_SUPPORT);
@@ -945,9 +946,6 @@ static void _toolconn(int sd, short args, void *cbdata)
     proc->name.vpid = tool.vpid;
     proc->parent = ORTE_PROC_MY_NAME->vpid;
     ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_ALIVE);
-    /* mark as tool - it does not count as a slot, even
-     * though we will track it as being on a node */
-    ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_TOOL);
     proc->state = ORTE_PROC_STATE_RUNNING;
     proc->app_idx = 0;
     if (NULL == hostname) {
@@ -1049,33 +1047,36 @@ static void lgcbfn(int sd, short args, void *cbdata)
     OBJ_RELEASE(cd);
 }
 
-void pmix_server_log_fn(opal_process_name_t *requestor,
-                        opal_list_t *info,
-                        opal_list_t *directives,
-                        opal_pmix_op_cbfunc_t cbfunc,
-                        void *cbdata)
+void pmix_server_log_fn(const pmix_proc_t *client,
+                        const pmix_info_t data[], size_t ndata,
+                        const pmix_info_t directives[], size_t ndirs,
+                        pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
-    opal_value_t *val;
-    opal_buffer_t *buf, *xmit = NULL;
+    size_t n, cnt;
+    opal_buffer_t *buf;
+    opal_byte_object_t bo, *boptr;
     int rc = ORTE_SUCCESS;
+    pmix_data_buffer_t pbuf;
+    pmix_proc_t proc;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s logging info",
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
 
-    OPAL_LIST_FOREACH(val, info, opal_value_t) {
-        if (NULL == val->key) {
-            ORTE_ERROR_LOG(ORTE_ERR_BAD_PARAM);
-            continue;
-        }
-        if (0 == strcmp(val->key, OPAL_PMIX_SHOW_HELP)) {
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+    (void)opal_snprintf_jobid(proc.nspace, PMIX_MAX_NSLEN, ORTE_PROC_MY_NAME->jobid);
+    proc.rank = ORTE_PROC_MY_NAME->vpid;
+    cnt = 0;
+
+    for (n=0; n < ndata; n++) {
+        if (0 == strncmp(data[n].key, OPAL_PMIX_SHOW_HELP, PMIX_MAX_KEYLEN)) {
             /* pull out the blob */
-            if (OPAL_BYTE_OBJECT != val->type) {
+            if (PMIX_BYTE_OBJECT != info[n].value.type) {
                 continue;
             }
             buf = OBJ_NEW(opal_buffer_t);
-            opal_dss.load(buf, val->data.bo.bytes, val->data.bo.size);
-            val->data.bo.bytes = NULL;
+            opal_dss.load(buf, info[n].value.data.bo.bytes, info[n].value.bo.size);
+            info[n].value.data.bo.bytes = NULL;
             if (ORTE_SUCCESS != (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
                                                               ORTE_PROC_MY_HNP, buf,
                                                               ORTE_RML_TAG_SHOW_HELP,
@@ -1088,20 +1089,28 @@ void pmix_server_log_fn(opal_process_name_t *requestor,
             rc = ORTE_ERR_NOT_SUPPORTED;
         } else {
             /* we need to ship this to our HNP/MASTER for processing */
-            if (NULL == xmit) {
-                xmit = OBJ_NEW(opal_buffer_t);
+            ret = PMIx_Data_pack(&proc, &pbuf, &info[n], 1, PMIX_INFO);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
             }
-            opal_dss.pack(xmit, &val, 1, OPAL_VALUE);
+            ++cnt;
         }
     }
-    if (NULL != xmit) {
+    if (0 < cnt) {
+        buf = OBJ_NEW(opal_buffer_t);
+        opal_dss.pack(buf, &cnt, 1, OPAL_SIZE);
+        bo.bytes = pbuf.base_ptr;
+        bo.size = pbuf.bytes_used;
+        boptr = &bo;
+        opal_dss.pack(buf, &boptr, 1, OPAL_BYTE_OBJECT);
+        OBJ_DESTRUCT(&bo);
         rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                     ORTE_PROC_MY_HNP, xmit,
+                                     ORTE_PROC_MY_HNP, buf,
                                      ORTE_RML_TAG_LOGGING,
                                      orte_rml_send_callback, NULL);
         if (ORTE_SUCCESS != rc) {
             ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(xmit);
+            OBJ_RELEASE(buf);
         }
     }
     /* we cannot directly execute the callback here
