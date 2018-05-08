@@ -971,8 +971,8 @@ if (!$ok || $help_arg) {
 #---------------------------------------------------------------------------
 
 # Check for project existence
-my $project_name_long = "PMIx-Runtime-Environment";
-my $project_name_short = "prte";
+my $project_name_long = "PMIx-RunTime-Environment";
+my $project_name_short = "prrte";
 
 #---------------------------------------------------------------------------
 
@@ -994,10 +994,10 @@ $dnl_line\n\n";
 
 # Verify that we're in the root directorty by checking for a token file.
 
-my_die "Not at the root directory of the PRTE source tree"
+my_die "Not at the root directory of the PRRTE source tree"
     if (! -f "config/opal_try_assemble.m4");
 
-my_die "autogen.pl has been invoked in the source tree of PRTE distribution tarball; aborting...
+my_die "autogen.pl has been invoked in the source tree of PRRTE distribution tarball; aborting...
 You likely do not need to invoke \"autogen.pl\" -- you can probably run \"configure\" directly.
 If you really know what you are doing, and really need to run autogen.pl, use the \"--force\" flag."
     if (!$force_arg && in_tarball());
