@@ -1,6 +1,8 @@
 #
 # Copyright (c) 2011-2012 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2018      Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -8,7 +10,7 @@
 # $HEADER$
 #
 
-dist_opaldata_DATA = hwloc/help-opal-hwloc-base.txt
+dist_opaldata_DATA += hwloc/help-opal-hwloc-base.txt
 
 headers += \
         hwloc/hwloc-internal.h
