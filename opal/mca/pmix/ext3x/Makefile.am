@@ -13,10 +13,8 @@
 
 dist_opaldata_DATA = help-pmix-ext3x.txt
 
-headers = \
-        ext3x.h
-
 sources = \
+        ext3x.h \
         ext3x.c \
         ext3x_client.c \
         ext3x_component.c \
