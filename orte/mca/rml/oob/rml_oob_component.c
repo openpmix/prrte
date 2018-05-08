@@ -13,7 +13,7 @@
  * Copyright (c) 2007-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -37,7 +37,7 @@
 #include "opal/util/output.h"
 #include "opal/util/argv.h"
 #include "opal/mca/backtrace/backtrace.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 
 #if OPAL_ENABLE_FT_CR == 1
 #include "orte/mca/rml/rml.h"

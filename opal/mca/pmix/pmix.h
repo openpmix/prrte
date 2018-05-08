@@ -21,7 +21,7 @@
 #endif
 
 #include "opal/mca/mca.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/dss/dss.h"
 #include "opal/runtime/opal.h"
 #include "opal/dss/dss.h"

@@ -21,7 +21,7 @@
 #endif
 
 #include "opal/class/opal_list.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/mca/pmix/pmix.h"
 #include "opal/util/argv.h"
 

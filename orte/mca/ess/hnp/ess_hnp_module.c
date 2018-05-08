@@ -40,7 +40,7 @@
 #include "opal/hash_string.h"
 #include "opal/class/opal_hash_table.h"
 #include "opal/class/opal_list.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/runtime/opal.h"
 
 #include "opal/util/arch.h"
@@ -54,7 +54,7 @@
 #include "opal/util/fd.h"
 #include "opal/mca/pmix/base/base.h"
 #include "opal/mca/pstat/base/base.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 
 #include "orte/mca/oob/base/base.h"
 #include "orte/mca/rml/base/base.h"

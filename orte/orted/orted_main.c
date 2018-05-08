@@ -50,7 +50,7 @@
 #endif  /* HAVE_SYS_TIME_H */
 
 
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/mca/base/base.h"
 #include "opal/util/output.h"
 #include "opal/util/cmd_line.h"
@@ -65,7 +65,7 @@
 #include "opal/mca/base/mca_base_var.h"
 #include "opal/util/daemon_init.h"
 #include "opal/dss/dss.h"
-#include "opal/mca/hwloc/hwloc-internal.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/mca/pmix/pmix.h"
 
 #include "orte/util/show_help.h"

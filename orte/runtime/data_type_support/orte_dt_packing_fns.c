@@ -28,7 +28,7 @@
 #include "opal/util/argv.h"
 #include "opal/dss/dss.h"
 #include "opal/dss/dss_internal.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/class/opal_pointer_array.h"
 
 #include "orte/mca/errmgr/errmgr.h"

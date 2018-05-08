@@ -30,11 +30,11 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
 
     AC_ARG_WITH([pmix],
                 [AC_HELP_STRING([--with-pmix(=DIR)],
-                                [Build PMIx support.  DIR can take one of three values: "internal", "external", or a valid directory name.  "internal" (or no DIR value) forces PRTE to use its internal copy of PMIx.  "external" forces PRTE to use an external installation of PMIx.  Supplying a valid directory name also forces PRTE to use an external installation of PMIx, and adds DIR/include, DIR/lib, and DIR/lib64 to the search path for headers and libraries. Note that PRTE does not support --without-pmix.])])
+                                [Build PMIx support.  If provided, DIR must be a valid directory name - otherwise, default Linux locations will be used. Supplying a valid directory name adds DIR/include, DIR/lib, and DIR/lib64 to the search path for headers and libraries. Note that PRTE does not support --without-pmix.])])
 
     AC_ARG_WITH([pmix-libdir],
                 [AC_HELP_STRING([--with-pmix-libdir=DIR],
-                                [Look for libpmix the given directory DIR, DIR/lib or DIR/lib64])])
+                                [Look for libpmix in the given directory DIR, DIR/lib or DIR/lib64])])
 
     AS_IF([test "$with_pmix" = "no"],
           [AC_MSG_WARN([PRTE requires PMIx support. It can be built])
@@ -42,136 +42,132 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
            AC_MSG_WARN([an external copy that you supply.])
            AC_MSG_ERROR([Cannot continue])])
 
-    AC_MSG_CHECKING([if user requested external PMIx support($with_pmix)])
     opal_prun_happy=no
     opal_external_have_pmix1=0
-    AS_IF([test -z "$with_pmix" || test "$with_pmix" = "yes" || test "$with_pmix" = "internal"],
-          [AC_MSG_RESULT([no])
-           opal_external_pmix_happy=no
-           opal_prun_happy=yes],
 
-          [AC_MSG_RESULT([yes])
-           # check for external pmix lib */
-           AS_IF([test "$with_pmix" = "external"],
-                 [pmix_ext_install_dir=/usr],
-                 [pmix_ext_install_dir=$with_pmix])
+    AS_IF([test -n "$with_pmix"],
+          [pmix_ext_install_dir=$with_pmix],
+          [pmix_ext_install_dir=/usr])
 
-           # Make sure we have the headers and libs in the correct location
-           OPAL_CHECK_WITHDIR([external-pmix], [$pmix_ext_install_dir/include], [pmix.h])
+    # Make sure we have the headers and libs in the correct location
+    OPAL_CHECK_WITHDIR([external-pmix], [$pmix_ext_install_dir/include], [pmix.h])
 
-           AS_IF([test -n "$with_pmix_libdir"],
-                 [AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir])
-                  files=`ls $with_pmix_libdir/libpmix.* 2> /dev/null | wc -l`
-                  AS_IF([test "$files" -gt 0],
-                        [AC_MSG_RESULT([found])
-                         pmix_ext_install_libdir=$with_pmix_libdir],
-                        [AC_MSG_RESULT([not found])
-                         AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir/lib64])
-                         files=`ls $with_pmix_libdir/lib64/libpmix.* 2> /dev/null | wc -l`
-                         AS_IF([test "$files" -gt 0],
-                               [AC_MSG_RESULT([found])
-                                pmix_ext_install_libdir=$with_pmix_libdir/lib64],
-                               [AC_MSG_RESULT([not found])
-                                AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir/lib])
-                                files=`ls $with_pmix_libdir/lib/libpmix.* 2> /dev/null | wc -l`
-                                AS_IF([test "$files" -gt 0],
-                                      [AC_MSG_RESULT([found])
-                                       pmix_ext_install_libdir=$with_pmix_libdir/lib],
-                                      [AC_MSG_RESULT([not found])
-                                       AC_MSG_ERROR([Cannot continue])])])])],
-                 [# check for presence of lib64 directory - if found, see if the
-                  # desired library is present and matches our build requirements
-                  AC_MSG_CHECKING([libpmix.* in $pmix_ext_install_dir/lib64])
-                  files=`ls $pmix_ext_install_dir/lib64/libpmix.* 2> /dev/null | wc -l`
-                  AS_IF([test "$files" -gt 0],
-                        [AC_MSG_RESULT([found])
-                         pmix_ext_install_libdir=$pmix_ext_install_dir/lib64],
-                        [AC_MSG_RESULT([not found])
-                         AC_MSG_CHECKING([libpmix.* in $pmix_ext_install_dir/lib])
-                         files=`ls $pmix_ext_install_dir/lib/libpmix.* 2> /dev/null | wc -l`
-                         AS_IF([test "$files" -gt 0],
-                               [AC_MSG_RESULT([found])
-                                pmix_ext_install_libdir=$pmix_ext_install_dir/lib],
-                               [AC_MSG_RESULT([not found])
-                                AC_MSG_ERROR([Cannot continue])])])])
-
-           # check the version
-           opal_external_pmix_save_CPPFLAGS=$CPPFLAGS
-           opal_external_pmix_save_LDFLAGS=$LDFLAGS
-           opal_external_pmix_save_LIBS=$LIBS
-
-           # if the pmix_version.h file does not exist, then
-           # this must be from a pre-1.1.5 version
-           AC_MSG_CHECKING([for PMIx version file])
-           CPPFLAGS="-I$pmix_ext_install_dir/include $CPPFLAGS"
-           AS_IF([test "x`ls $pmix_ext_install_dir/include/pmix_version.h 2> /dev/null`" = "x"],
-                 [AC_MSG_RESULT([not found - assuming pre-v2.0])
-                  AC_MSG_WARN([PRTE does not support PMIx versions])
-                  AC_MSG_WARN([less than v2.0 as only PMIx-based tools can])
-                  AC_MSG_WARN([can connect to the server.])
-                  AC_MSG_ERROR([Please select a newer version and configure again])],
+    AS_IF([test -n "$with_pmix_libdir"],
+          [AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir])
+           files=`ls $with_pmix_libdir/libpmix.* 2> /dev/null | wc -l`
+           AS_IF([test "$files" -gt 0],
+                 [AC_MSG_RESULT([found])
+                  pmix_ext_install_libdir=$with_pmix_libdir],
                  [AC_MSG_RESULT([not found])
-                  opal_external_pmix_version_found=0])
+                  AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir/lib64])
+                  files=`ls $with_pmix_libdir/lib64/libpmix.* 2> /dev/null | wc -l`
+                  AS_IF([test "$files" -gt 0],
+                        [AC_MSG_RESULT([found])
+                         pmix_ext_install_libdir=$with_pmix_libdir/lib64],
+                        [AC_MSG_RESULT([not found])
+                         AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir/lib])
+                         files=`ls $with_pmix_libdir/lib/libpmix.* 2> /dev/null | wc -l`
+                         AS_IF([test "$files" -gt 0],
+                               [AC_MSG_RESULT([found])
+                                pmix_ext_install_libdir=$with_pmix_libdir/lib],
+                                [AC_MSG_RESULT([not found])
+                                 AC_MSG_ERROR([Cannot continue])])])])],
+        [# check for presence of lib64 directory - if found, see if the
+         # desired library is present and matches our build requirements
+         AC_MSG_CHECKING([libpmix.* in $pmix_ext_install_dir/lib64])
+         files=`ls $pmix_ext_install_dir/lib64/libpmix.* 2> /dev/null | wc -l`
+         AS_IF([test "$files" -gt 0],
+               [AC_MSG_RESULT([found])
+                pmix_ext_install_libdir=$pmix_ext_install_dir/lib64],
+               [AC_MSG_RESULT([not found])
+                AC_MSG_CHECKING([libpmix.* in $pmix_ext_install_dir/lib])
+                files=`ls $pmix_ext_install_dir/lib/libpmix.* 2> /dev/null | wc -l`
+                AS_IF([test "$files" -gt 0],
+                      [AC_MSG_RESULT([found])
+                       pmix_ext_install_libdir=$pmix_ext_install_dir/lib],
+                      [AC_MSG_RESULT([not found])
+                       AC_MSG_ERROR([Cannot continue])])])])
 
-           # if it does exist, then we need to parse it to find
-           # the actual release series
-           AS_IF([test "$opal_external_pmix_version_found" = "0"],
-                 [AC_MSG_CHECKING([version 3x])
-                  AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
-                                                      #include <pmix_version.h>
-                                                      #if (PMIX_VERSION_MAJOR != 3L)
-                                                      #error "not version 3"
-                                                      #endif
-                                                      ], [])],
-                                    [AC_MSG_RESULT([found])
-                                     opal_external_pmix_version=3x
-                                     opal_external_pmix_version_found=1],
-                                    [AC_MSG_RESULT([not found])])])
+    # check the version
+    opal_external_pmix_save_CPPFLAGS=$CPPFLAGS
+    opal_external_pmix_save_LDFLAGS=$LDFLAGS
+    opal_external_pmix_save_LIBS=$LIBS
 
-           AS_IF([test "$opal_external_pmix_version_found" = "0"],
-                 [AC_MSG_CHECKING([version 2x])
-                  AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
-                                                      #include <pmix_version.h>
-                                                      #if (PMIX_VERSION_MAJOR != 2L)
-                                                      #error "not version 2"
-                                                      #endif
-                                                      ], [])],
-                                    [AC_MSG_RESULT([found])
-                                     opal_external_pmix_version=2x
-                                     opal_external_pmix_version_found=1
-                                     opal_prun_happy=yes],
-                                    [AC_MSG_RESULT([not found])])])
+    # if the pmix_version.h file does not exist, then
+    # this must be from a pre-1.1.5 version
+    AC_MSG_CHECKING([for PMIx version file])
+    CPPFLAGS="-I$pmix_ext_install_dir/include $CPPFLAGS"
+    AS_IF([test "x`ls $pmix_ext_install_dir/include/pmix_version.h 2> /dev/null`" = "x"],
+          [AC_MSG_RESULT([not found - assuming pre-v2.0])
+           AC_MSG_WARN([PRTE does not support PMIx versions])
+           AC_MSG_WARN([less than v2.0 as only PMIx-based tools can])
+           AC_MSG_WARN([can connect to the server.])
+           AC_MSG_ERROR([Please select a newer version and configure again])],
+           [AC_MSG_RESULT([not found])
+            opal_external_pmix_version_found=0])
 
-           AS_IF([test "$opal_external_pmix_version_found" = "0"],
-                 [AC_MSG_CHECKING([version 1x])
-                  AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
-                                                      #include <pmix_version.h>
-                                                      #if (PMIX_VERSION_MAJOR != 1L)
-                                                      #error "not version 1"
-                                                      #endif
-                                                      ], [])],
-                                    [AC_MSG_RESULT([found])
-                                     AC_MSG_WARN([PRTE does not support PMIx versions])
-                                     AC_MSG_WARN([less than v2.0 as only PMIx-based tools can])
-                                     AC_MSG_WARN([can connect to the server.])
-                                     AC_MSG_ERROR([Please select a newer version and configure again])],
-                                    [AC_MSG_RESULT([not found])])])
+    # if it does exist, then we need to parse it to find
+    # the actual release series
+    AS_IF([test "$opal_external_pmix_version_found" = "0"],
+           [AC_MSG_CHECKING([version 3x])
+            AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                                #include <pmix_version.h>
+                                                #if (PMIX_VERSION_MAJOR != 3L)
+                                                #error "not version 3"
+                                                 #endif
+                                                ], [])],
+                              [AC_MSG_RESULT([found])
+                               opal_external_pmix_version=3x
+                               opal_external_pmix_version_found=1],
+                              [AC_MSG_RESULT([not found])])])
 
-           AS_IF([test "x$opal_external_pmix_version" = "x"],
-                 [AC_MSG_WARN([External PMIx support requested, but version])
-                  AC_MSG_WARN([information of the external lib could not])
-                  AC_MSG_WARN([be detected])
-                  AC_MSG_ERROR([cannot continue])])
+    AS_IF([test "$opal_external_pmix_version_found" = "0"],
+          [AC_MSG_CHECKING([version 2x])
+           AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                               #include <pmix_version.h>
+                                               #if (PMIX_VERSION_MAJOR != 2L)
+                                               #error "not version 2"
+                                               #endif
+                                              ], [])],
+                             [AC_MSG_RESULT([found])
+                              opal_external_pmix_version=2x
+                              opal_external_pmix_version_found=1
+                              opal_prun_happy=yes],
+                             [AC_MSG_RESULT([not found])])])
 
-           CPPFLAGS=$opal_external_pmix_save_CPPFLAGS
-           LDFLAGS=$opal_external_pmix_save_LDFLAGS
-           LIBS=$opal_external_pmix_save_LIBS
+    AS_IF([test "$opal_external_pmix_version_found" = "0"],
+          [AC_MSG_CHECKING([version 1x])
+           AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                               #include <pmix_version.h>
+                                               #if (PMIX_VERSION_MAJOR != 1L)
+                                               #error "not version 1"
+                                               #endif
+                                              ], [])],
+                             [AC_MSG_RESULT([found])
+                              AC_MSG_WARN([PRTE does not support PMIx versions])
+                              AC_MSG_WARN([less than v2.0 as only PMIx-based tools can])
+                              AC_MSG_WARN([can connect to the server.])
+                              AC_MSG_ERROR([Please select a newer version and configure again])],
+                             [AC_MSG_RESULT([not found])])])
 
-           AS_IF([test "$pmix_ext_install_dir" != "/usr"],
-                 [opal_external_pmix_CPPFLAGS="-I$pmix_ext_install_dir/include"
-                  opal_external_pmix_LDFLAGS=-L$pmix_ext_install_libdir])
-           opal_external_pmix_LIBS=-lpmix
-           opal_external_pmix_happy=yes])
+    AS_IF([test "x$opal_external_pmix_version" = "x"],
+          [AC_MSG_WARN([External PMIx support requested, but version])
+           AC_MSG_WARN([information of the external lib could not])
+           AC_MSG_WARN([be detected])
+           AC_MSG_ERROR([cannot continue])])
+
+    CPPFLAGS=$opal_external_pmix_save_CPPFLAGS
+    LDFLAGS=$opal_external_pmix_save_LDFLAGS
+    LIBS=$opal_external_pmix_save_LIBS
+    OPAL_WRAPPER_FLAGS_ADD([CFLAGS], [-lpmix])
+
+    AS_IF([test "$pmix_ext_install_dir" != "/usr"],
+          [opal_external_pmix_CPPFLAGS="-I$pmix_ext_install_dir/include"
+           OPAL_WRAPPER_FLAGS_ADD([CPPFLAGS], [-I$pmix_ext_install_dir/include])
+           opal_external_pmix_LDFLAGS=-L$pmix_ext_install_libdir
+           OPAL_WRAPPER_FLAGS_ADD([LDFLAGS], [-L$pmix_ext_install_libdir])])
+    opal_external_pmix_LIBS=-lpmix
+    opal_external_pmix_happy=yes
 
     AM_CONDITIONAL([OPAL_WANT_PRUN], [test "$opal_prun_happy" = "yes"])
     OPAL_VAR_SCOPE_POP

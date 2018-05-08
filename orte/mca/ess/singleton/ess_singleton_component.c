@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,6 +31,7 @@
 
 #include "opal/mca/pmix/pmix.h"
 #include "opal/mca/pmix/base/base.h"
+#include "opal/mca/base/mca_base_var.h"
 
 #include "orte/util/proc_info.h"
 #include "orte/util/show_help.h"

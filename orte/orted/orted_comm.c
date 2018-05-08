@@ -45,7 +45,7 @@
 #include <time.h>
 
 
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/mca/base/base.h"
 #include "opal/mca/pstat/pstat.h"
 #include "opal/util/output.h"

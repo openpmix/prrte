@@ -40,7 +40,7 @@
 #include "opal/types.h"
 #include "opal/class/opal_hotel.h"
 #include "opal/mca/base/base.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/mca/pmix/pmix.h"
 #include "opal/util/proc.h"
 #include "opal/sys/atomic.h"

@@ -50,7 +50,7 @@
 #include "opal/class/opal_list.h"
 #include "opal/class/opal_bitmap.h"
 #include "orte/mca/mca.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/util/fd.h"
 
 #include "orte/mca/iof/iof.h"

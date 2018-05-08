@@ -56,7 +56,7 @@
 #include <sys/stat.h>
 #endif
 
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/mca/installdirs/installdirs.h"
 #include "opal/mca/pmix/base/base.h"
 #include "opal/mca/base/base.h"

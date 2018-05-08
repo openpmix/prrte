@@ -15,6 +15,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +32,6 @@
 
 #include "opal/util/argv.h"
 #include "opal/runtime/opal_info_support.h"
-#include "opal/mca/event/base/base.h"
 #include "opal/util/output.h"
 
 #include "orte/runtime/orte_info_support.h"

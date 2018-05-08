@@ -110,8 +110,8 @@
 #endif
 
 
-#include "opal/mca/hwloc/hwloc-internal.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/class/opal_pointer_array.h"
 #include "opal/util/opal_environ.h"
 #include "opal/util/show_help.h"

@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <pthread.h>
 
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "mpi.h"
 
 #include "orte/util/proc_info.h"

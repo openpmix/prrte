@@ -13,7 +13,7 @@
 
 #include "opal/threads/threads.h"
 #include "opal/runtime/opal.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 
 static orte_event_base_t *my_base=NULL;
 static opal_thread_t progress_thread;

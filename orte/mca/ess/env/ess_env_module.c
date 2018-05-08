@@ -32,7 +32,7 @@
 #endif
 #include <stdlib.h>
 
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/runtime/opal.h"
 
 #include "orte/util/show_help.h"

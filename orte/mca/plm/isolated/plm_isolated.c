@@ -34,7 +34,7 @@
 #include "orte/constants.h"
 
 #include "opal/util/output.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 
 #include "orte/util/show_help.h"
 #include "orte/runtime/orte_globals.h"

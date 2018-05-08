@@ -40,7 +40,7 @@
 #include <sys/stat.h>
 #endif
 
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/mca/pmix/base/base.h"
 #include "opal/util/arch.h"
 #include "opal/util/os_path.h"

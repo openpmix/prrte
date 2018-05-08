@@ -31,7 +31,7 @@
 #include "opal/util/show_help.h"
 #include "opal/util/output.h"
 #include "opal/dss/dss.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/mca/pmix/pmix.h"
 
 #include "orte/mca/errmgr/errmgr.h"

@@ -30,7 +30,7 @@
 #include "orte/mca/mca.h"
 #include "opal/util/output.h"
 #include "opal/mca/base/base.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/dss/dss.h"
 
 #include "orte/mca/errmgr/errmgr.h"

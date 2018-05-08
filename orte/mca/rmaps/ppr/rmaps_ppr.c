@@ -22,7 +22,7 @@
 #endif  /* HAVE_UNISTD_H */
 #include <string.h>
 
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/util/argv.h"
 
 #include "orte/util/show_help.h"

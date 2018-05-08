@@ -39,7 +39,7 @@
 #include "opal/util/argv.h"
 #include "opal/util/output.h"
 #include "opal/util/error.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/mca/pmix/pmix.h"
 
 #include "orte/util/name_fns.h"
@@ -270,7 +270,11 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         kv = OBJ_NEW(opal_value_t);
         kv->key = strdup(OPAL_PMIX_AVAIL_PHYS_MEMORY);
         kv->type = OPAL_UINT64;
+#if HWLOC_API_VERSION < 0x20000
         kv->data.uint64 = machine->memory.total_memory;
+#else
+        kv->data.uint64 = machine->total_memory;
+#endif
         opal_list_append(info, &kv->super);
     }
 
