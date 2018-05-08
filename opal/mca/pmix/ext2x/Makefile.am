@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
 # Copyright (c) 2015      Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
@@ -14,15 +14,13 @@
 dist_opaldata_DATA = help-pmix-ext2x.txt
 
 sources = \
+        ext2x.h \
         ext2x_local.c \
         ext2x.c \
         ext2x_client.c \
         ext2x_component.c \
         ext2x_server_north.c \
         ext2x_server_south.c
-
-headers = \
-        ext2x.h
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
