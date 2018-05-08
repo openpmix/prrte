@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
- * Copyright (c) 2014-2015 Research Organization for Information Science
+ * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2018 Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
@@ -22,6 +22,8 @@
 #include "opal/class/opal_list.h"
 #include "opal/util/proc.h"
 #include "opal/util/show_help.h"
+#include "opal/mca/mca.h"
+#include "opal/mca/base/mca_base_var.h"
 #include "opal/mca/pmix/pmix.h"
 #include "ext2x.h"
 

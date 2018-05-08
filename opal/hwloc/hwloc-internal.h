@@ -4,6 +4,8 @@
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2018      Research Organization for Information Science
+ *                         and Technology (RIST). All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -190,8 +192,10 @@ OPAL_DECLSPEC extern bool opal_hwloc_use_hwthreads_as_cpus;
 #define HWLOC_OBJ_L3CACHE HWLOC_OBJ_CACHE
 #define HWLOC_OBJ_L2CACHE HWLOC_OBJ_CACHE
 #define HWLOC_OBJ_L1CACHE HWLOC_OBJ_CACHE
+#if HWLOC_API_VERSION < 0x10a00
 #define HWLOC_OBJ_NUMANODE HWLOC_OBJ_NODE
 #define HWLOC_OBJ_PACKAGE HWLOC_OBJ_SOCKET
+#endif
 #define HAVE_DECL_HWLOC_OBJ_OSDEV_COPROC 0
 #define HAVE_HWLOC_TOPOLOGY_DUP 0
 #else
