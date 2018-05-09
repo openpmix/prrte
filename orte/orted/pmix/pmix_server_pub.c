@@ -35,6 +35,7 @@
 #include "opal/util/argv.h"
 #include "opal/util/output.h"
 #include "opal/dss/dss.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/util/name_fns.h"
@@ -50,10 +51,12 @@
 static int init_server(void)
 {
     char *server;
-    opal_value_t val;
+    pmix_proc_t proc;
+    pmix_value_t val;
     char input[1024], *filename;
     FILE *fp;
     int rc;
+    pmix_status_t ret;
 
     /* only do this once */
     orte_pmix_server_globals.pubsub_init = true;
@@ -110,18 +113,14 @@ static int init_server(void)
             return rc;
         }
         /* setup our route to the server */
-        OBJ_CONSTRUCT(&val, opal_value_t);
-        val.key = OPAL_PMIX_PROC_URI;
-        val.type = OPAL_STRING;
-        val.data.string = server;
-        if (OPAL_SUCCESS != (rc = opal_pmix.store_local(&orte_pmix_server_globals.server, &val))) {
-            ORTE_ERROR_LOG(rc);
-            val.key = NULL;
-            OBJ_DESTRUCT(&val);
+        OPAL_PMIX_CONVERT_NAME(&proc, &orte_pmix_server_globals.server);
+        PMIX_VALUE_LOAD(&val, server, PMIX_STRING);
+        if (PMIX_SUCCESS != (ret = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_VALUE_DESTRUCT(&val);
             return rc;
         }
-        val.key = NULL;
-        OBJ_DESTRUCT(&val);
+        PMIX_VALUE_DESTRUCT(&val);
 
         /* check if we are to wait for the server to start - resolves
          * a race condition that can occur when the server is run
@@ -186,12 +185,12 @@ static void execute(int sd, short args, void *cbdata)
     opal_dss.copy_payload(xfer, &req->msg);
 
     /* if the range is SESSION, then set the target to the global server */
-    if (OPAL_PMIX_RANGE_SESSION == req->range) {
+    if (PMIX_RANGE_SESSION == req->range) {
         opal_output_verbose(1, orte_pmix_server_globals.output,
                             "%s orted:pmix:server range SESSION",
                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
         target = &orte_pmix_server_globals.server;
-    } else if (OPAL_PMIX_RANGE_LOCAL == req->range) {
+    } else if (PMIX_RANGE_LOCAL == req->range) {
         /* if the range is local, send it to myself */
         opal_output_verbose(1, orte_pmix_server_globals.output,
                             "%s orted:pmix:server range LOCAL",
@@ -218,22 +217,24 @@ static void execute(int sd, short args, void *cbdata)
     if (NULL != req->opcbfunc) {
         req->opcbfunc(rc, req->cbdata);
     } else if (NULL != req->lkcbfunc) {
-        req->lkcbfunc(rc, NULL, req->cbdata);
+        req->lkcbfunc(rc, NULL, 0, req->cbdata);
     }
     opal_hotel_checkout(&orte_pmix_server_globals.reqs, req->room_num);
     OBJ_RELEASE(req);
 }
 
-int pmix_server_publish_fn(opal_process_name_t *proc,
-                           opal_list_t *info,
-                           opal_pmix_op_cbfunc_t cbfunc, void *cbdata)
-{
+pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc,
+                                     const pmix_info_t info[], size_t ninfo,
+                                     pmix_op_cbfunc_t cbfunc, void *cbdata){
     pmix_server_req_t *req;
-    int rc;
+    pmix_status_t rc;
+    int ret;
     uint8_t cmd = ORTE_PMIX_PUBLISH_CMD;
-    opal_value_t *iptr;
-    opal_pmix_persistence_t persist = OPAL_PMIX_PERSIST_APP;
-    bool rset, pset;
+    pmix_data_buffer_t pbkt;
+    pmix_byte_object_t pbo;
+    opal_byte_object_t bo, *boptr;
+    pmix_proc_t psender;
+    size_t n;
 
     opal_output_verbose(1, orte_pmix_server_globals.output,
                         "%s orted:pmix:server PUBLISH",
@@ -246,74 +247,60 @@ int pmix_server_publish_fn(opal_process_name_t *proc,
     req->cbdata = cbdata;
 
     /* load the command */
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &cmd, 1, OPAL_UINT8))) {
-        ORTE_ERROR_LOG(rc);
+    if (OPAL_SUCCESS != (ret = opal_dss.pack(&req->msg, &cmd, 1, OPAL_UINT8))) {
+        ORTE_ERROR_LOG(ret);
         OBJ_RELEASE(req);
-        return rc;
-    }
-
-    /* pack the name of the publisher */
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, proc, 1, OPAL_NAME))) {
-        ORTE_ERROR_LOG(rc);
-        OBJ_RELEASE(req);
-        return rc;
+        return PMIX_ERR_PACK_FAILURE;
     }
 
     /* no help for it - need to search for range/persistence */
-    rset = false;
-    pset = false;
-    OPAL_LIST_FOREACH(iptr, info, opal_value_t) {
-        if (0 == strcmp(iptr->key, OPAL_PMIX_RANGE)) {
-            req->range = (opal_pmix_data_range_t)iptr->data.uint;
-            if (pset) {
-                break;
-            }
-            rset = true;
-        } else if (0 == strcmp(iptr->key, OPAL_PMIX_PERSISTENCE)) {
-            persist = (opal_pmix_persistence_t)iptr->data.integer;
-            if (rset) {
-                break;
-            }
-            pset = true;
+    for(n=0; n < ninfo; n++) {
+        if (0 == strncmp(info[n].key, PMIX_RANGE, PMIX_MAX_KEYLEN)) {
+            req->range = info[n].value.data.range;
+        } else if (0 == strncmp(info[n].key, PMIX_TIMEOUT, PMIX_MAX_KEYLEN)) {
+            req->timeout = info[n].value.data.integer;
         }
     }
 
-    /* pack the range */
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &req->range, 1, OPAL_PMIX_DATA_RANGE))) {
-        ORTE_ERROR_LOG(rc);
+    /* setup a pmix_data_buffer_t to hold the message */
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
+    /* I will be sending it */
+    OPAL_PMIX_CONVERT_NAME(&psender, ORTE_PROC_MY_NAME);
+
+    /* pack the name of the publisher */
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_proc_t*)proc, 1, PMIX_PROC))) {
+        PMIX_ERROR_LOG(rc);
         OBJ_RELEASE(req);
         return rc;
     }
 
-    /* pack the persistence */
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &persist, 1, OPAL_INT))) {
-        ORTE_ERROR_LOG(rc);
+    /* pack the number of infos */
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+        PMIX_ERROR_LOG(rc);
         OBJ_RELEASE(req);
         return rc;
     }
 
-    /* if we have items, pack those too - ignore persistence, timeout
-     * and range values */
-    OPAL_LIST_FOREACH(iptr, info, opal_value_t) {
-        if (0 == strcmp(iptr->key, OPAL_PMIX_RANGE) ||
-            0 == strcmp(iptr->key, OPAL_PMIX_PERSISTENCE)) {
-            continue;
-        }
-        if (0 == strcmp(iptr->key, OPAL_PMIX_TIMEOUT)) {
-            /* record the timeout value, but don't pack it */
-            req->timeout = iptr->data.integer;
-            continue;
-        }
-        opal_output_verbose(5, orte_pmix_server_globals.output,
-                            "%s publishing data %s of type %d from source %s",
-                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), iptr->key, iptr->type,
-                            ORTE_NAME_PRINT(proc));
-        if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &iptr, 1, OPAL_VALUE))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(req);
-            return rc;
-        }
+    /* pack the infos */
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
+        PMIX_ERROR_LOG(rc);
+        OBJ_RELEASE(req);
+        return rc;
     }
+
+    /* unload the pmix buffer */
+    PMIX_DATA_BUFFER_UNLOAD(&pbkt, pbo.bytes, pbo.size);
+    bo.bytes = (uint8_t*)pbo.bytes;
+    bo.size = pbo.size;
+
+    /* pack it into our msg */
+    boptr = &bo;
+    if (ORTE_SUCCESS != (ret = opal_dss.pack(&req->msg, &boptr, 1, OPAL_BYTE_OBJECT))) {
+        ORTE_ERROR_LOG(ret);
+        free(bo.bytes);
+        return PMIX_ERR_PACK_FAILURE;
+    }
+    free(bo.bytes);
 
     /* thread-shift so we can store the tracker */
     opal_event_set(orte_event_base, &(req->ev),
@@ -326,19 +313,23 @@ int pmix_server_publish_fn(opal_process_name_t *proc,
 
 }
 
-int pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
-                          const pmix_info_t info[], size_t ninfo,
-                          pmix_lookup_cbfunc_t cbfunc, void *cbdata)
+pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
+                                    const pmix_info_t info[], size_t ninfo,
+                                    pmix_lookup_cbfunc_t cbfunc, void *cbdata)
 {
     pmix_server_req_t *req;
-    int rc;
+    int ret;
     uint8_t cmd = ORTE_PMIX_LOOKUP_CMD;
-    int32_t nkeys, i;
-    opal_value_t *iptr;
+    size_t m, n;
+    pmix_data_buffer_t pbkt;
+    pmix_byte_object_t pbo;
+    opal_byte_object_t bo, *boptr;
+    pmix_proc_t psender;
+    pmix_status_t rc;
 
-    /* the list of info objects are directives for us - they include
-     * things like timeout constraints, so there is no reason to
-     * forward them to the server */
+    if (NULL == keys || 0 == opal_argv_count(keys)) {
+        return PMIX_ERR_BAD_PARAM;
+    }
 
     /* create the caddy */
     req = OBJ_NEW(pmix_server_req_t);
@@ -347,75 +338,76 @@ int pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
     req->cbdata = cbdata;
 
     /* load the command */
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &cmd, 1, OPAL_UINT8))) {
-        ORTE_ERROR_LOG(rc);
+    if (OPAL_SUCCESS != (ret = opal_dss.pack(&req->msg, &cmd, 1, OPAL_UINT8))) {
+        ORTE_ERROR_LOG(ret);
         OBJ_RELEASE(req);
-        return rc;
+        return PMIX_ERR_PACK_FAILURE;
     }
 
-    /* pack the requesting process jobid */
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &proc->jobid, 1, ORTE_JOBID))) {
-        ORTE_ERROR_LOG(rc);
-        OBJ_RELEASE(req);
-        return rc;
-    }
-
-    /* no help for it - need to search for range */
-    OPAL_LIST_FOREACH(iptr, info, opal_value_t) {
-        if (0 == strcmp(iptr->key, OPAL_PMIX_RANGE)) {
-            req->range = (opal_pmix_data_range_t)iptr->data.uint;
-            break;
+    /* no help for it - need to search for range and timeout */
+   for(n=0; n < ninfo; n++) {
+        if (0 == strncmp(info[n].key, PMIX_RANGE, PMIX_MAX_KEYLEN)) {
+            req->range = info[n].value.data.range;
+        } else if (0 == strncmp(info[n].key, PMIX_TIMEOUT, PMIX_MAX_KEYLEN)) {
+            req->timeout = info[n].value.data.integer;
         }
     }
 
-    /* pack the range */
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &req->range, 1, OPAL_PMIX_DATA_RANGE))) {
-        ORTE_ERROR_LOG(rc);
+    /* setup a pmix_data_buffer_t to hold the message */
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
+    /* I will be sending it */
+    OPAL_PMIX_CONVERT_NAME(&psender, ORTE_PROC_MY_NAME);
+
+    /* pack the name of the requestor */
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_proc_t*)proc, 1, PMIX_PROC))) {
+        PMIX_ERROR_LOG(rc);
         OBJ_RELEASE(req);
         return rc;
     }
 
     /* pack the number of keys */
-    nkeys = opal_argv_count(keys);
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &nkeys, 1, OPAL_UINT32))) {
-        ORTE_ERROR_LOG(rc);
+    n = opal_argv_count(keys);
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &n, 1, PMIX_SIZE))) {
+        PMIX_ERROR_LOG(rc);
+        OBJ_RELEASE(req);
+        return rc;
+    }
+    /* pack the keys */
+    for (m=0; m < n; m++) {
+        if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &keys[m], 1, PMIX_STRING))) {
+            PMIX_ERROR_LOG(rc);
+            OBJ_RELEASE(req);
+            return rc;
+        }
+    }
+
+    /* pack the number of infos */
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+        PMIX_ERROR_LOG(rc);
         OBJ_RELEASE(req);
         return rc;
     }
 
-    /* pack the keys too */
-    for (i=0; i < nkeys; i++) {
-        opal_output_verbose(5, orte_pmix_server_globals.output,
-                            "%s lookup data %s for proc %s",
-                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), keys[i],
-                            ORTE_NAME_PRINT(proc));
-        if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &keys[i], 1, OPAL_STRING))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(req);
-            return rc;
-        }
+    /* pack the infos */
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
+        PMIX_ERROR_LOG(rc);
+        OBJ_RELEASE(req);
+        return rc;
     }
 
-    /* if we have items, pack those too - ignore range and timeout value */
-    OPAL_LIST_FOREACH(iptr, info, opal_value_t) {
-        if (0 == strcmp(iptr->key, OPAL_PMIX_RANGE)) {
-            continue;
-        }
-        if (0 == strcmp(iptr->key, OPAL_PMIX_TIMEOUT)) {
-            /* record the timeout value, but don't pack it */
-            req->timeout = iptr->data.integer;
-            continue;
-        }
-        opal_output_verbose(2, orte_pmix_server_globals.output,
-                            "%s lookup directive %s for proc %s",
-                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), iptr->key,
-                            ORTE_NAME_PRINT(proc));
-        if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &iptr, 1, OPAL_VALUE))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(req);
-            return rc;
-        }
+    /* unload the pmix buffer */
+    PMIX_DATA_BUFFER_UNLOAD(&pbkt, pbo.bytes, pbo.size);
+    bo.bytes = (uint8_t*)pbo.bytes;
+    bo.size = pbo.size;
+
+    /* pack it into our msg */
+    boptr = &bo;
+    if (ORTE_SUCCESS != (ret = opal_dss.pack(&req->msg, &boptr, 1, OPAL_BYTE_OBJECT))) {
+        ORTE_ERROR_LOG(ret);
+        free(bo.bytes);
+        return PMIX_ERR_PACK_FAILURE;
     }
+    free(bo.bytes);
 
     /* thread-shift so we can store the tracker */
     opal_event_set(orte_event_base, &(req->ev),
@@ -427,15 +419,19 @@ int pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
     return OPAL_SUCCESS;
 }
 
-int pmix_server_unpublish_fn(opal_process_name_t *proc, char **keys,
-                             opal_list_t *info,
-                             opal_pmix_op_cbfunc_t cbfunc, void *cbdata)
+pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
+                                       const pmix_info_t info[], size_t ninfo,
+                                       pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
     pmix_server_req_t *req;
-    int rc;
+    int ret;
     uint8_t cmd = ORTE_PMIX_UNPUBLISH_CMD;
-    uint32_t nkeys, n;
-    opal_value_t *iptr;
+    pmix_data_buffer_t pbkt;
+    pmix_byte_object_t pbo;
+    opal_byte_object_t bo, *boptr;
+    pmix_proc_t psender;
+    size_t m, n;
+    pmix_status_t rc;
 
     /* create the caddy */
     req = OBJ_NEW(pmix_server_req_t);
@@ -444,67 +440,76 @@ int pmix_server_unpublish_fn(opal_process_name_t *proc, char **keys,
     req->cbdata = cbdata;
 
     /* load the command */
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &cmd, 1, OPAL_UINT8))) {
-        ORTE_ERROR_LOG(rc);
+    if (OPAL_SUCCESS != (ret = opal_dss.pack(&req->msg, &cmd, 1, OPAL_UINT8))) {
+        ORTE_ERROR_LOG(ret);
         OBJ_RELEASE(req);
-        return rc;
+        return PMIX_ERR_PACK_FAILURE;
     }
 
-    /* pack the name of the publisher */
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, proc, 1, OPAL_NAME))) {
-        ORTE_ERROR_LOG(rc);
-        OBJ_RELEASE(req);
-        return rc;
-    }
+     /* no help for it - need to search for range and timeout */
+    for(n=0; n < ninfo; n++) {
+         if (0 == strncmp(info[n].key, PMIX_RANGE, PMIX_MAX_KEYLEN)) {
+             req->range = info[n].value.data.range;
+         } else if (0 == strncmp(info[n].key, PMIX_TIMEOUT, PMIX_MAX_KEYLEN)) {
+             req->timeout = info[n].value.data.integer;
+         }
+     }
 
-    /* no help for it - need to search for range */
-    OPAL_LIST_FOREACH(iptr, info, opal_value_t) {
-        if (0 == strcmp(iptr->key, OPAL_PMIX_RANGE)) {
-            req->range = (opal_pmix_data_range_t)iptr->data.integer;
-            break;
-        }
-    }
+     /* setup a pmix_data_buffer_t to hold the message */
+     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
+     /* I will be sending it */
+     OPAL_PMIX_CONVERT_NAME(&psender, ORTE_PROC_MY_NAME);
 
-    /* pack the range */
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &req->range, 1, OPAL_INT))) {
-        ORTE_ERROR_LOG(rc);
-        OBJ_RELEASE(req);
-        return rc;
-    }
+     /* pack the name of the requestor */
+     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_proc_t*)proc, 1, PMIX_PROC))) {
+         PMIX_ERROR_LOG(rc);
+         OBJ_RELEASE(req);
+         return rc;
+     }
 
-    /* pack the number of keys */
-    nkeys = opal_argv_count(keys);
-    if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &nkeys, 1, OPAL_UINT32))) {
-        ORTE_ERROR_LOG(rc);
-        OBJ_RELEASE(req);
-        return rc;
-    }
+     /* pack the number of keys */
+     n = opal_argv_count(keys);
+     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &n, 1, PMIX_SIZE))) {
+         PMIX_ERROR_LOG(rc);
+         OBJ_RELEASE(req);
+         return rc;
+     }
+     /* pack the keys */
+     for (m=0; m < n; m++) {
+         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &keys[m], 1, PMIX_STRING))) {
+             PMIX_ERROR_LOG(rc);
+             OBJ_RELEASE(req);
+             return rc;
+         }
+     }
 
-    /* pack the keys too */
-    for (n=0; n < nkeys; n++) {
-        if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &keys[n], 1, OPAL_STRING))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(req);
-            return rc;
-        }
-    }
+     /* pack the number of infos */
+     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+         PMIX_ERROR_LOG(rc);
+         OBJ_RELEASE(req);
+         return rc;
+     }
 
-    /* if we have items, pack those too - ignore range and timeout value */
-    OPAL_LIST_FOREACH(iptr, info, opal_value_t) {
-        if (0 == strcmp(iptr->key, OPAL_PMIX_RANGE)) {
-            continue;
-        }
-        if (0 == strcmp(iptr->key, OPAL_PMIX_TIMEOUT)) {
-            /* record the timeout value, but don't pack it */
-            req->timeout = iptr->data.integer;
-            continue;
-        }
-        if (OPAL_SUCCESS != (rc = opal_dss.pack(&req->msg, &iptr, 1, OPAL_VALUE))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(req);
-            return rc;
-        }
-    }
+     /* pack the infos */
+     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
+         PMIX_ERROR_LOG(rc);
+         OBJ_RELEASE(req);
+         return rc;
+     }
+
+     /* unload the pmix buffer */
+     PMIX_DATA_BUFFER_UNLOAD(&pbkt, pbo.bytes, pbo.size);
+     bo.bytes = (uint8_t*)pbo.bytes;
+     bo.size = pbo.size;
+
+     /* pack it into our msg */
+     boptr = &bo;
+     if (ORTE_SUCCESS != (ret = opal_dss.pack(&req->msg, &boptr, 1, OPAL_BYTE_OBJECT))) {
+         ORTE_ERROR_LOG(ret);
+         free(bo.bytes);
+         return PMIX_ERR_PACK_FAILURE;
+     }
+     free(bo.bytes);
 
     /* thread-shift so we can store the tracker */
     opal_event_set(orte_event_base, &(req->ev),
@@ -520,62 +525,104 @@ void pmix_server_keyval_client(int status, orte_process_name_t* sender,
                                opal_buffer_t *buffer,
                                orte_rml_tag_t tg, void *cbdata)
 {
-    int rc, ret, room_num = -1;
+    uint8_t command;
+    int rc, room_num = -1;
     int32_t cnt;
     pmix_server_req_t *req=NULL;
-    opal_list_t info;
-    opal_value_t *iptr;
-    opal_pmix_pdata_t *pdata;
-    opal_process_name_t source;
+    opal_byte_object_t *boptr;
+    pmix_data_buffer_t pbkt;
+    pmix_status_t ret, rt = PMIX_SUCCESS;
+    pmix_proc_t psender;
+    pmix_info_t info;
+    pmix_pdata_t *pdata = NULL;
+    size_t n, npdata = 0;
 
     opal_output_verbose(1, orte_pmix_server_globals.output,
                         "%s recvd lookup data return",
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
 
-    OBJ_CONSTRUCT(&info, opal_list_t);
     /* unpack the room number of the request tracker */
     cnt = 1;
     if (OPAL_SUCCESS != (rc = opal_dss.unpack(buffer, &room_num, &cnt, OPAL_INT))) {
         ORTE_ERROR_LOG(rc);
-        return;
-    }
-
-    /* unpack the status */
-    cnt = 1;
-    if (OPAL_SUCCESS != (rc = opal_dss.unpack(buffer, &ret, &cnt, OPAL_INT))) {
-        ORTE_ERROR_LOG(rc);
-        ret = rc;
+        ret = PMIX_ERR_UNPACK_FAILURE;
         goto release;
     }
 
-    opal_output_verbose(5, orte_pmix_server_globals.output,
-                        "%s recvd lookup returned status %d",
-                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret);
+    /* unpack the command */
+    cnt = 1;
+    if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &command, &cnt, OPAL_UINT8))) {
+        ORTE_ERROR_LOG(rc);
+        return;
+    }
 
-    if (ORTE_SUCCESS == ret) {
-        /* see if any data was included - not an error if the answer is no */
-        cnt = 1;
-        while (OPAL_SUCCESS == opal_dss.unpack(buffer, &source, &cnt, OPAL_NAME)) {
-            pdata = OBJ_NEW(opal_pmix_pdata_t);
-            pdata->proc = source;
-            if (OPAL_SUCCESS != (rc = opal_dss.unpack(buffer, &iptr, &cnt, OPAL_VALUE))) {
-                ORTE_ERROR_LOG(rc);
-                OBJ_RELEASE(pdata);
-                continue;
+    /* unpack the return status */
+    cnt = 1;
+    if (OPAL_SUCCESS != (rc = opal_dss.unpack(buffer, &status, &cnt, OPAL_INT))) {
+        ORTE_ERROR_LOG(rc);
+        ret = PMIX_ERR_UNPACK_FAILURE;
+        goto release;
+    }
+
+    if (ORTE_ERR_NOT_FOUND == status) {
+        ret = PMIX_ERR_NOT_FOUND;
+        goto release;
+    } else if (ORTE_ERR_PARTIAL_SUCCESS == status) {
+        rt = PMIX_QUERY_PARTIAL_SUCCESS;
+    } else {
+        ret = PMIX_SUCCESS;
+    }
+    if (ORTE_PMIX_UNPUBLISH_CMD == command) {
+        /* nothing else will be included */
+        goto release;
+    }
+
+    /* unpack the byte object payload */
+    cnt = 1;
+    if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &boptr, &cnt, OPAL_BYTE_OBJECT))) {
+        ORTE_ERROR_LOG(rc);
+        ret = PMIX_ERR_UNPACK_FAILURE;
+        goto release;
+    }
+
+    /* load it into a pmix data buffer for processing */
+    PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
+    boptr->bytes = NULL;
+    OBJ_RELEASE(boptr);
+
+    /* convert the sender */
+    OPAL_PMIX_CONVERT_NAME(&psender, sender);
+
+    /* unpack the number of data items */
+    cnt = 1;
+    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &npdata, &cnt, PMIX_SIZE))) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+        goto release;
+    }
+
+    if (0 < npdata) {
+        PMIX_PDATA_CREATE(pdata, npdata);
+        for (n=0; n < npdata; n++) {
+            cnt = 1;
+            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &pdata[n].proc, &cnt, PMIX_PROC))) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                goto release;
             }
-            opal_output_verbose(5, orte_pmix_server_globals.output,
-                                "%s recvd lookup returned data %s of type %d from source %s",
-                                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), iptr->key, iptr->type,
-                                ORTE_NAME_PRINT(&source));
-            if (OPAL_SUCCESS != (rc = opal_value_xfer(&pdata->value, iptr))) {
-                ORTE_ERROR_LOG(rc);
-                OBJ_RELEASE(pdata);
-                OBJ_RELEASE(iptr);
-                continue;
+            cnt = 1;
+            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &info, &cnt, PMIX_INFO))) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                goto release;
             }
-            OBJ_RELEASE(iptr);
-            opal_list_append(&info, &pdata->super);
+            (void)strncpy(pdata[n].key, info.key, PMIX_MAX_KEYLEN);
+            PMIX_VALUE_LOAD(&pdata[n].value, &info.value.data, info.value.type);
+            PMIX_VALUE_DESTRUCT(&info.value);
         }
+    }
+    if (PMIX_SUCCESS == ret) {
+        ret = rt;
     }
 
   release:
@@ -589,14 +636,16 @@ void pmix_server_keyval_client(int status, orte_process_name_t* sender,
         if (NULL != req->opcbfunc) {
             req->opcbfunc(ret, req->cbdata);
         } else if (NULL != req->lkcbfunc) {
-            req->lkcbfunc(ret, &info, req->cbdata);
+            req->lkcbfunc(ret, pdata, npdata, req->cbdata);
         } else {
             /* should not happen */
             ORTE_ERROR_LOG(ORTE_ERR_NOT_SUPPORTED);
         }
 
         /* cleanup */
-        OPAL_LIST_DESTRUCT(&info);
         OBJ_RELEASE(req);
+    }
+    if (NULL != pdata) {
+        PMIX_PDATA_FREE(pdata, npdata);
     }
 }

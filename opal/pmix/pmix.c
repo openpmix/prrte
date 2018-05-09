@@ -774,3 +774,14 @@ int opal_pmix_register_cleanup(char *path, bool directory, bool ignore, bool job
     }
     return ret;
 }
+
+
+/* CLASS INSTANTIATIONS */
+static void dsicon(opal_ds_info_t *p)
+{
+    PMIX_PROC_CONSTRUCT(&p->source);
+    p->info = NULL;
+}
+OBJ_CLASS_INSTANCE(opal_ds_info_t,
+                   opal_list_item_t,
+                   dsicon, NULL);

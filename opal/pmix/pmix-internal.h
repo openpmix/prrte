@@ -21,7 +21,7 @@
 #endif
 
 #include "opal/mca/mca.h"
-#include "opal/mca/event/event.h"
+#include "opal/event/event-internal.h"
 #include "opal/dss/dss.h"
 #include "opal/runtime/opal.h"
 #include "opal/dss/dss.h"
@@ -30,10 +30,22 @@
 #include "opal/hash_string.h"
 
 #include "pmix.h"
+#include "pmix_server.h"
+#include "pmix_tool.h"
 
 BEGIN_C_DECLS
 
 OPAL_DECLSPEC extern int opal_pmix_verbose_output;
+
+/* define a caddy for pointing to pmix_info_t that
+ * are to be included in an answer */
+typedef struct {
+    opal_list_item_t super;
+    pmix_proc_t source;
+    pmix_info_t *info;
+} opal_ds_info_t;
+OBJ_CLASS_DECLARATION(opal_ds_info_t);
+
 
 typedef struct {
     opal_mutex_t mutex;
@@ -445,6 +457,12 @@ OPAL_DECLSPEC int opal_pmix_convert_status(pmix_status_t status);
             (r) = (v);                      \
         }                                   \
     } while(0)
+#define OPAL_PMIX_CONVERT_NAME(p, n)                        \
+    do {                                                    \
+        OPAL_PMIX_CONVERT_JOBID((p)->nspace, (n)->jobid);   \
+        OPAL_PMIX_CONVERT_VPID((p)->rank, (n)->vpid);       \
+    } while(0)
+
 
 #define OPAL_PMIX_CONVERT_NSPACE(r, j, n)       \
     (r) = opal_convert_string_to_jobid((j), (n))
@@ -458,6 +476,13 @@ OPAL_DECLSPEC int opal_pmix_convert_status(pmix_status_t status);
         }                                   \
     } while(0)
 
+#define OPAL_PMIX_CONVERT_PROCT(r, n, p)                            \
+    do {                                                            \
+        OPAL_PMIX_CONVERT_NSPACE((r), &(n)->jobid, (p)->nspace);    \
+        if (OPAL_SUCCESS == (r)) {                                  \
+            OPAL_PMIX_CONVERT_RANK((n)->vpid, (p)->rank);           \
+        }                                                           \
+    } while(0)
 
 OPAL_DECLSPEC void opal_pmix_value_load(pmix_value_t *v,
                                         opal_value_t *kv);

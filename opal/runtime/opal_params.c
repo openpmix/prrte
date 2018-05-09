@@ -60,6 +60,7 @@ bool opal_timing_overhead = true;
 
 int opal_abort_delay = 0;
 bool opal_abort_print_stack = false;
+int opal_pmix_verbose_output = 0;
 
 static bool opal_register_done = false;
 
@@ -272,6 +273,13 @@ int opal_register_params(void)
     if (OPAL_SUCCESS != ret) {
         return ret;
     }
+
+    mca_base_var_register("opal", "opal", NULL, "pmix_verbose",
+                          "Verbosity for OPAL-level PMIx code",
+                          MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                          OPAL_INFO_LVL_5,
+                          MCA_BASE_VAR_SCOPE_READONLY,
+                          &opal_pmix_verbose_output);
 
     return OPAL_SUCCESS;
 }

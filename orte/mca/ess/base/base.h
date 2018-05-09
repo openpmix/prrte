@@ -28,6 +28,7 @@
 #include "orte_config.h"
 #include "orte/types.h"
 
+#include "opal/mca/base/mca_base_framework.h"
 #include "orte/mca/mca.h"
 #include "opal/dss/dss_types.h"
 #include "opal/pmix/pmix-internal.h"

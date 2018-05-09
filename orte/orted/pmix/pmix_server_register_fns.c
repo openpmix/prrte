@@ -40,7 +40,7 @@
 #include "opal/util/argv.h"
 #include "opal/util/output.h"
 #include "opal/util/error.h"
-#include "opal/mca/hwloc/base/base.h"
+#include "opal/hwloc/hwloc-internal.h"
 #include "opal/pmix/pmix-internal.h"
 
 #include "orte/util/name_fns.h"
@@ -265,7 +265,11 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
 
     /* topology signature */
     kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_TOPOLOGY_SIGNATURE);
+#if HWLOC_API_VERSION < 0x20000
+    kv->key = strdup(PMIX_HWLOC_XML_V1);
+#else
+    kv->key = strdup(PMIX_HWLOC_XML_V2);
+#endif
     kv->type = OPAL_STRING;
     kv->data.string = strdup(orte_topo_signature);
     opal_list_append(info, &kv->super);
@@ -276,7 +280,11 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         kv = OBJ_NEW(opal_value_t);
         kv->key = strdup(PMIX_AVAIL_PHYS_MEMORY);
         kv->type = OPAL_UINT64;
+#if HWLOC_API_VERSION < 0x20000
         kv->data.uint64 = machine->memory.total_memory;
+#else
+    kv->data.uint64 = machine->total_memory;
+#endif
         opal_list_append(info, &kv->super);
     }
 
@@ -559,11 +567,9 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         ++n;
 
         /* now publish it */
-        OPAL_PMIX_CONVERT_JOBID(pproc.nspace, ORTE_PROC_MY_NAME->jobid);
-        OPAL_PMIX_CONVERT_VPID(pproc.rank, ORTE_PROC_MY_NAME->vpid);
+        OPAL_PMIX_CONVERT_NAME(&pproc, ORTE_PROC_MY_NAME);
         OPAL_PMIX_CONSTRUCT_LOCK(&lock);
-        if (PMIX_SUCCESS != (ret = pmix_server_publish_fn(&pproc,
-                                                         pinfo, ninfo, opcbfunc, &lock))) {
+        if (PMIX_SUCCESS != (ret = pmix_server_publish_fn(&pproc, pinfo, ninfo, opcbfunc, &lock))) {
             PMIX_ERROR_LOG(ret);
             rc = opal_pmix_convert_status(ret);
             PMIX_INFO_FREE(pinfo, ninfo);

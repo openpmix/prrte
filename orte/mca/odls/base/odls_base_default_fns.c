@@ -200,7 +200,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     }
 
     /* setup the daemon job */
-    (void)opal_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, ORTE_PROC_MY_NAME->jobid);
+    OPAL_PMIX_CONVERT_JOBID(pproc.nspace, ORTE_PROC_MY_NAME->jobid);
 
     /* if we haven't already done so, provide the info on the
      * capabilities of each node */
@@ -220,7 +220,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         }
         wireup = OBJ_NEW(opal_buffer_t);
         /* always include data for mpirun as the daemons can't have it yet */
-        pproc.rank = ORTE_PROC_MY_NAME->vpid;
+        OPAL_PMIX_CONVERT_VPID(pproc.rank, ORTE_PROC_MY_NAME->vpid);
         val = NULL;
         if (PMIX_SUCCESS != (ret = PMIx_Get(&pproc, NULL, NULL, 0, &val)) || NULL == val) {
             PMIX_ERROR_LOG(ret);
@@ -231,6 +231,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         if (PMIX_DATA_ARRAY != val->type || NULL == val->data.darray ||
             PMIX_INFO != val->data.darray->type || NULL == val->data.darray->array) {
             ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
+            PMIX_VALUE_RELEASE(val);
             OBJ_RELEASE(wireup);
             return ORTE_ERR_NOT_FOUND;
         }
@@ -238,11 +239,19 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         info = (pmix_info_t*)val->data.darray->array;
         ninfo = val->data.darray->size;
         PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, info, ninfo, PMIX_INFO))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
+            PMIX_VALUE_RELEASE(val);
             OBJ_RELEASE(wireup);
             return ORTE_ERROR;
         }
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, info, ninfo, PMIX_INFO))) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_VALUE_RELEASE(val);
+            OBJ_RELEASE(wireup);
+            return ORTE_ERROR;
+        }
+        PMIX_VALUE_RELEASE(val);
         PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
         if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, ORTE_PROC_MY_NAME, 1, ORTE_NAME))) {
             ORTE_ERROR_LOG(rc);
@@ -257,7 +266,6 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
             OBJ_RELEASE(wireup);
             return rc;
         }
-        PMIX_VALUE_RELEASE(val);
         /* if we didn't rollup the connection info, then we have
          * to provide a complete map of connection info */
         if (!orte_static_ports && !orte_fwd_mpirun_port) {
@@ -266,7 +274,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
                     continue;
                 }
                 val = NULL;
-                pproc.rank = dmn->name.vpid;
+                OPAL_PMIX_CONVERT_VPID(pproc.rank, dmn->name.vpid);
                 if (PMIX_SUCCESS != (ret = PMIx_Get(&pproc, NULL, NULL, 0, &val)) || NULL == val) {
                     PMIX_ERROR_LOG(ret);
                     OBJ_RELEASE(buffer);
@@ -289,7 +297,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
                     return ORTE_ERROR;
                 }
                 PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
-                if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, ORTE_PROC_MY_NAME, 1, ORTE_NAME))) {
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, &dmn->name, 1, ORTE_NAME))) {
                     ORTE_ERROR_LOG(rc);
                     OBJ_RELEASE(wireup);
                     return rc;

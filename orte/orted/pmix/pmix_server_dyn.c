@@ -38,7 +38,8 @@
 #include "opal/util/output.h"
 #include "opal/util/path.h"
 #include "opal/dss/dss.h"
-#include "opal/mca/hwloc/hwloc-internal.h"
+#include "opal/hwloc/hwloc-internal.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/rmaps/base/base.h"
@@ -592,6 +593,10 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc,
 
     cd = OBJ_NEW(orte_pmix_server_op_caddy_t);
     OPAL_PMIX_CONVERT_NSPACE(rc, &cd->proc.jobid, proc->nspace);
+    if (ORTE_SUCCESS != rc) {
+        ORTE_ERROR_LOG(rc);
+        return PMIX_ERR_BAD_PARAM;
+    }
     OPAL_PMIX_CONVERT_RANK(cd->proc.vpid, proc->rank);
     cd->info = (pmix_info_t*)job_info;
     cd->ninfo = ninfo;
@@ -609,52 +614,92 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc,
 
 static void _cnct(int sd, short args, void *cbdata);
 
+static void opcbfunc(pmix_status_t status, void *cbdata)
+{
+    opal_pmix_lock_t *lock = (opal_pmix_lock_t*)cbdata;
+    lock->status = status;
+    OPAL_PMIX_WAKEUP_THREAD(lock);
+}
+
 static void _cnlk(pmix_status_t status,
                   pmix_pdata_t data[], size_t ndata,
                   void *cbdata)
 {
     orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
-    int rc, cnt;
-    opal_pmix_pdata_t *pdat;
+    int cnt;
     orte_job_t *jdata;
-    opal_buffer_t buf;
+    pmix_status_t ret;
+    pmix_data_buffer_t pbkt;
+    opal_pmix_lock_t lock;
+    pmix_info_t  *info;
+    size_t ninfo;
 
     ORTE_ACQUIRE_OBJECT(cd);
 
     /* if we failed to get the required data, then just inform
      * the embedded server that the connect cannot succeed */
-    if (PMIX_SUCCESS != status || NULL == data) {
-        if (NULL != cd->cbfunc) {
-            rc = opal_pmix_convert_status(status);
+    if (PMIX_SUCCESS != status) {
+        ret = status;
+        goto release;
+    }
+    if (NULL == data) {
+        ret = PMIX_ERR_NOT_FOUND;
+        goto release;
+    }
+
+    /* if we have more than one data returned, that's an error */
+    if (1 != ndata) {
+        ORTE_ERROR_LOG(ORTE_ERR_BAD_PARAM);
+        ret = PMIX_ERR_BAD_PARAM;
+        goto release;
+    }
+
+    /* the data will consist of a byte object containing
+     * a packed buffer of the job data */
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
+    PMIX_DATA_BUFFER_LOAD(&pbkt, data[0].value.data.bo.bytes, data[0].value.data.bo.size);
+    data[0].value.data.bo.bytes = NULL;
+    data[0].value.data.bo.size = 0;
+
+    /* extract the number of returned info */
+    cnt = 1;
+    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&data[0].proc, &pbkt, &ninfo, &cnt, PMIX_SIZE))) {
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+        goto release;
+    }
+    if (0 < ninfo) {
+        PMIX_INFO_CREATE(info, ninfo);
+        cnt = ninfo;
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&data[0].proc, &pbkt, info, &cnt, PMIX_INFO))) {
+            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+            PMIX_INFO_FREE(info, ninfo);
             goto release;
         }
     }
+    PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
-    /* register the returned data with the embedded PMIx server */
-    pdat = (opal_pmix_pdata_t*)opal_list_get_first(data);
-    if (OPAL_BYTE_OBJECT != pdat->value.type) {
-        rc = ORTE_ERR_BAD_PARAM;
+    /* we have to process the data to convert it into an orte_job_t
+     * that describes this job as we didn't already have it */
+    jdata = OBJ_NEW(orte_job_t);
+
+    /* register the data with the local server */
+    OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+    ret = PMIx_server_register_nspace(data[0].proc.nspace,
+                                      jdata->num_local_procs,
+                                      info, ninfo, opcbfunc, &lock);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_FREE(info, ninfo);
+        OPAL_PMIX_DESTRUCT_LOCK(&lock);
         goto release;
     }
-    /* the data will consist of a packed buffer with the job data in it */
-    OBJ_CONSTRUCT(&buf, opal_buffer_t);
-    opal_dss.load(&buf, pdat->value.data.bo.bytes, pdat->value.data.bo.size);
-    pdat->value.data.bo.bytes = NULL;
-    pdat->value.data.bo.size = 0;
-    cnt = 1;
-    if (OPAL_SUCCESS != (rc = opal_dss.unpack(&buf, &jdata, &cnt, ORTE_JOB))) {
-        OBJ_DESTRUCT(&buf);
-        goto release;
-    }
-    OBJ_DESTRUCT(&buf);
-    if (ORTE_SUCCESS != (rc = orte_pmix_server_register_nspace(jdata))) {
-        OBJ_RELEASE(jdata);
-        goto release;
-    }
-    OBJ_RELEASE(jdata);  // no reason to keep this around
+    OPAL_PMIX_WAIT_THREAD(&lock);
+    ret = lock.status;
+    OPAL_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(info, ninfo);
 
     /* restart the cnct processor */
-    ORTE_PMIX_OPERATION(cd->procs, cd->info, _cnct, cd->cbfunc, cd->cbdata);
+    ORTE_PMIX_OPERATION(cd->procs, cd->nprocs, cd->info, cd->ninfo, _cnct, cd->cbfunc, cd->cbdata);
     /* protect the re-referenced data */
     cd->procs = NULL;
     cd->info = NULL;
@@ -663,7 +708,7 @@ static void _cnlk(pmix_status_t status,
 
   release:
     if (NULL != cd->cbfunc) {
-        cd->cbfunc(rc, cd->cbdata);
+        cd->cbfunc(ret, cd->cbdata);
     }
     OBJ_RELEASE(cd);
 }
@@ -671,10 +716,12 @@ static void _cnlk(pmix_status_t status,
 static void _cnct(int sd, short args, void *cbdata)
 {
     orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
-    char **keys = NULL, *key;
+    char **keys = NULL;
     orte_job_t *jdata;
     int rc = ORTE_SUCCESS;
-    opal_value_t *kv;
+    size_t n;
+    orte_jobid_t jobid;
+    uint32_t uid;
 
     ORTE_ACQUIRE_OBJECT(cd);
 
@@ -688,9 +735,14 @@ static void _cnct(int sd, short args, void *cbdata)
      * missing nspaces */
 
     /* cycle thru the procs */
-    OPAL_LIST_FOREACH(nm, cd->procs, orte_namelist_t) {
+    for(n=0; n < cd->nprocs; n++) {
+        OPAL_PMIX_CONVERT_NSPACE(rc, &jobid, cd->procs[n].nspace);
+        if (ORTE_SUCCESS != rc) {
+            ORTE_ERROR_LOG(rc);
+            goto release;
+        }
         /* see if we have the job object for this job */
-        if (NULL == (jdata = orte_get_job_data_object(nm->name.jobid))) {
+        if (NULL == (jdata = orte_get_job_data_object(jobid))) {
             /* we don't know about this job. If our "global" data
              * server is just our HNP, then we have no way of finding
              * out about it, and all we can do is return an error */
@@ -701,17 +753,16 @@ static void _cnct(int sd, short args, void *cbdata)
             }
             /* ask the global data server for the data - if we get it,
              * then we can complete the request */
-            orte_util_convert_jobid_to_string(&key, nm->name.jobid);
-            opal_argv_append_nosize(&keys, key);
-            free(key);
-            /* we have to add the user's id to our list of info */
-            kv = OBJ_NEW(opal_value_t);
-            kv->key = strdup(OPAL_PMIX_USERID);
-            kv->type = OPAL_UINT32;
-            kv->data.uint32 = geteuid();
-            opal_list_append(cd->info, &kv->super);
-            if (ORTE_SUCCESS != (rc = pmix_server_lookup_fn(&nm->name, keys, cd->info, _cnlk, cd))) {
+            opal_argv_append_nosize(&keys, cd->procs[n].nspace);
+            /* we have to add the user's id to the directives */
+            cd->ndirs = 1;
+            PMIX_INFO_CREATE(cd->directives, cd->ndirs);
+            uid = geteuid();
+            PMIX_INFO_LOAD(&cd->directives[0], PMIX_USERID, &uid, OPAL_UINT32);
+            if (ORTE_SUCCESS != (rc = pmix_server_lookup_fn(&cd->procs[n], keys,
+                                                            cd->directives, cd->ndirs, _cnlk, cd))) {
                 opal_argv_free(keys);
+                PMIX_INFO_FREE(cd->directives, cd->ndirs);
                 goto release;
             }
             opal_argv_free(keys);
@@ -740,6 +791,8 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
                                      const pmix_info_t info[], size_t ninfo,
                                      pmix_connect_cbfunc_t cbfunc, void *cbdata)
 {
+    orte_pmix_server_op_caddy_t *op;
+
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s connect called with %d procs",
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
@@ -750,13 +803,25 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
         return PMIX_ERR_BAD_PARAM;
     }
     /* must thread shift this as we will be accessing global data */
-    ORTE_PMIX_OPERATION(procs, nprocs, info, ninfo, _cnct, cbfunc, cbdata);
+    op = OBJ_NEW(orte_pmix_server_op_caddy_t);
+    op->procs = (pmix_proc_t*)procs;
+    op->nprocs = nprocs;
+    op->info = (pmix_info_t*)info;
+    op->ninfo = ninfo;
+    op->cnctcbfunc = cbfunc;
+    op->cbdata = cbdata;
+    opal_event_set(orte_event_base, &(op->ev), -1,
+                   OPAL_EV_WRITE, _cnct, op);
+    opal_event_set_priority(&(op->ev), ORTE_MSG_PRI);
+    ORTE_POST_OBJECT(op);
+    opal_event_active(&(op->ev), OPAL_EV_WRITE, 1);
+
     return PMIX_SUCCESS;
 }
 
-static void mdxcbfunc(int status,
+static void mdxcbfunc(pmix_status_t status,
                       const char *data, size_t ndata, void *cbdata,
-                      opal_pmix_release_cbfunc_t relcbfunc, void *relcbdata)
+                      pmix_release_cbfunc_t relcbfunc, void *relcbdata)
 {
     orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
 
@@ -769,16 +834,17 @@ static void mdxcbfunc(int status,
     OBJ_RELEASE(cd);
 }
 
-int pmix_server_disconnect_fn(opal_list_t *procs, opal_list_t *info,
-                              opal_pmix_op_cbfunc_t cbfunc, void *cbdata)
+pmix_status_t pmix_server_disconnect_fn(const char nspace[],
+                                        const pmix_info_t info[], size_t ninfo,
+                                        pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
     orte_pmix_server_op_caddy_t *cd;
-    int rc;
+    pmix_proc_t proc;
+    pmix_status_t rc;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
-                        "%s disconnect called with %d procs",
-                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                        (int)opal_list_get_size(procs));
+                        "%s disconnect called on nspace %s",
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), nspace);
 
     /* at some point, we need to add bookeeping to track which
      * procs are "connected" so we know who to notify upon
@@ -788,8 +854,11 @@ int pmix_server_disconnect_fn(opal_list_t *procs, opal_list_t *info,
     cd = OBJ_NEW(orte_pmix_server_op_caddy_t);
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
+    (void)strncpy(proc.nspace, nspace, PMIX_MAX_NSLEN);
+    proc.rank = PMIX_RANK_WILDCARD;
 
-    if (ORTE_SUCCESS != (rc = pmix_server_fencenb_fn(procs, info, NULL, 0,
+    if (PMIX_SUCCESS != (rc = pmix_server_fencenb_fn(&proc, 1, info, ninfo,
+                                                     NULL, 0,
                                                      mdxcbfunc, cd))) {
         OBJ_RELEASE(cd);
     }
@@ -797,11 +866,10 @@ int pmix_server_disconnect_fn(opal_list_t *procs, opal_list_t *info,
     return rc;
 }
 
-int pmix_server_alloc_fn(const opal_process_name_t *requestor,
-                         opal_pmix_alloc_directive_t dir,
-                         opal_list_t *info,
-                         opal_pmix_info_cbfunc_t cbfunc,
-                         void *cbdata)
+pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
+                                   pmix_alloc_directive_t directive,
+                                   const pmix_info_t data[], size_t ndata,
+                                   pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
     /* ORTE currently has no way of supporting allocation requests */
     return ORTE_ERR_NOT_SUPPORTED;

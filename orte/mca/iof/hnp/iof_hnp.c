@@ -42,7 +42,7 @@
 #endif
 
 #include "opal/event/event-internal.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/runtime/orte_globals.h"
 #include "orte/mca/errmgr/errmgr.h"
@@ -611,12 +611,58 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
     return;
 }
 
+static void lkcbfunc(pmix_status_t status, void *cbdata)
+{
+    opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
+
+    OPAL_POST_OBJECT(lk);
+    lk->status = opal_pmix_convert_status(status);
+    OPAL_PMIX_WAKEUP_THREAD(lk);
+}
+
 static int hnp_output(const orte_process_name_t* peer,
                       orte_iof_tag_t source_tag,
                       const char *msg)
 {
-    if (ORTE_PROC_IS_MASTER && NULL != opal_pmix.server_iof_push) {
-        opal_pmix.server_iof_push(peer, source_tag, (unsigned char*)msg, strlen(msg));
+    pmix_proc_t source;
+    pmix_byte_object_t bo;
+    pmix_iof_channel_t pchan;
+    opal_pmix_lock_t lock;
+    pmix_status_t rc;
+    int ret;
+
+    if (ORTE_PROC_IS_MASTER) {
+        OPAL_PMIX_CONVERT_NAME(&source, peer);
+        pchan = 0;
+        if (ORTE_IOF_STDIN & source_tag) {
+            pchan |= PMIX_FWD_STDIN_CHANNEL;
+        }
+        if (ORTE_IOF_STDOUT & source_tag) {
+            pchan |= PMIX_FWD_STDOUT_CHANNEL;
+        }
+        if (ORTE_IOF_STDERR & source_tag) {
+            pchan |= PMIX_FWD_STDERR_CHANNEL;
+        }
+        if (ORTE_IOF_STDDIAG & source_tag) {
+            pchan |= PMIX_FWD_STDDIAG_CHANNEL;
+        }
+        /* setup the byte object */
+        PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
+        if (NULL != msg) {
+            bo.bytes = (char*)msg;
+            bo.size = strlen(msg)+1;
+        }
+        OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+        rc = PMIx_server_IOF_deliver(&source, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
+        if (PMIX_SUCCESS != rc) {
+            ret = opal_pmix_convert_status(rc);
+        } else {
+            /* wait for completion */
+            OPAL_PMIX_WAIT_THREAD(&lock);
+            ret = lock.status;
+        }
+        OPAL_PMIX_DESTRUCT_LOCK(&lock);
+        return ret;
     } else {
         /* output this to our local output */
         if (ORTE_IOF_STDOUT & source_tag || orte_xml_output) {

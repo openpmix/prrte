@@ -759,12 +759,21 @@ static void pmix_server_log(int status, orte_process_name_t* sender,
 static void opcon(orte_pmix_server_op_caddy_t *p)
 {
     p->procs = NULL;
+    p->nprocs = 0;
     p->eprocs = NULL;
+    p->neprocs = 0;
     p->info = NULL;
+    p->ninfo = 0;
+    p->directives = NULL;
+    p->ndirs = 0;
+    p->apps = NULL;
+    p->napps = 0;
     p->cbfunc = NULL;
     p->infocbfunc = NULL;
     p->toolcbfunc = NULL;
+    p->spcbfunc = NULL;
     p->cbdata = NULL;
+    p->server_object = NULL;
 }
 OBJ_CLASS_INSTANCE(orte_pmix_server_op_caddy_t,
                    opal_object_t,

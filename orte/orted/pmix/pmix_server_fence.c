@@ -34,6 +34,7 @@
 
 #include "opal/util/output.h"
 #include "opal/dss/dss.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/util/name_fns.h"
@@ -78,10 +79,10 @@ static void pmix_server_release(int status, opal_buffer_t *buf, void *cbdata)
  * called fence - thus, the collective is already locally
  * complete at this point. We therefore just need to create the
  * signature and pass the collective into grpcomm */
-int pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
-                           const pmix_info_t info[], size_t ninfo,
-                           char *data, size_t ndata,
-                           pmix_modex_cbfunc_t cbfunc, void *cbdata)
+pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
+                                     const pmix_info_t info[], size_t ninfo,
+                                     char *data, size_t ndata,
+                                     pmix_modex_cbfunc_t cbfunc, void *cbdata)
 {
     orte_pmix_mdx_caddy_t *cd=NULL;
     int rc;
@@ -99,15 +100,11 @@ int pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
         cd->sig->signature = (orte_process_name_t*)malloc(cd->sig->sz * sizeof(orte_process_name_t));
         memset(cd->sig->signature, 0, cd->sig->sz * sizeof(orte_process_name_t));
         for (i=0; i < nprocs; i++) {
-            if (OPAL_SUCCESS != (rc = opal_convert_string_to_jobid(&cd->sig->signature[i].jobid, procs[i].nspace))) {
+            OPAL_PMIX_CONVERT_PROCT(rc, &cd->sig->signature[i], &procs[i]);
+            if (OPAL_SUCCESS != rc) {
                 OPAL_ERROR_LOG(rc);
                 OBJ_RELEASE(cd);
-                return rc;
-            }
-            if (PMIX_RANK_WILDCARD == procs[i].rank) {
-                cd->sig->signature[i].vpid = ORTE_VPID_WILDCARD;
-            } else {
-                cd->sig->signature[i].vpid = procs[i].rank;
+                return PMIX_ERR_BAD_PARAM;
             }
         }
     }
@@ -128,10 +125,10 @@ int pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
     if (ORTE_SUCCESS != (rc = orte_grpcomm.allgather(cd->sig, buf, pmix_server_release, cd))) {
         ORTE_ERROR_LOG(rc);
         OBJ_RELEASE(buf);
-        return rc;
+        return PMIX_ERROR;
     }
     OBJ_RELEASE(buf);
-    return ORTE_SUCCESS;
+    return PMIX_SUCCESS;
 }
 
 static void dmodex_req(int sd, short args, void *cbdata)
@@ -287,24 +284,20 @@ static void dmodex_req(int sd, short args, void *cbdata)
 
 /* the local PMIx embedded server will use this function to call
  * us and request that we obtain data from a remote daemon */
-int pmix_server_dmodex_req_fn(const pmix_proc_t *proc,
-                              const pmix_info_t info[], size_t ninfo,
-                              pmix_modex_cbfunc_t cbfunc, void *cbdata)
+pmix_status_t pmix_server_dmodex_req_fn(const pmix_proc_t *proc,
+                                        const pmix_info_t info[], size_t ninfo,
+                                        pmix_modex_cbfunc_t cbfunc, void *cbdata)
 {
     orte_process_name_t name;
     int rc;
 
-    if (OPAL_SUCCESS != (rc = opal_convert_string_to_jobid(&name.jobid, proc->nspace))) {
-        return rc;
-    }
-    if (PMIX_RANK_WILDCARD == proc->rank) {
-        name.vpid = ORTE_VPID_WILDCARD;
-    } else {
-        name.vpid = proc->rank;
+    OPAL_PMIX_CONVERT_PROCT(rc, &name, proc);
+    if (OPAL_SUCCESS != rc) {
+        return PMIX_ERR_BAD_PARAM;
     }
 
     /*  we have to shift threads to the ORTE thread, so
      * create a request and push it into that thread */
     ORTE_DMX_REQ(name, dmodex_req, cbfunc, cbdata);
-    return OPAL_ERR_IN_PROCESS;
+    return PMIX_OPERATION_IN_PROGRESS;
 }

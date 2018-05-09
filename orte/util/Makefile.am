@@ -50,12 +50,9 @@ headers += \
         util/error_strings.h \
         util/context_fns.h \
         util/parse_options.h \
-        util/pre_condition_transports.h \
-        util/hnp_contact.h \
         util/hostfile/hostfile.h \
         util/hostfile/hostfile_lex.h \
         util/dash_host/dash_host.h \
-        util/comm/comm.h \
         util/attr.h \
         util/listener.h \
         util/compress.h \
@@ -69,12 +66,9 @@ lib@ORTE_LIB_PREFIX@open_rte_la_SOURCES += \
         util/show_help.c \
         util/context_fns.c \
         util/parse_options.c \
-        util/pre_condition_transports.c \
-        util/hnp_contact.c \
         util/hostfile/hostfile_lex.l \
         util/hostfile/hostfile.c \
         util/dash_host/dash_host.c \
-        util/comm/comm.c \
         util/attr.c \
         util/listener.c \
         util/compress.c
