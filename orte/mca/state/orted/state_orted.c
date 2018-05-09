@@ -382,8 +382,6 @@ static void track_procs(int fd, short argc, void *cbdata)
         ORTE_FLAG_SET(pdata, ORTE_PROC_FLAG_RECORDED);
         ORTE_FLAG_UNSET(pdata, ORTE_PROC_FLAG_ALIVE);
         pdata->state = state;
-        /* tell the PMIx subsystem to cleanup this client */
-        opal_pmix.server_deregister_client(proc, NULL, NULL);
         /* Clean up the session directory as if we were the process
          * itself.  This covers the case where the process died abnormally
          * and didn't cleanup its own session directory.
@@ -482,10 +480,8 @@ static void track_procs(int fd, short argc, void *cbdata)
                             /* skip procs from another job */
                             continue;
                         }
-                        if (!ORTE_FLAG_TEST(pptr, ORTE_PROC_FLAG_TOOL)) {
-                            node->slots_inuse--;
-                            node->num_procs--;
-                        }
+                        node->slots_inuse--;
+                        node->num_procs--;
                         OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
                                              "%s state:orted releasing proc %s from node %s",
                                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),

@@ -19,10 +19,12 @@
 #if HAVE_FCNTL_H
 #include <fcntl.h>
 #endif
+#include <pmix.h>
+#include <pmix_server.h>
 
 #include "opal/class/opal_list.h"
 #include "opal/event/event-internal.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/pmix/pmix-internal.h"
 #include "opal/util/argv.h"
 
 #include "orte/orted/pmix/pmix_server_internal.h"
@@ -405,17 +407,16 @@ static void cleanup_node(orte_proc_t *proc)
     if (NULL == (node = proc->node)) {
         return;
     }
+    node->num_procs--;
+    node->slots_inuse--;
     for (i=0; i < node->procs->size; i++) {
         if (NULL == (p = (orte_proc_t*)opal_pointer_array_get_item(node->procs, i))) {
             continue;
         }
         if (p->name.jobid == proc->name.jobid &&
-            p->name.vpid == proc->name.vpid &&
-            !ORTE_FLAG_TEST(proc, ORTE_PROC_FLAG_TOOL)) {
+            p->name.vpid == proc->name.vpid) {
             opal_pointer_array_set_item(node->procs, i, NULL);
             OBJ_RELEASE(p);
-            node->num_procs--;
-            node->slots_inuse--;
             break;
         }
     }
@@ -557,7 +558,7 @@ static void _send_notification(int status,
         }
         /* pass along the affected proc(s) */
         OBJ_CONSTRUCT(&kv, opal_value_t);
-        kv.key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
+        kv.key = strdup(PMIX_EVENT_AFFECTED_PROC);
         kv.type = OPAL_NAME;
         kv.data.name.jobid = proc->jobid;
         kv.data.name.vpid = proc->vpid;
@@ -581,7 +582,7 @@ static void _send_notification(int status,
 
     /* pass along the affected proc(s) */
     OBJ_CONSTRUCT(&kv, opal_value_t);
-    kv.key = strdup(OPAL_PMIX_EVENT_AFFECTED_PROC);
+    kv.key = strdup(PMIX_EVENT_AFFECTED_PROC);
     kv.type = OPAL_NAME;
     kv.data.name.jobid = proc->jobid;
     kv.data.name.vpid = proc->vpid;
@@ -596,7 +597,7 @@ static void _send_notification(int status,
 
     /* pass along the proc(s) to be notified */
     OBJ_CONSTRUCT(&kv, opal_value_t);
-    kv.key = strdup(OPAL_PMIX_EVENT_CUSTOM_RANGE);
+    kv.key = strdup(PMIX_EVENT_CUSTOM_RANGE);
     kv.type = OPAL_NAME;
     kv.data.name.jobid = target->jobid;
     kv.data.name.vpid = target->vpid;
@@ -643,6 +644,12 @@ static void _send_notification(int status,
     }
 }
 
+static void opcbfunc(pmix_status_t status, void *cbdata)
+{
+    opal_pmix_lock_t *lock = (opal_pmix_lock_t*)cbdata;
+    OPAL_PMIX_WAKEUP_THREAD(lock);
+}
+
 void orte_state_base_track_procs(int fd, short argc, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
@@ -653,6 +660,7 @@ void orte_state_base_track_procs(int fd, short argc, void *cbdata)
     int i;
     char *rtmod;
     orte_process_name_t parent, target;
+    opal_pmix_lock_t lock;
 
     ORTE_ACQUIRE_OBJECT(caddy);
     proc = &caddy->name;
@@ -725,8 +733,15 @@ void orte_state_base_track_procs(int fd, short argc, void *cbdata)
             pdata->state = state;
         }
         if (ORTE_FLAG_TEST(pdata, ORTE_PROC_FLAG_LOCAL)) {
+            pmix_proc_t pproc;
             /* tell the PMIx subsystem to cleanup this client */
-            opal_pmix.server_deregister_client(proc, NULL, NULL);
+            (void)opal_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, proc->jobid);
+            pproc.rank = proc->vpid;
+            OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+            PMIx_server_deregister_client(&pproc, opcbfunc, &lock);
+            OPAL_PMIX_WAIT_THREAD(&lock);
+            OPAL_PMIX_DESTRUCT_LOCK(&lock);
+
             /* Clean up the session directory as if we were the process
              * itself.  This covers the case where the process died abnormally
              * and didn't cleanup its own session directory.
@@ -800,6 +815,8 @@ void orte_state_base_check_all_complete(int fd, short args, void *cbdata)
     uint32_t u32;
     void *nptr;
     char *rtmod;
+    pmix_proc_t pproc;
+    opal_pmix_lock_t lock;
 
     ORTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -834,9 +851,11 @@ void orte_state_base_check_all_complete(int fd, short args, void *cbdata)
     }
 
     /* tell the PMIx server to release its data */
-    if (NULL != opal_pmix.server_deregister_nspace) {
-        opal_pmix.server_deregister_nspace(jdata->jobid, NULL, NULL);
-    }
+    (void)opal_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, jdata->jobid);
+    OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+    PMIx_server_deregister_nspace(pproc.nspace, opcbfunc, &lock);
+    OPAL_PMIX_WAIT_THREAD(&lock);
+    OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
     i32ptr = &i32;
     if (orte_get_attribute(&jdata->attributes, ORTE_JOB_NUM_NONZERO_EXIT, (void**)&i32ptr, OPAL_INT32) && !orte_abort_non_zero_exit) {
