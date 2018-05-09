@@ -14,7 +14,7 @@
 # Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
 # Copyright (c) 2013-2016 Los Alamos National Security, Inc.  All rights
 #                         reserved.
-# Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
 # Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -33,7 +33,7 @@ EXTRA_DIST = \
         completion/mpirun.zsh \
 	dist/make_dist_tarball \
 	dist/make-authors.pl \
-	dist/linux/openmpi.spec \
+	dist/linux/prte.spec \
 	dist/mofed/compile_debian_mlnx_example.in \
 	dist/mofed/debian \
 	platform/optimized \
