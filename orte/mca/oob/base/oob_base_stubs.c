@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2012-2014 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -15,7 +15,7 @@
 #include "orte/constants.h"
 
 #include "opal/util/output.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/pmix/pmix-internal.h"
 #include "opal/util/argv.h"
 
 #include "orte/mca/errmgr/errmgr.h"
@@ -76,7 +76,7 @@ void orte_oob_base_send_nb(int fd, short args, void *cbdata)
          * to our hash table. However, we don't want to chase up to the
          * server after it, so indicate it is optional
          */
-        OPAL_MODEX_RECV_VALUE_OPTIONAL(rc, OPAL_PMIX_PROC_URI, &msg->dst,
+        OPAL_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_PROC_URI, &msg->dst,
                                       (char**)&uri, OPAL_STRING);
         if (OPAL_SUCCESS == rc ) {
             if (NULL != uri) {
@@ -223,11 +223,12 @@ void orte_oob_base_get_addr(char **uri)
 {
     char *turi, *final=NULL, *tmp;
     size_t len = 0;
-    int rc=ORTE_SUCCESS;
     bool one_added = false;
     mca_base_component_list_item_t *cli;
     mca_oob_base_component_t *component;
-    opal_value_t val;
+    pmix_value_t val;
+    pmix_proc_t proc;
+    pmix_status_t rc;
 
     /* start with our process name */
     if (ORTE_SUCCESS != (rc = orte_util_convert_process_name_to_string(&final, ORTE_PROC_MY_NAME))) {
@@ -283,15 +284,13 @@ void orte_oob_base_get_addr(char **uri)
 
     *uri = final;
     /* push this into our modex storage */
-    OBJ_CONSTRUCT(&val, opal_value_t);
-    val.key = OPAL_PMIX_PROC_URI;
-    val.type = OPAL_STRING;
-    val.data.string = final;
-    if (OPAL_SUCCESS != (rc = opal_pmix.store_local(ORTE_PROC_MY_NAME, &val))) {
-        ORTE_ERROR_LOG(rc);
+    (void)opal_snprintf_jobid(proc.nspace, PMIX_MAX_NSLEN, ORTE_PROC_MY_NAME->jobid);
+    proc.rank = ORTE_PROC_MY_NAME->vpid;
+    PMIX_VALUE_LOAD(&val, final, PMIX_STRING);
+    if (PMIX_SUCCESS != (rc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
+        PMIX_ERROR_LOG(rc);
     }
-    val.key = NULL;
-    val.data.string = NULL;
+    PMIX_VALUE_DESTRUCT(&val);
     OBJ_DESTRUCT(&val);
 }
 

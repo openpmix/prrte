@@ -42,7 +42,7 @@
 #include "opal/class/opal_pointer_array.h"
 #include "opal/dss/dss.h"
 #include "opal/hwloc/hwloc-internal.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/util/dash_host/dash_host.h"
 #include "orte/util/session_dir.h"
@@ -73,7 +73,6 @@
 #include "orte/runtime/orte_quit.h"
 #include "orte/util/compress.h"
 #include "orte/util/name_fns.h"
-#include "orte/util/pre_condition_transports.h"
 #include "orte/util/proc_info.h"
 #include "orte/util/threads.h"
 #include "orte/mca/state/state.h"
@@ -270,9 +269,6 @@ void orte_plm_base_setup_job(int fd, short args, void *cbdata)
     int i;
     orte_app_context_t *app;
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
-    char *key;
-    orte_job_t *parent;
-    orte_process_name_t name, *nptr;
 
     ORTE_ACQUIRE_OBJECT(caddy);
 
@@ -309,55 +305,6 @@ void orte_plm_base_setup_job(int fd, short args, void *cbdata)
     if (!ORTE_FLAG_TEST(caddy->jdata, ORTE_JOB_FLAG_RECOVERABLE) &&
         orte_enable_recovery) {
         ORTE_FLAG_SET(caddy->jdata, ORTE_JOB_FLAG_RECOVERABLE);
-    }
-
-    /* setup transport keys in case the MPI layer needs them. If
-     * this is a dynamic spawn, then use the same keys as the
-     * parent process had so the new/old procs can communicate.
-     * Otherwise we can use the jobfam and stepid as unique keys
-     * because they are unique values assigned by the RM
-     */
-     nptr = &name;
-     if (orte_get_attribute(&caddy->jdata->attributes, ORTE_JOB_LAUNCH_PROXY, (void**)&nptr, OPAL_NAME)) {
-        /* get the parent jdata */
-        if (NULL == (parent = orte_get_job_data_object(name.jobid))) {
-            ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-            ORTE_FORCED_TERMINATE(ORTE_ERROR_DEFAULT_EXIT_CODE);
-            OBJ_RELEASE(caddy);
-            return;
-        }
-        /* a tool might be the parent calling spawn, so cannot require that
-         * a job transport key has been assigned to it */
-        key = NULL;
-        if (orte_get_attribute(&parent->attributes, ORTE_JOB_TRANSPORT_KEY, (void**)&key, OPAL_STRING) &&
-            NULL != key) {
-            /* record it */
-            orte_set_attribute(&caddy->jdata->attributes, ORTE_JOB_TRANSPORT_KEY, ORTE_ATTR_LOCAL, key, OPAL_STRING);
-            /* add the transport key envar to each app */
-            for (i=0; i < caddy->jdata->apps->size; i++) {
-                if (NULL == (app = (orte_app_context_t*)opal_pointer_array_get_item(caddy->jdata->apps, i))) {
-                    continue;
-                }
-                opal_setenv(OPAL_MCA_PREFIX"orte_precondition_transports", key, true, &app->env);
-            }
-            free(key);
-        } else {
-            if (ORTE_SUCCESS != (rc = orte_pre_condition_transports(caddy->jdata, NULL))) {
-                ORTE_ERROR_LOG(rc);
-                ORTE_FORCED_TERMINATE(ORTE_ERROR_DEFAULT_EXIT_CODE);
-                OBJ_RELEASE(caddy);
-                return;
-            }
-        }
-    } else {
-        /* this will also record the transport key attribute in the job object, and
-         * adds the key envar to each app */
-        if (ORTE_SUCCESS != (rc = orte_pre_condition_transports(caddy->jdata, NULL))) {
-            ORTE_ERROR_LOG(rc);
-            ORTE_FORCED_TERMINATE(ORTE_ERROR_DEFAULT_EXIT_CODE);
-            OBJ_RELEASE(caddy);
-            return;
-        }
     }
 
     /* if app recovery is not defined, set apps to defaults */
@@ -1012,8 +959,6 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
     int i;
     bool found;
     orte_daemon_cmd_flag_t cmd;
-    int32_t flag;
-    opal_value_t *kv;
     char *myendian;
 
     /* get the daemon job, if necessary */
@@ -1035,6 +980,12 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
     idx = 1;
     while (OPAL_SUCCESS == (rc = opal_dss.unpack(buffer, &dname, &idx, ORTE_NAME))) {
         char *nodename = NULL;
+        pmix_proc_t pproc;
+        pmix_status_t ret;
+        pmix_info_t *info;
+        size_t n, ninfo;
+        opal_byte_object_t *bptr;
+        pmix_data_buffer_t pbuf;
 
         OPAL_OUTPUT_VERBOSE((5, orte_plm_base_framework.framework_output,
                              "%s plm:base:orted_report_launch from daemon %s",
@@ -1051,25 +1002,54 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
         /* record that this daemon is alive */
         ORTE_FLAG_SET(daemon, ORTE_PROC_FLAG_ALIVE);
 
-        /* unpack the flag indicating the number of connection blobs
-         * in the report */
+        /* unpack the byte object containing the info array */
         idx = 1;
-        if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &flag, &idx, OPAL_INT32))) {
+        if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &bptr, &idx, OPAL_BYTE_OBJECT))) {
             ORTE_ERROR_LOG(rc);
             orted_failed_launch = true;
             goto CLEANUP;
         }
-        for (i=0; i < flag; i++) {
-            idx = 1;
-            if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &kv, &idx, OPAL_VALUE))) {
-                ORTE_ERROR_LOG(rc);
+        /* load the bytes into a PMIx data buffer for unpacking */
+        PMIX_DATA_BUFFER_LOAD(&pbuf, bptr->bytes, bptr->size);
+        bptr->bytes = NULL;
+        OBJ_RELEASE(bptr);
+        /* setup the daemon name */
+        (void)opal_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, ORTE_PROC_MY_NAME->jobid);
+        pproc.rank = dname.vpid;
+        /* unpack the number of info structs */
+        idx = 1;
+        ret = PMIx_Data_unpack(&pproc, &pbuf, &ninfo, &idx, PMIX_SIZE);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+            rc = ORTE_ERROR;
+            orted_failed_launch = true;
+            goto CLEANUP;
+        }
+        PMIX_INFO_CREATE(info, ninfo);
+        idx = ninfo;
+        ret = PMIx_Data_unpack(&pproc, &pbuf, info, &idx, PMIX_INFO);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_INFO_FREE(info, ninfo);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+            rc = ORTE_ERROR;
+            orted_failed_launch = true;
+            goto CLEANUP;
+        }
+        PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+
+        for (n=0; n < ninfo; n++) {
+            /* store this in a daemon wireup buffer for later distribution */
+            if (PMIX_SUCCESS != (ret = PMIx_Store_internal(&pproc, info[n].key, &info[n].value))) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_INFO_FREE(info, ninfo);
+                rc = ORTE_ERROR;
                 orted_failed_launch = true;
                 goto CLEANUP;
             }
-            /* store this in a daemon wireup buffer for later distribution */
-            opal_pmix.store_local(&dname, kv);
-            OBJ_RELEASE(kv);
         }
+        PMIX_INFO_FREE(info, ninfo);
 
         /* unpack the node name */
         idx = 1;
