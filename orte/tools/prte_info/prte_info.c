@@ -13,7 +13,7 @@
  * Copyright (c) 2007-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010-2016 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -56,7 +56,7 @@
 #include "orte/runtime/orte_info_support.h"
 #include "orte/runtime/orte_locks.h"
 
-#include "orte/tools/pinfo/pinfo.h"
+#include "orte/tools/prte_info/pinfo.h"
 
 /*
  * Public variables

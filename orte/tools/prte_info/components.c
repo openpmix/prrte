@@ -35,7 +35,7 @@
 #include "opal/util/output.h"
 
 #include "orte/runtime/orte_info_support.h"
-#include "orte/tools/pinfo/pinfo.h"
+#include "orte/tools/prte_info/pinfo.h"
 /*
  * Public variables
  */

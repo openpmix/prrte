@@ -46,7 +46,7 @@
 #include "orte/util/show_help.h"
 
 
-#include "orte/tools/pinfo/pinfo.h"
+#include "orte/tools/prte_info/pinfo.h"
 
 
 /*

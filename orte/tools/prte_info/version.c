@@ -13,6 +13,7 @@
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +32,7 @@
 #include "opal/util/printf.h"
 
 #include "orte/runtime/orte_info_support.h"
-#include "orte/tools/pinfo/pinfo.h"
+#include "orte/tools/prte_info/pinfo.h"
 
 /*
  * Public variables
@@ -71,8 +72,8 @@ static char *make_version_str(const char *scope,
  * Determines the version information related to the orte components
  * being used.
  * Accepts:
- *	- want_all: True if all components' info is required.
- *	- cmd_line: The constructed command line argument
+ *      - want_all: True if all components' info is required.
+ *      - cmd_line: The constructed command line argument
  */
 void orte_info_do_version(bool want_all, opal_cmd_line_t *cmd_line)
 {

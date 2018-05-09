@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
 # Copyright (c) 2017      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # $COPYRIGHT$
@@ -41,12 +41,12 @@ AM_CFLAGS = \
 
 include $(top_srcdir)/Makefile.ompi-rules
 
-man_pages = pinfo.1
+man_pages = prte_info.1
 EXTRA_DIST = $(man_pages:.1=.1in)
 
 if OPAL_INSTALL_BINARIES
 
-bin_PROGRAMS = pinfo
+bin_PROGRAMS = prte_info
 
 dist_ortedata_DATA = help-orte-info.txt
 
@@ -59,15 +59,15 @@ $(nodist_man_MANS): $(top_builddir)/opal/include/opal_config.h
 
 endif
 
-pinfo_SOURCES = \
+prte_info_SOURCES = \
         pinfo.h \
-        pinfo.c \
+        prte_info.c \
         output.c \
         param.c \
         components.c \
         version.c
 
-pinfo_LDADD = \
+prte_info_LDADD = \
 	$(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la \
 	$(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
 
