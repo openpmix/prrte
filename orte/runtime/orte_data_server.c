@@ -12,7 +12,7 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2016 Los Alamos National Security, LLC.
  *                         All rights reserved
- * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -36,7 +36,7 @@
 #include "opal/util/output.h"
 #include "opal/class/opal_pointer_array.h"
 #include "opal/dss/dss.h"
-#include "opal/mca/pmix/pmix_types.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/rml/rml.h"
@@ -61,8 +61,8 @@ typedef struct {
      * access rights */
     uint32_t uid;
     /* characteristics */
-    opal_pmix_data_range_t range;
-    opal_pmix_persistence_t persistence;
+    pmix_data_range_t range;
+    pmix_persistence_t persistence;
     /* and the values themselves */
     opal_list_t values;
     /* the value itself */
@@ -72,8 +72,8 @@ static void construct(orte_data_object_t *ptr)
 {
     ptr->index = -1;
     ptr->uid = UINT32_MAX;
-    ptr->range = OPAL_PMIX_RANGE_UNDEF;
-    ptr->persistence = OPAL_PMIX_PERSIST_SESSION;
+    ptr->range = PMIX_RANGE_UNDEF;
+    ptr->persistence = PMIX_PERSIST_SESSION;
     OBJ_CONSTRUCT(&ptr->values, opal_list_t);
 }
 
@@ -92,7 +92,7 @@ typedef struct {
     orte_process_name_t requestor;
     int room_number;
     uint32_t uid;
-    opal_pmix_data_range_t range;
+    pmix_data_range_t range;
     char **keys;
 } orte_data_req_t;
 static void rqcon(orte_data_req_t *p)
@@ -191,7 +191,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
     bool ret_packed = false, wait = false, data_added;
     int room_number;
     uint32_t uid = UINT32_MAX;
-    opal_pmix_data_range_t range;
+    pmix_data_range_t range;
     orte_data_req_t *req, *rqnext;
     orte_jobid_t jobid = ORTE_JOBID_INVALID;
 
@@ -240,14 +240,14 @@ void orte_data_server(int status, orte_process_name_t* sender,
 
         /* unpack the range */
         count = 1;
-        if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &data->range, &count, OPAL_PMIX_DATA_RANGE))) {
+        if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &data->range, &count, OPAL_UINT8))) {
             ORTE_ERROR_LOG(rc);
             OBJ_RELEASE(data);
             goto SEND_ERROR;
         }
         /* unpack the persistence */
         count = 1;
-        if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &data->persistence, &count, OPAL_INT))) {
+        if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &data->persistence, &count, OPAL_UINT8))) {
             ORTE_ERROR_LOG(rc);
             OBJ_RELEASE(data);
             goto SEND_ERROR;
@@ -256,7 +256,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
         count = 1;
         while (ORTE_SUCCESS == (rc = opal_dss.unpack(buffer, &iptr, &count, OPAL_VALUE))) {
             /* if this is the userid, separate it out */
-            if (0 == strcmp(iptr->key, OPAL_PMIX_USERID)) {
+            if (0 == strcmp(iptr->key, PMIX_USERID)) {
                 data->uid = iptr->data.uint32;
                 OBJ_RELEASE(iptr);
             } else {
@@ -283,7 +283,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
             /* if the published range is constrained to namespace, then only
              * consider this data if the publisher is
              * in the same namespace as the requestor */
-            if (OPAL_PMIX_RANGE_NAMESPACE == data->range) {
+            if (PMIX_RANGE_NAMESPACE == data->range) {
                 if (jobid != data->owner.jobid) {
                     continue;
                 }
@@ -347,7 +347,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
                 OBJ_RELEASE(req);
                 reply = NULL;
                 /* if the persistence is "first_read", then delete this data */
-                if (OPAL_PMIX_PERSIST_FIRST_READ == data->persistence) {
+                if (PMIX_PERSIST_FIRST_READ == data->persistence) {
                     opal_output_verbose(1, orte_data_server_output,
                                         "%s NOT STORING DATA FROM %s AT INDEX %d",
                                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
@@ -385,7 +385,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
 
         /* unpack the range - this sets some constraints on the range of data to be considered */
         count = 1;
-        if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &range, &count, OPAL_PMIX_DATA_RANGE))) {
+        if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &range, &count, PMIX_DATA_RANGE))) {
             ORTE_ERROR_LOG(rc);
             goto SEND_ERROR;
         }
@@ -420,9 +420,9 @@ void orte_data_server(int status, orte_process_name_t* sender,
         uid = UINT32_MAX;
         while (ORTE_SUCCESS == (rc = opal_dss.unpack(buffer, &iptr, &count, OPAL_VALUE))) {
             /* if this is the userid, separate it out */
-            if (0 == strcmp(iptr->key, OPAL_PMIX_USERID)) {
+            if (0 == strcmp(iptr->key, PMIX_USERID)) {
                 uid = iptr->data.uint32;
-            } else if (0 == strcmp(iptr->key, OPAL_PMIX_WAIT)) {
+            } else if (0 == strcmp(iptr->key, PMIX_WAIT)) {
                 /* flag that we wait until the data is present */
                 wait = true;
             }
@@ -465,7 +465,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
                 /* if the published range is constrained to namespace, then only
                  * consider this data if the publisher is
                  * in the same namespace as the requestor */
-                if (OPAL_PMIX_RANGE_NAMESPACE == data->range) {
+                if (PMIX_RANGE_NAMESPACE == data->range) {
                     if (jobid != data->owner.jobid) {
                         opal_output_verbose(10, orte_data_server_output,
                                             "%s\tMISMATCH JOBID %s %s",
@@ -509,7 +509,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
                         }
                     }
                 }
-                if (data_added && OPAL_PMIX_PERSIST_FIRST_READ == data->persistence) {
+                if (data_added && PMIX_PERSIST_FIRST_READ == data->persistence) {
                     opal_output_verbose(1, orte_data_server_output,
                                         "%s REMOVING DATA FROM %s AT INDEX %d",
                                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
@@ -602,7 +602,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
         uid = UINT32_MAX;
         while (ORTE_SUCCESS == (rc = opal_dss.unpack(buffer, &iptr, &count, OPAL_VALUE))) {
             /* if this is the userid, separate it out */
-            if (0 == strcmp(iptr->key, OPAL_PMIX_USERID)) {
+            if (0 == strcmp(iptr->key, PMIX_USERID)) {
                 uid = iptr->data.uint32;
             }
             /* ignore anything else for now */
@@ -686,8 +686,8 @@ void orte_data_server(int status, orte_process_name_t* sender,
             }
             /* check persistence - if it is intended to persist beyond the
              * proc itself, then we only delete it if rank=wildcard*/
-            if ((data->persistence == OPAL_PMIX_PERSIST_APP ||
-                 data->persistence == OPAL_PMIX_PERSIST_SESSION) &&
+            if ((data->persistence == PMIX_PERSIST_APP ||
+                 data->persistence == PMIX_PERSIST_SESSION) &&
                 ORTE_VPID_WILDCARD != requestor.vpid) {
                 continue;
             }

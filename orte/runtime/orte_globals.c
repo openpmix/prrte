@@ -33,7 +33,7 @@
 #endif
 
 #include "opal/hwloc/hwloc-internal.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/pmix/pmix-internal.h"
 #include "opal/util/argv.h"
 #include "opal/util/output.h"
 #include "opal/class/opal_hash_table.h"
@@ -483,9 +483,9 @@ char* orte_get_proc_hostname(orte_process_name_t *proc)
     }
 
     /* if we are an app, get the data from the modex db */
-    OPAL_MODEX_RECV_VALUE(rc, OPAL_PMIX_HOSTNAME,
+    OPAL_MODEX_RECV_VALUE(rc, PMIX_HOSTNAME,
                           (opal_process_name_t*)proc,
-                          &hostname, OPAL_STRING);
+                          &hostname, PMIX_STRING);
 
     /* user is responsible for releasing the data */
     return hostname;
@@ -508,9 +508,9 @@ orte_node_rank_t orte_get_proc_node_rank(orte_process_name_t *proc)
 
     /* if we are an app, get the value from the modex db */
     noderank = &nd;
-    OPAL_MODEX_RECV_VALUE(rc, OPAL_PMIX_NODE_RANK,
+    OPAL_MODEX_RECV_VALUE(rc, PMIX_NODE_RANK,
                           (opal_process_name_t*)proc,
-                          &noderank, ORTE_NODE_RANK);
+                          &noderank, PMIX_UINT16);
     if (OPAL_SUCCESS != rc) {
         nd = ORTE_NODE_RANK_INVALID;
     }
