@@ -13,6 +13,7 @@
  * Copyright (c) 2006      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +31,7 @@
 #include "orte/constants.h"
 
 #include "opal/util/argv.h"
-
+#include "opal/mca/base/mca_base_var.h"
 
 #include "orte/mca/plm/plm.h"
 #include "orte/mca/plm/base/base.h"

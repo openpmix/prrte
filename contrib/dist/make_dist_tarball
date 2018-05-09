@@ -300,7 +300,7 @@ make_tarball() {
     # move
     #
     echo "*** Moving tarballs..."
-    mv prte-* $distdir
+    mv prrte-* $distdir
 
     echo "*** All done"
 }
