@@ -329,8 +329,8 @@ orte/test/system/threads
 
 orte/tools/prun/prun
 orte/tools/prun/prun.1
-orte/tools/pinfo/pinfo
-orte/tools/pinfo/pinfo.1
+orte/tools/prte_info/prte_info
+orte/tools/prte_info/pinfo.1
 orte/tools/prted/prted
 orte/tools/prted/prted.1
 orte/tools/prte/prte
