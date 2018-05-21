@@ -430,11 +430,81 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
 
     /* get any application prep info */
     if (NULL != opal_pmix.server_setup_application) {
+        /* assemble the node and proc map info */
+        char **list, **procs, **micro, *tmp, *regex;
+        int i, k;
+        opal_list_t info;
+        orte_node_t *node;
+        orte_proc_t *pptr;
+
+        OBJ_CONSTRUCT(&info, opal_list_t);
+        list = NULL;
+        procs = NULL;
+        for (i=0; i < map->nodes->size; i++) {
+            micro = NULL;
+            if (NULL != (node = (orte_node_t*)opal_pointer_array_get_item(map->nodes, i))) {
+                opal_argv_append_nosize(&list, node->name);
+                /* assemble all the ranks for this job that are on this node */
+                for (k=0; k < node->procs->size; k++) {
+                    if (NULL != (pptr = (orte_proc_t*)opal_pointer_array_get_item(node->procs, k))) {
+                        if (jdata->jobid == pptr->name.jobid) {
+                            opal_argv_append_nosize(&micro, ORTE_VPID_PRINT(pptr->name.vpid));
+                        }
+                    }
+                }
+                /* assemble the rank/node map */
+                if (NULL != micro) {
+                    tmp = opal_argv_join(micro, ',');
+                    opal_argv_free(micro);
+                    opal_argv_append_nosize(&procs, tmp);
+                    free(tmp);
+                }
+            }
+        }
+        /* let the PMIx server generate the nodemap regex */
+        if (NULL != list) {
+            tmp = opal_argv_join(list, ',');
+            opal_argv_free(list);
+            list = NULL;
+            if (OPAL_SUCCESS != (rc = opal_pmix.generate_regex(tmp, &regex))) {
+                ORTE_ERROR_LOG(rc);
+                free(tmp);
+                OPAL_LIST_DESTRUCT(&info);
+                return rc;
+            }
+            free(tmp);
+            kv = OBJ_NEW(opal_value_t);
+            kv->key = strdup(OPAL_PMIX_NODE_MAP);
+            kv->type = OPAL_STRING;
+            kv->data.string = regex;
+            opal_list_append(&info, &kv->super);
+        }
+
+        /* let the PMIx server generate the procmap regex */
+        if (NULL != procs) {
+            tmp = opal_argv_join(procs, ';');
+            opal_argv_free(procs);
+            procs = NULL;
+            if (OPAL_SUCCESS != (rc = opal_pmix.generate_ppn(tmp, &regex))) {
+                ORTE_ERROR_LOG(rc);
+                free(tmp);
+                OPAL_LIST_DESTRUCT(&info);
+                return rc;
+            }
+            free(tmp);
+            kv = OBJ_NEW(opal_value_t);
+            kv->key = strdup(OPAL_PMIX_PROC_MAP);
+            kv->type = OPAL_STRING;
+            kv->data.string = regex;
+            opal_list_append(&info, &kv->super);
+        }
+
         /* we don't want to block here because it could
          * take some indeterminate time to get the info */
-        if (OPAL_SUCCESS != (rc = opal_pmix.server_setup_application(jdata->jobid, NULL, setup_cbfunc, jdata))) {
+        if (OPAL_SUCCESS != (rc = opal_pmix.server_setup_application(jdata->jobid, &info, setup_cbfunc, jdata))) {
             ORTE_ERROR_LOG(rc);
         }
+        OPAL_LIST_DESTRUCT(&info);
         return rc;
     }
 
