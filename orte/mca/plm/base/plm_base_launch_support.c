@@ -960,6 +960,7 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
     bool found;
     orte_daemon_cmd_flag_t cmd;
     char *myendian;
+    pmix_proc_t pproc;
 
     /* get the daemon job, if necessary */
     if (NULL == jdatorted) {
@@ -978,9 +979,9 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
 
     /* multiple daemons could be in this buffer, so unpack until we exhaust the data */
     idx = 1;
+    OPAL_PMIX_CONVERT_NAME(&pproc, ORTE_PROC_MY_NAME);
     while (OPAL_SUCCESS == (rc = opal_dss.unpack(buffer, &dname, &idx, ORTE_NAME))) {
         char *nodename = NULL;
-        pmix_proc_t pproc;
         pmix_status_t ret;
         pmix_info_t *info;
         size_t n, ninfo;
@@ -1009,47 +1010,51 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
             orted_failed_launch = true;
             goto CLEANUP;
         }
-        /* load the bytes into a PMIx data buffer for unpacking */
-        PMIX_DATA_BUFFER_LOAD(&pbuf, bptr->bytes, bptr->size);
-        bptr->bytes = NULL;
-        OBJ_RELEASE(bptr);
-        /* setup the daemon name */
-        (void)opal_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, ORTE_PROC_MY_NAME->jobid);
-        pproc.rank = dname.vpid;
-        /* unpack the number of info structs */
-        idx = 1;
-        ret = PMIx_Data_unpack(&pproc, &pbuf, &ninfo, &idx, PMIX_SIZE);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-            rc = ORTE_ERROR;
-            orted_failed_launch = true;
-            goto CLEANUP;
-        }
-        PMIX_INFO_CREATE(info, ninfo);
-        idx = ninfo;
-        ret = PMIx_Data_unpack(&pproc, &pbuf, info, &idx, PMIX_INFO);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_INFO_FREE(info, ninfo);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-            rc = ORTE_ERROR;
-            orted_failed_launch = true;
-            goto CLEANUP;
-        }
-        PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-
-        for (n=0; n < ninfo; n++) {
-            /* store this in a daemon wireup buffer for later distribution */
-            if (PMIX_SUCCESS != (ret = PMIx_Store_internal(&pproc, info[n].key, &info[n].value))) {
+        /* if nothing is present, then ignore it */
+        if (0 == bptr->size) {
+            free(bptr);
+        } else {
+            /* load the bytes into a PMIx data buffer for unpacking */
+            PMIX_DATA_BUFFER_LOAD(&pbuf, bptr->bytes, bptr->size);
+            bptr->bytes = NULL;
+            free(bptr);
+            /* setup the daemon name */
+            pproc.rank = dname.vpid;
+            /* unpack the number of info structs */
+            idx = 1;
+            ret = PMIx_Data_unpack(&pproc, &pbuf, &ninfo, &idx, PMIX_SIZE);
+            if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
-                PMIX_INFO_FREE(info, ninfo);
+                PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
                 rc = ORTE_ERROR;
                 orted_failed_launch = true;
                 goto CLEANUP;
             }
+            PMIX_INFO_CREATE(info, ninfo);
+            idx = ninfo;
+            ret = PMIx_Data_unpack(&pproc, &pbuf, info, &idx, PMIX_INFO);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_INFO_FREE(info, ninfo);
+                PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+                rc = ORTE_ERROR;
+                orted_failed_launch = true;
+                goto CLEANUP;
+            }
+            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+
+            for (n=0; n < ninfo; n++) {
+                /* store this in a daemon wireup buffer for later distribution */
+                if (PMIX_SUCCESS != (ret = PMIx_Store_internal(&pproc, info[n].key, &info[n].value))) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_INFO_FREE(info, ninfo);
+                    rc = ORTE_ERROR;
+                    orted_failed_launch = true;
+                    goto CLEANUP;
+                }
+            }
+            PMIX_INFO_FREE(info, ninfo);
         }
-        PMIX_INFO_FREE(info, ninfo);
 
         /* unpack the node name */
         idx = 1;

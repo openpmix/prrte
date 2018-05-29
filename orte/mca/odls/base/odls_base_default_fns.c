@@ -115,6 +115,12 @@ static void setup_cbfunc(pmix_status_t status,
     if (NULL != info) {
         PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
         /* pack the provided info */
+        if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &pbuf, &ninfo, 1, PMIX_SIZE))) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+            OBJ_DESTRUCT(&cache);
+            goto done;
+        }
         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &pbuf, info, ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
@@ -291,6 +297,11 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
                 info = (pmix_info_t*)val->data.darray->array;
                 ninfo = val->data.darray->size;
                 PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+                if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
+                    PMIX_ERROR_LOG(ret);
+                    OBJ_RELEASE(wireup);
+                    return ORTE_ERROR;
+                }
                 if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, info, ninfo, PMIX_INFO))) {
                     PMIX_ERROR_LOG(ret);
                     OBJ_RELEASE(wireup);
@@ -495,7 +506,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         return rc;
     /* we don't want to block here because it could
      * take some indeterminate time to get the info */
-    (void)opal_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, jdata->jobid);
+    OPAL_PMIX_CONVERT_JOBID(pproc.nspace, jdata->jobid);
     rc = ORTE_SUCCESS;
     if (PMIX_SUCCESS != (ret = PMIx_server_setup_application(pproc.nspace, NULL, 0,
                                                              setup_cbfunc, jdata))) {
@@ -708,22 +719,22 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
      * might not be any, so it isn't an error if we don't find things */
     cnt=1;
     rc = opal_dss.unpack(buffer, &bptr, &cnt, OPAL_BUFFER);
+    if (OPAL_SUCCESS != rc) {
+        ORTE_ERROR_LOG(rc);
+        goto REPORT_ERROR;
+    }
+
+    cnt=1;
+    rc = opal_dss.unpack(bptr, &bo, &cnt, OPAL_BYTE_OBJECT);
     if (OPAL_SUCCESS == rc) {
         /* there was setup data - process it */
-        cnt=1;
-        if (OPAL_SUCCESS != (rc = opal_dss.unpack(bptr, &bo, &cnt, OPAL_BYTE_OBJECT))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(bptr);
-            goto REPORT_ERROR;
-        }
         OBJ_RELEASE(bptr);
         PMIX_DATA_BUFFER_LOAD(&pbuf, bo->bytes, bo->size);
         bo->bytes = NULL;
         bo->size = 0;
         OBJ_RELEASE(bo);
         /* setup the daemon job */
-        (void)opal_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, ORTE_PROC_MY_NAME->jobid);
-        pproc.rank = ORTE_PROC_MY_NAME->vpid;
+        OPAL_PMIX_CONVERT_NAME(&pproc, ORTE_PROC_MY_NAME);
         /* unpack the number of info structs */
         cnt = 1;
         ret = PMIx_Data_unpack(&pproc, &pbuf, &ninfo, &cnt, PMIX_SIZE);

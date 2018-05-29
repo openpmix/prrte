@@ -250,13 +250,7 @@ typedef struct {
                             OPAL_NAME_PRINT(OPAL_PROC_MY_NAME),                         \
                             __FILE__, __LINE__,                                         \
                             OPAL_NAME_PRINT(*(p)), (s)));                               \
-        (void)snprintf(_proc.nspace, PMIX_MAX_NSLEN, "%s",                              \
-                       OPAL_JOBID_PRINT((p)->jobid));                                   \
-        if (OPAL_VPID_WILDCARD == (p)->vpid) {                                          \
-            _proc.rank = PMIX_RANK_WILDCARD;                                            \
-        } else {                                                                        \
-            _proc.rank = (p)->vpid;                                                     \
-        }                                                                               \
+        OPAL_PMIX_CONVERT_NAME(&_proc, (p));                                            \
         PMIX_INFO_LOAD(&_info, PMIX_OPTIONAL, NULL, PMIX_BOOL);                         \
         (r) = PMIx_Get(&(_proc), (s), &(_info), 1, &(_kv));                             \
         if (NULL == _kv) {                                                              \
@@ -297,13 +291,7 @@ typedef struct {
                             OPAL_NAME_PRINT(OPAL_PROC_MY_NAME),                         \
                             __FILE__, __LINE__,                                         \
                             OPAL_NAME_PRINT(*(p)), (s)));                               \
-        (void)snprintf(_proc.nspace, PMIX_MAX_NSLEN, "%s",                              \
-                       OPAL_JOBID_PRINT((p)->jobid));                                   \
-        if (OPAL_VPID_WILDCARD == (p)->vpid) {                                          \
-            _proc.rank = PMIX_RANK_WILDCARD;                                            \
-        } else {                                                                        \
-            _proc.rank = (p)->vpid;                                                     \
-        }                                                                               \
+        OPAL_PMIX_CONVERT_NAME(&_proc, (p));                                            \
         PMIX_INFO_LOAD(&_info, PMIX_IMMEDIATE, NULL, PMIX_BOOL);                        \
         (r) = PMIx_Get(&(_proc), (s), &(_info), 1, &(_kv));                             \
         if (NULL == _kv) {                                                              \
@@ -340,13 +328,7 @@ typedef struct {
                             OPAL_NAME_PRINT(OPAL_PROC_MY_NAME),                 \
                             __FILE__, __LINE__,                                 \
                             OPAL_NAME_PRINT(*(p)), (s)));                       \
-        (void)snprintf(_proc.nspace, PMIX_MAX_NSLEN, "%s",                      \
-                       OPAL_JOBID_PRINT((p)->jobid));                           \
-        if (OPAL_VPID_WILDCARD == (p)->vpid) {                                  \
-            _proc.rank = PMIX_RANK_WILDCARD;                                    \
-        } else {                                                                \
-            _proc.rank = (p)->vpid;                                             \
-        }                                                                       \
+        OPAL_PMIX_CONVERT_NAME(&_proc, (p));                                   \
         (r) = PMIx_Get(&(_proc), (s), NULL, 0, &(_kv));                         \
         if (NULL == _kv) {                                                      \
             (r) = PMIX_ERR_NOT_FOUND;                                           \
@@ -384,13 +366,7 @@ typedef struct {
                             OPAL_NAME_PRINT(*(p)), (s)));                       \
         *(d) = NULL;                                                            \
         *(sz) = 0;                                                              \
-        (void)snprintf(_proc.nspace, PMIX_MAX_NSLEN, "%s",                      \
-                       OPAL_JOBID_PRINT((p)->jobid));                           \
-        if (OPAL_VPID_WILDCARD == (p)->vpid) {                                  \
-            _proc.rank = PMIX_RANK_WILDCARD;                                    \
-        } else {                                                                \
-            _proc.rank = (p)->vpid;                                             \
-        }                                                                       \
+        OPAL_PMIX_CONVERT_NAME(&_proc, (p));                                    \
         (r) = PMIx_Get(&(_proc), (s), NULL, 0, &(_kv));                         \
         if (NULL == _kv) {                                                      \
             (r) = PMIX_ERR_NOT_FOUND;                                           \

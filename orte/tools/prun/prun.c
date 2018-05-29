@@ -132,6 +132,9 @@ static struct {
     bool terminate_dvm;
     bool system_server_first;
     bool system_server_only;
+    bool do_not_connect;
+    bool wait_to_connect;
+    int num_retries;
     int pid;
 } myoptions;
 
@@ -152,7 +155,7 @@ static int create_app(int argc, char* argv[],
 static int parse_locals(opal_list_t *jdata, int argc, char* argv[]);
 static void set_classpath_jar_file(opal_pmix_app_t *app, int index, char *jarfile);
 static size_t evid = INT_MAX;
-
+static pmix_proc_t myproc;
 
 static opal_cmd_line_init_t cmd_line_init[] = {
     /* tell the dvm to terminate */
@@ -169,6 +172,21 @@ static opal_cmd_line_init_t cmd_line_init[] = {
     { NULL, '\0', "system-server-only", "system-server-only", 0,
       &myoptions.system_server_only, OPAL_CMD_LINE_TYPE_BOOL,
       "Connect only to a system-level server", OPAL_CMD_LINE_OTYPE_DVM },
+
+    /* do not connect */
+    { NULL, '\0', "do-not-connect", "do-not-connect", 0,
+      &myoptions.do_not_connect, OPAL_CMD_LINE_TYPE_BOOL,
+      "Do not connect to a server", OPAL_CMD_LINE_OTYPE_DVM },
+
+    /* wait to connect */
+    { NULL, '\0', "wait-to-connect", "wait-to-connect", 0,
+      &myoptions.wait_to_connect, OPAL_CMD_LINE_TYPE_INT,
+      "Delay specified number of seconds before trying to connect", OPAL_CMD_LINE_OTYPE_DVM },
+
+    /* number of times to try to connect */
+    { NULL, '\0', "num-connect-retries", "num-connect-retries", 0,
+      &myoptions.num_retries, OPAL_CMD_LINE_TYPE_INT,
+      "Max number of times to try to connect", OPAL_CMD_LINE_OTYPE_DVM },
 
     /* provide a connection PID */
     { NULL, '\0', "pid", "pid", 1,
@@ -270,6 +288,9 @@ static void setupcbfunc(pmix_status_t status,
         for (n=0; n < ninfo; n++) {
             PMIX_INFO_XFER(&mylock->info[n], &info[n]);
         }
+    } else {
+        mylock->info = NULL;
+        mylock->ninfo = 0;
     }
 
     /* release the caller */
@@ -310,6 +331,55 @@ static void launchhandler(size_t evhdlr_registration_id,
     OPAL_PMIX_WAKEUP_THREAD(&myinfo.lock);
 }
 
+/**
+ * Static functions used to configure the interactions between the OPAL and
+ * the runtime.
+ */
+
+static char*
+_process_name_print_for_opal(const opal_process_name_t procname)
+{
+    orte_process_name_t* rte_name = (orte_process_name_t*)&procname;
+    return ORTE_NAME_PRINT(rte_name);
+}
+
+static char*
+_jobid_print_for_opal(const opal_jobid_t jobid)
+{
+    return ORTE_JOBID_PRINT(jobid);
+}
+
+static char*
+_vpid_print_for_opal(const opal_vpid_t vpid)
+{
+    return ORTE_VPID_PRINT(vpid);
+}
+
+static int
+_process_name_compare(const opal_process_name_t p1, const opal_process_name_t p2)
+{
+    return orte_util_compare_name_fields(ORTE_NS_CMP_ALL, &p1, &p2);
+}
+
+static int _convert_string_to_process_name(opal_process_name_t *name,
+                                           const char* name_string)
+{
+    return orte_util_convert_string_to_process_name(name, name_string);
+}
+
+static int _convert_process_name_to_string(char** name_string,
+                                          const opal_process_name_t *name)
+{
+    return orte_util_convert_process_name_to_string(name_string, name);
+}
+
+static int
+_convert_string_to_jobid(opal_jobid_t *jobid, const char *jobid_string)
+{
+    return orte_util_convert_string_to_jobid(jobid, jobid_string);
+}
+
+
 int prun(int argc, char *argv[])
 {
     int rc, i;
@@ -317,7 +387,7 @@ int prun(int argc, char *argv[])
     opal_pmix_lock_t lock, rellock;
     opal_list_t apps;
     opal_pmix_app_t *app;
-    opal_list_t codes;
+    opal_list_t tinfo;
     mylock_t mylock;
     pmix_info_t info, *iptr;
     pmix_proc_t pname;
@@ -334,6 +404,16 @@ int prun(int argc, char *argv[])
     memset(&myoptions, 0, sizeof(myoptions));
     OBJ_CONSTRUCT(&job_info, opal_list_t);
     OBJ_CONSTRUCT(&apps, opal_list_t);
+
+    /* Convince OPAL to use our naming scheme */
+    opal_process_name_print = _process_name_print_for_opal;
+    opal_vpid_print = _vpid_print_for_opal;
+    opal_jobid_print = _jobid_print_for_opal;
+    opal_compare_proc = _process_name_compare;
+    opal_convert_string_to_process_name = _convert_string_to_process_name;
+    opal_convert_process_name_to_string = _convert_process_name_to_string;
+    opal_snprintf_jobid = orte_util_snprintf_jobid;
+    opal_convert_string_to_jobid = _convert_string_to_jobid;
 
     /* search the argv for MCA params */
     for (i=0; NULL != argv[i]; i++) {
@@ -471,32 +551,110 @@ int prun(int argc, char *argv[])
         exit(0);
     }
 
-    /* ensure we ONLY take the ess/tool component */
-    opal_setenv(OPAL_MCA_PREFIX"ess", "tool", true, &environ);
-    /* tell the ess/tool component how we want to connect */
-    if (myoptions.system_server_only) {
-        opal_setenv(OPAL_MCA_PREFIX"ess_tool_system_server_only", "1", true, &environ);
+    /* setup options */
+    OBJ_CONSTRUCT(&tinfo, opal_list_t);
+    if (myoptions.do_not_connect) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
+        opal_list_append(&tinfo, &ds->super);
+    } else if (myoptions.system_server_first) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
+        opal_list_append(&tinfo, &ds->super);
+    } else if (myoptions.system_server_only) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
+        opal_list_append(&tinfo, &ds->super);
     }
-    if (myoptions.system_server_first) {
-        opal_setenv(OPAL_MCA_PREFIX"ess_tool_system_server_first", "1", true, &environ);
+    if (0 < myoptions.wait_to_connect) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_RETRY_DELAY, &myoptions.wait_to_connect, PMIX_UINT32);
+        opal_list_append(&tinfo, &ds->super);
     }
-    /* if they specified the DVM's pid, then pass it along */
-    if (0 != myoptions.pid) {
-        asprintf(&param, "%d", myoptions.pid);
-        opal_setenv(OPAL_MCA_PREFIX"ess_tool_server_pid", param, true, &environ);
-        free(param);
+    if (0 < myoptions.num_retries) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_MAX_RETRIES, &myoptions.num_retries, PMIX_UINT32);
+        opal_list_append(&tinfo, &ds->super);
     }
-    /* if they specified the URI, then pass it along */
-    if (NULL != orte_cmd_options.hnp) {
-        opal_setenv("PMIX_MCA_ptl_tcp_server_uri", orte_cmd_options.hnp, true, &environ);
+    if (0 < myoptions.pid) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &myoptions.pid, PMIX_PID);
+        opal_list_append(&tinfo, &ds->super);
+    }
+    /* ensure we don't try to use the usock PTL component */
+    ds = OBJ_NEW(opal_ds_info_t);
+    PMIX_INFO_CREATE(ds->info, 1);
+    PMIX_INFO_LOAD(ds->info, PMIX_USOCK_DISABLE, NULL, PMIX_BOOL);
+    opal_list_append(&tinfo, &ds->super);
+
+    /* we are also a launcher, ao pass that down so PMIx knows
+     * to setup rendezvous points */
+    ds = OBJ_NEW(opal_ds_info_t);
+    PMIX_INFO_CREATE(ds->info, 1);
+    PMIX_INFO_LOAD(ds->info, PMIX_LAUNCHER, NULL, PMIX_BOOL);
+    opal_list_append(&tinfo, &ds->super);
+    /* we always support session-level rendezvous */
+    ds = OBJ_NEW(opal_ds_info_t);
+    PMIX_INFO_CREATE(ds->info, 1);
+    PMIX_INFO_LOAD(ds->info, PMIX_SERVER_TOOL_SUPPORT, NULL, PMIX_BOOL);
+    opal_list_append(&tinfo, &ds->super);
+    /* use only one listener */
+    ds = OBJ_NEW(opal_ds_info_t);
+    PMIX_INFO_CREATE(ds->info, 1);
+    PMIX_INFO_LOAD(ds->info, PMIX_SINGLE_LISTENER, NULL, PMIX_BOOL);
+    opal_list_append(&tinfo, &ds->super);
+
+    /* setup any output format requests */
+    if (orte_cmd_options.tag_output) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
+        opal_list_append(&tinfo, &ds->super);
+    }
+    if (orte_cmd_options.timestamp_output) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
+        opal_list_append(&tinfo, &ds->super);
+    }
+    if (orte_xml_output) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
+        opal_list_append(&tinfo, &ds->super);
     }
 
-    /* now initialize ORTE - we have to indicate we are a launcher so that we
-     * will provide rendezvous points for tools to connect to us */
-    if (OPAL_SUCCESS != (rc = orte_init(&argc, &argv, ORTE_PROC_LAUNCHER))) {
-        OPAL_ERROR_LOG(rc);
-        return rc;
+    /* if they specified the URI, then pass it along */
+    if (NULL != orte_cmd_options.hnp) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_URI, orte_cmd_options.hnp, PMIX_STRING);
+        opal_list_append(&tinfo, &ds->super);
     }
+
+    /* convert to array of info */
+    ninfo = opal_list_get_size(&tinfo);
+    PMIX_INFO_CREATE(iptr, ninfo);
+    n = 0;
+    OPAL_LIST_FOREACH(ds, &tinfo, opal_ds_info_t) {
+        PMIX_INFO_XFER(&iptr[n], ds->info);
+        ++n;
+    }
+    OPAL_LIST_DESTRUCT(&tinfo);
+
+    /* now initialize PMIx - we have to indicate we are a launcher so that we
+     * will provide rendezvous points for tools to connect to us */
+    if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
+        PMIX_ERROR_LOG(ret);
+        return ret;
+    }
+    PMIX_INFO_FREE(iptr, ninfo);
 
     /* if the user just wants us to terminate a DVM, then do so */
     if (myoptions.terminate_dvm) {
@@ -764,7 +922,6 @@ int prun(int argc, char *argv[])
         PMIx_Register_event_handler(&ret, 1, NULL, 0, launchhandler, regcbfunc, &lock);
         OPAL_PMIX_WAIT_THREAD(&lock);
         OPAL_PMIX_DESTRUCT_LOCK(&lock);
-        OPAL_LIST_DESTRUCT(&codes);
         /* notify the tool that we are ready */
         ptr = strdup(param);
         param = strchr(ptr, ':');
@@ -805,6 +962,7 @@ int prun(int argc, char *argv[])
             }
         }
     }
+#if 0
     /* convert the job info into an array */
     ninfo = opal_list_get_size(&job_info);
     iptr = NULL;
@@ -816,11 +974,31 @@ int prun(int argc, char *argv[])
             ++n;
         }
     }
+#endif
+    ninfo = 0;
+    iptr = NULL;
     /* convert the apps to an array */
     napps = opal_list_get_size(&apps);
     PMIX_APP_CREATE(papps, napps);
+    n = 0;
     OPAL_LIST_FOREACH(app, &apps, opal_pmix_app_t) {
-        papps[n] = app->app;
+        size_t fbar;
+
+        papps[n].cmd = strdup(app->app.cmd);
+        papps[n].argv = opal_argv_copy(app->app.argv);
+        papps[n].env = opal_argv_copy(app->app.env);
+        papps[n].cwd = strdup(app->app.cwd);
+        papps[n].maxprocs = app->app.maxprocs;
+        fbar = opal_list_get_size(&app->info);
+        if (0 < fbar) {
+            papps[n].ninfo = fbar;
+            PMIX_INFO_CREATE(papps[n].info, fbar);
+            m = 0;
+            OPAL_LIST_FOREACH(ds, &app->info, opal_ds_info_t) {
+                PMIX_INFO_XFER(&papps[n].info[m], ds->info);
+                ++m;
+            }
+        }
         ++n;
     }
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, nspace);
@@ -865,7 +1043,7 @@ int prun(int argc, char *argv[])
 
   DONE:
     /* cleanup and leave */
-    orte_finalize();
+    PMIx_tool_finalize();
     return 0;
 }
 

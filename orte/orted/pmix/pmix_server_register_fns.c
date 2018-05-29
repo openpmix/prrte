@@ -582,7 +582,7 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         OPAL_PMIX_DESTRUCT_LOCK(&lock);
         PMIX_INFO_FREE(pinfo, ninfo);
     }
-    OPAL_LIST_RELEASE(info);
+
     return rc;
 }
 

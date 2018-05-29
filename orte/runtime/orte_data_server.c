@@ -253,7 +253,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
     /* load it into a pmix data buffer for processing */
     PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
     boptr->bytes = NULL;
-    OBJ_RELEASE(boptr);
+    free(boptr);
 
     /* convert the sender */
     OPAL_PMIX_CONVERT_NAME(&psender, sender);

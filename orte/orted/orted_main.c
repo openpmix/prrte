@@ -689,8 +689,7 @@ int orte_daemon(int argc, char *argv[])
             goto DONE;
         }
         PMIX_VALUE_LOAD(&val, orte_parent_uri, OPAL_STRING);
-        (void)opal_snprintf_jobid(proc.nspace, PMIX_MAX_NSLEN, ORTE_PROC_MY_PARENT->jobid);
-        proc.rank = ORTE_PROC_MY_PARENT->vpid;
+        OPAL_PMIX_CONVERT_NAME(&proc, ORTE_PROC_MY_PARENT);
         if (PMIX_SUCCESS != (prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
             PMIX_ERROR_LOG(prc);
             PMIX_VALUE_DESTRUCT(&val);
@@ -775,7 +774,6 @@ int orte_daemon(int argc, char *argv[])
 
         /* get any connection info we may have pushed */
         {
-            int32_t flag;
             pmix_data_buffer_t pbuf;
             pmix_info_t *info;
             size_t ninfo;
@@ -783,9 +781,10 @@ int orte_daemon(int argc, char *argv[])
             opal_byte_object_t bo, *boptr;
             pmix_value_t *vptr;
 
-            (void)opal_snprintf_jobid(proc.nspace, PMIX_MAX_NSLEN, ORTE_PROC_MY_NAME->jobid);
-            proc.rank = ORTE_PROC_MY_NAME->vpid;
+            OPAL_PMIX_CONVERT_NAME(&proc, ORTE_PROC_MY_NAME);
             boptr = &bo;
+            bo.bytes = NULL;
+            bo.size = 0;
             if (PMIX_SUCCESS == PMIx_Get(&proc, NULL, NULL, 0, &vptr) && NULL != vptr) {
                 /* the data is returned as a pmix_data_array_t */
                 if (PMIX_DATA_ARRAY != vptr->type || NULL == vptr->data.darray ||
@@ -798,6 +797,12 @@ int orte_daemon(int argc, char *argv[])
                 info = (pmix_info_t*)vptr->data.darray->array;
                 ninfo = vptr->data.darray->size;
                 PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+                if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&proc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
+                    PMIX_ERROR_LOG(prc);
+                    ret = ORTE_ERROR;
+                    OBJ_RELEASE(buffer);
+                    goto DONE;
+                }
                 if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&proc, &pbuf, info, ninfo, PMIX_INFO))) {
                     PMIX_ERROR_LOG(prc);
                     ret = ORTE_ERROR;
@@ -808,24 +813,11 @@ int orte_daemon(int argc, char *argv[])
                 bo.bytes = (uint8_t*)pbo.bytes;
                 bo.size = pbo.size;
                 PMIX_VALUE_RELEASE(vptr);
-                flag = ninfo;
-                if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &flag, 1, OPAL_INT32))) {
-                    ORTE_ERROR_LOG(ret);
-                    OBJ_RELEASE(buffer);
-                    goto DONE;
-                }
-                if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &boptr, 1, OPAL_BYTE_OBJECT))) {
-                    ORTE_ERROR_LOG(ret);
-                    OBJ_RELEASE(buffer);
-                    goto DONE;
-                }
-            } else {
-                flag = 0;
-                if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &flag, 1, OPAL_INT32))) {
-                    ORTE_ERROR_LOG(ret);
-                    OBJ_RELEASE(buffer);
-                    goto DONE;
-                }
+            }
+            if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &boptr, 1, OPAL_BYTE_OBJECT))) {
+                ORTE_ERROR_LOG(ret);
+                OBJ_RELEASE(buffer);
+                goto DONE;
             }
         }
 

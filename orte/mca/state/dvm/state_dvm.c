@@ -332,8 +332,16 @@ static void vm_ready(int fd, short args, void *cbdata)
                     info = (pmix_info_t*)val->data.darray->array;
                     ninfo = val->data.darray->size;
                     PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+                    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
+                        PMIX_ERROR_LOG(ret);
+                        PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+                        PMIX_ERROR_LOG(ret);
+                        OBJ_RELEASE(wireup);
+                        return;
+                    }
                     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, info, ninfo, PMIX_INFO))) {
                         PMIX_ERROR_LOG(ret);
+                        PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
                         OBJ_RELEASE(wireup);
                         return;
                     }

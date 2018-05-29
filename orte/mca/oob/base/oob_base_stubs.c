@@ -291,7 +291,6 @@ void orte_oob_base_get_addr(char **uri)
         PMIX_ERROR_LOG(rc);
     }
     PMIX_VALUE_DESTRUCT(&val);
-    OBJ_DESTRUCT(&val);
 }
 
 static void process_uri(char *uri)

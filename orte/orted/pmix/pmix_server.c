@@ -224,6 +224,7 @@ int pmix_server_init(void)
     opal_value_t *kv;
     pmix_info_t *info;
     size_t n, ninfo;
+    pmix_proc_t pname;
 
     if (orte_pmix_server_globals.initialized) {
         return ORTE_SUCCESS;
@@ -257,6 +258,7 @@ int pmix_server_init(void)
     opal_setenv("PMIX_SERVER_TMPDIR", orte_process_info.proc_session_dir, true, &environ);
 
     OBJ_CONSTRUCT(&ilist, opal_list_t);
+
     /* tell the server our temp directory */
     kv = OBJ_NEW(opal_value_t);
     kv->key = strdup(PMIX_SERVER_TMPDIR);
@@ -318,19 +320,23 @@ int pmix_server_init(void)
     }
 
     /* convert to an info array */
-    ninfo = opal_list_get_size(&ilist);
+    ninfo = opal_list_get_size(&ilist) + 2;
     PMIX_INFO_CREATE(info, ninfo);
     n = 0;
     while (NULL != (kv = (opal_value_t*)opal_list_remove_first(&ilist))) {
         if (OPAL_BOOL == kv->type) {
             PMIX_INFO_LOAD(&info[n], kv->key, &kv->data.flag, PMIX_BOOL);
         } else {
-            PMIX_INFO_LOAD(&info[n], kv->key, &kv->data.string, PMIX_STRING);
+            PMIX_INFO_LOAD(&info[n], kv->key, kv->data.string, PMIX_STRING);
         }
         ++n;
         OBJ_RELEASE(kv);
     }
     OPAL_LIST_DESTRUCT(&ilist);
+    /* tell the server our name so we agree on our identifier */
+    OPAL_PMIX_CONVERT_NAME(&pname, ORTE_PROC_MY_NAME);
+    PMIX_INFO_LOAD(&info[n], PMIX_SERVER_NSPACE, pname.nspace, PMIX_STRING);
+    PMIX_INFO_LOAD(&info[n+1], PMIX_SERVER_RANK, &pname.rank, PMIX_PROC_RANK);
 
     /* setup the local server */
     if (ORTE_SUCCESS != (rc = PMIx_server_init(&pmix_server, info, ninfo))) {
