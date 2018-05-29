@@ -38,7 +38,7 @@
 #endif
 
 #include "opal/dss/dss.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/errmgr/errmgr.h"
@@ -51,6 +51,14 @@
 
 #include "iof_hnp.h"
 
+static void lkcbfunc(pmix_status_t status, void *cbdata)
+{
+    opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
+
+    OPAL_POST_OBJECT(lk);
+    lk->status = opal_pmix_convert_status(status);
+    OPAL_PMIX_WAKEUP_THREAD(lk);
+}
 
 void orte_iof_hnp_recv(int status, orte_process_name_t* sender,
                        opal_buffer_t* buffer, orte_rml_tag_t tag,
@@ -249,21 +257,45 @@ void orte_iof_hnp_recv(int status, orte_process_name_t* sender,
                  ORTE_VPID_WILDCARD == origin.vpid ||
                  sink->name.vpid == origin.vpid)) {
                 /* send the data to the tool */
-                if (NULL != opal_pmix.server_iof_push) {
                     /* don't pass along zero byte blobs */
-                    if (0 < numbytes) {
-                        OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
-                                             "%s sending data from proc %s of size %d via PMIx to tool %s",
-                                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                                             ORTE_NAME_PRINT(&origin), (int)numbytes,
-                                             ORTE_NAME_PRINT(&sink->daemon)));
-                        rc = opal_pmix.server_iof_push(&origin, stream, data, numbytes);
-                        if (ORTE_SUCCESS != rc) {
-                            ORTE_ERROR_LOG(rc);
-                        }
+                if (0 < numbytes) {
+                    OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
+                                         "%s sending data from proc %s of size %d via PMIx to tool %s",
+                                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                                         ORTE_NAME_PRINT(&origin), (int)numbytes,
+                                         ORTE_NAME_PRINT(&sink->daemon)));
+                    pmix_proc_t source;
+                    pmix_byte_object_t bo;
+                    pmix_iof_channel_t pchan;
+                    opal_pmix_lock_t lock;
+                    pmix_status_t prc;
+                    OPAL_PMIX_CONVERT_NAME(&source, &origin);
+                    pchan = 0;
+                    if (ORTE_IOF_STDIN & stream) {
+                        pchan |= PMIX_FWD_STDIN_CHANNEL;
                     }
-                } else {
-                    orte_iof_hnp_send_data_to_endpoint(&sink->daemon, &origin, stream, data, numbytes);
+                    if (ORTE_IOF_STDOUT & stream) {
+                        pchan |= PMIX_FWD_STDOUT_CHANNEL;
+                    }
+                    if (ORTE_IOF_STDERR & stream) {
+                        pchan |= PMIX_FWD_STDERR_CHANNEL;
+                    }
+                    if (ORTE_IOF_STDDIAG & stream) {
+                        pchan |= PMIX_FWD_STDDIAG_CHANNEL;
+                    }
+                    /* setup the byte object */
+                    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
+                    bo.bytes = (char*)data;
+                    bo.size = numbytes;
+                    OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+                    prc = PMIx_server_IOF_deliver(&source, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
+                    if (PMIX_SUCCESS != prc) {
+                        PMIX_ERROR_LOG(prc);
+                    } else {
+                        /* wait for completion */
+                        OPAL_PMIX_WAIT_THREAD(&lock);
+                    }
+                    OPAL_PMIX_DESTRUCT_LOCK(&lock);
                 }
                 if (sink->exclusive) {
                     exclusive = true;

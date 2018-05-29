@@ -32,7 +32,7 @@
 #include "opal/util/output.h"
 #include "opal/dss/dss.h"
 #include "opal/event/event-internal.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/iof/iof.h"
@@ -621,12 +621,6 @@ int orte_show_help(const char *filename, const char *topic,
     return rc;
 }
 
-static void cbfunc(int status, void *cbdata)
-{
-    volatile bool *active = (volatile bool*)cbdata;
-    *active = false;
-}
-
 int orte_show_help_norender(const char *filename, const char *topic,
                             bool want_error_header, const char *output)
 {
@@ -634,10 +628,6 @@ int orte_show_help_norender(const char *filename, const char *topic,
     int8_t have_output = 1;
     opal_buffer_t *buf;
     bool am_inside = false;
-    opal_list_t info;
-    opal_value_t *kv;
-    volatile bool active;
-    struct timespec tp;
 
     if (!ready) {
         /* if we are finalizing, then we have no way to process
@@ -711,33 +701,27 @@ int orte_show_help_norender(const char *filename, const char *topic,
         } else {
             /* if we are not a daemon (i.e., we are an app) and if PMIx
              * support for "log" is available, then use that channel */
-            if (NULL != opal_pmix.log) {
-                OBJ_CONSTRUCT(&info, opal_list_t);
-                kv = OBJ_NEW(opal_value_t),
-                kv->key = strdup(OPAL_PMIX_SHOW_HELP);
-                kv->type = OPAL_BYTE_OBJECT;
-                opal_dss.unload(buf, (void**)&kv->data.bo.bytes, &kv->data.bo.size);
-                opal_list_append(&info, &kv->super);
-                active = true;
-                tp.tv_sec = 0;
-                tp.tv_nsec = 1000000;
-                opal_pmix.log(&info, cbfunc, (void*)&active);
-                while (active) {
-                    nanosleep(&tp, NULL);
-                }
-                OBJ_RELEASE(buf);
-                kv->data.bo.bytes = NULL;
-                OPAL_LIST_DESTRUCT(&info);
-                rc = ORTE_SUCCESS;
-                goto CLEANUP;
-            } else {
-                rc = show_help(filename, topic, output, ORTE_PROC_MY_NAME);
+            pmix_status_t ret;
+            pmix_info_t info;
+            pmix_byte_object_t pbo;
+            int32_t nsize;
+
+            opal_dss.unload(buf, (void**)&pbo.bytes, &nsize);
+            pbo.size = nsize;
+            PMIX_INFO_LOAD(&info, OPAL_PMIX_SHOW_HELP, &pbo, PMIX_BYTE_OBJECT);
+            ret = PMIx_Log(&info, 1, NULL, 0);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
             }
+            PMIX_INFO_DESTRUCT(&info);
+            OBJ_RELEASE(buf);
+            rc = ORTE_SUCCESS;
+            goto CLEANUP;
         }
         am_inside = false;
     }
 
-CLEANUP:
+  CLEANUP:
     return rc;
 }
 

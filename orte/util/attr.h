@@ -52,6 +52,8 @@ typedef uint8_t orte_app_context_flags_t;
 #define ORTE_APP_PREPEND_ENVAR      19    // opal_envar_t - prepend the specified value to the given envar
 #define ORTE_APP_APPEND_ENVAR       20    // opal_envar_t - append the specified value to the given envar
 #define ORTE_APP_ADD_ENVAR          21    // opal_envar_t - add envar, do not override pre-existing one
+#define ORTE_APP_DEBUGGER_DAEMON    22    // bool - flag that this app describes daemons to be co-launched
+                                          //        with the application procs in the other apps
 
 #define ORTE_APP_MAX_KEY        100
 
@@ -178,6 +180,7 @@ typedef uint16_t orte_proc_flags_t;
 #define ORTE_PROC_FLAG_DATA_RECVD    0x1000  // modex data for this proc has been received
 #define ORTE_PROC_FLAG_SM_ACCESS     0x2000  // indicate if process can read modex data from shared memory region
 #define ORTE_PROC_FLAG_TOOL          0x4000  // proc is a tool and doesn't count against allocations
+
 
 /***   PROCESS ATTRIBUTE KEYS   ***/
 #define ORTE_PROC_START_KEY   ORTE_JOB_MAX_KEY

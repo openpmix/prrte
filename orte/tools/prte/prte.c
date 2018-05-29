@@ -57,7 +57,6 @@
 #include "opal/event/event-internal.h"
 #include "opal/mca/installdirs/installdirs.h"
 #include "opal/mca/base/base.h"
-#include "opal/mca/pmix/pmix.h"
 #include "opal/util/argv.h"
 #include "opal/util/output.h"
 #include "opal/util/basename.h"

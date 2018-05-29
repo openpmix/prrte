@@ -25,8 +25,6 @@
 
 #include "orte_config.h"
 
-#include "opal/mca/pmix/pmix.h"
-
 BEGIN_C_DECLS
 
 ORTE_DECLSPEC int pmix_server_init(void);

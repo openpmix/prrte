@@ -49,6 +49,7 @@
 #include <sys/time.h>
 #endif  /* HAVE_SYS_TIME_H */
 
+#include <pmix_server.h>
 
 #include "opal/event/event-internal.h"
 #include "opal/mca/base/base.h"
@@ -66,7 +67,7 @@
 #include "opal/util/daemon_init.h"
 #include "opal/dss/dss.h"
 #include "opal/hwloc/hwloc-internal.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/util/show_help.h"
 #include "orte/util/proc_info.h"
@@ -74,7 +75,6 @@
 #include "orte/util/name_fns.h"
 #include "orte/util/parse_options.h"
 #include "orte/mca/rml/base/rml_contact.h"
-#include "orte/util/pre_condition_transports.h"
 #include "orte/util/compress.h"
 #include "orte/util/threads.h"
 
@@ -241,10 +241,9 @@ int orte_daemon(int argc, char *argv[])
     int i;
     opal_buffer_t *buffer;
     char hostname[OPAL_MAXHOSTNAMELEN];
-#if OPAL_ENABLE_FT_CR == 1
-    char *tmp_env_var = NULL;
-#endif
-    opal_value_t val;
+    pmix_value_t val;
+    pmix_proc_t proc;
+    pmix_status_t prc;
 
     /* initialize the globals */
     memset(&orted_globals, 0, sizeof(orted_globals));
@@ -333,15 +332,6 @@ int orte_daemon(int argc, char *argv[])
         i++;
         if (1000 < i) i=0;
     }
-
-#if OPAL_ENABLE_FT_CR == 1
-    /* Mark as a tool program */
-    (void) mca_base_var_env_name ("opal_cr_is_tool", &tmp_env_var);
-    opal_setenv(tmp_env_var,
-                "1",
-                true, &environ);
-    free(tmp_env_var);
-#endif
 
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
@@ -475,20 +465,16 @@ int orte_daemon(int argc, char *argv[])
     }
     ORTE_PROC_MY_DAEMON->jobid = ORTE_PROC_MY_NAME->jobid;
     ORTE_PROC_MY_DAEMON->vpid = ORTE_PROC_MY_NAME->vpid;
-    OBJ_CONSTRUCT(&val, opal_value_t);
-    val.key = OPAL_PMIX_PROC_URI;
-    val.type = OPAL_STRING;
-    val.data.string = orte_process_info.my_daemon_uri;
-    if (OPAL_SUCCESS != (ret = opal_pmix.store_local(ORTE_PROC_MY_NAME, &val))) {
-        ORTE_ERROR_LOG(ret);
-        val.key = NULL;
-        val.data.string = NULL;
-        OBJ_DESTRUCT(&val);
+    PMIX_VALUE_LOAD(&val, orte_process_info.my_daemon_uri, OPAL_STRING);
+    (void)opal_snprintf_jobid(proc.nspace, PMIX_MAX_NSLEN, ORTE_PROC_MY_NAME->jobid);
+    proc.rank = ORTE_PROC_MY_NAME->vpid;
+    if (PMIX_SUCCESS != (prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
+        PMIX_ERROR_LOG(prc);
+        PMIX_VALUE_DESTRUCT(&val);
+        ret = ORTE_ERROR;
         goto DONE;
     }
-    val.key = NULL;
-    val.data.string = NULL;
-    OBJ_DESTRUCT(&val);
+    PMIX_VALUE_DESTRUCT(&val);
 
     /* if I am also the hnp, then update that contact info field too */
     if (ORTE_PROC_IS_HNP) {
@@ -543,7 +529,7 @@ int orte_daemon(int argc, char *argv[])
     /* if requested, report my uri to the indicated pipe */
     if (orted_globals.uri_pipe > 0) {
         orte_job_t *jdata;
-        orte_proc_t *proc;
+        orte_proc_t *p;
         orte_node_t *node;
         orte_app_context_t *app;
         char *tmp, *nptr, *sysinfo;
@@ -575,50 +561,50 @@ int orte_daemon(int argc, char *argv[])
          * node on the global node pool, and since the singleton
          * -must- be on the same node as us, indicate that
          */
-        proc = OBJ_NEW(orte_proc_t);
-        proc->name.jobid = jdata->jobid;
-        proc->name.vpid = 0;
-        proc->parent = 0;
-        ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_ALIVE);
-        proc->state = ORTE_PROC_STATE_RUNNING;
-        proc->app_idx = 0;
+        p = OBJ_NEW(orte_proc_t);
+        p->name.jobid = jdata->jobid;
+        p->name.vpid = 0;
+        p->parent = 0;
+        ORTE_FLAG_SET(p, ORTE_PROC_FLAG_ALIVE);
+        p->state = ORTE_PROC_STATE_RUNNING;
+        p->app_idx = 0;
         /* obviously, it is on my node */
         node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, 0);
-        proc->node = node;
+        p->node = node;
         OBJ_RETAIN(node);  /* keep accounting straight */
-        opal_pointer_array_add(jdata->procs, proc);
+        opal_pointer_array_add(jdata->procs, p);
         jdata->num_procs = 1;
         /* add the node to the job map */
         OBJ_RETAIN(node);
         opal_pointer_array_add(jdata->map->nodes, node);
         jdata->map->num_nodes++;
         /* and it obviously is on the node */
-        OBJ_RETAIN(proc);
-        opal_pointer_array_add(node->procs, proc);
+        OBJ_RETAIN(p);
+        opal_pointer_array_add(node->procs, p);
         node->num_procs++;
         /* and obviously it is one of my local procs */
-        OBJ_RETAIN(proc);
-        opal_pointer_array_add(orte_local_children, proc);
+        OBJ_RETAIN(p);
+        opal_pointer_array_add(orte_local_children, p);
         jdata->num_local_procs = 1;
         /* set the trivial */
-        proc->local_rank = 0;
-        proc->node_rank = 0;
-        proc->app_rank = 0;
-        proc->state = ORTE_PROC_STATE_RUNNING;
-        proc->app_idx = 0;
-        ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_LOCAL);
-
-        /* set the ORTE_JOB_TRANSPORT_KEY from the environment */
-        orte_pre_condition_transports(jdata, NULL);
+        p->local_rank = 0;
+        p->node_rank = 0;
+        p->app_rank = 0;
+        p->state = ORTE_PROC_STATE_RUNNING;
+        p->app_idx = 0;
+        ORTE_FLAG_SET(p, ORTE_PROC_FLAG_LOCAL);
 
         /* register the singleton's nspace with our PMIx server */
         if (ORTE_SUCCESS != (ret = orte_pmix_server_register_nspace(jdata))) {
-          ORTE_ERROR_LOG(ret);
-          goto DONE;
+            ORTE_ERROR_LOG(ret);
+            goto DONE;
         }
         /* use setup fork to create the envars needed by the singleton */
-        if (OPAL_SUCCESS != (ret = opal_pmix.server_setup_fork(&proc->name, &singenv))) {
-            ORTE_ERROR_LOG(ret);
+        (void)opal_snprintf_jobid(proc.nspace, PMIX_MAX_NSLEN, p->name.jobid);
+        proc.rank = p->name.vpid;
+        if (PMIX_SUCCESS != (prc = PMIx_server_setup_fork(&proc, &singenv))) {
+            PMIX_ERROR_LOG(prc);
+            ret = ORTE_ERROR;
             goto DONE;
         }
 
@@ -702,20 +688,15 @@ int orte_daemon(int argc, char *argv[])
             ORTE_ERROR_LOG(ret);
             goto DONE;
         }
-        OBJ_CONSTRUCT(&val, opal_value_t);
-        val.key = OPAL_PMIX_PROC_URI;
-        val.type = OPAL_STRING;
-        val.data.string = orte_parent_uri;
-        if (OPAL_SUCCESS != (ret = opal_pmix.store_local(ORTE_PROC_MY_PARENT, &val))) {
-            ORTE_ERROR_LOG(ret);
-            val.key = NULL;
-            val.data.string = NULL;
-            OBJ_DESTRUCT(&val);
+        PMIX_VALUE_LOAD(&val, orte_parent_uri, OPAL_STRING);
+        OPAL_PMIX_CONVERT_NAME(&proc, ORTE_PROC_MY_PARENT);
+        if (PMIX_SUCCESS != (prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
+            PMIX_ERROR_LOG(prc);
+            PMIX_VALUE_DESTRUCT(&val);
+            ret = ORTE_ERROR;
             goto DONE;
         }
-        val.key = NULL;
-        val.data.string = NULL;
-        OBJ_DESTRUCT(&val);
+        PMIX_VALUE_DESTRUCT(&val);
 
         /* tell the routed module that we have a path
          * back to the HNP
@@ -793,76 +774,50 @@ int orte_daemon(int argc, char *argv[])
 
         /* get any connection info we may have pushed */
         {
-            opal_value_t *vptr = NULL, *kv;
-            opal_list_t *modex;
-            int32_t flag;
+            pmix_data_buffer_t pbuf;
+            pmix_info_t *info;
+            size_t ninfo;
+            pmix_byte_object_t pbo;
+            opal_byte_object_t bo, *boptr;
+            pmix_value_t *vptr;
 
-            if (opal_pmix.legacy_get()) {
-                if (OPAL_SUCCESS != (ret = opal_pmix.get(ORTE_PROC_MY_NAME, OPAL_PMIX_PROC_URI, NULL, &vptr)) || NULL == vptr) {
-                    /* just pack a marker indicating we don't have any to share */
-                    flag = 0;
-                    if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &flag, 1, OPAL_INT32))) {
-                        ORTE_ERROR_LOG(ret);
-                        OBJ_RELEASE(buffer);
-                        goto DONE;
-                    }
-                } else {
-                    flag = 1;
-                    if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &flag, 1, OPAL_INT32))) {
-                        ORTE_ERROR_LOG(ret);
-                        OBJ_RELEASE(buffer);
-                        goto DONE;
-                    }
-                    if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &vptr, 1, OPAL_VALUE))) {
-                        ORTE_ERROR_LOG(ret);
-                        OBJ_RELEASE(buffer);
-                        goto DONE;
-                    }
-                    OBJ_RELEASE(vptr);
+            OPAL_PMIX_CONVERT_NAME(&proc, ORTE_PROC_MY_NAME);
+            boptr = &bo;
+            bo.bytes = NULL;
+            bo.size = 0;
+            if (PMIX_SUCCESS == PMIx_Get(&proc, NULL, NULL, 0, &vptr) && NULL != vptr) {
+                /* the data is returned as a pmix_data_array_t */
+                if (PMIX_DATA_ARRAY != vptr->type || NULL == vptr->data.darray ||
+                    PMIX_INFO != vptr->data.darray->type || NULL == vptr->data.darray->array) {
+                    ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
+                    OBJ_RELEASE(buffer);
+                    goto DONE;
                 }
-            } else {
-                if (OPAL_SUCCESS != (ret = opal_pmix.get(ORTE_PROC_MY_NAME, NULL, NULL, &vptr)) || NULL == vptr) {
-                    /* just pack a marker indicating we don't have any to share */
-                    flag = 0;
-                    if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &flag, 1, OPAL_INT32))) {
-                        ORTE_ERROR_LOG(ret);
-                        OBJ_RELEASE(buffer);
-                        goto DONE;
-                    }
-                } else {
-                    /* the data is returned as a list of key-value pairs in the opal_value_t */
-                    if (OPAL_PTR == vptr->type) {
-                        modex = (opal_list_t*)vptr->data.ptr;
-                        flag = (int32_t)opal_list_get_size(modex);
-                        if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &flag, 1, OPAL_INT32))) {
-                            ORTE_ERROR_LOG(ret);
-                            OBJ_RELEASE(buffer);
-                            goto DONE;
-                        }
-                        OPAL_LIST_FOREACH(kv, modex, opal_value_t) {
-                            if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &kv, 1, OPAL_VALUE))) {
-                                ORTE_ERROR_LOG(ret);
-                                OBJ_RELEASE(buffer);
-                                goto DONE;
-                            }
-                        }
-                        OPAL_LIST_RELEASE(modex);
-                    } else {
-                        /* single value */
-                        flag = 1;
-                        if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &flag, 1, OPAL_INT32))) {
-                            ORTE_ERROR_LOG(ret);
-                            OBJ_RELEASE(buffer);
-                            goto DONE;
-                        }
-                        if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &vptr, 1, OPAL_VALUE))) {
-                            ORTE_ERROR_LOG(ret);
-                            OBJ_RELEASE(buffer);
-                            goto DONE;
-                        }
-                        OBJ_RELEASE(vptr);
-                    }
+                /* use the PMIx data support to pack it */
+                info = (pmix_info_t*)vptr->data.darray->array;
+                ninfo = vptr->data.darray->size;
+                PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+                if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&proc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
+                    PMIX_ERROR_LOG(prc);
+                    ret = ORTE_ERROR;
+                    OBJ_RELEASE(buffer);
+                    goto DONE;
                 }
+                if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&proc, &pbuf, info, ninfo, PMIX_INFO))) {
+                    PMIX_ERROR_LOG(prc);
+                    ret = ORTE_ERROR;
+                    OBJ_RELEASE(buffer);
+                    goto DONE;
+                }
+                PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
+                bo.bytes = (uint8_t*)pbo.bytes;
+                bo.size = pbo.size;
+                PMIX_VALUE_RELEASE(vptr);
+            }
+            if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &boptr, 1, OPAL_BYTE_OBJECT))) {
+                ORTE_ERROR_LOG(ret);
+                OBJ_RELEASE(buffer);
+                goto DONE;
             }
         }
 
@@ -1111,8 +1066,12 @@ static void rollup(int status, orte_process_name_t* sender,
 {
     int ret;
     orte_process_name_t child;
-    int32_t i, flag, cnt;
-    opal_value_t *kv;
+    int32_t flag, cnt;
+    opal_byte_object_t *boptr;
+    pmix_data_buffer_t pbkt;
+    pmix_info_t *info;
+    pmix_proc_t proc;
+    pmix_status_t prc;
 
     ncollected++;
 
@@ -1137,15 +1096,31 @@ static void rollup(int status, orte_process_name_t* sender,
             ORTE_ERROR_LOG(ret);
             goto report;
         }
-        for (i=0; i < flag; i++) {
+        if (0 < flag) {
+            (void)opal_snprintf_jobid(proc.nspace, PMIX_MAX_NSLEN, sender->jobid);
+            proc.rank = sender->vpid;
+            /* we have connection info */
             cnt = 1;
-            if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &kv, &cnt, OPAL_VALUE))) {
+            if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &boptr, &cnt, OPAL_BYTE_OBJECT))) {
                 ORTE_ERROR_LOG(ret);
                 goto report;
             }
-            /* store this in a daemon wireup buffer for later distribution */
-            opal_pmix.store_local(&child, kv);
-            OBJ_RELEASE(kv);
+            /* it was packed using PMIx, so unpack it the same way */
+            PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
+            PMIX_INFO_CREATE(info, (size_t)flag);
+            if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&proc, &pbkt, (void*)info, &flag, PMIX_INFO))) {
+                PMIX_ERROR_LOG(prc);
+                goto report;
+            }
+            for (cnt=0; cnt < flag; cnt++) {
+                prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &info[cnt].value);
+                if (PMIX_SUCCESS != prc) {
+                    PMIX_ERROR_LOG(prc);
+                    PMIX_INFO_FREE(info, (size_t)flag);
+                    goto report;
+                }
+            }
+            PMIX_INFO_FREE(info, (size_t)flag);
         }
     }
 

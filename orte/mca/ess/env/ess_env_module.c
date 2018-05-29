@@ -38,7 +38,6 @@
 #include "orte/util/show_help.h"
 #include "orte/mca/mca.h"
 #include "opal/mca/base/base.h"
-#include "opal/mca/pmix/pmix.h"
 #include "opal/util/output.h"
 #include "opal/util/malloc.h"
 #include "opal/util/argv.h"
@@ -77,7 +76,7 @@ static int rte_finalize(void);
 orte_ess_base_module_t orte_ess_env_module = {
     rte_init,
     rte_finalize,
-    orte_ess_base_app_abort,
+    NULL,
     NULL
 };
 

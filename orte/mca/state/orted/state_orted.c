@@ -19,7 +19,7 @@
 
 #include "opal/util/output.h"
 #include "opal/dss/dss.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/iof/base/base.h"
@@ -252,6 +252,14 @@ static void track_jobs(int fd, short argc, void *cbdata)
     OBJ_RELEASE(caddy);
 }
 
+static void opcbfunc(pmix_status_t status, void *cbdata)
+{
+    opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
+
+    OPAL_POST_OBJECT(lk);
+    lk->status = opal_pmix_convert_status(status);
+    OPAL_PMIX_WAKEUP_THREAD(lk);
+}
 static void track_procs(int fd, short argc, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
@@ -267,6 +275,8 @@ static void track_procs(int fd, short argc, void *cbdata)
     orte_job_map_t *map;
     orte_node_t *node;
     orte_process_name_t target;
+    pmix_proc_t pname;
+    opal_pmix_lock_t lock;
 
     ORTE_ACQUIRE_OBJECT(caddy);
     proc = &caddy->name;
@@ -382,8 +392,6 @@ static void track_procs(int fd, short argc, void *cbdata)
         ORTE_FLAG_SET(pdata, ORTE_PROC_FLAG_RECORDED);
         ORTE_FLAG_UNSET(pdata, ORTE_PROC_FLAG_ALIVE);
         pdata->state = state;
-        /* tell the PMIx subsystem to cleanup this client */
-        opal_pmix.server_deregister_client(proc, NULL, NULL);
         /* Clean up the session directory as if we were the process
          * itself.  This covers the case where the process died abnormally
          * and didn't cleanup its own session directory.
@@ -459,9 +467,11 @@ static void track_procs(int fd, short argc, void *cbdata)
             }
 
             /* tell the PMIx subsystem the job is complete */
-            if (NULL != opal_pmix.server_deregister_nspace) {
-                opal_pmix.server_deregister_nspace(jdata->jobid, NULL, NULL);
-            }
+            OPAL_PMIX_CONVERT_JOBID(pname.nspace, jdata->jobid);
+            OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+            PMIx_server_deregister_nspace(pname.nspace, opcbfunc, &lock);
+            OPAL_PMIX_WAIT_THREAD(&lock);
+            OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
             /* release the resources */
             if (NULL != jdata->map) {
@@ -482,10 +492,8 @@ static void track_procs(int fd, short argc, void *cbdata)
                             /* skip procs from another job */
                             continue;
                         }
-                        if (!ORTE_FLAG_TEST(pptr, ORTE_PROC_FLAG_TOOL)) {
-                            node->slots_inuse--;
-                            node->num_procs--;
-                        }
+                        node->slots_inuse--;
+                        node->num_procs--;
                         OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
                                              "%s state:orted releasing proc %s from node %s",
                                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),

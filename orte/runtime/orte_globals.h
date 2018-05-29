@@ -47,7 +47,6 @@
 #include "opal/threads/threads.h"
 #include "opal/event/event-internal.h"
 #include "opal/hwloc/hwloc-internal.h"
-#include "opal/hwloc/hwloc-internal.h"
 
 #include "orte/mca/plm/plm_types.h"
 #include "orte/mca/rml/rml_types.h"

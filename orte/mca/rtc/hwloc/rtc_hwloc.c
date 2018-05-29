@@ -36,7 +36,7 @@
 #if HWLOC_API_VERSION >= 0x20000
 #include "hwloc/shmem.h"
 #endif
-#include "opal/mca/pmix/pmix_types.h"
+#include "opal/pmix/pmix-internal.h"
 #include "opal/util/argv.h"
 #include "opal/util/fd.h"
 #include "opal/util/opal_environ.h"
@@ -230,19 +230,19 @@ static void assign(orte_job_t *jdata)
                         (unsigned long)shmemsize);
 
     kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(OPAL_PMIX_HWLOC_SHMEM_FILE);
+    kv->key = strdup(PMIX_HWLOC_SHMEM_FILE);
     kv->type = OPAL_STRING;
     kv->data.string = strdup(shmemfile);
     opal_list_append(cache, &kv->super);
 
     kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(OPAL_PMIX_HWLOC_SHMEM_ADDR);
+    kv->key = strdup(PMIX_HWLOC_SHMEM_ADDR);
     kv->type = OPAL_SIZE;
     kv->data.size = shmemaddr;
     opal_list_append(cache, &kv->super);
 
     kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(OPAL_PMIX_HWLOC_SHMEM_SIZE);
+    kv->key = strdup(PMIX_HWLOC_SHMEM_SIZE);
     kv->type = OPAL_SIZE;
     kv->data.size = shmemsize;
     opal_list_append(cache, &kv->super);

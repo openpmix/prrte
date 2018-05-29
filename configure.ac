@@ -23,6 +23,8 @@
 # Copyright (c) 2014-2017 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
+# Copyright (c) 2018      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -1145,6 +1147,14 @@ m4_ifdef([orte_CONFIG_LOCAL], [orte_CONFIG_LOCAL])
 ############################################################################
 # Party on
 ############################################################################
+
+# set projects good/no good AM_CONDITIONALS.  This is at the end so
+# that the OSHMEM/OMPI projects can be disabled, if needed, based on
+# MCA tests.  If a project is to be disabled, also remove it from
+# MCA_PROJECT_SUBDIRS to actually disable building.
+AM_CONDITIONAL([PROJECT_OMPI], [test "$project_ompi_amc" = "true"])
+AM_CONDITIONAL([PROJECT_ORTE], [test "$project_orte_amc" = "true"])
+AM_CONDITIONAL([PROJECT_OSHMEM], [test "$project_oshmem_amc" = "true"])
 
 AC_MSG_CHECKING([if libtool needs -no-undefined flag to build shared libraries])
 

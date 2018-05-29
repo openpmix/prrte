@@ -108,14 +108,7 @@ static int rte_init(void)
     }
 
     if (ORTE_PROC_IS_TOOL) {
-        /* otherwise, if I am a tool proc, use that procedure */
-        if (ORTE_SUCCESS != (ret = orte_ess_base_tool_setup(NULL))) {
-            ORTE_ERROR_LOG(ret);
-            error = "orte_ess_base_tool_setup";
-            goto fn_fail;
-        }
-        /* as a tool, I don't need a nidmap - so just return now */
-        ret = ORTE_SUCCESS;
+        ret = ORTE_ERR_NOT_SUPPORTED;
         goto fn_exit;
     }
 
@@ -147,11 +140,6 @@ static int rte_finalize(void)
             ORTE_ERROR_LOG(ret);
         }
 
-    } else if (ORTE_PROC_IS_TOOL) {
-        /* otherwise, if I am a tool proc, use that procedure */
-        if (ORTE_SUCCESS != (ret = orte_ess_base_tool_finalize())) {
-            ORTE_ERROR_LOG(ret);
-        }
     }
 
    fn_exit:

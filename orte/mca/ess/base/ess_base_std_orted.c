@@ -39,7 +39,7 @@
 #include "opal/event/event-internal.h"
 #include "opal/runtime/opal.h"
 #include "opal/hwloc/hwloc-internal.h"
-#include "opal/mca/pmix/base/base.h"
+#include "opal/pmix/pmix-internal.h"
 #include "opal/mca/pstat/base/base.h"
 #include "opal/util/arch.h"
 #include "opal/util/opal_environ.h"
@@ -350,21 +350,6 @@ int orte_ess_base_orted_setup(void)
     /* obviously, we have "reported" */
     jdata->num_reported = 1;
 
-    /* setup the PMIx framework - ensure it skips all non-PMIx components,
-     * but do not override anything we were given */
-    opal_setenv("OMPI_MCA_pmix", "^s1,s2,cray,isolated", false, &environ);
-    if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_pmix_base_framework, 0))) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_pmix_base_open";
-        goto error;
-    }
-    if (ORTE_SUCCESS != (ret = opal_pmix_base_select())) {
-        ORTE_ERROR_LOG(ret);
-        error = "opal_pmix_base_select";
-        goto error;
-    }
-    /* set the event base */
-    opal_pmix_base_set_evbase(orte_event_base);
     /* setup the PMIx server - we need this here in case the
      * communications infrastructure wants to register
      * information */
@@ -412,7 +397,8 @@ int orte_ess_base_orted_setup(void)
     pmix_server_start();
 
     if (NULL != orte_process_info.my_hnp_uri) {
-        opal_value_t val;
+        pmix_value_t val;
+        pmix_proc_t proc;
 
         /* extract the HNP's name so we can update the routing table */
         if (ORTE_SUCCESS != (ret = orte_rml_base_parse_uris(orte_process_info.my_hnp_uri,
@@ -425,21 +411,15 @@ int orte_ess_base_orted_setup(void)
          * the connection, but just tells the RML how to reach the HNP
          * if/when we attempt to send to it
          */
-        OBJ_CONSTRUCT(&val, opal_value_t);
-        val.key = OPAL_PMIX_PROC_URI;
-        val.type = OPAL_STRING;
-        val.data.string = orte_process_info.my_hnp_uri;
-        if (OPAL_SUCCESS != (ret = opal_pmix.store_local(ORTE_PROC_MY_HNP, &val))) {
-            ORTE_ERROR_LOG(ret);
-            val.key = NULL;
-            val.data.string = NULL;
-            OBJ_DESTRUCT(&val);
+        PMIX_VALUE_LOAD(&val, orte_process_info.my_hnp_uri, OPAL_STRING);
+        OPAL_PMIX_CONVERT_NAME(&proc, ORTE_PROC_MY_HNP);
+        if (PMIX_SUCCESS != PMIx_Store_internal(&proc, PMIX_PROC_URI, &val)) {
+            PMIX_VALUE_DESTRUCT(&val);
             error = "store HNP URI";
+            ret = OPAL_ERROR;
             goto error;
         }
-        val.key = NULL;
-        val.data.string = NULL;
-        OBJ_DESTRUCT(&val);
+        PMIX_VALUE_DESTRUCT(&val);
     }
 
     /* select the errmgr */
@@ -659,7 +639,6 @@ int orte_ess_base_orted_finalize(void)
     }
     /* shutdown the pmix server */
     pmix_server_finalize();
-    (void) mca_base_framework_close(&opal_pmix_base_framework);
 
     /* release the conduits */
     orte_rml.close_conduit(orte_mgmt_conduit);
@@ -754,4 +733,60 @@ static void signal_forward_callback(int fd, short event, void *arg)
         OBJ_RELEASE(cmd);
     }
 
+}
+
+/*
+ * We do NOT call the regular C-library "abort" function, even
+ * though that would have alerted us to the fact that this is
+ * an abnormal termination, because it would automatically cause
+ * a core file to be generated. On large systems, that can be
+ * overwhelming (imagine a few thousand Gbyte-sized files hitting
+                 * a shared file system simultaneously...ouch!).
+ *
+ * However, this causes a problem for OpenRTE as the system truly
+ * needs to know that this actually IS an abnormal termination.
+ * To get around the problem, we drop a marker in the proc-level
+ * session dir. If session dir's were not allowed, then we just
+ * ignore this question.
+ *
+ * In some cases, however, we DON'T want to create that alert. For
+ * example, if an orted detects that the HNP has died, then there
+ * is truly nobody to alert! In these cases, we pass report=false
+ * to indicate that we don't want the marker dropped.
+ */
+void orte_ess_base_app_abort(int status, bool report)
+{
+    int fd;
+    char *myfile;
+    struct timespec tp = {0, 100000};
+
+    /* Exit - do NOT do a normal finalize as this will very likely
+     * hang the process. We are aborting due to an abnormal condition
+     * that precludes normal cleanup
+     *
+     * We do need to do the following bits to make sure we leave a
+     * clean environment. Taken from orte_finalize():
+     * - Assume errmgr cleans up child processes before we exit.
+     */
+
+    /* If we were asked to report this termination, do so.
+     * Since singletons don't start an HNP unless necessary, and
+     * direct-launched procs don't have daemons at all, only send
+     * the message if routing is enabled as this indicates we
+     * have someone to send to
+     */
+    if (report && orte_routing_is_enabled && orte_create_session_dirs) {
+        myfile = opal_os_path(false, orte_process_info.proc_session_dir, "aborted", NULL);
+        fd = open(myfile, O_CREAT, S_IRUSR);
+        close(fd);
+        /* now introduce a short delay to allow any pending
+         * messages (e.g., from a call to "show_help") to
+         * have a chance to be sent */
+        nanosleep(&tp, NULL);
+    }
+    /* - Clean out the global structures
+     * (not really necessary, but good practice) */
+    orte_proc_info_finalize();
+    /* Now Exit */
+    _exit(status);
 }

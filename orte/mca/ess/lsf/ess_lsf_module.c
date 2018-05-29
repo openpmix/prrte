@@ -90,13 +90,7 @@ static int rte_init(void)
     }
 
     if (ORTE_PROC_IS_TOOL) {
-        /* otherwise, if I am a tool proc, use that procedure */
-        if (ORTE_SUCCESS != (ret = orte_ess_base_tool_setup(NULL))) {
-            ORTE_ERROR_LOG(ret);
-            error = "orte_ess_base_tool_setup";
-            goto error;
-        }
-        return ORTE_SUCCESS;
+        return ORTE_ERR_NOT_SUPPORTED;
 
     }
 
@@ -131,12 +125,6 @@ static int rte_finalize(void)
             ORTE_ERROR_LOG(ret);
             return ret;
         }
-    } else if (ORTE_PROC_IS_TOOL) {
-        /* otherwise, if I am a tool proc, use that procedure */
-        if (ORTE_SUCCESS != (ret = orte_ess_base_tool_finalize())) {
-            ORTE_ERROR_LOG(ret);
-        }
-        return ret;
     } else {
         /* otherwise, I must be an application process
          * use the default procedure to finish

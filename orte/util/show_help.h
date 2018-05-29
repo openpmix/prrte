@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2008-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,6 +37,8 @@
 #include "orte/mca/rml/rml_types.h"
 
 BEGIN_C_DECLS
+
+#define ORTE_PMIX_SHOW_HELP   "orte.pmix.show.help"
 
 /**
  * Initializes the output stream system and opens a default
