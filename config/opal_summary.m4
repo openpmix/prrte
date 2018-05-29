@@ -2,7 +2,7 @@ dnl -*- shell-script -*-
 dnl
 dnl Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 dnl                         reserved.
-dnl Copyright (c) 2016 Cisco Systems, Inc.  All rights reserved.
+dnl Copyright (c) 2016-2018 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2016      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2018      Intel, Inc. All rights reserved.

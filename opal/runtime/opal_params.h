@@ -18,7 +18,7 @@
  * Copyright (c) 2014      Hochschule Esslingen.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2016-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -48,6 +48,11 @@ OPAL_DECLSPEC extern bool opal_built_with_cuda_support;
  *  * Whether we want to enable CUDA GPU buffer send and receive support.
  *   */
 OPAL_DECLSPEC extern bool opal_cuda_support;
+
+/**
+ *  * Whether we want to warn the user when libcuda is missing.
+ *   */
+OPAL_DECLSPEC extern bool opal_warn_on_missing_libcuda;
 
 /**
  * Whether to use the "leave pinned" protocol or not (0 = no, 1 = yes,
