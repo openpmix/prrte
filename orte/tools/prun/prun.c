@@ -962,7 +962,7 @@ int prun(int argc, char *argv[])
             }
         }
     }
-#if 0
+
     /* convert the job info into an array */
     ninfo = opal_list_get_size(&job_info);
     iptr = NULL;
@@ -974,9 +974,7 @@ int prun(int argc, char *argv[])
             ++n;
         }
     }
-#endif
-    ninfo = 0;
-    iptr = NULL;
+
     /* convert the apps to an array */
     napps = opal_list_get_size(&apps);
     PMIX_APP_CREATE(papps, napps);

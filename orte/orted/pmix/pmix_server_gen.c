@@ -547,6 +547,7 @@ static void _query(int sd, short args, void *cbdata)
     pmix_query_t *q;
     pmix_data_array_t *darray;
     pmix_proc_info_t *procinfo;
+    pmix_info_t *info;
     pmix_status_t ret;
     opal_ds_info_t *kv;
     orte_jobid_t jobid;
@@ -554,7 +555,7 @@ static void _query(int sd, short args, void *cbdata)
     orte_proc_t *proct;
     orte_app_context_t *app;
     int rc, i, k, num_replies;
-    opal_list_t *results, targets, *array;
+    opal_list_t *results, targets;
     size_t m, n, p;
     uint32_t key;
     void *nptr;
@@ -652,25 +653,24 @@ static void _query(int sd, short args, void *cbdata)
                         opal_list_append(&targets, &nm->super);
                     }
                 }
-#if 0
                 /* if they have asked for only our local procs or daemon,
                  * then we can just get the data directly */
                 if (local_only) {
                     if (0 == opal_list_get_size(&targets)) {
                         kv = OBJ_NEW(opal_ds_info_t);
-                        kv->key = strdup(OPAL_PMIX_QUERY_MEMORY_USAGE);
-                        kv->type = OPAL_PTR;
-                        array = OBJ_NEW(opal_list_t);
-                        kv->data.ptr = array;
+                        PMIX_INFO_CREATE(kv->info, 1);
+                        (void)strncpy(kv->info->key, PMIX_QUERY_PROC_TABLE, PMIX_MAX_KEYLEN);
                         opal_list_append(results, &kv->super);
+                        /* create an entry for myself plus the avg of all local procs */
+                        PMIX_DATA_ARRAY_CREATE(darray, 2, PMIX_INFO);
+                        kv->info->value.type = PMIX_DATA_ARRAY;
+                        kv->info->value.data.darray = darray;
+                        PMIX_INFO_CREATE(info, 2);
+                        darray->array = info;
                         /* collect my memory usage */
                         OBJ_CONSTRUCT(&pstat, opal_pstats_t);
                         opal_pstat.query(orte_process_info.pid, &pstat, NULL);
-                        kv = OBJ_NEW(opal_value_t);
-                        kv->key = strdup(OPAL_PMIX_DAEMON_MEMORY);
-                        kv->type = OPAL_FLOAT;
-                        kv->data.fval = pstat.pss;
-                        opal_list_append(array, &kv->super);
+                        PMIX_INFO_LOAD(&info[0], PMIX_DAEMON_MEMORY, &pstat.pss, PMIX_FLOAT);
                         OBJ_DESTRUCT(&pstat);
                         /* collect the memory usage of all my children */
                         pss = 0.0;
@@ -691,11 +691,7 @@ static void _query(int sd, short args, void *cbdata)
                         if (0 < num_replies) {
                             pss /= (float)num_replies;
                         }
-                        kv = OBJ_NEW(opal_value_t);
-                        kv->key = strdup(OPAL_PMIX_CLIENT_AVG_MEMORY);
-                        kv->type = OPAL_FLOAT;
-                        kv->data.fval = pss;
-                        opal_list_append(array, &kv->super);
+                        PMIX_INFO_LOAD(&info[1], PMIX_CLIENT_AVG_MEMORY, &pss, PMIX_FLOAT);
                     } else {
                         /* get it for the specified targets */
                     }
@@ -704,7 +700,6 @@ static void _query(int sd, short args, void *cbdata)
                      * and ask directly for the info - if rank=wildcard, then
                      * we need to xcast the request and collect the results */
                 }
-#endif
             } else if (0 == strncmp(q->keys[n], PMIX_TIME_REMAINING, PMIX_MAX_KEYLEN)) {
                 if (ORTE_SUCCESS == orte_schizo.get_remaining_time(&key)) {
                     kv = OBJ_NEW(opal_ds_info_t);

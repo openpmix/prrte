@@ -522,10 +522,15 @@ static void _send_notification(int status,
     opal_buffer_t *buf;
     orte_grpcomm_signature_t sig;
     int rc;
-    opal_value_t kv, *kvptr;
     orte_process_name_t daemon;
-
-    buf = OBJ_NEW(opal_buffer_t);
+    opal_byte_object_t bo, *boptr;
+    pmix_byte_object_t pbo;
+    pmix_info_t *info;
+    size_t ninfo;
+    pmix_proc_t pname, psource;
+    pmix_data_buffer_t pbkt;
+    pmix_data_range_t range = PMIX_RANGE_CUSTOM;
+    pmix_status_t code, ret;
 
     opal_output_verbose(5, orte_state_base_framework.framework_output,
                         "%s state:base:sending notification %s proc %s target %s",
@@ -534,81 +539,62 @@ static void _send_notification(int status,
                         ORTE_NAME_PRINT(proc),
                         ORTE_NAME_PRINT(target));
 
-    /* pack the status */
-    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &status, 1, OPAL_INT))) {
-        ORTE_ERROR_LOG(rc);
-        OBJ_RELEASE(buf);
+    /* pack the info for sending */
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
+    OPAL_PMIX_CONVERT_NAME(&pname, ORTE_PROC_MY_NAME);
+
+    /* pack the status code */
+    code = opal_pmix_convert_rc(status);
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &code, 1, PMIX_STATUS))) {
+        PMIX_ERROR_LOG(ret);
+        return;
+    }
+    /* pack the source - it cannot be me as that will cause
+     * the pmix server to upcall the event back to me */
+    OPAL_PMIX_CONVERT_NAME(&psource, proc);
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &psource, 1, PMIX_PROC))) {
+        PMIX_ERROR_LOG(ret);
+        return;
+    }
+    /* pack the range */
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
+        PMIX_ERROR_LOG(ret);
         return;
     }
 
-    /* the source is the proc */
-    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, proc, 1, ORTE_NAME))) {
-        ORTE_ERROR_LOG(rc);
-        OBJ_RELEASE(buf);
+    /* setup the info */
+    ninfo = 2;
+    PMIX_INFO_CREATE(info, ninfo);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_AFFECTED_PROC, &psource, PMIX_PROC);
+    OPAL_PMIX_CONVERT_NAME(&psource, target);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_CUSTOM_RANGE, &psource, PMIX_PROC);
+
+    /* pack the number of infos */
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+        PMIX_ERROR_LOG(ret);
+        return;
+    }
+    /* pack the infos themselves */
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, info, ninfo, PMIX_INFO))) {
+        PMIX_ERROR_LOG(ret);
         return;
     }
 
-    if (OPAL_ERR_PROC_ABORTED == status) {
-        /* we will pass three opal_value_t's */
-        rc = 3;
-        if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &rc, 1, OPAL_INT))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(buf);
-            return;
-        }
-        /* pass along the affected proc(s) */
-        OBJ_CONSTRUCT(&kv, opal_value_t);
-        kv.key = strdup(PMIX_EVENT_AFFECTED_PROC);
-        kv.type = OPAL_NAME;
-        kv.data.name.jobid = proc->jobid;
-        kv.data.name.vpid = proc->vpid;
-        kvptr = &kv;
-        if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &kvptr, 1, OPAL_VALUE))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_DESTRUCT(&kv);
-            OBJ_RELEASE(buf);
-            return;
-        }
-        OBJ_DESTRUCT(&kv);
-    } else {
-        /* we are going to pass two opal_value_t's */
-        rc = 2;
-        if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &rc, 1, OPAL_INT))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(buf);
-            return;
-        }
-    }
+    /* unload the data buffer */
+    PMIX_DATA_BUFFER_UNLOAD(&pbkt, pbo.bytes, pbo.size);
+    bo.bytes = (uint8_t*)pbo.bytes;
+    bo.size = pbo.size;
 
-    /* pass along the affected proc(s) */
-    OBJ_CONSTRUCT(&kv, opal_value_t);
-    kv.key = strdup(PMIX_EVENT_AFFECTED_PROC);
-    kv.type = OPAL_NAME;
-    kv.data.name.jobid = proc->jobid;
-    kv.data.name.vpid = proc->vpid;
-    kvptr = &kv;
-    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &kvptr, 1, OPAL_VALUE))) {
+    /* insert into opal_buffer_t */
+    buf = OBJ_NEW(opal_buffer_t);
+    boptr = &bo;
+    if (OPAL_SUCCESS != (rc = opal_dss.pack(buf, &boptr, 1, OPAL_BYTE_OBJECT))) {
         ORTE_ERROR_LOG(rc);
-        OBJ_DESTRUCT(&kv);
         OBJ_RELEASE(buf);
+        free(bo.bytes);
         return;
     }
-    OBJ_DESTRUCT(&kv);
-
-    /* pass along the proc(s) to be notified */
-    OBJ_CONSTRUCT(&kv, opal_value_t);
-    kv.key = strdup(PMIX_EVENT_CUSTOM_RANGE);
-    kv.type = OPAL_NAME;
-    kv.data.name.jobid = target->jobid;
-    kv.data.name.vpid = target->vpid;
-    kvptr = &kv;
-    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &kvptr, 1, OPAL_VALUE))) {
-        ORTE_ERROR_LOG(rc);
-        OBJ_DESTRUCT(&kv);
-        OBJ_RELEASE(buf);
-        return;
-    }
-    OBJ_DESTRUCT(&kv);
+    free(bo.bytes);
 
     /* if the targets are a wildcard, then xcast it to everyone */
     if (ORTE_VPID_WILDCARD == target->vpid) {

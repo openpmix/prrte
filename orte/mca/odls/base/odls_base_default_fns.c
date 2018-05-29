@@ -99,17 +99,29 @@
 #include "orte/mca/odls/base/base.h"
 #include "orte/mca/odls/base/odls_private.h"
 
+typedef struct {
+    orte_job_t *jdata;
+    pmix_info_t *info;
+    size_t ninfo;
+} orte_odls_jcaddy_t;
+
 static void setup_cbfunc(pmix_status_t status,
                          pmix_info_t info[], size_t ninfo,
                          void *provided_cbdata,
                          pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
-    orte_job_t *jdata = (orte_job_t*)provided_cbdata;
+    orte_odls_jcaddy_t *cd = (orte_odls_jcaddy_t*)provided_cbdata;
+    orte_job_t *jdata = cd->jdata;
     opal_buffer_t cache, *bptr;
     pmix_data_buffer_t pbuf;
     pmix_byte_object_t pbo;
     opal_byte_object_t bo, *boptr;
     int rc;
+
+    /* release any info */
+    if (NULL != cd->info) {
+        PMIX_INFO_FREE(cd->info, cd->ninfo);
+    }
 
     OBJ_CONSTRUCT(&cache, opal_buffer_t);
     if (NULL != info) {
@@ -167,7 +179,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     void *nptr;
     uint32_t key;
     char *nidmap;
-    orte_proc_t *dmn, *proc;
+    orte_proc_t *dmn, *proc, *pptr;
     pmix_value_t *val = NULL;
     pmix_info_t *info;
     size_t ninfo;
@@ -175,6 +187,10 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     pmix_data_buffer_t pbuf;
     pmix_status_t ret;
     pmix_byte_object_t pbo;
+    orte_odls_jcaddy_t cd = {0};
+    char **list, **procs, **micro, *tmp, *regex;
+    int i, k;
+    orte_node_t *node;
 
     /* get the job data pointer */
     if (NULL == (jdata = orte_get_job_data_object(job))) {
@@ -426,90 +442,71 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         free(nidmap);
     }
 
-    /* get any application prep info */
-    if (NULL != opal_pmix.server_setup_application) {
-        /* assemble the node and proc map info */
-        char **list, **procs, **micro, *tmp, *regex;
-        int i, k;
-        opal_list_t info;
-        orte_node_t *node;
-        orte_proc_t *pptr;
-
-        OBJ_CONSTRUCT(&info, opal_list_t);
-        list = NULL;
-        procs = NULL;
-        for (i=0; i < map->nodes->size; i++) {
-            micro = NULL;
-            if (NULL != (node = (orte_node_t*)opal_pointer_array_get_item(map->nodes, i))) {
-                opal_argv_append_nosize(&list, node->name);
-                /* assemble all the ranks for this job that are on this node */
-                for (k=0; k < node->procs->size; k++) {
-                    if (NULL != (pptr = (orte_proc_t*)opal_pointer_array_get_item(node->procs, k))) {
-                        if (jdata->jobid == pptr->name.jobid) {
-                            opal_argv_append_nosize(&micro, ORTE_VPID_PRINT(pptr->name.vpid));
-                        }
+    /* assemble the node and proc map info */
+    list = NULL;
+    procs = NULL;
+    cd.ninfo = 2;
+    PMIX_INFO_CREATE(cd.info, cd.ninfo);
+    for (i=0; i < map->nodes->size; i++) {
+        micro = NULL;
+        if (NULL != (node = (orte_node_t*)opal_pointer_array_get_item(map->nodes, i))) {
+            opal_argv_append_nosize(&list, node->name);
+            /* assemble all the ranks for this job that are on this node */
+            for (k=0; k < node->procs->size; k++) {
+                if (NULL != (pptr = (orte_proc_t*)opal_pointer_array_get_item(node->procs, k))) {
+                    if (jdata->jobid == pptr->name.jobid) {
+                        opal_argv_append_nosize(&micro, ORTE_VPID_PRINT(pptr->name.vpid));
                     }
                 }
-                /* assemble the rank/node map */
-                if (NULL != micro) {
-                    tmp = opal_argv_join(micro, ',');
-                    opal_argv_free(micro);
-                    opal_argv_append_nosize(&procs, tmp);
-                    free(tmp);
-                }
             }
-        }
-        /* let the PMIx server generate the nodemap regex */
-        if (NULL != list) {
-            tmp = opal_argv_join(list, ',');
-            opal_argv_free(list);
-            list = NULL;
-            if (OPAL_SUCCESS != (rc = opal_pmix.generate_regex(tmp, &regex))) {
-                ORTE_ERROR_LOG(rc);
+            /* assemble the rank/node map */
+            if (NULL != micro) {
+                tmp = opal_argv_join(micro, ',');
+                opal_argv_free(micro);
+                opal_argv_append_nosize(&procs, tmp);
                 free(tmp);
-                OPAL_LIST_DESTRUCT(&info);
-                return rc;
             }
+        }
+    }
+    /* let the PMIx server generate the nodemap regex */
+    if (NULL != list) {
+        tmp = opal_argv_join(list, ',');
+        opal_argv_free(list);
+        list = NULL;
+        if (PMIX_SUCCESS != (ret = PMIx_generate_regex(tmp, &regex))) {
+            PMIX_ERROR_LOG(ret);
             free(tmp);
-            kv = OBJ_NEW(opal_value_t);
-            kv->key = strdup(OPAL_PMIX_NODE_MAP);
-            kv->type = OPAL_STRING;
-            kv->data.string = regex;
-            opal_list_append(&info, &kv->super);
+            PMIX_INFO_FREE(cd.info, cd.ninfo);
+            return opal_pmix_convert_status(ret);
         }
+        free(tmp);
+        PMIX_INFO_LOAD(&cd.info[0], PMIX_NODE_MAP, regex, PMIX_STRING);
+        free(regex);
+    }
 
-        /* let the PMIx server generate the procmap regex */
-        if (NULL != procs) {
-            tmp = opal_argv_join(procs, ';');
-            opal_argv_free(procs);
-            procs = NULL;
-            if (OPAL_SUCCESS != (rc = opal_pmix.generate_ppn(tmp, &regex))) {
-                ORTE_ERROR_LOG(rc);
-                free(tmp);
-                OPAL_LIST_DESTRUCT(&info);
-                return rc;
-            }
+    /* let the PMIx server generate the procmap regex */
+    if (NULL != procs) {
+        tmp = opal_argv_join(procs, ';');
+        opal_argv_free(procs);
+        procs = NULL;
+        if (PMIX_SUCCESS != (ret = PMIx_generate_ppn(tmp, &regex))) {
+            PMIX_ERROR_LOG(ret);
             free(tmp);
-            kv = OBJ_NEW(opal_value_t);
-            kv->key = strdup(OPAL_PMIX_PROC_MAP);
-            kv->type = OPAL_STRING;
-            kv->data.string = regex;
-            opal_list_append(&info, &kv->super);
+            PMIX_INFO_FREE(cd.info, cd.ninfo);
+            return opal_pmix_convert_status(ret);
         }
+        free(tmp);
+        PMIX_INFO_LOAD(&cd.info[0], PMIX_PROC_MAP, regex, PMIX_STRING);
+        free(regex);
+    }
 
-        /* we don't want to block here because it could
-         * take some indeterminate time to get the info */
-        if (OPAL_SUCCESS != (rc = opal_pmix.server_setup_application(jdata->jobid, &info, setup_cbfunc, jdata))) {
-            ORTE_ERROR_LOG(rc);
-        }
-        OPAL_LIST_DESTRUCT(&info);
-        return rc;
     /* we don't want to block here because it could
      * take some indeterminate time to get the info */
     OPAL_PMIX_CONVERT_JOBID(pproc.nspace, jdata->jobid);
     rc = ORTE_SUCCESS;
-    if (PMIX_SUCCESS != (ret = PMIx_server_setup_application(pproc.nspace, NULL, 0,
-                                                             setup_cbfunc, jdata))) {
+    cd.jdata = jdata;
+    if (PMIX_SUCCESS != (ret = PMIx_server_setup_application(pproc.nspace, cd.info, cd.ninfo,
+                                                             setup_cbfunc, &cd))) {
         opal_output(0, "[%s:%d] PMIx_server_setup_application failed: %s", __FILE__, __LINE__, PMIx_Error_string(ret));
         rc = ORTE_ERROR;
     }
