@@ -950,7 +950,6 @@ int orte_daemon(int argc, char *argv[])
         }
 
         /* collect our network inventory */
-        opal_output(0, "COLLECTING INVENTORY");
         memset(&xfer, 0, sizeof(myxfer_t));
         OPAL_PMIX_CONSTRUCT_LOCK(&xfer.lock);
         if (PMIX_SUCCESS != (prc = PMIx_server_collect_inventory(NULL, 0, infocbfunc, &xfer))) {
