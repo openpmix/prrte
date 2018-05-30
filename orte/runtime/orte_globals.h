@@ -587,6 +587,9 @@ ORTE_DECLSPEC extern char *orte_daemon_cores;
 /* Max time to wait for stack straces to return */
 ORTE_DECLSPEC extern int orte_stack_trace_wait_timeout;
 
+/* whether or not hwloc shmem support is available */
+ORTE_DECLSPEC extern bool orte_hwloc_shmem_available;
+
 END_C_DECLS
 
 #endif /* ORTE_RUNTIME_ORTE_GLOBALS_H */

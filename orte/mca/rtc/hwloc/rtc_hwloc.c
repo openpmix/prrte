@@ -187,6 +187,7 @@ static int init(void)
         shmemfd = -1;
         return ORTE_SUCCESS;
     }
+    orte_hwloc_shmem_available = true;
 #endif
 
     return ORTE_SUCCESS;

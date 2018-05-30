@@ -259,6 +259,47 @@ int pmix_server_init(void)
 
     OBJ_CONSTRUCT(&ilist, opal_list_t);
 
+#if HWLOC_API_VERSION < 0x20000
+     /* pass the topology string as we don't
+      * have HWLOC shared memory available - we do
+      * this so the procs won't read the topology
+      * themselves as this could overwhelm the local
+      * system on large-scale SMPs */
+    if (NULL != opal_hwloc_topology) {
+        char *xmlbuffer=NULL;
+        int len;
+        kv = OBJ_NEW(opal_value_t);
+        kv->key = strdup(PMIX_HWLOC_XML_V1);
+        if (0 != hwloc_topology_export_xmlbuffer(opal_hwloc_topology, &xmlbuffer, &len)) {
+            OBJ_RELEASE(kv);
+            OBJ_DESTRUCT(&ilist);
+            return ORTE_ERROR;
+        }
+        kv->data.string = xmlbuffer;
+        kv->type = OPAL_STRING;
+        opal_list_append(&ilist, &kv->super);
+    }
+#else
+    /* if shmem support isn't available, then export
+     * the topology as a v2 xml string */
+    if (!orte_hwloc_shmem_available) {
+        if (NULL != opal_hwloc_topology) {
+            char *xmlbuffer=NULL;
+            int len;
+            kv = OBJ_NEW(opal_value_t);
+            kv->key = strdup(PMIX_HWLOC_XML_V2);
+            if (0 != hwloc_topology_export_xmlbuffer(opal_hwloc_topology, &xmlbuffer, &len, 0)) {
+                OBJ_RELEASE(kv);
+                OBJ_DESTRUCT(&ilist);
+                return ORTE_ERROR;
+            }
+            kv->data.string = xmlbuffer;
+            kv->type = OPAL_STRING;
+            opal_list_append(&ilist, &kv->super);
+        }
+    }
+#endif
+
     /* tell the server our temp directory */
     kv = OBJ_NEW(opal_value_t);
     kv->key = strdup(PMIX_SERVER_TMPDIR);

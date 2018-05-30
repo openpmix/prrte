@@ -204,6 +204,7 @@ FILE *orte_xml_fp = NULL;
 char *orte_job_ident = NULL;
 bool orte_execute_quiet = false;
 bool orte_report_silent_errors = false;
+bool orte_hwloc_shmem_available = false;
 
 /* See comment in orte/tools/orterun/debuggers.c about this MCA
    param */
