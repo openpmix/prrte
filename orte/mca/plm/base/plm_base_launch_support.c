@@ -943,6 +943,12 @@ void orte_plm_base_daemon_topology(int status, orte_process_name_t* sender,
     }
 }
 
+static void opcbfunc(pmix_status_t status, void *cbdata)
+{
+    opal_pmix_lock_t *lock = (opal_pmix_lock_t*)cbdata;
+    OPAL_PMIX_WAKEUP_THREAD(lock);
+}
+
 void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
                                    opal_buffer_t *buffer,
                                    orte_rml_tag_t tag, void *cbdata)
@@ -1185,6 +1191,52 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
                 ORTE_ERROR_LOG(rc);
                 orted_failed_launch = true;
                 goto CLEANUP;
+            }
+        }
+
+        /* see if they provided their inventory */
+        idx = 1;
+        if (ORTE_SUCCESS == opal_dss.unpack(buffer, &bptr, &idx, OPAL_BYTE_OBJECT)) {
+            /* if nothing is present, then ignore it */
+            if (0 == bptr->size) {
+                free(bptr);
+            } else {
+                opal_pmix_lock_t lock;
+                /* load the bytes into a PMIx data buffer for unpacking */
+                PMIX_DATA_BUFFER_LOAD(&pbuf, bptr->bytes, bptr->size);
+                free(bptr);
+                idx = 1;
+                ret = PMIx_Data_unpack(NULL, &pbuf, &ninfo, &idx, PMIX_SIZE);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+                    rc = ORTE_ERROR;
+                    orted_failed_launch = true;
+                    goto CLEANUP;
+                }
+                PMIX_INFO_CREATE(info, ninfo);
+                idx = ninfo;
+                ret = PMIx_Data_unpack(NULL, &pbuf, info, &idx, PMIX_INFO);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_INFO_FREE(info, ninfo);
+                    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+                    rc = ORTE_ERROR;
+                    orted_failed_launch = true;
+                    goto CLEANUP;
+                }
+                PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+                OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+                ret = PMIx_server_deliver_inventory(info, ninfo, NULL, 0, opcbfunc, &lock);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_INFO_FREE(info, ninfo);
+                    rc = ORTE_ERROR;
+                    orted_failed_launch = true;
+                    goto CLEANUP;
+                }
+                OPAL_PMIX_WAIT_THREAD(&lock);
+                OPAL_PMIX_DESTRUCT_LOCK(&lock);
             }
         }
 
