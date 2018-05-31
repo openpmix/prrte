@@ -43,6 +43,7 @@ typedef struct {
     opal_list_item_t super;
     pmix_proc_t source;
     pmix_info_t *info;
+    pmix_persistence_t persistence;
 } opal_ds_info_t;
 OBJ_CLASS_DECLARATION(opal_ds_info_t);
 

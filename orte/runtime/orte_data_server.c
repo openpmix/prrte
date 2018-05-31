@@ -74,7 +74,7 @@ static void construct(orte_data_object_t *ptr)
     ptr->index = -1;
     PMIX_PROC_CONSTRUCT(&ptr->owner);
     ptr->uid = UINT32_MAX;
-    ptr->range = PMIX_RANGE_UNDEF;
+    ptr->range = PMIX_RANGE_SESSION;
     ptr->persistence = PMIX_PERSIST_SESSION;
     ptr->info = NULL;
     ptr->ninfo = 0;
@@ -423,7 +423,6 @@ void orte_data_server(int status, orte_process_name_t* sender,
                     goto SEND_ERROR;
                 }
                 free(bo.bytes);
-
                 if (0 > (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
                                                       &req->proxy, reply, ORTE_RML_TAG_DATA_CLIENT,
                                                       orte_rml_send_callback, NULL))) {
@@ -566,6 +565,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
                         rinfo = OBJ_NEW(opal_ds_info_t);
                         memcpy(&rinfo->source, &data->owner, sizeof(pmix_proc_t));
                         rinfo->info = &data->info[n];
+                        rinfo->persistence = data->persistence;
                         opal_list_append(&answers, &rinfo->super);
                         opal_output_verbose(1, orte_data_server_output,
                                             "%s data server: adding %s to data from %s:%d",
@@ -606,7 +606,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
                     opal_argv_free(keys);
                     goto SEND_ERROR;
                 }
-                if (PMIX_PERSIST_FIRST_READ == data->persistence) {
+                if (PMIX_PERSIST_FIRST_READ == rinfo->persistence) {
                     opal_output_verbose(1, orte_data_server_output,
                                         "%s REMOVING DATA FROM %s:%d AT INDEX %d",
                                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
@@ -698,15 +698,6 @@ void orte_data_server(int status, orte_process_name_t* sender,
                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                             requestor.nspace, requestor.rank);
 
-        /* unpack the range - this sets some constraints on the range of data to be considered */
-        count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &range, &count, PMIX_DATA_RANGE))) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-            rc = ORTE_ERR_UNPACK_FAILURE;
-            goto SEND_ERROR;
-        }
-
         /* unpack the number of keys */
         count = 1;
         if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &ninfo, &count, PMIX_SIZE))) {
@@ -738,6 +729,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
         }
 
         /* unpack the number of directives, if any */
+        range = PMIX_RANGE_SESSION;  // default
         count = 1;
         if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &ninfo, &count, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
@@ -759,7 +751,8 @@ void orte_data_server(int status, orte_process_name_t* sender,
             for (n=0; n < ninfo; n++) {
                 if (0 == strncmp(info[n].key, PMIX_USERID, PMIX_MAX_KEYLEN)) {
                     uid = info[n].value.data.uint32;
-                    break;
+                } else if (0 == strncmp(info[n].key, PMIX_RANGE, PMIX_MAX_KEYLEN)) {
+                    range = info[n].value.data.range;
                 }
             }
             /* ignore anything else for now */

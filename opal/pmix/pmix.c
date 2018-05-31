@@ -781,6 +781,7 @@ static void dsicon(opal_ds_info_t *p)
 {
     PMIX_PROC_CONSTRUCT(&p->source);
     p->info = NULL;
+    p->persistence = PMIX_PERSIST_INVALID;
 }
 OBJ_CLASS_INSTANCE(opal_ds_info_t,
                    opal_list_item_t,

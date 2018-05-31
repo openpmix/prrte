@@ -579,16 +579,21 @@ void pmix_server_keyval_client(int status, orte_process_name_t* sender,
 
     /* unpack the byte object payload */
     cnt = 1;
-    if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &boptr, &cnt, OPAL_BYTE_OBJECT))) {
-        ORTE_ERROR_LOG(rc);
-        ret = PMIX_ERR_UNPACK_FAILURE;
+    rc = opal_dss.unpack(buffer, &boptr, &cnt, OPAL_BYTE_OBJECT);
+    /* there may not be anything returned here - e.g., a publish
+     * command will not return any data if no matching pending
+     * requests were found */
+    if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS == ret) {
+            ret = rt;
+        }
         goto release;
     }
 
     /* load it into a pmix data buffer for processing */
     PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
     boptr->bytes = NULL;
-    OBJ_RELEASE(boptr);
+    free(boptr);
 
     /* convert the sender */
     OPAL_PMIX_CONVERT_NAME(&psender, sender);

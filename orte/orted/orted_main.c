@@ -234,6 +234,35 @@ opal_cmd_line_init_t orte_cmd_line_opts[] = {
       NULL, OPAL_CMD_LINE_TYPE_NULL, NULL }
 };
 
+typedef struct {
+    opal_pmix_lock_t lock;
+    pmix_info_t *info;
+    size_t ninfo;
+} myxfer_t;
+
+static void infocbfunc(pmix_status_t status,
+                       pmix_info_t *info, size_t ninfo,
+                       void *cbdata,
+                       pmix_release_cbfunc_t release_fn,
+                       void *release_cbdata)
+{
+    myxfer_t *xfer = (myxfer_t*)cbdata;
+    size_t n;
+
+    if (NULL != info) {
+        xfer->ninfo = ninfo;
+        PMIX_INFO_CREATE(xfer->info, xfer->ninfo);
+        for (n=0; n < ninfo; n++) {
+            PMIX_INFO_XFER(&xfer->info[n], &info[n]);
+        }
+    }
+
+    if (NULL != release_fn) {
+        release_fn(release_cbdata);
+    }
+    OPAL_PMIX_WAKEUP_THREAD(&xfer->lock);
+}
+
 int orte_daemon(int argc, char *argv[])
 {
     int ret = 0;
@@ -244,6 +273,10 @@ int orte_daemon(int argc, char *argv[])
     pmix_value_t val;
     pmix_proc_t proc;
     pmix_status_t prc;
+    myxfer_t xfer;
+    pmix_data_buffer_t pbuf;
+    pmix_byte_object_t pbo;
+    opal_byte_object_t bo, *boptr;
 
     /* initialize the globals */
     memset(&orted_globals, 0, sizeof(orted_globals));
@@ -774,11 +807,8 @@ int orte_daemon(int argc, char *argv[])
 
         /* get any connection info we may have pushed */
         {
-            pmix_data_buffer_t pbuf;
             pmix_info_t *info;
             size_t ninfo;
-            pmix_byte_object_t pbo;
-            opal_byte_object_t bo, *boptr;
             pmix_value_t *vptr;
 
             OPAL_PMIX_CONVERT_NAME(&proc, ORTE_PROC_MY_NAME);
@@ -919,6 +949,38 @@ int orte_daemon(int argc, char *argv[])
             }
         }
 
+        /* collect our network inventory */
+        memset(&xfer, 0, sizeof(myxfer_t));
+        OPAL_PMIX_CONSTRUCT_LOCK(&xfer.lock);
+        if (PMIX_SUCCESS != (prc = PMIx_server_collect_inventory(NULL, 0, infocbfunc, &xfer))) {
+            PMIX_ERROR_LOG(prc);
+            ret = ORTE_ERR_NOT_SUPPORTED;
+            goto DONE;
+        }
+        OPAL_PMIX_WAIT_THREAD(&xfer.lock);
+        if (NULL != xfer.info) {
+            PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, &pbuf, &xfer.ninfo, 1, PMIX_SIZE))) {
+                PMIX_ERROR_LOG(prc);
+                ret = ORTE_ERROR;
+                OBJ_RELEASE(buffer);
+                goto DONE;
+            }
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, &pbuf, xfer.info, xfer.ninfo, PMIX_INFO))) {
+                PMIX_ERROR_LOG(prc);
+                ret = ORTE_ERROR;
+                OBJ_RELEASE(buffer);
+                goto DONE;
+            }
+            PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
+            bo.bytes = (uint8_t*)pbo.bytes;
+            bo.size = pbo.size;
+            if (ORTE_SUCCESS != (ret = opal_dss.pack(buffer, &boptr, 1, OPAL_BYTE_OBJECT))) {
+                ORTE_ERROR_LOG(ret);
+                OBJ_RELEASE(buffer);
+                goto DONE;
+            }
+        }
         /* send it to the designated target */
         if (0 > (ret = orte_rml.send_buffer_nb(orte_mgmt_conduit,
                                                &target, buffer,
