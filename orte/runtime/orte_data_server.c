@@ -375,6 +375,12 @@ void orte_data_server(int status, orte_process_name_t* sender,
                     ORTE_ERROR_LOG(rc);
                     goto SEND_ERROR;
                 }
+                /* we are responding to a lookup cmd */
+                command = ORTE_PMIX_LOOKUP_CMD;
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(reply, &command, 1, OPAL_UINT8))) {
+                    ORTE_ERROR_LOG(rc);
+                    goto SEND_ERROR;
+                }
                 /* if we found all of the requested keys, then indicate so */
                 if (n == (size_t)opal_argv_count(req->keys)) {
                     i = ORTE_SUCCESS;
@@ -401,7 +407,14 @@ void orte_data_server(int status, orte_process_name_t* sender,
                  * operation just to assemble all the return values into a contiguous
                  * array */
                 while (NULL != (rinfo = (opal_ds_info_t*)opal_list_remove_first(&req->answers))) {
-                    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, rinfo, 1, PMIX_INFO))) {
+                    /* pack the data owner */
+                    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, &rinfo->source, 1, PMIX_PROC))) {
+                        PMIX_ERROR_LOG(ret);
+                        rc = ORTE_ERR_PACK_FAILURE;
+                        goto SEND_ERROR;
+                    }
+                    /* pack the data */
+                    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, rinfo->info, 1, PMIX_INFO))) {
                         PMIX_ERROR_LOG(ret);
                         rc = ORTE_ERR_PACK_FAILURE;
                         goto SEND_ERROR;
@@ -572,7 +585,6 @@ void orte_data_server(int status, orte_process_name_t* sender,
                                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), data->info[n].key,
                                             data->owner.nspace, data->owner.rank);
                     }
-                    break;  // key can only occur once
                 }
             }  // loop over stored data
         }  // loop over keys
@@ -834,9 +846,9 @@ void orte_data_server(int status, orte_process_name_t* sender,
             if (NULL == data) {
                 continue;
             }
-            /* check if data posted by the same process */
+            /* check if data posted by the specified process */
             if (0 != strncmp(requestor.nspace, data->owner.nspace, PMIX_MAX_NSLEN) ||
-                requestor.rank != data->owner.rank) {
+                (PMIX_RANK_WILDCARD != requestor.rank && requestor.rank != data->owner.rank)) {
                 continue;
             }
             /* check persistence - if it is intended to persist beyond the
