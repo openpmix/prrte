@@ -520,7 +520,7 @@ opal_init(int* pargc, char*** pargv)
 
     return OPAL_SUCCESS;
 
- return_error:
+  return_error:
     opal_show_help( "help-opal-runtime.txt",
                     "opal_init:startup:internal-failure", true,
                     error, ret );
