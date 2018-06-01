@@ -1242,12 +1242,19 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
                         ORTE_ERROR_LOG(rc);
                         return PMIX_ERR_BAD_PARAM;
                     }
-                    /* get the proc object for this proc */
-                    if (NULL == (proc = orte_get_proc_object(&name))) {
-                        ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-                        continue;
+                    if (ORTE_VPID_WILDCARD == name.vpid) {
+                        /* create an object */
+                        proc = OBJ_NEW(orte_proc_t);
+                        proc->name.jobid = name.jobid;
+                        proc->name.vpid = ORTE_VPID_WILDCARD;
+                    } else {
+                        /* get the proc object for this proc */
+                        if (NULL == (proc = orte_get_proc_object(&name))) {
+                            ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
+                            continue;
+                        }
+                        OBJ_RETAIN(proc);
                     }
-                    OBJ_RETAIN(proc);
                     opal_pointer_array_add(&parray, proc);
                 }
                 ptrarray = &parray;

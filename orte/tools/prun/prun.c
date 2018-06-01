@@ -156,6 +156,11 @@ static int parse_locals(opal_list_t *jdata, int argc, char* argv[]);
 static void set_classpath_jar_file(opal_pmix_app_t *app, int index, char *jarfile);
 static size_t evid = INT_MAX;
 static pmix_proc_t myproc;
+static bool forcibly_die=false;
+static opal_event_t term_handler;
+static int term_pipe[2];
+static opal_atomic_lock_t prun_abort_inprogress_lock = {{0}};
+static opal_event_base_t *myevbase = NULL;
 
 static opal_cmd_line_init_t cmd_line_init[] = {
     /* tell the dvm to terminate */
@@ -379,6 +384,9 @@ _convert_string_to_jobid(opal_jobid_t *jobid, const char *jobid_string)
     return orte_util_convert_string_to_jobid(jobid, jobid_string);
 }
 
+static void abort_signal_callback(int signal);
+static void clean_abort(int fd, short flags, void *arg);
+
 
 int prun(int argc, char *argv[])
 {
@@ -414,6 +422,7 @@ int prun(int argc, char *argv[])
     opal_convert_process_name_to_string = _convert_process_name_to_string;
     opal_snprintf_jobid = orte_util_snprintf_jobid;
     opal_convert_string_to_jobid = _convert_string_to_jobid;
+    opal_atomic_lock_init(&prun_abort_inprogress_lock, OPAL_ATOMIC_LOCK_UNLOCKED);
 
     /* search the argv for MCA params */
     for (i=0; NULL != argv[i]; i++) {
@@ -441,8 +450,8 @@ int prun(int argc, char *argv[])
         }
     }
 
-    /* init only the util portion of OPAL */
-    if (OPAL_SUCCESS != (rc = opal_init_util(&argc, &argv))) {
+    /* init OPAL */
+    if (OPAL_SUCCESS != (rc = opal_init(&argc, &argv))) {
         return rc;
     }
 
@@ -648,10 +657,45 @@ int prun(int argc, char *argv[])
     }
     OPAL_LIST_DESTRUCT(&tinfo);
 
+    /** setup callbacks for abort signals - from this point
+     * forward, we need to abort in a manner that allows us
+     * to cleanup. However, we cannot directly use libevent
+     * to trap these signals as otherwise we cannot respond
+     * to them if we are stuck in an event! So instead use
+     * the basic POSIX trap functions to handle the signal,
+     * and then let that signal handler do some magic to
+     * avoid the hang
+     *
+     * NOTE: posix traps don't allow us to do anything major
+     * in them, so use a pipe tied to a libevent event to
+     * reach a "safe" place where the termination event can
+     * be created
+     */
+    pipe(term_pipe);
+    /* setup an event to attempt normal termination on signal */
+    myevbase = opal_progress_thread_init(NULL);
+    opal_event_set(myevbase, &term_handler, term_pipe[0], OPAL_EV_READ, clean_abort, NULL);
+    opal_event_add(&term_handler, NULL);
+
+    /* Set both ends of this pipe to be close-on-exec so that no
+       children inherit it */
+    if (opal_fd_set_cloexec(term_pipe[0]) != OPAL_SUCCESS ||
+        opal_fd_set_cloexec(term_pipe[1]) != OPAL_SUCCESS) {
+        fprintf(stderr, "unable to set the pipe to CLOEXEC\n");
+        opal_progress_thread_finalize(NULL);
+        exit(1);
+    }
+
+    /* point the signal trap to a function that will activate that event */
+    signal(SIGTERM, abort_signal_callback);
+    signal(SIGINT, abort_signal_callback);
+    signal(SIGHUP, abort_signal_callback);
+
     /* now initialize PMIx - we have to indicate we are a launcher so that we
      * will provide rendezvous points for tools to connect to us */
     if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
         PMIX_ERROR_LOG(ret);
+        opal_progress_thread_finalize(NULL);
         return ret;
     }
     PMIX_INFO_FREE(iptr, ninfo);
@@ -1004,6 +1048,7 @@ int prun(int argc, char *argv[])
         opal_output(0, "Job failed to spawn: %s", PMIx_Error_string(ret));
         goto DONE;
     }
+    OPAL_PMIX_CONVERT_NSPACE(rc, &myjobid, nspace);
 
     /* register to be notified when
      * our job completes */
@@ -1042,6 +1087,8 @@ int prun(int argc, char *argv[])
   DONE:
     /* cleanup and leave */
     PMIx_tool_finalize();
+    opal_progress_thread_finalize(NULL);
+    opal_finalize();
     return 0;
 }
 
@@ -1586,4 +1633,68 @@ static void set_classpath_jar_file(opal_pmix_app_t *app, int index, char *jarfil
         free(app->app.argv[index]);
         app->app.argv[index] = str;
     }
+}
+
+static void clean_abort(int fd, short flags, void *arg)
+{
+    pmix_proc_t target;
+    pmix_info_t directive;
+
+    /* if we have already ordered this once, don't keep
+     * doing it to avoid race conditions
+     */
+    if (opal_atomic_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
+        if (forcibly_die) {
+            PMIx_tool_finalize();
+            /* exit with a non-zero status */
+            exit(1);
+        }
+        fprintf(stderr, "prun: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n");
+        forcibly_die = true;
+        /* reset the event */
+        opal_event_add(&term_handler, NULL);
+        return;
+    }
+
+    /* tell PRRTE to terminate our job */
+    OPAL_PMIX_CONVERT_JOBID(target.nspace, myjobid);
+    target.rank = PMIX_RANK_WILDCARD;
+    PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
+    PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL);
+}
+
+static struct timeval current, last={0,0};
+static bool first = true;
+
+/*
+ * Attempt to terminate the job and wait for callback indicating
+ * the job has been aborted.
+ */
+static void abort_signal_callback(int fd)
+{
+    uint8_t foo = 1;
+    char *msg = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
+
+    /* if this is the first time thru, just get
+     * the current time
+     */
+    if (first) {
+        first = false;
+        gettimeofday(&current, NULL);
+    } else {
+        /* get the current time */
+        gettimeofday(&current, NULL);
+        /* if this is within 5 seconds of the
+         * last time we were called, then just
+         * exit - we are probably stuck
+         */
+        if ((current.tv_sec - last.tv_sec) < 5) {
+            exit(1);
+        }
+        write(1, (void*)msg, strlen(msg));
+    }
+    /* save the time */
+    last.tv_sec = current.tv_sec;
+    /* tell the event lib to attempt to abnormally terminate */
+    write(term_pipe[1], &foo, 1);
 }
