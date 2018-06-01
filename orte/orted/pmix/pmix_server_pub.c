@@ -373,7 +373,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
         return rc;
     }
     /* pack the keys */
-    for (m=0; m < n; m++) {
+    for (m=0; NULL != keys[m]; m++) {
         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &keys[m], 1, PMIX_STRING))) {
             PMIX_ERROR_LOG(rc);
             OBJ_RELEASE(req);

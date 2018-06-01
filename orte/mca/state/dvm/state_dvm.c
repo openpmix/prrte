@@ -34,6 +34,7 @@
 #include "orte/util/threads.h"
 #include "orte/runtime/orte_quit.h"
 #include "orte/runtime/orte_wait.h"
+#include "orte/runtime/orte_data_server.h"
 
 #include "orte/mca/state/state.h"
 #include "orte/mca/state/base/base.h"
@@ -427,13 +428,19 @@ static void check_complete(int fd, short args, void *cbdata)
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
     orte_job_t *jdata;
     orte_proc_t *proc;
-    int i;
+    int i, rc;
     orte_node_t *node;
     orte_job_map_t *map;
     orte_std_cntr_t index;
     char *rtmod;
     pmix_proc_t pname;
     opal_pmix_lock_t lock;
+    uint8_t command = ORTE_PMIX_PURGE_PROC_CMD;
+    opal_buffer_t *buf;
+    pmix_data_buffer_t pbkt;
+    pmix_byte_object_t pbo;
+    opal_byte_object_t bo, *boptr;
+    pmix_status_t ret;
 
     ORTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -484,6 +491,42 @@ static void check_complete(int fd, short args, void *cbdata)
     OPAL_PMIX_WAIT_THREAD(&lock);
     OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
+    /* tell the data server to purge any data from this nspace */
+    buf = OBJ_NEW(opal_buffer_t);
+    /* room number is ignored, but has to be included for pack sequencing */
+    i=0;
+    opal_dss.pack(buf, &i, 1, OPAL_INT);
+    opal_dss.pack(buf, &command, 1, OPAL_UINT8);
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
+    /* pack the nspace to be purged */
+    pname.rank = PMIX_RANK_WILDCARD;
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &pname, 1, PMIX_PROC))) {
+        PMIX_ERROR_LOG(ret);
+        goto release;
+    }
+    PMIX_DATA_BUFFER_UNLOAD(&pbkt, pbo.bytes, pbo.size);
+    bo.bytes = (uint8_t*)pbo.bytes;
+    bo.size = pbo.size;
+    /* pack it into our command */
+    boptr = &bo;
+    if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &boptr, 1, OPAL_BYTE_OBJECT))) {
+        ORTE_ERROR_LOG(rc);
+        free(bo.bytes);
+        OBJ_RELEASE(buf);
+        goto release;
+    }
+    free(bo.bytes);
+    /* send it to the data server */
+    rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                 ORTE_PROC_MY_NAME, buf,
+                                 ORTE_RML_TAG_DATA_SERVER,
+                                 orte_rml_send_callback, NULL);
+    if (ORTE_SUCCESS != rc) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_RELEASE(buf);
+    }
+
+  release:
     /* Release the resources used by this job. Since some errmgrs may want
      * to continue using resources allocated to the job as part of their
      * fault recovery procedure, we only do this once the job is "complete".
