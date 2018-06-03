@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2011-2014 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
@@ -167,7 +167,7 @@ static int bind_generic(orte_job_t *jdata,
         tmp_obj = NULL;
         trg_obj = NULL;
         min_bound = UINT_MAX;
-        while (tmp_obj = hwloc_get_next_obj_by_depth(node->topology->topo, target_depth, tmp_obj)) {
+        while (NULL != (tmp_obj = hwloc_get_next_obj_by_depth(node->topology->topo, target_depth, tmp_obj))) {
             if (!hwloc_bitmap_intersects(locale->cpuset, tmp_obj->cpuset))
                 continue;
             data = (opal_hwloc_obj_data_t*)tmp_obj->userdata;
@@ -580,7 +580,6 @@ int orte_rmaps_base_compute_bindings(orte_job_t *jdata)
     orte_node_t *node;
     int i, rc;
     struct hwloc_topology_support *support;
-    bool force_down = false;
     int bind_depth;
 
     opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
@@ -701,7 +700,6 @@ int orte_rmaps_base_compute_bindings(orte_job_t *jdata)
             }
         } else if (OPAL_BIND_TO_NUMA < bind) {
             /* bind every proc downwards */
-            force_down = true;
             goto execute;
         }
         /* if the binding policy is less than numa, then we are unbound - so
