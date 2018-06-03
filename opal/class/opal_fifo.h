@@ -12,9 +12,9 @@
  *                         All rights reserved.
  * Copyright (c) 2007      Voltaire All rights reserved.
  * Copyright (c) 2010      IBM Corporation.  All rights reserved.
- * Copyright (c) 2014-2017 Los Alamos National Security, LLC. All rights
+ * Copyright (c) 2014-2018 Los Alamos National Security, LLC. All rights
  *                         reseved.
- * Copyright (c) 2017      Intel, Inc. All rights reserved.
+ * Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -184,9 +184,10 @@ static inline opal_list_item_t *opal_fifo_pop_atomic (opal_fifo_t *fifo)
 static inline opal_list_item_t *opal_fifo_push_atomic (opal_fifo_t *fifo,
                                                        opal_list_item_t *item)
 {
+    const opal_list_item_t * const ghost = &fifo->opal_fifo_ghost;
     opal_list_item_t *tail_item;
 
-    item->opal_list_next = &fifo->opal_fifo_ghost;
+    item->opal_list_next = (opal_list_item_t *) ghost;
 
     opal_atomic_wmb ();
 
@@ -195,7 +196,7 @@ static inline opal_list_item_t *opal_fifo_push_atomic (opal_fifo_t *fifo,
 
     opal_atomic_wmb ();
 
-    if (&fifo->opal_fifo_ghost == tail_item) {
+    if (ghost == tail_item) {
         /* update the head */
         fifo->opal_fifo_head.data.item = item;
     } else {
@@ -213,12 +214,22 @@ static inline opal_list_item_t *opal_fifo_push_atomic (opal_fifo_t *fifo,
  */
 static inline opal_list_item_t *opal_fifo_pop_atomic (opal_fifo_t *fifo)
 {
-    opal_list_item_t *item, *next, *ghost = &fifo->opal_fifo_ghost;
+    const opal_list_item_t * const ghost = &fifo->opal_fifo_ghost;
 
 #if OPAL_HAVE_ATOMIC_LLSC_PTR
+    register opal_list_item_t *item, *next;
+    int attempt = 0, ret = 0;
+
     /* use load-linked store-conditional to avoid ABA issues */
     do {
-        item = opal_atomic_ll_ptr (&fifo->opal_fifo_head.data.item);
+        if (++attempt == 5) {
+            /* deliberatly suspend this thread to allow other threads to run. this should
+             * only occur during periods of contention on the lifo. */
+            _opal_lifo_release_cpu ();
+            attempt = 0;
+        }
+
+        opal_atomic_ll_ptr(&fifo->opal_fifo_head.data.item, item);
         if (ghost == item) {
             if (ghost == fifo->opal_fifo_tail.data.item) {
                 return NULL;
@@ -230,11 +241,12 @@ static inline opal_list_item_t *opal_fifo_pop_atomic (opal_fifo_t *fifo)
         }
 
         next = (opal_list_item_t *) item->opal_list_next;
-        if (opal_atomic_sc_ptr (&fifo->opal_fifo_head.data.item, next)) {
-            break;
-        }
-    } while (1);
+        opal_atomic_sc_ptr(&fifo->opal_fifo_head.data.item, next, ret);
+    } while (!ret);
+
 #else
+    opal_list_item_t *item, *next;
+
     /* protect against ABA issues by "locking" the head */
     do {
         if (!opal_atomic_swap_32 ((volatile int32_t *) &fifo->opal_fifo_head.data.counter, 1)) {
@@ -259,10 +271,10 @@ static inline opal_list_item_t *opal_fifo_pop_atomic (opal_fifo_t *fifo)
     if (ghost == next) {
         void *tmp = item;
 
-        if (!opal_atomic_compare_exchange_strong_ptr (&fifo->opal_fifo_tail.data.item, &tmp, ghost)) {
-            while (ghost == item->opal_list_next) {
+        if (!opal_atomic_compare_exchange_strong_ptr (&fifo->opal_fifo_tail.data.item, &tmp, (void *) ghost)) {
+            do {
                 opal_atomic_rmb ();
-            }
+            } while (ghost == item->opal_list_next);
 
             fifo->opal_fifo_head.data.item = (opal_list_item_t *) item->opal_list_next;
         }
