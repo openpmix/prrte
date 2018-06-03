@@ -967,7 +967,7 @@ static int setup_path(orte_app_context_t *app, char **wdir)
         *wdir = strdup(dir);
         opal_setenv("PWD", dir, true, &app->env);
         /* update the initial wdir value too */
-        opal_setenv(OPAL_MCA_PREFIX"initial_wdir", dir, true, &app->env);
+        opal_setenv("OMPI_MCA_initial_wdir", dir, true, &app->env);
     } else {
         *wdir = NULL;
     }
@@ -1423,7 +1423,7 @@ void orte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
 
 
         /* tell all children that they are being launched via ORTE */
-        opal_setenv(OPAL_MCA_PREFIX"orte_launch", "1", true, &app->env);
+        opal_setenv("OMPI_MCA_orte_launch", "1", true, &app->env);
 
         /* if the user requested it, set the system resource limits */
         if (OPAL_SUCCESS != (rc = opal_util_init_sys_limits(&msg))) {
