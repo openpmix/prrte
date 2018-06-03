@@ -653,7 +653,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         flag = true;
         PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, &flag, PMIX_BOOL);
         /* provide the status */
-        PMIX_INFO_LOAD(&info[0], PMIX_JOB_TERM_STATUS, &ret, PMIX_STATUS);
+        PMIX_INFO_LOAD(&info[1], PMIX_JOB_TERM_STATUS, &ret, PMIX_STATUS);
         /* tell the requestor which job or proc  */
         OPAL_PMIX_CONVERT_JOBID(pname.nspace, jdata->jobid);
         if (NULL != pptr) {
@@ -661,7 +661,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         } else {
             pname.rank = PMIX_RANK_WILDCARD;
         }
-        PMIX_INFO_LOAD(&info[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+        PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
 
         /* pack the info for sending */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
