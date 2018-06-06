@@ -609,6 +609,7 @@ void pmix_server_keyval_client(int status, orte_process_name_t* sender,
     if (0 < npdata) {
         PMIX_PDATA_CREATE(pdata, npdata);
         for (n=0; n < npdata; n++) {
+            PMIX_INFO_CONSTRUCT(&info);
             cnt = 1;
             if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &pdata[n].proc, &cnt, PMIX_PROC))) {
                 PMIX_ERROR_LOG(ret);
@@ -622,8 +623,8 @@ void pmix_server_keyval_client(int status, orte_process_name_t* sender,
                 goto release;
             }
             (void)strncpy(pdata[n].key, info.key, PMIX_MAX_KEYLEN);
-            PMIX_VALUE_LOAD(&pdata[n].value, &info.value.data, info.value.type);
-            PMIX_VALUE_DESTRUCT(&info.value);
+            pmix_value_xfer(&pdata[n].value, &info.value);
+            PMIX_INFO_DESTRUCT(&info);
         }
     }
     if (PMIX_SUCCESS == ret) {
