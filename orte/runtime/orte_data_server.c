@@ -351,8 +351,9 @@ void orte_data_server(int status, orte_process_name_t* sender,
                                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
                         /* track this response */
                         opal_output_verbose(10, orte_data_server_output,
-                                            "%s data server: adding %s data from %s:%d to response",
+                                            "%s data server: adding %s data %s from %s:%d to response",
                                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), data->info[n].key,
+                                            PMIx_Data_type_string(data->info[n].value.type),
                                             data->owner.nspace, data->owner.rank);
                         rinfo = OBJ_NEW(opal_ds_info_t);
                         memcpy(&rinfo->source, &data->owner, sizeof(pmix_proc_t));
@@ -620,9 +621,10 @@ void orte_data_server(int status, orte_process_name_t* sender,
                 }
                 if (PMIX_PERSIST_FIRST_READ == rinfo->persistence) {
                     opal_output_verbose(1, orte_data_server_output,
-                                        "%s REMOVING DATA FROM %s:%d AT INDEX %d",
+                                        "%s REMOVING DATA FROM %s:%d FOR KEY %s",
                                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                                        data->owner.nspace, data->owner.rank, data->index);
+                                        rinfo->source.nspace, rinfo->source.rank,
+                                        rinfo->info->key);
                     memset(rinfo->info->key, 0, PMIX_MAX_KEYLEN+1);
                 }
             }

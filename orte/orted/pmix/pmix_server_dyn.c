@@ -781,8 +781,8 @@ static void _cnct(int sd, short args, void *cbdata)
     }
 
   release:
-    if (NULL != cd->cbfunc) {
-        cd->cbfunc(rc, cd->cbdata);
+    if (NULL != cd->cnctcbfunc) {
+        cd->cnctcbfunc(rc, NULL, PMIX_RANK_INVALID, cd->cbdata);
     }
     OBJ_RELEASE(cd);
 }
@@ -826,7 +826,6 @@ static void mdxcbfunc(pmix_status_t status,
     orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
 
     ORTE_ACQUIRE_OBJECT(cd);
-
     /* ack the call */
     if (NULL != cd->cbfunc) {
         cd->cbfunc(status, cd->cbdata);
@@ -860,6 +859,7 @@ pmix_status_t pmix_server_disconnect_fn(const char nspace[],
     if (PMIX_SUCCESS != (rc = pmix_server_fencenb_fn(&proc, 1, info, ninfo,
                                                      NULL, 0,
                                                      mdxcbfunc, cd))) {
+        PMIX_ERROR_LOG(rc);
         OBJ_RELEASE(cd);
     }
 
