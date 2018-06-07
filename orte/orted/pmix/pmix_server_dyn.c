@@ -781,15 +781,15 @@ static void _cnct(int sd, short args, void *cbdata)
     }
 
   release:
-    if (NULL != cd->cnctcbfunc) {
-        cd->cnctcbfunc(rc, NULL, PMIX_RANK_INVALID, cd->cbdata);
+    if (NULL != cd->cbfunc) {
+        cd->cbfunc(rc, cd->cbdata);
     }
     OBJ_RELEASE(cd);
 }
 
 pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
                                      const pmix_info_t info[], size_t ninfo,
-                                     pmix_connect_cbfunc_t cbfunc, void *cbdata)
+                                     pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
     orte_pmix_server_op_caddy_t *op;
 
@@ -808,7 +808,7 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     op->nprocs = nprocs;
     op->info = (pmix_info_t*)info;
     op->ninfo = ninfo;
-    op->cnctcbfunc = cbfunc;
+    op->cbfunc = cbfunc;
     op->cbdata = cbdata;
     opal_event_set(orte_event_base, &(op->ev), -1,
                    OPAL_EV_WRITE, _cnct, op);
@@ -833,17 +833,16 @@ static void mdxcbfunc(pmix_status_t status,
     OBJ_RELEASE(cd);
 }
 
-pmix_status_t pmix_server_disconnect_fn(const char nspace[],
+pmix_status_t pmix_server_disconnect_fn(const pmix_proc_t procs[], size_t nprocs,
                                         const pmix_info_t info[], size_t ninfo,
                                         pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
     orte_pmix_server_op_caddy_t *cd;
-    pmix_proc_t proc;
     pmix_status_t rc;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
-                        "%s disconnect called on nspace %s",
-                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), nspace);
+                        "%s disconnect called",
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
 
     /* at some point, we need to add bookeeping to track which
      * procs are "connected" so we know who to notify upon
@@ -853,10 +852,9 @@ pmix_status_t pmix_server_disconnect_fn(const char nspace[],
     cd = OBJ_NEW(orte_pmix_server_op_caddy_t);
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
-    (void)strncpy(proc.nspace, nspace, PMIX_MAX_NSLEN);
-    proc.rank = PMIX_RANK_WILDCARD;
 
-    if (PMIX_SUCCESS != (rc = pmix_server_fencenb_fn(&proc, 1, info, ninfo,
+    if (PMIX_SUCCESS != (rc = pmix_server_fencenb_fn(procs, nprocs,
+                                                     info, ninfo,
                                                      NULL, 0,
                                                      mdxcbfunc, cd))) {
         PMIX_ERROR_LOG(rc);

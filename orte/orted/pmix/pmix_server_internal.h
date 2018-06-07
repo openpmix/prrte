@@ -111,7 +111,6 @@ typedef struct {
     pmix_info_cbfunc_t infocbfunc;
     pmix_tool_connection_cbfunc_t toolcbfunc;
     pmix_spawn_cbfunc_t spcbfunc;
-    pmix_connect_cbfunc_t cnctcbfunc;
     void *cbdata;
 } orte_pmix_server_op_caddy_t;
 OBJ_CLASS_DECLARATION(orte_pmix_server_op_caddy_t);
@@ -222,8 +221,8 @@ extern pmix_status_t pmix_server_spawn_fn(const pmix_proc_t *proc,
                                           pmix_spawn_cbfunc_t cbfunc, void *cbdata);
 extern pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
                                             const pmix_info_t info[], size_t ninfo,
-                                            pmix_connect_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_disconnect_fn(const char nspace[],
+                                            pmix_op_cbfunc_t cbfunc, void *cbdata);
+extern pmix_status_t pmix_server_disconnect_fn(const pmix_proc_t procs[], size_t nprocs,
                                                const pmix_info_t info[], size_t ninfo,
                                                pmix_op_cbfunc_t cbfunc, void *cbdata);
 extern pmix_status_t pmix_server_register_events_fn(pmix_status_t *codes, size_t ncodes,
