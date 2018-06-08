@@ -637,8 +637,7 @@ static void pmix_server_dmdx_recv(int status, orte_process_name_t* sender,
     }
 
     /* ask our local pmix server for the data */
-    (void)opal_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, idreq.jobid);
-    pproc.rank = idreq.vpid;
+    OPAL_PMIX_CONVERT_NAME(&pproc, &idreq);
     if (OPAL_SUCCESS != (rc = PMIx_server_dmodex_request(&pproc, modex_resp, req))) {
         ORTE_ERROR_LOG(rc);
         opal_hotel_checkout(&orte_pmix_server_globals.reqs, req->room_num);
