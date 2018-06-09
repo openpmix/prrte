@@ -496,7 +496,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
             return opal_pmix_convert_status(ret);
         }
         free(tmp);
-        PMIX_INFO_LOAD(&cd.info[0], PMIX_PROC_MAP, regex, PMIX_STRING);
+        PMIX_INFO_LOAD(&cd.info[1], PMIX_PROC_MAP, regex, PMIX_STRING);
         free(regex);
     }
 
