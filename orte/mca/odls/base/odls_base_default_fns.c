@@ -445,7 +445,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     /* assemble the node and proc map info */
     list = NULL;
     procs = NULL;
-    cd.ninfo = 2;
+    cd.ninfo = 3;
     PMIX_INFO_CREATE(cd.info, cd.ninfo);
     for (i=0; i < map->nodes->size; i++) {
         micro = NULL;
@@ -500,9 +500,22 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         free(regex);
     }
 
+    /* construct the actual request - we just let them pick the
+     * default transport for now. Someday, we will add to prun
+     * the ability for transport specifications */
+    OPAL_PMIX_CONVERT_JOBID(pproc.nspace, jdata->jobid);
+    (void)strncpy(cd.info[2].key, PMIX_ALLOC_NETWORK, PMIX_MAX_KEYLEN);
+    cd.info[2].value.type = PMIX_DATA_ARRAY;
+    PMIX_DATA_ARRAY_CREATE(cd.info[2].value.data.darray, 2, PMIX_INFO);
+    PMIX_INFO_CREATE(info, 2);
+    cd.info[2].value.data.darray->array = info;
+    asprintf(&tmp, "%s.net", pproc.nspace);
+    PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NETWORK_ID, tmp, PMIX_STRING);
+    free(tmp);
+    PMIX_INFO_LOAD(&info[1], PMIX_ALLOC_NETWORK_SEC_KEY, NULL, PMIX_BOOL);
+
     /* we don't want to block here because it could
      * take some indeterminate time to get the info */
-    OPAL_PMIX_CONVERT_JOBID(pproc.nspace, jdata->jobid);
     rc = ORTE_SUCCESS;
     cd.jdata = jdata;
     if (PMIX_SUCCESS != (ret = PMIx_server_setup_application(pproc.nspace, cd.info, cd.ninfo,
