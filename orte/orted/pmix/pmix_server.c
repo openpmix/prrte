@@ -254,9 +254,6 @@ int pmix_server_init(void)
     OBJ_CONSTRUCT(&orte_pmix_server_globals.notifications, opal_list_t);
     orte_pmix_server_globals.server = *ORTE_NAME_INVALID;
 
-    /* ensure the PMIx server uses the proper rendezvous directory */
-    opal_setenv("PMIX_SERVER_TMPDIR", orte_process_info.proc_session_dir, true, &environ);
-
     OBJ_CONSTRUCT(&ilist, opal_list_t);
 
 #if HWLOC_API_VERSION < 0x20000

@@ -116,7 +116,7 @@ static void setup_cbfunc(pmix_status_t status,
     pmix_data_buffer_t pbuf;
     pmix_byte_object_t pbo;
     opal_byte_object_t bo, *boptr;
-    int rc;
+    int rc = ORTE_SUCCESS;
 
     /* release any info */
     if (NULL != cd->info) {
