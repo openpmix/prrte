@@ -66,7 +66,7 @@ typedef uint8_t orte_node_flags_t;
 #define ORTE_NODE_FLAG_OVERSUBSCRIBED     0x04   // whether or not this node is oversubscribed
 #define ORTE_NODE_FLAG_MAPPED             0x08   // whether we have been added to the current map
 #define ORTE_NODE_FLAG_SLOTS_GIVEN        0x10   // the number of slots was specified - used only in non-managed environments
-#define ORTE_NODE_NON_USABLE              0x20   // the flag is hosting a tool and is NOT to be used for jobs
+#define ORTE_NODE_NON_USABLE              0x20   // the node is hosting a tool and is NOT to be used for jobs
 
 
 /*** NODE ATTRIBUTE KEYS - never sent anywhere ***/

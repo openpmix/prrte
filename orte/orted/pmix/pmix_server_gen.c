@@ -1030,11 +1030,17 @@ static void _toolconn(int sd, short args, void *cbdata)
     proc->name.vpid = tool.vpid;
     proc->parent = ORTE_PROC_MY_NAME->vpid;
     ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_ALIVE);
+    ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_TOOL);
     proc->state = ORTE_PROC_STATE_RUNNING;
+    /* set the trivial */
+    proc->local_rank = 0;
+    proc->node_rank = 0;
+    proc->app_rank = 0;
     proc->app_idx = 0;
     if (NULL == hostname) {
         /* it is on my node */
         node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, 0);
+        ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_LOCAL);
     } else {
         /* we need to locate it */
         node = NULL;
@@ -1069,17 +1075,6 @@ static void _toolconn(int sd, short args, void *cbdata)
      * allocation */
     OBJ_RETAIN(proc);
     opal_pointer_array_add(node->procs, proc);
-    /* set the trivial */
-    proc->local_rank = 0;
-    proc->node_rank = 0;
-    proc->app_rank = 0;
-    proc->state = ORTE_PROC_STATE_RUNNING;
-    proc->app_idx = 0;
-    /* if it is on my node, mark it as local */
-    nptr = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, 0);
-    if (node == nptr) {
-        ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_LOCAL);
-    }
     /* if they indicated a preference for termination, set it */
     if (flag_given) {
         orte_set_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION,

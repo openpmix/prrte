@@ -492,8 +492,10 @@ static void track_procs(int fd, short argc, void *cbdata)
                             /* skip procs from another job */
                             continue;
                         }
-                        node->slots_inuse--;
-                        node->num_procs--;
+                        if (!ORTE_FLAG_TEST(pptr, ORTE_PROC_FLAG_TOOL)) {
+                            node->slots_inuse--;
+                            node->num_procs--;
+                        }
                         OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
                                              "%s state:orted releasing proc %s from node %s",
                                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
