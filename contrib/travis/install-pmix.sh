@@ -1,6 +1,6 @@
 #!/bin/sh
 set -ex
-git clone --depth=1 https://github.com/pmix/pmix pmix-master
+git clone --depth=1 -b topic/pmix_setup_cc https://github.com/ggouaillardet/pmix.git pmix-master
 cd pmix-master
 which gcc
 type gcc
