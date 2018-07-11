@@ -110,6 +110,10 @@ static int orte_rmaps_rf_map(orte_job_t *jdata)
         /* NOT FOR US */
         return ORTE_ERR_TAKE_NEXT_OPTION;
     }
+    if (OPAL_BIND_ORDERED_REQUESTED(jdata->map->binding)) {
+        /* NOT FOR US */
+        return ORTE_ERR_TAKE_NEXT_OPTION;
+    }
     opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rank_file: mapping job %s",
                         ORTE_JOBID_PRINT(jdata->jobid));

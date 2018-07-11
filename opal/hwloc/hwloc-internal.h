@@ -145,6 +145,10 @@ typedef uint16_t opal_binding_policy_t;
 #define OPAL_BIND_IF_SUPPORTED      0x1000
 #define OPAL_BIND_ALLOW_OVERLOAD    0x2000
 #define OPAL_BIND_GIVEN             0x4000
+/* bind each rank to the cpu in the given
+ * cpu list based on its node-local-rank */
+#define OPAL_BIND_ORDERED           0x8000
+
 /* binding policies - any changes in these
  * values must be reflected in orte/mca/rmaps/rmaps.h
  */
@@ -179,6 +183,9 @@ typedef uint16_t opal_binding_policy_t;
 /* macro to detect if binding is forced */
 #define OPAL_BIND_OVERLOAD_ALLOWED(n) \
     (OPAL_BIND_ALLOW_OVERLOAD & (n))
+#define OPAL_BIND_ORDERED_REQUESTED(n) \
+    (OPAL_BIND_ORDERED & (n))
+
 
 /* some global values */
 OPAL_DECLSPEC extern hwloc_topology_t opal_hwloc_topology;

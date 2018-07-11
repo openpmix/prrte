@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -115,9 +115,9 @@ int opal_hwloc_base_register(void)
     opal_hwloc_base_binding_policy = NULL;
     (void) mca_base_var_register("opal", "hwloc", "base", "binding_policy",
                                  "Policy for binding processes. Allowed values: none, hwthread, core, l1cache, l2cache, "
-                                 "l3cache, socket, numa, board (\"none\" is the default when oversubscribed, \"core\" is "
+                                 "l3cache, socket, numa, board, cpu-list (\"none\" is the default when oversubscribed, \"core\" is "
                                  "the default when np<=2, and \"numa\" is the default when np>2). Allowed qualifiers: "
-                                 "overload-allowed, if-supported",
+                                 "overload-allowed, if-supported, ordered",
                                  MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, OPAL_INFO_LVL_9,
                                  MCA_BASE_VAR_SCOPE_READONLY, &opal_hwloc_base_binding_policy);
 
@@ -482,6 +482,8 @@ int opal_hwloc_base_set_binding_policy(opal_binding_policy_t *policy, char *spec
                 } else if (0 == strncasecmp(quals[i], "overload-allowed", strlen(quals[i])) ||
                            0 == strncasecmp(quals[i], "oversubscribe-allowed", strlen(quals[i]))) {
                     tmp |= OPAL_BIND_ALLOW_OVERLOAD;
+                } else if (0 == strncasecmp(quals[i], "ordered", strlen(quals[i]))) {
+                    tmp |= OPAL_BIND_ORDERED;
                 } else {
                     /* unknown option */
                     opal_output(0, "Unknown qualifier to binding policy: %s", spec);
@@ -512,6 +514,12 @@ int opal_hwloc_base_set_binding_policy(opal_binding_policy_t *policy, char *spec
                 OPAL_SET_BINDING_POLICY(tmp, OPAL_BIND_TO_NUMA);
             } else if (0 == strcasecmp(tmpvals[0], "board")) {
                 OPAL_SET_BINDING_POLICY(tmp, OPAL_BIND_TO_BOARD);
+            } else if (0 == strcasecmp(tmpvals[0], "cpu-list") ||
+                       0 == strcasecmp(tmpvals[0], "cpulist")) {
+                // Accept both "cpu-list" (which matches the
+                // "--cpu-list" CLI option) and "cpulist" (because
+                // people will be lazy)
+                OPAL_SET_BINDING_POLICY(tmp, OPAL_BIND_TO_CPUSET);
             } else {
                 opal_show_help("help-opal-hwloc-base.txt", "invalid binding_policy", true, "binding", spec);
                 opal_argv_free(tmpvals);

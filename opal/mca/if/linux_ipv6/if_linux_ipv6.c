@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
+ * Copyright (c) 2018      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -118,8 +119,8 @@ static int if_linux_ipv6_open(void)
                                 addrbyte[8], addrbyte[9], addrbyte[10], addrbyte[11],
                                 addrbyte[12], addrbyte[13], addrbyte[14], addrbyte[15], scope);
 
-            /* we don't want any other scope less than link-local */
-            if (scope < 0x20) {
+            /* Only interested in global (0x00) scope */
+            if (scope != 0x00)  {
                 opal_output_verbose(1, opal_if_base_framework.framework_output,
                                     "skipping interface %2x%2x:%2x%2x:%2x%2x:%2x%2x:%2x%2x:%2x%2x:%2x%2x:%2x%2x scope %x\n",
                                     addrbyte[0], addrbyte[1], addrbyte[2], addrbyte[3],
@@ -172,5 +173,3 @@ static int if_linux_ipv6_open(void)
 
     return OPAL_SUCCESS;
 }
-
-
