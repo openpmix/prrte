@@ -181,7 +181,6 @@ typedef uint16_t orte_proc_flags_t;
 #define ORTE_PROC_FLAG_SM_ACCESS     0x2000  // indicate if process can read modex data from shared memory region
 #define ORTE_PROC_FLAG_TOOL          0x4000  // proc is a tool and doesn't count against allocations
 
-
 /***   PROCESS ATTRIBUTE KEYS   ***/
 #define ORTE_PROC_START_KEY   ORTE_JOB_MAX_KEY
 

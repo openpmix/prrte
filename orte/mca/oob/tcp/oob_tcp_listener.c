@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -277,6 +277,7 @@ static int create_listen(void)
     }
 
     /* get the address info for this interface */
+    memset(&inaddr, 0, sizeof(inaddr));
     ((struct sockaddr_in*) &inaddr)->sin_family = AF_INET;
     ((struct sockaddr_in*) &inaddr)->sin_addr.s_addr = INADDR_ANY;
     addrlen = sizeof(struct sockaddr_in);
@@ -529,6 +530,7 @@ static int create_listen6(void)
     }
 
     /* get the address info for this interface */
+    memset(&inaddr, 0, sizeof(inaddr));
     ((struct sockaddr_in6*) &inaddr)->sin6_family = AF_INET6;
     ((struct sockaddr_in6*) &inaddr)->sin6_addr = in6addr_any;
     addrlen = sizeof(struct sockaddr_in6);
