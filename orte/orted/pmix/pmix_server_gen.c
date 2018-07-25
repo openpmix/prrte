@@ -341,6 +341,7 @@ void pmix_server_notify(int status, orte_process_name_t* sender,
     pmix_data_buffer_t pbkt;
     pmix_data_range_t range = PMIX_RANGE_SESSION;
     pmix_status_t code, ret;
+    size_t ninfo;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s Notification received from %s",
@@ -395,11 +396,12 @@ void pmix_server_notify(int status, orte_process_name_t* sender,
         OBJ_RELEASE(cd);
         return;
     }
+    /* reserve a spot for an additional flag */
+    ninfo = cd->ninfo + 1;
+    /* create the space */
+    PMIX_INFO_CREATE(cd->info, ninfo);
 
     if (0 < cd->ninfo) {
-        /* create the space */
-        PMIX_INFO_CREATE(cd->info, cd->ninfo);
-
         /* unpack into it */
         cnt = cd->ninfo;
         if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, cd->info, &cnt, PMIX_INFO))) {
@@ -410,18 +412,12 @@ void pmix_server_notify(int status, orte_process_name_t* sender,
             return;
         }
     }
+    cd->ninfo = ninfo;
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
     /* protect against infinite loops by marking that this notification was
      * passed down to the server by me */
-    if (NULL == cd->info) {
-        cd->info = OBJ_NEW(opal_list_t);
-    }
-    val = OBJ_NEW(opal_value_t);
-    val->key = strdup("orte.notify.donotloop");
-    val->type = OPAL_BOOL;
-    val->data.flag = true;
-    opal_list_append(cd->info, &val->super);
+    PMIX_INFO_LOAD(&cd->info[ninfo-1], "orte.notify.donotloop", NULL, PMIX_BOOL);
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s NOTIFYING PMIX SERVER OF STATUS %d",
@@ -451,6 +447,7 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
     pmix_data_buffer_t pbkt;
     pmix_proc_t psender;
     pmix_status_t ret;
+    size_t n;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s local process %s:%d generated event code %d",
@@ -458,8 +455,8 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
                         source->nspace, source->rank, code);
 
     /* check to see if this is one we sent down */
-    OPAL_LIST_FOREACH(val, info, opal_value_t) {
-        if (0 == strcmp(val->key, "orte.notify.donotloop")) {
+    for (n=0; n < ninfo; n++) {
+        if (0 == strcmp(info[n].key, "orte.notify.donotloop")) {
             /* yep - do not process */
             goto done;
         }
