@@ -268,6 +268,8 @@ static void evhandler(size_t evhdlr_registration_id,
                         ORTE_JOBID_PRINT(jobid), jobstatus);
         }
     }
+    /* save the status */
+    lock->status = jobstatus;
     /* release the lock */
     OPAL_PMIX_WAKEUP_THREAD(lock);
 
@@ -390,7 +392,7 @@ static void clean_abort(int fd, short flags, void *arg);
 
 int prun(int argc, char *argv[])
 {
-    int rc, i;
+    int rc=1, i;
     char *param, *ptr;
     opal_pmix_lock_t lock, rellock;
     opal_list_t apps;
@@ -1070,6 +1072,8 @@ int prun(int argc, char *argv[])
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
     PMIx_Register_event_handler(&ret, 1, iptr, ninfo, evhandler, regcbfunc, &lock);
     OPAL_PMIX_WAIT_THREAD(&lock);
+    /* save the status */
+    rc = lock.status;
     OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
     if (orte_cmd_options.verbose) {
@@ -1089,7 +1093,7 @@ int prun(int argc, char *argv[])
     PMIx_tool_finalize();
     opal_progress_thread_finalize(NULL);
     opal_finalize();
-    return 0;
+    return rc;
 }
 
 static int parse_locals(opal_list_t *jdata, int argc, char* argv[])
