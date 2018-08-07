@@ -314,6 +314,8 @@ ORTE_DECLSPEC OBJ_CLASS_DECLARATION(orte_node_t);
 typedef struct {
     /** Base object so this can be put on a list */
     opal_list_item_t super;
+    /* record the exit status for this job */
+    int exit_code;
     /* personality for this job */
     char **personality;
     /* jobid for this job */

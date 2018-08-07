@@ -1072,8 +1072,6 @@ int prun(int argc, char *argv[])
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
     PMIx_Register_event_handler(&ret, 1, iptr, ninfo, evhandler, regcbfunc, &lock);
     OPAL_PMIX_WAIT_THREAD(&lock);
-    /* save the status */
-    rc = lock.status;
     OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
     if (orte_cmd_options.verbose) {
@@ -1082,6 +1080,8 @@ int prun(int argc, char *argv[])
 
     OPAL_PMIX_WAIT_THREAD(&rellock);
     OPAL_PMIX_DESTRUCT_LOCK(&rellock);
+    /* save the status */
+    rc = rellock.status;
 
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
     PMIx_Deregister_event_handler(evid, opcbfunc, &lock);

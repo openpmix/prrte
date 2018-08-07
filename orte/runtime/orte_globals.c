@@ -618,6 +618,7 @@ OBJ_CLASS_INSTANCE(orte_app_context_t,
 
 static void orte_job_construct(orte_job_t* job)
 {
+    job->exit_code = ORTE_ERROR_DEFAULT_EXIT_CODE;
     job->personality = NULL;
     job->jobid = ORTE_JOBID_INVALID;
     job->offset = 0;

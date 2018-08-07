@@ -337,10 +337,12 @@ static void proc_errors(int fd, short args, void *cbdata)
             OBJ_RETAIN(pptr);
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_ABORTED);
             /* update our exit code */
-            ORTE_UPDATE_EXIT_STATUS(pptr->exit_code);
+            jdata->exit_code = pptr->exit_code;
             /* just in case the exit code hadn't been set, do it here - this
              * won't override any reported exit code */
-            ORTE_UPDATE_EXIT_STATUS(ORTE_ERR_COMM_FAILURE);
+            if (0 == jdata->exit_code) {
+                jdata->exit_code = ORTE_ERR_COMM_FAILURE;
+            }
         }
         goto cleanup;
     }
@@ -405,7 +407,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* retain the object so it doesn't get free'd */
             OBJ_RETAIN(pptr);
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_ABORTED);
-            ORTE_UPDATE_EXIT_STATUS(pptr->exit_code);
+            jdata->exit_code = pptr->exit_code;
             /* kill the job */
             _terminate_job(jdata->jobid);
         }
@@ -423,7 +425,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* retain the object so it doesn't get free'd */
             OBJ_RETAIN(pptr);
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_ABORTED);
-            ORTE_UPDATE_EXIT_STATUS(pptr->exit_code);
+            jdata->exit_code = pptr->exit_code;
             /* kill the job */
             _terminate_job(jdata->jobid);
         }
@@ -441,13 +443,15 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* retain the object so it doesn't get free'd */
             OBJ_RETAIN(pptr);
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_ABORTED);
-            ORTE_UPDATE_EXIT_STATUS(pptr->exit_code);
+            jdata->exit_code = pptr->exit_code;
             /* now treat a special case - if the proc exit'd without a required
              * sync, it may have done so with a zero exit code. We want to ensure
              * that the user realizes there was an error, so in this -one- case,
              * we overwrite the process' exit code with the default error code
              */
-            ORTE_UPDATE_EXIT_STATUS(ORTE_ERROR_DEFAULT_EXIT_CODE);
+            if (0 == jdata->exit_code) {
+                jdata->exit_code = ORTE_ERROR_DEFAULT_EXIT_CODE;
+            }
              /* kill the job */
             _terminate_job(jdata->jobid);
        }
@@ -537,7 +541,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* retain the object so it doesn't get free'd */
             OBJ_RETAIN(pptr);
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_ABORTED);
-            ORTE_UPDATE_EXIT_STATUS(pptr->exit_code);
+            jdata->exit_code = pptr->exit_code;
             /* kill the job */
             _terminate_job(jdata->jobid);
         }
@@ -549,7 +553,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                              ORTE_NAME_PRINT(proc),
                              pptr->exit_code));
-        ORTE_UPDATE_EXIT_STATUS(pptr->exit_code);
+        jdata->exit_code = pptr->exit_code;
         /* track the number of non-zero exits */
         i32 = 0;
         i32ptr = &i32;
@@ -588,7 +592,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* retain the object so it doesn't get free'd */
             OBJ_RETAIN(pptr);
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_ABORTED);
-            ORTE_UPDATE_EXIT_STATUS(pptr->exit_code);
+            jdata->exit_code = pptr->exit_code;
             /* kill the job */
             _terminate_job(jdata->jobid);
         }
