@@ -629,12 +629,12 @@ static void dvm_notify(int sd, short args, void *cbdata)
 
     /* see if there was any problem */
     if (orte_get_attribute(&jdata->attributes, ORTE_JOB_ABORTED_PROC, (void**)&pptr, OPAL_PTR) && NULL != pptr) {
-        ret = opal_pmix_convert_rc(pptr->exit_code);
+        ret = opal_pmix_convert_rc(jdata->exit_code);
     /* or whether we got cancelled by the user */
     } else if (orte_get_attribute(&jdata->attributes, ORTE_JOB_CANCELLED, NULL, OPAL_BOOL)) {
         ret = opal_pmix_convert_rc(ORTE_ERR_JOB_CANCELLED);
     } else {
-        ret = PMIX_SUCCESS;
+        ret = opal_pmix_convert_rc(jdata->exit_code);
     }
 
     if (0 == ret && orte_get_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION, NULL, OPAL_BOOL)) {
