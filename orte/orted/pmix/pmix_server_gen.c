@@ -1308,5 +1308,5 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
         }
     }
 
-    return PMIX_SUCCESS;
+    return PMIX_OPERATION_SUCCEEDED;
 }
