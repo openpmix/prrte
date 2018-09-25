@@ -175,7 +175,6 @@ static int opal_progress_events(void)
     int events = 0;
 
     if( opal_progress_event_flag != 0 && !OPAL_THREAD_SWAP_32(&lock, 1) ) {
-#if OPAL_HAVE_WORKING_EVENTOPS
 #if OPAL_PROGRESS_USE_TIMERS
 #if OPAL_PROGRESS_ONLY_USEC_NATIVE
         opal_timer_t now = opal_timer_base_get_usec();
@@ -201,7 +200,6 @@ static int opal_progress_events(void)
         }
 #endif /* OPAL_PROGRESS_USE_TIMERS */
 
-#endif /* OPAL_HAVE_WORKING_EVENTOPS */
         lock = 0;
     }
 
