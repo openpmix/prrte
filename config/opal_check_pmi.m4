@@ -176,6 +176,13 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
            LDFLAGS="-L$pmix_ext_install_libdir $LDFLAGS"])
 
     LIBS="$LIBS -lpmix"
+
+    CPPFLAGS="$CPPFLAGS -I$pmix_ext_install_dir/include"
+    OPAL_WRAPPER_FLAGS_ADD([CPPFLAGS], [-I$pmix_ext_install_dir/include])
+
+    LDFLAGS="$LDFLAGS -L$pmix_ext_install_libdir"
+    OPAL_WRAPPER_FLAGS_ADD([LDFLAGS], [-L$pmix_ext_install_libdir])
+
     opal_external_pmix_happy=yes
 
     AC_DEFINE_UNQUOTED([OPAL_PMIX_VERSION], [$opal_external_pmix_version_found],

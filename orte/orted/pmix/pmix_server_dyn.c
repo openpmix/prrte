@@ -340,7 +340,7 @@ static void interim(int sd, short args, void *cbdata)
                 rc = ORTE_ERR_BAD_PARAM;
                 goto complete;
             }
-            rc = orte_rmaps_base_set_mapping_policy(&jdata->map->mapping,
+            rc = orte_rmaps_base_set_mapping_policy(jdata, &jdata->map->mapping,
                                                     NULL, info->value.data.string);
             if (ORTE_SUCCESS != rc) {
                 goto complete;

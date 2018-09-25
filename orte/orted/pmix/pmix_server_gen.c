@@ -565,7 +565,7 @@ static void _query(int sd, short args, void *cbdata)
     pmix_data_array_t *darray;
     pmix_proc_info_t *procinfo;
     pmix_info_t *info;
-    pmix_status_t ret;
+    pmix_status_t ret = PMIX_SUCCESS;
     opal_ds_info_t *kv;
     orte_jobid_t jobid;
     orte_job_t *jdata;
@@ -785,14 +785,14 @@ static void _query(int sd, short args, void *cbdata)
                     }
                 }
                 if (ORTE_JOBID_INVALID == jobid) {
-                    rc = ORTE_ERR_BAD_PARAM;
+                    ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
                 /* construct a list of values with opal_proc_info_t
                  * entries for each proc in the indicated job */
                 jdata = orte_get_job_data_object(jobid);
                 if (NULL == jdata) {
-                    rc = ORTE_ERR_NOT_FOUND;
+                    ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
                 /* setup the reply */
@@ -897,9 +897,13 @@ static void _query(int sd, short args, void *cbdata)
             /* convert the list of results to an info array */
             rcd->ninfo = opal_list_get_size(results);
             PMIX_INFO_CREATE(rcd->info, rcd->ninfo);
+            n=0;
+            OPAL_LIST_FOREACH(kv, results, opal_ds_info_t) {
+                PMIX_INFO_XFER(&rcd->info[n], kv->info);
+                n++;
+            }
         }
     }
-
     cd->infocbfunc(ret, rcd->info, rcd->ninfo, cd->cbdata, qrel, rcd);
 }
 
