@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008-2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012-2018 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
@@ -1284,6 +1284,24 @@ static int register_variable (const char *project_name, const char *framework_na
     /* Developer error. Storage can not be NULL and type must exist */
     assert (((flags & MCA_BASE_VAR_FLAG_SYNONYM) || NULL != storage) && type >= 0 && type < MCA_BASE_VAR_TYPE_MAX);
 
+    /* Developer error: check max length of strings */
+    if (NULL != project_name &&
+        strlen(project_name) > MCA_BASE_MAX_PROJECT_NAME_LEN) {
+        return OPAL_ERR_BAD_PARAM;
+    }
+    if (NULL != framework_name &&
+        strlen(framework_name) > MCA_BASE_MAX_TYPE_NAME_LEN) {
+        return OPAL_ERR_BAD_PARAM;
+    }
+    if (NULL != component_name &&
+        strlen(component_name) > MCA_BASE_MAX_COMPONENT_NAME_LEN) {
+        return OPAL_ERR_BAD_PARAM;
+    }
+    if (NULL != variable_name &&
+        strlen(variable_name) > MCA_BASE_MAX_VARIABLE_NAME_LEN) {
+        return OPAL_ERR_BAD_PARAM;
+    }
+
 #if OPAL_ENABLE_DEBUG
     /* Developer error: check for alignments */
     uintptr_t align = 0;
@@ -1381,7 +1399,7 @@ static int register_variable (const char *project_name, const char *framework_na
         var->mbv_type        = type;
         var->mbv_flags       = flags;
         var->mbv_group_index = group_index;
-        var->mbv_info_lvl  = info_lvl;
+        var->mbv_info_lvl    = info_lvl;
         var->mbv_scope       = scope;
         var->mbv_synonym_for = synonym_for;
         var->mbv_bind        = bind;
@@ -1390,26 +1408,22 @@ static int register_variable (const char *project_name, const char *framework_na
             var->mbv_description = strdup(description);
         }
 
-        if (NULL != variable_name) {
-            var->mbv_variable_name = strdup(variable_name);
-            if (NULL == var->mbv_variable_name) {
-                OBJ_RELEASE(var);
-                return OPAL_ERR_OUT_OF_RESOURCE;
-            }
-        }
-
-        ret = mca_base_var_generate_full_name4 (NULL, framework_name, component_name,
-                                                variable_name, &var->mbv_full_name);
-        if (OPAL_SUCCESS != ret) {
-            OBJ_RELEASE(var);
-            return OPAL_ERROR;
-        }
-
         ret = mca_base_var_generate_full_name4 (project_name, framework_name, component_name,
                                                 variable_name, &var->mbv_long_name);
         if (OPAL_SUCCESS != ret) {
             OBJ_RELEASE(var);
             return OPAL_ERROR;
+        }
+        /* The mbv_full_name and the variable name are subset of the mbv_long_name
+         * so instead of allocating them we can just point into the var mbv_long_name
+         * at the right location.
+         */
+        var->mbv_full_name = var->mbv_long_name +
+                             (NULL == project_name ? 0 : (strlen(project_name)+1)); /* 1 for _ */
+        if( NULL != variable_name ) {
+            var->mbv_variable_name = var->mbv_full_name +
+                                     (NULL == framework_name ? 0 : (strlen(framework_name)+1)) +
+                                     (NULL == component_name ? 0 : (strlen(component_name)+1));
         }
 
         /* Add it to the array.  Note that we copy the mca_var_t by value,
@@ -1588,30 +1602,31 @@ int mca_base_var_register_synonym (int synonym_for, const char *project_name,
 
 static int var_get_env (mca_base_var_t *var, const char *name, char **source, char **value)
 {
-    char *source_env, *value_env;
+    const char source_prefix[] = "SOURCE_";
+    const int max_len = strlen(mca_prefix) + strlen(source_prefix) +
+        strlen(name) + 1;
+    char *envvar = alloca(max_len);
+    if (NULL == envvar) {
+        return OPAL_ERR_OUT_OF_RESOURCE;
+    }
+
     int ret;
-
-    ret = asprintf (&source_env, "%sSOURCE_%s", mca_prefix, name);
+    ret = snprintf(envvar, max_len, "%s%s", mca_prefix, name);
     if (0 > ret) {
         return OPAL_ERROR;
     }
-
-    ret = asprintf (&value_env, "%s%s", mca_prefix, name);
-    if (0 > ret) {
-        free (source_env);
-        return OPAL_ERROR;
-    }
-
-    *source = getenv (source_env);
-    *value = getenv (value_env);
-
-    free (source_env);
-    free (value_env);
-
-    if (NULL == *value) {
+    *value = getenv(envvar);
+    if( NULL == *value ) {
         *source = NULL;
         return OPAL_ERR_NOT_FOUND;
     }
+
+    ret = snprintf(envvar, max_len, "%s%s%s", mca_prefix,
+                   source_prefix, name);
+    if( 0 > ret ) {
+        return OPAL_ERROR;
+    }
+    *source = getenv(envvar);
 
     return OPAL_SUCCESS;
 }
@@ -1851,15 +1866,11 @@ static void var_destructor(mca_base_var_t *var)
         OBJ_RELEASE(var->mbv_enumerator);
     }
 
-    if (NULL != var->mbv_variable_name) {
-        free(var->mbv_variable_name);
-    }
-    if (NULL != var->mbv_full_name) {
-        free(var->mbv_full_name);
-    }
     if (NULL != var->mbv_long_name) {
         free(var->mbv_long_name);
     }
+    var->mbv_full_name = NULL;
+    var->mbv_variable_name = NULL;
 
     if (NULL != var->mbv_description) {
         free(var->mbv_description);
@@ -1997,10 +2008,6 @@ static int var_value_string (mca_base_var_t *var, char **value_string)
             ret = var->mbv_enumerator->string_from_value(var->mbv_enumerator, value->boolval, value_string);
         } else {
             ret = var->mbv_enumerator->string_from_value(var->mbv_enumerator, value->intval, value_string);
-        }
-
-        if (OPAL_SUCCESS != ret) {
-            return ret;
         }
     }
 
@@ -2146,7 +2153,8 @@ int mca_base_var_dump(int vari, char ***out, mca_base_var_dump_type_t output_typ
         asprintf(out[0] + line++, "%ssource:%s", tmp, source_string);
 
         /* Output whether it's read only or writable */
-        asprintf(out[0] + line++, "%sstatus:%s", tmp, VAR_IS_DEFAULT_ONLY(var[0]) ? "read-only" : "writeable");
+        asprintf(out[0] + line++, "%sstatus:%s", tmp,
+                VAR_IS_SETTABLE(var[0]) ? "writeable" : "read-only");
 
         /* Output the info level of this parametere */
         asprintf(out[0] + line++, "%slevel:%d", tmp, var->mbv_info_lvl + 1);

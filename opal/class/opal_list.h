@@ -112,7 +112,7 @@ struct opal_list_item_t
 
 #if OPAL_ENABLE_DEBUG
     /** Atomic reference count for debugging */
-    volatile int32_t opal_list_item_refcount;
+    opal_atomic_int32_t opal_list_item_refcount;
     /** The list this item belong to */
     volatile struct opal_list_t* opal_list_item_belong_to;
 #endif
@@ -655,7 +655,7 @@ static inline opal_list_item_t *opal_list_remove_first(opal_list_t *list)
       Caller now owns the item and should release the item
       when caller is done with it.
   */
-  volatile opal_list_item_t *item;
+  opal_list_item_t *item;
   if ( 0 == list->opal_list_length ) {
     return (opal_list_item_t *)NULL;
   }
@@ -670,7 +670,7 @@ static inline opal_list_item_t *opal_list_remove_first(opal_list_t *list)
   list->opal_list_length--;
 
   /* get pointer to first element on the list */
-  item = list->opal_list_sentinel.opal_list_next;
+  item = (opal_list_item_t *) list->opal_list_sentinel.opal_list_next;
 
   /* reset previous pointer of next item on the list */
   item->opal_list_next->opal_list_prev = item->opal_list_prev;
@@ -687,11 +687,11 @@ static inline opal_list_item_t *opal_list_remove_first(opal_list_t *list)
   /* Spot check: ensure that the item we're returning is now on no
      lists */
 
-  OPAL_THREAD_ADD_FETCH32( &(item->opal_list_item_refcount), -1 );
+  OPAL_THREAD_ADD_FETCH32( &item->opal_list_item_refcount, -1 );
   assert(0 == item->opal_list_item_refcount);
 #endif
 
-  return (opal_list_item_t *) item;
+  return item;
 }
 
 
@@ -717,7 +717,7 @@ static inline opal_list_item_t *opal_list_remove_last(opal_list_t *list)
       Caller now owns the item and should release the item
       when caller is done with it.
   */
-  volatile opal_list_item_t  *item;
+  opal_list_item_t  *item;
   if ( 0 == list->opal_list_length ) {
       return (opal_list_item_t *)NULL;
   }
@@ -732,7 +732,7 @@ static inline opal_list_item_t *opal_list_remove_last(opal_list_t *list)
   list->opal_list_length--;
 
   /* get item */
-  item = list->opal_list_sentinel.opal_list_prev;
+  item = (opal_list_item_t *) list->opal_list_sentinel.opal_list_prev;
 
   /* reset previous pointer on next to last pointer */
   item->opal_list_prev->opal_list_next = item->opal_list_next;
@@ -747,12 +747,12 @@ static inline opal_list_item_t *opal_list_remove_last(opal_list_t *list)
   /* Spot check: ensure that the item we're returning is now on no
      lists */
 
-  OPAL_THREAD_ADD_FETCH32( &(item->opal_list_item_refcount), -1 );
+  OPAL_THREAD_ADD_FETCH32(&item->opal_list_item_refcount, -1 );
   assert(0 == item->opal_list_item_refcount);
   item->opal_list_item_belong_to = NULL;
 #endif
 
-  return (opal_list_item_t *) item;
+  return item;
 }
 
   /**
