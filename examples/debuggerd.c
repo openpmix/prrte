@@ -273,9 +273,13 @@ int main(int argc, char **argv)
     DEBUG_DESTRUCT_LOCK(&mylock);
 
     /* get the nspace of the job we are to debug - it will be in our JOB info */
+#ifdef PMIX_LOAD_PROCID
+    PMIX_LOAD_PROCID(&proc, myproc.nspace, PMIX_RANK_WILDCARD);
+#else
     PMIX_PROC_CONSTRUCT(&proc);
     (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_KEYLEN);
     proc.rank = PMIX_RANK_WILDCARD;
+#endif
     if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_DEBUG_JOB, NULL, 0, &val))) {
         fprintf(stderr, "[%s:%d:%lu] Failed to get job being debugged - error %s\n",
                 myproc.nspace, myproc.rank,
@@ -384,7 +388,7 @@ int main(int argc, char **argv)
     PMIX_INFO_LOAD(&info[1], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);  // deliver to the target nspace
     fprintf(stderr, "[%s:%u:%lu] Sending release\n", myproc.nspace, myproc.rank, (unsigned long)pid);
     rc = PMIx_Notify_event(PMIX_ERR_DEBUGGER_RELEASE,
-                           NULL, PMIX_RANGE_LOCAL,
+                           NULL, PMIX_RANGE_CUSTOM,
                            info, ninfo, NULL, NULL);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "%s[%s:%u:%lu] Sending release failed with error %s(%d)\n",

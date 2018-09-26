@@ -121,6 +121,7 @@ static void cbfunc(pmix_status_t status,
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
         for (n=0; n < ninfo; n++) {
+            fprintf(stderr, "Key %s Type %s(%d)\n", info[n].key, PMIx_Data_type_string(info[n].value.type), info[n].value.type);
             PMIX_INFO_XFER(&mq->info[n], &info[n]);
         }
     }
@@ -272,7 +273,6 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
         PMIX_APP_FREE(debugger, 1);
         return rc;
     }
-    fprintf(stderr, "SPAWNED DEBUGGERD\n");
     /* cleanup */
     PMIX_INFO_FREE(dinfo, dninfo);
     PMIX_APP_FREE(debugger, 1);
@@ -438,7 +438,7 @@ int main(int argc, char **argv)
         app[0].cwd = strdup(cwd);
         app[0].maxprocs = 1;
         /* provide job-level directives so the apps do what the user requested */
-        ninfo = 5;
+        ninfo = 6;
         PMIX_INFO_CREATE(info, ninfo);
         PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
         asprintf(&tmp, "%s:%d", myproc.nspace, myproc.rank);
@@ -450,6 +450,7 @@ int main(int argc, char **argv)
         PMIX_INFO_LOAD(&info[2], PMIX_FWD_STDOUT, &cospawn, PMIX_BOOL);  // forward stdout to me
         PMIX_INFO_LOAD(&info[3], PMIX_FWD_STDERR, &cospawn, PMIX_BOOL);  // forward stderr to me
         PMIX_INFO_LOAD(&info[4], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the job completes
+        PMIX_INFO_LOAD(&info[5], PMIX_LAUNCHER_RENDEZVOUS_FILE, "dbgr.rndz.txt", PMIX_STRING);  // have it output a specific rndz file
 
         /* spawn the job - the function will return when the launcher
          * has been launched. Note that this doesn't tell us anything
@@ -463,7 +464,6 @@ int main(int argc, char **argv)
             fprintf(stderr, "Application failed to launch with error: %s(%d)\n", PMIx_Error_string(rc), rc);
             goto done;
         }
-        fprintf(stderr, "Spawn complete\n\n");
 
         /* wait here for the launcher to declare itself ready */
         DEBUG_WAIT_THREAD(&launcher_ready.lock);
@@ -481,7 +481,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "Failed to connect to %s server: %s(%d)\n", argv[1], PMIx_Error_string(rc), rc);
             goto done;
         }
-        fprintf(stderr, "Connection completed\n");
+
         /* send the launch directives */
         ninfo = 3;
         PMIX_INFO_CREATE(info, ninfo);
@@ -527,7 +527,6 @@ int main(int argc, char **argv)
         myquery_data.info = NULL;
         myquery_data.ninfo = 0;
         /* execute the query */
-        fprintf(stderr, "Debugger: querying capabilities\n");
         if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void*)&myquery_data))) {
             fprintf(stderr, "PMIx_Query_info failed: %d\n", rc);
             goto done;
@@ -574,7 +573,7 @@ int main(int argc, char **argv)
                 }
             }
         }
-
+        cospawn = false;
         /* if cospawn is true, then we can launch both the app and the debugger
          * daemons at the same time */
         if (cospawn) {
@@ -630,14 +629,13 @@ int main(int argc, char **argv)
             /* wait to get a response */
             DEBUG_WAIT_THREAD(&myquery_data.lock);
             DEBUG_DESTRUCT_LOCK(&myquery_data.lock);
-
             /* we should have gotten a response */
             if (PMIX_SUCCESS != myquery_data.status) {
                 fprintf(stderr, "Debugger[%s:%d] Proctable query failed: %s\n",
                         myproc.nspace, myproc.rank, PMIx_Error_string(myquery_data.status));
                 goto done;
             }
-            /* there should hvae been data */
+            /* there should have been data */
             if (NULL == myquery_data.info || 0 == myquery_data.ninfo) {
                 fprintf(stderr, "Debugger[%s:%d] Proctable query return no results\n",
                         myproc.nspace, myproc.rank);
@@ -645,7 +643,10 @@ int main(int argc, char **argv)
             }
             /* the query should have returned a data_array */
             if (PMIX_DATA_ARRAY != myquery_data.info[0].value.type) {
-                fprintf(stderr, "Debugger[%s:%d] Query returned incorrect data type: %s\n", PMIx_Data_type_string(myquery_data.info[0].value.type));
+                fprintf(stderr, "Debugger[%s:%d] Query returned incorrect data type: %s(%d)\n",
+                        myproc.nspace, myproc.rank,
+                        PMIx_Data_type_string(myquery_data.info[0].value.type),
+                        (int)myquery_data.info[0].value.type);
                 return -1;
             }
             if (NULL == myquery_data.info[0].value.data.darray->array) {
@@ -664,7 +665,6 @@ int main(int argc, char **argv)
              *     int exit_code;
              *     pmix_proc_state_t state;
              */
-            fprintf(stderr, "Received %d array elements\n", (int)myquery_data.info[0].value.data.darray->size);
 
             /* now launch the debugger daemons */
             if (PMIX_SUCCESS != (rc = spawn_debugger(clientspace, &dbrel))) {

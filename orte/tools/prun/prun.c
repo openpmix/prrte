@@ -649,6 +649,14 @@ int prun(int argc, char *argv[])
         opal_list_append(&tinfo, &ds->super);
     }
 
+    /* check for request to drop a rendezvous file */
+    if (NULL != (param = getenv("PMIX_LAUNCHER_RENDEZVOUS_FILE"))) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_LAUNCHER_RENDEZVOUS_FILE, param, PMIX_STRING);
+        opal_list_append(&tinfo, &ds->super);
+    }
+
     /* convert to array of info */
     ninfo = opal_list_get_size(&tinfo);
     PMIX_INFO_CREATE(iptr, ninfo);
