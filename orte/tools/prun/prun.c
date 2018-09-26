@@ -985,9 +985,19 @@ int prun(int argc, char *argv[])
         ++param;
         (void)strncpy(pname.nspace, ptr, PMIX_MAX_NSLEN);
         pname.rank = strtoul(param, NULL, 10);
-        PMIx_Notify_event(PMIX_LAUNCHER_READY, &pname, PMIX_RANGE_SESSION, NULL, 0, NULL, NULL);
+        /* do not cache this event - the tool is waiting for us */
+        PMIX_INFO_CREATE(iptr, 2);
+        flag = true;
+        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_DO_NOT_CACHE, &flag, PMIX_BOOL);
+        /* target this notification solely to that one tool */
+        PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_CUSTOM_RANGE, &pname, PMIX_PROC);
+
+        PMIx_Notify_event(PMIX_LAUNCHER_READY, &pname, PMIX_RANGE_CUSTOM,
+                          iptr, 2, NULL, NULL);
         /* now wait for the launch directives to arrive */
         OPAL_PMIX_WAIT_THREAD(&myinfo.lock);
+        PMIX_INFO_FREE(iptr, 2);
+
         /* process the returned directives */
         if (NULL != myinfo.info) {
             for (n=0; n < myinfo.ninfo; n++) {

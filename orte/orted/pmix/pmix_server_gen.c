@@ -425,7 +425,9 @@ void pmix_server_notify(int status, orte_process_name_t* sender,
 
     ret = PMIx_Notify_event(code, &source, range, cd->info, cd->ninfo, _notify_release, cd);
     if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
+        if (PMIX_OPERATION_SUCCEEDED != ret) {
+            PMIX_ERROR_LOG(ret);
+        }
         if (NULL != cd->info) {
             PMIX_INFO_FREE(cd->info, cd->ninfo);
         }
