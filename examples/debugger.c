@@ -438,7 +438,11 @@ int main(int argc, char **argv)
         app[0].cwd = strdup(cwd);
         app[0].maxprocs = 1;
         /* provide job-level directives so the apps do what the user requested */
+#ifdef PMIX_LAUNCHER_RENDEZVOUS_FILE
         ninfo = 6;
+#else
+        ninfo = 5;
+#endif
         PMIX_INFO_CREATE(info, ninfo);
         PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
         asprintf(&tmp, "%s:%d", myproc.nspace, myproc.rank);
@@ -450,8 +454,9 @@ int main(int argc, char **argv)
         PMIX_INFO_LOAD(&info[2], PMIX_FWD_STDOUT, &cospawn, PMIX_BOOL);  // forward stdout to me
         PMIX_INFO_LOAD(&info[3], PMIX_FWD_STDERR, &cospawn, PMIX_BOOL);  // forward stderr to me
         PMIX_INFO_LOAD(&info[4], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the job completes
+#ifdef PMIX_LAUNCHER_RENDEZVOUS_FILE
         PMIX_INFO_LOAD(&info[5], PMIX_LAUNCHER_RENDEZVOUS_FILE, "dbgr.rndz.txt", PMIX_STRING);  // have it output a specific rndz file
-
+#endif
         /* spawn the job - the function will return when the launcher
          * has been launched. Note that this doesn't tell us anything
          * about the launcher's state - it just means that the launcher
