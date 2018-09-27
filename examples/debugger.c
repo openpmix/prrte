@@ -200,12 +200,16 @@ static void release_fn(size_t evhdlr_registration_id,
         return;
     }
 
-    fprintf(stderr, "DEBUGGER NOTIFIED THAT JOB %s TERMINATED - AFFECTED %s\n", lock->nspace,
-            (NULL == affected) ? "NULL" : affected->nspace);
-
-    if (found) {
-        lock->exit_code = exit_code;
-        lock->exit_code_given = true;
+    /* see if the code is LAUNCHER_READY */
+    if (PMIX_LAUNCHER_READY == status) {
+            fprintf(stderr, "%d DEBUGGER NOTIFIED THAT LAUNCHER IS READY\n", (int)getpid());
+    } else {
+        fprintf(stderr, "DEBUGGER NOTIFIED THAT JOB %s TERMINATED - AFFECTED %s\n", lock->nspace,
+                (NULL == affected) ? "NULL" : affected->nspace);
+        if (found) {
+            lock->exit_code = exit_code;
+            lock->exit_code_given = true;
+        }
     }
     DEBUG_WAKEUP_THREAD(&lock->lock);
 
@@ -308,7 +312,7 @@ int main(int argc, char **argv)
     pmix_query_t *query;
     size_t nq, n;
     myquery_data_t myquery_data;
-    bool cospawn = false, stop_on_exec = false;
+    bool cospawn = false, stop_on_exec = false, cospawn_reqd = false;
     char cwd[1024];
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
     mylock_t mylock;
@@ -352,7 +356,9 @@ int main(int argc, char **argv)
                 exit(1);
             }
             nspace = strdup(argv[i]);
-        } else {
+        } else if (0 == strcmp(argv[i], "-c") ||
+                   0 == strcmp(argv[i], "--cospawn")){
+            cospawn_reqd = true;
             break;
         }
     }
@@ -486,7 +492,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "Failed to connect to %s server: %s(%d)\n", argv[1], PMIx_Error_string(rc), rc);
             goto done;
         }
-
+fprintf(stderr, "Connection transferred to launcher\n");
         /* send the launch directives */
         ninfo = 3;
         PMIX_INFO_CREATE(info, ninfo);
@@ -509,7 +515,7 @@ int main(int argc, char **argv)
         /* provide a few app-level directives */
         PMIX_INFO_LOAD(&info[3], PMIX_DEBUG_APP_DIRECTIVES, &darray, PMIX_DATA_ARRAY);
 
-        fprintf(stderr, "[%s:%u%lu] Sending release\n", myproc.nspace, myproc.rank, (unsigned long)pid);
+        fprintf(stderr, "[%s:%u%lu] Sending launch directives\n", myproc.nspace, myproc.rank, (unsigned long)pid);
         PMIx_Notify_event(PMIX_LAUNCH_DIRECTIVE,
                           NULL, PMIX_RANGE_LOCAL,
                           info, ninfo, NULL, NULL);
@@ -578,10 +584,10 @@ int main(int argc, char **argv)
                 }
             }
         }
-        cospawn = false;
-        /* if cospawn is true, then we can launch both the app and the debugger
-         * daemons at the same time */
-        if (cospawn) {
+
+        /* if cospawn is available and they requested it, then we launch both
+         * the app and the debugger daemons at the same time */
+        if (cospawn && cospawn_reqd) {
 
         } else {
             /* we must do these as separate launches, so do the app first */
