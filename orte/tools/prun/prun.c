@@ -649,6 +649,16 @@ int prun(int argc, char *argv[])
         opal_list_append(&tinfo, &ds->super);
     }
 
+    /* if we were launched by a debugger, then we need to have
+     * notification of our termination sent */
+    if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
+        ds = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        flag = false;
+        PMIX_INFO_LOAD(ds->info, PMIX_EVENT_SILENT_TERMINATION, &flag, PMIX_BOOL);
+        opal_list_append(&tinfo, &ds->super);
+    }
+
 #ifdef PMIX_LAUNCHER_RENDEZVOUS_FILE
     /* check for request to drop a rendezvous file */
     if (NULL != (param = getenv("PMIX_LAUNCHER_RENDEZVOUS_FILE"))) {
@@ -1007,7 +1017,7 @@ int prun(int argc, char *argv[])
                     ninfo = myinfo.info[n].value.data.darray->size;
                     for (m=0; m < ninfo; m++) {
                         ds = OBJ_NEW(opal_ds_info_t);
-                        ds->info = &iptr[n];
+                        ds->info = &iptr[m];
                         opal_list_append(&job_info, &ds->super);
                     }
                     free(myinfo.info[n].value.data.darray);  // protect the info structs

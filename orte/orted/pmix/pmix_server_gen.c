@@ -420,8 +420,8 @@ void pmix_server_notify(int status, orte_process_name_t* sender,
     PMIX_INFO_LOAD(&cd->info[ninfo-1], "orte.notify.donotloop", NULL, PMIX_BOOL);
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
-                        "%s NOTIFYING PMIX SERVER OF STATUS %d",
-                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), code);
+                        "%s NOTIFYING PMIX SERVER OF STATUS %s SOURCE %s RANGE %s",
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), PMIx_Error_string(code), source.nspace, PMIx_Data_range_string(range));
 
     ret = PMIx_Notify_event(code, &source, range, cd->info, cd->ninfo, _notify_release, cd);
     if (PMIX_SUCCESS != ret) {
@@ -452,9 +452,9 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
     size_t n;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
-                        "%s local process %s:%d generated event code %d",
+                        "%s local process %s:%d generated event code %d range %s",
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                        source->nspace, source->rank, code);
+                        source->nspace, source->rank, code, PMIx_Data_range_string(range));
 
     /* check to see if this is one we sent down */
     for (n=0; n < ninfo; n++) {
@@ -947,7 +947,7 @@ static void _toolconn(int sd, short args, void *cbdata)
     char *hostname = NULL;
     orte_process_name_t tool = {ORTE_JOBID_INVALID, ORTE_VPID_INVALID};
     int rc, i;
-    bool flag = false, flag_given = false;;
+    bool flag = true;
     uid_t uid=0;
     gid_t gid=0;
     size_t n;
@@ -964,7 +964,6 @@ static void _toolconn(int sd, short args, void *cbdata)
         for (n=0; n < cd->ninfo; n++) {
             if (0 == strncmp(cd->info[n].key, PMIX_EVENT_SILENT_TERMINATION, PMIX_MAX_KEYLEN)) {
                 flag = PMIX_INFO_TRUE(&cd->info[n]);
-                flag_given = true;
             } else if (0 == strncmp(cd->info[n].key, PMIX_VERSION_INFO, PMIX_MAX_KEYLEN)) {
                 /* we ignore this for now */
             } else if (0 == strncmp(cd->info[n].key, PMIX_USERID, PMIX_MAX_KEYLEN)) {
@@ -1099,14 +1098,9 @@ static void _toolconn(int sd, short args, void *cbdata)
     OBJ_RETAIN(proc);
     opal_pointer_array_add(node->procs, proc);
     /* if they indicated a preference for termination, set it */
-    if (flag_given) {
+    if (flag) {
         orte_set_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION,
-                           ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
-    } else {
-        /* we default to silence */
-        flag = true;
-        orte_set_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION,
-                           ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
+                           ORTE_ATTR_GLOBAL, NULL, OPAL_BOOL);
     }
 
     if (NULL != cd->toolcbfunc) {

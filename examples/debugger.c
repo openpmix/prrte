@@ -481,18 +481,23 @@ int main(int argc, char **argv)
         DEBUG_DESTRUCT_LOCK(&launcher_ready.lock);
 
 
-        /* transfer our connection to the spawned launcher - by making it our
-         * server, we can query it for information about the job it launched */
+        /* register callback for when launcher terminates */
+        code = PMIX_ERR_JOB_TERMINATED;
+        DEBUG_CONSTRUCT_LOCK(&myrel.lock);
+        myrel.nspace = strdup(clientspace);
         PMIX_INFO_CREATE(info, 2);
-        PMIX_INFO_LOAD(&info[0], PMIX_SERVER_NSPACE, clientspace, PMIX_STRING);  // find rendezvous info by nspace
-        PMIX_INFO_LOAD(&info[1], PMIX_RECONNECT_SERVER, NULL, PMIX_BOOL);  // we are reconnecting
-        rc = PMIx_tool_connect_to_server(NULL, info, 2);
+        PMIX_INFO_LOAD(&info[0], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
+        /* only call me back when this specific job terminates */
+        PMIX_INFO_LOAD(&info[1], PMIX_NSPACE, clientspace, PMIX_STRING);
+
+        DEBUG_CONSTRUCT_LOCK(&mylock);
+        PMIx_Register_event_handler(&code, 1, info, 2,
+                                    release_fn, evhandler_reg_callbk, (void*)&mylock);
+        DEBUG_WAIT_THREAD(&mylock);
+        rc = mylock.status;
+        DEBUG_DESTRUCT_LOCK(&mylock);
         PMIX_INFO_FREE(info, 2);
-        if (PMIX_SUCCESS != rc) {
-            fprintf(stderr, "Failed to connect to %s server: %s(%d)\n", argv[1], PMIx_Error_string(rc), rc);
-            goto done;
-        }
-fprintf(stderr, "Connection transferred to launcher\n");
+
         /* send the launch directives */
         ninfo = 3;
         PMIX_INFO_CREATE(info, ninfo);
@@ -510,16 +515,15 @@ fprintf(stderr, "Connection transferred to launcher\n");
         PMIX_ENVAR_LOAD(&envar, "PATH", "/home/common/local/toad", ':');
         PMIX_INFO_LOAD(&iptr[1], PMIX_PREPEND_ENVAR, &envar, PMIX_ENVAR);
         PMIX_ENVAR_DESTRUCT(&envar);
-
         PMIX_INFO_LOAD(&info[2], PMIX_DEBUG_JOB_DIRECTIVES, &darray, PMIX_DATA_ARRAY);
-        /* provide a few app-level directives */
-        PMIX_INFO_LOAD(&info[3], PMIX_DEBUG_APP_DIRECTIVES, &darray, PMIX_DATA_ARRAY);
 
         fprintf(stderr, "[%s:%u%lu] Sending launch directives\n", myproc.nspace, myproc.rank, (unsigned long)pid);
         PMIx_Notify_event(PMIX_LAUNCH_DIRECTIVE,
-                          NULL, PMIX_RANGE_LOCAL,
+                          NULL, PMIX_RANGE_CUSTOM,
                           info, ninfo, NULL, NULL);
         PMIX_INFO_FREE(info, ninfo);
+        goto waitforme;
+
     } else {
         /* this is an initial launch - we need to launch the application
          * plus the debugger daemons, letting the RM know we are debugging
@@ -688,6 +692,8 @@ fprintf(stderr, "Connection transferred to launcher\n");
   rundebugger:
     /* this is where a debugger tool would wait until the debug operation is complete */
     DEBUG_WAIT_THREAD(&dbrel.lock);
+
+  waitforme:
     DEBUG_WAIT_THREAD(&myrel.lock);
 
   done:
