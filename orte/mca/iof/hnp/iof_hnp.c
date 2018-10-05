@@ -422,6 +422,16 @@ static void hnp_complete(const orte_job_t *jdata)
     OPAL_LIST_FOREACH_SAFE(proct, next, &mca_iof_hnp_component.procs, orte_iof_proc_t) {
         if (jdata->jobid == proct->name.jobid) {
             opal_list_remove_item(&mca_iof_hnp_component.procs, &proct->super);
+            if (NULL != proct->revstdout) {
+                orte_iof_base_static_dump_output(proct->revstdout);
+                OBJ_RELEASE(proct->revstdout);
+            }
+            proct->revstdout = NULL;
+            if (NULL != proct->revstderr) {
+                orte_iof_base_static_dump_output(proct->revstderr);
+                OBJ_RELEASE(proct->revstderr);
+            }
+            proct->revstderr = NULL;
             OBJ_RELEASE(proct);
         }
     }

@@ -317,9 +317,11 @@ void orte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
         if (rev->tag & ORTE_IOF_STDOUT) {
             orte_iof_base_static_dump_output(proct->revstdout);
             OBJ_RELEASE(proct->revstdout);
+            proct->revstdout = NULL;
         } else if (rev->tag & ORTE_IOF_STDERR) {
             orte_iof_base_static_dump_output(proct->revstderr);
             OBJ_RELEASE(proct->revstderr);
+            proct->revstderr = NULL;
         }
         /* check to see if they are all done */
         if (NULL == proct->revstdout &&
