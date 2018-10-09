@@ -34,8 +34,11 @@ CFLAGS = -g
 
 EXAMPLES = \
 	 client \
-         debugger \
-         debuggerd \
+         debugger/direct \
+	 debugger/indirect \
+	 debugger/attach \
+	 debugger/daemon \
+	 debugger/hello \
 	 dmodex \
 	 dynamic \
 	 fault \

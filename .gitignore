@@ -116,8 +116,6 @@ contrib/scaling/mpi_memprobe
 
 examples/alloc
 examples/client
-examples/debugger
-examples/debuggerd
 examples/dmodex
 examples/dynamic
 examples/fault
@@ -129,6 +127,11 @@ examples/probe
 examples/pub
 examples/target
 examples/tool
+examples/debugger/direct
+examples/debugger/indirect
+examples/debugger/attach
+examples/debugger/daemon
+examples/debugger/hello
 
 opal/libltdl
 
