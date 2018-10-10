@@ -205,6 +205,10 @@ static opal_cmd_line_init_t cmd_line_init[] = {
 };
 
 
+static void abort_signal_callback(int signal);
+static void clean_abort(int fd, short flags, void *arg);
+
+
 static void infocb(pmix_status_t status,
                    pmix_info_t *info, size_t ninfo,
                    void *cbdata,
@@ -234,6 +238,29 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
     OPAL_ACQUIRE_OBJECT(lock);
     OPAL_PMIX_WAKEUP_THREAD(lock);
 }
+
+static void defhandler(size_t evhdlr_registration_id,
+                       pmix_status_t status,
+                       const pmix_proc_t *source,
+                       pmix_info_t info[], size_t ninfo,
+                       pmix_info_t *results, size_t nresults,
+                       pmix_event_notification_cbfunc_fn_t cbfunc,
+                       void *cbdata)
+{
+    if (PMIX_ERR_UNREACH == status) {
+        /* exit with a non-zero status */
+        exit(1);
+    } else {
+        clean_abort(0, 0, NULL);
+    }
+
+    /* we _always_ have to execute the evhandler callback or
+     * else the event progress engine will hang */
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
+    }
+}
+
 
 static void evhandler(size_t evhdlr_registration_id,
                       pmix_status_t status,
@@ -385,10 +412,6 @@ _convert_string_to_jobid(opal_jobid_t *jobid, const char *jobid_string)
 {
     return orte_util_convert_string_to_jobid(jobid, jobid_string);
 }
-
-static void abort_signal_callback(int signal);
-static void clean_abort(int fd, short flags, void *arg);
-
 
 int prun(int argc, char *argv[])
 {
@@ -734,6 +757,12 @@ int prun(int argc, char *argv[])
         fprintf(stderr, "DONE\n");
         goto DONE;
     }
+
+    /* register a default event handler */
+    OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+    PMIx_Register_event_handler(NULL, 0, NULL, 0, defhandler, regcbfunc, &lock);
+    OPAL_PMIX_WAIT_THREAD(&lock);
+    OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
     /* get here if they want to run an application, so let's parse
      * the cmd line to get it */
@@ -1694,7 +1723,11 @@ static void clean_abort(int fd, short flags, void *arg)
     OPAL_PMIX_CONVERT_JOBID(target.nspace, myjobid);
     target.rank = PMIX_RANK_WILDCARD;
     PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
-    PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL);
+    if (PMIX_SUCCESS != PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL)) {
+        PMIx_tool_finalize();
+        /* exit with a non-zero status */
+        exit(1);
+    }
 }
 
 static struct timeval current, last={0,0};
