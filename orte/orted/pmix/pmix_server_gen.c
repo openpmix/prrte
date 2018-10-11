@@ -544,11 +544,8 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
     OBJ_RELEASE(sig);
 
   done:
-    /* execute the callback */
-    if (NULL != cbfunc) {
-        cbfunc(PMIX_SUCCESS, cbdata);
-    }
-    return PMIX_SUCCESS;
+    /* we do not need to execute a callback as we did this atomically */
+    return PMIX_OPERATION_SUCCEEDED;
 }
 
 static void qrel(void *cbdata)
