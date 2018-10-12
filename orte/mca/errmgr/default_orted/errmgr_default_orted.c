@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include "opal/util/output.h"
+#include "opal/util/printf.h"
 #include "opal/dss/dss.h"
 
 #include "orte/util/error_strings.h"

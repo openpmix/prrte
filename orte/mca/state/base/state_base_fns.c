@@ -565,6 +565,7 @@ static void _send_notification(int status,
     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
         PMIX_ERROR_LOG(ret);
         return;
+    }
 
     /* setup the info */
     ninfo = 2;
@@ -614,20 +615,6 @@ static void _send_notification(int status,
         OBJ_DESTRUCT(&sig);
         OBJ_RELEASE(buf);
     } else {
-        /* pass along the proc to be notified */
-        OBJ_CONSTRUCT(&kv, opal_value_t);
-        kv.key = strdup(OPAL_PMIX_EVENT_CUSTOM_RANGE);
-        kv.type = OPAL_NAME;
-        kv.data.name.jobid = target->jobid;
-        kv.data.name.vpid = target->vpid;
-        kvptr = &kv;
-        if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &kvptr, 1, OPAL_VALUE))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_DESTRUCT(&kv);
-            OBJ_RELEASE(buf);
-            return;
-        }
-        OBJ_DESTRUCT(&kv);
         /* get the daemon hosting the proc to be notified */
         daemon.jobid = ORTE_PROC_MY_NAME->jobid;
         daemon.vpid = orte_get_proc_daemon_vpid(target);

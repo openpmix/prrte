@@ -352,7 +352,7 @@ int opal_hwloc_base_get_topology(void)
 #endif
     if (rc != OPAL_SUCCESS) {
         /* check the old topo key to keep compatibility with older RMs */
-        OPAL_MODEX_RECV_VALUE_OPTIONAL(rc, OPAL_PMIX_LOCAL_TOPO,
+        OPAL_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_LOCAL_TOPO,
                                        &wildcard_rank, &val, OPAL_STRING);
     }
 

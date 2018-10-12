@@ -30,6 +30,7 @@
 #endif
 
 #include "opal/util/output.h"
+#include "opal/util/printf.h"
 #include "opal/dss/dss.h"
 
 #include "orte/mca/iof/base/base.h"
