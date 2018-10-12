@@ -9,8 +9,9 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,6 +28,7 @@
 #include "opal/util/argv.h"
 #include "opal/util/opal_environ.h"
 #include "opal/util/show_help.h"
+#include "opal/util/printf.h"
 #include "opal/mca/base/base.h"
 #include "opal/constants.h"
 
@@ -231,7 +233,7 @@ void mca_base_cmd_line_wrap_args(char **args)
                 return;
             }
             i += 2;
-            asprintf(&tstr, "\"%s\"", args[i]);
+            opal_asprintf(&tstr, "\"%s\"", args[i]);
             free(args[i]);
             args[i] = tstr;
         }

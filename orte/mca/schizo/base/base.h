@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2018 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,6 +22,7 @@
 #include "opal/class/opal_list.h"
 #include "opal/mca/base/mca_base_framework.h"
 #include "opal/util/cmd_line.h"
+#include "opal/util/printf.h"
 #include "orte/mca/mca.h"
 
 #include "orte/runtime/orte_globals.h"

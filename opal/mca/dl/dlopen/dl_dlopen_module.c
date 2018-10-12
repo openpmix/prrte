@@ -4,6 +4,8 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
+ * Copyright (c) 2018      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,6 +25,7 @@
 #include "opal/constants.h"
 #include "opal/mca/dl/dl.h"
 #include "opal/util/argv.h"
+#include "opal/util/printf.h"
 
 #include "dl_dlopen.h"
 
@@ -74,7 +77,7 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
              ext = mca_dl_dlopen_component.filename_suffixes[++i]) {
             char *name;
 
-            asprintf(&name, "%s%s", fname, ext);
+            opal_asprintf(&name, "%s%s", fname, ext);
             if (NULL == name) {
                 return OPAL_ERR_IN_ERRNO;
             }
@@ -182,7 +185,7 @@ static int dlopen_foreachfile(const char *search_path,
 
             /* Make the absolute path name */
             char *abs_name = NULL;
-            asprintf(&abs_name, "%s/%s", dirs[i], de->d_name);
+            opal_asprintf(&abs_name, "%s/%s", dirs[i], de->d_name);
             if (NULL == abs_name) {
                 ret = OPAL_ERR_IN_ERRNO;
                 goto error;

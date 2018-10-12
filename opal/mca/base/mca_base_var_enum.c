@@ -15,8 +15,9 @@
  *                         reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2017      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2018 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
+ * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,6 +31,7 @@
 #include "opal/mca/base/mca_base_vari.h"
 #include "opal/mca/base/base.h"
 #include "opal/util/argv.h"
+#include "opal/util/printf.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -278,7 +280,7 @@ static int mca_base_var_enum_verbose_sfv (mca_base_var_enum_t *self, const int v
     }
 
     if (string_value) {
-        ret = asprintf (string_value, "%d", value);
+        ret = opal_asprintf (string_value, "%d", value);
         if (0 > ret) {
             return OPAL_ERR_OUT_OF_RESOURCE;
         }
@@ -297,7 +299,7 @@ static int mca_base_var_enum_verbose_dump (mca_base_var_enum_t *self, char **out
         return ret;
     }
 
-    ret = asprintf (&tmp, "%s, 0 - 100", *out);
+    ret = opal_asprintf (&tmp, "%s, 0 - 100", *out);
     free (*out);
     if (0 > ret) {
         *out = NULL;
@@ -420,7 +422,7 @@ static int enum_dump (mca_base_var_enum_t *self, char **out)
 
     tmp = NULL;
     for (i = 0; i < self->enum_value_count && self->enum_values[i].string ; ++i) {
-        ret = asprintf (out, "%s%s%d:\"%s\"", tmp ? tmp : "", tmp ? ", " : "", self->enum_values[i].value,
+        ret = opal_asprintf (out, "%s%s%d:\"%s\"", tmp ? tmp : "", tmp ? ", " : "", self->enum_values[i].value,
                         self->enum_values[i].string);
         if (tmp) free (tmp);
         if (0 > ret) {
@@ -647,7 +649,7 @@ static int enum_string_from_value_flag (mca_base_var_enum_t *self, const int val
 
         tmp = out;
 
-        ret = asprintf (&out, "%s%s%s", tmp ? tmp : "", tmp ? "," : "", flag_enum->enum_flags[i].string);
+        ret = opal_asprintf (&out, "%s%s%s", tmp ? tmp : "", tmp ? "," : "", flag_enum->enum_flags[i].string);
         free (tmp);
 
         if (0 > ret) {
@@ -696,7 +698,7 @@ static int enum_dump_flag (mca_base_var_enum_t *self, char **out)
     for (int i = 0; i < self->enum_value_count ; ++i) {
         tmp = *out;
 
-        ret = asprintf (out, "%s%s0x%x:\"%s\"", tmp, i ? ", " : " ", flag_enum->enum_flags[i].flag,
+        ret = opal_asprintf (out, "%s%s0x%x:\"%s\"", tmp, i ? ", " : " ", flag_enum->enum_flags[i].flag,
                         flag_enum->enum_flags[i].string);
         free (tmp);
         if (0 > ret) {

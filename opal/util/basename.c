@@ -12,7 +12,7 @@
  * Copyright (c) 2009-2014 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2018 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -126,11 +126,7 @@ char* opal_dirname(const char* filename)
                 if (NULL == ret) {
                     return NULL;
                 }
-#ifdef HAVE_STRNCPY_S
-                strncpy_s( ret, (p - filename + 1), filename, p - filename );
-#else
-                strncpy(ret, filename, p - filename);
-#endif
+                opal_string_copy(ret, filename, p - filename);
                 ret[p - filename] = '\0';
                 return opal_make_filename_os_friendly(ret);
             }

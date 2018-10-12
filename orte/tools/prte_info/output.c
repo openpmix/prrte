@@ -10,7 +10,12 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+<<<<<<< HEAD:orte/tools/prte_info/output.c
  * Copyright (c) 2018      Intel, Inc. All rights reserved.
+||||||| merged common ancestors
+=======
+ * Copyright (c) 2018      Intel, Inc.  All rights reserved.
+>>>>>>> 6ed68da870c391d88575dc027a3de4826a77f57e:orte/tools/orte-info/output.c
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -105,7 +110,7 @@ void orte_info_out(const char *pretty_message, const char *plain_message, const 
 
     if (orte_info_pretty && NULL != pretty_message) {
         if (centerpoint > (int)strlen(pretty_message)) {
-            asprintf(&spaces, "%*s", centerpoint -
+            opal_asprintf(&spaces, "%*s", centerpoint -
                      (int)strlen(pretty_message), " ");
         } else {
             spaces = strdup("");
@@ -119,9 +124,9 @@ void orte_info_out(const char *pretty_message, const char *plain_message, const 
         }
         max_value_width = screen_width - strlen(spaces) - strlen(pretty_message) - 2;
         if (0 < strlen(pretty_message)) {
-            asprintf(&filler, "%s%s: ", spaces, pretty_message);
+            opal_asprintf(&filler, "%s%s: ", spaces, pretty_message);
         } else {
-            asprintf(&filler, "%s  ", spaces);
+            opal_asprintf(&filler, "%s  ", spaces);
         }
         free(spaces);
         spaces = NULL;
@@ -131,7 +136,7 @@ void orte_info_out(const char *pretty_message, const char *plain_message, const 
                 printf("%s%s\n", filler, v);
                 break;
             } else {
-                asprintf(&spaces, "%*s", centerpoint + 2, " ");
+                opal_asprintf(&spaces, "%*s", centerpoint + 2, " ");
 
                 /* Work backwards to find the first space before
                  * max_value_width
@@ -194,7 +199,7 @@ void orte_info_out_int(const char *pretty_message,
 {
     char *valstr;
 
-    asprintf(&valstr, "%d", (int)value);
+    opal_asprintf(&valstr, "%d", (int)value);
     orte_info_out(pretty_message, plain_message, valstr);
     free(valstr);
 }

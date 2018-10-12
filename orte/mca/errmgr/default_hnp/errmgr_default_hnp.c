@@ -32,6 +32,7 @@
 #endif
 
 #include "opal/util/output.h"
+#include "opal/util/printf.h"
 #include "opal/dss/dss.h"
 
 #include "orte/mca/iof/base/base.h"
@@ -151,7 +152,7 @@ static void hnp_abort(int error_code, char *fmt, ...)
     /* If there was a message, construct it */
     va_start(arglist, fmt);
     if (NULL != fmt) {
-        vasprintf(&outmsg, fmt, arglist);
+        opal_vasprintf(&outmsg, fmt, arglist);
     }
     va_end(arglist);
 
@@ -841,7 +842,7 @@ static void default_hnp_abort(orte_job_t *jdata)
     i32ptr = &i32;
     if (orte_get_attribute(&jdata->attributes, ORTE_JOB_NUM_NONZERO_EXIT, (void**)&i32ptr, OPAL_INT32)) {
         /* warn user */
-        orte_show_help("help-errmgr-base.txt", "normal-termination-but", true, 
+        orte_show_help("help-errmgr-base.txt", "normal-termination-but", true,
                        (1 == ORTE_LOCAL_JOBID(jdata->jobid)) ? "Primary" : "Child",
                        (1 == ORTE_LOCAL_JOBID(jdata->jobid)) ? "" : ORTE_LOCAL_JOBID_PRINT(jdata->jobid),
                        i32, (1 == i32) ? "process returned\na non-zero exit code" :

@@ -601,8 +601,8 @@ static void _send_notification(int status,
     }
     free(bo.bytes);
 
-    /* if the targets are a wildcard, then xcast it to everyone */
     if (ORTE_VPID_WILDCARD == target->vpid) {
+        /* xcast it to everyone */
         OBJ_CONSTRUCT(&sig, orte_grpcomm_signature_t);
         sig.signature = (orte_process_name_t*)malloc(sizeof(orte_process_name_t));
         sig.signature[0].jobid = ORTE_PROC_MY_NAME->jobid;
@@ -1144,9 +1144,9 @@ void orte_state_base_check_fds(orte_job_t *jdata)
             opal_argv_free(list);
             list = NULL;
             if (NULL == result) {
-                asprintf(&result, "    %d\t(%s)\t%s\n", i, info, status);
+                opal_asprintf(&result, "    %d\t(%s)\t%s\n", i, info, status);
             } else {
-                asprintf(&r2, "%s    %d\t(%s)\t%s\n", result, i, info, status);
+                opal_asprintf(&r2, "%s    %d\t(%s)\t%s\n", result, i, info, status);
                 free(result);
                 result = r2;
             }
@@ -1154,7 +1154,7 @@ void orte_state_base_check_fds(orte_job_t *jdata)
         }
         ++cnt;
     }
-    asprintf(&r2, "%s: %d open file descriptors after job %d completed\n%s",
+    opal_asprintf(&r2, "%s: %d open file descriptors after job %d completed\n%s",
              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), cnt, ORTE_LOCAL_JOBID(jdata->jobid), result);
     opal_output(0, "%s", r2);
     free(result);
