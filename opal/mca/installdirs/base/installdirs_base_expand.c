@@ -4,6 +4,8 @@
  * Copyright (c) 2007-2010 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2007      Sun Microsystem, Inc.  All rights reserved.
  * Copyright (c) 2010      Sandia National Laboratories. All rights reserved.
+ * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
+ * Copyright (c) 2018      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,6 +19,7 @@
 #include <string.h>
 
 #include "opal/util/os_path.h"
+#include "opal/util/printf.h"
 #include "opal/mca/installdirs/base/base.h"
 #include "opal/mca/installdirs/installdirs.h"
 
@@ -32,7 +35,7 @@
             tmp = retval;                                               \
             *start_pos = '\0';                                          \
             end_pos = start_pos + strlen("${" #fieldname "}");          \
-            asprintf(&retval, "%s%s%s", tmp,                            \
+            opal_asprintf(&retval, "%s%s%s", tmp,                            \
                      opal_install_dirs.ompiname + destdir_offset,       \
                      end_pos);                                          \
             free(tmp);                                                  \
@@ -41,7 +44,7 @@
             tmp = retval;                                               \
             *start_pos = '\0';                                          \
             end_pos = start_pos + strlen("@{" #fieldname "}");          \
-            asprintf(&retval, "%s%s%s", tmp,                            \
+            opal_asprintf(&retval, "%s%s%s", tmp,                            \
                      opal_install_dirs.ompiname + destdir_offset,       \
                      end_pos);                                          \
             free(tmp);                                                  \

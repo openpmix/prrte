@@ -66,6 +66,7 @@
 #include "opal/util/cmd_line.h"
 #include "opal/util/opal_environ.h"
 #include "opal/util/opal_getcwd.h"
+#include "opal/util/printf.h"
 #include "opal/util/show_help.h"
 #include "opal/util/fd.h"
 #include "opal/sys/atomic.h"
@@ -870,7 +871,7 @@ int prun(int argc, char *argv[])
         /* define the ppr */
         ds = OBJ_NEW(opal_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        (void)asprintf(&ptr, "%d:node", orte_cmd_options.npernode);
+        opal_asprintf(&ptr, "%d:node", orte_cmd_options.npernode);
         PMIX_INFO_LOAD(ds->info, PMIX_PPR, ptr, PMIX_STRING);
         free(ptr);
         opal_list_append(&job_info, &ds->super);
@@ -878,7 +879,7 @@ int prun(int argc, char *argv[])
         /* define the ppr */
         ds = OBJ_NEW(opal_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        (void)asprintf(&ptr, "%d:socket", orte_cmd_options.npersocket);
+        opal_asprintf(&ptr, "%d:socket", orte_cmd_options.npersocket);
         PMIX_INFO_LOAD(ds->info, PMIX_PPR, ptr, PMIX_STRING);
         free(ptr);
         opal_list_append(&job_info, &ds->super);
@@ -1538,9 +1539,9 @@ static int create_app(int argc, char* argv[],
                 if (NULL == strstr(app->app.argv[i], opal_install_dirs.libdir)) {
                     /* doesn't appear to - add it to be safe */
                     if (':' == app->app.argv[i][strlen(app->app.argv[i]-1)]) {
-                        asprintf(&value, "-Djava.library.path=%s%s", dptr, opal_install_dirs.libdir);
+                        opal_asprintf(&value, "-Djava.library.path=%s%s", dptr, opal_install_dirs.libdir);
                     } else {
-                        asprintf(&value, "-Djava.library.path=%s:%s", dptr, opal_install_dirs.libdir);
+                        opal_asprintf(&value, "-Djava.library.path=%s:%s", dptr, opal_install_dirs.libdir);
                     }
                     free(app->app.argv[i]);
                     app->app.argv[i] = value;
@@ -1550,7 +1551,7 @@ static int create_app(int argc, char* argv[],
         }
         if (!found) {
             /* need to add it right after the java command */
-            asprintf(&value, "-Djava.library.path=%s", opal_install_dirs.libdir);
+            opal_asprintf(&value, "-Djava.library.path=%s", opal_install_dirs.libdir);
             opal_argv_insert_element(&app->app.argv, 1, value);
             free(value);
         }
@@ -1575,7 +1576,7 @@ static int create_app(int argc, char* argv[],
                 }
                 free(value);
                 /* always add the local directory */
-                asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[i+1]);
+                opal_asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[i+1]);
                 free(app->app.argv[i+1]);
                 app->app.argv[i+1] = value;
                 break;
@@ -1602,7 +1603,7 @@ static int create_app(int argc, char* argv[],
                     }
                     free(value);
                     /* always add the local directory */
-                    (void)asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[1]);
+                    opal_asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[1]);
                     free(app->app.argv[1]);
                     app->app.argv[1] = value;
                     opal_argv_insert_element(&app->app.argv, 1, "-cp");
@@ -1621,7 +1622,7 @@ static int create_app(int argc, char* argv[],
                 /* check for mpi.jar */
                 value = opal_os_path(false, opal_install_dirs.libdir, "mpi.jar", NULL);
                 if (access(value, F_OK ) != -1) {
-                    (void)asprintf(&str2, "%s:%s", str, value);
+                    opal_asprintf(&str2, "%s:%s", str, value);
                     free(str);
                     str = str2;
                 }
@@ -1629,7 +1630,7 @@ static int create_app(int argc, char* argv[],
                 /* check for shmem.jar */
                 value = opal_os_path(false, opal_install_dirs.libdir, "shmem.jar", NULL);
                 if (access(value, F_OK ) != -1) {
-                    asprintf(&str2, "%s:%s", str, value);
+                    opal_asprintf(&str2, "%s:%s", str, value);
                     free(str);
                     str = str2;
                 }
@@ -1692,7 +1693,7 @@ static void set_classpath_jar_file(opal_pmix_app_t *app, int index, char *jarfil
         char *fmt = ':' == app->app.argv[index][strlen(app->app.argv[index]-1)]
                     ? "%s%s/%s" : "%s:%s/%s";
         char *str;
-        asprintf(&str, fmt, app->app.argv[index], opal_install_dirs.libdir, jarfile);
+        opal_asprintf(&str, fmt, app->app.argv[index], opal_install_dirs.libdir, jarfile);
         free(app->app.argv[index]);
         app->app.argv[index] = str;
     }

@@ -10,6 +10,8 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2007-2014 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
+ * Copyright (c) 2018      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,6 +34,7 @@
 #include <string.h>
 
 
+#ifndef HAVE_VASPRINTF
 /*
  * Make a good guess about how long a printf-style varargs formatted
  * string will be once all the % escapes are filled in.  We don't
@@ -192,7 +195,7 @@ static int guess_strlen(const char *fmt, va_list ap)
     return len;
 #endif
 }
-
+#endif /* #ifndef HAVE_VASPRINTF */
 
 int opal_asprintf(char **ptr, const char *fmt, ...)
 {
@@ -200,6 +203,7 @@ int opal_asprintf(char **ptr, const char *fmt, ...)
     va_list ap;
 
     va_start(ap, fmt);
+    /* opal_vasprintf guarantees that *ptr is set to NULL on error */
     length = opal_vasprintf(ptr, fmt, ap);
     va_end(ap);
 
@@ -209,6 +213,16 @@ int opal_asprintf(char **ptr, const char *fmt, ...)
 
 int opal_vasprintf(char **ptr, const char *fmt, va_list ap)
 {
+#ifdef HAVE_VASPRINTF
+    int length;
+
+    length = vasprintf(ptr, fmt, ap);
+    if (length < 0) {
+        *ptr = NULL;
+    }
+
+    return length;
+#else
     int length;
     va_list ap2;
 
@@ -248,6 +262,7 @@ int opal_vasprintf(char **ptr, const char *fmt, va_list ap)
     }
 
     return length;
+#endif
 }
 
 

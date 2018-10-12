@@ -9,6 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
+ * Copyright (c) 2018      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -95,7 +96,12 @@ OPAL_DECLSPEC int  opal_vsnprintf(char *str, size_t size, const char *fmt, va_li
  *
  * Returns the number of characters printed.
  *
- * THIS IS A PORTABILITY FEATURE: USE asprintf() in CODE.
+ * Unlike opal_snprintf and opal_vsnprintf, opal_asprintf() is always
+ * available and guarantees that *ptr is NULL when the underlying
+ * asprintf fails.  The standard does not require *ptr be set to NULL
+ * on error and some implementations (modern Linux) do not guarantee
+ * such behavior.
+ *
  */
 OPAL_DECLSPEC int  opal_asprintf(char **ptr, const char *fmt, ...) __opal_attribute_format__(__printf__, 2, 3);
 
@@ -119,7 +125,12 @@ OPAL_DECLSPEC int  opal_asprintf(char **ptr, const char *fmt, ...) __opal_attrib
  *
  * Returns the number of characters printed.
  *
- * THIS IS A PORTABILITY FEATURE: USE vasprintf() in CODE.
+ * Unlike opal_snprintf and opal_vsnprintf, opal_vasprintf() is always
+ * available and guarantees that *ptr is NULL when the underlying
+ * asprintf fails.  The standard does not require *ptr be set to NULL
+ * on error and some implementations (modern Linux) do not guarantee
+ * such behavior.
+ *
  */
 OPAL_DECLSPEC int  opal_vasprintf(char **ptr, const char *fmt, va_list ap) __opal_attribute_format__(__printf__, 2, 0);
 

@@ -16,7 +16,9 @@
  *                         reserved.
  * Copyright (c) 2015-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,23 +52,7 @@
 #include <arpa/inet.h>
 #endif
 #ifdef HAVE_NET_IF_H
-#if defined(__APPLE__) && defined(_LP64)
-/* Apple engineering suggested using options align=power as a
-   workaround for a bug in OS X 10.4 (Tiger) that prevented ioctl(...,
-   SIOCGIFCONF, ...) from working properly in 64 bit mode on Power PC.
-   It turns out that the underlying issue is the size of struct
-   ifconf, which the kernel expects to be 12 and natural 64 bit
-   alignment would make 16.  The same bug appears in 64 bit mode on
-   Intel macs, but align=power is a no-op there, so instead, use the
-   pack pragma to instruct the compiler to pack on 4 byte words, which
-   has the same effect as align=power for our needs and works on both
-   Intel and Power PC Macs. */
-#pragma pack(push,4)
-#endif
 #include <net/if.h>
-#if defined(__APPLE__) && defined(_LP64)
-#pragma pack(pop)
-#endif
 #endif
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
@@ -82,6 +68,7 @@
 #include "opal/util/output.h"
 #include "opal/util/argv.h"
 #include "opal/util/show_help.h"
+#include "opal/util/string_copy.h"
 #include "opal/constants.h"
 
 #include "opal/mca/if/base/base.h"
@@ -206,7 +193,7 @@ int opal_ifaddrtoname(const char* if_addr, char* if_name, int length)
                 memcpy (&ipv4, r->ai_addr, r->ai_addrlen);
 
                 if (inaddr->sin_addr.s_addr == ipv4.sin_addr.s_addr) {
-                    strncpy(if_name, intf->if_name, length);
+                    opal_string_copy(if_name, intf->if_name, length);
                     freeaddrinfo (res);
                     return OPAL_SUCCESS;
                 }
@@ -215,7 +202,7 @@ int opal_ifaddrtoname(const char* if_addr, char* if_name, int length)
             else {
                 if (IN6_ARE_ADDR_EQUAL(&((struct sockaddr_in6*) &intf->if_addr)->sin6_addr,
                     &((struct sockaddr_in6*) r->ai_addr)->sin6_addr)) {
-                    strncpy(if_name, intf->if_name, length);
+                    opal_string_copy(if_name, intf->if_name, length);
                     freeaddrinfo (res);
                     return OPAL_SUCCESS;
                 }
@@ -464,7 +451,7 @@ int opal_ifindextoname(int if_index, char* if_name, int length)
 
     OPAL_LIST_FOREACH(intf, &opal_if_list, opal_if_t) {
         if (intf->if_index == if_index) {
-            strncpy(if_name, intf->if_name, length);
+            opal_string_copy(if_name, intf->if_name, length);
             return OPAL_SUCCESS;
         }
     }
@@ -483,7 +470,7 @@ int opal_ifkindextoname(int if_kindex, char* if_name, int length)
 
     OPAL_LIST_FOREACH(intf, &opal_if_list, opal_if_t) {
         if (intf->if_kernel_index == if_kindex) {
-            strncpy(if_name, intf->if_name, length);
+            opal_string_copy(if_name, intf->if_name, length);
             return OPAL_SUCCESS;
         }
     }

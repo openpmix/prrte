@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2008      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2018 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -64,6 +64,7 @@
 #include "opal/util/os_dirpath.h"
 #include "opal/util/output.h"
 #include "opal/util/argv.h"
+#include "opal/util/printf.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/util/name_fns.h"
@@ -284,11 +285,11 @@ int orte_iof_base_setup_output_files(const orte_process_name_t* dst_name,
 
         /* construct the directory where the output files will go */
         if (usejobid) {
-            asprintf(&outdir, "%s/%d/rank.%0*lu", dirname,
+            opal_asprintf(&outdir, "%s/%d/rank.%0*lu", dirname,
                      (int)ORTE_LOCAL_JOBID(proct->name.jobid),
                      numdigs, (unsigned long)proct->name.vpid);
         } else {
-            asprintf(&outdir, "%s/rank.%0*lu", dirname,
+            opal_asprintf(&outdir, "%s/rank.%0*lu", dirname,
                      numdigs, (unsigned long)proct->name.vpid);
         }
         /* ensure the directory exists */
@@ -299,7 +300,7 @@ int orte_iof_base_setup_output_files(const orte_process_name_t* dst_name,
         }
         if (NULL != proct->revstdout && NULL == proct->revstdout->sink) {
             /* setup the stdout sink */
-            asprintf(&outfile, "%s/stdout", outdir);
+            opal_asprintf(&outfile, "%s/stdout", outdir);
             fdout = open(outfile, O_CREAT|O_RDWR|O_TRUNC, 0644);
             free(outfile);
             if (fdout < 0) {
@@ -323,7 +324,7 @@ int orte_iof_base_setup_output_files(const orte_process_name_t* dst_name,
                 proct->revstdout->sink->tag = ORTE_IOF_STDMERGE;  // show that it is merged
                 proct->revstderr->sink = proct->revstdout->sink;
             } else {
-                asprintf(&outfile, "%s/stderr", outdir);
+                opal_asprintf(&outfile, "%s/stderr", outdir);
                 fdout = open(outfile, O_CREAT|O_RDWR|O_TRUNC, 0644);
                 free(outfile);
                 if (fdout < 0) {

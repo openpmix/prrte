@@ -37,6 +37,7 @@
 #include <string.h>
 
 #include "opal/util/fd.h"
+#include "opal/util/string_copy.h"
 #include "opal/constants.h"
 
 
@@ -178,7 +179,7 @@ const char *opal_fd_get_peer_name(int fd)
 #endif
     else {
         // This string is guaranteed to be <= INET_ADDRSTRLEN
-        strncpy(str, "Unknown", len);
+        opal_string_copy(str, "Unknown", len);
         ret = str;
     }
 

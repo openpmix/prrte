@@ -13,7 +13,7 @@
  * Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -52,6 +52,7 @@
 #include "opal/mca/base/base.h"
 #include "opal/util/os_dirpath.h"
 #include "opal/util/output.h"
+#include "opal/util/printf.h"
 #include "opal/util/basename.h"
 #include "opal/util/argv.h"
 
@@ -103,7 +104,7 @@ void orte_errmgr_base_abort(int error_code, char *fmt, ...)
     va_start(arglist, fmt);
     if( NULL != fmt ) {
         char* buffer = NULL;
-        vasprintf( &buffer, fmt, arglist );
+        opal_vasprintf( &buffer, fmt, arglist );
         opal_output( 0, "%s", buffer );
         free( buffer );
     }
