@@ -119,7 +119,9 @@ OBJ_CLASS_DECLARATION(orte_pmix_server_op_caddy_t);
 typedef struct {
     opal_object_t super;
     orte_grpcomm_signature_t *sig;
+    opal_buffer_t *buf;
     pmix_modex_cbfunc_t cbfunc;
+    pmix_info_cbfunc_t infocbfunc;
     void *cbdata;
 } orte_pmix_mdx_caddy_t;
 OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
@@ -258,6 +260,12 @@ extern pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
                                              const pmix_proc_t targets[], size_t ntargets,
                                              const pmix_info_t directives[], size_t ndirs,
                                              pmix_info_cbfunc_t cbfunc, void *cbdata);
+
+extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
+                                          const pmix_proc_t procs[], size_t nprocs,
+                                          const pmix_info_t directives[], size_t ndirs,
+                                          pmix_info_cbfunc_t cbfunc, void *cbdata);
+
 
 /* declare the RML recv functions for responses */
 extern void pmix_server_launch_resp(int status, orte_process_name_t* sender,

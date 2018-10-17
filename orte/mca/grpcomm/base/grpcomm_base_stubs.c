@@ -62,6 +62,7 @@ typedef struct {
     opal_event_t ev;
     orte_grpcomm_signature_t *sig;
     opal_buffer_t *buf;
+    int mode;
     orte_grpcomm_cbfunc_t cbfunc;
     void *cbdata;
 } orte_grpcomm_caddy_t;
@@ -69,6 +70,7 @@ static void gccon(orte_grpcomm_caddy_t *p)
 {
     p->sig = NULL;
     p->buf = NULL;
+    p->mode = 0;
     p->cbfunc = NULL;
     p->cbdata = NULL;
 }
@@ -189,7 +191,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
     /* cycle thru the actives and see who can process it */
     OPAL_LIST_FOREACH(active, &orte_grpcomm_base.actives, orte_grpcomm_base_active_t) {
         if (NULL != active->module->allgather) {
-            if (ORTE_SUCCESS == (rc = active->module->allgather(coll, cd->buf))) {
+            if (ORTE_SUCCESS == (rc = active->module->allgather(coll, cd->buf, cd->mode))) {
                 break;
             }
         }
@@ -198,7 +200,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
 }
 
 int orte_grpcomm_API_allgather(orte_grpcomm_signature_t *sig,
-                               opal_buffer_t *buf,
+                               opal_buffer_t *buf, int mode,
                                orte_grpcomm_cbfunc_t cbfunc,
                                void *cbdata)
 {
@@ -215,6 +217,7 @@ int orte_grpcomm_API_allgather(orte_grpcomm_signature_t *sig,
     OBJ_RETAIN(buf);
     opal_dss.copy((void **)&cd->sig, (void *)sig, ORTE_SIGNATURE);
     cd->buf = buf;
+    cd->mode = mode;
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
     opal_event_set(orte_event_base, &cd->ev, -1, OPAL_EV_WRITE, allgather_stub, cd);
@@ -439,6 +442,7 @@ static int create_dmns(orte_grpcomm_signature_t *sig,
             }
             if (!found) {
                 nm = OBJ_NEW(orte_namelist_t);
+                nm->name.jobid = ORTE_PROC_MY_NAME->jobid;
                 nm->name.vpid = vpid;
                 opal_list_append(&ds, &nm->super);
             }

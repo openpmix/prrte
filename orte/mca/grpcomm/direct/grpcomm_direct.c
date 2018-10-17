@@ -46,7 +46,7 @@ static int xcast(orte_vpid_t *vpids,
                  size_t nprocs,
                  opal_buffer_t *buf);
 static int allgather(orte_grpcomm_coll_t *coll,
-                     opal_buffer_t *buf);
+                     opal_buffer_t *buf, int mode);
 
 /* Module def */
 orte_grpcomm_base_module_t orte_grpcomm_direct_module = {
@@ -123,7 +123,7 @@ static int xcast(orte_vpid_t *vpids,
 }
 
 static int allgather(orte_grpcomm_coll_t *coll,
-                     opal_buffer_t *buf)
+                     opal_buffer_t *buf, int mode)
 {
     int rc;
     opal_buffer_t *relay;
@@ -139,6 +139,13 @@ static int allgather(orte_grpcomm_coll_t *coll,
     relay = OBJ_NEW(opal_buffer_t);
     /* pack the signature */
     if (OPAL_SUCCESS != (rc = opal_dss.pack(relay, &coll->sig, 1, ORTE_SIGNATURE))) {
+        ORTE_ERROR_LOG(rc);
+        OBJ_RELEASE(relay);
+        return rc;
+    }
+
+    /* pack the mode */
+    if (OPAL_SUCCESS != (rc = opal_dss.pack(relay, &mode, 1, OPAL_INT))) {
         ORTE_ERROR_LOG(rc);
         OBJ_RELEASE(relay);
         return rc;
@@ -165,7 +172,7 @@ static void allgather_recv(int status, orte_process_name_t* sender,
                            void* cbdata)
 {
     int32_t cnt;
-    int rc, ret;
+    int rc, ret, mode;
     orte_grpcomm_signature_t *sig;
     opal_buffer_t *reply;
     orte_grpcomm_coll_t *coll;
@@ -189,6 +196,12 @@ static void allgather_recv(int status, orte_process_name_t* sender,
         return;
     }
 
+    /* unpack the mode */
+    cnt = 1;
+    if (OPAL_SUCCESS != (rc = opal_dss.unpack(buffer, &mode, &cnt, OPAL_INT))) {
+        ORTE_ERROR_LOG(rc);
+        return;
+    }
     /* increment nprocs reported for collective */
     coll->nreported++;
     /* capture any provided content */
@@ -222,6 +235,25 @@ static void allgather_recv(int status, orte_process_name_t* sender,
                 OBJ_RELEASE(reply);
                 OBJ_RELEASE(sig);
                 return;
+            }
+            /* pack the mode */
+            if (OPAL_SUCCESS != (rc = opal_dss.pack(reply, &mode, 1, OPAL_INT))) {
+                ORTE_ERROR_LOG(rc);
+                OBJ_RELEASE(reply);
+                OBJ_RELEASE(sig);
+                return;
+            }
+            /* if we were asked to provide a context id, do so */
+            if (1 == mode) {
+                size_t sz;
+                sz = orte_grpcomm_base.context_id;
+                ++orte_grpcomm_base.context_id;
+                if (OPAL_SUCCESS != (rc = opal_dss.pack(reply, &sz, 1, OPAL_SIZE))) {
+                    ORTE_ERROR_LOG(rc);
+                    OBJ_RELEASE(reply);
+                    OBJ_RELEASE(sig);
+                    return;
+                }
             }
             /* transfer the collected bucket */
             opal_dss.copy_payload(reply, &coll->bucket);

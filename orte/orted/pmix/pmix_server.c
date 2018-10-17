@@ -112,7 +112,8 @@ static pmix_server_module_t pmix_server = {
     .tool_connected = pmix_tool_connected_fn,
     .log = pmix_server_log_fn,
     .allocate = pmix_server_alloc_fn,
-    .job_control = pmix_server_job_ctrl_fn
+    .job_control = pmix_server_job_ctrl_fn,
+    .group = pmix_server_group_fn
 };
 
 void pmix_server_register_params(void)
@@ -848,6 +849,7 @@ OBJ_CLASS_INSTANCE(pmix_server_req_t,
 static void mdcon(orte_pmix_mdx_caddy_t *p)
 {
     p->sig = NULL;
+    p->buf = NULL;
     p->cbfunc = NULL;
     p->cbdata = NULL;
 }
@@ -855,6 +857,9 @@ static void mddes(orte_pmix_mdx_caddy_t *p)
 {
     if (NULL != p->sig) {
         OBJ_RELEASE(p->sig);
+    }
+    if (NULL != p->buf) {
+        OBJ_RELEASE(p->buf);
     }
 }
 OBJ_CLASS_INSTANCE(orte_pmix_mdx_caddy_t,

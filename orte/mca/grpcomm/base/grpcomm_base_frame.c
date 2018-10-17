@@ -95,6 +95,7 @@ static int orte_grpcomm_base_open(mca_base_open_flag_t flags)
     OBJ_CONSTRUCT(&orte_grpcomm_base.ongoing, opal_list_t);
     OBJ_CONSTRUCT(&orte_grpcomm_base.sig_table, opal_hash_table_t);
     opal_hash_table_init(&orte_grpcomm_base.sig_table, 128);
+    orte_grpcomm_base.context_id = 0;
 
     return mca_base_framework_components_open(&orte_grpcomm_base_framework, flags);
 }
