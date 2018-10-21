@@ -104,6 +104,7 @@ typedef struct {
     orte_job_t *jdata;
     pmix_info_t *info;
     size_t ninfo;
+    opal_pmix_lock_t lock;
 } orte_odls_jcaddy_t;
 
 static void setup_cbfunc(pmix_status_t status,
@@ -162,6 +163,9 @@ static void setup_cbfunc(pmix_status_t status,
 
     /* move to next stage */
     ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_SEND_LAUNCH_MSG);
+
+    /* release the original thread */
+    OPAL_PMIX_WAKEUP_THREAD(&cd->lock);
 
 }
 /* IT IS CRITICAL THAT ANY CHANGE IN THE ORDER OF THE INFO PACKED IN
@@ -520,11 +524,15 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
      * take some indeterminate time to get the info */
     rc = ORTE_SUCCESS;
     cd.jdata = jdata;
+    OPAL_PMIX_CONSTRUCT_LOCK(&cd.lock);
     if (PMIX_SUCCESS != (ret = PMIx_server_setup_application(pproc.nspace, cd.info, cd.ninfo,
                                                              setup_cbfunc, &cd))) {
         opal_output(0, "[%s:%d] PMIx_server_setup_application failed: %s", __FILE__, __LINE__, PMIx_Error_string(ret));
         rc = ORTE_ERROR;
+    } else {
+        OPAL_PMIX_WAIT_THREAD(&cd.lock);
     }
+    OPAL_PMIX_DESTRUCT_LOCK(&cd.lock);
     return rc;
 }
 
