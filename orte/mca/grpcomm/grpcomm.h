@@ -121,7 +121,7 @@ typedef int (*orte_grpcomm_base_module_xcast_fn_t)(orte_vpid_t *vpids,
  * NOTE: this is a non-blocking call. The callback function cached in
  * the orte_grpcomm_coll_t will be invoked upon completion. */
 typedef int (*orte_grpcomm_base_module_allgather_fn_t)(orte_grpcomm_coll_t *coll,
-                                                       opal_buffer_t *buf);
+                                                       opal_buffer_t *buf, int mode);
 
 /*
  * Ver 3.0 - internal modules
@@ -156,7 +156,7 @@ typedef int (*orte_grpcomm_base_API_xcast_fn_t)(orte_grpcomm_signature_t *sig,
  * NOTE: this is a non-blocking call. The provided callback function
  * will be invoked upon completion. */
 typedef int (*orte_grpcomm_base_API_allgather_fn_t)(orte_grpcomm_signature_t *sig,
-                                                    opal_buffer_t *buf,
+                                                    opal_buffer_t *buf, int mode,
                                                     orte_grpcomm_cbfunc_t cbfunc,
                                                     void *cbdata);
 typedef struct {

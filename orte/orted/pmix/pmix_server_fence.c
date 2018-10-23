@@ -122,7 +122,7 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
 
     /* pass it to the global collective algorithm */
     /* pass along any data that was collected locally */
-    if (ORTE_SUCCESS != (rc = orte_grpcomm.allgather(cd->sig, buf, pmix_server_release, cd))) {
+    if (ORTE_SUCCESS != (rc = orte_grpcomm.allgather(cd->sig, buf, 0, pmix_server_release, cd))) {
         ORTE_ERROR_LOG(rc);
         OBJ_RELEASE(buf);
         return PMIX_ERROR;

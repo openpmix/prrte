@@ -72,6 +72,7 @@ typedef struct {
     opal_list_t ongoing;
     opal_hash_table_t sig_table;
     char *transports;
+    size_t context_id;
 } orte_grpcomm_base_t;
 
 ORTE_DECLSPEC extern orte_grpcomm_base_t orte_grpcomm_base;
@@ -82,7 +83,7 @@ ORTE_DECLSPEC int orte_grpcomm_API_xcast(orte_grpcomm_signature_t *sig,
                                          opal_buffer_t *buf);
 
 ORTE_DECLSPEC int orte_grpcomm_API_allgather(orte_grpcomm_signature_t *sig,
-                                             opal_buffer_t *buf,
+                                             opal_buffer_t *buf, int mode,
                                              orte_grpcomm_cbfunc_t cbfunc,
                                              void *cbdata);
 
