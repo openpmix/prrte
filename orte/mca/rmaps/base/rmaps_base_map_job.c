@@ -2,14 +2,14 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2005 The University of Tennessee and The University
+ * Copyright (c) 2004-2018 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011-2012 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
@@ -29,6 +29,7 @@
 
 #include "orte/mca/mca.h"
 #include "opal/util/output.h"
+#include "opal/util/string_copy.h"
 #include "opal/mca/base/base.h"
 #include "opal/hwloc/hwloc-internal.h"
 #include "opal/dss/dss.h"
@@ -183,6 +184,7 @@ void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
             ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_NO_OVERSUBSCRIBE);
         } else {
             /* pass along the directive */
+            ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_SUBSCRIBE_GIVEN);
             if (ORTE_MAPPING_NO_OVERSUBSCRIBE & ORTE_GET_MAPPING_DIRECTIVE(orte_rmaps_base.mapping)) {
                 ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_NO_OVERSUBSCRIBE);
             } else {
@@ -530,14 +532,14 @@ void orte_rmaps_base_display_map(orte_job_t *jdata)
                 memset(tmp1, 0, sizeof(tmp1));
                 if (orte_get_attribute(&proc->attributes, ORTE_PROC_HWLOC_BOUND, (void**)&bd, OPAL_PTR)) {
                     if (NULL == bd) {
-                        (void)strncpy(tmp1, "UNBOUND", sizeof(tmp1));
+                        (void)opal_string_copy(tmp1, "UNBOUND", sizeof(tmp1));
                     } else {
                         if (OPAL_ERR_NOT_BOUND == opal_hwloc_base_cset2mapstr(tmp1, sizeof(tmp1), node->topology->topo, bd->cpuset)) {
-                            (void)strncpy(tmp1, "UNBOUND", sizeof(tmp1));
+                            (void)opal_string_copy(tmp1, "UNBOUND", sizeof(tmp1));
                         }
                     }
                 } else {
-                    (void)strncpy(tmp1, "UNBOUND", sizeof(tmp1));
+                    (void)opal_string_copy(tmp1, "UNBOUND", sizeof(tmp1));
                 }
                 opal_output(orte_clean_output, "\t\t<process rank=%s app_idx=%ld local_rank=%lu node_rank=%lu binding=%s>",
                             ORTE_VPID_PRINT(proc->name.vpid),  (long)proc->app_idx,
