@@ -1324,7 +1324,7 @@ static void group_release(int status, opal_buffer_t *buf, void *cbdata)
 {
     orte_pmix_mdx_caddy_t *cd = (orte_pmix_mdx_caddy_t*)cbdata;
     int32_t cnt;
-    int rc, mode;
+    int rc;
     pmix_status_t ret;
     size_t cid, ninfo = 0;
     pmix_info_t *info = NULL;
@@ -1336,23 +1336,21 @@ static void group_release(int status, opal_buffer_t *buf, void *cbdata)
         goto complete;
     }
 
-    /* first thing in the payload is the mode */
+    /* if a context id was provided, get it */
     cnt = 1;
-    if (OPAL_SUCCESS != (rc = opal_dss.unpack(buf, &mode, &cnt, OPAL_INT))) {
+    rc = opal_dss.unpack(buf, &cid, &cnt, OPAL_SIZE);
+    /* it is okay if they didn't */
+    if (ORTE_SUCCESS != rc && ORTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
         ORTE_ERROR_LOG(rc);
         goto complete;
     }
-
-    /* if a context id was provided, get it */
-    if (1 == mode) {
-        cnt = 1;
-        if (OPAL_SUCCESS != (rc = opal_dss.unpack(buf, &cid, &cnt, OPAL_SIZE))) {
-            ORTE_ERROR_LOG(rc);
-            goto complete;
-        }
+    if (ORTE_SUCCESS == rc) {
         ninfo = 1;
         PMIX_INFO_CREATE(info, ninfo);
         PMIX_INFO_LOAD(&info[0], PMIX_GROUP_CONTEXT_ID, &cid, PMIX_SIZE);
+    }
+    if (ORTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER == rc) {
+        rc = ORTE_SUCCESS;
     }
 
   complete:

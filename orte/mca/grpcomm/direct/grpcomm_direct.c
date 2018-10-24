@@ -670,7 +670,7 @@ static void barrier_release(int status, orte_process_name_t* sender,
                             void* cbdata)
 {
     int32_t cnt;
-    int rc, ret;
+    int rc, ret, mode;
     orte_grpcomm_signature_t *sig;
     orte_grpcomm_coll_t *coll;
 
@@ -688,6 +688,13 @@ static void barrier_release(int status, orte_process_name_t* sender,
     /* unpack the return status */
     cnt = 1;
     if (OPAL_SUCCESS != (rc = opal_dss.unpack(buffer, &ret, &cnt, OPAL_INT))) {
+        ORTE_ERROR_LOG(rc);
+        return;
+    }
+
+    /* unpack the mode */
+    cnt = 1;
+    if (OPAL_SUCCESS != (rc = opal_dss.unpack(buffer, &mode, &cnt, OPAL_INT))) {
         ORTE_ERROR_LOG(rc);
         return;
     }

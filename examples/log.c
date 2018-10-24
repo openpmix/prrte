@@ -136,6 +136,7 @@ int main(int argc, char **argv)
     }
 
   fence:
+    fprintf(stderr, "%s:%d Calling Fence\n", myproc.nspace, myproc.rank);
     /* call fence to synchronize with our peers - no need to
      * collect any info as we didn't "put" anything */
     PMIX_INFO_CREATE(info, 1);
