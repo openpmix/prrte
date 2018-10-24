@@ -274,6 +274,13 @@ static void allgather_recv(int status, orte_process_name_t* sender,
                 OBJ_RELEASE(sig);
                 return;
             }
+            /* pack the mode */
+            if (OPAL_SUCCESS != (rc = opal_dss.pack(reply, &mode, 1, OPAL_INT))) {
+                ORTE_ERROR_LOG(rc);
+                OBJ_RELEASE(reply);
+                OBJ_RELEASE(sig);
+                return;
+            }
             /* transfer the collected bucket */
             opal_dss.copy_payload(reply, &coll->bucket);
             /* send the info to our parent */
