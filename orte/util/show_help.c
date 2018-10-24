@@ -622,6 +622,12 @@ int orte_show_help(const char *filename, const char *topic,
     return rc;
 }
 
+static void mycb(pmix_status_t st, void *cbdata)
+{
+    opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
+    OPAL_PMIX_WAKEUP_THREAD(lk);
+}
+
 int orte_show_help_norender(const char *filename, const char *topic,
                             int want_error_header, const char *output)
 {
@@ -710,10 +716,23 @@ int orte_show_help_norender(const char *filename, const char *topic,
             opal_dss.unload(buf, (void**)&pbo.bytes, &nsize);
             pbo.size = nsize;
             PMIX_INFO_LOAD(&info, OPAL_PMIX_SHOW_HELP, &pbo, PMIX_BYTE_OBJECT);
+#if OPAL_PMIX_VERSION < 3
+            opal_pmix_lock_t lock;
+            OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+            ret = PMIx_Log_nb(&info, 1, NULL, 0, mycb, &lock);
+            if (PMIX_SUCCESS == ret) {
+                OPAL_PMIX_WAIT_THREAD(&lock);
+            } else {
+                rc = ret;
+                goto CLEANUP;
+            }
+            OPAL_PMIX_DESTRUCT_LOCK(&lock);
+#else
             ret = PMIx_Log(&info, 1, NULL, 0);
             if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
             }
+#endif
             PMIX_INFO_DESTRUCT(&info);
             OBJ_RELEASE(buf);
             rc = ORTE_SUCCESS;

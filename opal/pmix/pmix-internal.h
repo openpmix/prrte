@@ -472,6 +472,37 @@ OPAL_DECLSPEC int opal_pmix_register_cleanup(char *path,
                                              bool ignore,
                                              bool jobscope);
 
+/* protect against early versions of PMIx */
+#ifndef PMIX_VALUE_UNLOAD
+pmix_status_t pmix_value_unload(pmix_value_t *kv, void **data, size_t *sz);
+#define PMIX_VALUE_UNLOAD(r, k, d, s)      \
+    (r) = pmix_value_unload((k), (d), (s))
+#endif
+
+#ifndef PMIX_DATA_BUTTER_LOAD
+#define PMIX_DATA_BUFFER_LOAD(b, d, s)          \
+    do {                                        \
+        (b)->base_ptr = (char*)(d);             \
+        (b)->pack_ptr = (b)->base_ptr + (s);    \
+        (b)->unpack_ptr = (b)->base_ptr;        \
+        (b)->bytes_allocated = (s);             \
+        (b)->bytes_used = (s);                  \
+    } while(0)
+#endif
+
+#ifndef PMIX_DATA_BUFFER_UNLOAD
+#define PMIX_DATA_BUFFER_UNLOAD(b, d, s)    \
+    do {                                    \
+        (d) = (b)->base_ptr;                \
+        (s) = (b)->bytes_used;              \
+        (b)->base_ptr = NULL;               \
+    } while(0)
+#endif
+
+#ifndef PMIX_OPERATION_IN_PROGRESS
+#define PMIX_OPERATION_IN_PROGRESS  -156
+#endif
+
 END_C_DECLS
 
 #endif

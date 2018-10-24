@@ -95,6 +95,7 @@ void orte_iof_hnp_stdin_cb(int fd, short event, void *cbdata)
     }
 }
 
+#if OPAL_PMIX_VERSION >= 3
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
@@ -103,6 +104,7 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
     lk->status = opal_pmix_convert_status(status);
     OPAL_PMIX_WAKEUP_THREAD(lk);
 }
+#endif
 
 /* this is the read handler for my own child procs. In this case,
  * the data is going nowhere - I just output it myself
@@ -262,6 +264,7 @@ void orte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                                      ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                                      ORTE_NAME_PRINT(&proct->name), (int)numbytes,
                                      ORTE_NAME_PRINT(&sink->daemon)));
+            #if OPAL_PMIX_VERSION >= 3
                 /* don't pass down zero byte blobs */
                 if (0 < numbytes) {
                     pmix_proc_t source;
@@ -297,6 +300,9 @@ void orte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                     }
                     OPAL_PMIX_DESTRUCT_LOCK(&lock);
                 }
+            #else
+                orte_iof_hnp_send_data_to_endpoint(&sink->daemon, &proct->name, rev->tag, data, numbytes);
+            #endif
                 if (sink->exclusive) {
                     exclusive = true;
                 }

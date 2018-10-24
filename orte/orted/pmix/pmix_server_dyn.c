@@ -171,7 +171,9 @@ static void interim(int sd, short args, void *cbdata)
 {
     orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
     opal_process_name_t *requestor = &cd->proc;
+#if OPAL_PMIX_VERSION >= 3
     opal_envar_t envar;
+#endif
     orte_job_t *jdata;
     orte_app_context_t *app;
     pmix_app_t *papp;
@@ -263,6 +265,7 @@ static void interim(int sd, short args, void *cbdata)
                     flag = PMIX_INFO_TRUE(info);
                     orte_set_attribute(&app->attributes, ORTE_APP_DEBUGGER_DAEMON,
                                        ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
+#if OPAL_PMIX_VERSION >= 3
                 /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                 /* there can be multiple of these, so we add them to the attribute list */
                 } else if (0 == strcmp(info->key, PMIX_SET_ENVAR)) {
@@ -297,6 +300,7 @@ static void interim(int sd, short args, void *cbdata)
                     /* unrecognized key */
                     orte_show_help("help-orted.txt", "bad-key",
                                    true, "spawn", "application", info->key);
+#endif
                 }
             }
         }
@@ -513,6 +517,7 @@ static void interim(int sd, short args, void *cbdata)
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_DEBUGGER_DAEMON);
             ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_DEBUGGER);
 
+#if OPAL_PMIX_VERSION >= 3
         /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
         /* there can be multiple of these, so we add them to the attribute list */
         } else if (0 == strcmp(info->key, PMIX_SET_ENVAR)) {
@@ -542,6 +547,7 @@ static void interim(int sd, short args, void *cbdata)
             envar.separator = info->value.data.envar.separator;
             orte_add_attribute(&jdata->attributes, ORTE_JOB_APPEND_ENVAR,
                                ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
+#endif
 
         /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {

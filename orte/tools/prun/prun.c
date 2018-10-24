@@ -90,6 +90,7 @@
 /* ensure I can behave like a daemon */
 #include "prun.h"
 
+#if OPAL_PMIX_VERSION >= 3
 typedef struct {
     opal_object_t super;
     opal_pmix_lock_t lock;
@@ -111,6 +112,7 @@ static void mdes(myinfo_t *p)
 }
 static OBJ_CLASS_INSTANCE(myinfo_t, opal_object_t,
                           mcon, mdes);
+#endif
 
 typedef struct {
     opal_list_item_t super;
@@ -147,7 +149,9 @@ typedef struct {
 
 static opal_list_t job_info;
 static orte_jobid_t myjobid = ORTE_JOBID_INVALID;
+#if OPAL_PMIX_VERSION >= 3
 static myinfo_t myinfo;
+#endif
 
 static int create_app(int argc, char* argv[],
                       opal_list_t *jdata,
@@ -308,6 +312,7 @@ static void evhandler(size_t evhdlr_registration_id,
     }
 }
 
+#if OPAL_PMIX_VERSION >= 3
 static void setupcbfunc(pmix_status_t status,
                         pmix_info_t info[], size_t ninfo,
                         void *provided_cbdata,
@@ -365,6 +370,7 @@ static void launchhandler(size_t evhdlr_registration_id,
     /* now release the thread */
     OPAL_PMIX_WAKEUP_THREAD(&myinfo.lock);
 }
+#endif
 
 /**
  * Static functions used to configure the interactions between the OPAL and
@@ -422,7 +428,6 @@ int prun(int argc, char *argv[])
     opal_list_t apps;
     opal_pmix_app_t *app;
     opal_list_t tinfo;
-    mylock_t mylock;
     pmix_info_t info, *iptr;
     pmix_proc_t pname;
     pmix_status_t ret;
@@ -432,6 +437,9 @@ int prun(int argc, char *argv[])
     pmix_app_t *papps;
     size_t napps;
     char nspace[PMIX_MAX_NSLEN+1];
+#if OPAL_PMIX_VERSION >= 3
+    mylock_t mylock;
+#endif
 
     /* init the globals */
     memset(&orte_cmd_options, 0, sizeof(orte_cmd_options));
@@ -628,12 +636,14 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LOAD(ds->info, PMIX_USOCK_DISABLE, NULL, PMIX_BOOL);
     opal_list_append(&tinfo, &ds->super);
 
+#if OPAL_PMIX_VERSION >= 3
     /* we are also a launcher, so pass that down so PMIx knows
      * to setup rendezvous points */
     ds = OBJ_NEW(opal_ds_info_t);
     PMIX_INFO_CREATE(ds->info, 1);
     PMIX_INFO_LOAD(ds->info, PMIX_LAUNCHER, NULL, PMIX_BOOL);
     opal_list_append(&tinfo, &ds->super);
+#endif
     /* we always support session-level rendezvous */
     ds = OBJ_NEW(opal_ds_info_t);
     PMIX_INFO_CREATE(ds->info, 1);
@@ -645,6 +655,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LOAD(ds->info, PMIX_SINGLE_LISTENER, NULL, PMIX_BOOL);
     opal_list_append(&tinfo, &ds->super);
 
+#if OPAL_PMIX_VERSION >= 3
     /* setup any output format requests */
     if (orte_cmd_options.tag_output) {
         ds = OBJ_NEW(opal_ds_info_t);
@@ -664,6 +675,7 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LOAD(ds->info, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
         opal_list_append(&tinfo, &ds->super);
     }
+#endif
 
     /* if they specified the URI, then pass it along */
     if (NULL != orte_cmd_options.hnp) {
@@ -972,6 +984,7 @@ int prun(int argc, char *argv[])
         opal_list_append(&job_info, &ds->super);
     }
 
+#if OPAL_PMIX_VERSION >= 3
     /* pickup any relevant envars */
     flag = true;
     PMIX_INFO_LOAD(&info, PMIX_SETUP_APP_ENVARS, &flag, PMIX_BOOL);
@@ -1068,6 +1081,7 @@ int prun(int argc, char *argv[])
             }
         }
     }
+#endif
 
     /* convert the job info into an array */
     ninfo = opal_list_get_size(&job_info);

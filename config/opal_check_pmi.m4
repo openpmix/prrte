@@ -117,7 +117,8 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
                                                ], [])],
                               [AC_MSG_RESULT([found])
                                opal_external_pmix_version=4x
-                               opal_external_pmix_version_found=1],
+                               opal_external_pmix_version_found=4
+                               opal_prun_happy=yes],
                               [AC_MSG_RESULT([not found])])])
 
     AS_IF([test "$opal_external_pmix_version_found" = "0"],
@@ -130,7 +131,8 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
                                                ], [])],
                               [AC_MSG_RESULT([found])
                                opal_external_pmix_version=3x
-                               opal_external_pmix_version_found=1],
+                               opal_external_pmix_version_found=3
+                               opal_prun_happy=yes],
                               [AC_MSG_RESULT([not found])])])
 
     AS_IF([test "$opal_external_pmix_version_found" = "0"],
@@ -143,7 +145,7 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
                                               ], [])],
                              [AC_MSG_RESULT([found])
                               opal_external_pmix_version=2x
-                              opal_external_pmix_version_found=1
+                              opal_external_pmix_version_found=2
                               opal_prun_happy=yes],
                              [AC_MSG_RESULT([not found])])])
 

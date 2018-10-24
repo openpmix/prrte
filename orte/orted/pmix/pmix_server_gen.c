@@ -561,26 +561,31 @@ static void _query(int sd, short args, void *cbdata)
     orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
     orte_pmix_server_op_caddy_t *rcd;
     pmix_query_t *q;
-    pmix_data_array_t *darray;
-    pmix_proc_info_t *procinfo;
-    pmix_info_t *info;
     pmix_status_t ret = PMIX_SUCCESS;
     opal_ds_info_t *kv;
-    orte_jobid_t jobid;
     orte_job_t *jdata;
-    orte_proc_t *proct;
-    orte_app_context_t *app;
-    int rc, i, k, num_replies;
-    opal_list_t *results, targets;
-    size_t m, n, p;
+    int rc;
+    opal_list_t *results;
+    size_t m, n;
     uint32_t key;
     void *nptr;
     char **nspaces, nspace[PMIX_MAX_NSLEN+1];
     char **ans, *tmp;
-    bool local_only;
-    orte_namelist_t *nm;
+#if OPAL_PMIX_VERSION >= 3
     opal_pstats_t pstat;
     float pss;
+    bool local_only;
+    orte_namelist_t *nm;
+    size_t p;
+    opal_list_t targets;
+    int i, k, num_replies;
+    orte_proc_t *proct;
+    orte_app_context_t *app;
+    orte_jobid_t jobid;
+    pmix_proc_info_t *procinfo;
+    pmix_info_t *info;
+    pmix_data_array_t *darray;
+#endif
 
     ORTE_ACQUIRE_OBJECT(cd);
 
@@ -652,6 +657,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(kv->info, PMIX_QUERY_DEBUG_SUPPORT, tmp, PMIX_STRING);
                 free(tmp);
                 opal_list_append(results, &kv->super);
+#if OPAL_PMIX_VERSION >= 3
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_MEMORY_USAGE)) {
                 OBJ_CONSTRUCT(&targets, opal_list_t);
                 /* scan the qualifiers */
@@ -708,14 +714,9 @@ static void _query(int sd, short args, void *cbdata)
                             pss /= (float)num_replies;
                         }
                         PMIX_INFO_LOAD(&info[1], PMIX_CLIENT_AVG_MEMORY, &pss, PMIX_FLOAT);
-                    } else {
-                        /* get it for the specified targets */
                     }
-                } else {
-                    /* if they want it for remote procs, see who is hosting them
-                     * and ask directly for the info - if rank=wildcard, then
-                     * we need to xcast the request and collect the results */
                 }
+#endif
             } else if (0 == strncmp(q->keys[n], PMIX_TIME_REMAINING, PMIX_MAX_KEYLEN)) {
                 if (ORTE_SUCCESS == orte_schizo.get_remaining_time(&key)) {
                     kv = OBJ_NEW(opal_ds_info_t);
@@ -729,53 +730,54 @@ static void _query(int sd, short args, void *cbdata)
                     int len;
                     kv = OBJ_NEW(opal_ds_info_t);
                     PMIX_INFO_CREATE(kv->info, 1);
-                    #if HWLOC_API_VERSION < 0x20000
-                        /* get this from the v1.x API */
-                        if (0 != hwloc_topology_export_xmlbuffer(opal_hwloc_topology, &xmlbuffer, &len)) {
-                            OBJ_RELEASE(kv);
-                            continue;
-                        }
-                    #else
-                        /* get it from the v2 API */
-                        if (0 != hwloc_topology_export_xmlbuffer(opal_hwloc_topology, &xmlbuffer, &len,
-                                                                 HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1)) {
-                            OBJ_RELEASE(kv);
-                            continue;
-                        }
-                    #endif
+            #if HWLOC_API_VERSION < 0x20000
+                    /* get this from the v1.x API */
+                    if (0 != hwloc_topology_export_xmlbuffer(opal_hwloc_topology, &xmlbuffer, &len)) {
+                        OBJ_RELEASE(kv);
+                        continue;
+                    }
+            #else
+                    /* get it from the v2 API */
+                    if (0 != hwloc_topology_export_xmlbuffer(opal_hwloc_topology, &xmlbuffer, &len,
+                                                             HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1)) {
+                        OBJ_RELEASE(kv);
+                        continue;
+                    }
+            #endif
                     PMIX_INFO_LOAD(kv->info, PMIX_HWLOC_XML_V1, xmlbuffer, PMIX_STRING);
                     free(xmlbuffer);
                     opal_list_append(results, &kv->super);
                 }
             } else if (0 == strncmp(q->keys[n], PMIX_HWLOC_XML_V2, PMIX_MAX_KEYLEN)) {
                 /* we cannot provide it if we are using v1.x */
-                #if HWLOC_API_VERSION >= 0x20000
-                    if (NULL != opal_hwloc_topology) {
-                        char *xmlbuffer=NULL;
-                        int len;
-                        kv = OBJ_NEW(opal_ds_info_t);
-                        PMIX_INFO_CREATE(kv->info, 1);
-                        if (0 != hwloc_topology_export_xmlbuffer(opal_hwloc_topology, &xmlbuffer, &len, 0)) {
-                            OBJ_RELEASE(kv);
-                            continue;
-                        }
-                        PMIX_INFO_LOAD(kv->info, PMIX_HWLOC_XML_V2, xmlbuffer, PMIX_STRING);
-                        free(xmlbuffer);
-                        opal_list_append(results, &kv->super);
+            #if HWLOC_API_VERSION >= 0x20000
+                if (NULL != opal_hwloc_topology) {
+                    char *xmlbuffer=NULL;
+                    int len;
+                    kv = OBJ_NEW(opal_ds_info_t);
+                    PMIX_INFO_CREATE(kv->info, 1);
+                    if (0 != hwloc_topology_export_xmlbuffer(opal_hwloc_topology, &xmlbuffer, &len, 0)) {
+                        OBJ_RELEASE(kv);
+                        continue;
                     }
-                #endif
+                    PMIX_INFO_LOAD(kv->info, PMIX_HWLOC_XML_V2, xmlbuffer, PMIX_STRING);
+                    free(xmlbuffer);
+                    opal_list_append(results, &kv->super);
+                }
+            #endif
             } else if (0 == strncmp(q->keys[n], PMIX_SERVER_URI, PMIX_MAX_KEYLEN)) {
                 /* they want our URI */
                 kv = OBJ_NEW(opal_ds_info_t);
                 PMIX_INFO_CREATE(kv->info, 1);
                 PMIX_INFO_LOAD(kv->info, PMIX_SERVER_URI, orte_process_info.my_hnp_uri, PMIX_STRING);
                 opal_list_append(results, &kv->super);
+    #if OPAL_PMIX_VERSION >= 3
             } else if (0 == strncmp(q->keys[n], PMIX_QUERY_PROC_TABLE, PMIX_MAX_KEYLEN)) {
                 /* the job they are asking about is in the qualifiers */
                 jobid = ORTE_JOBID_INVALID;
                 for (k=0; k < (int)q->nqual; k++) {
                     if (0 == strncmp(q->qualifiers[k].key, PMIX_NSPACE, PMIX_MAX_KEYLEN)) {
-                        /* save the id */
+                                /* save the id */
                         OPAL_PMIX_CONVERT_NSPACE(rc, &jobid, q->qualifiers[k].value.data.string);
                         if (OPAL_SUCCESS != rc) {
                             ORTE_ERROR_LOG(rc);
@@ -799,7 +801,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_CREATE(kv->info, 1);
                 (void)strncpy(kv->info->key, PMIX_QUERY_PROC_TABLE, PMIX_MAX_KEYLEN);
                 opal_list_append(results, &kv->super);
-                /* cycle thru the job and create an entry for each proc */
+                 /* cycle thru the job and create an entry for each proc */
                 PMIX_DATA_ARRAY_CREATE(darray, jdata->num_procs, PMIX_PROC_INFO);
                 kv->info->value.type = PMIX_DATA_ARRAY;
                 kv->info->value.data.darray = darray;
@@ -828,7 +830,7 @@ static void _query(int sd, short args, void *cbdata)
                 jobid = ORTE_JOBID_INVALID;
                 for (k=0; k < (int)q->nqual; k++) {
                     if (0 == strncmp(q->qualifiers[k].key, PMIX_NSPACE, PMIX_MAX_KEYLEN)) {
-                        /* save the id */
+                                /* save the id */
                         OPAL_PMIX_CONVERT_NSPACE(rc, &jobid, q->qualifiers[k].value.data.string);
                         if (OPAL_SUCCESS != rc) {
                             ORTE_ERROR_LOG(rc);
@@ -878,11 +880,14 @@ static void _query(int sd, short args, void *cbdata)
                         ++p;
                     }
                 }
+        #endif
             }
-        }
-    }
+        } // for
+    } // for
 
+#if OPAL_PMIX_VERSION >= 3
   done:
+#endif
     rcd = OBJ_NEW(orte_pmix_server_op_caddy_t);
     if (PMIX_SUCCESS == ret) {
         if (0 == opal_list_get_size(results)) {
@@ -893,7 +898,7 @@ static void _query(int sd, short args, void *cbdata)
             } else {
                 ret = PMIX_SUCCESS;
             }
-            /* convert the list of results to an info array */
+        /* convert the list of results to an info array */
             rcd->ninfo = opal_list_get_size(results);
             PMIX_INFO_CREATE(rcd->info, rcd->ninfo);
             n=0;
@@ -1308,6 +1313,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
     return PMIX_OPERATION_SUCCEEDED;
 }
 
+#if OPAL_PMIX_VERSION >= 4
 static void relcb(void *cbdata)
 {
     orte_pmix_mdx_caddy_t *cd=(orte_pmix_mdx_caddy_t*)cbdata;
@@ -1412,3 +1418,4 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
     }
     return PMIX_SUCCESS;
 }
+#endif

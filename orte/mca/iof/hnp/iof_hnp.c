@@ -621,6 +621,7 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
     return;
 }
 
+#if OPAL_PMIX_VERSION >= 3
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
@@ -629,14 +630,16 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
     lk->status = opal_pmix_convert_status(status);
     OPAL_PMIX_WAKEUP_THREAD(lk);
 }
+#endif
 
 static int hnp_output(const orte_process_name_t* peer,
                       orte_iof_tag_t source_tag,
                       const char *msg)
 {
+#if OPAL_PMIX_VERSION >= 3
+    pmix_iof_channel_t pchan;
     pmix_proc_t source;
     pmix_byte_object_t bo;
-    pmix_iof_channel_t pchan;
     opal_pmix_lock_t lock;
     pmix_status_t rc;
     int ret;
@@ -674,13 +677,15 @@ static int hnp_output(const orte_process_name_t* peer,
         OPAL_PMIX_DESTRUCT_LOCK(&lock);
         return ret;
     } else {
+#endif
         /* output this to our local output */
         if (ORTE_IOF_STDOUT & source_tag || orte_xml_output) {
             orte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), orte_iof_base.iof_write_stdout->wev);
         } else {
             orte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), orte_iof_base.iof_write_stderr->wev);
         }
+#if OPAL_PMIX_VERSION >= 3
     }
-
+#endif
     return ORTE_SUCCESS;
 }
