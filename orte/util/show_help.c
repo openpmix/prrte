@@ -622,11 +622,13 @@ int orte_show_help(const char *filename, const char *topic,
     return rc;
 }
 
+#if OPAL_PMIX_VERSION < 3
 static void mycb(pmix_status_t st, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
     OPAL_PMIX_WAKEUP_THREAD(lk);
 }
+#endif
 
 int orte_show_help_norender(const char *filename, const char *topic,
                             int want_error_header, const char *output)
