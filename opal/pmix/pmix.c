@@ -488,6 +488,7 @@ void opal_pmix_value_load(pmix_value_t *v,
             v->data.pinfo->exit_code = kv->data.pinfo.exit_code;
             v->data.pinfo->state = opal_pmix_convert_state(kv->data.pinfo.state);
             break;
+#if OPAL_PMIX_VERSION >= 3
         case OPAL_ENVAR:
             v->type = PMIX_ENVAR;
             PMIX_ENVAR_CONSTRUCT(&v->data.envar);
@@ -499,6 +500,7 @@ void opal_pmix_value_load(pmix_value_t *v,
             }
             v->data.envar.separator = kv->data.envar.separator;
             break;
+#endif
         default:
             /* silence warnings */
             break;
@@ -684,6 +686,7 @@ int opal_pmix_value_unload(opal_value_t *kv,
         kv->data.pinfo.exit_code = v->data.pinfo->exit_code;
         kv->data.pinfo.state = opal_pmix_convert_pstate(v->data.pinfo->state);
         break;
+#if OPAL_PMIX_VERSION >= 3
     case PMIX_ENVAR:
         kv->type = OPAL_ENVAR;
         OBJ_CONSTRUCT(&kv->data.envar, opal_envar_t);
@@ -695,6 +698,7 @@ int opal_pmix_value_unload(opal_value_t *kv,
         }
         kv->data.envar.separator = v->data.envar.separator;
         break;
+#endif
     default:
         /* silence warnings */
         rc = OPAL_ERROR;
@@ -734,6 +738,9 @@ int opal_pmix_register_cleanup(char *path, bool directory, bool ignore, bool job
 
     OPAL_PMIX_CONSTRUCT_LOCK(&lk);
 
+#if OPAL_PMIX_VERSION < 3
+    return OPAL_ERR_NOT_SUPPORTED;
+#else
     if (ignore) {
         /* they want this path ignored */
         PMIX_INFO_LOAD(&pinfo[ninfo], PMIX_CLEANUP_IGNORE, path, PMIX_STRING);
@@ -751,6 +758,7 @@ int opal_pmix_register_cleanup(char *path, bool directory, bool ignore, bool job
             ++ninfo;
         }
     }
+#endif
 
     /* if they want this applied to the job, then indicate so */
     if (jobscope) {
@@ -781,7 +789,11 @@ static void dsicon(opal_ds_info_t *p)
 {
     PMIX_PROC_CONSTRUCT(&p->source);
     p->info = NULL;
+#if OPAL_PMIX_VERSION < 3
+    p->persistence = PMIX_PERSIST_INDEF;
+#else
     p->persistence = PMIX_PERSIST_INVALID;
+#endif
 }
 OBJ_CLASS_INSTANCE(opal_ds_info_t,
                    opal_list_item_t,

@@ -107,6 +107,8 @@ typedef struct {
     opal_pmix_lock_t lock;
 } orte_odls_jcaddy_t;
 
+
+#if OPAL_PMIX_VERSION >= 3
 static void setup_cbfunc(pmix_status_t status,
                          pmix_info_t info[], size_t ninfo,
                          void *provided_cbdata,
@@ -168,6 +170,8 @@ static void setup_cbfunc(pmix_status_t status,
     OPAL_PMIX_WAKEUP_THREAD(&cd->lock);
 
 }
+#endif
+
 /* IT IS CRITICAL THAT ANY CHANGE IN THE ORDER OF THE INFO PACKED IN
  * THIS FUNCTION BE REFLECTED IN THE CONSTRUCT_CHILD_LIST PARSER BELOW
 */
@@ -184,7 +188,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     void *nptr;
     uint32_t key;
     char *nidmap;
-    orte_proc_t *dmn, *proc, *pptr;
+    orte_proc_t *dmn, *proc;
     pmix_value_t *val = NULL;
     pmix_info_t *info;
     size_t ninfo;
@@ -192,10 +196,13 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     pmix_data_buffer_t pbuf;
     pmix_status_t ret;
     pmix_byte_object_t pbo;
-    orte_odls_jcaddy_t cd = {0};
-    char **list, **procs, **micro, *tmp, *regex;
-    int i, k;
     orte_node_t *node;
+#if OPAL_PMIX_VERSION >= 3
+    int i, k;
+    char **list, **procs, **micro, *tmp, *regex;
+    orte_odls_jcaddy_t cd = {0};
+    orte_proc_t *pptr;
+#endif
 
     /* get the job data pointer */
     if (NULL == (jdata = orte_get_job_data_object(job))) {
@@ -447,6 +454,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         free(nidmap);
     }
 
+#if OPAL_PMIX_VERSION >= 3
     /* assemble the node and proc map info */
     list = NULL;
     procs = NULL;
@@ -533,6 +541,10 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         OPAL_PMIX_WAIT_THREAD(&cd.lock);
     }
     OPAL_PMIX_DESTRUCT_LOCK(&cd.lock);
+#else
+    /* move to next stage */
+    ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_SEND_LAUNCH_MSG);
+#endif
     return rc;
 }
 
@@ -556,14 +568,17 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
     orte_app_context_t *app;
     int8_t flag;
     char *ppn;
-    opal_envar_t envt;
     opal_pmix_lock_t lock;
-    pmix_data_buffer_t pbuf;
-    opal_byte_object_t *bo;
     pmix_info_t *info = NULL;
-    size_t m, ninfo=0;
+    size_t ninfo=0;
     pmix_status_t ret;
     pmix_proc_t pproc;
+#if OPAL_PMIX_VERSION >= 3
+    pmix_data_buffer_t pbuf;
+    opal_byte_object_t *bo;
+    size_t m;
+    opal_envar_t envt;
+#endif
 
     OPAL_OUTPUT_VERBOSE((5, orte_odls_base_framework.framework_output,
                          "%s odls:constructing child list",
@@ -735,6 +750,7 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
     }
     free(ppn);
 
+#if OPAL_PMIX_VERSION >= 3
     /* unpack the buffer containing any application setup info - there
      * might not be any, so it isn't an error if we don't find things */
     cnt=1;
@@ -807,6 +823,7 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
             }
         }
     }
+#endif
 
     /* now that the node array in the job map and jdata are completely filled out,.
      * we need to "wireup" the procs to their nodes so other utilities can

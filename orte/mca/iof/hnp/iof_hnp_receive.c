@@ -51,6 +51,7 @@
 
 #include "iof_hnp.h"
 
+#if OPAL_PMIX_VERSION >= 3
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
@@ -59,6 +60,7 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
     lk->status = opal_pmix_convert_status(status);
     OPAL_PMIX_WAKEUP_THREAD(lk);
 }
+#endif
 
 void orte_iof_hnp_recv(int status, orte_process_name_t* sender,
                        opal_buffer_t* buffer, orte_rml_tag_t tag,
@@ -257,6 +259,7 @@ void orte_iof_hnp_recv(int status, orte_process_name_t* sender,
                  ORTE_VPID_WILDCARD == origin.vpid ||
                  sink->name.vpid == origin.vpid)) {
                 /* send the data to the tool */
+            #if OPAL_PMIX_VERSION >= 3
                     /* don't pass along zero byte blobs */
                 if (0 < numbytes) {
                     OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
@@ -297,6 +300,9 @@ void orte_iof_hnp_recv(int status, orte_process_name_t* sender,
                     }
                     OPAL_PMIX_DESTRUCT_LOCK(&lock);
                 }
+            #else
+                orte_iof_hnp_send_data_to_endpoint(&sink->daemon, &origin, stream, data, numbytes);
+            #endif
                 if (sink->exclusive) {
                     exclusive = true;
                 }

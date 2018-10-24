@@ -1195,6 +1195,7 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
             }
         }
 
+#if OPAL_PMIX_VERSION >= 3
         /* see if they provided their inventory */
         idx = 1;
         if (ORTE_SUCCESS == opal_dss.unpack(buffer, &bptr, &idx, OPAL_BYTE_OBJECT)) {
@@ -1240,6 +1241,7 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
                 OPAL_PMIX_DESTRUCT_LOCK(&lock);
             }
         }
+#endif
 
         /* do we already have this topology from some other node? */
         found = false;
