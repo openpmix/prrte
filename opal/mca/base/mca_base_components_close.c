@@ -12,6 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2013-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2018      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,10 +51,16 @@ void mca_base_component_close (const mca_base_component_t *component, int output
 {
     /* Close */
     if (NULL != component->mca_close_component) {
-        component->mca_close_component();
-        opal_output_verbose (MCA_BASE_VERBOSE_COMPONENT, output_id,
-                             "mca: base: close: component %s closed",
-                             component->mca_component_name);
+        if( OPAL_SUCCESS == component->mca_close_component() ) {
+            opal_output_verbose (MCA_BASE_VERBOSE_COMPONENT, output_id,
+                                 "mca: base: close: component %s closed",
+                                 component->mca_component_name);
+        } else {
+            opal_output_verbose (MCA_BASE_VERBOSE_COMPONENT, output_id,
+                                 "mca: base: close: component %s refused to close [drop it]",
+                                 component->mca_component_name);
+            return;
+        }
     }
 
     mca_base_component_unload (component, output_id);
