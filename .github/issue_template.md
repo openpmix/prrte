@@ -4,14 +4,7 @@ Thank you for taking the time to submit an issue!
 
 ### What version of the PMIx Reference Server are you using? (e.g., v1.0, v2.1, git master @ hash, etc.)
 
-### Is the reference server using its internal version of PMIx, or an external one?
-
-##### If external, what version of PMIx are you using? (e.g., v1.2.5, v2.0.3, v2.1.0, git branch name and hash, etc.)
-
-
-##### Describe how PMIx was installed (e.g., from a source/distribution tarball, from a git clone, from an operating system distribution package, etc.)
-
-
+##### What version of PMIx are you using? (e.g., v1.2.5, v2.0.3, v2.1.0, git branch name and hash, etc.)
 
 ### Please describe the system on which you are running
 
