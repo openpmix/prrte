@@ -56,6 +56,19 @@ orte_grpcomm_API_module_t orte_grpcomm = {
 
 static bool recv_issued = false;
 
+static int base_register(mca_base_register_flag_t flags)
+{
+    orte_grpcomm_base.context_id = 1;
+    mca_base_var_register("orte", "grpcomm", "base", "starting_context_id",
+                          "Starting value for assigning context id\'s",
+                          MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                          OPAL_INFO_LVL_9,
+                          MCA_BASE_VAR_SCOPE_READONLY,
+                          &orte_grpcomm_base.context_id);
+
+    return ORTE_SUCCESS;
+}
+
 static int orte_grpcomm_base_close(void)
 {
     orte_grpcomm_base_active_t *active;
@@ -95,12 +108,11 @@ static int orte_grpcomm_base_open(mca_base_open_flag_t flags)
     OBJ_CONSTRUCT(&orte_grpcomm_base.ongoing, opal_list_t);
     OBJ_CONSTRUCT(&orte_grpcomm_base.sig_table, opal_hash_table_t);
     opal_hash_table_init(&orte_grpcomm_base.sig_table, 128);
-    orte_grpcomm_base.context_id = 0;
 
     return mca_base_framework_components_open(&orte_grpcomm_base_framework, flags);
 }
 
-MCA_BASE_FRAMEWORK_DECLARE(orte, grpcomm, "GRPCOMM", NULL,
+MCA_BASE_FRAMEWORK_DECLARE(orte, grpcomm, "GRPCOMM", base_register,
                            orte_grpcomm_base_open,
                            orte_grpcomm_base_close,
                            mca_grpcomm_base_static_components, 0);
