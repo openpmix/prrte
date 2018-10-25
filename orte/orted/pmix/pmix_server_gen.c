@@ -1207,7 +1207,7 @@ void pmix_server_log_fn(const pmix_proc_t *client,
         bo.size = pbo.size;
         boptr = &bo;
         opal_dss.pack(buf, &boptr, 1, OPAL_BYTE_OBJECT);
-        OBJ_DESTRUCT(&bo);
+        free(bo.bytes);
         rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
                                      ORTE_PROC_MY_HNP, buf,
                                      ORTE_RML_TAG_LOGGING,
