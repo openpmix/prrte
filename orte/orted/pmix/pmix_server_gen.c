@@ -1202,7 +1202,6 @@ void pmix_server_log_fn(const pmix_proc_t *client,
         buf = OBJ_NEW(opal_buffer_t);
         opal_dss.pack(buf, &cnt, 1, OPAL_SIZE);
         PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
-        OBJ_CONSTRUCT(&bo, opal_buffer_t);
         bo.bytes = (uint8_t*)pbo.bytes;
         bo.size = pbo.size;
         boptr = &bo;
