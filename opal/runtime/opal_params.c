@@ -64,6 +64,8 @@ int opal_abort_delay = 0;
 bool opal_abort_print_stack = false;
 int opal_pmix_verbose_output = 0;
 
+int opal_max_thread_in_progress = 1;
+
 static bool opal_register_done = false;
 
 int opal_register_params(void)

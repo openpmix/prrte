@@ -2,6 +2,9 @@
 /*
  * Copyright (c) 2018      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2018      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2018      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +26,7 @@
 
 #include <stdatomic.h>
 #include <stdint.h>
-#include "opal/include/opal_stdint.h"
+#include "opal_stdint.h"
 
 #define OPAL_HAVE_ATOMIC_MEM_BARRIER 1
 
