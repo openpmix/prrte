@@ -608,7 +608,7 @@ static void _query(int sd, short args, void *cbdata)
                 rc = opal_hash_table_get_first_key_uint32(orte_job_data, &key, (void **)&jdata, &nptr);
                 while (OPAL_SUCCESS == rc) {
                     if (ORTE_PROC_MY_NAME->jobid != jdata->jobid) {
-                        memset(nspace, 0, 512);
+                        memset(nspace, 0, PMIX_MAX_NSLEN);
                         OPAL_PMIX_CONVERT_JOBID(nspace, jdata->jobid);
                         opal_argv_append_nosize(&nspaces, nspace);
                     }
