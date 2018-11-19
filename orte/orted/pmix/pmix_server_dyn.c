@@ -637,7 +637,7 @@ static void _cnlk(pmix_status_t status,
     pmix_status_t ret;
     pmix_data_buffer_t pbkt;
     opal_pmix_lock_t lock;
-    pmix_info_t  *info;
+    pmix_info_t  *info = NULL;
     size_t ninfo;
 
     ORTE_ACQUIRE_OBJECT(cd);

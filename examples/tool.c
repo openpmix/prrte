@@ -40,6 +40,7 @@ static void cbfunc(pmix_status_t status,
 
     /* do something with the returned info - it will be
      * released in the release_fn */
+fprintf(stderr, "Query returned %s\n", PMIx_Error_string(status));
 
     if (NULL != release_fn) {
         release_fn(release_cbdata);
@@ -54,13 +55,17 @@ int main(int argc, char **argv)
     pmix_query_t *query;
     size_t nq;
     volatile bool active;
+pmix_info_t info;
+
+PMIX_INFO_LOAD(&info, PMIX_SERVER_URI, argv[1], PMIX_STRING);
+fprintf(stderr, "Connecting to %s\n", argv[1]);
 
     /* init us */
-    if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, NULL, 0))) {
+    if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, &info, 1))) {
         fprintf(stderr, "PMIx_tool_init failed: %d\n", rc);
         exit(rc);
     }
-
+fprintf(stderr, "Connected\n");
     /* query something */
     nq = 2;
     PMIX_QUERY_CREATE(query, nq);

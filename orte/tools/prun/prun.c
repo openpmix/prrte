@@ -252,11 +252,10 @@ static void defhandler(size_t evhdlr_registration_id,
                        pmix_event_notification_cbfunc_fn_t cbfunc,
                        void *cbdata)
 {
+    opal_output(0, "DEFAULT HDLR %s", PMIx_Error_string(status));
     if (PMIX_ERR_UNREACH == status) {
         /* exit with a non-zero status */
         exit(1);
-    } else {
-        clean_abort(0, 0, NULL);
     }
 
     /* we _always_ have to execute the evhandler callback or
@@ -768,7 +767,7 @@ int prun(int argc, char *argv[])
         OPAL_PMIX_WAIT_THREAD(&lock);
         OPAL_PMIX_DESTRUCT_LOCK(&lock);
         fprintf(stderr, "DONE\n");
-        goto DONE;
+        goto DONE2;
     }
 
     /* register a default event handler */
@@ -1165,6 +1164,7 @@ int prun(int argc, char *argv[])
   DONE:
     /* cleanup and leave */
     PMIx_tool_finalize();
+  DONE2:
     opal_progress_thread_finalize(NULL);
     opal_finalize();
     return rc;
