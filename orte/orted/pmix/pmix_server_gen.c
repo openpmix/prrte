@@ -608,7 +608,7 @@ static void _query(int sd, short args, void *cbdata)
                 rc = opal_hash_table_get_first_key_uint32(orte_job_data, &key, (void **)&jdata, &nptr);
                 while (OPAL_SUCCESS == rc) {
                     if (ORTE_PROC_MY_NAME->jobid != jdata->jobid) {
-                        memset(nspace, 0, 512);
+                        memset(nspace, 0, PMIX_MAX_NSLEN);
                         OPAL_PMIX_CONVERT_JOBID(nspace, jdata->jobid);
                         opal_argv_append_nosize(&nspaces, nspace);
                     }
@@ -765,8 +765,14 @@ static void _query(int sd, short args, void *cbdata)
                     opal_list_append(results, &kv->super);
                 }
             #endif
-            } else if (0 == strncmp(q->keys[n], PMIX_SERVER_URI, PMIX_MAX_KEYLEN)) {
+            } else if (0 == strncmp(q->keys[n], PMIX_PROC_URI, PMIX_MAX_KEYLEN)) {
                 /* they want our URI */
+                kv = OBJ_NEW(opal_ds_info_t);
+                PMIX_INFO_CREATE(kv->info, 1);
+                PMIX_INFO_LOAD(kv->info, PMIX_PROC_URI, orte_process_info.my_hnp_uri, PMIX_STRING);
+                opal_list_append(results, &kv->super);
+            } else if (0 == strncmp(q->keys[n], PMIX_SERVER_URI, PMIX_MAX_KEYLEN)) {
+                /* they want our PMIx URI */
                 kv = OBJ_NEW(opal_ds_info_t);
                 PMIX_INFO_CREATE(kv->info, 1);
                 PMIX_INFO_LOAD(kv->info, PMIX_SERVER_URI, orte_process_info.my_hnp_uri, PMIX_STRING);
@@ -1159,7 +1165,6 @@ void pmix_server_log_fn(const pmix_proc_t *client,
     pmix_data_buffer_t pbuf;
     pmix_byte_object_t pbo;
     pmix_proc_t psender;
-    orte_process_name_t proxy;
     pmix_status_t ret;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
@@ -1219,7 +1224,7 @@ void pmix_server_log_fn(const pmix_proc_t *client,
     /* we cannot directly execute the callback here
      * as it would threadlock - so shift to somewhere
      * safe */
-    ORTE_PMIX_THREADSHIFT(&proxy, NULL, rc,
+    ORTE_PMIX_THREADSHIFT(ORTE_NAME_WILDCARD, NULL, rc,
                           NULL, NULL, 0, lgcbfn,
                           cbfunc, cbdata);
 }

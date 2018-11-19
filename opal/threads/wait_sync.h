@@ -9,7 +9,7 @@
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
- * Copyright (c) 2017      Intel, Inc. All rights reserved.
+ * Copyright (c) 2017-2018 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,6 +26,8 @@
 #include <pthread.h>
 
 BEGIN_C_DECLS
+
+extern int opal_max_thread_in_progress;
 
 typedef struct ompi_wait_sync_t {
     opal_atomic_int32_t count;

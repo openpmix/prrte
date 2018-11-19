@@ -68,11 +68,8 @@ ORTE_DECLSPEC extern mca_base_framework_t orte_state_base_framework;
 #define ORTE_FORCED_TERMINATE(x)                                                    \
     do {                                                                            \
         if (!orte_abnormal_term_ordered) {                                          \
-            orte_errmgr.abort((x), "%s FORCE-TERMINATE AT %s:%d - error %s(%d)",    \
-                                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),                 \
-                                ORTE_ERROR_NAME((x)), (x),                          \
-                                __FILE__, __LINE__);                                \
-        }                                                                           \
+            opal_output(0, "FORCE TERMINATE ORDERED %s:%d", __FILE__, __LINE__);    \
+        } \
     } while(0);
 
 #define ORTE_ACTIVATE_JOB_STATE(j, s)                                       \

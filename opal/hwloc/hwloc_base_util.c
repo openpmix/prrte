@@ -1347,9 +1347,11 @@ opal_hwloc_locality_t opal_hwloc_base_get_relative_locality(hwloc_topology_t top
  */
 char* opal_hwloc_base_find_coprocessors(hwloc_topology_t topo)
 {
+#if HAVE_DECL_HWLOC_OBJ_OSDEV_COPROC
     hwloc_obj_t osdev;
     unsigned i;
     char **cps = NULL;
+#endif
     char *cpstring = NULL;
     int depth;
 
@@ -1687,7 +1689,7 @@ int opal_hwloc_base_cset2str(char *str, int len,
     bool first;
     int num_sockets, num_cores;
     int ret, socket_index, core_index;
-    char tmp[BUFSIZ];
+    char tmp[2048];
     const int stmp = sizeof(tmp) - 1;
     int **map=NULL;
     hwloc_obj_t root;
@@ -1850,8 +1852,9 @@ static void sort_by_dist(hwloc_topology_t topo, char* device_name, opal_list_t *
     hwloc_obj_t root = NULL;
     int depth;
     unsigned i;
-#endif
+#else
     unsigned distances_nr = 0;
+#endif
 
     for (device_obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_OS_DEVICE, 0); device_obj; device_obj = hwloc_get_next_osdev(topo, device_obj)) {
         if (device_obj->attr->osdev.type == HWLOC_OBJ_OSDEV_OPENFABRICS
@@ -1882,7 +1885,7 @@ static void sort_by_dist(hwloc_topology_t topo, char* device_name, opal_list_t *
 
                 /* find distance matrix for all numa nodes */
 #if HWLOC_API_VERSION < 0x20000
-                distances = hwloc_get_whole_distance_matrix_by_type(topo, HWLOC_OBJ_NODE);
+                distances = (struct hwloc_distances_s*)hwloc_get_whole_distance_matrix_by_type(topo, HWLOC_OBJ_NODE);
                 if (NULL ==  distances) {
                     /* we can try to find distances under group object. This info can be there. */
                     depth = hwloc_get_type_depth(topo, HWLOC_OBJ_NODE);

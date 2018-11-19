@@ -32,6 +32,7 @@
 #include "opal/util/output.h"
 #include "opal/util/printf.h"
 #include "opal/dss/dss.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/mca/iof/base/base.h"
 #include "orte/mca/rml/rml.h"
@@ -377,6 +378,22 @@ static void proc_errors(int fd, short args, void *cbdata)
     }
 
   keep_going:
+    /* if this is a continuously operating job, then there is nothing more
+     * to do - we let the job continue to run */
+    if (orte_get_attribute(&jdata->attributes, ORTE_JOB_CONTINUOUS_OP, NULL, OPAL_BOOL) ||
+        ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_RECOVERABLE)) {
+        /* always mark the waitpid as having fired */
+        ORTE_ACTIVATE_PROC_STATE(&pptr->name, ORTE_PROC_STATE_WAITPID_FIRED);
+        /* if this is a remote proc, we won't hear anything more about it
+         * as the default behavior would be to terminate the job. So be sure to
+         * mark the IOF as having completed too so we correctly mark this proc
+         * as dead and notify everyone as required */
+        if (!ORTE_FLAG_TEST(pptr, ORTE_PROC_FLAG_LOCAL)) {
+            ORTE_ACTIVATE_PROC_STATE(&pptr->name, ORTE_PROC_STATE_IOF_COMPLETE);
+        }
+        goto cleanup;
+    }
+
     /* ensure we record the failed proc properly so we can report
      * the error once we terminate
      */

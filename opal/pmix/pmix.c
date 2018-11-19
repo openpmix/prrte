@@ -655,7 +655,7 @@ int opal_pmix_value_unload(opal_value_t *kv,
             /* handle the various types */
             if (PMIX_INFO == v->data.darray->type) {
                 pmix_info_t *iptr = (pmix_info_t*)v->data.darray->array;
-                if (NULL != iptr[n].key) {
+                if (0 < strlen(iptr[n].key)) {
                     ival->key = strdup(iptr[n].key);
                 }
                 rc = opal_pmix_value_unload(ival, &iptr[n].value);

@@ -355,6 +355,15 @@ int pmix_server_init(void)
     }
 #endif
 
+    /* PRRTE always allows remote tool connections */
+    if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
+        kv = OBJ_NEW(opal_value_t);
+        kv->key = strdup(PMIX_SERVER_REMOTE_CONNECTIONS);
+        kv->type = OPAL_BOOL;
+        kv->data.flag = true;
+        opal_list_append(&ilist, &kv->super);
+    }
+
     /* convert to an info array */
     ninfo = opal_list_get_size(&ilist) + 2;
     PMIX_INFO_CREATE(info, ninfo);

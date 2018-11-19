@@ -28,11 +28,54 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <pthread.h>
 
 #include <pmix.h>
 
 static pmix_proc_t myproc;
-static bool completed;
+
+typedef struct {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    volatile bool active;
+    pmix_status_t status;
+    int exit_code;
+    bool exit_code_given;
+} mylock_t;
+
+#define DEBUG_CONSTRUCT_LOCK(l)                     \
+    do {                                            \
+        pthread_mutex_init(&(l)->mutex, NULL);      \
+        pthread_cond_init(&(l)->cond, NULL);        \
+        (l)->active = true;                         \
+        (l)->status = PMIX_SUCCESS;                 \
+        (l)->exit_code = 0;                         \
+        (l)->exit_code_given = false;               \
+    } while(0)
+
+#define DEBUG_DESTRUCT_LOCK(l)              \
+    do {                                    \
+        pthread_mutex_destroy(&(l)->mutex); \
+        pthread_cond_destroy(&(l)->cond);   \
+    } while(0)
+
+#define DEBUG_WAIT_THREAD(lck)                                      \
+    do {                                                            \
+        pthread_mutex_lock(&(lck)->mutex);                          \
+        while ((lck)->active) {                                     \
+            pthread_cond_wait(&(lck)->cond, &(lck)->mutex);         \
+        }                                                           \
+        pthread_mutex_unlock(&(lck)->mutex);                        \
+    } while(0)
+
+#define DEBUG_WAKEUP_THREAD(lck)                        \
+    do {                                                \
+        pthread_mutex_lock(&(lck)->mutex);              \
+        (lck)->active = false;                          \
+        pthread_cond_broadcast(&(lck)->cond);           \
+        pthread_mutex_unlock(&(lck)->mutex);            \
+    } while(0)
+
 
 static void notification_fn(size_t evhdlr_registration_id,
                             pmix_status_t status,
@@ -42,22 +85,68 @@ static void notification_fn(size_t evhdlr_registration_id,
                             pmix_event_notification_cbfunc_fn_t cbfunc,
                             void *cbdata)
 {
-    fprintf(stderr, "Client %s:%d NOTIFIED with status %d\n", myproc.nspace, myproc.rank, status);
-    completed = true;
+    mylock_t *lock;
+    pmix_status_t rc;
+    bool found;
+    int exit_code;
+    size_t n;
+    pmix_proc_t *affected = NULL;
+
+    /* find our return object */
+    lock = NULL;
+    found = false;
+    for (n=0; n < ninfo; n++) {
+        if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
+            lock = (mylock_t*)info[n].value.data.ptr;
+            /* not every RM will provide an exit code, but check if one was given */
+        } else if (0 == strncmp(info[n].key, PMIX_EXIT_CODE, PMIX_MAX_KEYLEN)) {
+            exit_code = info[n].value.data.integer;
+            found = true;
+        } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
+            affected = info[n].value.data.proc;
+        }
+    }
+    /* if the object wasn't returned, then that is an error */
+    if (NULL == lock) {
+        fprintf(stderr, "LOCK WASN'T RETURNED IN RELEASE CALLBACK\n");
+        /* let the event handler progress */
+        if (NULL != cbfunc) {
+            cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
+        }
+        return;
+    }
+
+    /* tell the event handler state machine that we are the last step */
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+    fprintf(stderr, "DEBUGGER DAEMON NOTIFIED TERMINATED - AFFECTED %s\n",
+            (NULL == affected) ? "NULL" : affected->nspace);
+
+    if (found) {
+        lock->exit_code = exit_code;
+        lock->exit_code_given = true;
+    }
+    DEBUG_WAKEUP_THREAD(lock);
 }
 
 static void op_callbk(pmix_status_t status,
                       void *cbdata)
 {
+    mylock_t *lock = (mylock_t*)cbdata;
     fprintf(stderr, "Client %s:%d OP CALLBACK CALLED WITH STATUS %d\n", myproc.nspace, myproc.rank, status);
+    DEBUG_WAKEUP_THREAD(lock);
 }
 
-static void errhandler_reg_callbk(pmix_status_t status,
+static void evhandler_reg_callbk(pmix_status_t status,
                                   size_t errhandler_ref,
                                   void *cbdata)
 {
+    mylock_t *lock = (mylock_t*)cbdata;
+
     fprintf(stderr, "Client %s:%d ERRHANDLER REGISTRATION CALLBACK CALLED WITH STATUS %d, ref=%lu\n",
                myproc.nspace, myproc.rank, status, (unsigned long)errhandler_ref);
+    DEBUG_WAKEUP_THREAD(lock);
 }
 
 int main(int argc, char **argv)
@@ -67,6 +156,9 @@ int main(int argc, char **argv)
     pmix_value_t *val = &value;
     pmix_proc_t proc;
     uint32_t nprocs;
+    pmix_info_t *info;
+    mylock_t mylock, myrel;
+    pmix_status_t code[2] = {PMIX_ERR_PROC_ABORTED, PMIX_ERR_JOB_TERMINATED};
 
     /* init us */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
@@ -87,11 +179,27 @@ int main(int argc, char **argv)
     nprocs = val->data.uint32;
     PMIX_VALUE_RELEASE(val);
     fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, nprocs);
-    completed = false;
 
-    /* register our errhandler */
-    PMIx_Register_event_handler(NULL, 0, NULL, 0,
-                                notification_fn, errhandler_reg_callbk, NULL);
+    /* register another handler specifically for when the target
+     * job completes */
+    DEBUG_CONSTRUCT_LOCK(&myrel);
+    PMIX_INFO_CREATE(info, 2);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
+    /* only call me back when one of us terminates */
+    PMIX_INFO_LOAD(&info[1], PMIX_NSPACE, myproc.nspace, PMIX_STRING);
+
+    DEBUG_CONSTRUCT_LOCK(&mylock);
+    PMIx_Register_event_handler(code, 2, info, 2,
+                                notification_fn, evhandler_reg_callbk, (void*)&mylock);
+    DEBUG_WAIT_THREAD(&mylock);
+    if (PMIX_SUCCESS != mylock.status) {
+        rc = mylock.status;
+        DEBUG_DESTRUCT_LOCK(&mylock);
+        PMIX_INFO_FREE(info, 2);
+        goto done;
+    }
+    DEBUG_DESTRUCT_LOCK(&mylock);
+    PMIX_INFO_FREE(info, 2);
 
     /* call fence to sync */
     PMIX_PROC_CONSTRUCT(&proc);
@@ -109,17 +217,15 @@ int main(int argc, char **argv)
         exit(1);
     }
     /* everyone simply waits */
-    while (!completed) {
-        struct timespec ts;
-        ts.tv_sec = 0;
-        ts.tv_nsec = 100000;
-        nanosleep(&ts, NULL);
-    }
+    DEBUG_WAIT_THREAD(&myrel);
 
  done:
     /* finalize us */
     fprintf(stderr, "Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
-    PMIx_Deregister_event_handler(1, op_callbk, NULL);
+    DEBUG_CONSTRUCT_LOCK(&mylock);
+    PMIx_Deregister_event_handler(1, op_callbk, &mylock);
+    DEBUG_WAIT_THREAD(&mylock);
+    DEBUG_DESTRUCT_LOCK(&mylock);
 
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
         fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %d\n", myproc.nspace, myproc.rank, rc);
