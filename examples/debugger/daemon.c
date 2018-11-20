@@ -275,7 +275,8 @@ int main(int argc, char **argv)
     PMIX_INFO_CREATE(info, 2);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
     /* only call me back when this specific job terminates */
-    PMIX_INFO_LOAD(&info[1], PMIX_NSPACE, target, PMIX_STRING);
+    PMIX_LOAD_PROCID(&proc, target, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
 
     DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIx_Register_event_handler(&code, 1, info, 2,
