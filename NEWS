@@ -59,6 +59,27 @@ Master (not on release branches yet)
 ------------------------------------
 
 **********************************************************************
+PRRTE NEWS
+
+1.0.0 -- Nov 2018
+------------------------
+This represents the initial release of the PMIx Reference RunTime
+Environment. It corresponds to the state of the upstream OpenMPI
+master branch as of 24Nov2018, which is roughly the state of the
+v4.0.1 OMPI release from which it derives. Since PRRTE is an
+independent project with its own release cycle, but derives from
+the OMPI master branch of ORTE and OPAL, each PRRTE release will
+have its own version triplet but the ORTE and OPAL libraries within
+it will track the upstream values.
+
+
+**********************************************************************
+
+**********************************************************************
+THIS STARTS THE UPSTREAM NEWS. NOTE THAT MANY, IF NOT MOST, OF THE
+UPSTREAM NEWS ITEMS PERTAIN TO CODE AREAS NOT INCLUDED IN PRRTE. THIS
+INCLUDES ALL MENTIONS OF MPI AND OPEN SHMEM LAYERS
+**********************************************************************
 *  PRE-DEPRECATION WARNING: MPIR Support
 *
 * As was announced in summer 2017, Open MPI is deprecating support for
