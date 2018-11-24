@@ -252,7 +252,6 @@ static void defhandler(size_t evhdlr_registration_id,
                        pmix_event_notification_cbfunc_fn_t cbfunc,
                        void *cbdata)
 {
-    opal_output(0, "DEFAULT HDLR %s", PMIx_Error_string(status));
     if (PMIX_ERR_UNREACH == status) {
         /* exit with a non-zero status */
         exit(1);
@@ -759,6 +758,18 @@ int prun(int argc, char *argv[])
 
     /* if the user just wants us to terminate a DVM, then do so */
     if (myoptions.terminate_dvm) {
+        /* setup a lock to track the connection */
+        OPAL_PMIX_CONSTRUCT_LOCK(&rellock);
+        /* register to trap connection loss */
+        pmix_status_t code[6] = {PMIX_ERR_PROC_ABORTING, PMIX_ERR_PROC_ABORTED,
+                                 PMIX_ERR_PROC_REQUESTED_ABORT, PMIX_ERR_JOB_TERMINATED,
+                                 PMIX_ERR_UNREACH, PMIX_ERR_LOST_CONNECTION_TO_SERVER};
+        OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+        PMIX_INFO_LOAD(&info, PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
+        PMIx_Register_event_handler(code, 6, &info, 1,
+                                    evhandler, regcbfunc, &lock);
+        OPAL_PMIX_WAIT_THREAD(&lock);
+        OPAL_PMIX_DESTRUCT_LOCK(&lock);
         flag = true;
         PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
         fprintf(stderr, "TERMINATING DVM...");
@@ -766,8 +777,12 @@ int prun(int argc, char *argv[])
         PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
         OPAL_PMIX_WAIT_THREAD(&lock);
         OPAL_PMIX_DESTRUCT_LOCK(&lock);
+        /* wait for connection to depart */
+        OPAL_PMIX_WAIT_THREAD(&rellock);
+        OPAL_PMIX_DESTRUCT_LOCK(&rellock);
+        /* wait for the connection to go away */
         fprintf(stderr, "DONE\n");
-        goto DONE2;
+        goto DONE;
     }
 
     /* register a default event handler */
@@ -1026,6 +1041,7 @@ int prun(int argc, char *argv[])
          * values - must do so prior to registering in case
          * the event has already arrived */
         OBJ_CONSTRUCT(&myinfo, myinfo_t);
+
         /* go ahead and register */
         PMIx_Register_event_handler(&ret, 1, NULL, 0, launchhandler, regcbfunc, &lock);
         OPAL_PMIX_WAIT_THREAD(&lock);
@@ -1118,6 +1134,7 @@ int prun(int argc, char *argv[])
         }
         ++n;
     }
+
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, nspace);
     if (PMIX_SUCCESS != ret) {
         opal_output(0, "Job failed to spawn: %s", PMIx_Error_string(ret));
@@ -1161,10 +1178,10 @@ int prun(int argc, char *argv[])
     OPAL_PMIX_WAIT_THREAD(&lock);
     OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
+
   DONE:
     /* cleanup and leave */
     PMIx_tool_finalize();
-  DONE2:
     opal_progress_thread_finalize(NULL);
     opal_finalize();
     return rc;
