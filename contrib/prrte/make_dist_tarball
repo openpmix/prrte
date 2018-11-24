@@ -100,7 +100,7 @@ EOF
     shift
 done
 
-# pmix needs libevent to build.  If $LIBEVENT is set in the
+# prrte needs libevent to build.  If $LIBEVENT is set in the
 # environment, automatically add it to the config_args.
 if test "$LIBEVENT" != ""; then
     echo "*** Found \$LIBEVENT: $LIBEVENT"
@@ -307,7 +307,7 @@ make_tarball() {
     # move
     #
     echo "*** Moving tarballs..."
-    mv pmix-* $distdir
+    mv prrte-* $distdir
 
     echo "*** All done"
 }
