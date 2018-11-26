@@ -16,8 +16,8 @@
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2014-2016 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2018 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -305,6 +305,7 @@ static void interim(int sd, short args, void *cbdata)
             }
         }
     }
+    PMIX_APP_FREE(cd->apps, cd->napps);
 
     /* transfer the job info across */
     for (m=0; m < cd->ninfo; m++) {

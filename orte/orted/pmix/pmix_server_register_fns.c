@@ -16,8 +16,8 @@
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2014-2016 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2018 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -580,8 +580,8 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         OPAL_PMIX_WAIT_THREAD(&lock);
         rc = lock.status;
         OPAL_PMIX_DESTRUCT_LOCK(&lock);
-        PMIX_INFO_FREE(pinfo, ninfo);
     }
+    PMIX_INFO_FREE(pinfo, ninfo);
 
     return rc;
 }

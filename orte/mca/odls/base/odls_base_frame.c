@@ -13,8 +13,8 @@
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2017 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2018 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2018 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -70,6 +70,8 @@ orte_odls_base_module_t orte_odls = {0};
  * Framework global variables
  */
 orte_odls_globals_t orte_odls_globals = {0};
+
+static opal_event_base_t ** orte_event_base_ptr = NULL;
 
 static int orte_odls_base_register(mca_base_register_flag_t flags)
 {
@@ -174,9 +176,12 @@ void orte_odls_base_start_threads(orte_job_t *jdata)
         }
     }
     if (0 == orte_odls_globals.num_threads) {
-        orte_odls_globals.ev_bases = (opal_event_base_t**)malloc(sizeof(opal_event_base_t*));
-        /* use the default event base */
-        orte_odls_globals.ev_bases[0] = orte_event_base;
+        if (NULL == orte_event_base_ptr) {
+            orte_event_base_ptr = (opal_event_base_t**)malloc(sizeof(opal_event_base_t*));
+            /* use the default event base */
+            orte_event_base_ptr[0] = orte_event_base;
+        }
+        orte_odls_globals.ev_bases = orte_event_base_ptr;
     } else {
         orte_odls_globals.ev_bases =
             (opal_event_base_t**)malloc(orte_odls_globals.num_threads * sizeof(opal_event_base_t*));

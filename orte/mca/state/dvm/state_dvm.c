@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2015-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2018      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -674,6 +676,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         code = PMIX_ERR_JOB_TERMINATED;
         if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &code, 1, PMIX_STATUS))) {
             PMIX_ERROR_LOG(ret);
+            PMIX_INFO_FREE(info, ninfo);
             return;
         }
         /* pack the source - it cannot be me as that will cause
@@ -683,23 +686,28 @@ static void dvm_notify(int sd, short args, void *cbdata)
         OPAL_PMIX_CONVERT_NAME(&psource, &pnotify);
         if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &psource, 1, PMIX_PROC))) {
             PMIX_ERROR_LOG(ret);
+            PMIX_INFO_FREE(info, ninfo);
             return;
         }
         /* pack the range */
         if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
             PMIX_ERROR_LOG(ret);
+            PMIX_INFO_FREE(info, ninfo);
             return;
         }
         /* pack the number of infos */
         if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &ninfo, 1, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
+            PMIX_INFO_FREE(info, ninfo);
             return;
         }
         /* pack the infos themselves */
         if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, info, ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
+            PMIX_INFO_FREE(info, ninfo);
             return;
         }
+        PMIX_INFO_FREE(info, ninfo);
 
         /* unload the data buffer */
         PMIX_DATA_BUFFER_UNLOAD(&pbkt, pbo.bytes, pbo.size);
@@ -761,4 +769,5 @@ static void dvm_notify(int sd, short args, void *cbdata)
     orte_grpcomm.xcast(sig, ORTE_RML_TAG_DAEMON, reply);
     OBJ_RELEASE(reply);
     OBJ_RELEASE(sig);
+    OBJ_RELEASE(caddy);
 }

@@ -577,13 +577,16 @@ static void _send_notification(int status,
     /* pack the number of infos */
     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(ret);
+        PMIX_INFO_FREE(info, ninfo);
         return;
     }
     /* pack the infos themselves */
     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, info, ninfo, PMIX_INFO))) {
         PMIX_ERROR_LOG(ret);
+        PMIX_INFO_FREE(info, ninfo);
         return;
     }
+    PMIX_INFO_FREE(info, ninfo);
 
     /* unload the data buffer */
     PMIX_DATA_BUFFER_UNLOAD(&pbkt, pbo.bytes, pbo.size);
