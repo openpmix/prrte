@@ -80,6 +80,7 @@ struct orte_cmd_options_t {
     int timeout;
     bool report_state_on_timeout;
     bool get_stack_traces;
+    char *pset;
 };
 typedef struct orte_cmd_options_t orte_cmd_options_t;
 ORTE_DECLSPEC extern orte_cmd_options_t orte_cmd_options;
