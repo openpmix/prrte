@@ -296,6 +296,11 @@ static void interim(int sd, short args, void *cbdata)
                     orte_add_attribute(&app->attributes, ORTE_APP_APPEND_ENVAR,
                                        ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
 
+#if OPAL_PMIX_VERSION >= 4
+                } else if (0 == strcmp(info->key, PMIX_PSET_NAME)) {
+                    orte_set_attribute(&app->attributes, ORTE_APP_PSET_NAME,
+                                       ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
+#endif
                 } else {
                     /* unrecognized key */
                     orte_show_help("help-orted.txt", "bad-key",

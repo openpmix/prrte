@@ -54,6 +54,8 @@ typedef uint8_t orte_app_context_flags_t;
 #define ORTE_APP_ADD_ENVAR          21    // opal_envar_t - add envar, do not override pre-existing one
 #define ORTE_APP_DEBUGGER_DAEMON    22    // bool - flag that this app describes daemons to be co-launched
                                           //        with the application procs in the other apps
+#define ORTE_APP_PSET_NAME          23    // string - user-assigned name for the process
+                                          //          set containing the given process
 
 #define ORTE_APP_MAX_KEY        100
 

@@ -1448,6 +1448,14 @@ static int create_app(int argc, char* argv[],
         app->app.cwd = strdup(cwd);
     }
 
+    /* if they specified a process set name, then pass it along */
+    if (NULL != orte_cmd_options.pset) {
+        val = OBJ_NEW(opal_ds_info_t);
+        PMIX_INFO_CREATE(val->info, 1);
+        PMIX_INFO_LOAD(val->info, PMIX_PSET_NAME, orte_cmd_options.pset, PMIX_STRING);
+        opal_list_append(&app->info, &val->super);
+    }
+
     /* Did the user specify a hostfile. Need to check for both
      * hostfile and machine file.
      * We can only deal with one hostfile per app context, otherwise give an error.

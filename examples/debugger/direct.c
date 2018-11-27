@@ -143,16 +143,11 @@ static void release_fn(size_t evhdlr_registration_id,
         return;
     }
 
-    /* see if the code is LAUNCHER_READY */
-    if (PMIX_LAUNCHER_READY == status) {
-            fprintf(stderr, "%d DEBUGGER NOTIFIED THAT LAUNCHER IS READY\n", (int)getpid());
-    } else {
-        fprintf(stderr, "DEBUGGER NOTIFIED THAT JOB %s TERMINATED - AFFECTED %s\n", lock->nspace,
-                (NULL == affected) ? "NULL" : affected->nspace);
-        if (found) {
-            lock->exit_code = exit_code;
-            lock->exit_code_given = true;
-        }
+    fprintf(stderr, "DEBUGGER NOTIFIED THAT JOB %s TERMINATED - AFFECTED %s\n", lock->nspace,
+            (NULL == affected) ? "NULL" : affected->nspace);
+    if (found) {
+        lock->exit_code = exit_code;
+        lock->exit_code_given = true;
     }
     DEBUG_WAKEUP_THREAD(&lock->lock);
 
@@ -264,15 +259,7 @@ int main(int argc, char **argv)
     myrel_t myrel, launcher_ready, dbrel;
     pid_t pid;
     pmix_envar_t envar;
-    char *launchers[] = {
-        "prun",
-        "mpirun",
-        "mpiexec",
-        "orterun",
-        NULL
-    };
     pmix_proc_t proc;
-    bool found;
     pmix_data_array_t darray;
     char *tmp;
     char clientspace[PMIX_MAX_NSLEN+1];

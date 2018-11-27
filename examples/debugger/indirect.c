@@ -194,6 +194,7 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     char dspace[PMIX_MAX_NSLEN+1];
     mylock_t mylock;
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
+    pmix_proc_t proc;
 
     /* setup the debugger */
     PMIX_APP_CREATE(debugger, 1);
@@ -229,7 +230,8 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     PMIX_INFO_CREATE(dinfo, 2);
     PMIX_INFO_LOAD(&dinfo[0], PMIX_EVENT_RETURN_OBJECT, myrel, PMIX_POINTER);
     /* only call me back when this specific job terminates */
-    PMIX_INFO_LOAD(&dinfo[1], PMIX_NSPACE, dspace, PMIX_STRING);
+    PMIX_LOAD_PROCID(&proc, dspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&dinfo[1], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
 
     DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIx_Register_event_handler(&code, 1, dinfo, 2,
@@ -405,7 +407,8 @@ int main(int argc, char **argv)
     PMIX_INFO_CREATE(info, 2);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
     /* only call me back when this specific job terminates */
-    PMIX_INFO_LOAD(&info[1], PMIX_NSPACE, clientspace, PMIX_STRING);
+    PMIX_LOAD_PROCID(&proc, clientspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
 
     DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIx_Register_event_handler(&code, 1, info, 2,

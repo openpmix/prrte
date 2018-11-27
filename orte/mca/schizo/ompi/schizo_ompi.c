@@ -497,6 +497,11 @@ static opal_cmd_line_init_t cmd_line_init[] = {
       "Comma-separated list of programming model, languages, and containers being used (default=\"ompi\")",
       OPAL_CMD_LINE_OTYPE_LAUNCH },
 
+    { NULL, '\0', "pset", "pset", 1,
+      &orte_cmd_options.pset, OPAL_CMD_LINE_TYPE_STRING,
+      "User-specified name assigned to the processes in their given application",
+      OPAL_CMD_LINE_OTYPE_LAUNCH },
+
     { NULL, '\0', "dvm", "dvm", 0,
       &orte_cmd_options.create_dvm, OPAL_CMD_LINE_TYPE_BOOL,
       "Create a persistent distributed virtual machine (DVM)",
