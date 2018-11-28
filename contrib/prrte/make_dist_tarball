@@ -380,6 +380,7 @@ for file in $version_files; do
     sed -e 's/^want_repo_rev=.*/want_repo_rev=0/' \
         -e 's/^repo_rev=.*/'repo_rev=$repo_rev/ \
         -e "s/^date=.*/date=\"$release_date\"/" \
+        -e "s/^tarball_version=.*/tarball_version=/" \
         $file > $file.new
     cp -f $file.new $file
     rm $file.new
