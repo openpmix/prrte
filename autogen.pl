@@ -81,8 +81,8 @@ if ($^O eq "solaris") {
     $patch_prog = "gpatch";
 }
 
-$username = getpwuid($>);
-$full_hostname = `hostname`;
+$username = $ENV{USER} || getpwuid($>);
+$full_hostname = $ENV{HOSTNAME} || `hostname`;
 chomp($full_hostname);
 $hostname = $full_hostname;
 $hostname =~ s/^([\w\-]+)\..+/\1/;
@@ -975,9 +975,6 @@ my $project_name_long = "PMIx-RunTime-Environment";
 my $project_name_short = "prrte";
 
 #---------------------------------------------------------------------------
-
-$full_hostname = `hostname`;
-chomp($full_hostname);
 
 $m4 = "dnl
 dnl \$HEADER\$
