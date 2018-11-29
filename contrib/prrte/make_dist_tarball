@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2008-2013 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2015-2018 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -100,7 +100,7 @@ EOF
     shift
 done
 
-# prrte needs libevent to build.  If $LIBEVENT is set in the
+# PRRTE needs libevent to build.  If $LIBEVENT is set in the
 # environment, automatically add it to the config_args.
 if test "$LIBEVENT" != ""; then
     echo "*** Found \$LIBEVENT: $LIBEVENT"
@@ -270,7 +270,7 @@ make_tarball() {
     #
     echo "*** Running autogen $autogen_args..."
     rm -f success
-    (./autogen.pl $autogen_args 2>&1 && touch success) | tee auto.out
+    (./autogen.pl --force $autogen_args 2>&1 && touch success) | tee auto.out
     if test ! -f success; then
         echo "Autogen failed.  Aborting"
         exit 1
@@ -327,9 +327,9 @@ if test $mac -eq 0; then
     check_gnu_version libtool $LT_TARGET_VERSION
 fi
 #
-# Verify that we're in a top PMIx dir
+# Verify that we're in a top PRRTE dir
 #
-echo "*** Checking to ensure in top-level PMIx directory..."
+echo "*** Checking to ensure in top-level PRRTE directory..."
 if test -f VERSION -a -f configure.ac -a -f config/pkg.m4 ; then
     happy=1
 else
@@ -380,6 +380,7 @@ for file in $version_files; do
     sed -e 's/^want_repo_rev=.*/want_repo_rev=0/' \
         -e 's/^repo_rev=.*/'repo_rev=$repo_rev/ \
         -e "s/^date=.*/date=\"$release_date\"/" \
+        -e "s/^tarball_version=.*/tarball_version=/" \
         $file > $file.new
     cp -f $file.new $file
     rm $file.new
