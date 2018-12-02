@@ -503,6 +503,14 @@ pmix_status_t pmix_value_unload(pmix_value_t *kv, void **data, size_t *sz);
 #define PMIX_OPERATION_IN_PROGRESS  -156
 #endif
 
+#ifndef PMIX_LOAD_KEY
+#define PMIX_LOAD_KEY(a, b) \
+    do {                                            \
+        memset((a), 0, PMIX_MAX_KEYLEN+1);          \
+        pmix_strncpy((a), (b), PMIX_MAX_KEYLEN);    \
+    }while(0)
+#endif
+
 END_C_DECLS
 
 #endif
