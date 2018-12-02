@@ -284,6 +284,14 @@ extern void pmix_server_notify(int status, orte_process_name_t* sender,
 
 /* exposed shared variables */
 typedef struct {
+  opal_list_item_t super;
+  char *name;
+  pmix_proc_t *members;
+  size_t num_members;
+} pmix_server_pset_t;
+OBJ_CLASS_DECLARATION(pmix_server_pset_t);
+
+typedef struct {
     bool initialized;
     int verbosity;
     int output;
@@ -297,6 +305,7 @@ typedef struct {
     bool session_server;
     bool system_server;
     bool legacy;
+    opal_list_t psets;
 } pmix_server_globals_t;
 
 extern pmix_server_globals_t orte_pmix_server_globals;

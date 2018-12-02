@@ -576,7 +576,7 @@ static void _query(int sd, short args, void *cbdata)
     float pss;
     bool local_only;
     orte_namelist_t *nm;
-    size_t p;
+    size_t p, sz;
     opal_list_t targets;
     int i, k, num_replies;
     orte_proc_t *proct;
@@ -717,14 +717,14 @@ static void _query(int sd, short args, void *cbdata)
                     }
                 }
 #endif
-            } else if (0 == strncmp(q->keys[n], PMIX_TIME_REMAINING, PMIX_MAX_KEYLEN)) {
+            } else if (0 == strcmp(q->keys[n], PMIX_TIME_REMAINING)) {
                 if (ORTE_SUCCESS == orte_schizo.get_remaining_time(&key)) {
                     kv = OBJ_NEW(opal_ds_info_t);
                     PMIX_INFO_CREATE(kv->info, 1);
                     PMIX_INFO_LOAD(kv->info, PMIX_TIME_REMAINING, &key, PMIX_UINT32);
                     opal_list_append(results, &kv->super);
                 }
-            } else if (0 == strncmp(q->keys[n], PMIX_HWLOC_XML_V1, PMIX_MAX_KEYLEN)) {
+            } else if (0 == strcmp(q->keys[n], PMIX_HWLOC_XML_V1)) {
                 if (NULL != opal_hwloc_topology) {
                     char *xmlbuffer=NULL;
                     int len;
@@ -748,7 +748,7 @@ static void _query(int sd, short args, void *cbdata)
                     free(xmlbuffer);
                     opal_list_append(results, &kv->super);
                 }
-            } else if (0 == strncmp(q->keys[n], PMIX_HWLOC_XML_V2, PMIX_MAX_KEYLEN)) {
+            } else if (0 == strcmp(q->keys[n], PMIX_HWLOC_XML_V2)) {
                 /* we cannot provide it if we are using v1.x */
             #if HWLOC_API_VERSION >= 0x20000
                 if (NULL != opal_hwloc_topology) {
@@ -765,20 +765,20 @@ static void _query(int sd, short args, void *cbdata)
                     opal_list_append(results, &kv->super);
                 }
             #endif
-            } else if (0 == strncmp(q->keys[n], PMIX_PROC_URI, PMIX_MAX_KEYLEN)) {
+            } else if (0 == strcmp(q->keys[n], PMIX_PROC_URI)) {
                 /* they want our URI */
                 kv = OBJ_NEW(opal_ds_info_t);
                 PMIX_INFO_CREATE(kv->info, 1);
                 PMIX_INFO_LOAD(kv->info, PMIX_PROC_URI, orte_process_info.my_hnp_uri, PMIX_STRING);
                 opal_list_append(results, &kv->super);
-            } else if (0 == strncmp(q->keys[n], PMIX_SERVER_URI, PMIX_MAX_KEYLEN)) {
+            } else if (0 == strcmp(q->keys[n], PMIX_SERVER_URI)) {
                 /* they want our PMIx URI */
                 kv = OBJ_NEW(opal_ds_info_t);
                 PMIX_INFO_CREATE(kv->info, 1);
                 PMIX_INFO_LOAD(kv->info, PMIX_SERVER_URI, orte_process_info.my_hnp_uri, PMIX_STRING);
                 opal_list_append(results, &kv->super);
     #if OPAL_PMIX_VERSION >= 3
-            } else if (0 == strncmp(q->keys[n], PMIX_QUERY_PROC_TABLE, PMIX_MAX_KEYLEN)) {
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PROC_TABLE)) {
                 /* the job they are asking about is in the qualifiers */
                 jobid = ORTE_JOBID_INVALID;
                 for (k=0; k < (int)q->nqual; k++) {
@@ -831,7 +831,7 @@ static void _query(int sd, short args, void *cbdata)
                     procinfo[p].state = opal_pmix_convert_state(proct->state);
                     ++p;
                 }
-            } else if (0 == strncmp(q->keys[n], PMIX_QUERY_LOCAL_PROC_TABLE, PMIX_MAX_KEYLEN)) {
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_LOCAL_PROC_TABLE)) {
                 /* the job they are asking about is in the qualifiers */
                 jobid = ORTE_JOBID_INVALID;
                 for (k=0; k < (int)q->nqual; k++) {
@@ -886,6 +886,26 @@ static void _query(int sd, short args, void *cbdata)
                         ++p;
                     }
                 }
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NUM_PSETS)) {
+                kv = OBJ_NEW(opal_ds_info_t);
+                PMIX_INFO_CREATE(kv->info, 1);
+                sz = opal_list_get_size(&orte_pmix_server_globals.psets);
+                PMIX_INFO_LOAD(kv->info, PMIX_QUERY_NUM_PSETS, &sz, PMIX_SIZE);
+                opal_list_append(results, &kv->super);
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PSET_NAMES)) {
+                pmix_server_pset_t *ps;
+                ans = NULL;
+                OPAL_LIST_FOREACH(ps, &orte_pmix_server_globals.psets, pmix_server_pset_t) {
+                    opal_argv_append_nosize(&ans, ps->name);
+                }
+                tmp = opal_argv_join(ans, ',');
+                opal_argv_free(ans);
+                ans = NULL;
+                kv = OBJ_NEW(opal_ds_info_t);
+                PMIX_INFO_CREATE(kv->info, 1);
+                PMIX_INFO_LOAD(kv->info, PMIX_QUERY_PSET_NAMES, tmp, PMIX_STRING);
+                opal_list_append(results, &kv->super);
+                free(tmp);
         #endif
             }
         } // for
@@ -1378,17 +1398,62 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
     orte_pmix_mdx_caddy_t *cd;
     int rc;
     size_t i, mode = 0;
+    pmix_server_pset_t *pset;
+    char *gpid = NULL;
+    bool fence = false;
 
     if (PMIX_GROUP_CONSTRUCT == op) {
-        /* check the directives for a request to assign a context id */
+        /* check the directives */
         for (i=0; i < ndirs; i++) {
+            /* see if they want a context id assigned */
             if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
                 if (PMIX_INFO_TRUE(&directives[i])) {
                     mode = 1;
                 }
+            } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ID)) {
+                gpid = directives[i].value.data.string;
+            } else if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
+                fence = PMIX_INFO_TRUE(&directives[i]);
+            }
+        }
+        /* they are required to pass us an id */
+        if (NULL == gpid) {
+            return PMIX_ERR_BAD_PARAM;
+        }
+        /* add it to our list of known process sets */
+        pset = OBJ_NEW(pmix_server_pset_t);
+        pset->name = strdup(gpid);
+        pset->num_members = nprocs;
+        PMIX_PROC_CREATE(pset->members, pset->num_members);
+        memcpy(pset->members, procs, nprocs * sizeof(pmix_proc_t));
+        opal_list_append(&orte_pmix_server_globals.psets, &pset->super);
+    } else if (PMIX_GROUP_DESTRUCT == op) {
+        /* check the directives */
+        for (i=0; i < ndirs; i++) {
+            /* see if they want a fence operation */
+            if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
+                fence = PMIX_INFO_TRUE(&directives[i]);
+            } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ID)) {
+                gpid = directives[i].value.data.string;
+            }
+        }
+        /* they are required to pass us an id */
+        if (NULL == gpid) {
+            return PMIX_ERR_BAD_PARAM;
+        }
+        /* find this process set on our list of groups */
+        OPAL_LIST_FOREACH(pset, &orte_pmix_server_globals.psets, pmix_server_pset_t) {
+            if (0 == strcmp(pset->name, gpid)) {
+                opal_list_remove_item(&orte_pmix_server_globals.psets, &pset->super);
+                OBJ_RELEASE(pset);
                 break;
             }
         }
+    }
+
+    /* if they don't want us to do a fence, then we are done */
+    if (!fence) {
+        return PMIX_OPERATION_SUCCEEDED;
     }
 
     cd = OBJ_NEW(orte_pmix_mdx_caddy_t);
