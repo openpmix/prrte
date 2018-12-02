@@ -510,6 +510,7 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         PMIX_LOAD_KEY(pinfo[ninfo].key, PMIX_LOCAL_PROCS);
         pinfo[ninfo].value.type = PMIX_DATA_ARRAY;
         PMIX_DATA_ARRAY_CREATE(pinfo[ninfo].value.data.darray, nmsize, PMIX_PROC);
+        PMIX_PROC_CREATE(pinfo[ninfo].value.data.darray->array, nmsize);
         procs = (pmix_proc_t*)pinfo[ninfo].value.data.darray->array;
         n = 0;
         OPAL_LIST_FOREACH(nm, &local_procs, opal_namelist_t) {
