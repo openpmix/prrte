@@ -531,11 +531,11 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     /* now add the local procs, if they are defined */
     if (0 < nmsize) {
         pmix_proc_t *procs;
-        PMIX_LOAD_KEY(pinfo[ninfo].key, PMIX_LOCAL_PROCS);
-        pinfo[ninfo].value.type = PMIX_DATA_ARRAY;
-        PMIX_DATA_ARRAY_CREATE(pinfo[ninfo].value.data.darray, nmsize, PMIX_PROC);
-        PMIX_PROC_CREATE(pinfo[ninfo].value.data.darray->array, nmsize);
-        procs = (pmix_proc_t*)pinfo[ninfo].value.data.darray->array;
+        PMIX_LOAD_KEY(pinfo[ninfo-1].key, PMIX_LOCAL_PROCS);
+        pinfo[ninfo-1].value.type = PMIX_DATA_ARRAY;
+        PMIX_DATA_ARRAY_CREATE(pinfo[ninfo-1].value.data.darray, nmsize, PMIX_PROC);
+        PMIX_PROC_CREATE(pinfo[ninfo-1].value.data.darray->array, nmsize);
+        procs = (pmix_proc_t*)pinfo[ninfo-1].value.data.darray->array;
         n = 0;
         OPAL_LIST_FOREACH(nm, &local_procs, opal_namelist_t) {
             OPAL_PMIX_CONVERT_JOBID(procs[n].nspace, nm->name.jobid);
