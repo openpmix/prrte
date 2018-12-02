@@ -77,6 +77,9 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     pmix_info_t *pinfo;
     size_t ninfo;
     opal_pmix_lock_t lock;
+    opal_list_t local_procs;
+    opal_namelist_t *nm;
+    size_t nmsize;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s register nspace for %s",
@@ -315,10 +318,17 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     vpid = ORTE_VPID_MAX;
     OPAL_PMIX_CONVERT_JOBID(pproc.nspace, jdata->jobid);
     micro = NULL;
+    OBJ_CONSTRUCT(&local_procs, opal_list_t);
     for (i=0; i < mynode->procs->size; i++) {
         if (NULL == (pptr = (orte_proc_t*)opal_pointer_array_get_item(mynode->procs, i))) {
             continue;
         }
+        /* track all procs on the node */
+        nm = OBJ_NEW(opal_namelist_t);
+        nm->name.jobid = pptr->name.jobid;
+        nm->name.vpid = pptr->name.vpid;
+        opal_list_append(&local_procs, &nm->super);
+        /* see if this is a peer - i.e., from the same jobid */
         if (pptr->name.jobid == jdata->jobid) {
             opal_argv_append_nosize(&micro, ORTE_VPID_PRINT(pptr->name.vpid));
             if (pptr->name.vpid < vpid) {
@@ -482,6 +492,10 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
 
     /* pass it down */
     ninfo = opal_list_get_size(info);
+    /* if there are local procs, then we add that here */
+    if (0 < (nmsize = opal_list_get_size(&local_procs))) {
+        ++ninfo;
+    }
     PMIX_INFO_CREATE(pinfo, ninfo);
     n = 0;
     OPAL_LIST_FOREACH(kv, info, opal_value_t) {
@@ -490,6 +504,21 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         ++n;
     }
     OPAL_LIST_RELEASE(info);
+    /* now add the local procs, if they are defined */
+    if (0 < nmsize) {
+        pmix_proc_t *procs;
+        PMIX_LOAD_KEY(pinfo[ninfo].key, PMIX_LOCAL_PROCS);
+        pinfo[ninfo].value.type = PMIX_DATA_ARRAY;
+        PMIX_DATA_ARRAY_CREATE(pinfo[ninfo].value.data.darray, nmsize, PMIX_PROC);
+        procs = (pmix_proc_t*)pinfo[ninfo].value.data.darray->array;
+        n = 0;
+        OPAL_LIST_FOREACH(nm, &local_procs, opal_namelist_t) {
+            OPAL_PMIX_CONVERT_JOBID(procs[n].nspace, nm->name.jobid);
+            OPAL_PMIX_CONVERT_VPID(procs[n].rank, nm->name.vpid);
+            ++n;
+        }
+        OPAL_LIST_DESTRUCT(&local_procs);
+    }
 
     /* register it */
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
