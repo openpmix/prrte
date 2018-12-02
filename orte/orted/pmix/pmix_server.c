@@ -237,6 +237,8 @@ int pmix_server_init(void)
 
     /* setup the server's state variables */
     OBJ_CONSTRUCT(&orte_pmix_server_globals.reqs, opal_hotel_t);
+    OBJ_CONSTRUCT(&orte_pmix_server_globals.psets, opal_list_t);
+
     /* by the time we init the server, we should know how many nodes we
      * have in our environment - with the exception of mpirun. If the
      * user specified the size of the hotel, then use that value. Otherwise,
@@ -455,6 +457,7 @@ void pmix_server_finalize(void)
     /* cleanup collectives */
     OBJ_DESTRUCT(&orte_pmix_server_globals.reqs);
     OPAL_LIST_DESTRUCT(&orte_pmix_server_globals.notifications);
+    OPAL_LIST_DESTRUCT(&orte_pmix_server_globals.psets);
 }
 
 static void send_error(int status, opal_process_name_t *idreq,
@@ -897,3 +900,22 @@ static void mddes(orte_pmix_mdx_caddy_t *p)
 OBJ_CLASS_INSTANCE(orte_pmix_mdx_caddy_t,
                    opal_object_t,
                    mdcon, mddes);
+
+static void pscon(pmix_server_pset_t *p)
+{
+    p->name = NULL;
+    p->members = NULL;
+    p->num_members = 0;
+}
+static void psdes(pmix_server_pset_t *p)
+{
+    if (NULL != p->name) {
+        free(p->name);
+    }
+    if (NULL != p->members) {
+        free(p->members);
+    }
+}
+OBJ_CLASS_INSTANCE(pmix_server_pset_t,
+                   opal_list_item_t,
+                   pscon, psdes);
