@@ -521,21 +521,14 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         ++ninfo;
     }
     PMIX_INFO_CREATE(pinfo, ninfo);
-    n = 0;
-    OPAL_LIST_FOREACH(kv, info, opal_value_t) {
-        (void)strncpy(pinfo[n].key, kv->key, PMIX_MAX_KEYLEN);
-        opal_pmix_value_load(&pinfo[n].value, kv);
-        ++n;
-    }
-    OPAL_LIST_RELEASE(info);
-    /* now add the local procs, if they are defined */
+    /* first add the local procs, if they are defined */
     if (0 < nmsize) {
         pmix_proc_t *procs;
-        PMIX_LOAD_KEY(pinfo[ninfo-1].key, PMIX_LOCAL_PROCS);
-        pinfo[ninfo-1].value.type = PMIX_DATA_ARRAY;
-        PMIX_DATA_ARRAY_CREATE(pinfo[ninfo-1].value.data.darray, nmsize, PMIX_PROC);
-        PMIX_PROC_CREATE(pinfo[ninfo-1].value.data.darray->array, nmsize);
-        procs = (pmix_proc_t*)pinfo[ninfo-1].value.data.darray->array;
+        PMIX_LOAD_KEY(pinfo[0].key, PMIX_LOCAL_PROCS);
+        pinfo[0].value.type = PMIX_DATA_ARRAY;
+        PMIX_DATA_ARRAY_CREATE(pinfo[0].value.data.darray, nmsize, PMIX_PROC);
+        PMIX_PROC_CREATE(pinfo[0].value.data.darray->array, nmsize);
+        procs = (pmix_proc_t*)pinfo[0].value.data.darray->array;
         n = 0;
         OPAL_LIST_FOREACH(nm, &local_procs, opal_namelist_t) {
             OPAL_PMIX_CONVERT_JOBID(procs[n].nspace, nm->name.jobid);
@@ -544,6 +537,18 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         }
         OPAL_LIST_DESTRUCT(&local_procs);
     }
+    /* now load the rest of the list */
+    if (0 < nmsize) {
+        n = 1;
+    } else {
+        n = 0;
+    }
+    OPAL_LIST_FOREACH(kv, info, opal_value_t) {
+        (void)strncpy(pinfo[n].key, kv->key, PMIX_MAX_KEYLEN);
+        opal_pmix_value_load(&pinfo[n].value, kv);
+        ++n;
+    }
+    OPAL_LIST_RELEASE(info);
 
     /* register it */
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
