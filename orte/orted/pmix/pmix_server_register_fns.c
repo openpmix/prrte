@@ -80,6 +80,7 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     opal_list_t local_procs;
     opal_namelist_t *nm;
     size_t nmsize;
+    pmix_server_pset_t *pset;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s register nspace for %s",
@@ -312,7 +313,17 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     kv->data.string = strdup(opal_hwloc_base_print_binding(jdata->map->binding));
     opal_list_append(info, &kv->super);
 
-
+    /* register any psets for this job */
+    for (i=0; i < (int)jdata->num_apps; i++) {
+        app = (orte_app_context_t*)opal_pointer_array_get_item(jdata->apps, pptr->app_idx);
+        tmp = NULL;
+        if (orte_get_attribute(&app->attributes, ORTE_APP_PSET_NAME, (void**)&tmp, OPAL_STRING) &&
+            NULL != tmp) {
+            pset = OBJ_NEW(pmix_server_pset_t);
+            pset->name = strdup(tmp);
+            opal_list_append(&orte_pmix_server_globals.psets, &pset->super);
+        }
+    }
 
     /* register any local clients */
     vpid = ORTE_VPID_MAX;
