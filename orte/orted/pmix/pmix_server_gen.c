@@ -657,7 +657,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(kv->info, PMIX_QUERY_DEBUG_SUPPORT, tmp, PMIX_STRING);
                 free(tmp);
                 opal_list_append(results, &kv->super);
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_VERSION_MAJOR >= 3
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_MEMORY_USAGE)) {
                 OBJ_CONSTRUCT(&targets, opal_list_t);
                 /* scan the qualifiers */
@@ -778,7 +778,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(kv->info, PMIX_SERVER_URI, orte_process_info.my_hnp_uri, PMIX_STRING);
                 opal_list_append(results, &kv->super);
     #if OPAL_PMIX_VERSION >= 3
-            } else if (0 == strncmp(q->keys[n], PMIX_QUERY_PROC_TABLE, PMIX_MAX_KEYLEN)) {
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PROC_TABLE)) {
                 /* the job they are asking about is in the qualifiers */
                 jobid = ORTE_JOBID_INVALID;
                 for (k=0; k < (int)q->nqual; k++) {
