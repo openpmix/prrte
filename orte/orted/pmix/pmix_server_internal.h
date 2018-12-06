@@ -72,6 +72,9 @@ BEGIN_C_DECLS
     int timeout;
     int room_num;
     int remote_room_num;
+    bool flag;
+    pmix_info_t *info;
+    size_t ninfo;
     pmix_data_range_t range;
     orte_process_name_t proxy;
     orte_process_name_t target;
@@ -82,6 +85,7 @@ BEGIN_C_DECLS
     pmix_spawn_cbfunc_t spcbfunc;
     pmix_lookup_cbfunc_t lkcbfunc;
     pmix_release_cbfunc_t rlcbfunc;
+    pmix_tool_connection_cbfunc_t toolcbfunc;
     void *cbdata;
 } pmix_server_req_t;
 OBJ_CLASS_DECLARATION(pmix_server_req_t);
@@ -268,6 +272,9 @@ extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
                                           pmix_info_cbfunc_t cbfunc, void *cbdata);
 #endif
 
+void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
+                                         char *hostname,
+                                         orte_vpid_t vpid);
 
 /* declare the RML recv functions for responses */
 extern void pmix_server_launch_resp(int status, orte_process_name_t* sender,

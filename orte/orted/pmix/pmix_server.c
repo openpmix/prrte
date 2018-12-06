@@ -851,6 +851,7 @@ OBJ_CLASS_INSTANCE(orte_pmix_server_op_caddy_t,
 static void rqcon(pmix_server_req_t *p)
 {
     p->operation = NULL;
+    p->flag = true;
     p->range = PMIX_RANGE_SESSION;
     p->proxy = *ORTE_NAME_INVALID;
     p->target = *ORTE_NAME_INVALID;
@@ -862,6 +863,7 @@ static void rqcon(pmix_server_req_t *p)
     p->spcbfunc = NULL;
     p->lkcbfunc = NULL;
     p->rlcbfunc = NULL;
+    p->toolcbfunc = NULL;
     p->cbdata = NULL;
 }
 static void rqdes(pmix_server_req_t *p)
