@@ -63,6 +63,8 @@ void pmix_server_launch_resp(int status, orte_process_name_t* sender,
     orte_jobid_t jobid;
     orte_job_t *jdata;
     char nspace[PMIX_MAX_NSLEN+1];
+    pmix_proc_t proc;
+    pmix_status_t xrc;
 
     /* unpack the status */
     cnt = 1;
@@ -97,11 +99,27 @@ void pmix_server_launch_resp(int status, orte_process_name_t* sender,
     if (NULL != req->spcbfunc) {
         OPAL_PMIX_CONVERT_JOBID(nspace, jobid);
         req->spcbfunc(ret, nspace, req->cbdata);
-    }
-    /* if we failed to launch, then ensure we cleanup */
-    if (ORTE_SUCCESS != ret) {
-        jdata = orte_get_job_data_object(jobid);
-        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_TERMINATED);
+        /* if we failed to launch, then ensure we cleanup */
+        if (ORTE_SUCCESS != ret) {
+            jdata = orte_get_job_data_object(jobid);
+            ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_TERMINATED);
+        }
+    } else if (NULL != req->toolcbfunc) {
+        xrc = opal_pmix_convert_rc(ret);
+        /* if success, then add to our job info */
+        if (ORTE_SUCCESS == ret) {
+            jdata = OBJ_NEW(orte_job_t);
+            jdata->jobid = jobid;
+            orte_pmix_server_tool_conn_complete(jdata, req->operation, 0);
+            /* if they indicated a preference for termination, set it */
+            if (req->flag) {
+                orte_set_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION,
+                                   ORTE_ATTR_GLOBAL, NULL, OPAL_BOOL);
+            }
+            OPAL_PMIX_CONVERT_JOBID(proc.nspace, jobid);
+            proc.rank = 0;
+        }
+        req->toolcbfunc(xrc, &proc, req->cbdata);
     }
     /* cleanup */
     OBJ_RELEASE(req);

@@ -128,7 +128,7 @@ void orte_plm_base_recv(int status, orte_process_name_t* sender,
     orte_plm_cmd_flag_t command;
     orte_std_cntr_t count;
     orte_jobid_t job;
-    orte_job_t *jdata, *parent;
+    orte_job_t *jdata, *parent, jb;
     opal_buffer_t *answer;
     orte_vpid_t vpid;
     orte_proc_t *proc;
@@ -154,6 +154,51 @@ void orte_plm_base_recv(int status, orte_process_name_t* sender,
     }
 
     switch (command) {
+    case ORTE_PLM_ALLOC_JOBID_CMD:
+        /* set default return value */
+        job = ORTE_JOBID_INVALID;
+
+        /* unpack the room number of the request so we can return it to them */
+        count = 1;
+        if (ORTE_SUCCESS != (rc = opal_dss.unpack(buffer, &room, &count, OPAL_INT))) {
+            ORTE_ERROR_LOG(rc);
+            goto CLEANUP;
+        }
+        /* get the new jobid */
+        OBJ_CONSTRUCT(&jb, orte_job_t);
+        rc = orte_plm_base_create_jobid(&jb);
+        if (ORTE_SUCCESS == rc) {
+            job = jb.jobid;
+        }
+        OBJ_DESTRUCT(&jb);
+
+        /* setup the response */
+        answer = OBJ_NEW(opal_buffer_t);
+
+        /* pack the status to be returned */
+        if (ORTE_SUCCESS != (ret = opal_dss.pack(answer, &rc, 1, OPAL_INT32))) {
+            ORTE_ERROR_LOG(ret);
+        }
+
+        /* pack the jobid */
+        if (ORTE_SUCCESS != (ret = opal_dss.pack(answer, &job, 1, ORTE_JOBID))) {
+            ORTE_ERROR_LOG(ret);
+        }
+
+        /* pack the room number of the request */
+        if (ORTE_SUCCESS != (ret = opal_dss.pack(answer, &room, 1, OPAL_INT))) {
+            ORTE_ERROR_LOG(ret);
+        }
+
+        /* send the response back to the sender */
+        if (0 > (ret = orte_rml.send_buffer_nb(orte_mgmt_conduit,
+                                               sender, answer, ORTE_RML_TAG_LAUNCH_RESP,
+                                               orte_rml_send_callback, NULL))) {
+            ORTE_ERROR_LOG(ret);
+            OBJ_RELEASE(answer);
+        }
+        break;
+
     case ORTE_PLM_LAUNCH_JOB_CMD:
         OPAL_OUTPUT_VERBOSE((5, orte_plm_base_framework.framework_output,
                              "%s plm:base:receive job launch command from %s",
