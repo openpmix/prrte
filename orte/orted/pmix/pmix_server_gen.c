@@ -1427,7 +1427,7 @@ static void group_release(int status, opal_buffer_t *buf, void *cbdata)
     }
 }
 
-pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
+pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
                                    const pmix_proc_t procs[], size_t nprocs,
                                    const pmix_info_t directives[], size_t ndirs,
                                    pmix_info_cbfunc_t cbfunc, void *cbdata)
@@ -1436,8 +1436,12 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
     int rc;
     size_t i, mode = 0;
     pmix_server_pset_t *pset;
-    char *gpid = NULL;
     bool fence = false;
+
+    /* they are required to pass us an id */
+    if (NULL == gpid) {
+        return PMIX_ERR_BAD_PARAM;
+    }
 
     if (PMIX_GROUP_CONSTRUCT == op) {
         /* check the directives */
@@ -1447,15 +1451,9 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
                 if (PMIX_INFO_TRUE(&directives[i])) {
                     mode = 1;
                 }
-            } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ID)) {
-                gpid = directives[i].value.data.string;
             } else if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
                 fence = PMIX_INFO_TRUE(&directives[i]);
             }
-        }
-        /* they are required to pass us an id */
-        if (NULL == gpid) {
-            return PMIX_ERR_BAD_PARAM;
         }
         /* add it to our list of known process sets */
         pset = OBJ_NEW(pmix_server_pset_t);
@@ -1470,13 +1468,8 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
             /* see if they want a fence operation */
             if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
                 fence = PMIX_INFO_TRUE(&directives[i]);
-            } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ID)) {
-                gpid = directives[i].value.data.string;
+                break;
             }
-        }
-        /* they are required to pass us an id */
-        if (NULL == gpid) {
-            return PMIX_ERR_BAD_PARAM;
         }
         /* find this process set on our list of groups */
         OPAL_LIST_FOREACH(pset, &orte_pmix_server_globals.psets, pmix_server_pset_t) {
@@ -1488,8 +1481,9 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
         }
     }
 
-    /* if they don't want us to do a fence, then we are done */
-    if (!fence) {
+    /* if they don't want us to do a fence and they don't want a
+     * context id assigned, then we are done */
+    if (!fence && 0 == mode) {
         return PMIX_OPERATION_SUCCEEDED;
     }
 

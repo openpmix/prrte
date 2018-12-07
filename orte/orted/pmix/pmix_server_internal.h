@@ -266,7 +266,7 @@ extern pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
                                              pmix_info_cbfunc_t cbfunc, void *cbdata);
 
 #if OPAL_PMIX_VERSION >= 4
-extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
+extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
                                           const pmix_proc_t procs[], size_t nprocs,
                                           const pmix_info_t directives[], size_t ndirs,
                                           pmix_info_cbfunc_t cbfunc, void *cbdata);
