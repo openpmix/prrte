@@ -537,7 +537,7 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
 #endif
     PMIX_INFO_CREATE(pinfo, ninfo);
 
-#if OPAL_PMIX_VERSION >= 3
+#if OPAL_PMIX_VERSION >= 4
     /* first add the local procs, if they are defined */
     if (0 < nmsize) {
         pmix_proc_t *procs;
