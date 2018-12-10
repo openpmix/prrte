@@ -944,11 +944,13 @@ void orte_plm_base_daemon_topology(int status, orte_process_name_t* sender,
     }
 }
 
+#if OPAL_PMIX_VERSION >= 3
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     opal_pmix_lock_t *lock = (opal_pmix_lock_t*)cbdata;
     OPAL_PMIX_WAKEUP_THREAD(lock);
 }
+#endif
 
 void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
                                    opal_buffer_t *buffer,

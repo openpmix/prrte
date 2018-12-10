@@ -511,6 +511,35 @@ pmix_status_t pmix_value_unload(pmix_value_t *kv, void **data, size_t *sz);
     }while(0)
 #endif
 
+#ifndef pmix_strncpy
+/**
+ * Provide a safe version of strncpy that doesn't generate
+ * a ton of spurious warnings. Note that not every environment
+ * provides nice string functions, and we aren't concerned about
+ * max performance here
+ *
+ * @param dest Destination string.
+ * @param src Source string.
+ * @param len Size of the dest array - 1
+ *
+ */
+static inline void pmix_strncpy(char *dest, const char *src, size_t len)
+{
+    size_t i, k;
+    char *new_dest = dest;
+
+    /* use an algorithm that also protects against
+     * non-NULL-terminated src strings */
+    for (i=0, k=0; i <= len; ++i, ++src, ++new_dest) {
+        ++k;
+        *new_dest = *src;
+        if ('\0' == *src) {
+            break;
+        }
+    }
+    dest[k-1] = '\0';
+}
+#endif
 END_C_DECLS
 
 #endif

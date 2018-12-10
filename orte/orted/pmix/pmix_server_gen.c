@@ -576,7 +576,7 @@ static void _query(int sd, short args, void *cbdata)
     float pss;
     bool local_only;
     orte_namelist_t *nm;
-    size_t p, sz;
+    size_t p;
     opal_list_t targets;
     int i, k, num_replies;
     orte_proc_t *proct;
@@ -585,6 +585,9 @@ static void _query(int sd, short args, void *cbdata)
     pmix_proc_info_t *procinfo;
     pmix_info_t *info;
     pmix_data_array_t *darray;
+#endif
+#if OPAL_PMIX_VERSION >= 4
+    size_t sz;
 #endif
 
     ORTE_ACQUIRE_OBJECT(cd);

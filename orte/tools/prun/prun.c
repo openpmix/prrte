@@ -1448,6 +1448,7 @@ static int create_app(int argc, char* argv[],
         app->app.cwd = strdup(cwd);
     }
 
+#if OPAL_PMIX_VERSION >= 4
     /* if they specified a process set name, then pass it along */
     if (NULL != orte_cmd_options.pset) {
         val = OBJ_NEW(opal_ds_info_t);
@@ -1455,6 +1456,7 @@ static int create_app(int argc, char* argv[],
         PMIX_INFO_LOAD(val->info, PMIX_PSET_NAME, orte_cmd_options.pset, PMIX_STRING);
         opal_list_append(&app->info, &val->super);
     }
+#endif
 
     /* Did the user specify a hostfile. Need to check for both
      * hostfile and machine file.
