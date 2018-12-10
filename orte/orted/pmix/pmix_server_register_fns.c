@@ -527,11 +527,17 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
 
     /* pass it down */
     ninfo = opal_list_get_size(info);
+#if OPAL_PMIX_VERSION >= 3
     /* if there are local procs, then we add that here */
     if (0 < (nmsize = opal_list_get_size(&local_procs))) {
         ++ninfo;
     }
+#else
+    nmsize = 0;
+#endif
     PMIX_INFO_CREATE(pinfo, ninfo);
+
+#if OPAL_PMIX_VERSION >= 4
     /* first add the local procs, if they are defined */
     if (0 < nmsize) {
         pmix_proc_t *procs;
@@ -548,6 +554,8 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         }
         OPAL_LIST_DESTRUCT(&local_procs);
     }
+#endif
+
     /* now load the rest of the list */
     if (0 < nmsize) {
         n = 1;

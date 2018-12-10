@@ -196,8 +196,8 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     pmix_data_buffer_t pbuf;
     pmix_status_t ret;
     pmix_byte_object_t pbo;
-    orte_node_t *node;
 #if OPAL_PMIX_VERSION >= 3
+    orte_node_t *node;
     int i, k;
     char **list, **procs, **micro, *tmp, *regex;
     orte_odls_jcaddy_t cd = {0};
