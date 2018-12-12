@@ -112,10 +112,7 @@ static pmix_server_module_t pmix_server = {
     .tool_connected = pmix_tool_connected_fn,
     .log = pmix_server_log_fn,
     .allocate = pmix_server_alloc_fn,
-    .job_control = pmix_server_job_ctrl_fn,
-#if OPAL_PMIX_VERSION >= 4
-    .group = pmix_server_group_fn
-#endif
+    .job_control = pmix_server_job_ctrl_fn
 };
 
 void pmix_server_register_params(void)
