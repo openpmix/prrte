@@ -112,10 +112,7 @@ static pmix_server_module_t pmix_server = {
     .tool_connected = pmix_tool_connected_fn,
     .log = pmix_server_log_fn,
     .allocate = pmix_server_alloc_fn,
-    .job_control = pmix_server_job_ctrl_fn,
-#if OPAL_PMIX_VERSION >= 4
-    .group = pmix_server_group_fn
-#endif
+    .job_control = pmix_server_job_ctrl_fn
 };
 
 void pmix_server_register_params(void)
@@ -851,6 +848,7 @@ OBJ_CLASS_INSTANCE(orte_pmix_server_op_caddy_t,
 static void rqcon(pmix_server_req_t *p)
 {
     p->operation = NULL;
+    p->flag = true;
     p->range = PMIX_RANGE_SESSION;
     p->proxy = *ORTE_NAME_INVALID;
     p->target = *ORTE_NAME_INVALID;
@@ -862,6 +860,7 @@ static void rqcon(pmix_server_req_t *p)
     p->spcbfunc = NULL;
     p->lkcbfunc = NULL;
     p->rlcbfunc = NULL;
+    p->toolcbfunc = NULL;
     p->cbdata = NULL;
 }
 static void rqdes(pmix_server_req_t *p)

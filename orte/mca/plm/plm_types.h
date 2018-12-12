@@ -225,6 +225,7 @@ typedef uint8_t orte_plm_cmd_flag_t;
 #define ORTE_PLM_LAUNCH_JOB_CMD         1
 #define ORTE_PLM_UPDATE_PROC_STATE      2
 #define ORTE_PLM_REGISTERED_CMD         3
+#define ORTE_PLM_ALLOC_JOBID_CMD        4
 
 END_C_DECLS
 
