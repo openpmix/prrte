@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 
 #include <pmix.h>
 
@@ -40,9 +41,14 @@ int main(int argc, char **argv)
     char hostname[1024];
     pmix_value_t *val;
     uint16_t localrank;
+    int spin = 0;
 
     pid = getpid();
     gethostname(hostname, 1024);
+
+    if (1 < argc) {
+        spin = strtoul(argv[1], NULL, 10);
+    }
 
     /* init us - note that the call to "init" includes the return of
      * any job-related info provided by the RM. This includes any
@@ -65,6 +71,10 @@ int main(int argc, char **argv)
 
     fprintf(stderr, "Client ns %s rank %d pid %lu: Running on host %s localrank %d\n",
             myproc.nspace, myproc.rank, (unsigned long)pid, hostname , (int)localrank);
+
+    if (0 < spin) {
+        sleep(spin);
+    }
 
   done:
     /* finalize us */
