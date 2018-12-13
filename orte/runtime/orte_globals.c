@@ -727,7 +727,7 @@ static void orte_job_destruct(orte_job_t* job)
 }
 
 OBJ_CLASS_INSTANCE(orte_job_t,
-                   opal_list_item_t,
+                   opal_object_t,
                    orte_job_construct,
                    orte_job_destruct);
 
