@@ -605,6 +605,7 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
             OBJ_RELEASE(map);
             jdata->map = NULL;
         }
+        OBJ_RELEASE(jdata);
         break;
 
 
