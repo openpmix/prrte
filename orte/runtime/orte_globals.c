@@ -131,6 +131,7 @@ orte_timer_t *orte_mpiexec_timeout = NULL;
 int orte_stack_trace_wait_timeout = 30;
 
 /* global arrays for data storage */
+opal_list_t orte_tools;
 opal_hash_table_t *orte_job_data = NULL;
 opal_pointer_array_t *orte_node_pool = NULL;
 opal_pointer_array_t *orte_node_topologies = NULL;
@@ -686,6 +687,7 @@ static void orte_job_destruct(orte_job_t* job)
         opal_argv_free(job->personality);
     }
     if (NULL != job->launcher) {
+        opal_list_remove_item(&job->launcher->jobs, &job->super);
         OBJ_RELEASE(job->launcher);
     }
     for (n=0; n < job->apps->size; n++) {

@@ -238,6 +238,7 @@ int pmix_server_init(void)
     /* setup the server's state variables */
     OBJ_CONSTRUCT(&orte_pmix_server_globals.reqs, opal_hotel_t);
     OBJ_CONSTRUCT(&orte_pmix_server_globals.psets, opal_list_t);
+    OBJ_CONSTRUCT(&orte_tools, opal_list_t);
 
     /* by the time we init the server, we should know how many nodes we
      * have in our environment - with the exception of mpirun. If the
@@ -458,6 +459,7 @@ void pmix_server_finalize(void)
     OBJ_DESTRUCT(&orte_pmix_server_globals.reqs);
     OPAL_LIST_DESTRUCT(&orte_pmix_server_globals.notifications);
     OPAL_LIST_DESTRUCT(&orte_pmix_server_globals.psets);
+    OPAL_LIST_DESTRUCT(&orte_tools);
 }
 
 static void send_error(int status, opal_process_name_t *idreq,
@@ -855,6 +857,7 @@ static void rqcon(pmix_server_req_t *p)
 {
     p->operation = NULL;
     p->flag = true;
+    p->pid = 0;
     p->range = PMIX_RANGE_SESSION;
     p->proxy = *ORTE_NAME_INVALID;
     p->target = *ORTE_NAME_INVALID;

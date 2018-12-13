@@ -392,7 +392,10 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
             ORTE_ACTIVATE_JOB_STATE(NULL, ORTE_JOB_STATE_DAEMONS_TERMINATED);
             return;
         }
-        /* kill the local procs */
+        /* kill the local procs - passing a NULL indicates
+         * we want everything terminated, including any
+         * attached tools */
+        opal_output(0, "ORDER KILL PROCS");
         orte_odls.kill_local_procs(NULL);
         /* flag that orteds were ordered to terminate */
         orte_orteds_term_ordered = true;

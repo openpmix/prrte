@@ -997,27 +997,57 @@ static void _toolconn(int sd, short args, void *cbdata)
     /* check for directives */
     if (NULL != cd->info) {
         for (n=0; n < cd->ninfo; n++) {
-            if (0 == strncmp(cd->info[n].key, PMIX_EVENT_SILENT_TERMINATION, PMIX_MAX_KEYLEN)) {
+            if (PMIX_CHECK_KEY(&cd->info[n], PMIX_EVENT_SILENT_TERMINATION)) {
                 flag = PMIX_INFO_TRUE(&cd->info[n]);
-            } else if (0 == strncmp(cd->info[n].key, PMIX_VERSION_INFO, PMIX_MAX_KEYLEN)) {
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_VERSION_INFO)) {
                 /* we ignore this for now */
-            } else if (0 == strncmp(cd->info[n].key, PMIX_USERID, PMIX_MAX_KEYLEN)) {
-                uid = cd->info[n].value.data.uint32;
-            } else if (0 == strncmp(cd->info[n].key, PMIX_GRPID, PMIX_MAX_KEYLEN)) {
-                gid = cd->info[n].value.data.uint32;
-            } else if (0 == strncmp(cd->info[n].key, PMIX_NSPACE, PMIX_MAX_KEYLEN)) {
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_USERID)) {
+                PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, uid, uid_t);
+                if (PMIX_SUCCESS != xrc) {
+                    if (NULL != cd->toolcbfunc) {
+                        cd->toolcbfunc(xrc, NULL, cd->cbdata);
+                    }
+                    OBJ_RELEASE(cd);
+                    return;
+                }
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_GRPID)) {
+                PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, gid, gid_t);
+                if (PMIX_SUCCESS != xrc) {
+                    if (NULL != cd->toolcbfunc) {
+                        cd->toolcbfunc(xrc, NULL, cd->cbdata);
+                    }
+                    OBJ_RELEASE(cd);
+                    return;
+                }
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_NSPACE)) {
                  OPAL_PMIX_CONVERT_NSPACE(rc, &tool.jobid, cd->info[n].value.data.string);
                  if (ORTE_SUCCESS != rc) {
                     ORTE_ERROR_LOG(rc);
                  }
-            } else if (0 == strncmp(cd->info[n].key, PMIX_RANK, PMIX_MAX_KEYLEN)) {
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_RANK)) {
                 OPAL_PMIX_CONVERT_RANK(tool.vpid, cd->info[n].value.data.rank);
-            } else if (0 == strncmp(cd->info[n].key, PMIX_HOSTNAME, PMIX_MAX_KEYLEN)) {
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_HOSTNAME)) {
                 hostname = cd->info[n].value.data.string;
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PROC_PID)) {
+                PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, cd->pid, pid_t);
+                if (PMIX_SUCCESS != xrc) {
+                    if (NULL != cd->toolcbfunc) {
+                        cd->toolcbfunc(xrc, NULL, cd->cbdata);
+                    }
+                    OBJ_RELEASE(cd);
+                    return;
+                }
             }
         }
     }
-
+    if (0 == cd->pid) {
+        /* we need the pid */
+        if (NULL != cd->toolcbfunc) {
+            cd->toolcbfunc(PMIX_ERR_BAD_PARAM, NULL, cd->cbdata);
+        }
+        OBJ_RELEASE(cd);
+        return;
+    }
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s TOOL CONNECTION FROM UID %d GID %d",
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), uid, gid);
@@ -1077,7 +1107,7 @@ static void _toolconn(int sd, short args, void *cbdata)
         jdata = OBJ_NEW(orte_job_t);
         jdata->jobid = tool.jobid;
     }
-    orte_pmix_server_tool_conn_complete(jdata, hostname, tool.vpid);
+    orte_pmix_server_tool_conn_complete(jdata, hostname, tool.vpid, cd->pid);
     /* if they indicated a preference for termination, set it */
     if (flag) {
         orte_set_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION,
@@ -1096,12 +1126,23 @@ static void _toolconn(int sd, short args, void *cbdata)
 
 void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
                                          char *hostname,
-                                         orte_vpid_t vpid)
+                                         orte_vpid_t vpid, pid_t pid)
 {
+    orte_tool_t *tl;
     orte_app_context_t *app;
     orte_proc_t *proc;
     orte_node_t *node, *nptr;
     int i;
+
+    tl = OBJ_NEW(orte_tool_t);
+    tl->name.jobid = jdata->jobid;
+    tl->name.vpid = vpid;
+    tl->pid = pid;
+    opal_list_append(&tl->jobs, &jdata->super);
+    opal_list_append(&orte_tools, &tl->super);
+
+    OBJ_RETAIN(tl);
+    jdata->launcher = tl;
 
     opal_hash_table_set_value_uint32(orte_job_data, jdata->jobid, jdata);
     /* setup some required job-level fields in case this

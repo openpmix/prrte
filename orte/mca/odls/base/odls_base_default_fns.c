@@ -1930,11 +1930,13 @@ int orte_odls_base_default_kill_local_procs(opal_pointer_array_t *procs,
     opal_pointer_array_t procarray, *procptr;
     bool do_cleanup;
     orte_odls_quick_caddy_t *cd;
+    orte_tool_t *tl;
 
     OBJ_CONSTRUCT(&procs_killed, opal_list_t);
-
+opal_output(0, "KILLING LOCAL");
     /* if the pointer array is NULL, then just kill everything */
     if (NULL == procs) {
+        opal_output(0, "KILL ALL");
         OPAL_OUTPUT_VERBOSE((5, orte_odls_base_framework.framework_output,
                              "%s odls:kill_local_proc working on WILDCARD",
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
@@ -2122,6 +2124,20 @@ int orte_odls_base_default_kill_local_procs(opal_pointer_array_t *procs,
     if (do_cleanup) {
         OBJ_DESTRUCT(&procarray);
         OBJ_DESTRUCT(&proctmp);
+        /* if we are killing everything, then clean up any
+         * attached tools as well - they won't have sigchild
+         * waiting on them as they are not children of ours */
+        OPAL_LIST_FOREACH(tl, &orte_tools, orte_tool_t) {
+        opal_output(0, "ISSUING SIGTERM TO TOOL %s", ORTE_NAME_PRINT(&tl->name));
+            kill_local(tl->pid, SIGTERM);
+        }
+        /* wait a little again */
+        sleep(orte_odls_globals.timeout_before_sigkill);
+        /* issue a SIGKILL to all */
+        OPAL_LIST_FOREACH(tl, &orte_tools, orte_tool_t) {
+        opal_output(0, "ISSUING SIGKILL TO TOOL %s", ORTE_NAME_PRINT(&tl->name));
+            kill_local(tl->pid, SIGKILL);
+        }
     }
 
     return ORTE_SUCCESS;

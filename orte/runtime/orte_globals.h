@@ -316,6 +316,8 @@ typedef struct {
     opal_list_item_t super;
     /* process name */
     orte_process_name_t name;
+    /* pid of the tool */
+    pid_t pid;
     /* record the exit status for this tool */
     orte_exit_code_t exit_code;
     /* keep a list of any jobs spawned either directly

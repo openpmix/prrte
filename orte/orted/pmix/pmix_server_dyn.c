@@ -110,7 +110,7 @@ void pmix_server_launch_resp(int status, orte_process_name_t* sender,
         if (ORTE_SUCCESS == ret) {
             jdata = OBJ_NEW(orte_job_t);
             jdata->jobid = jobid;
-            orte_pmix_server_tool_conn_complete(jdata, req->operation, 0);
+            orte_pmix_server_tool_conn_complete(jdata, req->operation, 0, req->pid);
             /* if they indicated a preference for termination, set it */
             if (req->flag) {
                 orte_set_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION,
@@ -189,10 +189,11 @@ static void interim(int sd, short args, void *cbdata)
 {
     orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
     opal_process_name_t *requestor = &cd->proc;
+    orte_tool_t *tl;
 #if OPAL_PMIX_VERSION >= 3
     opal_envar_t envar;
 #endif
-    orte_job_t *jdata;
+    orte_job_t *jdata, *jparent;
     orte_app_context_t *app;
     pmix_app_t *papp;
     pmix_info_t *info;
@@ -208,9 +209,26 @@ static void interim(int sd, short args, void *cbdata)
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                         ORTE_NAME_PRINT(requestor));
 
+    /* find the job object of the requestor so we can
+     * get its launcher */
+    jparent = orte_get_job_data_object(requestor->jobid);
+    if (NULL == jparent || NULL == jparent->launcher) {
+        /* this should never happen as someone must
+         * always direct the spawn command */
+        ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
+        rc = ORTE_ERR_NOT_FOUND;
+        goto complete;
+    }
+    tl = jparent->launcher;
+
     /* create the job object */
     jdata = OBJ_NEW(orte_job_t);
     jdata->map = OBJ_NEW(orte_job_map_t);
+    /* add it to this tool */
+    OBJ_RETAIN(jdata);
+    opal_list_append(&tl->jobs, &jdata->super);
+    OBJ_RETAIN(tl);
+    jdata->launcher = tl;
 
     /* transfer the apps across */
     for (n=0; n < cd->napps; n++) {

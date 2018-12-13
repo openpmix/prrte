@@ -73,6 +73,7 @@ BEGIN_C_DECLS
     int room_num;
     int remote_room_num;
     bool flag;
+    pid_t pid;
     pmix_info_t *info;
     size_t ninfo;
     pmix_data_range_t range;
@@ -274,7 +275,7 @@ extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
 
 void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
                                          char *hostname,
-                                         orte_vpid_t vpid);
+                                         orte_vpid_t vpid, pid_t pid);
 
 /* declare the RML recv functions for responses */
 extern void pmix_server_launch_resp(int status, orte_process_name_t* sender,
