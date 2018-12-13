@@ -76,13 +76,11 @@ char *orte_mgmt_transport = NULL;
 char *orte_coll_transport = NULL;
 int orte_mgmt_conduit = -1;
 int orte_coll_conduit = -1;
-bool orte_no_vm = false;
 char *orte_data_server_uri = NULL;
 
 /* ORTE OOB port flags */
 bool orte_static_ports = false;
 char *orte_oob_static_ports = NULL;
-bool orte_standalone_operation = false;
 bool orte_fwd_mpirun_port = true;
 
 bool orte_keep_fqdn_hostnames = false;
@@ -116,12 +114,6 @@ bool orte_node_info_communicated = false;
 char *orte_launch_agent = NULL;
 char **orted_cmd_line=NULL;
 char **orte_fork_agent=NULL;
-
-/* debugger job */
-bool orte_debugger_dump_proctable = false;
-char *orte_debugger_test_daemon = NULL;
-bool orte_debugger_test_attach = false;
-int orte_debugger_check_rate = -1;
 
 /* exit flags */
 int orte_exit_status = 0;
@@ -193,9 +185,6 @@ bool orte_map_stddiag_to_stdout = false;
 
 /* maximum size of virtual machine - used to subdivide allocation */
 int orte_max_vm_size = -1;
-
-/* user debugger */
-char *orte_base_user_debugger = NULL;
 
 int orte_debug_output = -1;
 bool orte_debug_daemons_flag = false;
@@ -616,10 +605,28 @@ OBJ_CLASS_INSTANCE(orte_app_context_t,
                    orte_app_context_construct,
                    orte_app_context_destructor);
 
+static void orte_tool_construct(orte_tool_t *t)
+{
+    t->name = *ORTE_NAME_INVALID;
+    t->exit_code = 0;
+    OBJ_CONSTRUCT(&t->jobs, opal_list_t);
+    OBJ_CONSTRUCT(&t->attributes, opal_list_t);
+}
+static void orte_tool_destruct(orte_tool_t *t)
+{
+    OPAL_LIST_DESTRUCT(&t->jobs);
+    OPAL_LIST_DESTRUCT(&t->attributes);
+}
+OBJ_CLASS_INSTANCE(orte_tool_t,
+                   opal_list_item_t,
+                   orte_tool_construct,
+                   orte_tool_destruct);
+
 static void orte_job_construct(orte_job_t* job)
 {
     job->exit_code = 0;
     job->personality = NULL;
+    job->launcher = NULL;
     job->jobid = ORTE_JOBID_INVALID;
     job->offset = 0;
     job->apps = OBJ_NEW(opal_pointer_array_t);
@@ -677,6 +684,9 @@ static void orte_job_destruct(orte_job_t* job)
 
     if (NULL != job->personality) {
         opal_argv_free(job->personality);
+    }
+    if (NULL != job->launcher) {
+        OBJ_RELEASE(job->launcher);
     }
     for (n=0; n < job->apps->size; n++) {
         if (NULL == (app = (orte_app_context_t*)opal_pointer_array_get_item(job->apps, n))) {

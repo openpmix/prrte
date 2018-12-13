@@ -307,7 +307,7 @@ static int bind_in_place(orte_job_t *jdata,
         if (NULL == (node = (orte_node_t*)opal_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
-        if (!orte_no_vm && (int)ORTE_PROC_MY_NAME->vpid != node->index) {
+        if ((int)ORTE_PROC_MY_NAME->vpid != node->index) {
             continue;
         }
         if (!orte_do_not_launch) {
@@ -521,7 +521,7 @@ static int bind_to_cpuset(orte_job_t *jdata)
         if (NULL == (node = (orte_node_t*)opal_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
-        if (!orte_no_vm && (int)ORTE_PROC_MY_NAME->vpid != node->index) {
+        if ((int)ORTE_PROC_MY_NAME->vpid != node->index) {
             continue;
         }
         if (!orte_do_not_launch) {
@@ -754,7 +754,7 @@ int orte_rmaps_base_compute_bindings(orte_job_t *jdata)
         if (NULL == (node = (orte_node_t*)opal_pointer_array_get_item(jdata->map->nodes, i))) {
             continue;
         }
-        if (!orte_no_vm && !orte_do_not_launch &&
+        if (!orte_do_not_launch &&
             (int)ORTE_PROC_MY_NAME->vpid != node->index) {
             continue;
         }
