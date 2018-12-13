@@ -688,17 +688,11 @@ static int component_startup(void)
         }
     }
 
-    /* if we are a daemon/HNP, or we are a standalone app,
-     * then it is possible that someone else may initiate a
-     * connection to us. In these cases, we need to start the
-     * listening thread/event. Otherwise, we will be the one
-     * initiating communication, and there is no need for
-     * a listener */
-    if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_DAEMON ||
-        orte_standalone_operation) {
-        if (ORTE_SUCCESS != (rc = orte_oob_tcp_start_listening())) {
-            ORTE_ERROR_LOG(rc);
-        }
+    /* it is possible that someone else may initiate a
+     * connection to us - we need to start the
+     * listening thread/event. */
+    if (ORTE_SUCCESS != (rc = orte_oob_tcp_start_listening())) {
+        ORTE_ERROR_LOG(rc);
     }
 
     return rc;

@@ -279,44 +279,6 @@ int orte_register_params(void)
         orte_devel_level_output = true;
     }
 
-    /* See comment in orte/tools/orterun/orterun.c about this MCA
-       param (this param is internal) */
-    orte_in_parallel_debugger = false;
-    (void) mca_base_var_register ("orte", "orte", NULL, "in_parallel_debugger",
-                                  "Whether the application is being debugged "
-                                  "in a parallel debugger (default: false)",
-                                  MCA_BASE_VAR_TYPE_BOOL, NULL, 0, MCA_BASE_VAR_FLAG_INTERNAL,
-                                  OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_READONLY,
-                                  &orte_in_parallel_debugger);
-
-    orte_debugger_dump_proctable = false;
-    (void) mca_base_var_register ("orte", "orte", NULL, "output_debugger_proctable",
-                                  "Whether or not to output the debugger proctable after launch (default: false)",
-                                  MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_ALL,
-                                  &orte_debugger_dump_proctable);
-
-    orte_debugger_test_daemon = NULL;
-    (void) mca_base_var_register ("orte", "orte", NULL, "debugger_test_daemon",
-                                  "Name of the executable to be used to simulate a debugger colaunch (relative or absolute path)",
-                                  MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
-                                  OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_READONLY,
-                                  &orte_debugger_test_daemon);
-
-    orte_debugger_test_attach = false;
-    (void) mca_base_var_register ("orte", "orte", NULL, "debugger_test_attach",
-                                  "Test debugger colaunch after debugger attachment",
-                                  MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_READONLY,
-                                  &orte_debugger_test_attach);
-
-    orte_debugger_check_rate = 0;
-    (void) mca_base_var_register ("orte", "orte", NULL, "debugger_check_rate",
-                                  "Set rate (in secs) for auto-detect of debugger attachment (0 => do not check)",
-                                  MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
-                                  OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_READONLY,
-                                  &orte_debugger_check_rate);
-
     orte_do_not_launch = false;
     (void) mca_base_var_register ("orte", "orte", NULL, "do_not_launch",
                                   "Perform all necessary operations to prepare to launch the application, but do not actually launch it",
@@ -351,25 +313,6 @@ int orte_register_params(void)
                                   MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                   OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_READONLY,
                                   &orte_startup_timeout);
-
-    /* User-level debugger info string */
-    orte_base_user_debugger = "totalview @mpirun@ -a @mpirun_args@ : ddt -n @np@ -start @executable@ @executable_argv@ @single_app@ : fxp @mpirun@ -a @mpirun_args@";
-    (void) mca_base_var_register ("orte", "orte", NULL, "base_user_debugger",
-                                  "Sequence of user-level debuggers to search for in orterun",
-                                  MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
-                                  OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_READONLY,
-                                  &orte_base_user_debugger);
-
-#if 0
-    mca_base_param_reg_int_name("orte", "abort_timeout",
-                                "Max time to wait [in secs] before aborting an ORTE operation (default: 1sec)",
-                                false, false, 1, &value);
-    orte_max_timeout = 1000000.0 * value;  /* convert to usec */
-
-    mca_base_param_reg_int_name("orte", "timeout_step",
-                                "Time to wait [in usecs/proc] before aborting an ORTE operation (default: 1000 usec/proc)",
-                                false, false, 1000, &orte_timeout_usec_per_proc);
-#endif
 
     /* default hostfile */
     orte_default_hostfile = NULL;
@@ -664,32 +607,12 @@ int orte_register_params(void)
                                   OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_READONLY,
                                   &orte_report_child_jobs_separately);
 
-
-#if 0
-    /* XXX -- unused parameter */
-    mca_base_param_reg_int_name("orte", "child_time_to_exit",
-                                "Max time a spawned child job is allowed to run after the primary job has terminated (seconds)",
-                                false, false,
-                                INT_MAX, &value);
-    orte_child_time_to_exit.tv_sec = value;
-    orte_child_time_to_exit.tv_usec = 0;
-#endif
-
     orte_stat_history_size = 1;
     (void) mca_base_var_register ("orte", "orte", NULL, "stat_history_size",
                                   "Number of stat samples to keep",
                                   MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                   OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_READONLY,
                                   &orte_stat_history_size);
-
-    orte_no_vm = false;
-    id = mca_base_var_register ("orte", "orte", NULL, "no_vm",
-                                "Do not build the VM at start to detect topologies",
-                                MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                OPAL_INFO_LVL_9, MCA_BASE_VAR_SCOPE_READONLY,
-                                &orte_no_vm);
-    /* register a synonym for old name */
-    mca_base_var_register_synonym (id, "orte", "state", "novm", "select", MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     orte_max_vm_size = -1;
     (void) mca_base_var_register ("orte", "orte", NULL, "max_vm_size",

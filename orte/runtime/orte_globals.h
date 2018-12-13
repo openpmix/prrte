@@ -312,6 +312,22 @@ typedef struct {
 ORTE_DECLSPEC OBJ_CLASS_DECLARATION(orte_node_t);
 
 typedef struct {
+    /** base object */
+    opal_list_item_t super;
+    /* process name */
+    orte_process_name_t name;
+    /* record the exit status for this tool */
+    orte_exit_code_t exit_code;
+    /* keep a list of any jobs spawned either directly
+     * by this tool, or by any child jobs spawned by
+     * the tool */
+    opal_list_t jobs;
+    /* attributes */
+    opal_list_t attributes;
+} orte_tool_t;
+ORTE_DECLSPEC OBJ_CLASS_DECLARATION(orte_tool_t);
+
+typedef struct {
     /** Base object so this can be put on a list */
     opal_list_item_t super;
     /* record the exit status for this job */
@@ -320,6 +336,8 @@ typedef struct {
     char **personality;
     /* jobid for this job */
     orte_jobid_t jobid;
+    /* tool responsible for job */
+    orte_tool_t *launcher;
     /* offset to the total number of procs so shared memory
      * components can potentially connect to any spawned jobs*/
     orte_vpid_t offset;
@@ -461,13 +479,11 @@ ORTE_DECLSPEC extern char *orte_basename;
 ORTE_DECLSPEC extern bool orte_coprocessors_detected;
 ORTE_DECLSPEC extern opal_hash_table_t *orte_coprocessors;
 ORTE_DECLSPEC extern char *orte_topo_signature;
-ORTE_DECLSPEC extern bool orte_no_vm;
 ORTE_DECLSPEC extern char *orte_data_server_uri;
 
 /* ORTE OOB port flags */
 ORTE_DECLSPEC extern bool orte_static_ports;
 ORTE_DECLSPEC extern char *orte_oob_static_ports;
-ORTE_DECLSPEC extern bool orte_standalone_operation;
 ORTE_DECLSPEC extern bool orte_fwd_mpirun_port;
 
 /* nodename flags */
@@ -505,12 +521,6 @@ ORTE_DECLSPEC extern char *orte_launch_agent;
 ORTE_DECLSPEC extern char **orted_cmd_line;
 ORTE_DECLSPEC extern char **orte_fork_agent;
 
-/* debugger job */
-ORTE_DECLSPEC extern bool orte_debugger_dump_proctable;
-ORTE_DECLSPEC extern char *orte_debugger_test_daemon;
-ORTE_DECLSPEC extern bool orte_debugger_test_attach;
-ORTE_DECLSPEC extern int orte_debugger_check_rate;
-
 /* exit flags */
 ORTE_DECLSPEC extern bool orte_abnormal_term_ordered;
 ORTE_DECLSPEC extern bool orte_routing_is_enabled;
@@ -524,6 +534,7 @@ ORTE_DECLSPEC extern float orte_max_timeout;
 ORTE_DECLSPEC extern orte_timer_t *orte_mpiexec_timeout;
 
 /* global arrays for data storage */
+ORTE_DECLSPEC extern opal_list_t orte_tools;
 ORTE_DECLSPEC extern opal_hash_table_t *orte_job_data;
 ORTE_DECLSPEC extern opal_pointer_array_t *orte_node_pool;
 ORTE_DECLSPEC extern opal_pointer_array_t *orte_node_topologies;
@@ -577,9 +588,6 @@ ORTE_DECLSPEC extern bool orte_map_stddiag_to_stdout;
 
 /* maximum size of virtual machine - used to subdivide allocation */
 ORTE_DECLSPEC extern int orte_max_vm_size;
-
-/* user debugger */
-ORTE_DECLSPEC extern char *orte_base_user_debugger;
 
 /* binding directives for daemons to restrict them
  * to certain cores

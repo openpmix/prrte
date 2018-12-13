@@ -654,11 +654,9 @@ int orte_show_help_norender(const char *filename, const char *topic,
 
     /* if we are the HNP, or the RML has not yet been setup,
      * or ROUTED has not been setup,
-     * or we weren't given an HNP, or we are running in standalone
-     * mode, then all we can do is process this locally
+     * or we weren't given an HNP, then all we can do is process this locally
      */
-    if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_TOOL ||
-        orte_standalone_operation) {
+    if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_TOOL) {
         rc = show_help(filename, topic, output, ORTE_PROC_MY_NAME);
         goto CLEANUP;
     } else if (ORTE_PROC_IS_DAEMON) {
