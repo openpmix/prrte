@@ -373,7 +373,7 @@ int main(int argc, char **argv)
     free(tmp);
     PMIX_INFO_LOAD(&info[1], PMIX_SET_ENVAR, &envar, PMIX_ENVAR);  // launcher is to wait for directives
     PMIX_ENVAR_DESTRUCT(&envar);
-    cospawn = false;
+    cospawn = true;
     PMIX_INFO_LOAD(&info[2], PMIX_FWD_STDOUT, &cospawn, PMIX_BOOL);  // forward stdout to me
     PMIX_INFO_LOAD(&info[3], PMIX_FWD_STDERR, &cospawn, PMIX_BOOL);  // forward stderr to me
     PMIX_INFO_LOAD(&info[4], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the job completes
