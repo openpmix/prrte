@@ -3,8 +3,8 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
- * Copyright (c) 2014-2017 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2018 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2016      Cisco Systems, Inc.  All rights reserved.
@@ -443,21 +443,15 @@ void opal_pmix_value_load(pmix_value_t *v,
             memcpy(&v->data.state, &kv->data.uint8, sizeof(uint8_t));
             break;
         case OPAL_PTR:
-            /* if the opal_value_t is passing a true pointer, then
-             * respect that request and pass it along */
-            if (0 == strcmp(kv->key, PMIX_EVENT_RETURN_OBJECT)) {
-                v->type = PMIX_POINTER;
-                v->data.ptr = kv->data.ptr;
-                break;
-            }
-            /* otherwise, it must be to a list of
-             * opal_value_t's that we need to convert to a pmix_data_array
-             * of pmix_info_t structures */
+            v->type = PMIX_POINTER;
+            v->data.ptr = kv->data.ptr;
+            break;
+         case OPAL_LIST:
             list = (opal_list_t*)kv->data.ptr;
             v->type = PMIX_DATA_ARRAY;
             v->data.darray = (pmix_data_array_t*)malloc(sizeof(pmix_data_array_t));
             v->data.darray->type = PMIX_INFO;
-            v->data.darray->size = opal_list_get_size(list);
+            v->data.darray->size = (NULL == list)?0:opal_list_get_size(list);
             if (0 < v->data.darray->size) {
                 PMIX_INFO_CREATE(info, v->data.darray->size);
                 v->data.darray->array = info;
