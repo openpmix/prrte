@@ -386,6 +386,7 @@ typedef struct {
     opal_list_t attributes;
     /* launch msg buffer */
     opal_buffer_t launch_msg;
+    opal_list_t children;
 } orte_job_t;
 ORTE_DECLSPEC OBJ_CLASS_DECLARATION(orte_job_t);
 

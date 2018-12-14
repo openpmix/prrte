@@ -244,6 +244,8 @@ void orte_plm_base_recv(int status, orte_process_name_t* sender,
             if (NULL != prefix_dir) {
                 free(prefix_dir);
             }
+            /* link the spawned job to the spawner */
+            opal_list_append(&parent->children, &jdata->super);
         }
 
         /* if the user asked to forward any envars, cycle through the app contexts
