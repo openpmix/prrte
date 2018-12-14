@@ -11,8 +11,8 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2013 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2018 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -471,7 +471,6 @@ int orte_rmaps_rr_byobj(orte_job_t *jdata,
 {
     int i, nmapped, nprocs_mapped;
     orte_node_t *node;
-    orte_proc_t *proc;
     int nprocs, start;
     hwloc_obj_t obj=NULL;
     unsigned int nobjs;
@@ -586,6 +585,7 @@ int orte_rmaps_rr_byobj(orte_job_t *jdata,
             do {
                 /* loop through the number of objects */
                 for (i=0; i < (int)nobjs && nmapped < nprocs && nprocs_mapped < (int)app->num_procs; i++) {
+                    orte_proc_t *proc;
                     opal_output_verbose(20, orte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:rr: assigning proc to object %d", (i+start) % nobjs);
                     /* get the hwloc object */
@@ -605,6 +605,7 @@ int orte_rmaps_rr_byobj(orte_job_t *jdata,
                     nprocs_mapped++;
                     nmapped++;
                     orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
+                    OBJ_RELEASE(proc);
                 }
             } while (nmapped < nprocs && nprocs_mapped < (int)app->num_procs);
             add_one = true;
