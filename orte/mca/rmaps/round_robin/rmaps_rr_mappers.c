@@ -45,7 +45,6 @@ int orte_rmaps_rr_byslot(orte_job_t *jdata,
 {
     int i, nprocs_mapped;
     orte_node_t *node;
-    orte_proc_t *proc;
     int num_procs_to_assign, extra_procs_to_assign=0, nxtra_nodes=0;
     hwloc_obj_t obj=NULL;
     float balance;
@@ -105,6 +104,7 @@ int orte_rmaps_rr_byslot(orte_job_t *jdata,
                             (int)num_procs_to_assign, node->name);
 
         for (i=0; i < num_procs_to_assign && nprocs_mapped < app->num_procs; i++) {
+            orte_proc_t *proc;
             /* add this node to the map - do it only once */
             if (!ORTE_FLAG_TEST(node, ORTE_NODE_FLAG_MAPPED)) {
                 ORTE_FLAG_SET(node, ORTE_NODE_FLAG_MAPPED);
@@ -117,6 +117,7 @@ int orte_rmaps_rr_byslot(orte_job_t *jdata,
             }
             nprocs_mapped++;
             orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
+            OBJ_RELEASE(proc);
         }
     }
 
@@ -184,11 +185,13 @@ int orte_rmaps_rr_byslot(orte_job_t *jdata,
                             "mca:rmaps:rr:slot adding up to %d procs to node %s",
                             num_procs_to_assign, node->name);
         for (i=0; i < num_procs_to_assign && nprocs_mapped < app->num_procs; i++) {
+            orte_proc_t *proc;
             if (NULL == (proc = orte_rmaps_base_setup_proc(jdata, node, app->idx))) {
                 return ORTE_ERR_OUT_OF_RESOURCE;
             }
             nprocs_mapped++;
             orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
+            OBJ_RELEASE(proc);
         }
         /* not all nodes are equal, so only set oversubscribed for
          * this node if it is in that state
@@ -234,7 +237,6 @@ int orte_rmaps_rr_bynode(orte_job_t *jdata,
 {
     int j, nprocs_mapped, nnodes;
     orte_node_t *node;
-    orte_proc_t *proc;
     int num_procs_to_assign, navg;
     int extra_procs_to_assign=0, nxtra_nodes=0;
     hwloc_obj_t obj=NULL;
@@ -372,11 +374,13 @@ int orte_rmaps_rr_bynode(orte_job_t *jdata,
                                  ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), node->name,
                                  num_procs_to_assign));
             for (j=0; j < num_procs_to_assign && nprocs_mapped < app->num_procs; j++) {
+                orte_proc_t *proc;
                 if (NULL == (proc = orte_rmaps_base_setup_proc(jdata, node, app->idx))) {
                     return ORTE_ERR_OUT_OF_RESOURCE;
                 }
                 nprocs_mapped++;
                 orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
+                OBJ_RELEASE(proc);
             }
             /* not all nodes are equal, so only set oversubscribed for
              * this node if it is in that state
@@ -416,6 +420,7 @@ int orte_rmaps_rr_bynode(orte_job_t *jdata,
     /* now fillin as required until fully mapped */
     while (nprocs_mapped < app->num_procs) {
         OPAL_LIST_FOREACH(node, node_list, orte_node_t) {
+            orte_proc_t *proc;
             /* get the root object as we are not assigning
              * locale except at the node level
              */
@@ -423,14 +428,15 @@ int orte_rmaps_rr_bynode(orte_job_t *jdata,
                 obj = hwloc_get_root_obj(node->topology->topo);
             }
 
-           OPAL_OUTPUT_VERBOSE((20, orte_rmaps_base_framework.framework_output,
+            OPAL_OUTPUT_VERBOSE((20, orte_rmaps_base_framework.framework_output,
                                  "%s ADDING PROC TO NODE %s",
-                                ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), node->name));
+                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), node->name));
             if (NULL == (proc = orte_rmaps_base_setup_proc(jdata, node, app->idx))) {
                 return ORTE_ERR_OUT_OF_RESOURCE;
             }
             nprocs_mapped++;
             orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
+            OBJ_RELEASE(proc);
             /* not all nodes are equal, so only set oversubscribed for
              * this node if it is in that state
              */
@@ -662,7 +668,6 @@ static int byobj_span(orte_job_t *jdata,
 {
     int i, j, nprocs_mapped, navg;
     orte_node_t *node;
-    orte_proc_t *proc;
     int nprocs, nxtra_objs;
     hwloc_obj_t obj=NULL;
     unsigned int nobjs;
@@ -766,11 +771,13 @@ static int byobj_span(orte_job_t *jdata,
             }
             /* map the reqd number of procs */
             for (j=0; j < nprocs && nprocs_mapped < app->num_procs; j++) {
+                orte_proc_t *proc;
                 if (NULL == (proc = orte_rmaps_base_setup_proc(jdata, node, app->idx))) {
                     return ORTE_ERR_OUT_OF_RESOURCE;
                 }
                 nprocs_mapped++;
                 orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
+                OBJ_RELEASE(proc);
             }
             /* keep track of the node we last used */
             jdata->bookmark = node;

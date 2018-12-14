@@ -3,8 +3,8 @@
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
- * Copyright (c) 2015-2017 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2018 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -73,7 +73,6 @@ static int ppr_mapper(orte_job_t *jdata)
     int rc = ORTE_SUCCESS, j, n;
     mca_base_component_t *c=&mca_rmaps_ppr_component.base_version;
     orte_node_t *node;
-    orte_proc_t *proc;
     orte_app_context_t *app;
     orte_vpid_t total_procs, nprocs_mapped;
     opal_hwloc_level_t start=OPAL_HWLOC_NODE_LEVEL;
@@ -286,12 +285,14 @@ static int ppr_mapper(orte_job_t *jdata)
             if (OPAL_HWLOC_NODE_LEVEL == start) {
                 obj = hwloc_get_root_obj(node->topology->topo);
                 for (j=0; j < ppr[start] && nprocs_mapped < total_procs; j++) {
+                    orte_proc_t *proc;
                     if (NULL == (proc = orte_rmaps_base_setup_proc(jdata, node, idx))) {
                         rc = ORTE_ERR_OUT_OF_RESOURCE;
                         goto error;
                     }
                     nprocs_mapped++;
                     orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
+                    OBJ_RELEASE(proc);
                 }
             } else {
                 /* get the number of lowest resources on this node */
@@ -307,12 +308,14 @@ static int ppr_mapper(orte_job_t *jdata)
                                                           lowest, cache_level,
                                                           i, OPAL_HWLOC_AVAILABLE);
                     for (j=0; j < ppr[start] && nprocs_mapped < total_procs; j++) {
+                        orte_proc_t *proc;
                         if (NULL == (proc = orte_rmaps_base_setup_proc(jdata, node, idx))) {
                             rc = ORTE_ERR_OUT_OF_RESOURCE;
                             goto error;
                         }
                         nprocs_mapped++;
                         orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
+                        OBJ_RELEASE(proc);
                     }
                 }
 
