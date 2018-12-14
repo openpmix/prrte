@@ -663,6 +663,7 @@ static void orte_job_construct(orte_job_t* job)
 
     OBJ_CONSTRUCT(&job->attributes, opal_list_t);
     OBJ_CONSTRUCT(&job->launch_msg, opal_buffer_t);
+    OBJ_CONSTRUCT(&job->children, opal_list_t);
 }
 
 static void orte_job_destruct(orte_job_t* job)
@@ -730,10 +731,13 @@ static void orte_job_destruct(orte_job_t* job)
 
     OBJ_DESTRUCT(&job->launch_msg);
 
+    OPAL_LIST_DESTRUCT(&job->children);
+
     if (NULL != orte_job_data && ORTE_JOBID_INVALID != job->jobid) {
         /* remove the job from the global array */
         opal_hash_table_remove_value_uint32(orte_job_data, job->jobid);
     }
+
 }
 
 OBJ_CLASS_INSTANCE(orte_job_t,
