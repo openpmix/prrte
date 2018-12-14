@@ -396,7 +396,7 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
             /* setup the proc map object */
             kv = OBJ_NEW(opal_value_t);
             kv->key = strdup(PMIX_PROC_DATA);
-            kv->type = OPAL_PTR;
+            kv->type = OPAL_LIST;
             kv->data.ptr = OBJ_NEW(opal_list_t);
             opal_list_append(info, &kv->super);
             pmap = kv->data.ptr;
