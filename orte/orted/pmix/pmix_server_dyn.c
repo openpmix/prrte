@@ -238,22 +238,22 @@ static void interim(int sd, short args, void *cbdata)
         if (NULL != papp->info) {
             for (m=0; m < papp->ninfo; m++) {
                 info = &papp->info[m];
-                if (0 == strcmp(info->key, PMIX_HOST)) {
+                if (PMIX_CHECK_KEY(info, PMIX_HOST)) {
                     orte_set_attribute(&app->attributes, ORTE_APP_DASH_HOST,
                                        ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
-                } else if (0 == strcmp(info->key, PMIX_HOSTFILE)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_HOSTFILE)) {
                     orte_set_attribute(&app->attributes, ORTE_APP_HOSTFILE,
                                        ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
-                } else if (0 == strcmp(info->key, PMIX_ADD_HOSTFILE)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_ADD_HOSTFILE)) {
                     orte_set_attribute(&app->attributes, ORTE_APP_ADD_HOSTFILE,
                                        ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
-                } else if (0 == strcmp(info->key, PMIX_ADD_HOST)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_ADD_HOST)) {
                     orte_set_attribute(&app->attributes, ORTE_APP_ADD_HOST,
                                        ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
-                } else if (0 == strcmp(info->key, PMIX_PREFIX)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
                     orte_set_attribute(&app->attributes, ORTE_APP_PREFIX_DIR,
                                        ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
-                } else if (0 == strcmp(info->key, PMIX_WDIR)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_WDIR)) {
                     /* if this is a relative path, convert it to an absolute path */
                     if (opal_path_is_absolute(info->value.data.string)) {
                         app->cwd = strdup(info->value.data.string);
@@ -267,43 +267,43 @@ static void interim(int sd, short args, void *cbdata)
                         /* construct the absolute path */
                         app->cwd = opal_os_path(false, cwd, info->value.data.string, NULL);
                     }
-                } else if (0 == strcmp(info->key, PMIX_PRELOAD_BIN)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_BIN)) {
                     flag = PMIX_INFO_TRUE(info);
                     orte_set_attribute(&app->attributes, ORTE_APP_PRELOAD_BIN,
                                        ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
-                } else if (0 == strcmp(info->key, PMIX_PRELOAD_FILES)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_FILES)) {
                     orte_set_attribute(&app->attributes, ORTE_APP_PRELOAD_FILES,
                                        ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
 
-                } else if (0 == strcmp(info->key, PMIX_COSPAWN_APP)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_COSPAWN_APP)) {
                     flag = PMIX_INFO_TRUE(info);
                     orte_set_attribute(&app->attributes, ORTE_APP_DEBUGGER_DAEMON,
                                        ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
 #if OPAL_PMIX_VERSION >= 3
                 /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                 /* there can be multiple of these, so we add them to the attribute list */
-                } else if (0 == strcmp(info->key, PMIX_SET_ENVAR)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
                     envar.envar = info->value.data.envar.envar;
                     envar.value = info->value.data.envar.value;
                     envar.separator = info->value.data.envar.separator;
                     orte_add_attribute(&app->attributes, ORTE_APP_SET_ENVAR,
                                        ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
-                } else if (0 == strcmp(info->key, PMIX_ADD_ENVAR)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_ADD_ENVAR)) {
                     envar.envar = info->value.data.envar.envar;
                     envar.value = info->value.data.envar.value;
                     envar.separator = info->value.data.envar.separator;
                     orte_add_attribute(&app->attributes, ORTE_APP_ADD_ENVAR,
                                        ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
-                } else if (0 == strcmp(info->key, PMIX_UNSET_ENVAR)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_UNSET_ENVAR)) {
                     orte_add_attribute(&app->attributes, ORTE_APP_UNSET_ENVAR,
                                        ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
-                } else if (0 == strcmp(info->key, PMIX_PREPEND_ENVAR)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_PREPEND_ENVAR)) {
                     envar.envar = info->value.data.envar.envar;
                     envar.value = info->value.data.envar.value;
                     envar.separator = info->value.data.envar.separator;
                     orte_add_attribute(&app->attributes, ORTE_APP_PREPEND_ENVAR,
                                        ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
-                } else if (0 == strcmp(info->key, PMIX_APPEND_ENVAR)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_APPEND_ENVAR)) {
                     envar.envar = info->value.data.envar.envar;
                     envar.value = info->value.data.envar.value;
                     envar.separator = info->value.data.envar.separator;
@@ -311,7 +311,7 @@ static void interim(int sd, short args, void *cbdata)
                                        ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
 
 #if OPAL_PMIX_VERSION >= 4
-                } else if (0 == strcmp(info->key, PMIX_PSET_NAME)) {
+                } else if (PMIX_CHECK_KEY(info, PMIX_PSET_NAME)) {
                     orte_set_attribute(&app->attributes, ORTE_APP_PSET_NAME,
                                        ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
 #endif
@@ -330,19 +330,19 @@ static void interim(int sd, short args, void *cbdata)
     for (m=0; m < cd->ninfo; m++) {
         info = &cd->info[m];
         /***   PERSONALITY   ***/
-        if (0 == strcmp(info->key, PMIX_PERSONALITY)) {
+        if (PMIX_CHECK_KEY(info, PMIX_PERSONALITY)) {
             jdata->personality = opal_argv_split(info->value.data.string, ',');
 
         /***   REQUESTED MAPPER   ***/
-        } else if (0 == strcmp(info->key, PMIX_MAPPER)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
             jdata->map->req_mapper = strdup(info->value.data.string);
 
         /***   DISPLAY MAP   ***/
-        } else if (0 == strcmp(info->key, PMIX_DISPLAY_MAP)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {
             jdata->map->display_map = PMIX_INFO_TRUE(info);
 
         /***   PPR (PROCS-PER-RESOURCE)   ***/
-        } else if (0 == strcmp(info->key, PMIX_PPR)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
             if (ORTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
                 /* not allowed to provide multiple mapping policies */
                 orte_show_help("help-orte-rmaps-base.txt", "redefining-policy",
@@ -355,7 +355,7 @@ static void interim(int sd, short args, void *cbdata)
             jdata->map->ppr = strdup(info->value.data.string);
 
         /***   MAP-BY   ***/
-        } else if (0 == strcmp(info->key, PMIX_MAPBY)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
             if (ORTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
                 /* not allowed to provide multiple mapping policies */
                 orte_show_help("help-orte-rmaps-base.txt", "redefining-policy",
@@ -370,7 +370,7 @@ static void interim(int sd, short args, void *cbdata)
                 goto complete;
             }
         /***   RANK-BY   ***/
-        } else if (0 == strcmp(info->key, PMIX_RANKBY)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_RANKBY)) {
             if (ORTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
                 /* not allowed to provide multiple ranking policies */
                 orte_show_help("help-orte-rmaps-base.txt", "redefining-policy",
@@ -387,7 +387,7 @@ static void interim(int sd, short args, void *cbdata)
             }
 
         /***   BIND-TO   ***/
-        } else if (0 == strcmp(info->key, PMIX_BINDTO)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_BINDTO)) {
             if (OPAL_BINDING_POLICY_IS_SET(jdata->map->binding)) {
                 /* not allowed to provide multiple mapping policies */
                 orte_show_help("help-opal-hwloc-base.txt", "redefining-policy", true,
@@ -403,11 +403,11 @@ static void interim(int sd, short args, void *cbdata)
             }
 
         /***   CPUS/RANK   ***/
-        } else if (0 == strcmp(info->key, PMIX_CPUS_PER_PROC)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_CPUS_PER_PROC)) {
             jdata->map->cpus_per_rank = info->value.data.uint32;
 
         /***   NO USE LOCAL   ***/
-        } else if (0 == strcmp(info->key, PMIX_NO_PROCS_ON_HEAD)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_NO_PROCS_ON_HEAD)) {
             flag = PMIX_INFO_TRUE(info);
             if (flag) {
                 ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_NO_USE_LOCAL);
@@ -418,7 +418,7 @@ static void interim(int sd, short args, void *cbdata)
             ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_LOCAL_GIVEN);
 
         /***   OVERSUBSCRIBE   ***/
-        } else if (0 == strcmp(info->key, PMIX_NO_OVERSUBSCRIBE)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_NO_OVERSUBSCRIBE)) {
             flag = PMIX_INFO_TRUE(info);
             if (flag) {
                 ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_NO_OVERSUBSCRIBE);
@@ -429,18 +429,18 @@ static void interim(int sd, short args, void *cbdata)
             ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_SUBSCRIBE_GIVEN);
 
         /***   REPORT BINDINGS  ***/
-        } else if (0 == strcmp(info->key, PMIX_REPORT_BINDINGS)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_REPORT_BINDINGS)) {
             flag = PMIX_INFO_TRUE(info);
             orte_set_attribute(&jdata->attributes, ORTE_JOB_REPORT_BINDINGS,
                                ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
 
         /***   CPU LIST  ***/
-        } else if (0 == strcmp(info->key, PMIX_CPU_LIST)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_CPU_LIST)) {
             orte_set_attribute(&jdata->attributes, ORTE_JOB_CPU_LIST,
                                ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_BOOL);
 
         /***   RECOVERABLE  ***/
-        } else if (0 == strcmp(info->key, PMIX_JOB_RECOVERABLE)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_JOB_RECOVERABLE)) {
             flag = PMIX_INFO_TRUE(info);
             if (flag) {
                 ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_RECOVERABLE);
@@ -449,7 +449,7 @@ static void interim(int sd, short args, void *cbdata)
             }
 
         /***   MAX RESTARTS  ***/
-        } else if (0 == strcmp(info->key, PMIX_MAX_RESTARTS)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_MAX_RESTARTS)) {
             for (i=0; i < jdata->apps->size; i++) {
                 if (NULL == (app = (orte_app_context_t*)opal_pointer_array_get_item(jdata->apps, i))) {
                     continue;
@@ -459,19 +459,19 @@ static void interim(int sd, short args, void *cbdata)
             }
 
         /***   CONTINUOUS OPERATION  ***/
-        } else if (0 == strcmp(info->key, PMIX_JOB_CONTINUOUS)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_JOB_CONTINUOUS)) {
             flag = PMIX_INFO_TRUE(info);
             orte_set_attribute(&jdata->attributes, ORTE_JOB_CONTINUOUS_OP,
                                ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
 
         /***   NON-PMI JOB   ***/
-        } else if (0 == strcmp(info->key, PMIX_NON_PMI)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_NON_PMI)) {
             flag = PMIX_INFO_TRUE(info);
             orte_set_attribute(&jdata->attributes, ORTE_JOB_NON_ORTE_JOB,
                                ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
 
         /***   SPAWN REQUESTOR IS TOOL   ***/
-        } else if (0 == strcmp(info->key, PMIX_REQUESTOR_IS_TOOL)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_REQUESTOR_IS_TOOL)) {
             flag = PMIX_INFO_TRUE(info);
             orte_set_attribute(&jdata->attributes, ORTE_JOB_DVM_JOB,
                                ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
@@ -482,42 +482,42 @@ static void interim(int sd, short args, void *cbdata)
             }
 
         /***   NOTIFY UPON JOB COMPLETION   ***/
-        } else if (0 == strcmp(info->key, PMIX_NOTIFY_COMPLETION)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_NOTIFY_COMPLETION)) {
             flag = PMIX_INFO_TRUE(info);
             orte_set_attribute(&jdata->attributes, ORTE_JOB_NOTIFY_COMPLETION,
                                ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
 
         /***   STOP ON EXEC FOR DEBUGGER   ***/
-        } else if (0 == strcmp(info->key, PMIX_DEBUG_STOP_ON_EXEC)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_ON_EXEC)) {
             /* we don't know how to do this */
             rc = ORTE_ERR_NOT_SUPPORTED;
             goto complete;
 
         /***   TAG STDOUT   ***/
-        } else if (0 == strcmp(info->key, PMIX_TAG_OUTPUT)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_TAG_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             orte_set_attribute(&jdata->attributes, ORTE_JOB_TAG_OUTPUT,
                                ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
 
         /***   TIMESTAMP OUTPUT   ***/
-        } else if (0 == strcmp(info->key, PMIX_TIMESTAMP_OUTPUT)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_TIMESTAMP_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             orte_set_attribute(&jdata->attributes, ORTE_JOB_TIMESTAMP_OUTPUT,
                                ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
 
         /***   OUTPUT TO FILES   ***/
-        } else if (0 == strcmp(info->key, PMIX_OUTPUT_TO_FILE)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_OUTPUT_TO_FILE)) {
             orte_set_attribute(&jdata->attributes, ORTE_JOB_OUTPUT_TO_FILE,
                                ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
 
         /***   MERGE STDERR TO STDOUT   ***/
-        } else if (0 == strcmp(info->key, PMIX_MERGE_STDERR_STDOUT)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_MERGE_STDERR_STDOUT)) {
             flag = PMIX_INFO_TRUE(info);
             orte_set_attribute(&jdata->attributes, ORTE_JOB_MERGE_STDERR_STDOUT,
                                ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
 
         /***   STDIN TARGET   ***/
-        } else if (0 == strcmp(info->key, PMIX_STDIN_TGT)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_STDIN_TGT)) {
             if (0 == strcmp(info->value.data.string, "all")) {
                 jdata->stdin_target = ORTE_VPID_WILDCARD;
             } else if (0 == strcmp(info->value.data.string, "none")) {
@@ -527,46 +527,48 @@ static void interim(int sd, short args, void *cbdata)
             }
 
         /***   INDEX ARGV   ***/
-        } else if (0 == strcmp(info->key, PMIX_INDEX_ARGV)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_INDEX_ARGV)) {
             flag = PMIX_INFO_TRUE(info);
             orte_set_attribute(&jdata->attributes, ORTE_JOB_INDEX_ARGV,
                                ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
 
         /***   DEBUGGER DAEMONS   ***/
-        } else if (0 == strcmp(info->key, PMIX_DEBUGGER_DAEMONS)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_DEBUGGER_DAEMONS)) {
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_DEBUGGER_DAEMON);
             ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_DEBUGGER);
 
 #if OPAL_PMIX_VERSION >= 3
         /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
         /* there can be multiple of these, so we add them to the attribute list */
-        } else if (0 == strcmp(info->key, PMIX_SET_ENVAR)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
             orte_add_attribute(&jdata->attributes, ORTE_JOB_SET_ENVAR,
                                ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
-        } else if (0 == strcmp(info->key, PMIX_ADD_ENVAR)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_ADD_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
             orte_add_attribute(&jdata->attributes, ORTE_JOB_ADD_ENVAR,
                                ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
-        } else if (0 == strcmp(info->key, PMIX_UNSET_ENVAR)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_UNSET_ENVAR)) {
             orte_add_attribute(&jdata->attributes, ORTE_JOB_UNSET_ENVAR,
                                ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
-        } else if (0 == strcmp(info->key, PMIX_PREPEND_ENVAR)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_PREPEND_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
             orte_add_attribute(&jdata->attributes, ORTE_JOB_PREPEND_ENVAR,
                                ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
-        } else if (0 == strcmp(info->key, PMIX_APPEND_ENVAR)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_APPEND_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
             orte_add_attribute(&jdata->attributes, ORTE_JOB_APPEND_ENVAR,
                                ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
+        } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
+            ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_TOOL);
 #endif
 
         /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/

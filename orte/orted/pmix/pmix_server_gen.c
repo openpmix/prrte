@@ -1111,6 +1111,9 @@ void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
     orte_node_t *node, *nptr;
     int i;
 
+    /* flag that this job is a tool */
+    ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_TOOL);
+    /* store it away */
     opal_hash_table_set_value_uint32(orte_job_data, jdata->jobid, jdata);
     /* setup some required job-level fields in case this
      * tool calls spawn, or uses some other functions that

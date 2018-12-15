@@ -98,6 +98,7 @@ typedef uint16_t orte_job_flags_t;
 #define ORTE_JOB_FLAG_RESTART            0x0200   //
 #define ORTE_JOB_FLAG_PROCS_MIGRATING    0x0400   // some procs in job are migrating from one node to another
 #define ORTE_JOB_FLAG_OVERSUBSCRIBED     0x0800   // at least one node in the job is oversubscribed
+#define ORTE_JOB_FLAG_TOOL               0x1000   // job is a tool
 
 /***   JOB ATTRIBUTE KEYS   ***/
 #define ORTE_JOB_START_KEY   ORTE_NODE_MAX_KEY
