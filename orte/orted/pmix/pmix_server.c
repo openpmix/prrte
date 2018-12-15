@@ -855,6 +855,9 @@ static void rqcon(pmix_server_req_t *p)
 {
     p->operation = NULL;
     p->flag = true;
+    p->uid = 0;
+    p->gid = 0;
+    p->pid = 0;
     p->range = PMIX_RANGE_SESSION;
     p->proxy = *ORTE_NAME_INVALID;
     p->target = *ORTE_NAME_INVALID;

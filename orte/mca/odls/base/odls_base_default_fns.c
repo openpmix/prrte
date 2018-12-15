@@ -1748,6 +1748,7 @@ void orte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
 
     /* get the jobdat for this child */
     if (NULL == (jobdat = orte_get_job_data_object(proc->name.jobid))) {
+        opal_output(0, "UNABLE TO LOCATE OBJECT FOR %s", ORTE_NAME_PRINT(&proc->name));
         ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
         goto MOVEON;
     }

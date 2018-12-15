@@ -976,13 +976,8 @@ static void _toolconn(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *cd = (pmix_server_req_t*)cbdata;
     orte_job_t *jdata = NULL;
-    char *hostname = NULL;
-    orte_process_name_t tool = {ORTE_JOBID_INVALID, ORTE_VPID_INVALID};
     int rc;
-    uid_t uid=0;
-    gid_t gid=0;
     size_t n;
-    bool flag = true;
     pmix_proc_t pname;
     opal_buffer_t *buf;
     orte_plm_cmd_flag_t command = ORTE_PLM_ALLOC_JOBID_CMD;
@@ -997,38 +992,61 @@ static void _toolconn(int sd, short args, void *cbdata)
     /* check for directives */
     if (NULL != cd->info) {
         for (n=0; n < cd->ninfo; n++) {
-            if (0 == strncmp(cd->info[n].key, PMIX_EVENT_SILENT_TERMINATION, PMIX_MAX_KEYLEN)) {
-                flag = PMIX_INFO_TRUE(&cd->info[n]);
-            } else if (0 == strncmp(cd->info[n].key, PMIX_VERSION_INFO, PMIX_MAX_KEYLEN)) {
+            if (PMIX_CHECK_KEY(&cd->info[n], PMIX_EVENT_SILENT_TERMINATION)) {
+                cd->flag = PMIX_INFO_TRUE(&cd->info[n]);
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_VERSION_INFO)) {
                 /* we ignore this for now */
-            } else if (0 == strncmp(cd->info[n].key, PMIX_USERID, PMIX_MAX_KEYLEN)) {
-                uid = cd->info[n].value.data.uint32;
-            } else if (0 == strncmp(cd->info[n].key, PMIX_GRPID, PMIX_MAX_KEYLEN)) {
-                gid = cd->info[n].value.data.uint32;
-            } else if (0 == strncmp(cd->info[n].key, PMIX_NSPACE, PMIX_MAX_KEYLEN)) {
-                 OPAL_PMIX_CONVERT_NSPACE(rc, &tool.jobid, cd->info[n].value.data.string);
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_USERID)) {
+                PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, cd->uid, uid_t);
+                if (PMIX_SUCCESS != xrc) {
+                    if (NULL != cd->toolcbfunc) {
+                        cd->toolcbfunc(xrc, NULL, cd->cbdata);
+                    }
+                    OBJ_RELEASE(cd);
+                    return;
+                }
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_GRPID)) {
+                PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, cd->gid, gid_t);
+                if (PMIX_SUCCESS != xrc) {
+                    if (NULL != cd->toolcbfunc) {
+                        cd->toolcbfunc(xrc, NULL, cd->cbdata);
+                    }
+                    OBJ_RELEASE(cd);
+                    return;
+                }
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_NSPACE)) {
+                 OPAL_PMIX_CONVERT_NSPACE(rc, &cd->target.jobid, cd->info[n].value.data.string);
                  if (ORTE_SUCCESS != rc) {
                     ORTE_ERROR_LOG(rc);
                  }
-            } else if (0 == strncmp(cd->info[n].key, PMIX_RANK, PMIX_MAX_KEYLEN)) {
-                OPAL_PMIX_CONVERT_RANK(tool.vpid, cd->info[n].value.data.rank);
-            } else if (0 == strncmp(cd->info[n].key, PMIX_HOSTNAME, PMIX_MAX_KEYLEN)) {
-                hostname = cd->info[n].value.data.string;
+             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_RANK)) {
+                OPAL_PMIX_CONVERT_RANK(cd->target.vpid, cd->info[n].value.data.rank);
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_HOSTNAME)) {
+                cd->operation = strdup(cd->info[n].value.data.string);
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PROC_PID)) {
+                PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, cd->pid, pid_t);
+                if (PMIX_SUCCESS != xrc) {
+                    if (NULL != cd->toolcbfunc) {
+                        cd->toolcbfunc(xrc, NULL, cd->cbdata);
+                    }
+                    OBJ_RELEASE(cd);
+                    return;
+                }
             }
         }
     }
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s TOOL CONNECTION FROM UID %d GID %d",
-                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), uid, gid);
+                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), cd->uid, cd->gid);
 
     /* if we are not the HNP or master, and the tool doesn't
      * already have a name (i.e., we didn't spawn it), then
      * there is nothing we can currently do.
      * Eventually, when we switch to nspace instead of an
      * integer jobid, we'll just locally assign this value */
-    if (ORTE_JOBID_INVALID == tool.jobid ||
-        ORTE_VPID_INVALID == tool.vpid) {
+    if (ORTE_JOBID_INVALID == cd->target.jobid ||
+        ORTE_VPID_INVALID == cd->target.vpid) {
        /* if we are the HNP, we can directly assign the jobid */
         if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
             jdata = OBJ_NEW(orte_job_t);
@@ -1036,24 +1054,20 @@ static void _toolconn(int sd, short args, void *cbdata)
             if (ORTE_SUCCESS != rc) {
                 OBJ_RELEASE(jdata);
                 if (NULL != cd->toolcbfunc) {
-                    OPAL_PMIX_CONVERT_NAME(&pname, &tool);
+                    OPAL_PMIX_CONVERT_NAME(&pname, &cd->target);
                     cd->toolcbfunc(PMIX_ERROR, &pname, cd->cbdata);
                 }
                 OBJ_RELEASE(cd);
                 return;
             }
-            tool.jobid = jdata->jobid;
-            tool.vpid = 0;
+            cd->target.jobid = jdata->jobid;
+            cd->target.vpid = 0;
         } else {
             if (OPAL_SUCCESS != (rc = opal_hotel_checkin(&orte_pmix_server_globals.reqs, cd, &cd->room_num))) {
                 orte_show_help("help-orted.txt", "noroom", true, cd->operation, orte_pmix_server_globals.num_rooms);
                 goto callback;
             }
             /* we need to send this to the HNP for a jobid */
-            if (NULL != hostname) {
-                cd->operation = strdup(hostname);  // pass the hostname
-            }
-            cd->flag = flag;
             buf = OBJ_NEW(opal_buffer_t);
             opal_dss.pack(buf, &command, 1, ORTE_PLM_CMD);
             opal_dss.pack(buf, &cd->room_num, 1, OPAL_INT);
@@ -1075,19 +1089,14 @@ static void _toolconn(int sd, short args, void *cbdata)
         }
     } else {
         jdata = OBJ_NEW(orte_job_t);
-        jdata->jobid = tool.jobid;
+        jdata->jobid = cd->target.jobid;
     }
-    orte_pmix_server_tool_conn_complete(jdata, hostname, tool.vpid);
-    /* if they indicated a preference for termination, set it */
-    if (flag) {
-        orte_set_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION,
-                           ORTE_ATTR_GLOBAL, NULL, OPAL_BOOL);
-    }
+    orte_pmix_server_tool_conn_complete(jdata, cd);
     rc = ORTE_SUCCESS;
 
   callback:
     if (NULL != cd->toolcbfunc) {
-        OPAL_PMIX_CONVERT_NAME(&pname, &tool);
+        OPAL_PMIX_CONVERT_NAME(&pname, &cd->target);
         xrc = opal_pmix_convert_rc(rc);
         cd->toolcbfunc(xrc, &pname, cd->cbdata);
     }
@@ -1095,8 +1104,7 @@ static void _toolconn(int sd, short args, void *cbdata)
 }
 
 void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
-                                         char *hostname,
-                                         orte_vpid_t vpid)
+                                         pmix_server_req_t *req)
 {
     orte_app_context_t *app;
     orte_proc_t *proc;
@@ -1128,7 +1136,8 @@ void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
      */
     proc = OBJ_NEW(orte_proc_t);
     proc->name.jobid = jdata->jobid;
-    proc->name.vpid = vpid;
+    proc->name.vpid = req->target.vpid;
+    proc->pid = req->pid;
     proc->parent = ORTE_PROC_MY_NAME->vpid;
     ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_ALIVE);
     ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_TOOL);
@@ -1138,7 +1147,7 @@ void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
     proc->node_rank = 0;
     proc->app_rank = 0;
     proc->app_idx = 0;
-    if (NULL == hostname) {
+    if (NULL == req->operation) {
         /* it is on my node */
         node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, 0);
         ORTE_FLAG_SET(proc, ORTE_PROC_FLAG_LOCAL);
@@ -1149,7 +1158,7 @@ void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
             if (NULL == (nptr = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, i))) {
                 continue;
             }
-            if (0 == strcmp(hostname, nptr->name)) {
+            if (0 == strcmp(req->operation, nptr->name)) {
                 node = nptr;
                 break;
             }
@@ -1157,7 +1166,7 @@ void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
         if (NULL == node) {
             /* not in our allocation - which is still okay */
             node = OBJ_NEW(orte_node_t);
-            node->name = strdup(hostname);
+            node->name = strdup(req->operation);
             ORTE_FLAG_SET(node, ORTE_NODE_NON_USABLE);
             opal_pointer_array_add(orte_node_pool, node);
         }
@@ -1176,6 +1185,11 @@ void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
      * allocation */
     OBJ_RETAIN(proc);
     opal_pointer_array_add(node->procs, proc);
+    /* if they indicated a preference for termination, set it */
+    if (req->flag) {
+        orte_set_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION,
+                           ORTE_ATTR_GLOBAL, NULL, OPAL_BOOL);
+    }
 }
 
 void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo,

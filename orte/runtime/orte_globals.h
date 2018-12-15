@@ -312,22 +312,6 @@ typedef struct {
 ORTE_DECLSPEC OBJ_CLASS_DECLARATION(orte_node_t);
 
 typedef struct {
-    /** base object */
-    opal_list_item_t super;
-    /* process name */
-    orte_process_name_t name;
-    /* record the exit status for this tool */
-    orte_exit_code_t exit_code;
-    /* keep a list of any jobs spawned either directly
-     * by this tool, or by any child jobs spawned by
-     * the tool */
-    opal_list_t jobs;
-    /* attributes */
-    opal_list_t attributes;
-} orte_tool_t;
-ORTE_DECLSPEC OBJ_CLASS_DECLARATION(orte_tool_t);
-
-typedef struct {
     /** Base object so this can be put on a list */
     opal_list_item_t super;
     /* record the exit status for this job */
@@ -336,8 +320,6 @@ typedef struct {
     char **personality;
     /* jobid for this job */
     orte_jobid_t jobid;
-    /* tool responsible for job */
-    orte_tool_t *launcher;
     /* offset to the total number of procs so shared memory
      * components can potentially connect to any spawned jobs*/
     orte_vpid_t offset;
@@ -386,6 +368,7 @@ typedef struct {
     opal_list_t attributes;
     /* launch msg buffer */
     opal_buffer_t launch_msg;
+    /* track children of this job */
     opal_list_t children;
 } orte_job_t;
 ORTE_DECLSPEC OBJ_CLASS_DECLARATION(orte_job_t);
@@ -535,7 +518,6 @@ ORTE_DECLSPEC extern float orte_max_timeout;
 ORTE_DECLSPEC extern orte_timer_t *orte_mpiexec_timeout;
 
 /* global arrays for data storage */
-ORTE_DECLSPEC extern opal_list_t orte_tools;
 ORTE_DECLSPEC extern opal_hash_table_t *orte_job_data;
 ORTE_DECLSPEC extern opal_pointer_array_t *orte_node_pool;
 ORTE_DECLSPEC extern opal_pointer_array_t *orte_node_topologies;

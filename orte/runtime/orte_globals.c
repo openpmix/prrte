@@ -605,28 +605,10 @@ OBJ_CLASS_INSTANCE(orte_app_context_t,
                    orte_app_context_construct,
                    orte_app_context_destructor);
 
-static void orte_tool_construct(orte_tool_t *t)
-{
-    t->name = *ORTE_NAME_INVALID;
-    t->exit_code = 0;
-    OBJ_CONSTRUCT(&t->jobs, opal_list_t);
-    OBJ_CONSTRUCT(&t->attributes, opal_list_t);
-}
-static void orte_tool_destruct(orte_tool_t *t)
-{
-    OPAL_LIST_DESTRUCT(&t->jobs);
-    OPAL_LIST_DESTRUCT(&t->attributes);
-}
-OBJ_CLASS_INSTANCE(orte_tool_t,
-                   opal_list_item_t,
-                   orte_tool_construct,
-                   orte_tool_destruct);
-
 static void orte_job_construct(orte_job_t* job)
 {
     job->exit_code = 0;
     job->personality = NULL;
-    job->launcher = NULL;
     job->jobid = ORTE_JOBID_INVALID;
     job->offset = 0;
     job->apps = OBJ_NEW(opal_pointer_array_t);
@@ -685,9 +667,6 @@ static void orte_job_destruct(orte_job_t* job)
 
     if (NULL != job->personality) {
         opal_argv_free(job->personality);
-    }
-    if (NULL != job->launcher) {
-        OBJ_RELEASE(job->launcher);
     }
     for (n=0; n < job->apps->size; n++) {
         if (NULL == (app = (orte_app_context_t*)opal_pointer_array_get_item(job->apps, n))) {

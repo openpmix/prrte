@@ -110,14 +110,10 @@ void pmix_server_launch_resp(int status, orte_process_name_t* sender,
         if (ORTE_SUCCESS == ret) {
             jdata = OBJ_NEW(orte_job_t);
             jdata->jobid = jobid;
-            orte_pmix_server_tool_conn_complete(jdata, req->operation, 0);
-            /* if they indicated a preference for termination, set it */
-            if (req->flag) {
-                orte_set_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION,
-                                   ORTE_ATTR_GLOBAL, NULL, OPAL_BOOL);
-            }
-            OPAL_PMIX_CONVERT_JOBID(proc.nspace, jobid);
-            proc.rank = 0;
+            req->target.jobid = jobid;
+            req->target.vpid = 0;
+            orte_pmix_server_tool_conn_complete(jdata, req);
+            OPAL_PMIX_CONVERT_NAME(&proc, &req->target);
         }
         req->toolcbfunc(xrc, &proc, req->cbdata);
     }
