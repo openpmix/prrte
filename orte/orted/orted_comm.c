@@ -54,6 +54,7 @@
 #include "opal/runtime/opal.h"
 #include "opal/runtime/opal_progress.h"
 #include "opal/dss/dss.h"
+#include "opal/pmix/pmix-internal.h"
 
 #include "orte/util/proc_info.h"
 #include "orte/util/session_dir.h"
@@ -88,6 +89,13 @@
  * Globals
  */
 static char *get_orted_comm_cmd_str(int command);
+
+static void _notify_release(int status, void *cbdata)
+{
+    opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
+
+    OPAL_PMIX_WAKEUP_THREAD(lk);
+}
 
 static opal_pointer_array_t *procs_prev_ordered_to_terminate = NULL;
 
@@ -128,6 +136,9 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
     int8_t flag;
     uint8_t *cmpdata;
     size_t cmplen;
+    uint32_t u32;
+    void *nptr;
+    opal_pmix_lock_t lk;
 
     /* unpack the command */
     n = 1;
@@ -394,6 +405,41 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
         }
         /* kill the local procs */
         orte_odls.kill_local_procs(NULL);
+        /* cycle thru our known jobs to find any that are tools - these
+         * may not have been killed if, for example, we didn't start
+         * them */
+        i = opal_hash_table_get_first_key_uint32(orte_job_data, &u32, (void **)&jdata, &nptr);
+        while (OPAL_SUCCESS == i) {
+            if (ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_TOOL) &&
+                0 < opal_list_get_size(&jdata->children)) {
+                pmix_info_t info[3];
+                pmix_proc_t pname;
+                bool flag;
+                orte_job_t *jd;
+                pmix_status_t xrc = PMIX_ERR_JOB_TERMINATED;
+                /* we need to notify this job that its CHILD job terminated
+                 * as that is the job it is looking for */
+                jd = (orte_job_t*)opal_list_get_first(&jdata->children);
+                /* must notify this tool of termination so it can
+                 * cleanly exit - otherwise, it may hang waiting for
+                 * some kind of notification */
+                /* ensure this only goes to the job terminated event handler */
+                flag = true;
+                PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, &flag, PMIX_BOOL);
+                /* provide the status */
+                PMIX_INFO_LOAD(&info[1], PMIX_JOB_TERM_STATUS, &xrc, PMIX_STATUS);
+                /* tell the requestor which job */
+                OPAL_PMIX_CONVERT_JOBID(pname.nspace, jd->jobid);
+                pname.rank = PMIX_RANK_WILDCARD;
+                PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+                OPAL_PMIX_CONSTRUCT_LOCK(&lk);
+                PMIx_Notify_event(PMIX_ERR_JOB_TERMINATED, &pname, PMIX_RANGE_SESSION,
+                                  info, 3, _notify_release, &lk);
+                OPAL_PMIX_WAIT_THREAD(&lk);
+                OPAL_PMIX_DESTRUCT_LOCK(&lk);
+            }
+            i = opal_hash_table_get_next_key_uint32(orte_job_data, &u32, (void **)&jdata, nptr, &nptr);
+        }
         /* flag that orteds were ordered to terminate */
         orte_orteds_term_ordered = true;
         if (ORTE_PROC_IS_HNP) {
