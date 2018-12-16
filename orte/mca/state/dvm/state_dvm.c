@@ -481,6 +481,19 @@ static void check_complete(int fd, short args, void *cbdata)
         jdata->state = ORTE_JOB_STATE_TERMINATED;
     }
 
+    /* cleanup the procs as these are gone */
+    for (i=0; i < orte_local_children->size; i++) {
+        if (NULL == (proc = (orte_proc_t*)opal_pointer_array_get_item(orte_local_children, i))) {
+            continue;
+        }
+        /* if this child is part of the job... */
+        if (proc->name.jobid == jdata->jobid) {
+            /* clear the entry in the local children */
+            opal_pointer_array_set_item(orte_local_children, i, NULL);
+            OBJ_RELEASE(proc);  // maintain accounting
+        }
+    }
+
     /* tell the IOF that the job is complete */
     if (NULL != orte_iof.complete) {
         orte_iof.complete(jdata);
@@ -578,6 +591,11 @@ static void check_complete(int fd, short args, void *cbdata)
         }
         OBJ_RELEASE(map);
         jdata->map = NULL;
+    }
+
+    /* if requested, check fd status for leaks */
+    if (orte_state_base_run_fdcheck) {
+        orte_state_base_check_fds(jdata);
     }
 
     if (ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_DEBUGGER_DAEMON)) {

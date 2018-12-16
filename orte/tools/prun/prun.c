@@ -252,9 +252,25 @@ static void defhandler(size_t evhdlr_registration_id,
                        pmix_event_notification_cbfunc_fn_t cbfunc,
                        void *cbdata)
 {
-    if (PMIX_ERR_UNREACH == status) {
-        /* exit with a non-zero status */
-        exit(1);
+    opal_pmix_lock_t *lock = NULL;
+    size_t n;
+
+    if (PMIX_ERR_UNREACH == status ||
+        PMIX_ERR_LOST_CONNECTION_TO_SERVER == status) {
+        /* we should always have info returned to us - if not, there is
+         * nothing we can do */
+        if (NULL != info) {
+            for (n=0; n < ninfo; n++) {
+                if (PMIX_CHECK_KEY(&info[n], PMIX_EVENT_RETURN_OBJECT)) {
+                    lock = (opal_pmix_lock_t*)info[n].value.data.ptr;
+                }
+            }
+        }
+
+        /* save the status */
+        lock->status = status;
+        /* release the lock */
+        OPAL_PMIX_WAKEUP_THREAD(lock);
     }
 
     /* we _always_ have to execute the evhandler callback or
@@ -787,9 +803,12 @@ int prun(int argc, char *argv[])
         goto DONE;
     }
 
-    /* register a default event handler */
+    /* register a default event handler and pass it our release lock
+     * so we can cleanly exit if the server goes away */
+    OPAL_PMIX_CONSTRUCT_LOCK(&rellock);
+    PMIX_INFO_LOAD(&info, PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
-    PMIx_Register_event_handler(NULL, 0, NULL, 0, defhandler, regcbfunc, &lock);
+    PMIx_Register_event_handler(NULL, 0, &info, 1, defhandler, regcbfunc, &lock);
     OPAL_PMIX_WAIT_THREAD(&lock);
     OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
@@ -1158,7 +1177,6 @@ int prun(int argc, char *argv[])
     pname.rank = PMIX_RANK_WILDCARD;
     PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
     /* request that they return our lock object */
-    OPAL_PMIX_CONSTRUCT_LOCK(&rellock);
     PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
     /* do the registration */
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
