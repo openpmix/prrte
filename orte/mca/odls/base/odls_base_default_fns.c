@@ -762,9 +762,9 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
 
     cnt=1;
     rc = opal_dss.unpack(bptr, &bo, &cnt, OPAL_BYTE_OBJECT);
+    OBJ_RELEASE(bptr);
     if (OPAL_SUCCESS == rc) {
         /* there was setup data - process it */
-        OBJ_RELEASE(bptr);
         PMIX_DATA_BUFFER_LOAD(&pbuf, bo->bytes, bo->size);
         bo->bytes = NULL;
         bo->size = 0;
