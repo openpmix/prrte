@@ -324,7 +324,6 @@ static void interim(int sd, short args, void *cbdata)
             }
         }
     }
-    PMIX_APP_FREE(cd->apps, cd->napps);
 
     /* transfer the job info across */
     for (m=0; m < cd->ninfo; m++) {
