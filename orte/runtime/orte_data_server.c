@@ -13,8 +13,8 @@
  * Copyright (c) 2012-2016 Los Alamos National Security, LLC.
  *                         All rights reserved
  * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
- * Copyright (c) 2017      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017-2018 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -266,6 +266,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
         count = 1;
         if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &data->owner, &count, PMIX_PROC))) {
             PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             OBJ_RELEASE(data);
             rc = ORTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
@@ -280,6 +281,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
         count = 1;
         if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &data->ninfo, &count, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             OBJ_RELEASE(data);
             rc = ORTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
@@ -289,6 +291,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
         if (1 > data->ninfo) {
             ret = PMIX_ERR_BAD_PARAM;
             PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             OBJ_RELEASE(data);
             rc = ORTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
@@ -301,10 +304,12 @@ void orte_data_server(int status, orte_process_name_t* sender,
         count = data->ninfo;
         if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, data->info, &count, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             OBJ_RELEASE(data);
             rc = ORTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
         /* check for directives */
         for (n=0; n < data->ninfo; n++) {
@@ -400,6 +405,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
                 /* pack the number of returned info's */
                 if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, &n, 1, PMIX_SIZE))) {
                     PMIX_ERROR_LOG(ret);
+                    PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                     rc = ORTE_ERR_PACK_FAILURE;
                     goto SEND_ERROR;
                 }
@@ -411,12 +417,14 @@ void orte_data_server(int status, orte_process_name_t* sender,
                     /* pack the data owner */
                     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, &rinfo->source, 1, PMIX_PROC))) {
                         PMIX_ERROR_LOG(ret);
+                        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         rc = ORTE_ERR_PACK_FAILURE;
                         goto SEND_ERROR;
                     }
                     /* pack the data */
                     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, rinfo->info, 1, PMIX_INFO))) {
                         PMIX_ERROR_LOG(ret);
+                        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         rc = ORTE_ERR_PACK_FAILURE;
                         goto SEND_ERROR;
                     }
@@ -836,6 +844,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
             rc = ORTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
         opal_output_verbose(1, orte_data_server_output,
                             "%s data server: purge data from %s:%d",
