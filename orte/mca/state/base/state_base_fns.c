@@ -98,7 +98,7 @@ void orte_state_base_activate_job_state(orte_job_t *jdata,
         s = (orte_state_t*)any;
     } else {
         OPAL_OUTPUT_VERBOSE((1, orte_state_base_framework.framework_output,
-                             "ACTIVATE: ANY STATE NOT FOUND"));
+                             "ACTIVATE: JOB STATE %s NOT REGISTERED", orte_job_state_to_str(state)));
         return;
     }
     if (NULL == s->cbfunc) {
@@ -683,11 +683,7 @@ void orte_state_base_track_procs(int fd, short argc, void *cbdata)
         }
         jdata->num_launched++;
         if (jdata->num_launched == jdata->num_procs) {
-            if (ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_DEBUGGER_DAEMON)) {
-                ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_READY_FOR_DEBUGGERS);
-            } else {
-                ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_RUNNING);
-            }
+            ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_RUNNING);
         }
     } else if (ORTE_PROC_STATE_REGISTERED == state) {
         /* update the proc state */
@@ -994,10 +990,6 @@ void orte_state_base_check_all_complete(int fd, short args, void *cbdata)
                  * is maintained!
                  */
                 if (1 < j) {
-                    if (ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_DEBUGGER_DAEMON)) {
-                        /* this was a debugger daemon. notify that a debugger has detached */
-                        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_DEBUGGER_DETACH);
-                    }
                     opal_hash_table_set_value_uint32(orte_job_data, jdata->jobid, NULL);
                     OBJ_RELEASE(jdata);
                 }
