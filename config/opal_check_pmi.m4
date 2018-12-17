@@ -49,7 +49,7 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
           [pmix_ext_install_dir=$with_pmix])
 
     # Make sure we have the headers and libs in the correct location
-    OPAL_CHECK_WITHDIR([external-pmix], [$pmix_ext_install_dir/include], [pmix.h])
+    OPAL_CHECK_WITHDIR([pmix], [$pmix_ext_install_dir/include], [pmix.h])
 
     AS_IF([test -n "$with_pmix_libdir"],
           [AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir])
