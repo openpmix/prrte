@@ -261,8 +261,6 @@ const char *orte_job_state_to_str(orte_job_state_t state)
         return "SUSPENDED";
     case ORTE_JOB_STATE_REGISTERED:
         return "SYNC REGISTERED";
-    case ORTE_JOB_STATE_READY_FOR_DEBUGGERS:
-        return "READY FOR DEBUGGERS";
     case ORTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE:
         return "LOCAL LAUNCH COMPLETE";
     case ORTE_JOB_STATE_UNTERMINATED:
@@ -325,8 +323,6 @@ const char *orte_job_state_to_str(orte_job_state_t state)
         return "FAULT TOLERANCE RESTART";
     case ORTE_JOB_STATE_ANY:
         return "ANY";
-    case ORTE_JOB_STATE_DEBUGGER_DETACH:
-        return "DEBUGGER DETACH";
     default:
         return "UNKNOWN STATE!";
     }

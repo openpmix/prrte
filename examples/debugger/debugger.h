@@ -37,6 +37,7 @@ typedef struct {
     pthread_cond_t cond;
     volatile bool active;
     pmix_status_t status;
+    int count;
 } mylock_t;
 
 #define DEBUG_CONSTRUCT_LOCK(l)                     \
@@ -45,6 +46,7 @@ typedef struct {
         pthread_cond_init(&(l)->cond, NULL);        \
         (l)->active = true;                         \
         (l)->status = PMIX_SUCCESS;                 \
+        (l)->count = 0;                             \
     } while(0)
 
 #define DEBUG_DESTRUCT_LOCK(l)              \

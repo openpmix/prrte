@@ -91,6 +91,29 @@ static void notification_fn(size_t evhdlr_registration_id,
                             pmix_event_notification_cbfunc_fn_t cbfunc,
                             void *cbdata)
 {
+    myrel_t *lock;
+    size_t n;
+
+    if (PMIX_ERR_UNREACH == status ||
+        PMIX_ERR_LOST_CONNECTION_TO_SERVER == status) {
+        /* we should always have info returned to us - if not, there is
+         * nothing we can do */
+        if (NULL != info) {
+            for (n=0; n < ninfo; n++) {
+                if (PMIX_CHECK_KEY(&info[n], PMIX_EVENT_RETURN_OBJECT)) {
+                    lock = (myrel_t*)info[n].value.data.ptr;
+                }
+            }
+        }
+
+        /* save the status */
+        lock->exit_code = status;
+        lock->exit_code_given = true;
+        /* always release the lock if we lose connection
+         * to our host server */
+        DEBUG_WAKEUP_THREAD(&lock->lock);
+    }
+
     /* this example doesn't do anything with default events */
     if (NULL != cbfunc) {
         cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
@@ -119,7 +142,7 @@ static void release_fn(size_t evhdlr_registration_id,
     size_t n;
     pmix_proc_t *affected = NULL;
 
-    /* find our return object */
+    /* find the return object */
     lock = NULL;
     found = false;
     for (n=0; n < ninfo; n++) {
@@ -146,10 +169,15 @@ static void release_fn(size_t evhdlr_registration_id,
     fprintf(stderr, "DEBUGGER NOTIFIED THAT JOB %s TERMINATED - AFFECTED %s\n", lock->nspace,
             (NULL == affected) ? "NULL" : affected->nspace);
     if (found) {
-        lock->exit_code = exit_code;
-        lock->exit_code_given = true;
+        if (!lock->exit_code_given) {
+            lock->exit_code = exit_code;
+            lock->exit_code_given = true;
+        }
     }
-    DEBUG_WAKEUP_THREAD(&lock->lock);
+    lock->lock.count--;
+    if (0 == lock->lock.count) {
+        DEBUG_WAKEUP_THREAD(&lock->lock);
+    }
 
     /* tell the event handler state machine that we are the last step */
     if (NULL != cbfunc) {
@@ -199,15 +227,15 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     debugger[0].cwd = strdup(cwd);
     /* provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
-    dninfo = 6;
+    dninfo = 7;
     PMIX_INFO_CREATE(dinfo, dninfo);
     PMIX_INFO_LOAD(&dinfo[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
     PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
-    PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
-    PMIX_INFO_LOAD(&dinfo[2], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
-    PMIX_INFO_LOAD(&dinfo[3], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
-    PMIX_INFO_LOAD(&dinfo[4], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
-    PMIX_INFO_LOAD(&dinfo[5], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
+    PMIX_INFO_LOAD(&dinfo[2], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
+    PMIX_INFO_LOAD(&dinfo[3], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
+    PMIX_INFO_LOAD(&dinfo[4], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
+    PMIX_INFO_LOAD(&dinfo[5], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
+    PMIX_INFO_LOAD(&dinfo[6], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
     /* spawn the daemons */
     fprintf(stderr, "Debugger: spawning %s\n", debugger[0].cmd);
     if (PMIX_SUCCESS != (rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace))) {
@@ -227,19 +255,20 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     /* only call me back when this specific job terminates */
     PMIX_LOAD_PROCID(&proc, dspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&dinfo[1], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+    /* track that we need both jobs to terminate */
+    myrel->lock.count++;
 
     DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIx_Register_event_handler(&code, 1, dinfo, 2,
                                 release_fn, evhandler_reg_callbk, (void*)&mylock);
     DEBUG_WAIT_THREAD(&mylock);
+    fprintf(stderr, "Debugger: Registered for termination on nspace %s\n", dspace);
     rc = mylock.status;
     DEBUG_DESTRUCT_LOCK(&mylock);
     PMIX_INFO_FREE(dinfo, 2);
 
     return rc;
 }
-
-#define DBGR_LOOP_LIMIT  10
 
 int main(int argc, char **argv)
 {
@@ -256,7 +285,7 @@ int main(int argc, char **argv)
     char cwd[1024];
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
     mylock_t mylock;
-    myrel_t myrel, launcher_ready, dbrel;
+    myrel_t myrel;
     pid_t pid;
     pmix_envar_t envar;
     pmix_proc_t proc;
@@ -286,23 +315,26 @@ int main(int argc, char **argv)
     PMIX_INFO_CREATE(info, 1);
     PMIX_INFO_LOAD(&info[0], PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
     /* init as a tool */
-    if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, info, ninfo))) {
+    if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, info, 1))) {
         fprintf(stderr, "PMIx_tool_init failed: %s(%d)\n", PMIx_Error_string(rc), rc);
         exit(rc);
     }
-    PMIX_INFO_FREE(info, ninfo);
+    PMIX_INFO_FREE(info, 1);
 
     fprintf(stderr, "Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank, (unsigned long)pid);
 
-    /* construct the debugger termination release */
-    DEBUG_CONSTRUCT_LOCK(&dbrel.lock);
+    /* construct my own release first */
+    DEBUG_CONSTRUCT_LOCK(&myrel.lock);
 
     /* register a default event handler */
+    PMIX_INFO_CREATE(info, 1);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(NULL, 0, NULL, 0,
+    PMIx_Register_event_handler(NULL, 0, info, 1,
                                 notification_fn, evhandler_reg_callbk, (void*)&mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
+    PMIX_INFO_FREE(info, 1);
 
     /* this is an initial launch - we need to launch the application
      * plus the debugger daemons, letting the RM know we are debugging
@@ -405,6 +437,24 @@ int main(int argc, char **argv)
         PMIX_INFO_FREE(info, ninfo);
         PMIX_APP_FREE(app, napps);
 
+        /* register callback for when the app terminates */
+        PMIX_INFO_CREATE(info, 2);
+        PMIX_INFO_LOAD(&info[0], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
+        /* only call me back when this specific job terminates */
+        PMIX_LOAD_PROCID(&proc, clientspace, PMIX_RANK_WILDCARD);
+        PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+        /* track number of jobs to terminate */
+        myrel.lock.count++;
+
+        DEBUG_CONSTRUCT_LOCK(&mylock);
+        PMIx_Register_event_handler(&code, 1, info, 2,
+                                    release_fn, evhandler_reg_callbk, (void*)&mylock);
+        DEBUG_WAIT_THREAD(&mylock);
+        fprintf(stderr, "Debugger: Registered for termination on nspace %s\n", clientspace);
+        rc = mylock.status;
+        DEBUG_DESTRUCT_LOCK(&mylock);
+        PMIX_INFO_FREE(info, 2);
+
         /* get the proctable for this nspace */
         PMIX_QUERY_CREATE(query, 1);
         PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_PROC_TABLE);
@@ -461,7 +511,7 @@ int main(int argc, char **argv)
          */
         fprintf(stderr, "Received proc table for %d procs\n", (int)myquery_data.info[0].value.data.darray->size);
         /* now launch the debugger daemons */
-        if (PMIX_SUCCESS != (rc = spawn_debugger(clientspace, &dbrel))) {
+        if (PMIX_SUCCESS != (rc = spawn_debugger(clientspace, &myrel))) {
             fprintf(stderr, "Debugger daemons failed to spawn: %s\n", PMIx_Error_string(rc));
             goto done;
         }
@@ -469,13 +519,10 @@ int main(int argc, char **argv)
 
   rundebugger:
     /* this is where a debugger tool would wait until the debug operation is complete */
-    DEBUG_WAIT_THREAD(&dbrel.lock);
     DEBUG_WAIT_THREAD(&myrel.lock);
 
   done:
     DEBUG_DESTRUCT_LOCK(&myrel.lock);
-    DEBUG_DESTRUCT_LOCK(&dbrel.lock);
     PMIx_tool_finalize();
-
     return(rc);
 }

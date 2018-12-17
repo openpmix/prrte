@@ -142,17 +142,19 @@ static void release_fn(size_t evhdlr_registration_id,
         return;
     }
 
-    /* tell the event handler state machine that we are the last step */
-    if (NULL != cbfunc) {
-        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
-    }
-    fprintf(stderr, "DEBUGGER DAEMON NOTIFIED THAT JOB %s TERMINATED - AFFECTED %s\n", lock->nspace,
+    fprintf(stderr, "DEBUGGER DAEMON %s NOTIFIED THAT JOB TERMINATED - AFFECTED %s\n", lock->nspace,
             (NULL == affected) ? "NULL" : affected->nspace);
 
     if (found) {
         lock->exit_code = exit_code;
         lock->exit_code_given = true;
     }
+
+    /* tell the event handler state machine that we are the last step */
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+
     DEBUG_WAKEUP_THREAD(&lock->lock);
 }
 

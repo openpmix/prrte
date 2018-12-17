@@ -727,11 +727,6 @@ void orte_plm_base_registered(int fd, short args, void *cbdata)
     /* update job state */
     jdata->state = caddy->job_state;
 
-   /* if this wasn't a debugger job, then need to init_after_spawn for debuggers */
-    if (!ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_DEBUGGER_DAEMON)) {
-        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_READY_FOR_DEBUGGERS);
-    }
-
     OBJ_RELEASE(caddy);
 }
 

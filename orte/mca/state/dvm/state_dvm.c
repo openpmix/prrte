@@ -598,10 +598,7 @@ static void check_complete(int fd, short args, void *cbdata)
         orte_state_base_check_fds(jdata);
     }
 
-    if (ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_DEBUGGER_DAEMON)) {
-        /* this was a debugger daemon. notify that a debugger has detached */
-        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_DEBUGGER_DETACH);
-    } else if (jdata->state != ORTE_JOB_STATE_NOTIFIED) {
+    if (jdata->state != ORTE_JOB_STATE_NOTIFIED) {
         OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
                              "%s state:dvm:check_job_completed state is terminated - activating notify",
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
@@ -685,7 +682,6 @@ static void dvm_notify(int sd, short args, void *cbdata)
             pname.rank = PMIX_RANK_WILDCARD;
         }
         PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
-
         /* pack the info for sending */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
         OPAL_PMIX_CONVERT_NAME(&pname, ORTE_PROC_MY_NAME);

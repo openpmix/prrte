@@ -128,7 +128,12 @@ static void _client_finalized(int sd, short args, void *cbdata)
         /* find the named process */
         p = NULL;
         if (NULL == (jdata = orte_get_job_data_object(cd->proc.jobid))) {
-            return;
+            /* this tool was not started by us and we have
+             * no job record for it - this shouldn't happen,
+             * so let's error log it */
+            ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
+            /* ensure they don't hang */
+            goto release;
         }
         for (i=0; i < jdata->procs->size; i++) {
             if (NULL == (ptr = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, i))) {
@@ -153,10 +158,12 @@ static void _client_finalized(int sd, short args, void *cbdata)
     }
     if (NULL != p) {
         ORTE_FLAG_SET(p, ORTE_PROC_FLAG_HAS_DEREG);
-        /* release the caller */
-        if (NULL != cd->cbfunc) {
-            cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
-        }
+    }
+
+  release:
+    /* release the caller */
+    if (NULL != cd->cbfunc) {
+        cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
     OBJ_RELEASE(cd);
 }
@@ -975,13 +982,15 @@ pmix_status_t pmix_server_query_fn(pmix_proc_t *proct,
 static void _toolconn(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *cd = (pmix_server_req_t*)cbdata;
-    orte_job_t *jdata = NULL;
-    int rc;
+    orte_job_t *jdata = NULL, *jptr;
+    int rc, i;
+    uint32_t u32;
     size_t n;
     pmix_proc_t pname;
     opal_buffer_t *buf;
     orte_plm_cmd_flag_t command = ORTE_PLM_ALLOC_JOBID_CMD;
     pmix_status_t xrc;
+    void *nptr;
 
     ORTE_ACQUIRE_OBJECT(cd);
 
@@ -1062,6 +1071,7 @@ static void _toolconn(int sd, short args, void *cbdata)
             }
             cd->target.jobid = jdata->jobid;
             cd->target.vpid = 0;
+            orte_pmix_server_tool_conn_complete(jdata, cd);
         } else {
             if (OPAL_SUCCESS != (rc = opal_hotel_checkin(&orte_pmix_server_globals.reqs, cd, &cd->room_num))) {
                 orte_show_help("help-orted.txt", "noroom", true, cd->operation, orte_pmix_server_globals.num_rooms);
@@ -1088,10 +1098,25 @@ static void _toolconn(int sd, short args, void *cbdata)
             return;
         }
     } else {
-        jdata = OBJ_NEW(orte_job_t);
-        jdata->jobid = cd->target.jobid;
+        /* we may have spawned this job, so check to see if we
+         * already have a job object for it */
+        jdata = NULL;
+        i = opal_hash_table_get_first_key_uint32(orte_job_data, &u32, (void **)&jptr, &nptr);
+        while (OPAL_SUCCESS == i) {
+            if (cd->target.jobid == jptr->jobid) {
+                jdata = jptr;
+                /* flag that this job is a tool */
+                ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_TOOL);
+                break;
+            }
+            i = opal_hash_table_get_next_key_uint32(orte_job_data, &u32, (void **)&jptr, nptr, &nptr);
+        }
+        if (NULL == jdata) {
+            jdata = OBJ_NEW(orte_job_t);
+            jdata->jobid = cd->target.jobid;
+            orte_pmix_server_tool_conn_complete(jdata, cd);
+        }
     }
-    orte_pmix_server_tool_conn_complete(jdata, cd);
     rc = ORTE_SUCCESS;
 
   callback:
@@ -1115,9 +1140,7 @@ void orte_pmix_server_tool_conn_complete(orte_job_t *jdata,
     ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_TOOL);
     /* store it away */
     opal_hash_table_set_value_uint32(orte_job_data, jdata->jobid, jdata);
-    /* setup some required job-level fields in case this
-     * tool calls spawn, or uses some other functions that
-     * need them */
+
     /* must create a map for it (even though it has no
      * info in it) so that the job info will be picked
      * up in subsequent pidmaps or other daemons won't

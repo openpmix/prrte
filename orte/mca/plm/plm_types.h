@@ -129,9 +129,7 @@ typedef int32_t orte_job_state_t;
 #define ORTE_JOB_STATE_RUNNING                  14  /* all procs have been fork'd */
 #define ORTE_JOB_STATE_SUSPENDED                15  /* job has been suspended */
 #define ORTE_JOB_STATE_REGISTERED               16  /* all procs registered for sync */
-#define ORTE_JOB_STATE_READY_FOR_DEBUGGERS      17  /* job ready for debugger init after spawn */
 #define ORTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE    18  /* all local procs have attempted launch */
-#define ORTE_JOB_STATE_DEBUGGER_DETACH          19  /* a debugger has detached */
 
 /*
  * Define a "boundary" so we can easily and quickly determine
