@@ -74,9 +74,7 @@ headers = \
         string_copy.h \
         sys_limits.h \
         timings.h \
-        uri.h \
-        info_subscriber.h \
-	info.h
+        uri.h
 
 libopalutil_la_SOURCES = \
         $(headers) \
@@ -113,9 +111,7 @@ libopalutil_la_SOURCES = \
         strncpy.c \
         string_copy.c \
         sys_limits.c \
-        uri.c \
-        info_subscriber.c \
-        info.c
+        uri.c
 
 if OPAL_COMPILE_TIMING
 libopalutil_la_SOURCES += timings.c
