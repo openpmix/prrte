@@ -12,6 +12,8 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
+ * Copyright (c) 2018      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -98,7 +100,7 @@ int orte_odls_alps_component_query(mca_base_module_t **module, int *priority)
 
     rc = orte_common_alps_proc_in_pagg(&flag);
     if ((ORTE_SUCCESS == rc) && flag) {
-        *priority = 10; /* take precendence over base */
+        *priority = 80; /* take precendence over base and default */
         *module = (mca_base_module_t *) &orte_odls_alps_module;
     }
 
