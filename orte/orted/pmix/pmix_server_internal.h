@@ -129,6 +129,9 @@ typedef struct {
     opal_buffer_t *buf;
     pmix_modex_cbfunc_t cbfunc;
     pmix_info_cbfunc_t infocbfunc;
+    int mode;
+    pmix_info_t *info;
+    size_t ninfo;
     void *cbdata;
 } orte_pmix_mdx_caddy_t;
 OBJ_CLASS_DECLARATION(orte_pmix_mdx_caddy_t);
