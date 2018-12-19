@@ -1423,6 +1423,9 @@ static void relcb(void *cbdata)
 {
     orte_pmix_mdx_caddy_t *cd=(orte_pmix_mdx_caddy_t*)cbdata;
 
+    if (NULL != cd->info) {
+        PMIX_INFO_FREE(cd->info, cd->ninfo);
+    }
     OBJ_RELEASE(cd);
 }
 static void group_release(int status, opal_buffer_t *buf, void *cbdata)
@@ -1431,8 +1434,9 @@ static void group_release(int status, opal_buffer_t *buf, void *cbdata)
     int32_t cnt;
     int rc;
     pmix_status_t ret;
-    size_t cid, ninfo = 0;
-    pmix_info_t *info = NULL;
+    size_t cid, n;
+    pmix_byte_object_t bo;
+    int32_t byused;
 
     ORTE_ACQUIRE_OBJECT(cd);
 
@@ -1441,32 +1445,51 @@ static void group_release(int status, opal_buffer_t *buf, void *cbdata)
         goto complete;
     }
 
-    /* if a context id was provided, get it */
-    cnt = 1;
-    rc = opal_dss.unpack(buf, &cid, &cnt, OPAL_SIZE);
-    /* it is okay if they didn't */
-    if (ORTE_SUCCESS != rc && ORTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
-        ORTE_ERROR_LOG(rc);
-        goto complete;
+    if (1 == cd->mode) {
+        /* a context id was requested, get it */
+        cnt = 1;
+        rc = opal_dss.unpack(buf, &cid, &cnt, OPAL_SIZE);
+        /* error if they didn't return it */
+        if (ORTE_SUCCESS != rc) {
+            ORTE_ERROR_LOG(rc);
+            goto complete;
+        }
+        cd->ninfo++;
     }
-    if (ORTE_SUCCESS == rc) {
-        ninfo = 1;
-        PMIX_INFO_CREATE(info, ninfo);
-        PMIX_INFO_LOAD(&info[0], PMIX_GROUP_CONTEXT_ID, &cid, PMIX_SIZE);
+    /* if anything is left in the buffer, then it is
+     * modex data that needs to be stored */
+    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
+    byused = buf->bytes_used - (buf->unpack_ptr - buf->base_ptr);
+    if (0 < byused) {
+        bo.bytes = buf->unpack_ptr;
+        bo.size = byused;
     }
-    if (ORTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER == rc) {
-        rc = ORTE_SUCCESS;
+    if (NULL != bo.bytes && 0 < bo.size) {
+        cd->ninfo++;
+    }
+
+    if (0 < cd->ninfo) {
+        PMIX_INFO_CREATE(cd->info, cd->ninfo);
+        n = 0;
+        if (1 == cd->mode) {
+            PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_CONTEXT_ID, &cid, PMIX_SIZE);
+            ++n;
+        }
+        if (NULL != bo.bytes && 0 < bo.size) {
+            PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_ENDPT_DATA, &bo, PMIX_BYTE_OBJECT);
+        }
     }
 
   complete:
     ret = opal_pmix_convert_rc(rc);
     /* return to the local procs in the collective */
     if (NULL != cd->infocbfunc) {
-        cd->infocbfunc(ret, info, ninfo, cd->cbdata, relcb, cd);
+        cd->infocbfunc(ret, cd->info, cd->ninfo, cd->cbdata, relcb, cd);
     } else {
-        if (NULL != info) {
-            PMIX_INFO_FREE(info, ninfo);
+        if (NULL != cd->info) {
+            PMIX_INFO_FREE(cd->info, cd->ninfo);
         }
+        OBJ_RELEASE(cd);
     }
 }
 
@@ -1480,24 +1503,33 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
     size_t i, mode = 0;
     pmix_server_pset_t *pset;
     bool fence = false;
+#if OPAL_PMIX_VERSION >= 4
+    opal_buffer_t bf;
+    pmix_byte_object_t *bo = NULL;
+#endif
 
     /* they are required to pass us an id */
     if (NULL == gpid) {
         return PMIX_ERR_BAD_PARAM;
     }
 
-    if (PMIX_GROUP_CONSTRUCT == op) {
-        /* check the directives */
-        for (i=0; i < ndirs; i++) {
-            /* see if they want a context id assigned */
-            if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
-                if (PMIX_INFO_TRUE(&directives[i])) {
-                    mode = 1;
-                }
-            } else if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
-                fence = PMIX_INFO_TRUE(&directives[i]);
+    /* check the directives */
+    for (i=0; i < ndirs; i++) {
+        /* see if they want a context id assigned */
+        if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
+            if (PMIX_INFO_TRUE(&directives[i])) {
+                mode = 1;
             }
+        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
+            fence = PMIX_INFO_TRUE(&directives[i]);
+#if OPAL_PMIX_VERSION >= 4
+        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ENDPT_DATA)) {
+            bo = (pmix_byte_object_t*)&directives[i].value.data.bo;
+#endif
         }
+    }
+
+    if (PMIX_GROUP_CONSTRUCT == op) {
         /* add it to our list of known process sets */
         pset = OBJ_NEW(pmix_server_pset_t);
         pset->name = strdup(gpid);
@@ -1506,14 +1538,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         memcpy(pset->members, procs, nprocs * sizeof(pmix_proc_t));
         opal_list_append(&orte_pmix_server_globals.psets, &pset->super);
     } else if (PMIX_GROUP_DESTRUCT == op) {
-        /* check the directives */
-        for (i=0; i < ndirs; i++) {
-            /* see if they want a fence operation */
-            if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
-                fence = PMIX_INFO_TRUE(&directives[i]);
-                break;
-            }
-        }
         /* find this process set on our list of groups */
         OPAL_LIST_FOREACH(pset, &orte_pmix_server_globals.psets, pmix_server_pset_t) {
             if (0 == strcmp(pset->name, gpid)) {
@@ -1533,6 +1557,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
     cd = OBJ_NEW(orte_pmix_mdx_caddy_t);
     cd->infocbfunc = cbfunc;
     cd->cbdata = cbdata;
+    cd->mode = mode;
 
    /* compute the signature of this collective */
     if (NULL != procs) {
@@ -1550,7 +1575,17 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         }
     }
     cd->buf = OBJ_NEW(opal_buffer_t);
-
+#if OPAL_PMIX_VERSION >= 4
+    /* if they provided us with a data blob, send it along */
+    if (NULL != bo) {
+        /* We don't own the byte_object and so we have to
+         * copy it here */
+        OBJ_CONSTRUCT(&bf, opal_buffer_t);
+        opal_dss.load(&bf, bo->bytes, bo->size);
+        opal_dss.copy_payload(cd->buf, &bf);
+        /* don't destruct bf! */
+    }
+#endif
     /* pass it to the global collective algorithm */
     if (ORTE_SUCCESS != (rc = orte_grpcomm.allgather(cd->sig, cd->buf, mode,
                                                      group_release, cd))) {

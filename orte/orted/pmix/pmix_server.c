@@ -891,6 +891,9 @@ static void mdcon(orte_pmix_mdx_caddy_t *p)
     p->sig = NULL;
     p->buf = NULL;
     p->cbfunc = NULL;
+    p->mode = 0;
+    p->info = NULL;
+    p->ninfo = 0;
     p->cbdata = NULL;
 }
 static void mddes(orte_pmix_mdx_caddy_t *p)
