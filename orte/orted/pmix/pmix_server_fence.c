@@ -299,5 +299,5 @@ pmix_status_t pmix_server_dmodex_req_fn(const pmix_proc_t *proc,
     /*  we have to shift threads to the ORTE thread, so
      * create a request and push it into that thread */
     ORTE_DMX_REQ(name, dmodex_req, cbfunc, cbdata);
-    return PMIX_OPERATION_IN_PROGRESS;
+    return PMIX_SUCCESS;
 }
