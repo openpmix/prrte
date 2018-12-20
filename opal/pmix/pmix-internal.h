@@ -47,6 +47,14 @@ typedef struct {
 } opal_ds_info_t;
 OBJ_CLASS_DECLARATION(opal_ds_info_t);
 
+/* define another cady for putting statically defined
+ * pmix_info_t objects on a list */
+typedef struct {
+    opal_list_item_t super;
+    pmix_info_t info;
+} opal_info_item_t;
+OBJ_CLASS_DECLARATION(opal_info_item_t);
+
 
 typedef struct {
     opal_mutex_t mutex;

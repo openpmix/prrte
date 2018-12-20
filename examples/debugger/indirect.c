@@ -370,19 +370,25 @@ int main(int argc, char **argv)
 #endif
     PMIX_INFO_CREATE(info, ninfo);
     n=0;
-    PMIX_INFO_LOAD(&info[n++], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
+    PMIX_INFO_LOAD(&info[n], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
+    n++;
     asprintf(&tmp, "%s:%d", myproc.nspace, myproc.rank);
     PMIX_ENVAR_LOAD(&envar, "PMIX_LAUNCHER_PAUSE_FOR_TOOL", tmp, ':');
     free(tmp);
-    PMIX_INFO_LOAD(&info[n++], PMIX_SET_ENVAR, &envar, PMIX_ENVAR);  // launcher is to wait for directives
+    PMIX_INFO_LOAD(&info[n], PMIX_SET_ENVAR, &envar, PMIX_ENVAR);  // launcher is to wait for directives
+    n++;
     PMIX_ENVAR_DESTRUCT(&envar);
     cospawn = true;
-    PMIX_INFO_LOAD(&info[n++], PMIX_FWD_STDOUT, &cospawn, PMIX_BOOL);  // forward stdout to me
-    PMIX_INFO_LOAD(&info[n++], PMIX_FWD_STDERR, &cospawn, PMIX_BOOL);  // forward stderr to me
-    PMIX_INFO_LOAD(&info[n++], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the job completes
-    PMIX_INFO_LOAD(&info[n++], PMIX_SPAWN_TOOL, NULL, PMIX_BOOL); // we are spawning a tool
+    PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDOUT, &cospawn, PMIX_BOOL);  // forward stdout to me
+    n++;
+    PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDERR, &cospawn, PMIX_BOOL);  // forward stderr to me
+    n++;
+    PMIX_INFO_LOAD(&info[n], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the job completes
+    n++;
+    PMIX_INFO_LOAD(&info[n], PMIX_SPAWN_TOOL, NULL, PMIX_BOOL); // we are spawning a tool
+    n++;
 #ifdef PMIX_LAUNCHER_RENDEZVOUS_FILE
-    PMIX_INFO_LOAD(&info[n++], PMIX_LAUNCHER_RENDEZVOUS_FILE, "dbgr.rndz.txt", PMIX_STRING);  // have it output a specific rndz file
+    PMIX_INFO_LOAD(&info[n], PMIX_LAUNCHER_RENDEZVOUS_FILE, "dbgr.rndz.txt", PMIX_STRING);  // have it output a specific rndz file
 #endif
     /* spawn the job - the function will return when the launcher
      * has been launched. Note that this doesn't tell us anything
