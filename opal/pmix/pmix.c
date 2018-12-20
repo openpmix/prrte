@@ -792,3 +792,15 @@ static void dsicon(opal_ds_info_t *p)
 OBJ_CLASS_INSTANCE(opal_ds_info_t,
                    opal_list_item_t,
                    dsicon, NULL);
+
+static void infoitmcon(opal_info_item_t *p)
+{
+    PMIX_INFO_CONSTRUCT(&p->info);
+}
+static void infoitdecon(opal_info_item_t *p)
+{
+    PMIX_INFO_DESTRUCT(&p->info);
+}
+OBJ_CLASS_INSTANCE(opal_info_item_t,
+                   opal_list_item_t,
+                   infoitmcon, infoitdecon);
