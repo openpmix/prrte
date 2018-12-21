@@ -370,6 +370,8 @@ typedef struct {
     opal_buffer_t launch_msg;
     /* track children of this job */
     opal_list_t children;
+    /* track the launcher of these jobs */
+    orte_jobid_t launcher;
 } orte_job_t;
 ORTE_DECLSPEC OBJ_CLASS_DECLARATION(orte_job_t);
 

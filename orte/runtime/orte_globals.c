@@ -646,6 +646,7 @@ static void orte_job_construct(orte_job_t* job)
     OBJ_CONSTRUCT(&job->attributes, opal_list_t);
     OBJ_CONSTRUCT(&job->launch_msg, opal_buffer_t);
     OBJ_CONSTRUCT(&job->children, opal_list_t);
+    job->launcher = ORTE_JOBID_INVALID;
 }
 
 static void orte_job_destruct(orte_job_t* job)

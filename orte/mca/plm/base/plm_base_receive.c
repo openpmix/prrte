@@ -246,6 +246,13 @@ void orte_plm_base_recv(int status, orte_process_name_t* sender,
             }
             /* link the spawned job to the spawner */
             opal_list_append(&parent->children, &jdata->super);
+            /* connect the launcher as well */
+            if (ORTE_JOBID_INVALID == parent->launcher) {
+                /* we are an original spawn */
+                jdata->launcher = name.jobid;
+            } else {
+                jdata->launcher = parent->launcher;
+            }
         }
 
         /* if the user asked to forward any envars, cycle through the app contexts
