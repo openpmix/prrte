@@ -256,6 +256,14 @@ int orte_dt_unpack_job(opal_buffer_t *buffer, void *dest,
             ORTE_ERROR_LOG(rc);
             return rc;
         }
+
+        /* unpack the launcher ID */
+        n = 1;
+        if (ORTE_SUCCESS != (rc = opal_dss_unpack_buffer(buffer,
+                                &(jobs[i]->launcher), &n, ORTE_JOBID))) {
+            ORTE_ERROR_LOG(rc);
+            return rc;
+        }
     }
 
     return ORTE_SUCCESS;
