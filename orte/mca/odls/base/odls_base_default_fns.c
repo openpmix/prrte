@@ -734,21 +734,19 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
                 goto REPORT_ERROR;
             }
         }
+        free(ppn);
         /* compute the ranks and add the proc objects
          * to the jdata->procs array */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_vpids(jdata))) {
             ORTE_ERROR_LOG(rc);
-            free(ppn);
             goto REPORT_ERROR;
         }
         /* and finally, compute the local and node ranks */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_local_ranks(jdata))) {
             ORTE_ERROR_LOG(rc);
-            free(ppn);
             goto REPORT_ERROR;
         }
     }
-    free(ppn);
 
 #if OPAL_PMIX_VERSION >= 3
     /* unpack the buffer containing any application setup info - there
