@@ -108,5 +108,8 @@ ORTE_DECLSPEC void orte_show_help_recv(int status, orte_process_name_t* sender,
                                        opal_buffer_t *buffer, orte_rml_tag_t tag,
                                        void* cbdata);
 
+ORTE_DECLSPEC char* orte_show_help_string(const char *filename, const char *topic,
+                                          int want_error_header, ...);
+
 END_C_DECLS
 #endif

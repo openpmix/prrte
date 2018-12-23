@@ -61,6 +61,7 @@ typedef struct {
     pthread_cond_t cond;
     volatile bool active;
     int status;
+    char *msg;
 } opal_pmix_lock_t;
 
 #define opal_pmix_condition_wait(a,b)   pthread_cond_wait(a, &(b)->m_lock_pthread)
@@ -70,6 +71,8 @@ typedef struct {
         OBJ_CONSTRUCT(&(l)->mutex, opal_mutex_t);       \
         pthread_cond_init(&(l)->cond, NULL);            \
         (l)->active = true;                             \
+        (l)->status = 0;                                \
+        (l)->msg = NULL;                                \
         OPAL_POST_OBJECT((l));                          \
     } while(0)
 
@@ -78,6 +81,9 @@ typedef struct {
         OPAL_ACQUIRE_OBJECT((l));           \
         OBJ_DESTRUCT(&(l)->mutex);          \
         pthread_cond_destroy(&(l)->cond);   \
+        if (NULL != (l)->msg) {             \
+            free((l)->msg);                 \
+        }                                   \
     } while(0)
 
 

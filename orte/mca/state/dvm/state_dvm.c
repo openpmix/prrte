@@ -643,16 +643,18 @@ static void dvm_notify(int sd, short args, void *cbdata)
     pmix_data_buffer_t pbkt;
     pmix_data_range_t range = PMIX_RANGE_CUSTOM;
     pmix_status_t code, ret;
+    char *errmsg = NULL;
 
     /* see if there was any problem */
     if (orte_get_attribute(&jdata->attributes, ORTE_JOB_ABORTED_PROC, (void**)&pptr, OPAL_PTR) && NULL != pptr) {
-        ret = opal_pmix_convert_rc(jdata->exit_code);
+        rc = jdata->exit_code;
     /* or whether we got cancelled by the user */
     } else if (orte_get_attribute(&jdata->attributes, ORTE_JOB_CANCELLED, NULL, OPAL_BOOL)) {
-        ret = opal_pmix_convert_rc(ORTE_ERR_JOB_CANCELLED);
+        rc = ORTE_ERR_JOB_CANCELLED;
     } else {
-        ret = opal_pmix_convert_rc(jdata->exit_code);
+        rc = jdata->exit_code;
     }
+    ret = opal_pmix_convert_rc(rc);
 
     if (0 == ret && orte_get_attribute(&jdata->attributes, ORTE_JOB_SILENT_TERMINATION, NULL, OPAL_BOOL)) {
         notify = false;
@@ -666,8 +668,17 @@ static void dvm_notify(int sd, short args, void *cbdata)
     }
 
     if (notify) {
+        /* if it was an abnormal termination, then construct an appropriate
+         * error message */
+        if (ORTE_SUCCESS != rc) {
+            errmsg = orte_dump_aborted_procs(jdata);
+        }
         /* construct the info to be provided */
-        ninfo = 4;
+        if (NULL == errmsg) {
+            ninfo = 4;
+        } else {
+            ninfo = 5;
+        }
         PMIX_INFO_CREATE(info, ninfo);
         /* ensure this only goes to the job terminated event handler */
         flag = true;
@@ -682,6 +693,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
             pname.rank = PMIX_RANK_WILDCARD;
         }
         PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+
         /* pack the info for sending */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
         OPAL_PMIX_CONVERT_NAME(&pname, ORTE_PROC_MY_NAME);
@@ -693,6 +705,11 @@ static void dvm_notify(int sd, short args, void *cbdata)
         }
         tgt.rank = 0;
         PMIX_INFO_LOAD(&info[3], PMIX_EVENT_CUSTOM_RANGE, &tgt, PMIX_PROC);
+
+        if (NULL != errmsg) {
+            PMIX_INFO_LOAD(&info[4], PMIX_EVENT_TEXT_MESSAGE, errmsg, PMIX_STRING);
+            free(errmsg);
+        }
 
         /* pack the status code */
         code = PMIX_ERR_JOB_TERMINATED;
