@@ -493,6 +493,13 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
             /* point to the first rank to cause the problem */
             orte_set_attribute(&jdata->attributes, ORTE_JOB_ABORTED_PROC, ORTE_ATTR_LOCAL, pptr, OPAL_PTR);
+            /* update our exit code */
+            jdata->exit_code = pptr->exit_code;
+            /* just in case the exit code hadn't been set, do it here - this
+             * won't override any reported exit code */
+            if (0 == jdata->exit_code) {
+                jdata->exit_code = ORTE_ERR_FAILED_TO_START;
+            }
             /* retain the object so it doesn't get free'd */
             OBJ_RETAIN(pptr);
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_ABORTED);
@@ -533,8 +540,6 @@ static void proc_errors(int fd, short args, void *cbdata)
                 ORTE_ERROR_LOG(ret);
                 OBJ_RELEASE(answer);
             }
-            /* record that we notified about this job */
-            jdata->state = ORTE_JOB_STATE_NOTIFIED;
           CLEANUP:
             /* kill the job */
             _terminate_job(jdata->jobid);

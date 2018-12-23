@@ -596,6 +596,20 @@ void orte_show_help_finalize(void)
     }
 }
 
+char* orte_show_help_string(const char *filename, const char *topic,
+                            int want_error_header, ...)
+{
+    va_list arglist;
+    char *output;
+
+    va_start(arglist, want_error_header);
+    output = opal_show_help_vstring(filename, topic, want_error_header,
+                                    arglist);
+    va_end(arglist);
+
+    return output;
+}
+
 int orte_show_help(const char *filename, const char *topic,
                    int want_error_header, ...)
 {

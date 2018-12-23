@@ -99,11 +99,6 @@ void pmix_server_launch_resp(int status, orte_process_name_t* sender,
     if (NULL != req->spcbfunc) {
         OPAL_PMIX_CONVERT_JOBID(nspace, jobid);
         req->spcbfunc(ret, nspace, req->cbdata);
-        /* if we failed to launch, then ensure we cleanup */
-        if (ORTE_SUCCESS != ret) {
-            jdata = orte_get_job_data_object(jobid);
-            ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_TERMINATED);
-        }
     } else if (NULL != req->toolcbfunc) {
         xrc = opal_pmix_convert_rc(ret);
         /* if success, then add to our job info */

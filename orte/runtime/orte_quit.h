@@ -2,7 +2,7 @@
  * Copyright (c) 2010      Cisco Systems, Inc. All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2016      Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2018 Intel, Inc.  All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -27,10 +27,7 @@ BEGIN_C_DECLS
 
 ORTE_DECLSPEC void orte_quit(int fd, short args, void *cbdata);
 
-ORTE_DECLSPEC int orte_print_aborted_job(orte_job_t *job,
-                                         orte_app_context_t *approc,
-                                         orte_proc_t *proc,
-                                         orte_node_t *node);
+ORTE_DECLSPEC char* orte_dump_aborted_procs(orte_job_t *jdata);
 
 END_C_DECLS
 

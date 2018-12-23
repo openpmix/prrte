@@ -293,6 +293,7 @@ static void evhandler(size_t evhdlr_registration_id,
     int jobstatus=0, rc;
     orte_jobid_t jobid = ORTE_JOBID_INVALID;
     size_t n;
+    char *msg = NULL;
 
     /* we should always have info returned to us - if not, there is
      * nothing we can do */
@@ -307,6 +308,8 @@ static void evhandler(size_t evhdlr_registration_id,
                 }
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
                 lock = (opal_pmix_lock_t*)info[n].value.data.ptr;
+            } else if (0 == strncmp(info[n].key, PMIX_EVENT_TEXT_MESSAGE, PMIX_MAX_KEYLEN)) {
+                msg = info[n].value.data.string;
             }
         }
         if (orte_cmd_options.verbose && (myjobid != ORTE_JOBID_INVALID && jobid == myjobid)) {
@@ -316,6 +319,9 @@ static void evhandler(size_t evhdlr_registration_id,
     }
     /* save the status */
     lock->status = jobstatus;
+    if (NULL != msg) {
+        lock->msg = strdup(msg);
+    }
     /* release the lock */
     OPAL_PMIX_WAKEUP_THREAD(lock);
 
@@ -1157,10 +1163,6 @@ int prun(int argc, char *argv[])
     }
 
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, nspace);
-    if (PMIX_SUCCESS != ret) {
-        opal_output(0, "Job failed to spawn: %s", PMIx_Error_string(ret));
-        goto DONE;
-    }
     OPAL_PMIX_CONVERT_NSPACE(rc, &myjobid, nspace);
 
     /* register to be notified when
@@ -1187,11 +1189,14 @@ int prun(int argc, char *argv[])
     if (orte_cmd_options.verbose) {
         opal_output(0, "JOB %s EXECUTING", OPAL_JOBID_PRINT(myjobid));
     }
-
     OPAL_PMIX_WAIT_THREAD(&rellock);
-    OPAL_PMIX_DESTRUCT_LOCK(&rellock);
     /* save the status */
     rc = rellock.status;
+    /* output any message */
+    if (NULL != rellock.msg) {
+        fprintf(stderr, "%s\n", rellock.msg);
+    }
+    OPAL_PMIX_DESTRUCT_LOCK(&rellock);
 
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
     PMIx_Deregister_event_handler(evid, opcbfunc, &lock);
