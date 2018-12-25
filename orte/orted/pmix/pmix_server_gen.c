@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2014-2017 Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2014      Research Organization for Information Science
+ * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
@@ -937,6 +937,7 @@ static void _query(int sd, short args, void *cbdata)
     }
     OPAL_LIST_DESTRUCT(&results);
     cd->infocbfunc(ret, rcd->info, rcd->ninfo, cd->cbdata, qrel, rcd);
+    OBJ_RELEASE(cd);
 }
 
 pmix_status_t pmix_server_query_fn(pmix_proc_t *proct,
