@@ -13,6 +13,8 @@
  *                         All rights reserved.
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2017      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2018      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -70,7 +72,6 @@ OBJ_CLASS_DECLARATION(orte_grpcomm_base_active_t);
 typedef struct {
     opal_list_t actives;
     opal_list_t ongoing;
-    opal_hash_table_t sig_table;
     char *transports;
     size_t context_id;
 } orte_grpcomm_base_t;
