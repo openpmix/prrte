@@ -572,7 +572,7 @@ static void _send_notification(int status,
     PMIX_INFO_CREATE(info, ninfo);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_AFFECTED_PROC, &psource, PMIX_PROC);
     OPAL_PMIX_CONVERT_NAME(&psource, target);
-    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_CUSTOM_RANGE, &psource, PMIX_PROC);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_CUSTOM_RANGE, &psource, PMIX_PROC);
 
     /* pack the number of infos */
     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &ninfo, 1, PMIX_SIZE))) {
