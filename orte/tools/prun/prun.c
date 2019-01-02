@@ -14,7 +14,7 @@
  * Copyright (c) 2007-2009 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2007-2017 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -223,6 +223,10 @@ static void infocb(pmix_status_t status,
     opal_pmix_lock_t *lock = (opal_pmix_lock_t*)cbdata;
     OPAL_ACQUIRE_OBJECT(lock);
 
+    if (orte_cmd_options.verbose) {
+        opal_output(0, "PRUN: INFOCB");
+    }
+
     if (NULL != release_fn) {
         release_fn(release_cbdata);
     }
@@ -254,6 +258,10 @@ static void defhandler(size_t evhdlr_registration_id,
 {
     opal_pmix_lock_t *lock = NULL;
     size_t n;
+
+    if (orte_cmd_options.verbose) {
+        opal_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
+    }
 
     if (PMIX_ERR_UNREACH == status ||
         PMIX_ERR_LOST_CONNECTION_TO_SERVER == status) {
@@ -294,6 +302,10 @@ static void evhandler(size_t evhdlr_registration_id,
     orte_jobid_t jobid = ORTE_JOBID_INVALID;
     size_t n;
     char *msg = NULL;
+
+    if (orte_cmd_options.verbose) {
+        opal_output(0, "PRUN: EVHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
+    }
 
     /* we should always have info returned to us - if not, there is
      * nothing we can do */

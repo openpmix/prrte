@@ -115,6 +115,7 @@ contrib/scaling/mpi_barrier
 contrib/scaling/mpi_memprobe
 
 examples/alloc
+examples/bad_exit
 examples/client
 examples/dmodex
 examples/dynamic
