@@ -2,6 +2,8 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2018      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,6 +38,8 @@ ORTE_DECLSPEC    int orte_state_base_select(void);
 ORTE_DECLSPEC void orte_state_base_print_job_state_machine(void);
 
 ORTE_DECLSPEC void orte_state_base_print_proc_state_machine(void);
+
+ORTE_DECLSPEC extern int orte_state_base_parent_fd;
 
 END_C_DECLS
 

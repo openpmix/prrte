@@ -2,8 +2,8 @@
 /*
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Intel, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -43,6 +43,7 @@
  */
 orte_state_base_module_t orte_state = {0};
 bool orte_state_base_run_fdcheck = false;
+int orte_state_base_parent_fd = -1;
 
 static int orte_state_base_register(mca_base_register_flag_t flags)
 {
