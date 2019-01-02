@@ -15,6 +15,8 @@
  * Copyright (c) 2007-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -82,6 +84,7 @@
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/rml/base/rml_contact.h"
 #include "orte/mca/state/state.h"
+#include "orte/mca/state/base/base.h"
 
 #include "orte/runtime/runtime.h"
 #include "orte/runtime/orte_globals.h"
@@ -186,6 +189,29 @@ static opal_cmd_line_init_t cmd_line_init[] = {
     { NULL, '\0', NULL, NULL, 0,
       NULL, OPAL_CMD_LINE_TYPE_NULL, NULL }
 };
+
+static int wait_pipe[2];
+
+static int wait_dvm(pid_t pid) {
+    char reply;
+    int rc;
+    int status;
+
+    close(wait_pipe[1]);
+    do {
+        rc = read(wait_pipe[0], &reply, 1);
+    } while (0 > rc && EINTR == errno);
+
+    if (1 == rc && 'K' == reply) {
+        return 0;
+    } else if (0 == rc) {
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status)) {
+            return WEXITSTATUS(status);
+        }
+    }
+    return 255;
+}
 
 int main(int argc, char *argv[])
 {
@@ -332,7 +358,10 @@ int main(int argc, char *argv[])
     if(!orte_debug_flag &&
        !orte_debug_daemons_flag &&
        myglobals.daemonize) {
-        opal_daemon_init(NULL);
+        pipe(wait_pipe);
+        orte_state_base_parent_fd = wait_pipe[1];
+        opal_daemon_init_callback(NULL, wait_dvm);
+        close(wait_pipe[0]);
     }
 
     /* Intialize our Open RTE environment */

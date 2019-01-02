@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2018      Research Organization for Information Science
+ * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
@@ -400,7 +400,14 @@ static void vm_ready(int fd, short args, void *cbdata)
             OBJ_RELEASE(buf);
         }
         /* notify that the vm is ready */
-        fprintf(stdout, "DVM ready\n"); fflush(stdout);
+        if (0 > orte_state_base_parent_fd) {
+            fprintf(stdout, "DVM ready\n"); fflush(stdout);
+        } else {
+            char ok = 'K';
+            write(orte_state_base_parent_fd, &ok, 1);
+            close(orte_state_base_parent_fd);
+            orte_state_base_parent_fd = -1;
+        }
         OBJ_RELEASE(caddy);
         return;
     }
