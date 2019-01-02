@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2018 Research Organization for Information Science
@@ -561,10 +561,11 @@ static void interim(int sd, short args, void *cbdata)
             envar.separator = info->value.data.envar.separator;
             orte_add_attribute(&jdata->attributes, ORTE_JOB_APPEND_ENVAR,
                                ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
+#endif
+#if OPAL_PMIX_VERSION >= 4
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_TOOL);
 #endif
-
         /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {
             /* cache for inclusion with job info at registration */
