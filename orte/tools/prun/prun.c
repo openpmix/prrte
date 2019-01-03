@@ -476,8 +476,6 @@ int prun(int argc, char *argv[])
     /* init the globals */
     memset(&orte_cmd_options, 0, sizeof(orte_cmd_options));
     memset(&myoptions, 0, sizeof(myoptions));
-    // default to system-server-first
-    myoptions.system_server_first = true;
     OBJ_CONSTRUCT(&job_info, opal_list_t);
     OBJ_CONSTRUCT(&apps, opal_list_t);
 
