@@ -117,10 +117,12 @@ contrib/scaling/mpi_memprobe
 examples/alloc
 examples/bad_exit
 examples/client
+examples/client2
 examples/dmodex
 examples/dynamic
 examples/fault
 examples/hello
+examples/jctrl
 examples/launcher
 examples/log
 examples/pmi1client

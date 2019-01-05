@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -31,8 +31,8 @@
 #include <time.h>
 
 #include <pmix.h>
+#include "examples.h"
 
-static volatile bool waiting_for_debugger = true;
 static pmix_proc_t myproc;
 
 /* this is the event notification function we pass down below
@@ -66,11 +66,36 @@ static void release_fn(size_t evhdlr_registration_id,
                        pmix_event_notification_cbfunc_fn_t cbfunc,
                        void *cbdata)
 {
-    fprintf(stderr, "Client %s:%d Debugger release\n", myproc.nspace, myproc.rank);
+    myrel_t *lock;
+    size_t n;
+
+    /* find the return object */
+    lock = NULL;
+    for (n=0; n < ninfo; n++) {
+        if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
+            lock = (myrel_t*)info[n].value.data.ptr;
+            break;
+        }
+    }
+    /* if the object wasn't returned, then that is an error */
+    if (NULL == lock) {
+        fprintf(stderr, "LOCK WASN'T RETURNED IN RELEASE CALLBACK\n");
+        /* let the event handler progress */
+        if (NULL != cbfunc) {
+            cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
+        }
+        return;
+    }
+
+    /* tell the event handler state machine that we are the last step */
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
     }
-    waiting_for_debugger = false;
+    /* the status will be PMIX_ERR_DEBUGGER_RELEASE since that is the code
+     * we registered to receive, so just return success */
+    lock->lock.status = PMIX_SUCCESS;
+    /* release the lock */
+    DEBUG_WAKEUP_THREAD(&lock->lock);
 }
 
 /* event handler registration is done asynchronously because it
@@ -84,18 +109,20 @@ static void evhandler_reg_callbk(pmix_status_t status,
                                  size_t evhandler_ref,
                                  void *cbdata)
 {
-    volatile int *active = (volatile int*)cbdata;
+    mylock_t *lock = (mylock_t*)cbdata;
 
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
                    myproc.nspace, myproc.rank, status, (unsigned long)evhandler_ref);
     }
-    *active = status;
+    lock->status = status;
+    lock->evhandler_ref = evhandler_ref;
+    DEBUG_WAKEUP_THREAD(lock);
 }
 
 int main(int argc, char **argv)
 {
-    int rc;
+    pmix_status_t rc;
     pmix_value_t value;
     pmix_value_t *val = &value;
     char *tmp;
@@ -103,7 +130,8 @@ int main(int argc, char **argv)
     uint32_t nprocs, n;
     pmix_info_t *info;
     bool flag;
-    volatile int active;
+    mylock_t mylock;
+    myrel_t myrel;
     pmix_status_t dbg = PMIX_ERR_DEBUGGER_RELEASE;
     pid_t pid;
 
@@ -124,15 +152,16 @@ int main(int argc, char **argv)
 
     /* register our default event handler - again, this isn't strictly
      * required, but is generally good practice */
-    active = -1;
+    DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIx_Register_event_handler(NULL, 0, NULL, 0,
-                                notification_fn, evhandler_reg_callbk, (void*)&active);
-    while (-1 == active) {
-        sleep(1);
-    }
-    if (0 != active) {
+                                notification_fn, evhandler_reg_callbk, (void*)&mylock);
+    DEBUG_WAIT_THREAD(&mylock);
+    rc = mylock.status;
+    DEBUG_DESTRUCT_LOCK(&mylock);
+
+    if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "[%s:%d] Default handler registration failed\n", myproc.nspace, myproc.rank);
-        exit(active);
+        goto done;
     }
 
     /* job-related info is found in our nspace, assigned to the
@@ -150,21 +179,24 @@ int main(int argc, char **argv)
      * debugger */
     if (PMIX_SUCCESS == (rc = PMIx_Get(&proc, PMIX_DEBUG_WAIT_FOR_NOTIFY, NULL, 0, &val))) {
         /* register for debugger release */
-        active = -1;
-        PMIx_Register_event_handler(&dbg, 1, NULL, 0,
-                                    release_fn, evhandler_reg_callbk, (void*)&active);
+        DEBUG_CONSTRUCT_LOCK(&mylock);
+        PMIX_INFO_CREATE(info, 1);
+        DEBUG_CONSTRUCT_MYREL(&myrel);
+        PMIX_INFO_LOAD(&info[0], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
+        PMIx_Register_event_handler(&dbg, 1, info, 1,
+                                    release_fn, evhandler_reg_callbk, (void*)&mylock);
         /* wait for registration to complete */
-        while (-1 == active) {
-            sleep(1);
-        }
-        if (0 != active) {
+        DEBUG_WAIT_THREAD(&mylock);
+        rc = mylock.status;
+        DEBUG_DESTRUCT_LOCK(&mylock);
+        PMIX_INFO_FREE(info, 1);
+        if (PMIX_SUCCESS != rc) {
             fprintf(stderr, "[%s:%d] Debug handler registration failed\n", myproc.nspace, myproc.rank);
-            exit(active);
+            goto done;
         }
         /* wait for debugger release */
-        while (waiting_for_debugger) {
-            sleep(1);
-        }
+        DEBUG_WAIT_THREAD(&myrel.lock);
+        DEBUG_DESTRUCT_MYREL(&myrel);
     }
 
     /* get our universe size */

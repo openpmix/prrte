@@ -30,7 +30,7 @@
 #include <unistd.h>
 
 #include <pmix.h>
-#include "debugger/debugger.h"
+#include "examples.h"
 
 static pmix_proc_t myproc;
 
