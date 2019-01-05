@@ -33,23 +33,26 @@ CFLAGS = -g
 # Example programs to build
 
 EXAMPLES = \
-	 client \
-         debugger/direct \
-	 debugger/indirect \
-	 debugger/attach \
-	 debugger/daemon \
-	 debugger/hello \
-	 dmodex \
-	 dynamic \
-	 fault \
-	 pub \
-	 tool \
-	 alloc \
-         probe \
-         target \
-         hello \
-         log \
-         bad_exit
+	client \
+	client2 \
+	debugger/direct \
+	debugger/indirect \
+	debugger/attach \
+	debugger/daemon \
+	debugger/hello \
+	dmodex \
+	dynamic \
+	fault \
+	pub \
+	tool \
+	alloc \
+	probe \
+	target \
+	hello \
+	log \
+	bad_exit \
+	jctrl \
+	launcher
 
 all: $(EXAMPLES)
 

@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -31,51 +31,9 @@
 #include <pthread.h>
 
 #include <pmix.h>
+#include "examples.h"
 
 static pmix_proc_t myproc;
-
-typedef struct {
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-    volatile bool active;
-    pmix_status_t status;
-    int exit_code;
-    bool exit_code_given;
-} mylock_t;
-
-#define DEBUG_CONSTRUCT_LOCK(l)                     \
-    do {                                            \
-        pthread_mutex_init(&(l)->mutex, NULL);      \
-        pthread_cond_init(&(l)->cond, NULL);        \
-        (l)->active = true;                         \
-        (l)->status = PMIX_SUCCESS;                 \
-        (l)->exit_code = 0;                         \
-        (l)->exit_code_given = false;               \
-    } while(0)
-
-#define DEBUG_DESTRUCT_LOCK(l)              \
-    do {                                    \
-        pthread_mutex_destroy(&(l)->mutex); \
-        pthread_cond_destroy(&(l)->cond);   \
-    } while(0)
-
-#define DEBUG_WAIT_THREAD(lck)                                      \
-    do {                                                            \
-        pthread_mutex_lock(&(lck)->mutex);                          \
-        while ((lck)->active) {                                     \
-            pthread_cond_wait(&(lck)->cond, &(lck)->mutex);         \
-        }                                                           \
-        pthread_mutex_unlock(&(lck)->mutex);                        \
-    } while(0)
-
-#define DEBUG_WAKEUP_THREAD(lck)                        \
-    do {                                                \
-        pthread_mutex_lock(&(lck)->mutex);              \
-        (lck)->active = false;                          \
-        pthread_cond_broadcast(&(lck)->cond);           \
-        pthread_mutex_unlock(&(lck)->mutex);            \
-    } while(0)
-
 
 static void notification_fn(size_t evhdlr_registration_id,
                             pmix_status_t status,
@@ -85,7 +43,7 @@ static void notification_fn(size_t evhdlr_registration_id,
                             pmix_event_notification_cbfunc_fn_t cbfunc,
                             void *cbdata)
 {
-    mylock_t *lock;
+    myrel_t *lock;
     pmix_status_t rc;
     bool found;
     int exit_code;
@@ -97,7 +55,7 @@ static void notification_fn(size_t evhdlr_registration_id,
     found = false;
     for (n=0; n < ninfo; n++) {
         if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
-            lock = (mylock_t*)info[n].value.data.ptr;
+            lock = (myrel_t*)info[n].value.data.ptr;
             /* not every RM will provide an exit code, but check if one was given */
         } else if (0 == strncmp(info[n].key, PMIX_EXIT_CODE, PMIX_MAX_KEYLEN)) {
             exit_code = info[n].value.data.integer;
@@ -127,7 +85,7 @@ static void notification_fn(size_t evhdlr_registration_id,
         lock->exit_code = exit_code;
         lock->exit_code_given = true;
     }
-    DEBUG_WAKEUP_THREAD(lock);
+    DEBUG_WAKEUP_THREAD(&lock->lock);
 }
 
 static void op_callbk(pmix_status_t status,
@@ -157,7 +115,8 @@ int main(int argc, char **argv)
     pmix_proc_t proc;
     uint32_t nprocs;
     pmix_info_t *info;
-    mylock_t mylock, myrel;
+    mylock_t mylock;
+    myrel_t myrel;
     pmix_status_t code[2] = {PMIX_ERR_PROC_ABORTED, PMIX_ERR_JOB_TERMINATED};
 
     /* init us */
@@ -182,7 +141,7 @@ int main(int argc, char **argv)
 
     /* register another handler specifically for when the target
      * job completes */
-    DEBUG_CONSTRUCT_LOCK(&myrel);
+    DEBUG_CONSTRUCT_MYREL(&myrel);
     PMIX_INFO_CREATE(info, 2);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
     /* only call me back when one of us terminates */
@@ -217,7 +176,8 @@ int main(int argc, char **argv)
         exit(1);
     }
     /* everyone simply waits */
-    DEBUG_WAIT_THREAD(&myrel);
+    DEBUG_WAIT_THREAD(&myrel.lock);
+    DEBUG_DESTRUCT_MYREL(&myrel);
 
  done:
     /* finalize us */
