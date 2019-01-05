@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2009      Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2014-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -90,7 +90,7 @@
  */
 static char *get_orted_comm_cmd_str(int command);
 
-static void _notify_release(int status, void *cbdata)
+static void _notify_release(pmix_status_t status, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
 
@@ -135,6 +135,7 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
     uint32_t u32;
     void *nptr;
     opal_pmix_lock_t lk;
+    pmix_proc_t pname;
 
     /* unpack the command */
     n = 1;
@@ -409,7 +410,6 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
             if (ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_TOOL) &&
                 0 < opal_list_get_size(&jdata->children)) {
                 pmix_info_t info[3];
-                pmix_proc_t pname;
                 bool flag;
                 orte_job_t *jd;
                 pmix_status_t xrc = PMIX_ERR_JOB_TERMINATED;
@@ -477,13 +477,8 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
              * was already cleaned up, or it was a tool */
             goto CLEANUP;
         }
-
-        /* if we have any local children for this job, then we
-         * can ignore this request as we would have already
-         * dealt with it */
-        if (0 < jdata->num_local_procs) {
-            goto CLEANUP;
-        }
+        /* convert the jobid */
+        OPAL_PMIX_CONVERT_JOBID(pname.nspace, job);
 
         /* release all resources (even those on other nodes) that we
          * assigned to this job */
@@ -505,6 +500,12 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
                         node->slots_inuse--;
                         node->num_procs--;
                     }
+                    /* deregister this proc - will be ignored if already done */
+                    OPAL_PMIX_CONSTRUCT_LOCK(&lk);
+                    pname.rank = proct->name.vpid;
+                    PMIx_server_deregister_client(&pname, _notify_release, &lk);
+                    OPAL_PMIX_WAIT_THREAD(&lk);
+                    OPAL_PMIX_DESTRUCT_LOCK(&lk);
                     /* set the entry in the node array to NULL */
                     opal_pointer_array_set_item(node->procs, i, NULL);
                     /* release the proc once for the map entry */
@@ -520,6 +521,11 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
             OBJ_RELEASE(map);
             jdata->map = NULL;
         }
+        OPAL_PMIX_CONSTRUCT_LOCK(&lk);
+        PMIx_server_deregister_nspace(pname.nspace, _notify_release, &lk);
+        OPAL_PMIX_WAIT_THREAD(&lk);
+        OPAL_PMIX_DESTRUCT_LOCK(&lk);
+
         OBJ_RELEASE(jdata);
         break;
 

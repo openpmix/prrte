@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -428,7 +428,7 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
 static void check_complete(int fd, short args, void *cbdata)
 {
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
-    orte_job_t *jdata;
+    orte_job_t *jdata, *jptr;
     orte_proc_t *proc;
     int i, rc;
     orte_node_t *node;
@@ -443,6 +443,7 @@ static void check_complete(int fd, short args, void *cbdata)
     pmix_byte_object_t pbo;
     opal_byte_object_t bo, *boptr;
     pmix_status_t ret;
+    opal_pointer_array_t procs;
 
     ORTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -596,6 +597,27 @@ static void check_complete(int fd, short args, void *cbdata)
     /* if requested, check fd status for leaks */
     if (orte_state_base_run_fdcheck) {
         orte_state_base_check_fds(jdata);
+    }
+
+    /* if this job was a launcher, then we need to abort all of its
+     * child jobs that might still be running */
+    if (0 < opal_list_get_size(&jdata->children)) {
+        OBJ_CONSTRUCT(&procs, opal_pointer_array_t);
+        opal_pointer_array_init(&procs, 1, INT_MAX, 1);
+        OPAL_LIST_FOREACH(jptr, &jdata->children, orte_job_t) {
+            proc = OBJ_NEW(orte_proc_t);
+            proc->name.jobid = jptr->jobid;
+            proc->name.vpid = ORTE_VPID_WILDCARD;
+            opal_pointer_array_add(&procs, proc);
+
+        }
+        orte_plm.terminate_procs(&procs);
+        for (i=0; i < procs.size; i++) {
+            if (NULL != (proc = (orte_proc_t*)opal_pointer_array_get_item(&procs, i))) {
+                OBJ_RELEASE(proc);
+            }
+        }
+        OBJ_DESTRUCT(&procs);
     }
 
     if (jdata->state != ORTE_JOB_STATE_NOTIFIED) {

@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -245,6 +245,7 @@ void orte_plm_base_recv(int status, orte_process_name_t* sender,
                 free(prefix_dir);
             }
             /* link the spawned job to the spawner */
+            OBJ_RETAIN(jdata);
             opal_list_append(&parent->children, &jdata->super);
             /* connect the launcher as well */
             if (ORTE_JOBID_INVALID == parent->launcher) {
