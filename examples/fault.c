@@ -44,7 +44,6 @@ static void notification_fn(size_t evhdlr_registration_id,
                             void *cbdata)
 {
     myrel_t *lock;
-    pmix_status_t rc;
     bool found;
     int exit_code;
     size_t n;
