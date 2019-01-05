@@ -9,7 +9,7 @@
  * Copyright (c) 2011      Oracle and/or all its affiliates.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -219,6 +219,19 @@ static void job_errors(int fd, short args, void *cbdata)
     }
     /* ensure we terminate any processes left running in the DVM */
     _terminate_job(jdata->jobid);
+
+    /* if the job never launched, then we need to let the
+     * state machine know this job failed - it has no
+     * other means of being alerted since no proc states
+     * will be triggered */
+    if (ORTE_JOB_STATE_FAILED_TO_START == jdata->state ||
+        ORTE_JOB_STATE_NEVER_LAUNCHED == jdata->state ||
+        ORTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state ||
+        ORTE_JOB_STATE_ALLOC_FAILED == jdata->state ||
+        ORTE_JOB_STATE_MAP_FAILED == jdata->state ||
+        ORTE_JOB_STATE_CANNOT_LAUNCH == jdata->state) {
+        ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_TERMINATED);
+    }
 
     /* cleanup */
     OBJ_RELEASE(caddy);
