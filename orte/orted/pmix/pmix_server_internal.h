@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
@@ -68,11 +68,13 @@ BEGIN_C_DECLS
     opal_object_t super;
     opal_event_t ev;
     char *operation;
+    char *cmdline;
     int status;
     int timeout;
     int room_num;
     int remote_room_num;
     bool flag;
+    bool launcher;
     uid_t uid;
     gid_t gid;
     pid_t pid;
