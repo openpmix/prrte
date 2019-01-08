@@ -853,6 +853,7 @@ static void rqcon(pmix_server_req_t *p)
 {
     p->operation = NULL;
     p->flag = true;
+    p->launcher = false;
     p->uid = 0;
     p->gid = 0;
     p->pid = 0;

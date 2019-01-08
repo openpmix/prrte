@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -99,6 +99,7 @@ typedef uint16_t orte_job_flags_t;
 #define ORTE_JOB_FLAG_PROCS_MIGRATING    0x0400   // some procs in job are migrating from one node to another
 #define ORTE_JOB_FLAG_OVERSUBSCRIBED     0x0800   // at least one node in the job is oversubscribed
 #define ORTE_JOB_FLAG_TOOL               0x1000   // job is a tool
+#define ORTE_JOB_FLAG_LAUNCHER           0x2000   // job is also a launcher
 
 /***   JOB ATTRIBUTE KEYS   ***/
 #define ORTE_JOB_START_KEY   ORTE_NODE_MAX_KEY

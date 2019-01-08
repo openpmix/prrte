@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2014-2015 Intel, Inc. All rights reserved.
+# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -18,4 +18,5 @@ lib@ORTE_LIB_PREFIX@open_rte_la_SOURCES += \
           orted/pmix/pmix_server_register_fns.c \
           orted/pmix/pmix_server_dyn.c \
           orted/pmix/pmix_server_pub.c \
-          orted/pmix/pmix_server_gen.c
+          orted/pmix/pmix_server_gen.c \
+          orted/pmix/pmix_server_queries.c
