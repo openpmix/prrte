@@ -12,7 +12,7 @@
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2017-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +39,7 @@
 #include <errno.h>
 
 static int alps_set_name(void);
-static int rte_init(void);
+static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
 orte_ess_base_module_t orte_ess_alps_module = {
@@ -53,7 +53,7 @@ orte_ess_base_module_t orte_ess_alps_module = {
 static orte_vpid_t starting_vpid = 0;
 
 
-static int rte_init(void)
+static int rte_init(int argc, char **argv)
 {
     int ret;
     char *error = NULL;

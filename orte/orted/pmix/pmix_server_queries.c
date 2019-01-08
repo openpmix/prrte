@@ -159,8 +159,7 @@ static void _query(int sd, short args, void *cbdata)
                 rc = opal_hash_table_get_first_key_uint32(orte_job_data, &key, (void **)&jdata, &nptr);
                 while (OPAL_SUCCESS == rc) {
                     /* don't show the requestor's job or non-launcher tools */
-                    if (ORTE_PROC_MY_NAME->jobid != jdata->jobid &&
-                        (!ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_TOOL) || ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_LAUNCHER))) {
+                    if (!ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_TOOL) || ORTE_FLAG_TEST(jdata, ORTE_JOB_FLAG_LAUNCHER)) {
                         kv = OBJ_NEW(opal_info_item_t);
                         (void)strncpy(kv->info.key, PMIX_QUERY_NAMESPACE_INFO, PMIX_MAX_KEYLEN);
                         opal_list_append(&stack, &kv->super);

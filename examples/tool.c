@@ -137,7 +137,7 @@ int main(int argc, char **argv)
                                 break;
                             }
                             iptr = (pmix_info_t*)dptr->array;
-                            for (m=0; m < darray->size; m++) {
+                            for (m=0; m < dptr->size; m++) {
                                 fprintf(stderr, "\t%s", iptr[m].value.data.string);
                             }
                             fprintf(stderr, "\n");

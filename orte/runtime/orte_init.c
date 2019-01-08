@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2007-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2007-2008 Sun Microsystems, Inc.  All rights reserved.
- * Copyright (c) 2014-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
@@ -270,7 +270,7 @@ int orte_init(int* pargc, char*** pargv, orte_proc_type_t flags)
     }
 
     /* initialize the RTE for this environment */
-    if (ORTE_SUCCESS != (ret = orte_ess.init())) {
+    if (ORTE_SUCCESS != (ret = orte_ess.init(*pargc, *pargv))) {
         error = "orte_ess_init";
         goto error;
     }

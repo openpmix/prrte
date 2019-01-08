@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2012 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2018      Intel, Inc. All rights reserved.
+ * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,7 +47,7 @@ BEGIN_C_DECLS
 /*
  * Initialize the RTE for this environment
  */
-typedef int (*orte_ess_base_module_init_fn_t)(void);
+typedef int (*orte_ess_base_module_init_fn_t)(int argc, char **argv);
 
 /*
  * Finalize the RTE for this environment
