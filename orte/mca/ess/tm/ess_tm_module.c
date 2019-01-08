@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2008-2011 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2017-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,7 +47,7 @@
 
 static int tm_set_name(void);
 
-static int rte_init(void);
+static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
 orte_ess_base_module_t orte_ess_tm_module = {
@@ -62,7 +62,7 @@ orte_ess_base_module_t orte_ess_tm_module = {
  */
 
 
-static int rte_init(void)
+static int rte_init(int argc, char **argv)
 {
     int ret;
     char *error = NULL;

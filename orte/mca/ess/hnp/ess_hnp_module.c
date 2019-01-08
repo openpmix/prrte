@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2014 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2017 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -94,7 +94,7 @@
 #include "orte/mca/ess/base/base.h"
 #include "orte/mca/ess/hnp/ess_hnp.h"
 
-static int rte_init(void);
+static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 static void rte_abort(int status, bool report) __opal_attribute_noreturn__;
 
@@ -126,7 +126,7 @@ static void setup_sighandler(int signal, opal_event_t *ev,
     opal_event_signal_add(ev, NULL);
 }
 
-static int rte_init(void)
+static int rte_init(int argc, char **argv)
 {
     int ret;
     char *error = NULL;
@@ -438,6 +438,8 @@ static int rte_init(void)
 
     /* every job requires at least one app */
     app = OBJ_NEW(orte_app_context_t);
+    app->app = strdup(argv[0]);
+    app->argv = opal_argv_copy(argv);
     opal_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps++;
     /* create and store a node object where we are */
