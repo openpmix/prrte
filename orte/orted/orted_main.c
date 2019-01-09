@@ -16,7 +16,7 @@
  * Copyright (c) 2009      Institut National de Recherche en Informatique
  *                         et Automatique. All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -234,7 +234,7 @@ opal_cmd_line_init_t orte_cmd_line_opts[] = {
       NULL, OPAL_CMD_LINE_TYPE_NULL, NULL }
 };
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
 typedef struct {
     opal_pmix_lock_t lock;
     pmix_info_t *info;
@@ -275,7 +275,7 @@ int orte_daemon(int argc, char *argv[])
     pmix_value_t val;
     pmix_proc_t proc;
     pmix_status_t prc;
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     myxfer_t xfer;
 #endif
     pmix_data_buffer_t pbuf;
@@ -953,7 +953,7 @@ int orte_daemon(int argc, char *argv[])
             }
         }
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
         /* collect our network inventory */
         memset(&xfer, 0, sizeof(myxfer_t));
         OPAL_PMIX_CONSTRUCT_LOCK(&xfer.lock);

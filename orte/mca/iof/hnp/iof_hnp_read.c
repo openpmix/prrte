@@ -12,7 +12,7 @@
  * Copyright (c) 2007-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -95,7 +95,7 @@ void orte_iof_hnp_stdin_cb(int fd, short event, void *cbdata)
     }
 }
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
@@ -264,7 +264,7 @@ void orte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                                      ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                                      ORTE_NAME_PRINT(&proct->name), (int)numbytes,
                                      ORTE_NAME_PRINT(&sink->daemon)));
-            #if OPAL_PMIX_VERSION >= 3
+            #if PMIX_NUMERIC_VERSION >= 0x00030000
                 /* don't pass down zero byte blobs */
                 if (0 < numbytes) {
                     pmix_proc_t source;

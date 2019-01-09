@@ -608,8 +608,10 @@ static void _toolconn(int sd, short args, void *cbdata)
                 OPAL_PMIX_CONVERT_RANK(cd->target.vpid, cd->info[n].value.data.rank);
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_HOSTNAME)) {
                 cd->operation = strdup(cd->info[n].value.data.string);
+#ifdef PMIX_CMD_LINE
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_CMD_LINE)) {
                 cd->cmdline = strdup(cd->info[n].value.data.string);
+#endif
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_LAUNCHER)) {
                 cd->launcher = PMIX_INFO_TRUE(&cd->info[n]);
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PROC_PID)) {
@@ -1008,7 +1010,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
     return PMIX_OPERATION_SUCCEEDED;
 }
 
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
 static void relcb(void *cbdata)
 {
     orte_pmix_mdx_caddy_t *cd=(orte_pmix_mdx_caddy_t*)cbdata;
@@ -1093,7 +1095,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
     size_t i, mode = 0;
     pmix_server_pset_t *pset;
     bool fence = false;
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     opal_buffer_t bf;
     pmix_byte_object_t *bo = NULL;
 #endif
@@ -1112,7 +1114,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
             }
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
             fence = PMIX_INFO_TRUE(&directives[i]);
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ENDPT_DATA)) {
             bo = (pmix_byte_object_t*)&directives[i].value.data.bo;
 #endif
@@ -1165,7 +1167,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         }
     }
     cd->buf = OBJ_NEW(opal_buffer_t);
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* if they provided us with a data blob, send it along */
     if (NULL != bo) {
         /* We don't own the byte_object and so we have to

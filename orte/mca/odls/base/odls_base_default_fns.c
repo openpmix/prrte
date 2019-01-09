@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
@@ -108,7 +108,7 @@ typedef struct {
 } orte_odls_jcaddy_t;
 
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
 static void setup_cbfunc(pmix_status_t status,
                          pmix_info_t info[], size_t ninfo,
                          void *provided_cbdata,
@@ -196,7 +196,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     pmix_data_buffer_t pbuf;
     pmix_status_t ret;
     pmix_byte_object_t pbo;
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     orte_node_t *node;
     int i, k;
     char **list, **procs, **micro, *tmp, *regex;
@@ -454,7 +454,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         free(nidmap);
     }
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     /* assemble the node and proc map info */
     list = NULL;
     procs = NULL;
@@ -521,8 +521,12 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     (void)strncpy(cd.info[2].key, PMIX_ALLOC_NETWORK, PMIX_MAX_KEYLEN);
     cd.info[2].value.type = PMIX_DATA_ARRAY;
     PMIX_DATA_ARRAY_CREATE(cd.info[2].value.data.darray, 2, PMIX_INFO);
+#if PMIX_NUMERIC_VERSION < 0x00030100
     PMIX_INFO_CREATE(info, 2);
     cd.info[2].value.data.darray->array = info;
+#else
+    info = (pmix_info_t*)cd.info[2].value.data.darray->array;
+#endif
     asprintf(&tmp, "%s.net", pproc.nspace);
     PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NETWORK_ID, tmp, PMIX_STRING);
     free(tmp);
@@ -573,7 +577,7 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
     size_t ninfo=0;
     pmix_status_t ret;
     pmix_proc_t pproc;
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     pmix_data_buffer_t pbuf;
     opal_byte_object_t *bo;
     size_t m;
@@ -748,7 +752,7 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
         }
     }
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     /* unpack the buffer containing any application setup info - there
      * might not be any, so it isn't an error if we don't find things */
     cnt=1;

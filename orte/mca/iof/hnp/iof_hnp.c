@@ -15,7 +15,7 @@
  *                         reserved.
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * $COPYRIGHT$
  *
@@ -621,7 +621,7 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
     return;
 }
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
@@ -636,7 +636,7 @@ static int hnp_output(const orte_process_name_t* peer,
                       orte_iof_tag_t source_tag,
                       const char *msg)
 {
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     pmix_iof_channel_t pchan;
     pmix_proc_t source;
     pmix_byte_object_t bo;
@@ -684,7 +684,7 @@ static int hnp_output(const orte_process_name_t* peer,
         } else {
             orte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), orte_iof_base.iof_write_stderr->wev);
         }
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     }
 #endif
     return ORTE_SUCCESS;

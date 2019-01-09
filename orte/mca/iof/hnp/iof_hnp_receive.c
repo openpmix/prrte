@@ -12,7 +12,7 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * $COPYRIGHT$
  *
@@ -51,7 +51,7 @@
 
 #include "iof_hnp.h"
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
@@ -259,7 +259,7 @@ void orte_iof_hnp_recv(int status, orte_process_name_t* sender,
                  ORTE_VPID_WILDCARD == origin.vpid ||
                  sink->name.vpid == origin.vpid)) {
                 /* send the data to the tool */
-            #if OPAL_PMIX_VERSION >= 3
+            #if PMIX_NUMERIC_VERSION >= 0x00030000
                     /* don't pass along zero byte blobs */
                 if (0 < numbytes) {
                     OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,

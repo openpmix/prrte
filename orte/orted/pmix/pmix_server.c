@@ -113,7 +113,7 @@ static pmix_server_module_t pmix_server = {
     .log = pmix_server_log_fn,
     .allocate = pmix_server_alloc_fn,
     .job_control = pmix_server_job_ctrl_fn,
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     .group = pmix_server_group_fn
 #endif
 };
@@ -346,7 +346,7 @@ int pmix_server_init(void)
         opal_list_append(&ilist, &kv->super);
     }
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     /* if we are the HNP or MASTER, then we are a gateway */
     if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
         kv = OBJ_NEW(opal_value_t);
@@ -752,7 +752,7 @@ static void pmix_server_dmdx_resp(int status, orte_process_name_t* sender,
     OBJ_RELEASE(d);  // maintain accounting
 }
 
-#if OPAL_PMIX_VERSION < 3
+#if PMIX_NUMERIC_VERSION < 0x00030000
 static void mycb(pmix_status_t st, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
@@ -808,7 +808,7 @@ static void pmix_server_log(int status, orte_process_name_t* sender,
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
     /* pass the array down to be logged */
-#if OPAL_PMIX_VERSION < 3
+#if PMIX_NUMERIC_VERSION < 0x00030000
     opal_pmix_lock_t lock;
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
     ret = PMIx_Log_nb(info, ninfo, NULL, 0, mycb, &lock);

@@ -180,7 +180,7 @@ static void interim(int sd, short args, void *cbdata)
 {
     orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
     opal_process_name_t *requestor = &cd->proc;
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     opal_envar_t envar;
 #endif
     orte_job_t *jdata;
@@ -274,7 +274,7 @@ static void interim(int sd, short args, void *cbdata)
                     flag = PMIX_INFO_TRUE(info);
                     orte_set_attribute(&app->attributes, ORTE_APP_DEBUGGER_DAEMON,
                                        ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
                 /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                 /* there can be multiple of these, so we add them to the attribute list */
                 } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
@@ -305,7 +305,7 @@ static void interim(int sd, short args, void *cbdata)
                     orte_add_attribute(&app->attributes, ORTE_APP_APPEND_ENVAR,
                                        ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
 
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
                 } else if (PMIX_CHECK_KEY(info, PMIX_PSET_NAME)) {
                     orte_set_attribute(&app->attributes, ORTE_APP_PSET_NAME,
                                        ORTE_ATTR_GLOBAL, info->value.data.string, OPAL_STRING);
@@ -531,7 +531,7 @@ static void interim(int sd, short args, void *cbdata)
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_DEBUGGER_DAEMON);
             ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_DEBUGGER);
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
         /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
         /* there can be multiple of these, so we add them to the attribute list */
         } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
@@ -562,7 +562,7 @@ static void interim(int sd, short args, void *cbdata)
             orte_add_attribute(&jdata->attributes, ORTE_JOB_APPEND_ENVAR,
                                ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
 #endif
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_TOOL);
 #endif
