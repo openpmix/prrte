@@ -130,7 +130,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "Client ns %s rank %d pid %lu: Running on host %s localrank %d\n",
             myproc.nspace, myproc.rank, (unsigned long)pid, hostname , (int)localrank);
 
-#if PMIX_VERSION_MAJOR >= 4
+#if PMIX_VERSION_MAJOR >= 0x00040000
     n = 1;
     PMIX_QUERY_CONSTRUCT(&query);
     PMIX_ARGV_APPEND(rc, query.keys, PMIX_QUERY_NUM_PSETS);

@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
-# Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # $COPYRIGHT$
@@ -86,6 +86,8 @@ AC_DEFUN([OPAL_HWLOC_CONFIG],[
     else
         AC_MSG_RESULT([yes])
     fi
+
+    OPAL_SUMMARY_ADD([[Required Packages]],[[HWLOC]],[hwloc],[$opal_hwloc_dir])
 
     OPAL_VAR_SCOPE_POP
 ])dnl

@@ -12,7 +12,7 @@
  * Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2016-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
@@ -636,7 +636,7 @@ int orte_show_help(const char *filename, const char *topic,
     return rc;
 }
 
-#if OPAL_PMIX_VERSION < 3
+#if PMIX_NUMERIC_VERSION < 0x00030000
 static void mycb(pmix_status_t st, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
@@ -730,7 +730,7 @@ int orte_show_help_norender(const char *filename, const char *topic,
             opal_dss.unload(buf, (void**)&pbo.bytes, &nsize);
             pbo.size = nsize;
             PMIX_INFO_LOAD(&info, OPAL_PMIX_SHOW_HELP, &pbo, PMIX_BYTE_OBJECT);
-#if OPAL_PMIX_VERSION < 3
+#if PMIX_NUMERIC_VERSION < 0x00030000
             opal_pmix_lock_t lock;
             OPAL_PMIX_CONSTRUCT_LOCK(&lock);
             ret = PMIx_Log_nb(&info, 1, NULL, 0, mycb, &lock);

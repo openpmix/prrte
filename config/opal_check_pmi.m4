@@ -13,7 +13,7 @@
 # Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2011-2014 Los Alamos National Security, LLC. All rights
 #                         reserved.
-# Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014-2017 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -187,8 +187,7 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
 
     opal_external_pmix_happy=yes
 
-    AC_DEFINE_UNQUOTED([OPAL_PMIX_VERSION], [$opal_external_pmix_version_found],
-                       [PMIx version PRRTE is built against])
+    OPAL_SUMMARY_ADD([[Required Packages]],[[PMIx]],[pmix],[$pmix_ext_install_dir])
 
     OPAL_VAR_SCOPE_POP
 ])

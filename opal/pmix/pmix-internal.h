@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -32,6 +32,7 @@
 #include "pmix.h"
 #include "pmix_server.h"
 #include "pmix_tool.h"
+#include "pmix_version.h"
 
 BEGIN_C_DECLS
 
@@ -523,6 +524,11 @@ pmix_status_t pmix_value_unload(pmix_value_t *kv, void **data, size_t *sz);
         memset((a), 0, PMIX_MAX_KEYLEN+1);          \
         pmix_strncpy((a), (b), PMIX_MAX_KEYLEN);    \
     }while(0)
+#endif
+
+#ifndef PMIX_CHECK_KEY
+#define PMIX_CHECK_KEY(a, b) \
+    (0 == strncmp((a)->key, (b), PMIX_MAX_KEYLEN))
 #endif
 
 END_C_DECLS

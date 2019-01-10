@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2018 Research Organization for Information Science
@@ -466,7 +466,7 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
                 kv->data.uint32 = app->num_procs;
                 opal_list_append(info, &kv->super);
 
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
                 app = (orte_app_context_t*)opal_pointer_array_get_item(jdata->apps, pptr->app_idx);
                 tmp = NULL;
                 if (orte_get_attribute(&app->attributes, ORTE_APP_PSET_NAME, (void**)&tmp, OPAL_STRING) &&
@@ -527,7 +527,7 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
 
     /* pass it down */
     ninfo = opal_list_get_size(info);
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     /* if there are local procs, then we add that here */
     if (0 < (nmsize = opal_list_get_size(&local_procs))) {
         ++ninfo;
@@ -537,14 +537,13 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
 #endif
     PMIX_INFO_CREATE(pinfo, ninfo);
 
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* first add the local procs, if they are defined */
     if (0 < nmsize) {
         pmix_proc_t *procs;
         PMIX_LOAD_KEY(pinfo[0].key, PMIX_LOCAL_PROCS);
         pinfo[0].value.type = PMIX_DATA_ARRAY;
         PMIX_DATA_ARRAY_CREATE(pinfo[0].value.data.darray, nmsize, PMIX_PROC);
-        PMIX_PROC_CREATE(pinfo[0].value.data.darray->array, nmsize);
         procs = (pmix_proc_t*)pinfo[0].value.data.darray->array;
         n = 0;
         OPAL_LIST_FOREACH(nm, &local_procs, opal_namelist_t) {

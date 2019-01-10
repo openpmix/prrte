@@ -690,11 +690,15 @@ static void dvm_notify(int sd, short args, void *cbdata)
     }
 
     if (notify) {
+    #ifdef PMIX_EVENT_TEXT_MESSAGE
         /* if it was an abnormal termination, then construct an appropriate
          * error message */
         if (ORTE_SUCCESS != rc) {
             errmsg = orte_dump_aborted_procs(jdata);
         }
+    #else
+        errmsg = NULL;
+    #endif
         /* construct the info to be provided */
         if (NULL == errmsg) {
             ninfo = 4;
@@ -727,11 +731,12 @@ static void dvm_notify(int sd, short args, void *cbdata)
         }
         tgt.rank = 0;
         PMIX_INFO_LOAD(&info[3], PMIX_EVENT_CUSTOM_RANGE, &tgt, PMIX_PROC);
-
+    #ifdef PMIX_EVENT_TEXT_MESSAGE
         if (NULL != errmsg) {
             PMIX_INFO_LOAD(&info[4], PMIX_EVENT_TEXT_MESSAGE, errmsg, PMIX_STRING);
             free(errmsg);
         }
+    #endif
 
         /* pack the status code */
         code = PMIX_ERR_JOB_TERMINATED;

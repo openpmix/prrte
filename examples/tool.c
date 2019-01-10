@@ -73,6 +73,7 @@ int main(int argc, char **argv)
     char *nspace = NULL;
     char **actives = NULL;
     pmix_data_array_t *darray, *dptr;
+    bool geturi = false;
 
     for (n=1; n < argc; n++) {
         if (0 == strcmp("-u", argv[n]) || 0 == strcmp("--url", argv[n])) {
@@ -87,6 +88,12 @@ int main(int argc, char **argv)
                 exit(1);
             }
             nspace = argv[n+1];
+        } else if (0 == strcmp("-uri", argv[n]) || 0 == strcmp("--uri", argv[n])) {
+            /* retrieve the PMIx server's uri from the indicated node */
+            if (NULL == argv[n+1]) {
+                /* use our node */
+            }
+            geturi = true;
         }
     }
 
@@ -104,6 +111,31 @@ int main(int argc, char **argv)
     }
     if (NULL != info) {
         PMIX_INFO_FREE(info, ninfo);
+    }
+
+    if (geturi) {
+        nq = 1;
+        PMIX_QUERY_CREATE(query, nq);
+        PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_SERVER_URI);
+        DEBUG_CONSTRUCT_MYQUERY(&mydata);
+        if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void*)&mydata))) {
+            fprintf(stderr, "Client ns %s rank %d: PMIx_Query_info failed: %d\n", myproc.nspace, myproc.rank, rc);
+            goto done;
+        }
+        DEBUG_WAIT_THREAD(&mydata.lock);
+        /* find the response */
+        if (PMIX_SUCCESS == mydata.lock.status) {
+            /* should be in the first key */
+            if (PMIX_CHECK_KEY(&mydata.info[0], PMIX_SERVER_URI)) {
+                fprintf(stderr, "PMIx server URI: %s\n", mydata.info[0].value.data.string);
+            } else {
+                fprintf(stderr, "Query returned wrong info key at first posn: %s\n", mydata.info[0].key);
+            }
+        } else {
+            fprintf(stderr, "Query returned error: %s\n", PMIx_Error_string(mydata.lock.status));
+        }
+        DEBUG_DESTRUCT_MYQUERY(&mydata);
+        goto done;
     }
 
     if (NULL == nspace) {

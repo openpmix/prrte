@@ -90,7 +90,7 @@
 /* ensure I can behave like a daemon */
 #include "prun.h"
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
 typedef struct {
     opal_object_t super;
     opal_pmix_lock_t lock;
@@ -149,7 +149,7 @@ typedef struct {
 
 static opal_list_t job_info;
 static orte_jobid_t myjobid = ORTE_JOBID_INVALID;
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
 static myinfo_t myinfo;
 #endif
 
@@ -320,8 +320,10 @@ static void evhandler(size_t evhdlr_registration_id,
                 }
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
                 lock = (opal_pmix_lock_t*)info[n].value.data.ptr;
+        #ifdef PMIX_EVENT_TEXT_MESSAGE
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_TEXT_MESSAGE, PMIX_MAX_KEYLEN)) {
                 msg = info[n].value.data.string;
+        #endif
             }
         }
         if (orte_cmd_options.verbose && (myjobid != ORTE_JOBID_INVALID && jobid == myjobid)) {
@@ -344,7 +346,7 @@ static void evhandler(size_t evhdlr_registration_id,
     }
 }
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
 static void setupcbfunc(pmix_status_t status,
                         pmix_info_t info[], size_t ninfo,
                         void *provided_cbdata,
@@ -469,7 +471,7 @@ int prun(int argc, char *argv[])
     pmix_app_t *papps;
     size_t napps;
     char nspace[PMIX_MAX_NSLEN+1];
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     mylock_t mylock;
 #endif
 
@@ -668,7 +670,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LOAD(ds->info, PMIX_USOCK_DISABLE, NULL, PMIX_BOOL);
     opal_list_append(&tinfo, &ds->super);
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     /* we are also a launcher, so pass that down so PMIx knows
      * to setup rendezvous points */
     ds = OBJ_NEW(opal_ds_info_t);
@@ -687,7 +689,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LOAD(ds->info, PMIX_SINGLE_LISTENER, NULL, PMIX_BOOL);
     opal_list_append(&tinfo, &ds->super);
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     /* setup any output format requests */
     if (orte_cmd_options.tag_output) {
         ds = OBJ_NEW(opal_ds_info_t);
@@ -1035,7 +1037,7 @@ int prun(int argc, char *argv[])
         opal_list_append(&job_info, &ds->super);
     }
 
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     /* pickup any relevant envars */
     flag = true;
     PMIX_INFO_LOAD(&info, PMIX_SETUP_APP_ENVARS, &flag, PMIX_BOOL);
@@ -1483,7 +1485,7 @@ static int create_app(int argc, char* argv[],
         app->app.cwd = strdup(cwd);
     }
 
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* if they specified a process set name, then pass it along */
     if (NULL != orte_cmd_options.pset) {
         val = OBJ_NEW(opal_ds_info_t);

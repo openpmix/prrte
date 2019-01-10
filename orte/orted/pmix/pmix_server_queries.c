@@ -76,11 +76,14 @@ static void _query(int sd, short args, void *cbdata)
     size_t m, n, p;
     uint32_t key;
     void *nptr;
-    char nspace[PMIX_MAX_NSLEN+1], *cmdline, **nspaces;
+    char nspace[PMIX_MAX_NSLEN+1], **nspaces;
+#ifdef PMIX_QUERY_NAMESPACE_INFO
+    char *cmdline;
+#endif
     char **ans, *tmp;
     orte_process_name_t requestor;
     orte_app_context_t *app;
-#if OPAL_PMIX_VERSION >= 3
+#if PMIX_NUMERIC_VERSION >= 0x00030000
     opal_pstats_t pstat;
     float pss;
     bool local_only;
@@ -92,7 +95,7 @@ static void _query(int sd, short args, void *cbdata)
     pmix_info_t *info;
     pmix_data_array_t *darray;
 #endif
-#if OPAL_PMIX_VERSION >= 4
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     size_t sz;
 #endif
 
@@ -152,7 +155,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_NAMESPACES, tmp, PMIX_STRING);
                 free(tmp);
                 opal_list_append(&results, &kv->super);
-#if OPAL_PMIX_VERSION >= 4
+#ifdef PMIX_QUERY_NAMESPACE_INFO
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NAMESPACE_INFO)) {
                 /* get the current jobids */
                 OBJ_CONSTRUCT(&stack, opal_list_t);
@@ -167,8 +170,7 @@ static void _query(int sd, short args, void *cbdata)
                         PMIX_DATA_ARRAY_CREATE(darray, 2, PMIX_INFO);
                         kv->info.value.type = PMIX_DATA_ARRAY;
                         kv->info.value.data.darray = darray;
-                        PMIX_INFO_CREATE(info, 2);
-                        darray->array = info;
+                        info = (pmix_info_t*)darray->array;
                         /* add the nspace name */
                         memset(nspace, 0, PMIX_MAX_NSLEN);
                         OPAL_PMIX_CONVERT_JOBID(nspace, jdata->jobid);
@@ -189,15 +191,12 @@ static void _query(int sd, short args, void *cbdata)
                 kv->info.value.data.darray = darray;
                 opal_list_append(&results, &kv->super);
                 /* join the results into an array */
-                if (0 < m) {
-                    PMIX_INFO_CREATE(info, m);
-                    darray->array = info;
-                    p=0;
-                    while (NULL != (kv = (opal_info_item_t*)opal_list_remove_first(&stack))) {
-                        PMIX_INFO_XFER(&info[p], &kv->info);
-                        OBJ_RELEASE(kv);
-                        ++p;
-                    }
+                info = (pmix_info_t*)darray->array;
+                p=0;
+                while (NULL != (kv = (opal_info_item_t*)opal_list_remove_first(&stack))) {
+                    PMIX_INFO_XFER(&info[p], &kv->info);
+                    OBJ_RELEASE(kv);
+                    ++p;
                 }
                 OPAL_LIST_DESTRUCT(&stack);
 #endif
@@ -234,7 +233,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_DEBUG_SUPPORT, tmp, PMIX_STRING);
                 free(tmp);
                 opal_list_append(&results, &kv->super);
-#if PMIX_VERSION_MAJOR >= 3
+#ifdef PMIX_QUERY_MEMORY_USAGE
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_MEMORY_USAGE)) {
                 OBJ_CONSTRUCT(&targets, opal_list_t);
                 /* scan the qualifiers */
@@ -263,8 +262,10 @@ static void _query(int sd, short args, void *cbdata)
                         PMIX_DATA_ARRAY_CREATE(darray, 2, PMIX_INFO);
                         kv->info.value.type = PMIX_DATA_ARRAY;
                         kv->info.value.data.darray = darray;
-                        PMIX_INFO_CREATE(info, 2);
-                        darray->array = info;
+#if PMIX_NUMERIC_VERSION < 0x00030100
+                        PMIX_INFO_CREATE(darray->array, 2);
+#endif
+                        info = (pmix_info_t*)darray->array;
                         /* collect my memory usage */
                         OBJ_CONSTRUCT(&pstat, opal_pstats_t);
                         opal_pstat.query(orte_process_info.pid, &pstat, NULL);
@@ -344,11 +345,12 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_PROC_URI, orte_process_info.my_hnp_uri, PMIX_STRING);
                 opal_list_append(&results, &kv->super);
             } else if (0 == strcmp(q->keys[n], PMIX_SERVER_URI)) {
-                /* they want our PMIx URI */
+                /* they want our PMIx URI - have to ask for it */
+
                 kv = OBJ_NEW(opal_info_item_t);
                 PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_URI, orte_process_info.my_hnp_uri, PMIX_STRING);
                 opal_list_append(&results, &kv->super);
-    #if PMIX_VERSION_MAJOR >= 3
+    #ifdef PMIX_QUERY_PROC_TABLE
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PROC_TABLE)) {
                 /* construct a list of values with opal_proc_info_t
                  * entries for each proc in the indicated job */
@@ -365,8 +367,10 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_DATA_ARRAY_CREATE(darray, jdata->num_procs, PMIX_PROC_INFO);
                 kv->info.value.type = PMIX_DATA_ARRAY;
                 kv->info.value.data.darray = darray;
-                PMIX_PROC_INFO_CREATE(procinfo, jdata->num_local_procs);
-                darray->array = procinfo;
+        #if PMIX_NUMERIC_VERSION < 0x00030100
+                PMIX_PROC_INFO_CREATE(darray->array, jdata->num_local_procs);
+        #endif
+                procinfo = (pmix_proc_info_t*)darray->array;
                 p = 0;
                 for (k=0; k < jdata->procs->size; k++) {
                     if (NULL == (proct = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, k))) {
@@ -401,8 +405,10 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_DATA_ARRAY_CREATE(darray, jdata->num_local_procs, PMIX_PROC_INFO);
                 kv->info.value.type = PMIX_DATA_ARRAY;
                 kv->info.value.data.darray = darray;
-                PMIX_PROC_INFO_CREATE(procinfo, jdata->num_local_procs);
-                darray->array = procinfo;
+        #if PMIX_NUMERIC_VERSION < 0x00030100
+                PMIX_PROC_INFO_CREATE(darray->array, jdata->num_local_procs);
+        #endif
+                procinfo = (pmix_proc_info_t*)darray->array;
                 p = 0;
                 for (k=0; k < jdata->procs->size; k++) {
                     if (NULL == (proct = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, k))) {
@@ -424,7 +430,7 @@ static void _query(int sd, short args, void *cbdata)
                     }
                 }
     #endif
-    #if PMIX_VERSION_MAJOR >= 4
+    #ifdef PMIX_QUERY_NUM_PSETS
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NUM_PSETS)) {
                 kv = OBJ_NEW(opal_info_item_t);
                 sz = opal_list_get_size(&orte_pmix_server_globals.psets);
@@ -462,9 +468,7 @@ static void _query(int sd, short args, void *cbdata)
         } // for
     } // for
 
-#if OPAL_PMIX_VERSION >= 3
   done:
-#endif
     rcd = OBJ_NEW(orte_pmix_server_op_caddy_t);
     if (PMIX_SUCCESS == ret) {
         if (0 == opal_list_get_size(&results)) {
