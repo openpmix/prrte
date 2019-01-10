@@ -16,8 +16,8 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -507,7 +507,9 @@ pmix_status_t pmix_server_query_fn(pmix_proc_t *proct,
 
     /* need to threadshift this request */
     cd = OBJ_NEW(orte_pmix_server_op_caddy_t);
-    cd->procs = proct;
+    cd->nprocs = 1;
+    PMIX_PROC_CREATE(cd->procs, cd->nprocs);
+    cd->procs[0] = *proct;
     cd->queries = queries;
     cd->nqueries = nqueries;
     cd->infocbfunc = cbfunc;
