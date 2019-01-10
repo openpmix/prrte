@@ -107,7 +107,7 @@ static void _query(int sd, short args, void *cbdata)
 
     OBJ_CONSTRUCT(&results, opal_list_t);
 
-    OPAL_PMIX_CONVERT_PROCT(rc, &requestor, cd->procs);
+    OPAL_PMIX_CONVERT_PROCT(rc, &requestor, &cd->proct);
     if (OPAL_SUCCESS != rc) {
         ORTE_ERROR_LOG(rc);
     }
@@ -507,7 +507,7 @@ pmix_status_t pmix_server_query_fn(pmix_proc_t *proct,
 
     /* need to threadshift this request */
     cd = OBJ_NEW(orte_pmix_server_op_caddy_t);
-    cd->procs = proct;
+    memcpy(&cd->proct, proct, sizeof(pmix_proc_t));
     cd->queries = queries;
     cd->nqueries = nqueries;
     cd->infocbfunc = cbfunc;

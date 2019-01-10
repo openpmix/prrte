@@ -105,6 +105,7 @@ typedef struct {
     opal_process_name_t proc;
     const char *msg;
     void *server_object;
+    pmix_proc_t proct;
     pmix_proc_t *procs;
     size_t nprocs;
     pmix_proc_t *eprocs;

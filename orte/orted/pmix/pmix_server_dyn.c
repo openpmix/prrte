@@ -723,9 +723,9 @@ static void _cnlk(pmix_status_t status,
 
     /* restart the cnct processor */
     ORTE_PMIX_OPERATION(cd->procs, cd->nprocs, cd->info, cd->ninfo, _cnct, cd->cbfunc, cd->cbdata);
-    /* protect the re-referenced data */
-    cd->procs = NULL;
-    cd->info = NULL;
+    /* we don't need to protect the re-referenced data as
+     * the orte_pmix_server_op_caddy_t does not have
+     * a destructor! */
     OBJ_RELEASE(cd);
     return;
 
