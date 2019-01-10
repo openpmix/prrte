@@ -16,8 +16,8 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2014-2015 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -879,6 +879,11 @@ static void rqdes(pmix_server_req_t *p)
     if (NULL != p->jdata) {
         OBJ_RELEASE(p->jdata);
     }
+#ifdef PMIX_CMD_LINE
+    if (NULL != p->cmdline) {
+        free(p->cmdline);
+    }
+#endif
     OBJ_DESTRUCT(&p->msg);
 }
 OBJ_CLASS_INSTANCE(pmix_server_req_t,
