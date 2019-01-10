@@ -845,9 +845,17 @@ static void opcon(orte_pmix_server_op_caddy_t *p)
     p->cbdata = NULL;
     p->server_object = NULL;
 }
+static void opdel(orte_pmix_server_op_caddy_t *p)
+{
+    if (NULL != p->procs) {
+        PMIX_PROC_FREE(p->procs, p->nprocs);
+        p->nprocs = 0;
+        p->procs = NULL;
+    }
+}
 OBJ_CLASS_INSTANCE(orte_pmix_server_op_caddy_t,
                    opal_object_t,
-                   opcon, NULL);
+                   opcon, opdel);
 
 static void rqcon(pmix_server_req_t *p)
 {

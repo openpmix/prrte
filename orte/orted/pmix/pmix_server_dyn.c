@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
+ * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
@@ -725,7 +725,9 @@ static void _cnlk(pmix_status_t status,
     ORTE_PMIX_OPERATION(cd->procs, cd->nprocs, cd->info, cd->ninfo, _cnct, cd->cbfunc, cd->cbdata);
     /* protect the re-referenced data */
     cd->procs = NULL;
+    cd->nprocs = 0;
     cd->info = NULL;
+    cd->ninfo = 0;
     OBJ_RELEASE(cd);
     return;
 
