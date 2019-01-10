@@ -814,6 +814,7 @@ int orte_daemon(int argc, char *argv[])
             pmix_info_t *info;
             size_t ninfo;
             pmix_value_t *vptr;
+            size_t ii;
 
             OPAL_PMIX_CONVERT_NAME(&proc, ORTE_PROC_MY_NAME);
             boptr = &bo;
@@ -830,6 +831,10 @@ int orte_daemon(int argc, char *argv[])
                 /* use the PMIx data support to pack it */
                 info = (pmix_info_t*)vptr->data.darray->array;
                 ninfo = vptr->data.darray->size;
+                opal_output(0, "CONNECTION INFO");
+                for (ii=0; ii < ninfo; ii++) {
+                    opal_output(0, "\tKEY %s: %s", info[ii].key, info[ii].value.data.string);
+                }
                 PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
                 if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&proc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
                     PMIX_ERROR_LOG(prc);
