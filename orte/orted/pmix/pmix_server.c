@@ -828,6 +828,7 @@ static void pmix_server_log(int status, orte_process_name_t* sender,
 /****    INSTANTIATE LOCAL OBJECTS    ****/
 static void opcon(orte_pmix_server_op_caddy_t *p)
 {
+    memset(&p->proct, 0, sizeof(pmix_proc_t));
     p->procs = NULL;
     p->nprocs = 0;
     p->eprocs = NULL;
