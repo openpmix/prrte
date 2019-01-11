@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016-2018 Intel, Inc.  All rights reserved.
+# Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -29,7 +29,6 @@ mcacomponentdir = $(ortelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_regx_reverse_la_SOURCES = $(sources)
 mca_regx_reverse_la_LDFLAGS = -module -avoid-version
-mca_regx_reverse_la_LIBADD = $(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_regx_reverse_la_SOURCES = $(sources)
