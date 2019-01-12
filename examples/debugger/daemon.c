@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -279,6 +279,10 @@ int main(int argc, char **argv)
     /* only call me back when this specific job terminates */
     PMIX_LOAD_PROCID(&proc, target, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+
+    fprintf(stderr, "[%s:%d:%lu] registering for termination of %s\n", myproc.nspace, myproc.rank,
+            (unsigned long)pid, proc.nspace);
+
 
     DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIx_Register_event_handler(&code, 1, info, 2,
