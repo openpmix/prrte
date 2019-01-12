@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -166,7 +166,7 @@ static void release_fn(size_t evhdlr_registration_id,
         return;
     }
 
-    fprintf(stderr, "DEBUGGER NOTIFIED THAT JOB %s TERMINATED - AFFECTED %s\n", lock->nspace,
+    fprintf(stderr, "DEBUGGER NOTIFIED THAT JOB %s TERMINATED \n",
             (NULL == affected) ? "NULL" : affected->nspace);
     if (found) {
         if (!lock->exit_code_given) {
@@ -227,7 +227,7 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     debugger[0].cwd = strdup(cwd);
     /* provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
-    dninfo = 7;
+    dninfo = 8;
     PMIX_INFO_CREATE(dinfo, dninfo);
     PMIX_INFO_LOAD(&dinfo[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
     PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
@@ -236,6 +236,7 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     PMIX_INFO_LOAD(&dinfo[4], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
     PMIX_INFO_LOAD(&dinfo[5], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
     PMIX_INFO_LOAD(&dinfo[6], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
+    PMIX_INFO_LOAD(&dinfo[7], PMIX_SETUP_APP_ENVARS, NULL, PMIX_BOOL);
     /* spawn the daemons */
     fprintf(stderr, "Debugger: spawning %s\n", debugger[0].cmd);
     if (PMIX_SUCCESS != (rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace))) {
@@ -415,7 +416,7 @@ int main(int argc, char **argv)
         app[0].cwd = strdup(cwd);
         app[0].maxprocs = 2;
         /* provide job-level directives so the apps do what the user requested */
-        ninfo = 5;
+        ninfo = 6;
         PMIX_INFO_CREATE(info, ninfo);
         PMIX_INFO_LOAD(&info[0], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
         if (stop_on_exec) {
@@ -426,6 +427,7 @@ int main(int argc, char **argv)
         PMIX_INFO_LOAD(&info[2], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
         PMIX_INFO_LOAD(&info[3], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
         PMIX_INFO_LOAD(&info[4], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the job completes
+        PMIX_INFO_LOAD(&info[5], PMIX_SETUP_APP_ENVARS, NULL, PMIX_BOOL);
 
         /* spawn the job - the function will return when the app
          * has been launched */

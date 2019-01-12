@@ -1355,27 +1355,7 @@ static int create_app(int argc, char* argv[],
         goto cleanup;
     }
 
-    /* Grab all MCA environment variables */
-    app->app.env = opal_argv_copy(*app_env);
-    for (i=0; NULL != environ[i]; i++) {
-        if (0 == strncmp("PMIX_", environ[i], 5) ||
-            0 == strncmp("OMPI_", environ[i], 5)) {
-            /* check for duplicate in app->env - this
-             * would have been placed there by the
-             * cmd line processor. By convention, we
-             * always let the cmd line override the
-             * environment
-             */
-            param = strdup(environ[i]);
-            value = strchr(param, '=');
-            *value = '\0';
-            value++;
-            opal_setenv(param, value, false, &app->app.env);
-            free(param);
-        }
-    }
-
-    /* set necessary env variables for external usage from tune conf file*/
+    /* set necessary env variables for external usage from tune conf file */
     int set_from_file = 0;
     char **vars = NULL;
     if (OPAL_SUCCESS == mca_base_var_process_env_list_from_file(&vars) &&
