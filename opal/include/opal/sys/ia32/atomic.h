@@ -15,7 +15,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015-2018 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2017      Intel, Inc. All rights reserved.
+ * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -113,9 +113,9 @@ static inline int32_t opal_atomic_swap_32( opal_atomic_int32_t *addr,
     int32_t oldval;
 
     __asm__ __volatile__("xchg %1, %0" :
-                         "=r" (oldval), "=m" (*addr) :
-                         "0" (newval), "m" (*addr) :
-                         "memory");
+			 "=r" (oldval), "=m" (*addr) :
+			 "0" (newval), "m" (*addr) :
+			 "memory");
     return oldval;
 }
 
