@@ -71,12 +71,13 @@ static void _query(int sd, short args, void *cbdata)
     opal_info_item_t *kv;
     orte_jobid_t jobid;
     orte_job_t *jdata;
-    int rc;
+    orte_node_t *node, *ndptr;
+    int k, rc;
     opal_list_t results, stack;
     size_t m, n, p;
-    uint32_t key;
+    uint32_t key, nodeid;
     void *nptr;
-    char nspace[PMIX_MAX_NSLEN+1], **nspaces;
+    char nspace[PMIX_MAX_NSLEN+1], **nspaces, *hostname, *uri;
 #ifdef PMIX_QUERY_NAMESPACE_INFO
     char *cmdline;
 #endif
@@ -89,7 +90,7 @@ static void _query(int sd, short args, void *cbdata)
     bool local_only;
     orte_namelist_t *nm;
     opal_list_t targets;
-    int i, k, num_replies;
+    int i, num_replies;
     orte_proc_t *proct;
     pmix_proc_info_t *procinfo;
     pmix_info_t *info;
@@ -110,11 +111,15 @@ static void _query(int sd, short args, void *cbdata)
     OPAL_PMIX_CONVERT_PROCT(rc, &requestor, &cd->proct);
     if (OPAL_SUCCESS != rc) {
         ORTE_ERROR_LOG(rc);
+        ret = PMIX_ERR_BAD_PARAM;
+        goto done;
     }
 
     /* see what they wanted */
     for (m=0; m < cd->nqueries; m++) {
         q = &cd->queries[m];
+        hostname = NULL;
+        nodeid = UINT32_MAX;
         /* default to the requestor's jobid */
         jobid = requestor.jobid;
         /* see if they provided any qualifiers */
@@ -122,10 +127,14 @@ static void _query(int sd, short args, void *cbdata)
             for (n=0; n < q->nqual; n++) {
                 if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NSPACE)) {
                     OPAL_PMIX_CONVERT_NSPACE(rc, &jobid, q->qualifiers[n].value.data.string);
-                    if (ORTE_JOBID_INVALID == jobid) {
-                        rc = PMIX_ERR_BAD_PARAM;
+                    if (ORTE_JOBID_INVALID == jobid || OPAL_SUCCESS != rc) {
+                        ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
+                } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_HOSTNAME)) {
+                    hostname = q->qualifiers[n].value.data.string;
+                } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NODEID)) {
+                    PMIX_VALUE_GET_NUMBER(rc, &q->qualifiers[n].value, nodeid, uint32_t);
                 }
             }
         }
@@ -345,10 +354,61 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_PROC_URI, orte_process_info.my_hnp_uri, PMIX_STRING);
                 opal_list_append(&results, &kv->super);
             } else if (0 == strcmp(q->keys[n], PMIX_SERVER_URI)) {
-                /* they want our PMIx URI - have to ask for it */
-
+                /* they want the PMIx URI */
+                if (NULL != hostname) {
+                    /* find the node object */
+                    node = NULL;
+                    for (k=0; k < orte_node_pool->size; k++) {
+                        if (NULL == (ndptr = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, k))) {
+                            continue;
+                        }
+                        if (0 == strcmp(hostname, ndptr->name)) {
+                            node = ndptr;
+                            break;
+                        }
+                    }
+                    if (NULL == node) {
+                        /* unknown node */
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
+                    /* we want the info for the server on that node */
+                    if (NULL == node->daemon) {
+                        /* not found */
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
+                    proct = node->daemon;
+                } else if (UINT32_MAX != nodeid) {
+                    /* get the node object at that index */
+                    node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, nodeid);
+                    if (NULL == node) {
+                        /* bad index */
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
+                    /* we want the info for the server on that node */
+                    if (NULL == node->daemon) {
+                        /* not found */
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
+                    proct = node->daemon;
+                } else {
+                    /* send them ours */
+                    proct = orte_get_proc_object(ORTE_PROC_MY_NAME);
+                }
+                /* get the server uri value - we can block here as we are in
+                 * an ORTE progress thread */
+                OPAL_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_SERVER_URI, &proct->name,
+                                              (char**)&uri, OPAL_STRING);
+                if (OPAL_SUCCESS != rc) {
+                    ret = opal_pmix_convert_rc(rc);
+                    goto done;
+                }
                 kv = OBJ_NEW(opal_info_item_t);
-                PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_URI, orte_process_info.my_hnp_uri, PMIX_STRING);
+                PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_URI, uri, PMIX_STRING);
+                free(uri);
                 opal_list_append(&results, &kv->super);
     #ifdef PMIX_QUERY_PROC_TABLE
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PROC_TABLE)) {
