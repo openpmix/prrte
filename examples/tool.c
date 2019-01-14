@@ -66,19 +66,18 @@ int main(int argc, char **argv)
     pmix_status_t rc;
     pmix_proc_t myproc;
     pmix_query_t *query;
-    size_t nq, ninfo = 0, n, m, p;
+    size_t nq, ninfo = 0, n, m;
     myquery_data_t mydata;
     pmix_info_t *info = NULL, *iptr;
     char *server_uri = NULL;
     char *nspace = NULL;
     char *nodename = NULL;
-    char **actives = NULL;
     pmix_data_array_t *darray, *dptr;
     bool geturi = false;
     char hostname[1024];
 
     gethostname(hostname, 1024);
-    for (n=1; n < argc; n++) {
+    for (n=1; n < (size_t)argc; n++) {
         if (0 == strcmp("-u", argv[n]) || 0 == strcmp("--url", argv[n])) {
             if (NULL == argv[n+1]) {
                 fprintf(stderr, "Must provide URI argument to %s option\n", argv[n]);
