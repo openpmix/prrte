@@ -15,7 +15,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
+ * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
@@ -770,7 +770,7 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
         PMIX_DATA_BUFFER_LOAD(&pbuf, bo->bytes, bo->size);
         bo->bytes = NULL;
         bo->size = 0;
-        PMIX_BYTE_OBJECT_FREE(bo, 1);
+        free(bo);
         /* setup the daemon job */
         OPAL_PMIX_CONVERT_NAME(&pproc, ORTE_PROC_MY_NAME);
         /* unpack the number of info structs */
