@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
+ * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
@@ -889,6 +889,9 @@ static void orte_attr_des(orte_attribute_t *p)
         OBJ_DESTRUCT(&p->data.buf);
     } else if (OPAL_STRING == p->type) {
         free(p->data.string);
+    } else if (OPAL_ENVAR == p->type) {
+        free(p->data.envar.envar);
+        free(p->data.envar.value);
     }
 }
 OBJ_CLASS_INSTANCE(orte_attribute_t,
