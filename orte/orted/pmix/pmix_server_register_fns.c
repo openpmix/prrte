@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
+ * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
@@ -551,9 +551,10 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
             OPAL_PMIX_CONVERT_VPID(procs[n].rank, nm->name.vpid);
             ++n;
         }
-        OPAL_LIST_DESTRUCT(&local_procs);
     }
 #endif
+
+    OPAL_LIST_DESTRUCT(&local_procs);
 
     /* now load the rest of the list */
     if (0 < nmsize) {
