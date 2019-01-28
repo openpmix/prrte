@@ -15,7 +15,7 @@
  * Copyright (c) 2010      IBM Corporation.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Rutgers, The State University of New Jersey.
  *                         All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
@@ -231,6 +231,14 @@ static int close_open_file_descriptors(posix_spawn_file_actions_t *factions)
         return ORTE_ERR_FILE_OPEN_FAILURE;
     }
     struct dirent *files;
+
+    /* grab the fd of the opendir above so we don't close in the 
+     * middle of the scan. */
+    int dir_scan_fd = dirfd(dir);
+    if(dir_scan_fd < 0 ) {
+        return ORTE_ERR_FILE_OPEN_FAILURE;
+    }
+
     while (NULL != (files = readdir(dir))) {
         if (!isdigit(files->d_name[0])) {
             continue;
@@ -240,7 +248,7 @@ static int close_open_file_descriptors(posix_spawn_file_actions_t *factions)
             closedir(dir);
             return ORTE_ERR_TYPE_MISMATCH;
         }
-        if (fd >=3) {
+        if (fd >=3 && fd != dir_scan_fd) {
             posix_spawn_file_actions_addclose(factions, fd);
         }
     }

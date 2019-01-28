@@ -15,7 +15,7 @@
  * Copyright (c) 2010      IBM Corporation.  All rights reserved.
  * Copyright (c) 2011-2014 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Rutgers, The State University of New Jersey.
  *                         All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
@@ -300,6 +300,14 @@ static int close_open_file_descriptors(int write_fd, orte_iof_base_io_conf_t opt
         return ORTE_ERR_FILE_OPEN_FAILURE;
     }
 
+    /* grab the fd of the opendir above so we don't close in the
+     * middle of the scan. */
+    int dir_scan_fd = dirfd(dir);
+    if(dir_scan_fd < 0 ) {
+        return ORTE_ERR_FILE_OPEN_FAILURE;
+    }
+
+
     /* close all file descriptors w/ exception of stdin/stdout/stderr,
        the pipe used for the IOF INTERNAL messages, and the pipe up to
        the parent. Be careful to retain all of the pipe fd's set up
@@ -333,8 +341,9 @@ static int close_open_file_descriptors(int write_fd, orte_iof_base_io_conf_t opt
             (fd == alps_app_filedes[1])) continue;
 
         if (fd >=3 &&
-            fd != write_fd) {
-                        close(fd);
+            fd != write_fd &&
+	    fd != dir_scan_fd) {
+            close(fd);
         }
     }
 
