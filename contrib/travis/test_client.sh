@@ -6,9 +6,10 @@ export LD_LIBRARY_PATH=$HOME/bogus/lib:$HOME/bogus/lib/pmix:/usr/lib:/usr/lib/pm
 
 make client
 
-prte &
-# wait a little for the server to start
-sleep 2
+set -x
+
+prte --daemonize
+
 prun --oversubscribe -n 2 ./client
 ret=$?
 
