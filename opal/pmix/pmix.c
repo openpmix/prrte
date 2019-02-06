@@ -759,6 +759,11 @@ int opal_pmix_register_cleanup(char *path, bool directory, bool ignore, bool job
     if (PMIX_SUCCESS != rc) {
         ret = rc;
     } else {
+#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
+        /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
+         * being called, so assumes the everything went well and avoid a deadlock. */
+        cleanup_cbfunc(PMIX_SUCCESS, NULL, 0, (void *)&lk, NULL, NULL);
+#endif
         OPAL_PMIX_WAIT_THREAD(&lk);
         ret = lk.status;
     }

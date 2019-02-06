@@ -55,6 +55,9 @@
 #ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
 #endif
+#ifdef HAVE_POLL_H
+#include <poll.h>
+#endif
 
 #include "opal/event/event-internal.h"
 #include "opal/mca/installdirs/installdirs.h"
@@ -217,6 +220,13 @@ static void infocb(pmix_status_t status,
                    void *release_cbdata)
 {
     opal_pmix_lock_t *lock = (opal_pmix_lock_t*)cbdata;
+#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
+    /* The callback should likely not have been called
+     * see the comment below */
+    if (PMIX_ERR_COMM_FAILURE == status) {
+        return;
+    }
+#endif
     OPAL_ACQUIRE_OBJECT(lock);
 
     if (orte_cmd_options.verbose) {
@@ -799,6 +809,14 @@ int prun(int argc, char *argv[])
         fprintf(stderr, "TERMINATING DVM...");
         OPAL_PMIX_CONSTRUCT_LOCK(&lock);
         PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
+#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
+        /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
+         * being called when the server successes. The callback might be eventually
+         * called though then the connection to the server closes with
+         * status PMIX_ERR_COMM_FAILURE */
+        poll(NULL, 0, 1000);
+        infocb(PMIX_SUCCESS, NULL, 0, (void *)&lock, NULL, NULL);
+#endif
         OPAL_PMIX_WAIT_THREAD(&lock);
         OPAL_PMIX_DESTRUCT_LOCK(&lock);
         /* wait for connection to depart */
@@ -806,7 +824,11 @@ int prun(int argc, char *argv[])
         OPAL_PMIX_DESTRUCT_LOCK(&rellock);
         /* wait for the connection to go away */
         fprintf(stderr, "DONE\n");
+#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
+        return rc;
+#else
         goto DONE;
+#endif
     }
 
     /* register a default event handler and pass it our release lock
