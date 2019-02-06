@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
-# Copyright (c) 2016      Research Organization for Information Science
+# Copyright (c) 2016-2019 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # $COPYRIGHT$
 #
@@ -50,7 +50,7 @@ lib@OPAL_LIB_PREFIX@open_pal_la_LIBADD = \
         util/libopalutil.la \
 	$(MCA_opal_FRAMEWORK_LIBS)
 lib@OPAL_LIB_PREFIX@open_pal_la_DEPENDENCIES = $(lib@OPAL_LIB_PREFIX@open_pal_la_LIBADD)
-lib@OPAL_LIB_PREFIX@open_pal_la_LDFLAGS = -version-info $(libopen_pal_so_version)
+lib@OPAL_LIB_PREFIX@open_pal_la_LDFLAGS = -version-info $(libopen_pal_so_version) -lpmix
 
 # included subdirectory Makefile.am's and appended-to variables
 headers =

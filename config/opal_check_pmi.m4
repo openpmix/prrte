@@ -168,8 +168,6 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
           [CPPFLAGS="-I$pmix_ext_install_dir/include $CPPFLAGS"
            LDFLAGS="-L$pmix_ext_install_libdir $LDFLAGS"])
 
-    LIBS="$LIBS -lpmix"
-
     CPPFLAGS="$CPPFLAGS -I$pmix_ext_install_dir/include"
     OPAL_WRAPPER_FLAGS_ADD([CPPFLAGS], [-I$pmix_ext_install_dir/include])
 

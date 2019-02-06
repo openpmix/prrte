@@ -12,6 +12,8 @@
 # Copyright (c) 2008-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2019      Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -56,6 +58,9 @@ prun_SOURCES = \
 prun_LDADD = \
 	$(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la \
 	$(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
+
+prun_LDFLAGS = \
+        -lpmix
 
 distclean-local:
 	rm -f $(man_pages)
