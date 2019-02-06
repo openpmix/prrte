@@ -527,14 +527,10 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
 
     /* pass it down */
     ninfo = opal_list_get_size(info);
-#if PMIX_NUMERIC_VERSION >= 0x00030000
     /* if there are local procs, then we add that here */
     if (0 < (nmsize = opal_list_get_size(&local_procs))) {
         ++ninfo;
     }
-#else
-    nmsize = 0;
-#endif
     PMIX_INFO_CREATE(pinfo, ninfo);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000

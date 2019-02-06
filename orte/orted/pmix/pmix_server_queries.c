@@ -16,8 +16,8 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -84,18 +84,16 @@ static void _query(int sd, short args, void *cbdata)
     char **ans, *tmp;
     orte_process_name_t requestor;
     orte_app_context_t *app;
-#if PMIX_NUMERIC_VERSION >= 0x00030000
     opal_pstats_t pstat;
     float pss;
     bool local_only;
     orte_namelist_t *nm;
     opal_list_t targets;
     int i, num_replies;
-    orte_proc_t *proct;
     pmix_proc_info_t *procinfo;
     pmix_info_t *info;
     pmix_data_array_t *darray;
-#endif
+    orte_proc_t *proct;
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     size_t sz;
 #endif
