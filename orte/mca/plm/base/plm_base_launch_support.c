@@ -14,7 +14,7 @@
  *                         et Automatique. All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
+ * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
@@ -939,13 +939,11 @@ void orte_plm_base_daemon_topology(int status, orte_process_name_t* sender,
     }
 }
 
-#if PMIX_NUMERIC_VERSION >= 0x00030000
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     opal_pmix_lock_t *lock = (opal_pmix_lock_t*)cbdata;
     OPAL_PMIX_WAKEUP_THREAD(lock);
 }
-#endif
 
 void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
                                    opal_buffer_t *buffer,
@@ -1192,7 +1190,6 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
             }
         }
 
-#if PMIX_NUMERIC_VERSION >= 0x00030000
         /* see if they provided their inventory */
         idx = 1;
         if (ORTE_SUCCESS == opal_dss.unpack(buffer, &bptr, &idx, OPAL_BYTE_OBJECT)) {
@@ -1238,7 +1235,6 @@ void orte_plm_base_daemon_callback(int status, orte_process_name_t* sender,
                 OPAL_PMIX_DESTRUCT_LOCK(&lock);
             }
         }
-#endif
 
         /* do we already have this topology from some other node? */
         found = false;

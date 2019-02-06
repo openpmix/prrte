@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
+ * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
@@ -180,9 +180,7 @@ static void interim(int sd, short args, void *cbdata)
 {
     orte_pmix_server_op_caddy_t *cd = (orte_pmix_server_op_caddy_t*)cbdata;
     opal_process_name_t *requestor = &cd->proc;
-#if PMIX_NUMERIC_VERSION >= 0x00030000
     opal_envar_t envar;
-#endif
     orte_job_t *jdata;
     orte_app_context_t *app;
     pmix_app_t *papp;
@@ -274,7 +272,6 @@ static void interim(int sd, short args, void *cbdata)
                     flag = PMIX_INFO_TRUE(info);
                     orte_set_attribute(&app->attributes, ORTE_APP_DEBUGGER_DAEMON,
                                        ORTE_ATTR_GLOBAL, &flag, OPAL_BOOL);
-#if PMIX_NUMERIC_VERSION >= 0x00030000
                 /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                 /* there can be multiple of these, so we add them to the attribute list */
                 } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
@@ -314,7 +311,6 @@ static void interim(int sd, short args, void *cbdata)
                     /* unrecognized key */
                     orte_show_help("help-orted.txt", "bad-key",
                                    true, "spawn", "application", info->key);
-#endif
                 }
             }
         }
@@ -531,7 +527,6 @@ static void interim(int sd, short args, void *cbdata)
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_DEBUGGER_DAEMON);
             ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_DEBUGGER);
 
-#if PMIX_NUMERIC_VERSION >= 0x00030000
         /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
         /* there can be multiple of these, so we add them to the attribute list */
         } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
@@ -561,7 +556,6 @@ static void interim(int sd, short args, void *cbdata)
             envar.separator = info->value.data.envar.separator;
             orte_add_attribute(&jdata->attributes, ORTE_JOB_APPEND_ENVAR,
                                ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
-#endif
 #if PMIX_NUMERIC_VERSION >= 0x00040000
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_TOOL);

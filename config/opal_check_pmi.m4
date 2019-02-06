@@ -14,8 +14,8 @@
 # Copyright (c) 2011-2014 Los Alamos National Security, LLC. All rights
 #                         reserved.
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
-# Copyright (c) 2014-2017 Research Organization for Information Science
-#                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2014-2019 Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -135,34 +135,25 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
                                opal_prun_happy=yes],
                               [AC_MSG_RESULT([not found])])])
 
-    AS_IF([test "$opal_external_pmix_version_found" = "0"],
-          [AC_MSG_CHECKING([version 2x])
-           AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
-                                               #include <pmix_version.h>
-                                               #if (PMIX_VERSION_MAJOR != 2L)
-                                               #error "not version 2"
-                                               #endif
-                                              ], [])],
-                             [AC_MSG_RESULT([found])
-                              opal_external_pmix_version=2x
-                              opal_external_pmix_version_found=2
-                              opal_prun_happy=yes],
-                             [AC_MSG_RESULT([not found])])])
+    AS_IF([test "$opal_external_pmix_version_found" = "3"],
+          [AC_MSG_CHECKING([version is 3.1.0])
+            AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                                #include <pmix_version.h>
+                                                #if (PMIX_VERSION_MINOR == 1L) && (PMIX_VERSION_RELEASE == 0L)
+                                                #error "version 3.1.0 - DOA"
+                                                #endif
+                                               ], [])],
+                              [AC_MSG_RESULT([no])],
+                              [AC_MSG_RESULT([yes])
+                               AC_MSG_WARN([PRTE does not support PMIx version 3.1.0])
+                               AC_MSG_WARN([that was dead on arrival])
+                               AC_MSG_ERROR([Please select an other version and configure again])])])
 
     AS_IF([test "$opal_external_pmix_version_found" = "0"],
-          [AC_MSG_CHECKING([version 1x])
-           AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
-                                               #include <pmix_version.h>
-                                               #if (PMIX_VERSION_MAJOR != 1L)
-                                               #error "not version 1"
-                                               #endif
-                                              ], [])],
-                             [AC_MSG_RESULT([found])
-                              AC_MSG_WARN([PRTE does not support PMIx versions])
-                              AC_MSG_WARN([less than v2.0 as only PMIx-based tools can])
-                              AC_MSG_WARN([can connect to the server.])
-                              AC_MSG_ERROR([Please select a newer version and configure again])],
-                             [AC_MSG_RESULT([not found])])])
+          [AC_MSG_WARN([PRTE does not support PMIx versions])
+           AC_MSG_WARN([less than v3.0 as only PMIx-based tools can])
+           AC_MSG_WARN([can connect to the server.])
+           AC_MSG_ERROR([Please select a newer version and configure again])])
 
     AS_IF([test "x$opal_external_pmix_version" = "x"],
           [AC_MSG_WARN([PMIx version information could not])

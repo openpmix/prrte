@@ -13,8 +13,8 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * $COPYRIGHT$
@@ -621,7 +621,6 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
     return;
 }
 
-#if PMIX_NUMERIC_VERSION >= 0x00030000
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
     opal_pmix_lock_t *lk = (opal_pmix_lock_t*)cbdata;
@@ -630,13 +629,11 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
     lk->status = opal_pmix_convert_status(status);
     OPAL_PMIX_WAKEUP_THREAD(lk);
 }
-#endif
 
 static int hnp_output(const orte_process_name_t* peer,
                       orte_iof_tag_t source_tag,
                       const char *msg)
 {
-#if PMIX_NUMERIC_VERSION >= 0x00030000
     pmix_iof_channel_t pchan;
     pmix_proc_t source;
     pmix_byte_object_t bo;
@@ -677,15 +674,12 @@ static int hnp_output(const orte_process_name_t* peer,
         OPAL_PMIX_DESTRUCT_LOCK(&lock);
         return ret;
     } else {
-#endif
         /* output this to our local output */
         if (ORTE_IOF_STDOUT & source_tag || orte_xml_output) {
             orte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), orte_iof_base.iof_write_stdout->wev);
         } else {
             orte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), orte_iof_base.iof_write_stderr->wev);
         }
-#if PMIX_NUMERIC_VERSION >= 0x00030000
     }
-#endif
     return ORTE_SUCCESS;
 }

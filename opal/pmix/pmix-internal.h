@@ -3,6 +3,8 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -488,47 +490,33 @@ OPAL_DECLSPEC int opal_pmix_register_cleanup(char *path,
                                              bool jobscope);
 
 /* protect against early versions of PMIx */
-#ifndef PMIX_VALUE_UNLOAD
-pmix_status_t pmix_value_unload(pmix_value_t *kv, void **data, size_t *sz);
-#define PMIX_VALUE_UNLOAD(r, k, d, s)      \
-    (r) = pmix_value_unload((k), (d), (s))
+#if PMIX_VERSION_MAJOR == 3
+#if   PMIX_VERSION_MINOR == 0
+#if     PMIX_VERSION_RELEASE == 0
+#define   PMIX_NUMERIC_VERSION 0x00030000
+#define   PMIX_OPERATION_SUCCEEDED (PMIX_ERR_OP_BASE - 27)
+#elif   PMIX_VERSION_RELEASE == 2
+#undef    PMIX_NUMERIC_VERSION
+#define   PMIX_NUMERIC_VERSION 0x00030002
 #endif
-
-#ifndef PMIX_DATA_BUTTER_LOAD
-#define PMIX_DATA_BUFFER_LOAD(b, d, s)          \
-    do {                                        \
-        (b)->base_ptr = (char*)(d);             \
-        (b)->pack_ptr = (b)->base_ptr + (s);    \
-        (b)->unpack_ptr = (b)->base_ptr;        \
-        (b)->bytes_allocated = (s);             \
-        (b)->bytes_used = (s);                  \
-    } while(0)
-#endif
-
-#ifndef PMIX_DATA_BUFFER_UNLOAD
-#define PMIX_DATA_BUFFER_UNLOAD(b, d, s)    \
-    do {                                    \
-        (d) = (b)->base_ptr;                \
-        (s) = (b)->bytes_used;              \
-        (b)->base_ptr = NULL;               \
-    } while(0)
-#endif
-
-#ifndef PMIX_OPERATION_IN_PROGRESS
-#define PMIX_OPERATION_IN_PROGRESS  -156
-#endif
-
-#ifndef PMIX_LOAD_KEY
 #define PMIX_LOAD_KEY(a, b) \
     do {                                            \
         memset((a), 0, PMIX_MAX_KEYLEN+1);          \
         pmix_strncpy((a), (b), PMIX_MAX_KEYLEN);    \
     }while(0)
-#endif
-
-#ifndef PMIX_CHECK_KEY
+#if     PMIX_VERSION_RELEASE < 2
 #define PMIX_CHECK_KEY(a, b) \
     (0 == strncmp((a)->key, (b), PMIX_MAX_KEYLEN))
+#endif
+#elif PMIX_VERSION_MINOR == 1
+#if     PMIX_VERSION_RELEASE == 1
+#undef    PMIX_NUMERIC_VERSION
+#define   PMIX_NUMERIC_VERSION 0x00030101
+#elif   PMIX_VERSION_RELEASE == 2
+#undef    PMIX_NUMERIC_VERSION
+#define   PMIX_NUMERIC_VERSION 0x00030102
+#endif
+#endif
 #endif
 
 END_C_DECLS
