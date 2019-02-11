@@ -795,12 +795,10 @@ int prun(int argc, char *argv[])
         /* setup a lock to track the connection */
         OPAL_PMIX_CONSTRUCT_LOCK(&rellock);
         /* register to trap connection loss */
-        pmix_status_t code[6] = {PMIX_ERR_PROC_ABORTING, PMIX_ERR_PROC_ABORTED,
-                                 PMIX_ERR_PROC_REQUESTED_ABORT, PMIX_ERR_JOB_TERMINATED,
-                                 PMIX_ERR_UNREACH, PMIX_ERR_LOST_CONNECTION_TO_SERVER};
+        pmix_status_t code[2] = {PMIX_ERR_UNREACH, PMIX_ERR_LOST_CONNECTION_TO_SERVER};
         OPAL_PMIX_CONSTRUCT_LOCK(&lock);
         PMIX_INFO_LOAD(&info, PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
-        PMIx_Register_event_handler(code, 6, &info, 1,
+        PMIx_Register_event_handler(code, 2, &info, 1,
                                     evhandler, regcbfunc, &lock);
         OPAL_PMIX_WAIT_THREAD(&lock);
         OPAL_PMIX_DESTRUCT_LOCK(&lock);
