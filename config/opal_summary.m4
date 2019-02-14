@@ -5,7 +5,7 @@ dnl                         reserved.
 dnl Copyright (c) 2016-2018 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2016      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
-dnl Copyright (c) 2018      Intel, Inc. All rights reserved.
+dnl Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -41,7 +41,7 @@ AC_DEFUN([OPAL_SUMMARY_PRINT],[
 
 PRRTE configuration:
 -----------------------
-Version: $PRRTE_MAJOR_VERSION.$PRRTE_MINOR_VERSION.$PRRTE_RELEASE_VERSION$OMPI_GREEK_VERSION
+Version: $OPAL_MAJOR_VERSION.$OPAL_MINOR_VERSION.$OPAL_RELEASE_VERSION$OPAL_GREEK_VERSION
 EOF
 
     if test $WANT_DEBUG = 0 ; then
