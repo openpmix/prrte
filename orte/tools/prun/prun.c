@@ -1230,11 +1230,24 @@ int prun(int argc, char *argv[])
     }
     OPAL_PMIX_DESTRUCT_LOCK(&rellock);
 
+    /* deregister our event handler */
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
     PMIx_Deregister_event_handler(evid, opcbfunc, &lock);
     OPAL_PMIX_WAIT_THREAD(&lock);
     OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
+    /* close the push of our stdin */
+    PMIX_INFO_CREATE(iptr, 1);
+    PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
+    OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+    ret = PMIx_IOF_push(NULL, 0, NULL, iptr, 1, opcbfunc, &lock);
+    if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+        opal_output(0, "IOF close of stdin failed: %s", PMIx_Error_string(ret));
+    } else if (PMIX_SUCCESS == ret) {
+        OPAL_PMIX_WAIT_THREAD(&lock);
+    }
+    OPAL_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(iptr, 1);
 
   DONE:
     /* cleanup and leave */
