@@ -515,9 +515,9 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     OPAL_PMIX_CONVERT_JOBID(pproc.nspace, jdata->jobid);
     (void)strncpy(cd.info[2].key, PMIX_ALLOC_NETWORK, PMIX_MAX_KEYLEN);
     cd.info[2].value.type = PMIX_DATA_ARRAY;
-    PMIX_DATA_ARRAY_CREATE(cd.info[2].value.data.darray, 2, PMIX_INFO);
+    PMIX_DATA_ARRAY_CREATE(cd.info[2].value.data.darray, 3, PMIX_INFO);
 #if PMIX_NUMERIC_VERSION < 0x00030100
-    PMIX_INFO_CREATE(info, 2);
+    PMIX_INFO_CREATE(info, 3);
     cd.info[2].value.data.darray->array = info;
 #else
     info = (pmix_info_t*)cd.info[2].value.data.darray->array;
@@ -526,6 +526,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NETWORK_ID, tmp, PMIX_STRING);
     free(tmp);
     PMIX_INFO_LOAD(&info[1], PMIX_ALLOC_NETWORK_SEC_KEY, NULL, PMIX_BOOL);
+    PMIX_INFO_LOAD(&info[2], PMIX_SETUP_APP_ENVARS, NULL, PMIX_BOOL);
 
     /* we don't want to block here because it could
      * take some indeterminate time to get the info */

@@ -281,6 +281,9 @@ static void defhandler(size_t evhdlr_registration_id,
             }
         }
 
+        if (NULL == lock) {
+            exit(1);
+        }
         /* save the status */
         lock->status = status;
         /* release the lock */
@@ -1229,6 +1232,12 @@ int prun(int argc, char *argv[])
         fprintf(stderr, "%s\n", rellock.msg);
     }
     OPAL_PMIX_DESTRUCT_LOCK(&rellock);
+
+    /* if we lost connection to the server, then we are done */
+    if (PMIX_ERR_LOST_CONNECTION_TO_SERVER == rc ||
+        PMIX_ERR_UNREACH == rc) {
+        goto DONE;
+    }
 
     /* deregister our event handler */
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
