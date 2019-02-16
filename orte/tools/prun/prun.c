@@ -281,6 +281,9 @@ static void defhandler(size_t evhdlr_registration_id,
             }
         }
 
+        if (NULL == lock) {
+            exit(1);
+        }
         /* save the status */
         lock->status = status;
         /* release the lock */
@@ -1183,6 +1186,20 @@ int prun(int argc, char *argv[])
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, nspace);
     OPAL_PMIX_CONVERT_NSPACE(rc, &myjobid, nspace);
 
+    /* push our stdin to the apps */
+    PMIX_LOAD_PROCID(&pname, nspace, 0);  // forward stdin to rank=0
+    PMIX_INFO_CREATE(iptr, 1);
+    PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
+    OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+    ret = PMIx_IOF_push(&pname, 1, NULL, iptr, 1, opcbfunc, &lock);
+    if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+        opal_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
+    } else if (PMIX_SUCCESS == ret) {
+        OPAL_PMIX_WAIT_THREAD(&lock);
+    }
+    OPAL_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(iptr, 1);
+
     /* register to be notified when
      * our job completes */
     ret = PMIX_ERR_JOB_TERMINATED;
@@ -1216,11 +1233,30 @@ int prun(int argc, char *argv[])
     }
     OPAL_PMIX_DESTRUCT_LOCK(&rellock);
 
+    /* if we lost connection to the server, then we are done */
+    if (PMIX_ERR_LOST_CONNECTION_TO_SERVER == rc ||
+        PMIX_ERR_UNREACH == rc) {
+        goto DONE;
+    }
+
+    /* deregister our event handler */
     OPAL_PMIX_CONSTRUCT_LOCK(&lock);
     PMIx_Deregister_event_handler(evid, opcbfunc, &lock);
     OPAL_PMIX_WAIT_THREAD(&lock);
     OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
+    /* close the push of our stdin */
+    PMIX_INFO_CREATE(iptr, 1);
+    PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
+    OPAL_PMIX_CONSTRUCT_LOCK(&lock);
+    ret = PMIx_IOF_push(NULL, 0, NULL, iptr, 1, opcbfunc, &lock);
+    if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+        opal_output(0, "IOF close of stdin failed: %s", PMIx_Error_string(ret));
+    } else if (PMIX_SUCCESS == ret) {
+        OPAL_PMIX_WAIT_THREAD(&lock);
+    }
+    OPAL_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(iptr, 1);
 
   DONE:
     /* cleanup and leave */
