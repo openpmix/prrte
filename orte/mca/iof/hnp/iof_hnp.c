@@ -81,6 +81,9 @@ static int finalize(void);
 
 static int hnp_ft_event(int state);
 
+static int push_stdin(const orte_process_name_t* dst_name,
+                      uint8_t *data, size_t sz);
+
 /* The API's in this module are solely used to support LOCAL
  * procs - i.e., procs that are co-located to the HNP. Remote
  * procs interact with the HNP's IOF via the HNP's receive function,
@@ -95,7 +98,8 @@ orte_iof_base_module_t orte_iof_hnp_module = {
     .output = hnp_output,
     .complete = hnp_complete,
     .finalize = finalize,
-    .ft_event = hnp_ft_event
+    .ft_event = hnp_ft_event,
+    .push_stdin = push_stdin
 };
 
 /* Initialize the module */
@@ -135,7 +139,6 @@ static int init(void)
 static int hnp_push(const orte_process_name_t* dst_name, orte_iof_tag_t src_tag, int fd)
 {
     orte_job_t *jdata;
-    orte_proc_t *proc;
     orte_iof_proc_t *proct, *pptr;
     int flags, rc;
     orte_ns_cmp_bitmask_t mask = ORTE_NS_CMP_ALL;
@@ -164,153 +167,144 @@ static int hnp_push(const orte_process_name_t* dst_name, orte_iof_tag_t src_tag,
     opal_list_append(&mca_iof_hnp_component.procs, &proct->super);
 
   SETUP:
-    if (!(src_tag & ORTE_IOF_STDIN)) {
-        /* set the file descriptor to non-blocking - do this before we setup
-         * and activate the read event in case it fires right away
-         */
-        if((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-            opal_output(orte_iof_base_framework.framework_output, "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
-                        __FILE__, __LINE__, errno);
-        } else {
-            flags |= O_NONBLOCK;
-            fcntl(fd, F_SETFL, flags);
-        }
-        /* get the local jobdata for this proc */
-        if (NULL == (jdata = orte_get_job_data_object(proct->name.jobid))) {
-            ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-            return ORTE_ERR_NOT_FOUND;
-        }
-        /* define a read event and activate it */
-        if (src_tag & ORTE_IOF_STDOUT) {
-            ORTE_IOF_READ_EVENT(&proct->revstdout, proct, fd, ORTE_IOF_STDOUT,
-                                orte_iof_hnp_read_local_handler, false);
-        } else if (src_tag & ORTE_IOF_STDERR) {
-            ORTE_IOF_READ_EVENT(&proct->revstderr, proct, fd, ORTE_IOF_STDERR,
-                                orte_iof_hnp_read_local_handler, false);
-        }
-        /* setup any requested output files */
-        if (ORTE_SUCCESS != (rc = orte_iof_base_setup_output_files(dst_name, jdata, proct))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
+    /* set the file descriptor to non-blocking - do this before we setup
+     * and activate the read event in case it fires right away
+     */
+    if((flags = fcntl(fd, F_GETFL, 0)) < 0) {
+        opal_output(orte_iof_base_framework.framework_output, "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
+                    __FILE__, __LINE__, errno);
+    } else {
+        flags |= O_NONBLOCK;
+        fcntl(fd, F_SETFL, flags);
+    }
+    /* get the local jobdata for this proc */
+    if (NULL == (jdata = orte_get_job_data_object(proct->name.jobid))) {
+        ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
+        return ORTE_ERR_NOT_FOUND;
+    }
+    /* define a read event and activate it */
+    if (src_tag & ORTE_IOF_STDOUT) {
+        ORTE_IOF_READ_EVENT(&proct->revstdout, proct, fd, ORTE_IOF_STDOUT,
+                            orte_iof_hnp_read_local_handler, false);
+    } else if (src_tag & ORTE_IOF_STDERR) {
+        ORTE_IOF_READ_EVENT(&proct->revstderr, proct, fd, ORTE_IOF_STDERR,
+                            orte_iof_hnp_read_local_handler, false);
+    }
+    /* setup any requested output files */
+    if (ORTE_SUCCESS != (rc = orte_iof_base_setup_output_files(dst_name, jdata, proct))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
 
-        /* if -all- of the readevents for this proc have been defined, then
-         * activate them. Otherwise, we can think that the proc is complete
-         * because one of the readevents fires -prior- to all of them having
-         * been defined!
-         */
-        if (NULL != proct->revstdout &&
-            (orte_iof_base.redirect_app_stderr_to_stdout || NULL != proct->revstderr)) {
-            if (proct->copy) {
-                /* see if there are any wildcard subscribers out there that
-                 * apply to us */
-                OPAL_LIST_FOREACH(pptr, &mca_iof_hnp_component.procs, orte_iof_proc_t) {
-                    if (dst_name->jobid == pptr->name.jobid &&
-                        ORTE_VPID_WILDCARD == pptr->name.vpid &&
-                        NULL != pptr->subscribers) {
-                        OBJ_RETAIN(pptr->subscribers);
-                        proct->subscribers = pptr->subscribers;
-                        break;
-                    }
+    /* if -all- of the readevents for this proc have been defined, then
+     * activate them. Otherwise, we can think that the proc is complete
+     * because one of the readevents fires -prior- to all of them having
+     * been defined!
+     */
+    if (NULL != proct->revstdout &&
+        (orte_iof_base.redirect_app_stderr_to_stdout || NULL != proct->revstderr)) {
+        if (proct->copy) {
+            /* see if there are any wildcard subscribers out there that
+             * apply to us */
+            OPAL_LIST_FOREACH(pptr, &mca_iof_hnp_component.procs, orte_iof_proc_t) {
+                if (dst_name->jobid == pptr->name.jobid &&
+                    ORTE_VPID_WILDCARD == pptr->name.vpid &&
+                    NULL != pptr->subscribers) {
+                    OBJ_RETAIN(pptr->subscribers);
+                    proct->subscribers = pptr->subscribers;
+                    break;
                 }
             }
-            ORTE_IOF_READ_ACTIVATE(proct->revstdout);
-            if (!orte_iof_base.redirect_app_stderr_to_stdout) {
-                ORTE_IOF_READ_ACTIVATE(proct->revstderr);
-            }
-       }
-        return ORTE_SUCCESS;
-    }
-
-    /* if we are pushing stdin, this is happening only during launch - setup
-     * a target for this destination if it is going somewhere other than me
-     */
-    if (ORTE_VPID_WILDCARD == dst_name->vpid) {
-        /* if wildcard, define a sink with that info so it gets sent out */
-        ORTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, -1, ORTE_IOF_STDIN,
-                             stdin_write_handler);
-        proct->stdinev->daemon.jobid = ORTE_PROC_MY_NAME->jobid;
-        proct->stdinev->daemon.vpid = ORTE_VPID_WILDCARD;
-     } else {
-        /* no - lookup the proc's daemon and set that into sink */
-        if (NULL == (jdata = orte_get_job_data_object(dst_name->jobid))) {
-            ORTE_ERROR_LOG(ORTE_ERR_BAD_PARAM);
-            return ORTE_ERR_BAD_PARAM;
         }
-        if (NULL == (proc = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, dst_name->vpid))) {
-            ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-            return ORTE_ERR_NOT_FOUND;
-        }
-        /* if it is me, then don't set this up - we'll get it on the pull */
-        if (ORTE_PROC_MY_NAME->vpid != proc->node->daemon->name.vpid) {
-            ORTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, -1, ORTE_IOF_STDIN,
-                                 stdin_write_handler);
-            proct->stdinev->daemon.jobid = ORTE_PROC_MY_NAME->jobid;
-            proct->stdinev->daemon.vpid = proc->node->daemon->name.vpid;
-        }
-    }
-
-    /* now setup the read - but check to only do this once */
-    if (NULL == mca_iof_hnp_component.stdinev) {
-        /* Since we are the HNP, we don't want to set nonblocking on our
-         * stdio stream.  If we do so, we set the file descriptor to
-         * non-blocking for everyone that has that file descriptor, which
-         * includes everyone else in our shell pipeline chain.  (See
-         * http://lists.freebsd.org/pipermail/freebsd-hackers/2005-January/009742.html).
-         * This causes things like "mpirun -np 1 big_app | cat" to lose
-         * output, because cat's stdout is then ALSO non-blocking and cat
-         * isn't built to deal with that case (same with almost all other
-         * unix text utils).
-         */
-        if (0 != fd) {
-            if((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-                opal_output(orte_iof_base_framework.framework_output, "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
-                            __FILE__, __LINE__, errno);
-            } else {
-                flags |= O_NONBLOCK;
-                fcntl(fd, F_SETFL, flags);
-            }
-        }
-        if (isatty(fd)) {
-            /* We should avoid trying to read from stdin if we
-             * have a terminal, but are backgrounded.  Catch the
-             * signals that are commonly used when we switch
-             * between being backgrounded and not.  If the
-             * filedescriptor is not a tty, don't worry about it
-             * and always stay connected.
-             */
-            opal_event_signal_set(orte_event_base, &mca_iof_hnp_component.stdinsig,
-                                  SIGCONT, orte_iof_hnp_stdin_cb,
-                                  NULL);
-
-            /* setup a read event to read stdin, but don't activate it yet. The
-             * dst_name indicates who should receive the stdin. If that recipient
-             * doesn't do a corresponding pull, however, then the stdin will
-             * be dropped upon receipt at the local daemon
-             */
-            ORTE_IOF_READ_EVENT(&mca_iof_hnp_component.stdinev,
-                                proct, fd, ORTE_IOF_STDIN,
-                                orte_iof_hnp_read_local_handler, false);
-
-            /* check to see if we want the stdin read event to be
-             * active - we will always at least define the event,
-             * but may delay its activation
-             */
-            if (!(src_tag & ORTE_IOF_STDIN) || orte_iof_hnp_stdin_check(fd)) {
-                ORTE_IOF_READ_ACTIVATE(mca_iof_hnp_component.stdinev);
-            }
-        } else {
-            /* if we are not looking at a tty, just setup a read event
-             * and activate it
-             */
-            ORTE_IOF_READ_EVENT(&mca_iof_hnp_component.stdinev,
-                                proct, fd, ORTE_IOF_STDIN,
-                                orte_iof_hnp_read_local_handler, true);
+        ORTE_IOF_READ_ACTIVATE(proct->revstdout);
+        if (!orte_iof_base.redirect_app_stderr_to_stdout) {
+            ORTE_IOF_READ_ACTIVATE(proct->revstderr);
         }
     }
     return ORTE_SUCCESS;
 }
 
+/* Push data to stdin of a client process
+ *
+ * (a) a specific name, usually vpid=0; or
+ *
+ * (b) all procs, specified by vpid=ORTE_VPID_WILDCARD
+ *
+ */
+static int push_stdin(const orte_process_name_t* dst_name,
+                      uint8_t *data, size_t sz)
+{
+    orte_iof_proc_t *proct, *pptr;
+    int rc;
+    orte_ns_cmp_bitmask_t mask = ORTE_NS_CMP_ALL;
+
+    /* don't do this if the dst vpid is invalid */
+    if (ORTE_VPID_INVALID == dst_name->vpid) {
+        return ORTE_SUCCESS;
+    }
+
+    OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
+                         "%s iof:hnp pushing stdin for process %s",
+                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                         ORTE_NAME_PRINT(dst_name)));
+
+    /* do we already have this process in our list? */
+    proct = NULL;
+    OPAL_LIST_FOREACH(pptr, &mca_iof_hnp_component.procs, orte_iof_proc_t) {
+        if (OPAL_EQUAL == orte_util_compare_name_fields(mask, &pptr->name, dst_name)) {
+            /* found it */
+            proct = pptr;
+        }
+    }
+    if (NULL == proct) {
+        return ORTE_ERR_NOT_FOUND;
+    }
+
+    /* pass the data to the sink */
+
+    /* if the daemon is me, then this is a local sink */
+    if (OPAL_EQUAL == orte_util_compare_name_fields(mask, ORTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
+        OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
+                             "%s read %d bytes from stdin - writing to %s",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), (int)sz,
+                             ORTE_NAME_PRINT(&proct->name)));
+        /* send the bytes down the pipe - we even send 0 byte events
+         * down the pipe so it forces out any preceding data before
+         * closing the output stream
+         */
+        if (NULL != proct->stdinev->wev) {
+            if (ORTE_IOF_MAX_INPUT_BUFFERS < orte_iof_base_write_output(&proct->name, ORTE_IOF_STDIN, data, sz, proct->stdinev->wev)) {
+                /* getting too backed up - stop the read event for now if it is still active */
+
+                OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
+                                     "buffer backed up - holding"));
+                return ORTE_ERR_OUT_OF_RESOURCE;
+            }
+        }
+    } else {
+        OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
+                             "%s sending %d bytes from stdinev to daemon %s",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), (int)sz,
+                             ORTE_NAME_PRINT(&proct->stdinev->daemon)));
+
+        /* send the data to the daemon so it can
+         * write it to the proc's fd - in this case,
+         * we pass sink->name to indicate who is to
+         * receive the data. If the connection closed,
+         * numbytes will be zero so zero bytes will be
+         * sent - this will tell the daemon to close
+         * the fd for stdin to that proc
+         */
+        if( ORTE_SUCCESS != (rc = orte_iof_hnp_send_data_to_endpoint(&proct->stdinev->daemon, &proct->stdinev->name, ORTE_IOF_STDIN, data, sz))) {
+            /* if the addressee is unknown, remove the sink from the list */
+            if( ORTE_ERR_ADDRESSEE_UNKNOWN == rc ) {
+                OBJ_RELEASE(proct->stdinev);
+            }
+        }
+    }
+
+    return ORTE_SUCCESS;
+}
 
 /*
  * Since we are the HNP, the only "pull" call comes from a local
@@ -585,36 +579,17 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
         }
     }
     goto check;
+
   re_enter:
     ORTE_IOF_SINK_ACTIVATE(wev);
+
   check:
-    if (NULL != mca_iof_hnp_component.stdinev &&
-        !orte_abnormal_term_ordered &&
-        !mca_iof_hnp_component.stdinev->active) {
-        OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
-                            "read event is off - checking if okay to restart"));
-        /* if we have turned off the read event, check to
-         * see if the output list has shrunk enough to
-         * turn it back on
-         *
-         * RHC: Note that when multiple procs want stdin, we
-         * can get into a fight between a proc turnin stdin
-         * back "on" and other procs turning it "off". There
-         * is no clear way to resolve this as different procs
-         * may take input at different rates.
-         */
-        if (opal_list_get_size(&wev->outputs) < ORTE_IOF_MAX_INPUT_BUFFERS) {
-            /* restart the read */
-            OPAL_OUTPUT_VERBOSE((1, orte_iof_base_framework.framework_output,
-                                 "restarting read event"));
-            ORTE_IOF_READ_ACTIVATE(mca_iof_hnp_component.stdinev);
-        }
-    }
     if (sink->closed && 0 == opal_list_get_size(&wev->outputs)) {
         /* the sink has already been closed and everything was written, time to release it */
         OBJ_RELEASE(sink);
     }
     return;
+
   finish:
     OBJ_RELEASE(wev);
     sink->wev = NULL;

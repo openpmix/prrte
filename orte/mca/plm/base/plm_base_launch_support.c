@@ -595,7 +595,6 @@ void orte_plm_base_post_launch(int fd, short args, void *cbdata)
     int32_t rc;
     orte_job_t *jdata;
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
-    orte_process_name_t name;
     orte_timer_t *timer=NULL;
     int ret;
     opal_buffer_t *answer;
@@ -624,23 +623,6 @@ void orte_plm_base_post_launch(int fd, short args, void *cbdata)
     }
     /* update job state */
     caddy->jdata->state = caddy->job_state;
-
-    /* complete wiring up the iof */
-    OPAL_OUTPUT_VERBOSE((5, orte_plm_base_framework.framework_output,
-                         "%s plm:base:launch wiring up iof for job %s",
-                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                         ORTE_JOBID_PRINT(jdata->jobid)));
-
-    /* push stdin - the IOF will know what to do with the specified target */
-    name.jobid = jdata->jobid;
-    name.vpid = jdata->stdin_target;
-
-    if (ORTE_SUCCESS != (rc = orte_iof.push(&name, ORTE_IOF_STDIN, 0))) {
-        ORTE_ERROR_LOG(rc);
-        ORTE_FORCED_TERMINATE(ORTE_ERROR_DEFAULT_EXIT_CODE);
-        OBJ_RELEASE(caddy);
-        return;
-    }
 
     /* if this isn't a dynamic spawn, just cleanup */
     if (ORTE_JOBID_INVALID == jdata->originator.jobid) {

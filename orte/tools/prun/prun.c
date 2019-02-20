@@ -264,9 +264,24 @@ static void defhandler(size_t evhdlr_registration_id,
 {
     opal_pmix_lock_t *lock = NULL;
     size_t n;
+    pmix_proc_t target;
+    pmix_info_t directive;
 
     if (orte_cmd_options.verbose) {
         opal_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
+    }
+
+    if (PMIX_ERR_IOF_FAILURE == status) {
+        /* tell PRRTE to terminate our job */
+        OPAL_PMIX_CONVERT_JOBID(target.nspace, myjobid);
+        target.rank = PMIX_RANK_WILDCARD;
+        PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
+        if (PMIX_SUCCESS != PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL)) {
+            PMIx_tool_finalize();
+            /* exit with a non-zero status */
+            exit(1);
+        }
+        goto progress;
     }
 
     if (PMIX_ERR_UNREACH == status ||
@@ -290,6 +305,7 @@ static void defhandler(size_t evhdlr_registration_id,
         OPAL_PMIX_WAKEUP_THREAD(lock);
     }
 
+  progress:
     /* we _always_ have to execute the evhandler callback or
      * else the event progress engine will hang */
     if (NULL != cbfunc) {

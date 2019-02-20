@@ -113,6 +113,8 @@ static pmix_server_module_t pmix_server = {
     .log = pmix_server_log_fn,
     .allocate = pmix_server_alloc_fn,
     .job_control = pmix_server_job_ctrl_fn,
+    .iof_pull = pmix_server_iof_pull_fn,
+    .push_stdin = pmix_server_stdin_fn,
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     .group = pmix_server_group_fn
 #endif
