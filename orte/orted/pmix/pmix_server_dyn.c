@@ -584,6 +584,9 @@ static void interim(int sd, short args, void *cbdata)
     orte_set_attribute(&jdata->attributes, ORTE_JOB_LAUNCH_PROXY,
                        ORTE_ATTR_GLOBAL, requestor, OPAL_NAME);
 
+    /* indicate that IO is to be forwarded */
+    ORTE_FLAG_SET(jdata, ORTE_JOB_FLAG_FORWARD_OUTPUT);
+
     /* setup a spawn tracker so we know who to call back when this is done
      * and thread-shift the entire thing so it can be safely added to
      * our tracking list */
