@@ -1209,9 +1209,11 @@ pmix_status_t pmix_server_stdin_fn(const pmix_proc_t *source,
     OPAL_PMIX_CONVERT_PROCT(rc, &dst, &targets[0]);
     orte_iof.push_stdin(&dst, (uint8_t*)bo->bytes, bo->size);
 
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     if (NULL == bo->bytes || 0 == bo->size) {
         return PMIX_ERR_IOF_COMPLETE;
     }
+#endif
 
     return PMIX_OPERATION_SUCCEEDED;
 }
