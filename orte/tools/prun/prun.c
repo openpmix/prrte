@@ -271,6 +271,7 @@ static void defhandler(size_t evhdlr_registration_id,
         opal_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
     }
 
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     if (PMIX_ERR_IOF_FAILURE == status) {
         /* tell PRRTE to terminate our job */
         OPAL_PMIX_CONVERT_JOBID(target.nspace, myjobid);
@@ -283,6 +284,7 @@ static void defhandler(size_t evhdlr_registration_id,
         }
         goto progress;
     }
+#endif
 
     if (PMIX_ERR_UNREACH == status ||
         PMIX_ERR_LOST_CONNECTION_TO_SERVER == status) {
@@ -1202,6 +1204,7 @@ int prun(int argc, char *argv[])
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, nspace);
     OPAL_PMIX_CONVERT_NSPACE(rc, &myjobid, nspace);
 
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, nspace, 0);  // forward stdin to rank=0
     PMIX_INFO_CREATE(iptr, 1);
@@ -1215,6 +1218,7 @@ int prun(int argc, char *argv[])
     }
     OPAL_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(iptr, 1);
+#endif
 
     /* register to be notified when
      * our job completes */
@@ -1261,6 +1265,7 @@ int prun(int argc, char *argv[])
     OPAL_PMIX_WAIT_THREAD(&lock);
     OPAL_PMIX_DESTRUCT_LOCK(&lock);
 
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* close the push of our stdin */
     PMIX_INFO_CREATE(iptr, 1);
     PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
@@ -1273,6 +1278,7 @@ int prun(int argc, char *argv[])
     }
     OPAL_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(iptr, 1);
+#endif
 
   DONE:
     /* cleanup and leave */
