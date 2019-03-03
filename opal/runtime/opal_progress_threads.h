@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
- * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2015      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -67,4 +69,6 @@ OPAL_DECLSPEC int opal_progress_thread_pause(const char *name);
  */
 OPAL_DECLSPEC int opal_progress_thread_resume(const char *name);
 
+
+OPAL_DECLSPEC int opal_progress_thread_attach(opal_event_base_t *ev_base, const char *name);
 #endif

@@ -5,6 +5,8 @@
  * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -24,9 +26,11 @@
 #endif
 #include <stdint.h>
 #include <stdarg.h>
-#include "event.h"
-#include "event2/event.h"
-#include "event2/thread.h"
+
+#include OPAL_EVENT_HEADER
+#if ! OPAL_HAVE_LIBEV
+#include OPAL_EVENT2_THREAD_HEADER
+#endif
 
 #include "opal/util/output.h"
 
@@ -78,43 +82,56 @@ OPAL_DECLSPEC opal_event_t* opal_event_alloc(void);
 
 #define opal_event_base_init_common_timeout (b, t) event_base_init_common_timeout((b), (t))
 
-#define opal_event_base_loopbreak(b) event_base_loopbreak(b)
-
 #define opal_event_base_loopexit(b) event_base_loopexit(b, NULL)
+
+#if OPAL_HAVE_LIBEV
+#define opal_event_use_threads()
+#define opal_event_free(b) free(b)
+#define opal_event_get_signal(x) (x)->ev_fd
+#else
+
+/* thread support APIs */
+#define opal_event_use_threads() evthread_use_pthreads()
+#define opal_event_base_loopbreak(b) event_base_loopbreak(b)
+#define opal_event_free(x) event_free(x)
+#define opal_event_get_signal(x) event_get_signal(x)
+#endif
 
 /* Event priority APIs */
 #define opal_event_base_priority_init(b, n) event_base_priority_init((b), (n))
 
 #define opal_event_set_priority(x, n) event_priority_set((x), (n))
 
-/* thread support APIs */
-#define opal_event_use_threads() evthread_use_pthreads()
-
 /* Basic event APIs */
 #define opal_event_enable_debug_mode() event_enable_debug_mode()
 
-#define opal_event_set(b, x, fd, fg, cb, arg) event_assign((x), (b), (fd), (fg), (event_callback_fn) (cb), (arg))
+OPAL_DECLSPEC int opal_event_assign(struct event *ev, opal_event_base_t *evbase,
+                                  int fd, short arg, event_callback_fn cbfn, void *cbd);
 
-#define opal_event_assign(x, b, fd, fg, cb, arg) event_assign((x), (b), (fd), (fg), (event_callback_fn) (cb), (arg))
+#define opal_event_set(b, x, fd, fg, cb, arg) opal_event_assign((x), (b), (fd), (fg), (event_callback_fn) (cb), (arg))
 
+#if OPAL_HAVE_LIBEV
+OPAL_DECLSPEC int opal_event_add(struct event *ev, struct timeval *tv);
+OPAL_DECLSPEC int opal_event_del(struct event *ev);
+OPAL_DECLSPEC void opal_event_active (struct event *ev, int res, short ncalls);
+OPAL_DECLSPEC void opal_event_base_loopbreak (opal_event_base_t *b);
+#else
 #define opal_event_add(ev, tv) event_add((ev), (tv))
-
 #define opal_event_del(ev) event_del((ev))
-
 #define opal_event_active(x, y, z) event_active((x), (y), (z))
+#define opal_event_base_loopbreak(b) event_base_loopbreak(b)
 
-#define opal_event_new(b, fd, fg, cb, arg) event_new((b), (fd), (fg), (event_callback_fn) (cb), (arg))
+#endif
 
-OPAL_DECLSPEC opal_event_t* opal_event_alloc(void);
-
-#define opal_event_free(x) event_free((x))
+OPAL_DECLSPEC opal_event_t* opal_event_new(opal_event_base_t *b, int fd,
+                                         short fg, event_callback_fn cbfn, void *cbd);
 
 /* Timer APIs */
 #define opal_event_evtimer_new(b, cb, arg) opal_event_new((b), -1, 0, (cb), (arg))
 
 #define opal_event_evtimer_add(x, tv) opal_event_add((x), (tv))
 
-#define opal_event_evtimer_set(b, x, cb, arg) event_assign((x), (b), -1, 0, (event_callback_fn) (cb), (arg))
+#define opal_event_evtimer_set(b, x, cb, arg) opal_event_assign((x), (b), -1, 0, (event_callback_fn) (cb), (arg))
 
 #define opal_event_evtimer_del(x) opal_event_del((x))
 
@@ -125,15 +142,13 @@ OPAL_DECLSPEC opal_event_t* opal_event_alloc(void);
 /* Signal APIs */
 #define opal_event_signal_add(x, tv) event_add((x), (tv))
 
-#define opal_event_signal_set(b, x, fd, cb, arg) event_assign((x), (b), (fd), EV_SIGNAL|EV_PERSIST, (event_callback_fn) (cb), (arg))
+#define opal_event_signal_set(b, x, fd, cb, arg) opal_event_assign((x), (b), (fd), EV_SIGNAL|EV_PERSIST, (event_callback_fn) (cb), (arg))
 
 #define opal_event_signal_del(x) event_del((x))
 
 #define opal_event_signal_pending(x, tv) event_pending((x), EV_SIGNAL, (tv))
 
 #define opal_event_signal_initalized(x) event_initialized((x))
-
-#define opal_event_get_signal(x) event_get_signal((x))
 
 #define opal_event_loop(b, fg) event_base_loop((b), (fg))
 
