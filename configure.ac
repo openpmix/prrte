@@ -20,8 +20,8 @@
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
 # Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
-# Copyright (c) 2014-2017 Research Organization for Information Science
-#                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2014-2019 Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
 # Copyright (c) 2018      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
@@ -959,7 +959,20 @@ AC_CACHE_SAVE
 
 opal_show_title "Configure libevent"
 
+OPAL_LIBEV_CONFIG
 OPAL_LIBEVENT_CONFIG
+
+AS_IF([test $opal_libevent_support -eq 1 && test $opal_libev_support -eq 1],
+      [AC_MSG_WARN([Both libevent and libev support have been specified.])
+       AC_MSG_WARN([Only one can be configured against at a time. Please])
+       AC_MSG_WARN([remove one from the configure command line.])
+       AC_MSG_ERROR([Cannot continue])])
+
+AS_IF([test $opal_libevent_support -eq 0 && test $opal_libev_support -eq 0],
+      [AC_MSG_WARN([Either libevent or libev support is required, but neither])
+       AC_MSG_WARN([was found. Please use the configure options to point us])
+       AC_MSG_WARN([to where we can find one or the other library])
+       AC_MSG_ERROR([Cannot continue])])
 
 ##################################
 # PMIx

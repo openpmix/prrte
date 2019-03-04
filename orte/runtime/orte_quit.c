@@ -16,6 +16,8 @@
  *                         reserved.
  * Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2014-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -90,7 +92,8 @@ void orte_quit(int fd, short args, void *cbdata)
      */
     orte_event_base_active = false;
     ORTE_POST_OBJECT(orte_event_base_active);
-    /* break out of the event loop */
+    /* break the event loop - this will cause the loop to exit upon
+       completion of any current event */
     opal_event_base_loopbreak(orte_event_base);
 }
 

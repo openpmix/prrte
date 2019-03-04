@@ -76,6 +76,7 @@
 #include "opal/util/os_path.h"
 #include "opal/util/path.h"
 #include "opal/class/opal_pointer_array.h"
+#include "opal/runtime/opal_progress_threads.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/grpcomm/grpcomm.h"
@@ -495,6 +496,9 @@ int main(int argc, char *argv[])
      * isn't a user-level application */
     ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_ALLOCATE);
 
+    if(OPAL_SUCCESS != (rc=opal_progress_thread_attach(orte_event_base, "main"))) {
+        return rc;
+    }
     /* loop the event lib until an exit event is detected */
     while (orte_event_base_active) {
         opal_event_loop(orte_event_base, OPAL_EVLOOP_ONCE);
