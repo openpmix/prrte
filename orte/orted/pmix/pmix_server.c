@@ -120,6 +120,29 @@ static pmix_server_module_t pmix_server = {
 #endif
 };
 
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+static char *prrte_fns[] = {
+    "fence_nb",
+    "direct_modex"
+};
+
+typedef struct {
+    char *name;
+    char *string;
+    pmix_data_type_t type;
+    char **description;
+} orte_regattr_input_t;
+
+static orte_regattr_input_t prrte_attributes[] = {
+    // fence_nb
+    {.name = "PMIX_TIMEOUT", .string = PMIX_TIMEOUT, .type = PMIX_INT, .description = (char *[]){"POSITIVE INTEGERS", "Time in seconds before", "declaring not found", NULL}},
+    {.name = ""},
+    // direct_modex
+    {.name = "PMIX_TIMEOUT", .string = PMIX_TIMEOUT, .type = PMIX_INT, .description = (char *[]){"POSITIVE INTEGERS", "Time in seconds before", "declaring not found", NULL}},
+    {.name = ""},
+};
+#endif
+
 void pmix_server_register_params(void)
 {
     /* register a verbosity */
@@ -231,6 +254,10 @@ int pmix_server_init(void)
     pmix_info_t *info;
     size_t n, ninfo;
     pmix_proc_t pname;
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+    pmix_regattr_t *attrs;
+    size_t m, nregs, nattrs, cnt;
+#endif
 
     if (orte_pmix_server_globals.initialized) {
         return ORTE_SUCCESS;
@@ -390,6 +417,31 @@ int pmix_server_init(void)
         return rc;
     }
     PMIX_INFO_FREE(info, ninfo);
+
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+    /* register our support */
+    nregs = sizeof(prrte_fns) / sizeof(char*);
+    cnt = 0;
+    for (n=0; n < nregs; n++) {
+        nattrs = 0;
+        while (0 != strlen(prrte_attributes[cnt+nattrs].name)) {
+            ++nattrs;
+        }
+        PMIX_REGATTR_CREATE(attrs, nattrs);
+        for (m=0; m < nattrs; m++) {
+            attrs[m].name = strdup(prrte_attributes[m+cnt].name);
+            PMIX_LOAD_KEY(attrs[m].string, prrte_attributes[m+cnt].string);
+            attrs[m].type = prrte_attributes[m+cnt].type;
+            PMIX_ARGV_COPY(attrs[m].description, prrte_attributes[m+cnt].description);
+        }
+        rc = PMIx_Register_attributes(prrte_fns[n], attrs, nattrs);
+        PMIX_REGATTR_FREE(attrs, nattrs);
+        if (PMIX_SUCCESS != rc) {
+            break;
+        }
+        cnt += nattrs + 1;
+    }
+#endif
 
     return rc;
 }
