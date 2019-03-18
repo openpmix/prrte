@@ -11,6 +11,8 @@
  *                         All rights reserved.
  * Copyright (c) 2014      Los Alamos National Security, LLC.  All rights
  *                         reserved.
+ * Copyright (c) 2019      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -72,176 +74,192 @@ int orte_odls_alps_get_rdma_creds(void)
      * application processes can actually use the HSN API (uGNI).
      */
 
-    if (ORTE_PROC_IS_DAEMON) {
+    ret = alps_app_lli_lock();
 
-        ret = alps_app_lli_lock();
+    /*
+     * First get our apid
+     */
 
-        /*
-         * First get our apid
-         */
+    ret = alps_app_lli_put_request(ALPS_APP_LLI_ALPS_REQ_APID, NULL, 0);
+    if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                              "%s odls:alps: alps_app_lli_put_request returned %d",
+                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
+         ret = ORTE_ERR_FILE_WRITE_FAILURE;
+         goto fn_exit;
+    }
 
-        ret = alps_app_lli_put_request(ALPS_APP_LLI_ALPS_REQ_APID, NULL, 0);
-        if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
-            OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
-                                 "%s odls:alps: alps_app_lli_put_request returned %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
-            ret = ORTE_ERR_FILE_WRITE_FAILURE;
-            goto fn_exit;
-        }
+    ret = alps_app_lli_get_response (&alps_status, &alps_count);
+    if (ALPS_APP_LLI_ALPS_STAT_OK != alps_status) {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: alps_app_lli_get_response returned %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), alps_status));
+        ret = ORTE_ERR_FILE_READ_FAILURE;
+        goto fn_exit;
+    }
 
-        ret = alps_app_lli_get_response (&alps_status, &alps_count);
-        if (ALPS_APP_LLI_ALPS_STAT_OK != alps_status) {
-            OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
-                                 "%s odls:alps: alps_app_lli_get_response returned %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), alps_status));
-            ret = ORTE_ERR_FILE_READ_FAILURE;
-            goto fn_exit;
-        }
+    ret = alps_app_lli_get_response_bytes (&apid, sizeof(apid));
+    if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: alps_app_lli_get_response_bytes returned %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
+        ret = ORTE_ERR_FILE_READ_FAILURE;
+        goto fn_exit;
+    }
 
-        ret = alps_app_lli_get_response_bytes (&apid, sizeof(apid));
-        if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
-            OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
-                                 "%s odls:alps: alps_app_lli_get_response_bytes returned %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
-            ret = ORTE_ERR_FILE_READ_FAILURE;
-            goto fn_exit;
-        }
+    /*
+     * now get the GNI rdma credentials info
+     */
 
-        /*
-         * now get the GNI rdma credentials info
-         */
+    ret = alps_app_lli_put_request(ALPS_APP_LLI_ALPS_REQ_GNI, NULL, 0);
+    if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: alps_app_lli_put_request returned %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
+        ret = ORTE_ERR_FILE_WRITE_FAILURE;
+        goto fn_exit;
+    }
 
-        ret = alps_app_lli_put_request(ALPS_APP_LLI_ALPS_REQ_GNI, NULL, 0);
-        if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
-            OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
-                                 "%s odls:alps: alps_app_lli_put_request returned %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
-            ret = ORTE_ERR_FILE_WRITE_FAILURE;
-            goto fn_exit;
-        }
+    ret = alps_app_lli_get_response(&alps_status, &alps_count);
+    if (ALPS_APP_LLI_ALPS_STAT_OK != alps_status) {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: alps_app_lli_get_response returned %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), alps_status));
+        ret = ORTE_ERR_FILE_READ_FAILURE;
+        goto fn_exit;
+    }
 
-        ret = alps_app_lli_get_response(&alps_status, &alps_count);
-        if (ALPS_APP_LLI_ALPS_STAT_OK != alps_status) {
-            OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
-                                 "%s odls:alps: alps_app_lli_get_response returned %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), alps_status));
-            ret = ORTE_ERR_FILE_READ_FAILURE;
-            goto fn_exit;
-        }
+    rdmacred_rsp = (alpsAppLLIGni_t *)malloc(alps_count);
+    if (NULL == rdmacred_rsp) {
+        ret = ORTE_ERR_OUT_OF_RESOURCE;
+        goto fn_exit;
+    }
 
-        rdmacred_rsp = (alpsAppLLIGni_t *)malloc(alps_count);
-        if (NULL == rdmacred_rsp) {
-            ret = ORTE_ERR_OUT_OF_RESOURCE;
-            goto fn_exit;
-        }
+    memset(rdmacred_rsp,0,alps_count);
 
-        memset(rdmacred_rsp,0,alps_count);
+    ret = alps_app_lli_get_response_bytes(rdmacred_rsp, alps_count);
+    if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: alps_app_lli_get_response_bytes returned %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
+        free(rdmacred_rsp);
+        ret = ORTE_ERR_FILE_READ_FAILURE;
+        goto fn_exit;
+    }
 
-        ret = alps_app_lli_get_response_bytes(rdmacred_rsp, alps_count);
-        if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
-            OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
-                                 "%s odls:alps: alps_app_lli_get_response_bytes returned %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
-            free(rdmacred_rsp);
-            ret = ORTE_ERR_FILE_READ_FAILURE;
-            goto fn_exit;
-        }
+    ret = alps_app_lli_unlock();
 
-        ret = alps_app_lli_unlock();
+    rdmacred_buf = (alpsAppGni_t *)(rdmacred_rsp->u.buf);
 
-        rdmacred_buf = (alpsAppGni_t *)(rdmacred_rsp->u.buf);
+    /*
+     * now set up the env. variables -
+     * The cray pmi sets up 4 environment variables:
+     * PMI_GNI_DEV_ID - format (id0:id1....idX)
+     * PMI_GNI_LOC_ADDR - format (locaddr0:locaddr1:....locaddrX)
+     * PMI_GNI_COOKIE - format (cookie0:cookie1:...cookieX)
+     * PMI_GNI_PTAG - format (ptag0:ptag1:....ptagX)
+     *
+     * where X == num_creds - 1
+     *
+     * TODO: need in theory to check for possible overrun of env_buffer
+     */
 
-        /*
-         * now set up the env. variables -
-         * The cray pmi sets up 4 environment variables:
-         * PMI_GNI_DEV_ID - format (id0:id1....idX)
-         * PMI_GNI_LOC_ADDR - format (locaddr0:locaddr1:....locaddrX)
-         * PMI_GNI_COOKIE - format (cookie0:cookie1:...cookieX)
-         * PMI_GNI_PTAG - format (ptag0:ptag1:....ptagX)
-         *
-         * where X == num_creds - 1
-         *
-         * TODO: need in theory to check for possible overrun of env_buffer
-         */
+    num_creds = rdmacred_rsp->count;
 
-        num_creds = rdmacred_rsp->count;
+    /*
+     * first build ptag env
+     */
 
-        /*
-         * first build ptag env
-         */
+    memset(env_buffer,0,sizeof(env_buffer));
+    ptr = env_buffer;
+    for (i=0; i<num_creds-1; i++) {
+        len = sprintf(ptr,"%d:",rdmacred_buf[i].ptag);
+        ptr += len;
+    }
+    sprintf(ptr,"%d",rdmacred_buf[num_creds-1].ptag);
+    ret = opal_setenv("PMI_GNI_PTAG", env_buffer, false, &orte_launch_environ);
+    if (ret != ORTE_SUCCESS) {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: opal_setenv for PMI_GNI_TAG failed - returned %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
+        goto fn_exit;
 
-        memset(env_buffer,0,sizeof(env_buffer));
-        ptr = env_buffer;
-        for (i=0; i<num_creds-1; i++) {
-            len = sprintf(ptr,"%d:",rdmacred_buf[i].ptag);
-            ptr += len;
-        }
-        sprintf(ptr,"%d",rdmacred_buf[num_creds-1].ptag);
-        ret = opal_setenv("PMI_GNI_PTAG", env_buffer, false, &orte_launch_environ);
-        if (ret != ORTE_SUCCESS) {
-            OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
-                                 "%s odls:alps: opal_setenv for PMI_GNI_TAG returned %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
-            goto fn_exit;
-        }
+    } else {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: PMI_GNI_TAG = %s",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), env_buffer));
+    }
 
-        /*
-         * the cookie env
-         */
+    /*
+     * the cookie env
+     */
 
-        memset(env_buffer,0,sizeof(env_buffer));
-        ptr = env_buffer;
-        for (i=0; i<num_creds-1; i++) {
-            len = sprintf(ptr,"%d:",rdmacred_buf[i].cookie);
-            ptr += len;
-        }
-        sprintf(ptr,"%d",rdmacred_buf[num_creds-1].cookie);
-        ret = opal_setenv("PMI_GNI_COOKIE", env_buffer, false, &orte_launch_environ);
-        if (ret != ORTE_SUCCESS) {
-            OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
-                                 "%s odls:alps: opal_setenv for PMI_GNI_COOKIE returned %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
-            goto fn_exit;
-        }
+    memset(env_buffer,0,sizeof(env_buffer));
+    ptr = env_buffer;
+    for (i=0; i<num_creds-1; i++) {
+        len = sprintf(ptr,"%d:",rdmacred_buf[i].cookie);
+        ptr += len;
+    }
+    sprintf(ptr,"%d",rdmacred_buf[num_creds-1].cookie);
+    ret = opal_setenv("PMI_GNI_COOKIE", env_buffer, false, &orte_launch_environ);
+    if (ret != ORTE_SUCCESS) {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: opal_setenv for PMI_GNI_COOKIE returned %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
+        goto fn_exit;
 
-        /*
-         * nic loc addrs
-         */
+    } else {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: PMI_GNI_COOKIE = %s",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), env_buffer));
+    }
 
-        memset(env_buffer,0,sizeof(env_buffer));
-        ptr = env_buffer;
-        for (i=0; i<num_creds-1; i++) {
-            len = sprintf(ptr,"%d:",rdmacred_buf[i].local_addr);
-            ptr += len;
-        }
-        sprintf(ptr,"%d",rdmacred_buf[num_creds-1].local_addr);
-        ret = opal_setenv("PMI_GNI_LOC_ADDR", env_buffer, false, &orte_launch_environ);
-        if (ret != ORTE_SUCCESS) {
-            OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
-                                 "%s odls:alps: opal_setenv for PMI_GNI_LOC_ADDR returned %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
-            goto fn_exit;
-        }
+    /*
+     * nic loc addrs
+     */
 
-        /*
-         * finally device ids
-         */
+    memset(env_buffer,0,sizeof(env_buffer));
+    ptr = env_buffer;
+    for (i=0; i<num_creds-1; i++) {
+        len = sprintf(ptr,"%d:",rdmacred_buf[i].local_addr);
+        ptr += len;
+    }
+    sprintf(ptr,"%d",rdmacred_buf[num_creds-1].local_addr);
+    ret = opal_setenv("PMI_GNI_LOC_ADDR", env_buffer, false, &orte_launch_environ);
+    if (ret != ORTE_SUCCESS) {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: opal_setenv for PMI_GNI_LOC_ADDR returned %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
+        goto fn_exit;
 
-        memset(env_buffer,0,sizeof(env_buffer));
-        ptr = env_buffer;
-        for (i=0; i<num_creds-1; i++) {
-            len = sprintf(ptr,"%d:",rdmacred_buf[i].device_id);
-            ptr += len;
-        }
-        sprintf(ptr,"%d",rdmacred_buf[num_creds-1].device_id);
-        ret = opal_setenv("PMI_GNI_DEV_ID", env_buffer, false, &orte_launch_environ);
-        if (ret != ORTE_SUCCESS) {
-            OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
-                                 "%s odls:alps: opal_setenv for PMI_GNI_DEV_ID returned %d",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
-            goto fn_exit;
-        }
+    } else {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: PMI_GNI_LOC_ADDR = %s",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), env_buffer));
+    }
 
+    /*
+     * finally device ids
+     */
+
+    memset(env_buffer,0,sizeof(env_buffer));
+    ptr = env_buffer;
+    for (i=0; i<num_creds-1; i++) {
+        len = sprintf(ptr,"%d:",rdmacred_buf[i].device_id);
+        ptr += len;
+    }
+    sprintf(ptr,"%d",rdmacred_buf[num_creds-1].device_id);
+    ret = opal_setenv("PMI_GNI_DEV_ID", env_buffer, false, &orte_launch_environ);
+    if (ret != ORTE_SUCCESS) {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: opal_setenv for PMI_GNI_DEV_ID returned %d",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ret));
+        goto fn_exit;
+
+    } else {
+        OPAL_OUTPUT_VERBOSE((20, orte_odls_base_framework.framework_output,
+                             "%s odls:alps: PMI_GNI_DEV_ID = %s",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), env_buffer));
     }
 
    fn_exit:
