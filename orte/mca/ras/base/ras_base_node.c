@@ -14,6 +14,8 @@
  * Copyright (c) 2014-2018 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2019      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -83,24 +85,6 @@ int orte_ras_base_node_insert(opal_list_t* nodes, orte_job_t *jdata)
 
     /* get the hnp node's info */
     hnp_node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, 0);
-
-    if ((orte_ras_base.launch_orted_on_hn == true) &&
-        (orte_managed_allocation)) {
-        if (NULL != hnp_node) {
-            OPAL_LIST_FOREACH(node, nodes, orte_node_t) {
-                if (orte_ifislocal(node->name)) {
-                    orte_hnp_is_allocated = true;
-                    break;
-                }
-            }
-            if (orte_hnp_is_allocated && !(ORTE_GET_MAPPING_DIRECTIVE(orte_rmaps_base.mapping) &
-                ORTE_MAPPING_NO_USE_LOCAL)) {
-                hnp_node->name = strdup("mpirun");
-                skiphnp = true;
-                ORTE_SET_MAPPING_DIRECTIVE(orte_rmaps_base.mapping, ORTE_MAPPING_NO_USE_LOCAL);
-            }
-        }
-    }
 
     /* cycle through the list */
     while (NULL != (item = opal_list_remove_first(nodes))) {

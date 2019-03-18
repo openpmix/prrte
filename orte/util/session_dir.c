@@ -13,6 +13,8 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -372,15 +374,6 @@ cleanup:
 int
 orte_session_dir_cleanup(orte_jobid_t jobid)
 {
-    /* special case - if a daemon is colocated with mpirun,
-     * then we let mpirun do the rest to avoid a race
-     * condition. this scenario always results in the rank=1
-     * daemon colocated with mpirun */
-    if (orte_ras_base.launch_orted_on_hn &&
-        ORTE_PROC_IS_DAEMON &&
-        1 == ORTE_PROC_MY_NAME->vpid) {
-        return ORTE_SUCCESS;
-    }
 
     if (!orte_create_session_dirs || orte_process_info.rm_session_dirs ) {
         /* we haven't created them or RM will clean them up for us*/
@@ -489,16 +482,6 @@ orte_session_dir_finalize(orte_process_name_t *proc)
                 opal_output(0, "sess_dir_finalize: proc session dir not empty - leaving");
             }
         }
-    }
-
-    /* special case - if a daemon is colocated with mpirun,
-     * then we let mpirun do the rest to avoid a race
-     * condition. this scenario always results in the rank=1
-     * daemon colocated with mpirun */
-    if (orte_ras_base.launch_orted_on_hn &&
-        ORTE_PROC_IS_DAEMON &&
-        1 == ORTE_PROC_MY_NAME->vpid) {
-        return ORTE_SUCCESS;
     }
 
     opal_os_dirpath_destroy(orte_process_info.job_session_dir,
