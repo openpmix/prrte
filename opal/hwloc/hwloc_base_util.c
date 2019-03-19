@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012-2017 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (C) 2018      Mellanox Technologies, Ltd.
@@ -1723,14 +1723,14 @@ int opal_hwloc_base_cset2str(char *str, int len,
         for (core_index = 0; core_index < num_cores; ++core_index) {
             if (map[socket_index][core_index] > 0) {
                 if (!first) {
-                    strncat(str, ", ", len - strlen(str));
+                    strncat(str, ", ", len - strlen(str) - 1);
                 }
                 first = false;
 
                 snprintf(tmp, stmp, "socket %d[core %d[hwt %s]]",
                          socket_index, core_index,
                          bitmap2rangestr(map[socket_index][core_index]));
-                strncat(str, tmp, len - strlen(str));
+                strncat(str, tmp, len - strlen(str) - 1);
             }
         }
     }
@@ -1786,7 +1786,7 @@ int opal_hwloc_base_cset2mapstr(char *str, int len,
     for (socket = hwloc_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0);
          NULL != socket;
          socket = socket->next_cousin) {
-        strncat(str, "[", len - strlen(str));
+        strncat(str, "[", len - strlen(str) - 1);
 
         /* Iterate over all existing cores in this socket */
         core_index = 0;
@@ -1798,7 +1798,7 @@ int opal_hwloc_base_cset2mapstr(char *str, int len,
                                                         socket->cpuset,
                                                         HWLOC_OBJ_CORE, ++core_index)) {
             if (core_index > 0) {
-                strncat(str, "/", len - strlen(str));
+                strncat(str, "/", len - strlen(str) - 1);
             }
 
             /* Iterate over all existing PUs in this core */
@@ -1813,13 +1813,13 @@ int opal_hwloc_base_cset2mapstr(char *str, int len,
 
                 /* Is this PU in the cpuset? */
                 if (hwloc_bitmap_isset(cpuset, pu->os_index)) {
-                    strncat(str, "B", len - strlen(str));
+                    strncat(str, "B", len - strlen(str) - 1);
                 } else {
-                    strncat(str, ".", len - strlen(str));
+                    strncat(str, ".", len - strlen(str) - 1);
                 }
             }
         }
-        strncat(str, "]", len - strlen(str));
+        strncat(str, "]", len - strlen(str) - 1);
     }
 
     return OPAL_SUCCESS;
