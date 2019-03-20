@@ -664,8 +664,7 @@ static void _toolconn(int sd, short args, void *cbdata)
             opal_dss.pack(buf, &command, 1, ORTE_PLM_CMD);
             opal_dss.pack(buf, &cd->room_num, 1, OPAL_INT);
             /* send it to the HNP for processing - might be myself! */
-            if (ORTE_SUCCESS != (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                                              ORTE_PROC_MY_HNP, buf,
+            if (ORTE_SUCCESS != (rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_HNP, buf,
                                                               ORTE_RML_TAG_PLM,
                                                               orte_rml_send_callback, NULL))) {
                 ORTE_ERROR_LOG(rc);
@@ -875,8 +874,7 @@ void pmix_server_log_fn(const pmix_proc_t *client,
             }
             buf = OBJ_NEW(opal_buffer_t);
             opal_dss.load(buf, data[n].value.data.bo.bytes, data[n].value.data.bo.size);
-            if (ORTE_SUCCESS != (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                                              ORTE_PROC_MY_HNP, buf,
+            if (ORTE_SUCCESS != (rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_HNP, buf,
                                                               ORTE_RML_TAG_SHOW_HELP,
                                                               orte_rml_send_callback, NULL))) {
                 ORTE_ERROR_LOG(rc);
@@ -904,8 +902,7 @@ void pmix_server_log_fn(const pmix_proc_t *client,
         boptr = &bo;
         opal_dss.pack(buf, &boptr, 1, OPAL_BYTE_OBJECT);
         free(bo.bytes);
-        rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                     ORTE_PROC_MY_HNP, buf,
+        rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_HNP, buf,
                                      ORTE_RML_TAG_LOGGING,
                                      orte_rml_send_callback, NULL);
         if (ORTE_SUCCESS != rc) {

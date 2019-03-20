@@ -66,7 +66,6 @@
 #include "orte/mca/grpcomm/base/base.h"
 #include "orte/mca/iof/base/base.h"
 #include "orte/mca/ras/base/base.h"
-#include "orte/mca/regx/base/base.h"
 #include "orte/mca/plm/base/base.h"
 #include "orte/mca/plm/plm.h"
 #include "orte/mca/odls/base/base.h"
@@ -82,7 +81,6 @@
 #include "orte/util/proc_info.h"
 #include "orte/util/session_dir.h"
 #include "orte/util/name_fns.h"
-#include "orte/util/show_help.h"
 
 #include "orte/runtime/runtime.h"
 #include "orte/runtime/orte_wait.h"
@@ -140,7 +138,6 @@ static int rte_init(int argc, char **argv)
     uint32_t h;
     int idx;
     orte_topology_t *t;
-    opal_list_t transports;
     orte_ess_base_signal_t *sig;
     pmix_proc_t pname;
     pmix_value_t pval;
@@ -356,27 +353,6 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
-    /* get a conduit for our use - we never route IO over fabric */
-    OBJ_CONSTRUCT(&transports, opal_list_t);
-    orte_set_attribute(&transports, ORTE_RML_TRANSPORT_TYPE,
-                       ORTE_ATTR_LOCAL, orte_mgmt_transport, OPAL_STRING);
-    if (ORTE_RML_CONDUIT_INVALID == (orte_mgmt_conduit = orte_rml.open_conduit(&transports))) {
-        ret = ORTE_ERR_OPEN_CONDUIT_FAIL;
-        error = "orte_rml_open_mgmt_conduit";
-        goto error;
-    }
-    OPAL_LIST_DESTRUCT(&transports);
-
-    OBJ_CONSTRUCT(&transports, opal_list_t);
-    orte_set_attribute(&transports, ORTE_RML_TRANSPORT_TYPE,
-                       ORTE_ATTR_LOCAL, orte_coll_transport, OPAL_STRING);
-    if (ORTE_RML_CONDUIT_INVALID == (orte_coll_conduit = orte_rml.open_conduit(&transports))) {
-        ret = ORTE_ERR_OPEN_CONDUIT_FAIL;
-        error = "orte_rml_open_coll_conduit";
-        goto error;
-    }
-    OPAL_LIST_DESTRUCT(&transports);
-
     /* it is now safe to start the pmix server */
     pmix_server_start();
 
@@ -535,16 +511,6 @@ static int rte_init(int argc, char **argv)
     if (ORTE_SUCCESS != (ret = orte_rmaps_base_select())) {
         ORTE_ERROR_LOG(ret);
         error = "orte_rmaps_base_find_available";
-        goto error;
-    }
-    if (ORTE_SUCCESS != (ret = mca_base_framework_open(&orte_regx_base_framework, 0))) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_regx_base_open";
-        goto error;
-    }
-    if (ORTE_SUCCESS != (ret = orte_regx_base_select())) {
-        ORTE_ERROR_LOG(ret);
-        error = "orte_regx_base_select";
         goto error;
     }
 
@@ -733,10 +699,6 @@ static int rte_finalize(void)
     /* output any lingering stdout/err data */
     fflush(stdout);
     fflush(stderr);
-
-        /* release the conduits */
-    orte_rml.close_conduit(orte_mgmt_conduit);
-    orte_rml.close_conduit(orte_coll_conduit);
 
     (void) mca_base_framework_close(&orte_iof_base_framework);
     (void) mca_base_framework_close(&orte_rtc_base_framework);

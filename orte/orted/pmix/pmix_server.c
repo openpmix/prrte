@@ -535,8 +535,7 @@ static void send_error(int status, opal_process_name_t *idreq,
     }
 
     /* send the response */
-    orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                            remote, reply,
+    orte_rml.send_buffer_nb(remote, reply,
                             ORTE_RML_TAG_DIRECT_MODEX_RESP,
                             orte_rml_send_callback, NULL);
     return;
@@ -579,8 +578,7 @@ static void _mdxresp(int sd, short args, void *cbdata)
     opal_dss.copy_payload(reply, &req->msg);
 
     /* send the response */
-    orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                            &req->proxy, reply,
+    orte_rml.send_buffer_nb(&req->proxy, reply,
                             ORTE_RML_TAG_DIRECT_MODEX_RESP,
                             orte_rml_send_callback, NULL);
 

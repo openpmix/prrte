@@ -5,7 +5,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
-# Copyright (c) 2017      Intel, Inc. All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -39,3 +39,4 @@ mca_routed_debruijn_la_LIBADD = $(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rt
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_routed_debruijn_la_SOURCES = $(sources)
 libmca_routed_debruijn_la_LDFLAGS = -module -avoid-version
+

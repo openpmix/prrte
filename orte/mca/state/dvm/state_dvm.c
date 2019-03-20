@@ -27,11 +27,11 @@
 #include "orte/mca/odls/odls_types.h"
 #include "orte/mca/plm/base/base.h"
 #include "orte/mca/ras/base/base.h"
-#include "orte/mca/regx/regx.h"
 #include "orte/mca/rmaps/base/base.h"
 #include "orte/mca/rml/rml.h"
 #include "orte/mca/rml/base/rml_contact.h"
 #include "orte/mca/routed/routed.h"
+#include "orte/util/nidmap.h"
 #include "orte/util/session_dir.h"
 #include "orte/util/threads.h"
 #include "orte/runtime/orte_quit.h"
@@ -246,15 +246,13 @@ static void vm_ready(int fd, short args, void *cbdata)
     orte_state_caddy_t *caddy = (orte_state_caddy_t*)cbdata;
     int rc;
     opal_buffer_t *buf;
-    orte_daemon_cmd_flag_t command = ORTE_DAEMON_DVM_NIDMAP_CMD;
+    orte_daemon_cmd_flag_t command = ORTE_DAEMON_PASS_NODE_INFO_CMD;
     orte_grpcomm_signature_t *sig;
     opal_buffer_t *wireup;
     orte_job_t *jptr;
     orte_proc_t *dmn;
     opal_byte_object_t bo, *boptr;
-    int8_t flag;
     int32_t numbytes, v;
-    char *nidmap;
     pmix_value_t *val;
     pmix_info_t *info;
     size_t ninfo;
@@ -269,121 +267,94 @@ static void vm_ready(int fd, short args, void *cbdata)
     if (ORTE_PROC_MY_NAME->jobid == caddy->jdata->jobid) {
         /* if there is only one daemon in the job, then there
          * is just a little bit to do */
-        if (1 == orte_process_info.num_procs) {
-            if (!orte_nidmap_communicated) {
-                if (ORTE_SUCCESS != (rc = orte_regx.nidmap_create(orte_node_pool, &orte_node_regex))) {
-                    ORTE_ERROR_LOG(rc);
-                    return;
-                }
-                orte_nidmap_communicated = true;
-            }
-        } else {
+        if (1 < orte_process_info.num_procs) {
             /* send the daemon map to every daemon in this DVM - we
              * do this here so we don't have to do it for every
              * job we are going to launch */
             buf = OBJ_NEW(opal_buffer_t);
             opal_dss.pack(buf, &command, 1, ORTE_DAEMON_CMD);
-            /* if we couldn't provide the allocation regex on the orted
-             * cmd line, then we need to provide all the info here */
-            if (!orte_nidmap_communicated) {
-                if (ORTE_SUCCESS != (rc = orte_regx.nidmap_create(orte_node_pool, &nidmap))) {
-                    ORTE_ERROR_LOG(rc);
-                    OBJ_RELEASE(buf);
-                    return;
-                }
-                orte_nidmap_communicated = true;
-            } else {
-                nidmap = NULL;
-            }
-            opal_dss.pack(buf, &nidmap, 1, OPAL_STRING);
-            if (NULL != nidmap) {
-                free(nidmap);
+            if (ORTE_SUCCESS != (rc = orte_util_nidmap_create(orte_node_pool, buf))) {
+                ORTE_ERROR_LOG(rc);
+                OBJ_RELEASE(buf);
+                return;
             }
             /* provide the info on the capabilities of each node */
-            if (!orte_node_info_communicated) {
-                flag = 1;
-                opal_dss.pack(buf, &flag, 1, OPAL_INT8);
-                if (ORTE_SUCCESS != (rc = orte_regx.encode_nodemap(buf))) {
-                    ORTE_ERROR_LOG(rc);
-                    OBJ_RELEASE(buf);
+            if (OPAL_SUCCESS != (rc = orte_util_pass_node_info(buf))) {
+                ORTE_ERROR_LOG(rc);
+                OBJ_RELEASE(buf);
+                return;
+            }
+            /* get wireup info for daemons */
+            jptr = orte_get_job_data_object(ORTE_PROC_MY_NAME->jobid);
+            wireup = OBJ_NEW(opal_buffer_t);
+            OPAL_PMIX_CONVERT_JOBID(pproc.nspace, ORTE_PROC_MY_NAME->jobid);
+            for (v=0; v < jptr->procs->size; v++) {
+                if (NULL == (dmn = (orte_proc_t*)opal_pointer_array_get_item(jptr->procs, v))) {
+                    continue;
+                }
+                val = NULL;
+                OPAL_PMIX_CONVERT_VPID(pproc.rank, dmn->name.vpid);
+                if (PMIX_SUCCESS != (ret = PMIx_Get(&pproc, NULL, NULL, 0, &val)) || NULL == val) {
+                    PMIX_ERROR_LOG(ret);
+                    OBJ_RELEASE(wireup);
                     return;
                 }
-                orte_node_info_communicated = true;
-                /* get wireup info for daemons */
-                jptr = orte_get_job_data_object(ORTE_PROC_MY_NAME->jobid);
-                wireup = OBJ_NEW(opal_buffer_t);
-                OPAL_PMIX_CONVERT_JOBID(pproc.nspace, ORTE_PROC_MY_NAME->jobid);
-                for (v=0; v < jptr->procs->size; v++) {
-                    if (NULL == (dmn = (orte_proc_t*)opal_pointer_array_get_item(jptr->procs, v))) {
-                        continue;
-                    }
-                    val = NULL;
-                    OPAL_PMIX_CONVERT_VPID(pproc.rank, dmn->name.vpid);
-                    if (PMIX_SUCCESS != (ret = PMIx_Get(&pproc, NULL, NULL, 0, &val)) || NULL == val) {
-                        PMIX_ERROR_LOG(ret);
-                        OBJ_RELEASE(wireup);
-                        return;
-                    }
-                    /* the data is returned as a pmix_data_array_t */
-                    if (PMIX_DATA_ARRAY != val->type || NULL == val->data.darray ||
-                        PMIX_INFO != val->data.darray->type || NULL == val->data.darray->array) {
-                        ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-                        OBJ_RELEASE(wireup);
-                        return;
-                    }
-                    /* use the PMIx data support to pack it */
-                    info = (pmix_info_t*)val->data.darray->array;
-                    ninfo = val->data.darray->size;
-                    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-                    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
-                        PMIX_ERROR_LOG(ret);
-                        PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                        PMIX_ERROR_LOG(ret);
-                        OBJ_RELEASE(wireup);
-                        return;
-                    }
-                    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, info, ninfo, PMIX_INFO))) {
-                        PMIX_ERROR_LOG(ret);
-                        PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                        OBJ_RELEASE(wireup);
-                        return;
-                    }
-                    PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
-                    if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, &dmn->name, 1, ORTE_NAME))) {
-                        ORTE_ERROR_LOG(rc);
-                        OBJ_RELEASE(wireup);
-                        return;
-                    }
-                    boptr = &bo;
-                    bo.bytes = (uint8_t*)pbo.bytes;
-                    bo.size = pbo.size;
-                    if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, &boptr, 1, OPAL_BYTE_OBJECT))) {
-                        ORTE_ERROR_LOG(rc);
-                        OBJ_RELEASE(wireup);
-                        return;
-                    }
-                    PMIX_VALUE_RELEASE(val);
+                /* the data is returned as a pmix_data_array_t */
+                if (PMIX_DATA_ARRAY != val->type || NULL == val->data.darray ||
+                    PMIX_INFO != val->data.darray->type || NULL == val->data.darray->array) {
+                    ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
+                    OBJ_RELEASE(wireup);
+                    return;
                 }
-                /* put it in a byte object for xmission */
-                opal_dss.unload(wireup, (void**)&bo.bytes, &numbytes);
-                /* pack the byte object - zero-byte objects are fine */
-                bo.size = numbytes;
-                boptr = &bo;
-                if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &boptr, 1, OPAL_BYTE_OBJECT))) {
+                /* use the PMIx data support to pack it */
+                info = (pmix_info_t*)val->data.darray->array;
+                ninfo = val->data.darray->size;
+                PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+                if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+                    PMIX_ERROR_LOG(ret);
+                    OBJ_RELEASE(wireup);
+                    return;
+                }
+                if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, info, ninfo, PMIX_INFO))) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+                    OBJ_RELEASE(wireup);
+                    return;
+                }
+                PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, &dmn->name, 1, ORTE_NAME))) {
                     ORTE_ERROR_LOG(rc);
                     OBJ_RELEASE(wireup);
-                    OBJ_RELEASE(buf);
                     return;
                 }
-                /* release the data since it has now been copied into our buffer */
-                if (NULL != bo.bytes) {
-                    free(bo.bytes);
+                boptr = &bo;
+                bo.bytes = (uint8_t*)pbo.bytes;
+                bo.size = pbo.size;
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, &boptr, 1, OPAL_BYTE_OBJECT))) {
+                    ORTE_ERROR_LOG(rc);
+                    OBJ_RELEASE(wireup);
+                    return;
                 }
-                OBJ_RELEASE(wireup);
-            } else {
-                flag = 0;
-                opal_dss.pack(buf, &flag, 1, OPAL_INT8);
+                PMIX_VALUE_RELEASE(val);
             }
+            /* put it in a byte object for xmission */
+            opal_dss.unload(wireup, (void**)&bo.bytes, &numbytes);
+            /* pack the byte object - zero-byte objects are fine */
+            bo.size = numbytes;
+            boptr = &bo;
+            if (ORTE_SUCCESS != (rc = opal_dss.pack(buf, &boptr, 1, OPAL_BYTE_OBJECT))) {
+                ORTE_ERROR_LOG(rc);
+                OBJ_RELEASE(wireup);
+                OBJ_RELEASE(buf);
+                return;
+            }
+            /* release the data since it has now been copied into our buffer */
+            if (NULL != bo.bytes) {
+                free(bo.bytes);
+            }
+            OBJ_RELEASE(wireup);
 
             /* goes to all daemons */
             sig = OBJ_NEW(orte_grpcomm_signature_t);
@@ -408,20 +379,17 @@ static void vm_ready(int fd, short args, void *cbdata)
             close(orte_state_base_parent_fd);
             orte_state_base_parent_fd = -1;
         }
+
+        /* progress the job */
+        caddy->jdata->state = ORTE_JOB_STATE_VM_READY;
         OBJ_RELEASE(caddy);
         return;
     }
-
-    /* progress the job */
-    caddy->jdata->state = ORTE_JOB_STATE_VM_READY;
 
     /* position any required files */
     if (ORTE_SUCCESS != orte_filem.preposition_files(caddy->jdata, files_ready, caddy->jdata)) {
         ORTE_FORCED_TERMINATE(ORTE_ERROR_DEFAULT_EXIT_CODE);
     }
-
-    /* cleanup */
-    OBJ_RELEASE(caddy);
 }
 
 static void opcbfunc(pmix_status_t status, void *cbdata)
@@ -441,7 +409,6 @@ static void check_complete(int fd, short args, void *cbdata)
     orte_node_t *node;
     orte_job_map_t *map;
     orte_std_cntr_t index;
-    char *rtmod;
     pmix_proc_t pname;
     opal_pmix_lock_t lock;
     uint8_t command = ORTE_PMIX_PURGE_PROC_CMD;
@@ -465,8 +432,7 @@ static void check_complete(int fd, short args, void *cbdata)
         OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
                              "%s state:dvm:check_job_complete - received NULL job, checking daemons",
                              ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
-        rtmod = orte_rml.get_routed(orte_mgmt_conduit);
-        if (0 == orte_routed.num_routes(rtmod)) {
+        if (0 == orte_routed.num_routes()) {
             /* orteds are done! */
             OPAL_OUTPUT_VERBOSE((2, orte_state_base_framework.framework_output,
                                  "%s orteds complete - exiting",
@@ -540,8 +506,7 @@ static void check_complete(int fd, short args, void *cbdata)
     }
     free(bo.bytes);
     /* send it to the data server */
-    rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                 ORTE_PROC_MY_NAME, buf,
+    rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_NAME, buf,
                                  ORTE_RML_TAG_DATA_SERVER,
                                  orte_rml_send_callback, NULL);
     if (ORTE_SUCCESS != rc) {
