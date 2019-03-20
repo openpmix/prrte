@@ -94,7 +94,10 @@ int orte_ras_base_node_insert(opal_list_t* nodes, orte_job_t *jdata)
             }
             if (orte_hnp_is_allocated && !(ORTE_GET_MAPPING_DIRECTIVE(orte_rmaps_base.mapping) &
                 ORTE_MAPPING_NO_USE_LOCAL)) {
-                hnp_node->name = strdup("mpirun");
+                if (NULL != hnp_node->name) {
+                    free(hnp_node->name);
+                }
+                hnp_node->name = strdup("prte");
                 skiphnp = true;
                 ORTE_SET_MAPPING_DIRECTIVE(orte_rmaps_base.mapping, ORTE_MAPPING_NO_USE_LOCAL);
             }
