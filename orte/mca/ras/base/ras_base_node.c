@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2017 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -84,8 +84,7 @@ int orte_ras_base_node_insert(opal_list_t* nodes, orte_job_t *jdata)
     /* get the hnp node's info */
     hnp_node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, 0);
 
-    if ((orte_ras_base.launch_orted_on_hn == true) &&
-        (orte_managed_allocation)) {
+    if (orte_ras_base.launch_orted_on_hn) {
         if (NULL != hnp_node) {
             OPAL_LIST_FOREACH(node, nodes, orte_node_t) {
                 if (orte_ifislocal(node->name)) {

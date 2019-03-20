@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2016 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -72,6 +72,9 @@ static int base_register(mca_base_register_flag_t flags)
 static int orte_grpcomm_base_close(void)
 {
     orte_grpcomm_base_active_t *active;
+    void *key;
+    size_t size;
+    uint32_t *seq_number;
 
     if (recv_issued) {
         orte_rml.recv_cancel(ORTE_NAME_WILDCARD, ORTE_RML_TAG_XCAST);
@@ -86,6 +89,11 @@ static int orte_grpcomm_base_close(void)
     }
     OPAL_LIST_DESTRUCT(&orte_grpcomm_base.actives);
     OPAL_LIST_DESTRUCT(&orte_grpcomm_base.ongoing);
+    for (void *_nptr=NULL;                                   \
+         OPAL_SUCCESS == opal_hash_table_get_next_key_ptr(&orte_grpcomm_base.sig_table, &key, &size, (void **)&seq_number, _nptr, &_nptr);) {
+        free(seq_number);
+    }
+    OBJ_DESTRUCT(&orte_grpcomm_base.sig_table);
 
     return mca_base_framework_components_close(&orte_grpcomm_base_framework, NULL);
 }
@@ -98,6 +106,8 @@ static int orte_grpcomm_base_open(mca_base_open_flag_t flags)
 {
     OBJ_CONSTRUCT(&orte_grpcomm_base.actives, opal_list_t);
     OBJ_CONSTRUCT(&orte_grpcomm_base.ongoing, opal_list_t);
+    OBJ_CONSTRUCT(&orte_grpcomm_base.sig_table, opal_hash_table_t);
+    opal_hash_table_init(&orte_grpcomm_base.sig_table, 128);
 
     return mca_base_framework_components_open(&orte_grpcomm_base_framework, flags);
 }

@@ -12,7 +12,7 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2016 Los Alamos National Security, LLC.
  *                         All rights reserved
- * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -445,8 +445,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
                     goto SEND_ERROR;
                 }
                 free(bo.bytes);
-                if (0 > (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                                      &req->proxy, reply, ORTE_RML_TAG_DATA_CLIENT,
+                if (0 > (rc = orte_rml.send_buffer_nb(&req->proxy, reply, ORTE_RML_TAG_DATA_CLIENT,
                                                       orte_rml_send_callback, NULL))) {
                     ORTE_ERROR_LOG(rc);
                     OBJ_RELEASE(reply);
@@ -894,8 +893,7 @@ void orte_data_server(int status, orte_process_name_t* sender,
     }
 
   SEND_ANSWER:
-    if (0 > (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                          sender, answer, ORTE_RML_TAG_DATA_CLIENT,
+    if (0 > (rc = orte_rml.send_buffer_nb(sender, answer, ORTE_RML_TAG_DATA_CLIENT,
                                           orte_rml_send_callback, NULL))) {
         ORTE_ERROR_LOG(rc);
         OBJ_RELEASE(answer);

@@ -703,8 +703,7 @@ int orte_show_help_norender(const char *filename, const char *topic,
         /* if we are a daemon, then send it via RML to the HNP */
         if (ORTE_PROC_IS_DAEMON) {
             /* send it to the HNP */
-            if (ORTE_SUCCESS != (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                                              ORTE_PROC_MY_HNP, buf,
+            if (ORTE_SUCCESS != (rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_HNP, buf,
                                                               ORTE_RML_TAG_SHOW_HELP,
                                                               orte_rml_send_callback, NULL))) {
                 OBJ_RELEASE(buf);
@@ -790,8 +789,7 @@ int orte_show_help_suppress(const char *filename, const char *topic)
             /* pack the flag that we DO NOT have a string */
             opal_dss.pack(buf, &have_output, 1, OPAL_INT8);
             /* send it to the HNP */
-            if (ORTE_SUCCESS != (rc = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                                              ORTE_PROC_MY_HNP, buf,
+            if (ORTE_SUCCESS != (rc = orte_rml.send_buffer_nb(ORTE_PROC_MY_HNP, buf,
                                                               ORTE_RML_TAG_SHOW_HELP,
                                                               orte_rml_send_callback, NULL))) {
                 ORTE_ERROR_LOG(rc);

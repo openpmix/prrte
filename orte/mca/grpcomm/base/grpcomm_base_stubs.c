@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2016 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2016-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -33,7 +33,7 @@
 
 #include "opal/dss/dss.h"
 
-#include "orte/util/compress.h"
+#include "opal/mca/compress/compress.h"
 #include "orte/util/proc_info.h"
 #include "orte/util/error_strings.h"
 #include "orte/mca/errmgr/errmgr.h"
@@ -140,9 +140,11 @@ int orte_grpcomm_API_xcast(orte_grpcomm_signature_t *sig,
 static void allgather_stub(int fd, short args, void *cbdata)
 {
     orte_grpcomm_caddy_t *cd = (orte_grpcomm_caddy_t*)cbdata;
+    int ret = OPAL_SUCCESS;
     int rc;
     orte_grpcomm_base_active_t *active;
     orte_grpcomm_coll_t *coll;
+    uint32_t *seq_number;
 
     ORTE_ACQUIRE_OBJECT(cd);
 
@@ -150,6 +152,32 @@ static void allgather_stub(int fd, short args, void *cbdata)
                          "%s grpcomm:base:allgather stub",
                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
 
+    /* retrieve an existing tracker, create it if not
+     * already found. The allgather module is responsible
+     * for releasing it upon completion of the collective */
+    ret = opal_hash_table_get_value_ptr(&orte_grpcomm_base.sig_table, (void *)cd->sig->signature, cd->sig->sz * sizeof(orte_process_name_t), (void **)&seq_number);
+    if (OPAL_ERR_NOT_FOUND == ret) {
+        seq_number = (uint32_t *)malloc(sizeof(uint32_t));
+        *seq_number = 0;
+    } else if (OPAL_SUCCESS == ret) {
+        *seq_number = *seq_number + 1;
+    } else {
+        OPAL_OUTPUT((orte_grpcomm_base_framework.framework_output,
+                     "%s rpcomm:base:allgather cannot get signature from hash table",
+                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
+        ORTE_ERROR_LOG(ret);
+        OBJ_RELEASE(cd);
+        return;
+    }
+    ret = opal_hash_table_set_value_ptr(&orte_grpcomm_base.sig_table, (void *)cd->sig->signature, cd->sig->sz * sizeof(orte_process_name_t), (void *)seq_number);
+    if (OPAL_SUCCESS != ret) {
+        OPAL_OUTPUT((orte_grpcomm_base_framework.framework_output,
+                     "%s rpcomm:base:allgather cannot add new signature to hash table",
+                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
+        ORTE_ERROR_LOG(ret);
+        OBJ_RELEASE(cd);
+        return;
+    }
     coll = orte_grpcomm_base_get_tracker(cd->sig, true);
     if (NULL == coll) {
         OBJ_RELEASE(cd->sig);
@@ -206,7 +234,6 @@ orte_grpcomm_coll_t* orte_grpcomm_base_get_tracker(orte_grpcomm_signature_t *sig
     orte_namelist_t *nm;
     opal_list_t children;
     size_t n;
-    char *routed;
 
     /* search the existing tracker list to see if this already exists */
     OPAL_LIST_FOREACH(coll, &orte_grpcomm_base.ongoing, orte_grpcomm_coll_t) {
@@ -254,37 +281,29 @@ orte_grpcomm_coll_t* orte_grpcomm_base_get_tracker(orte_grpcomm_signature_t *sig
         return NULL;
     }
 
-    /* get the routed module for our conduit */
-    routed = orte_rml.get_routed(orte_coll_conduit);
-    if (NULL == routed) {
-        /* this conduit is not routed, so we expect all daemons
-         * to directly participate */
-        coll->nexpected = coll->ndmns;
-    } else {
-        /* cycle thru the array of daemons and compare them to our
-         * children in the routing tree, counting the ones that match
-         * so we know how many daemons we should receive contributions from */
-        OBJ_CONSTRUCT(&children, opal_list_t);
-        orte_routed.get_routing_list(routed, &children);
-        while (NULL != (nm = (orte_namelist_t*)opal_list_remove_first(&children))) {
-            for (n=0; n < coll->ndmns; n++) {
-                if (nm->name.vpid == coll->dmns[n]) {
-                    coll->nexpected++;
-                    break;
-                }
-            }
-            OBJ_RELEASE(nm);
-        }
-        OPAL_LIST_DESTRUCT(&children);
-
-        /* see if I am in the array of participants - note that I may
-         * be in the rollup tree even though I'm not participating
-         * in the collective itself */
+    /* cycle thru the array of daemons and compare them to our
+     * children in the routing tree, counting the ones that match
+     * so we know how many daemons we should receive contributions from */
+    OBJ_CONSTRUCT(&children, opal_list_t);
+    orte_routed.get_routing_list(&children);
+    while (NULL != (nm = (orte_namelist_t*)opal_list_remove_first(&children))) {
         for (n=0; n < coll->ndmns; n++) {
-            if (coll->dmns[n] == ORTE_PROC_MY_NAME->vpid) {
+            if (nm->name.vpid == coll->dmns[n]) {
                 coll->nexpected++;
                 break;
             }
+        }
+        OBJ_RELEASE(nm);
+    }
+    OPAL_LIST_DESTRUCT(&children);
+
+    /* see if I am in the array of participants - note that I may
+     * be in the rollup tree even though I'm not participating
+     * in the collective itself */
+    for (n=0; n < coll->ndmns; n++) {
+        if (coll->dmns[n] == ORTE_PROC_MY_NAME->vpid) {
+            coll->nexpected++;
+            break;
         }
     }
 
@@ -482,8 +501,8 @@ static int pack_xcast(orte_grpcomm_signature_t *sig,
     }
 
     /* see if we want to compress this message */
-    if (orte_util_compress_block((uint8_t*)data.base_ptr, data.bytes_used,
-                                 &cmpdata, &cmplen)) {
+    if (opal_compress.compress_block((uint8_t*)data.base_ptr, data.bytes_used,
+                                     &cmpdata, &cmplen)) {
         /* the data was compressed - mark that we compressed it */
         flag = 1;
         if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &flag, 1, OPAL_INT8))) {

@@ -67,7 +67,6 @@
 #include "orte/mca/ess/base/base.h"
 #include "orte/mca/grpcomm/base/base.h"
 #include "orte/mca/plm/base/base.h"
-#include "orte/mca/regx/regx.h"
 #include "orte/mca/rml/base/rml_contact.h"
 #include "orte/mca/rmaps/rmaps_types.h"
 #include "orte/mca/rmaps/base/base.h"
@@ -79,6 +78,7 @@
 
 #include "orte/util/context_fns.h"
 #include "orte/util/name_fns.h"
+#include "orte/util/nidmap.h"
 #include "orte/util/session_dir.h"
 #include "orte/util/proc_info.h"
 #include "orte/util/show_help.h"
@@ -185,7 +185,6 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     int8_t flag;
     void *nptr;
     uint32_t key;
-    char *nidmap;
     orte_proc_t *dmn, *proc;
     pmix_value_t *val = NULL;
     pmix_info_t *info;
@@ -213,219 +212,63 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         return ORTE_SUCCESS;
     }
 
-    /* if we couldn't provide the allocation regex on the orted
-     * cmd line, then we need to provide all the info here */
-    if (!orte_nidmap_communicated) {
-        if (ORTE_SUCCESS != (rc = orte_regx.nidmap_create(orte_node_pool, &nidmap))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-        orte_nidmap_communicated = true;
-    } else {
-        nidmap = NULL;
-    }
-    opal_dss.pack(buffer, &nidmap, 1, OPAL_STRING);
-    if (NULL != nidmap) {
-        free(nidmap);
-    }
-
     /* setup the daemon job */
     OPAL_PMIX_CONVERT_JOBID(pproc.nspace, ORTE_PROC_MY_NAME->jobid);
 
-    /* if we haven't already done so, provide the info on the
-     * capabilities of each node */
-    if (1 < orte_process_info.num_procs &&
-        (!orte_node_info_communicated ||
-         orte_get_attribute(&jdata->attributes, ORTE_JOB_LAUNCHED_DAEMONS, NULL, OPAL_BOOL))) {
+    /* we need to ensure that any new daemons get a complete
+     * copy of all active jobs so the grpcomm collectives can
+     * properly work should a proc from one of the other jobs
+     * interact with this one */
+    if (orte_get_attribute(&jdata->attributes, ORTE_JOB_LAUNCHED_DAEMONS, NULL, OPAL_BOOL)) {
         flag = 1;
         opal_dss.pack(buffer, &flag, 1, OPAL_INT8);
-        if (ORTE_SUCCESS != (rc = orte_regx.encode_nodemap(buffer))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-        /* get wireup info for daemons */
-        if (NULL == (jptr = orte_get_job_data_object(ORTE_PROC_MY_NAME->jobid))) {
-            ORTE_ERROR_LOG(ORTE_ERR_BAD_PARAM);
-            return ORTE_ERR_BAD_PARAM;
-        }
-        wireup = OBJ_NEW(opal_buffer_t);
-        /* always include data for mpirun as the daemons can't have it yet */
-        OPAL_PMIX_CONVERT_VPID(pproc.rank, ORTE_PROC_MY_NAME->vpid);
-        val = NULL;
-        if (PMIX_SUCCESS != (ret = PMIx_Get(&pproc, NULL, NULL, 0, &val)) || NULL == val) {
-            PMIX_ERROR_LOG(ret);
-            OBJ_RELEASE(wireup);
-            return rc;
-        }
-        /* the data is returned as a pmix_data_array_t */
-        if (PMIX_DATA_ARRAY != val->type || NULL == val->data.darray ||
-            PMIX_INFO != val->data.darray->type || NULL == val->data.darray->array) {
-            ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-            PMIX_VALUE_RELEASE(val);
-            OBJ_RELEASE(wireup);
-            return ORTE_ERR_NOT_FOUND;
-        }
-        /* use the PMIx data support to pack it */
-        info = (pmix_info_t*)val->data.darray->array;
-        ninfo = val->data.darray->size;
-        PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_VALUE_RELEASE(val);
-            OBJ_RELEASE(wireup);
-            return ORTE_ERROR;
-        }
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, info, ninfo, PMIX_INFO))) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_VALUE_RELEASE(val);
-            OBJ_RELEASE(wireup);
-            return ORTE_ERROR;
-        }
-        PMIX_VALUE_RELEASE(val);
-        PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
-        if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, ORTE_PROC_MY_NAME, 1, ORTE_NAME))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(wireup);
-            return rc;
-        }
-        boptr = &bo;
-        bo.bytes = (uint8_t*)pbo.bytes;
-        bo.size = pbo.size;
-        if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, &boptr, 1, OPAL_BYTE_OBJECT))) {
-            ORTE_ERROR_LOG(rc);
-            OBJ_RELEASE(wireup);
-            return rc;
-        }
-        /* if we didn't rollup the connection info, then we have
-         * to provide a complete map of connection info */
-        if (!orte_static_ports && !orte_fwd_mpirun_port) {
-            for (v=1; v < jptr->procs->size; v++) {
-                if (NULL == (dmn = (orte_proc_t*)opal_pointer_array_get_item(jptr->procs, v))) {
-                    continue;
-                }
-                val = NULL;
-                OPAL_PMIX_CONVERT_VPID(pproc.rank, dmn->name.vpid);
-                if (PMIX_SUCCESS != (ret = PMIx_Get(&pproc, NULL, NULL, 0, &val)) || NULL == val) {
-                    PMIX_ERROR_LOG(ret);
-                    OBJ_RELEASE(buffer);
-                    return rc;
-                }
-                /* the data is returned as a pmix_data_array_t */
-                if (PMIX_DATA_ARRAY != val->type || NULL == val->data.darray ||
-                    PMIX_INFO != val->data.darray->type || NULL == val->data.darray->array) {
-                    ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-                    OBJ_RELEASE(wireup);
-                    return ORTE_ERR_NOT_FOUND;
-                }
-                /* use the PMIx data support to pack it */
-                info = (pmix_info_t*)val->data.darray->array;
-                ninfo = val->data.darray->size;
-                PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-                if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
-                    PMIX_ERROR_LOG(ret);
-                    OBJ_RELEASE(wireup);
-                    return ORTE_ERROR;
-                }
-                if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, info, ninfo, PMIX_INFO))) {
-                    PMIX_ERROR_LOG(ret);
-                    OBJ_RELEASE(wireup);
-                    return ORTE_ERROR;
-                }
-                PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
-                if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, &dmn->name, 1, ORTE_NAME))) {
+        OBJ_CONSTRUCT(&jobdata, opal_buffer_t);
+        rc = opal_hash_table_get_first_key_uint32(orte_job_data, &key, (void **)&jptr, &nptr);
+        while (OPAL_SUCCESS == rc) {
+            /* skip the one we are launching now */
+            if (NULL != jptr && jptr != jdata &&
+                ORTE_PROC_MY_NAME->jobid != jptr->jobid) {
+                OBJ_CONSTRUCT(&priorjob, opal_buffer_t);
+                /* pack the job struct */
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(&priorjob, &jptr, 1, ORTE_JOB))) {
                     ORTE_ERROR_LOG(rc);
-                    OBJ_RELEASE(wireup);
-                    return rc;
-                }
-                boptr = &bo;
-                bo.bytes = (uint8_t*)pbo.bytes;
-                bo.size = pbo.size;
-                if (ORTE_SUCCESS != (rc = opal_dss.pack(wireup, &boptr, 1, OPAL_BYTE_OBJECT))) {
-                    ORTE_ERROR_LOG(rc);
-                    OBJ_RELEASE(wireup);
-                    return rc;
-                }
-                PMIX_VALUE_RELEASE(val);
-            }
-        }
-        /* put it in a byte object for xmission */
-        opal_dss.unload(wireup, (void**)&bo.bytes, &numbytes);
-        OBJ_RELEASE(wireup);
-        /* pack the byte object - zero-byte objects are fine */
-        bo.size = numbytes;
-        boptr = &bo;
-        if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &boptr, 1, OPAL_BYTE_OBJECT))) {
-            ORTE_ERROR_LOG(rc);
-            return rc;
-        }
-        /* release the data since it has now been copied into our buffer */
-        if (NULL != bo.bytes) {
-            free(bo.bytes);
-        }
-
-        /* we need to ensure that any new daemons get a complete
-         * copy of all active jobs so the grpcomm collectives can
-         * properly work should a proc from one of the other jobs
-         * interact with this one */
-        if (orte_get_attribute(&jdata->attributes, ORTE_JOB_LAUNCHED_DAEMONS, NULL, OPAL_BOOL)) {
-            flag = 1;
-            opal_dss.pack(buffer, &flag, 1, OPAL_INT8);
-            OBJ_CONSTRUCT(&jobdata, opal_buffer_t);
-            rc = opal_hash_table_get_first_key_uint32(orte_job_data, &key, (void **)&jptr, &nptr);
-            while (OPAL_SUCCESS == rc) {
-                /* skip the one we are launching now */
-                if (NULL != jptr && jptr != jdata &&
-                    ORTE_PROC_MY_NAME->jobid != jptr->jobid) {
-                    OBJ_CONSTRUCT(&priorjob, opal_buffer_t);
-                    /* pack the job struct */
-                    if (ORTE_SUCCESS != (rc = opal_dss.pack(&priorjob, &jptr, 1, ORTE_JOB))) {
-                        ORTE_ERROR_LOG(rc);
-                        OBJ_DESTRUCT(&jobdata);
-                        OBJ_DESTRUCT(&priorjob);
-                        return rc;
-                    }
-                    /* pack the location of each proc */
-                    for (n=0; n < jptr->procs->size; n++) {
-                        if (NULL == (proc = (orte_proc_t*)opal_pointer_array_get_item(jptr->procs, n))) {
-                            continue;
-                        }
-                        if (ORTE_SUCCESS != (rc = opal_dss.pack(&priorjob, &proc->parent, 1, ORTE_VPID))) {
-                            ORTE_ERROR_LOG(rc);
-                            OBJ_DESTRUCT(&jobdata);
-                            OBJ_DESTRUCT(&priorjob);
-                            return rc;
-                        }
-                    }
-                    /* pack the jobdata buffer */
-                    wireup = &priorjob;
-                    if (ORTE_SUCCESS != (rc = opal_dss.pack(&jobdata, &wireup, 1, OPAL_BUFFER))) {
-                        ORTE_ERROR_LOG(rc);
-                        OBJ_DESTRUCT(&jobdata);
-                        OBJ_DESTRUCT(&priorjob);
-                        return rc;
-                    }
+                    OBJ_DESTRUCT(&jobdata);
                     OBJ_DESTRUCT(&priorjob);
+                    return rc;
                 }
-                rc = opal_hash_table_get_next_key_uint32(orte_job_data, &key, (void **)&jptr, nptr, &nptr);
+                /* pack the location of each proc */
+                for (n=0; n < jptr->procs->size; n++) {
+                    if (NULL == (proc = (orte_proc_t*)opal_pointer_array_get_item(jptr->procs, n))) {
+                        continue;
+                    }
+                    if (ORTE_SUCCESS != (rc = opal_dss.pack(&priorjob, &proc->parent, 1, ORTE_VPID))) {
+                        ORTE_ERROR_LOG(rc);
+                        OBJ_DESTRUCT(&jobdata);
+                        OBJ_DESTRUCT(&priorjob);
+                        return rc;
+                    }
+                }
+                /* pack the jobdata buffer */
+                wireup = &priorjob;
+                if (ORTE_SUCCESS != (rc = opal_dss.pack(&jobdata, &wireup, 1, OPAL_BUFFER))) {
+                    ORTE_ERROR_LOG(rc);
+                    OBJ_DESTRUCT(&jobdata);
+                    OBJ_DESTRUCT(&priorjob);
+                    return rc;
+                }
+                OBJ_DESTRUCT(&priorjob);
             }
-            /* pack the jobdata buffer */
-            wireup = &jobdata;
-            if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &wireup, 1, OPAL_BUFFER))) {
-                ORTE_ERROR_LOG(rc);
-                OBJ_DESTRUCT(&jobdata);
-                return rc;
-            }
-            OBJ_DESTRUCT(&jobdata);
-        } else {
-            flag = 0;
-            opal_dss.pack(buffer, &flag, 1, OPAL_INT8);
+            rc = opal_hash_table_get_next_key_uint32(orte_job_data, &key, (void **)&jptr, nptr, &nptr);
         }
-        orte_node_info_communicated = true;
+        /* pack the jobdata buffer */
+        wireup = &jobdata;
+        if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &wireup, 1, OPAL_BUFFER))) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_DESTRUCT(&jobdata);
+            return rc;
+        }
+        OBJ_DESTRUCT(&jobdata);
     } else {
-        /* mark that we didn't */
-        flag = 0;
-        opal_dss.pack(buffer, &flag, 1, OPAL_INT8);
-        /* and that we didn't launch daemons */
         flag = 0;
         opal_dss.pack(buffer, &flag, 1, OPAL_INT8);
     }
@@ -437,17 +280,11 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     }
 
     if (!orte_get_attribute(&jdata->attributes, ORTE_JOB_FULLY_DESCRIBED, NULL, OPAL_BOOL)) {
-        /* compute and pack the ppn regex */
-        if (ORTE_SUCCESS != (rc = orte_regx.generate_ppn(jdata, &nidmap))) {
+        /* compute and pack the ppn */
+        if (ORTE_SUCCESS != (rc = orte_util_generate_ppn(jdata, buffer))) {
             ORTE_ERROR_LOG(rc);
             return rc;
         }
-        if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &nidmap, 1, OPAL_STRING))) {
-            ORTE_ERROR_LOG(rc);
-            free(nidmap);
-            return rc;
-        }
-        free(nidmap);
     }
 
     /* assemble the node and proc map info */
@@ -563,7 +400,6 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
     orte_proc_t *pptr, *dmn;
     orte_app_context_t *app;
     int8_t flag;
-    char *ppn;
     opal_pmix_lock_t lock;
     pmix_info_t *info = NULL;
     size_t ninfo=0;
@@ -706,29 +542,22 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
      * and sent us the complete array of procs in the orte_job_t, so we
      * don't need to do anything more here */
     if (!orte_get_attribute(&jdata->attributes, ORTE_JOB_FULLY_DESCRIBED, NULL, OPAL_BOOL)) {
-        /* extract the ppn regex */
-        cnt = 1;
-        if (OPAL_SUCCESS != (rc = opal_dss.unpack(buffer, &ppn, &cnt, OPAL_STRING))) {
+        /* load the ppn info into the job and node arrays - the
+         * function will ignore the data on the HNP as it already
+         * has the info */
+        if (ORTE_SUCCESS != (rc = orte_util_decode_ppn(jdata, buffer))) {
             ORTE_ERROR_LOG(rc);
             goto REPORT_ERROR;
         }
 
         if (!ORTE_PROC_IS_HNP) {
-            /* populate the node array of the job map and the proc array of
-             * the job object so we know how many procs are on each node */
-            if (ORTE_SUCCESS != (rc = orte_regx.parse_ppn(jdata, ppn))) {
-                ORTE_ERROR_LOG(rc);
-                free(ppn);
-                goto REPORT_ERROR;
-            }
-            /* now assign locations to the procs */
+            /* assign locations to the procs */
             if (ORTE_SUCCESS != (rc = orte_rmaps_base_assign_locations(jdata))) {
                 ORTE_ERROR_LOG(rc);
-                free(ppn);
                 goto REPORT_ERROR;
             }
         }
-        free(ppn);
+
         /* compute the ranks and add the proc objects
          * to the jdata->procs array */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_vpids(jdata))) {

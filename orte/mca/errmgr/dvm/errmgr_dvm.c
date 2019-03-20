@@ -210,8 +210,7 @@ static void job_errors(int fd, short args, void *cbdata)
                          ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                          ORTE_JOBID_PRINT(jdata->jobid),
                          ORTE_NAME_PRINT(&jdata->originator)));
-    if (0 > (ret = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                           &jdata->originator, answer,
+    if (0 > (ret = orte_rml.send_buffer_nb(&jdata->originator, answer,
                                            ORTE_RML_TAG_LAUNCH_RESP,
                                            orte_rml_send_callback, NULL))) {
         ORTE_ERROR_LOG(ret);
@@ -246,7 +245,6 @@ static void proc_errors(int fd, short args, void *cbdata)
     orte_proc_state_t state = caddy->proc_state;
     int i;
     int32_t i32, *i32ptr;
-    char *rtmod;
 
     ORTE_ACQUIRE_OBJECT(caddy);
 
@@ -269,9 +267,6 @@ static void proc_errors(int fd, short args, void *cbdata)
         goto cleanup;
     }
     pptr = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, proc->vpid);
-
-    /* get the management conduit's routed module */
-    rtmod = orte_rml.get_routed(orte_mgmt_conduit);
 
     /* we MUST handle a communication failure before doing anything else
      * as it requires some special care to avoid normal termination issues
@@ -306,9 +301,9 @@ static void proc_errors(int fd, short args, void *cbdata)
                                  "%s Comm failure: daemons terminating - recording daemon %s as gone",
                                  ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), ORTE_NAME_PRINT(proc)));
             /* remove from dependent routes, if it is one */
-            orte_routed.route_lost(rtmod, proc);
+            orte_routed.route_lost(proc);
             /* if all my routes and local children are gone, then terminate ourselves */
-            if (0 == orte_routed.num_routes(rtmod)) {
+            if (0 == orte_routed.num_routes()) {
                 for (i=0; i < orte_local_children->size; i++) {
                     if (NULL != (proct = (orte_proc_t*)opal_pointer_array_get_item(orte_local_children, i)) &&
                         ORTE_FLAG_TEST(pptr, ORTE_PROC_FLAG_ALIVE) && proct->state < ORTE_PROC_STATE_UNTERMINATED) {
@@ -329,7 +324,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                 OPAL_OUTPUT_VERBOSE((5, orte_errmgr_base_framework.framework_output,
                                      "%s Comm failure: %d routes remain alive",
                                      ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                                     (int)orte_routed.num_routes(rtmod)));
+                                     (int)orte_routed.num_routes()));
             }
             goto cleanup;
         }
@@ -382,7 +377,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         }
         /* if all my routes and children are gone, then terminate
            ourselves nicely (i.e., this is a normal termination) */
-        if (0 == orte_routed.num_routes(rtmod)) {
+        if (0 == orte_routed.num_routes()) {
             OPAL_OUTPUT_VERBOSE((2, orte_errmgr_base_framework.framework_output,
                                  "%s errmgr:default:dvm all routes gone - exiting",
                                  ORTE_NAME_PRINT(ORTE_PROC_MY_NAME)));
@@ -546,10 +541,9 @@ static void proc_errors(int fd, short args, void *cbdata)
                 opal_dss.pack(answer, &pptr->node, 1, ORTE_NODE);
             }
             /* return response */
-            if (0 > (ret = orte_rml.send_buffer_nb(orte_mgmt_conduit,
-                                                           &jdata->originator, answer,
-                                                           ORTE_RML_TAG_LAUNCH_RESP,
-                                                           orte_rml_send_callback, NULL))) {
+            if (0 > (ret = orte_rml.send_buffer_nb(&jdata->originator, answer,
+                                                   ORTE_RML_TAG_LAUNCH_RESP,
+                                                   orte_rml_send_callback, NULL))) {
                 ORTE_ERROR_LOG(ret);
                 OBJ_RELEASE(answer);
             }
@@ -633,7 +627,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             _terminate_job(jdata->jobid);
         }
         /* remove from dependent routes, if it is one */
-        orte_routed.route_lost(rtmod, proc);
+        orte_routed.route_lost(proc);
         break;
 
     case ORTE_PROC_STATE_UNABLE_TO_SEND_MSG:

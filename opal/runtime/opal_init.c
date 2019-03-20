@@ -15,7 +15,7 @@
  * Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2010-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
@@ -48,6 +48,7 @@
 #include "opal/util/net.h"
 #include "opal/mca/installdirs/base/base.h"
 #include "opal/hwloc/hwloc-internal.h"
+#include "opal/mca/compress/base/base.h"
 #include "opal/mca/timer/base/base.h"
 #include "opal/mca/if/base/base.h"
 #include "opal/dss/dss.h"
@@ -599,6 +600,12 @@ int opal_init_test(void)
 
     if (OPAL_SUCCESS != (ret = opal_event_base_open())) {
         error = "opal_event_base_open";
+        goto return_error;
+    }
+
+    /* Intitialize compress framework */
+    if (OPAL_SUCCESS != (ret = opal_compress_base_select())) {
+        error = "opal_compress_base_select";
         goto return_error;
     }
 

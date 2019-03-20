@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2012-2014 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,9 +24,6 @@
 #include "orte/mca/rml/rml.h"
 #include "orte/util/threads.h"
 #include "orte/mca/oob/base/base.h"
-#if OPAL_ENABLE_FT_CR == 1
-#include "orte/mca/state/base/base.h"
-#endif
 
 static void process_uri(char *uri);
 
@@ -107,7 +104,7 @@ void orte_oob_base_send_nb(int fd, short args, void *cbdata)
             OPAL_LIST_FOREACH(cli, &orte_oob_base.actives, mca_base_component_list_item_t) {
                 component = (mca_oob_base_component_t*)cli->cli_component;
                 if (NULL != component->is_reachable) {
-                    if (component->is_reachable(msg->routed, &msg->dst)) {
+                    if (component->is_reachable(&msg->dst)) {
                         /* there is a way to reach this peer - record it
                          * so we don't waste this time again
                          */
@@ -170,7 +167,7 @@ void orte_oob_base_send_nb(int fd, short args, void *cbdata)
     OPAL_LIST_FOREACH(cli, &orte_oob_base.actives, mca_base_component_list_item_t) {
         component = (mca_oob_base_component_t*)cli->cli_component;
         /* is this peer reachable via this component? */
-        if (!component->is_reachable(msg->routed, &msg->dst)) {
+        if (!component->is_reachable(&msg->dst)) {
             continue;
         }
         /* it is addressable, so attempt to send via that transport */
@@ -381,60 +378,3 @@ static void process_uri(char *uri)
     }
     opal_argv_free(uris);
 }
-
-void orte_oob_base_get_transports(opal_list_t *transports)
-{
-    mca_base_component_list_item_t *cli;
-    mca_oob_base_component_t *component;
-    orte_rml_pathway_t *p;
-
-    opal_output_verbose(5, orte_oob_base_framework.framework_output,
-                        "%s: get transports",
-                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
-
-    OPAL_LIST_FOREACH(cli, &orte_oob_base.actives, mca_base_component_list_item_t) {
-        component = (mca_oob_base_component_t*)cli->cli_component;
-        opal_output_verbose(5, orte_oob_base_framework.framework_output,
-                            "%s:get transports for component %s",
-                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                            component->oob_base.mca_component_name);
-        if (NULL != component->query_transports) {
-            if (NULL != (p = component->query_transports())) {
-                opal_list_append(transports, &p->super);
-            }
-        }
-    }
-}
-
-#if OPAL_ENABLE_FT_CR == 1
-void orte_oob_base_ft_event(int sd, short argc, void *cbdata)
-{
-    int rc;
-    mca_base_component_list_item_t *cli;
-    mca_oob_base_component_t *component;
-    orte_state_caddy_t *state = (orte_state_caddy_t*)cbdata;
-
-    opal_output_verbose(5, orte_oob_base_framework.framework_output,
-                        "%s oob:base:ft_event %s(%d)",
-                        ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                        orte_job_state_to_str(state->job_state),
-                        state->job_state);
-
-    /* loop across all available modules in priority order
-     * and call each one's ft_event handler
-     */
-    OPAL_LIST_FOREACH(cli, &orte_oob_base.actives, mca_base_component_list_item_t) {
-        component = (mca_oob_base_component_t*)cli->cli_component;
-        if (NULL == component->ft_event) {
-            /* doesn't support this ability */
-            continue;
-        }
-
-        if (ORTE_SUCCESS != (rc = component->ft_event(state->job_state))) {
-            ORTE_ERROR_LOG(rc);
-        }
-    }
-    OBJ_RELEASE(state);
-}
-
-#endif
