@@ -163,7 +163,7 @@ static pmix_proc_t myproc;
 static bool forcibly_die=false;
 static opal_event_t term_handler;
 static int term_pipe[2];
-static opal_atomic_lock_t prun_abort_inprogress_lock = {{0}};
+static opal_atomic_lock_t prun_abort_inprogress_lock = {0};
 static opal_event_base_t *myevbase = NULL;
 
 static opal_cmd_line_init_t cmd_line_init[] = {
