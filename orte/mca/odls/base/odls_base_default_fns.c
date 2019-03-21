@@ -176,23 +176,17 @@ static void setup_cbfunc(pmix_status_t status,
 int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
                                               orte_jobid_t job)
 {
-    int rc, v, n;
+    int rc, n;
     orte_job_t *jdata=NULL, *jptr;
     orte_job_map_t *map=NULL;
     opal_buffer_t *wireup, jobdata, priorjob;
-    opal_byte_object_t bo, *boptr;
-    int32_t numbytes;
     int8_t flag;
     void *nptr;
     uint32_t key;
-    orte_proc_t *dmn, *proc;
-    pmix_value_t *val = NULL;
+    orte_proc_t *proc;
     pmix_info_t *info;
-    size_t ninfo;
     pmix_proc_t pproc;
-    pmix_data_buffer_t pbuf;
     pmix_status_t ret;
-    pmix_byte_object_t pbo;
     orte_node_t *node;
     int i, k;
     char **list, **procs, **micro, *tmp, *regex;

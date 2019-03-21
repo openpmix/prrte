@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -35,6 +35,7 @@
 #include "opal/dss/dss.h"
 
 #include "orte/mca/errmgr/errmgr.h"
+#include "orte/mca/ras/base/base.h"
 #include "orte/runtime/orte_globals.h"
 #include "orte/util/show_help.h"
 #include "orte/util/threads.h"
@@ -191,7 +192,10 @@ void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
 
     /* check for no-use-local directive */
-    if (!(ORTE_MAPPING_LOCAL_GIVEN & ORTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
+    if (orte_ras_base.launch_orted_on_hn) {
+        /* must override any setting */
+        ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_NO_USE_LOCAL);
+    } else if (!(ORTE_MAPPING_LOCAL_GIVEN & ORTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
         if (inherit && (ORTE_MAPPING_NO_USE_LOCAL & ORTE_GET_MAPPING_DIRECTIVE(orte_rmaps_base.mapping))) {
             ORTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, ORTE_MAPPING_NO_USE_LOCAL);
         }
