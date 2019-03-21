@@ -108,7 +108,7 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
     opal_buffer_t *relay_msg;
     int ret;
     orte_std_cntr_t n;
-    int32_t signal;
+    int32_t signal, cnt;
     orte_jobid_t job;
     opal_buffer_t data, *answer;
     orte_job_t *jdata;
@@ -135,7 +135,14 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
     uint32_t u32;
     void *nptr;
     opal_pmix_lock_t lk;
-    pmix_proc_t pname;
+    pmix_data_buffer_t pbkt;
+    pmix_proc_t pdmn, pname;
+    opal_byte_object_t *bo, *bo2;
+    orte_process_name_t dmn;
+    pmix_status_t pstatus;
+    pmix_info_t *info;
+    size_t n2, ninfo;
+    opal_buffer_t wireup;
 
     /* unpack the command */
     n = 1;
@@ -263,6 +270,68 @@ void orte_daemon_recv(int status, orte_process_name_t* sender,
                 ORTE_ERROR_LOG(ret);
                 goto CLEANUP;
             }
+            /* unpack the wireup byte object */
+            cnt=1;
+            if (ORTE_SUCCESS != (ret = opal_dss.unpack(buffer, &bo, &cnt, OPAL_BYTE_OBJECT))) {
+                ORTE_ERROR_LOG(ret);
+                goto CLEANUP;
+            }
+            if (0 < bo->size) {
+                OPAL_PMIX_CONVERT_NAME(&pname, ORTE_PROC_MY_NAME);
+                /* load it into a buffer */
+                OBJ_CONSTRUCT(&wireup, opal_buffer_t);
+                opal_dss.load(&wireup, bo->bytes, bo->size);
+                cnt=1;
+                while (OPAL_SUCCESS == (ret = opal_dss.unpack(&wireup, &dmn, &cnt, ORTE_NAME))) {
+                    /* unpack the byte object containing the contact info */
+                    cnt = 1;
+                    if (ORTE_SUCCESS != (ret = opal_dss.unpack(&wireup, &bo2, &cnt, OPAL_BYTE_OBJECT))) {
+                        ORTE_ERROR_LOG(ret);
+                        break;
+                    }
+                    /* load into a PMIx buffer for unpacking */
+                    PMIX_DATA_BUFFER_LOAD(&pbkt, bo2->bytes, bo2->size);
+                    /* unpack the number of info's provided */
+                    cnt = 1;
+                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(&pname, &pbkt, &ninfo, &cnt, PMIX_SIZE))) {
+                        PMIX_ERROR_LOG(pstatus);
+                        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                        ret = OPAL_ERR_UNPACK_FAILURE;
+                        break;
+                    }
+                    /* unpack the infos */
+                    PMIX_INFO_CREATE(info, ninfo);
+                    cnt = ninfo;
+                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(&pname, &pbkt, info, &cnt, PMIX_INFO))) {
+                        PMIX_ERROR_LOG(pstatus);
+                        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                        PMIX_INFO_FREE(info, ninfo);
+                        ret = OPAL_ERR_UNPACK_FAILURE;
+                        break;
+                    }
+
+                    /* store them locally */
+                    OPAL_PMIX_CONVERT_NAME(&pdmn, &dmn);
+                    for (n2=0; n2 < ninfo; n2++) {
+                        pstatus = PMIx_Store_internal(&pdmn, info[n2].key, &info[n2].value);
+                        if (PMIX_SUCCESS != pstatus) {
+                            PMIX_ERROR_LOG(pstatus);
+                            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                            PMIX_INFO_FREE(info, ninfo);
+                            ret = OPAL_ERR_UNPACK_FAILURE;
+                            goto CLEANUP;
+                        }
+                    }
+                    PMIX_INFO_FREE(info, ninfo);
+                    PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                }
+                if (ORTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
+                    ORTE_ERROR_LOG(ret);
+                }
+                /* done with the wireup buffer - dump it */
+                OBJ_DESTRUCT(&wireup);
+            }
+            free(bo);
         }
         break;
 
@@ -802,6 +871,9 @@ static char *get_orted_comm_cmd_str(int command)
 
     case ORTE_DAEMON_DVM_CLEANUP_JOB_CMD:
         return strdup("ORTE_DAEMON_DVM_CLEANUP_JOB_CMD");
+
+    case ORTE_DAEMON_PASS_NODE_INFO_CMD:
+        return strdup("ORTE_DAEMON_PASS_NODE_INFO_CMD");
 
     default:
         return strdup("Unknown Command!");
