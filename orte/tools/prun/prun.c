@@ -488,7 +488,7 @@ int prun(int argc, char *argv[])
     opal_pmix_app_t *app;
     opal_list_t tinfo;
     pmix_info_t info, *iptr;
-    pmix_proc_t pname;
+    pmix_proc_t pname, controller;
     pmix_status_t ret;
     bool flag;
     opal_ds_info_t *ds;
@@ -497,6 +497,7 @@ int prun(int argc, char *argv[])
     size_t napps;
     char nspace[PMIX_MAX_NSLEN+1];
     mylock_t mylock;
+    bool notify_launch = false;
 
     /* init the globals */
     memset(&orte_cmd_options, 0, sizeof(orte_cmd_options));
@@ -1118,14 +1119,14 @@ int prun(int argc, char *argv[])
         param = strchr(ptr, ':');
         *param = '\0';
         ++param;
-        (void)strncpy(pname.nspace, ptr, PMIX_MAX_NSLEN);
-        pname.rank = strtoul(param, NULL, 10);
+        (void)strncpy(controller.nspace, ptr, PMIX_MAX_NSLEN);
+        controller.rank = strtoul(param, NULL, 10);
         /* do not cache this event - the tool is waiting for us */
         PMIX_INFO_CREATE(iptr, 2);
         flag = true;
         PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_DO_NOT_CACHE, &flag, PMIX_BOOL);
         /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_CUSTOM_RANGE, &pname, PMIX_PROC);
+        PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
 
         PMIx_Notify_event(PMIX_LAUNCHER_READY, &pname, PMIX_RANGE_CUSTOM,
                           iptr, 2, NULL, NULL);
@@ -1141,6 +1142,11 @@ int prun(int argc, char *argv[])
                     iptr = (pmix_info_t*)myinfo.info[n].value.data.darray->array;
                     ninfo = myinfo.info[n].value.data.darray->size;
                     for (m=0; m < ninfo; m++) {
+                        if (PMIX_CHECK_KEY(&iptr[m], PMIX_NOTIFY_LAUNCH)) {
+                            /* we don't pass this along - it is aimed at us */
+                            notify_launch = true;
+                            continue;
+                        }
                         ds = OBJ_NEW(opal_ds_info_t);
                         ds->info = &iptr[m];
                         opal_list_append(&job_info, &ds->super);
@@ -1204,6 +1210,20 @@ int prun(int argc, char *argv[])
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, nspace);
     OPAL_PMIX_CONVERT_NSPACE(rc, &myjobid, nspace);
 
+    if (notify_launch) {
+        /* direct an event back to our controller telling them
+         * the namespace of the spawned job */
+        PMIX_INFO_CREATE(iptr, 3);
+        /* do not cache this event - the tool is waiting for us */
+        flag = true;
+        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_DO_NOT_CACHE, &flag, PMIX_BOOL);
+        /* target this notification solely to that one tool */
+        PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
+        /* pass the nspace of the spawned job */
+        PMIX_INFO_LOAD(&iptr[2], PMIX_NSPACE, nspace, PMIX_STRING);
+        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &controller, PMIX_RANGE_CUSTOM,
+                          iptr, 3, NULL, NULL);
+    }
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, nspace, 0);  // forward stdin to rank=0

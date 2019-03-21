@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -184,64 +184,86 @@ static void evhandler_reg_callbk(pmix_status_t status,
     DEBUG_WAKEUP_THREAD(lock);
 }
 
-static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
+static void spawn_cbfunc(pmix_status_t status,
+                         pmix_nspace_t nspace, void *cbdata)
+{
+    myquery_data_t *mydata = (myquery_data_t*)cbdata;
+    pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
+
+    PMIX_INFO_FREE(mydata->info, mydata->ninfo);
+    PMIX_APP_FREE(mydata->apps, mydata->napps);
+    free(mydata);
+    fprintf(stderr, "Debugger daemon job: %s\n", nspace);
+}
+
+static void spawn_debugger(size_t evhdlr_registration_id,
+                           pmix_status_t status,
+                           const pmix_proc_t *source,
+                           pmix_info_t info[], size_t ninfo,
+                           pmix_info_t results[], size_t nresults,
+                           pmix_event_notification_cbfunc_fn_t cbfunc,
+                           void *cbdata)
 {
     pmix_status_t rc;
-    pmix_info_t *dinfo;
-    pmix_app_t *debugger;
-    size_t dninfo;
+    size_t n;
     char cwd[1024];
-    char dspace[PMIX_MAX_NSLEN+1];
-    mylock_t mylock;
-    pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
-    pmix_proc_t proc;
+    char *appspace = NULL;
+    myquery_data_t *mydata;
+
+    for (n=0; n < ninfo; n++) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_NSPACE)) {
+            appspace = info[n].value.data.string;
+            break;
+        }
+    }
+    /* if the namespace of the launched job wasn't returned, then that is an error */
+    if (NULL == appspace) {
+        fprintf(stderr, "LAUNCHED NAMESPACE WASN'T RETURNED IN CALLBACK\n");
+        /* let the event handler progress */
+        if (NULL != cbfunc) {
+            cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
+        }
+        return;
+    }
+    fprintf(stderr, "Child job to be debugged: %s\n", appspace);
 
     /* setup the debugger */
-    PMIX_APP_CREATE(debugger, 1);
-    debugger[0].cmd = strdup("./debuggerd");
-    PMIX_ARGV_APPEND(rc, debugger[0].argv, "./debuggerd");
+    mydata = (myquery_data_t*)malloc(sizeof(myquery_data_t));
+    mydata->napps = 1;
+    PMIX_APP_CREATE(mydata->apps, mydata->napps);
+    mydata->apps[0].cmd = strdup("./daemon");
+    PMIX_ARGV_APPEND(rc, mydata->apps[0].argv, "./daemon");
     getcwd(cwd, 1024);  // point us to our current directory
-    debugger[0].cwd = strdup(cwd);
+    mydata->apps[0].cwd = strdup(cwd);
     /* provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
-    dninfo = 6;
-    PMIX_INFO_CREATE(dinfo, dninfo);
-    PMIX_INFO_LOAD(&dinfo[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
-    PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
-    PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
-    PMIX_INFO_LOAD(&dinfo[2], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
-    PMIX_INFO_LOAD(&dinfo[3], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
-    PMIX_INFO_LOAD(&dinfo[4], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
-    PMIX_INFO_LOAD(&dinfo[5], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
+    mydata->ninfo = 6;
+    PMIX_INFO_CREATE(mydata->info, mydata->ninfo);
+    n=0;
+    PMIX_INFO_LOAD(&mydata->info[n], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
+    ++n;
+   // PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
+    PMIX_INFO_LOAD(&mydata->info[n], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
+    ++n;
+    PMIX_INFO_LOAD(&mydata->info[n], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
+    ++n;
+    PMIX_INFO_LOAD(&mydata->info[n], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
+    ++n;
+    PMIX_INFO_LOAD(&mydata->info[n], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
+    ++n;
+    PMIX_INFO_LOAD(&mydata->info[n], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
     /* spawn the daemons */
-    fprintf(stderr, "Debugger: spawning %s\n", debugger[0].cmd);
-    if (PMIX_SUCCESS != (rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace))) {
+    fprintf(stderr, "Debugger: spawning %s\n", mydata->apps[0].cmd);
+    if (PMIX_SUCCESS != (rc = PMIx_Spawn_nb(mydata->info, mydata->ninfo, mydata->apps, mydata->napps, spawn_cbfunc, (void*)mydata))) {
         fprintf(stderr, "Debugger daemons failed to launch with error: %s\n", PMIx_Error_string(rc));
-        PMIX_INFO_FREE(dinfo, dninfo);
-        PMIX_APP_FREE(debugger, 1);
-        return rc;
+        return;
     }
-    /* cleanup */
-    PMIX_INFO_FREE(dinfo, dninfo);
-    PMIX_APP_FREE(debugger, 1);
 
-    /* register callback for when this job terminates */
-    myrel->nspace = strdup(dspace);
-    PMIX_INFO_CREATE(dinfo, 2);
-    PMIX_INFO_LOAD(&dinfo[0], PMIX_EVENT_RETURN_OBJECT, myrel, PMIX_POINTER);
-    /* only call me back when this specific job terminates */
-    PMIX_LOAD_PROCID(&proc, dspace, PMIX_RANK_WILDCARD);
-    PMIX_INFO_LOAD(&dinfo[1], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
-
-    DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(&code, 1, dinfo, 2,
-                                release_fn, evhandler_reg_callbk, (void*)&mylock);
-    DEBUG_WAIT_THREAD(&mylock);
-    rc = mylock.status;
-    DEBUG_DESTRUCT_LOCK(&mylock);
-    PMIX_INFO_FREE(dinfo, 2);
-
-    return rc;
+    /* tell the event handler state machine that we are the last step */
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+    return;
 }
 
 #define DBGR_LOOP_LIMIT  10
@@ -348,6 +370,25 @@ int main(int argc, char **argv)
     DEBUG_DESTRUCT_LOCK(&mylock);
     PMIX_INFO_FREE(info, 2);
 
+    /* register to receive the "launch complete" event telling us
+     * the nspace of the job being debugged so we can spawn the
+     * debugger daemons against it */
+    DEBUG_CONSTRUCT_LOCK(&mylock);
+    code = PMIX_LAUNCH_COMPLETE;
+    PMIX_INFO_CREATE(info, 1);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "LAUNCH-COMPLETE", PMIX_STRING);
+    PMIx_Register_event_handler(&code, 1, info, 1,
+                                spawn_debugger, evhandler_reg_callbk, (void*)&mylock);
+    DEBUG_WAIT_THREAD(&mylock);
+    if (PMIX_SUCCESS != mylock.status) {
+        rc = mylock.status;
+        DEBUG_DESTRUCT_LOCK(&mylock);
+        PMIX_INFO_FREE(info, 2);
+        goto done;
+    }
+    DEBUG_DESTRUCT_LOCK(&mylock);
+    PMIX_INFO_FREE(info, 2);
+
     /* we are using an intermediate launcher - we will use the
      * reference server to start it, but tell it to wait after
      * launch for directive prior to spawning the application */
@@ -434,8 +475,8 @@ int main(int argc, char **argv)
     PMIX_INFO_LOAD(&info[1], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);  // only non-default handlers
     /* provide a few job-level directives */
     darray.type = PMIX_INFO;
-    darray.size = 2;
-    PMIX_INFO_CREATE(darray.array, 2);
+    darray.size = 4;
+    PMIX_INFO_CREATE(darray.array, 3);
     iptr = (pmix_info_t*)darray.array;
     PMIX_ENVAR_LOAD(&envar, "FOOBAR", "1", ':');
     PMIX_INFO_LOAD(&iptr[0], PMIX_SET_ENVAR, &envar, PMIX_ENVAR);
@@ -443,6 +484,9 @@ int main(int argc, char **argv)
     PMIX_ENVAR_LOAD(&envar, "PATH", "/home/common/local/toad", ':');
     PMIX_INFO_LOAD(&iptr[1], PMIX_PREPEND_ENVAR, &envar, PMIX_ENVAR);
     PMIX_ENVAR_DESTRUCT(&envar);
+    PMIX_INFO_LOAD(&iptr[2], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
+    PMIX_INFO_LOAD(&iptr[3], PMIX_NOTIFY_LAUNCH, NULL, PMIX_BOOL); // notify us when the job is launched
+    /* load the array */
     PMIX_INFO_LOAD(&info[2], PMIX_DEBUG_JOB_DIRECTIVES, &darray, PMIX_DATA_ARRAY);
 
     fprintf(stderr, "[%s:%u%lu] Sending launch directives\n", myproc.nspace, myproc.rank, (unsigned long)pid);

@@ -603,7 +603,7 @@ int orte_util_pass_node_info(opal_buffer_t *buffer)
         } else {
             /* mark that this was not compressed */
             compressed = false;
-            bo.bytes = bucket.base_ptr;
+            bo.bytes = (uint8_t*)bucket.base_ptr;
             bo.size = bucket.bytes_used;
         }
         /* indicate compression */
@@ -742,7 +742,6 @@ int orte_util_parse_node_info(opal_buffer_t *buf)
     opal_byte_object_t *boptr;
     uint16_t *slots = NULL;
     uint8_t *flags = NULL;
-    uint8_t *topologies = NULL;
     uint8_t *bytes = NULL;
     orte_topology_t *t2;
     hwloc_topology_t topo;
@@ -1025,9 +1024,6 @@ int orte_util_parse_node_info(opal_buffer_t *buf)
     }
     if (NULL != flags) {
         free(flags);
-    }
-    if (NULL != topologies) {
-        free(topologies);
     }
     return rc;
 }
