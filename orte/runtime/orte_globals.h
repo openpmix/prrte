@@ -13,7 +13,7 @@
  * Copyright (c) 2007-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -220,6 +220,7 @@ struct orte_job_map_t;
 /* define an object for storing node topologies */
 typedef struct {
     opal_object_t super;
+    int index;
     hwloc_topology_t topo;
     char *sig;
 } orte_topology_t;
