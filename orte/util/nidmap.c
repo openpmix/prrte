@@ -448,7 +448,7 @@ int orte_util_decode_nidmap(opal_buffer_t *buf)
 int orte_util_pass_node_info(opal_buffer_t *buffer)
 {
     uint16_t *slots=NULL, slot = UINT16_MAX;
-    uint8_t *flags=NULL, flag = UINT8_MAX, *topologies = NULL;
+    uint8_t *flags=NULL, flag = UINT8_MAX;
     int8_t i8, ntopos;
     int rc, n, nbitmap, nstart;
     bool compressed, unislots = true, uniflags = true, unitopos = true;
@@ -457,8 +457,6 @@ int orte_util_pass_node_info(opal_buffer_t *buffer)
     size_t sz, nslots;
     opal_buffer_t bucket;
     orte_topology_t *t;
-    uint8_t *cmpdata;
-    size_t cmplen;
 
     /* make room for the number of slots on each node */
     nslots = sizeof(uint16_t) * orte_node_pool->size;
@@ -519,65 +517,57 @@ int orte_util_pass_node_info(opal_buffer_t *buffer)
     if (1 < ntopos) {
         /* need to send them along */
         if (opal_compress.compress_block((uint8_t*)bucket.base_ptr, bucket.bytes_used,
-                                         &cmpdata, &cmplen)) {
+                                         &bo.bytes, &sz)) {
             /* the data was compressed - mark that we compressed it */
-            flag = 1;
-            if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &flag, 1, OPAL_INT8))) {
+            compressed = true;
+            if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &compressed, 1, OPAL_BOOL))) {
                 ORTE_ERROR_LOG(rc);
-                free(cmpdata);
-                OBJ_DESTRUCT(&bucket);
-                goto cleanup;
-            }
-            /* pack the compressed length */
-            if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &cmplen, 1, OPAL_SIZE))) {
-                ORTE_ERROR_LOG(rc);
-                free(cmpdata);
                 OBJ_DESTRUCT(&bucket);
                 goto cleanup;
             }
             /* pack the uncompressed length */
             if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &bucket.bytes_used, 1, OPAL_SIZE))) {
                 ORTE_ERROR_LOG(rc);
-                free(cmpdata);
                 OBJ_DESTRUCT(&bucket);
                 goto cleanup;
             }
-            /* pack the compressed info */
-            if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, cmpdata, cmplen, OPAL_UINT8))) {
-                ORTE_ERROR_LOG(rc);
-                free(cmpdata);
-                OBJ_DESTRUCT(&bucket);
-                goto cleanup;
-            }
-            free(cmpdata);
+            bo.size = sz;
         } else {
             /* mark that it was not compressed */
-            flag = 0;
-            if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &flag, 1, OPAL_INT8))) {
+            compressed = false;
+            if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &compressed, 1, OPAL_BOOL))) {
                 ORTE_ERROR_LOG(rc);
                 OBJ_DESTRUCT(&bucket);
-                free(cmpdata);
                 goto cleanup;
             }
-            /* transfer the payload across */
-            opal_dss.copy_payload(buffer, &bucket);
+            opal_dss.unload(&bucket, (void**)&bo.bytes, &bo.size);
         }
         unitopos = false;
+        /* pack the info */
+        boptr = &bo;
+        if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &boptr, 1, OPAL_BYTE_OBJECT))) {
+            ORTE_ERROR_LOG(rc);
+            OBJ_DESTRUCT(&bucket);
+            goto cleanup;
+        }
+        OBJ_DESTRUCT(&bucket);
+        free(bo.bytes);
     }
-    OBJ_DESTRUCT(&bucket);
 
-    /* create an array of topology indices */
-    if (!unitopos) {
-        topologies = (uint8_t*)malloc(orte_node_pool->size * sizeof(int8_t));
-    }
-
+    /* construct the per-node info */
+    OBJ_CONSTRUCT(&bucket, opal_buffer_t);
     for (n=0; n < orte_node_pool->size; n++) {
         if (NULL == (nptr = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, n))) {
             continue;
         }
-        /* store the topology, if required */
-        if (NULL != topologies) {
-            topologies[n] = nptr->topology->index;
+        /* track the topology, if required */
+        if (!unitopos) {
+            i8 = nptr->topology->index;
+            if (ORTE_SUCCESS != (rc = opal_dss.pack(&bucket, &i8, 1, OPAL_INT8))) {
+                ORTE_ERROR_LOG(rc);
+                OBJ_DESTRUCT(&bucket);
+                goto cleanup;
+            }
         }
         /* store the number of slots */
         slots[n] = nptr->slots;
@@ -605,21 +595,19 @@ int orte_util_pass_node_info(opal_buffer_t *buffer)
 
     /* deal with the topology assignments */
     if (!unitopos) {
-        if (opal_compress.compress_block((uint8_t*)topologies, ntopos,
+        if (opal_compress.compress_block((uint8_t*)bucket.base_ptr, bucket.bytes_used,
                                          (uint8_t**)&bo.bytes, &sz)) {
             /* mark that this was compressed */
-            i8 = 1;
             compressed = true;
             bo.size = sz;
         } else {
             /* mark that this was not compressed */
-            i8 = 0;
             compressed = false;
-            bo.bytes = topologies;
-            bo.size = nbitmap;
+            bo.bytes = bucket.base_ptr;
+            bo.size = bucket.bytes_used;
         }
         /* indicate compression */
-        if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &i8, 1, OPAL_INT8))) {
+        if (ORTE_SUCCESS != (rc = opal_dss.pack(buffer, &compressed, 1, OPAL_BOOL))) {
             if (compressed) {
                 free(bo.bytes);
             }
@@ -640,6 +628,7 @@ int orte_util_pass_node_info(opal_buffer_t *buffer)
             free(bo.bytes);
         }
     }
+    OBJ_DESTRUCT(&bucket);
 
     /* if we have uniform #slots, then just flag it - no
      * need to pass anything */
@@ -818,19 +807,19 @@ int orte_util_parse_node_info(opal_buffer_t *buf)
         for (n=0; n < i8; n++) {
             /* unpack the index */
             cnt = 1;
-            if (ORTE_SUCCESS != (rc = opal_dss.unpack(buf, &index, &cnt, OPAL_INT))) {
+            if (ORTE_SUCCESS != (rc = opal_dss.unpack(&bucket, &index, &cnt, OPAL_INT))) {
                 ORTE_ERROR_LOG(rc);
                 goto cleanup;
             }
             /* unpack the signature */
             cnt = 1;
-            if (ORTE_SUCCESS != (rc = opal_dss.unpack(buf, &sig, &cnt, OPAL_STRING))) {
+            if (ORTE_SUCCESS != (rc = opal_dss.unpack(&bucket, &sig, &cnt, OPAL_STRING))) {
                 ORTE_ERROR_LOG(rc);
                 goto cleanup;
             }
             /* unpack the topology */
             cnt = 1;
-            if (ORTE_SUCCESS != (rc = opal_dss.unpack(buf, &topo, &cnt, OPAL_HWLOC_TOPO))) {
+            if (ORTE_SUCCESS != (rc = opal_dss.unpack(&bucket, &topo, &cnt, OPAL_HWLOC_TOPO))) {
                 ORTE_ERROR_LOG(rc);
                 goto cleanup;
             }
@@ -841,6 +830,8 @@ int orte_util_parse_node_info(opal_buffer_t *buf)
             t2->topo = topo;
             opal_pointer_array_set_item(orte_node_topologies, index, t2);
         }
+        OBJ_DESTRUCT(&bucket);
+
         /* now get the array of assigned topologies */
         /* unpack the compression flag */
         cnt = 1;
@@ -864,7 +855,7 @@ int orte_util_parse_node_info(opal_buffer_t *buf)
         }
         /* if compressed, decompress */
         if (compressed) {
-            if (!opal_compress.decompress_block((uint8_t**)&topologies, sz,
+            if (!opal_compress.decompress_block((uint8_t**)&bytes, sz,
                                                 boptr->bytes, boptr->size)) {
                 ORTE_ERROR_LOG(ORTE_ERROR);
                 if (NULL != boptr->bytes) {
@@ -875,7 +866,8 @@ int orte_util_parse_node_info(opal_buffer_t *buf)
                 goto cleanup;
             }
         } else {
-            topologies = (uint8_t*)boptr->bytes;
+            bytes = (uint8_t*)boptr->bytes;
+            sz = boptr->size;
             boptr->bytes = NULL;
             boptr->size = 0;
         }
@@ -883,11 +875,18 @@ int orte_util_parse_node_info(opal_buffer_t *buf)
             free(boptr->bytes);
         }
         free(boptr);
+        OBJ_CONSTRUCT(&bucket, opal_buffer_t);
+        opal_dss.load(&bucket, bytes, sz);
         /* cycle across the node pool and assign the values */
-        for (n=0, m=0; n < orte_node_pool->size; n++) {
+        for (n=0; n < orte_node_pool->size; n++) {
             if (NULL != (nptr = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, n))) {
-                nptr->topology = opal_pointer_array_get_item(orte_node_topologies, topologies[m]);
-                ++m;
+                /* unpack the next topology index */
+                cnt = 1;
+                if (OPAL_SUCCESS != (rc = opal_dss.unpack(&bucket, &i8, &cnt, OPAL_INT8))) {
+                    ORTE_ERROR_LOG(rc);
+                    goto cleanup;
+                }
+                nptr->topology = opal_pointer_array_get_item(orte_node_topologies, index);
             }
         }
     }
