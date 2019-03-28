@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -79,6 +79,8 @@ typedef struct {
     pmix_status_t status;
     pmix_info_t *info;
     size_t ninfo;
+    pmix_app_t *apps;
+    size_t napps;
 } myquery_data_t;
 
 /* define a structure for releasing when a given
