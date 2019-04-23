@@ -1142,11 +1142,13 @@ int prun(int argc, char *argv[])
                     iptr = (pmix_info_t*)myinfo.info[n].value.data.darray->array;
                     ninfo = myinfo.info[n].value.data.darray->size;
                     for (m=0; m < ninfo; m++) {
+#if PMIX_NUMERIC_VERSION >= 0x00040000
                         if (PMIX_CHECK_KEY(&iptr[m], PMIX_NOTIFY_LAUNCH)) {
                             /* we don't pass this along - it is aimed at us */
                             notify_launch = true;
                             continue;
                         }
+#endif
                         ds = OBJ_NEW(opal_ds_info_t);
                         ds->info = &iptr[m];
                         opal_list_append(&job_info, &ds->super);
@@ -1210,6 +1212,7 @@ int prun(int argc, char *argv[])
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, nspace);
     OPAL_PMIX_CONVERT_NSPACE(rc, &myjobid, nspace);
 
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     if (notify_launch) {
         /* direct an event back to our controller telling them
          * the namespace of the spawned job */
@@ -1224,7 +1227,6 @@ int prun(int argc, char *argv[])
         PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &controller, PMIX_RANGE_CUSTOM,
                           iptr, 3, NULL, NULL);
     }
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, nspace, 0);  // forward stdin to rank=0
     PMIX_INFO_CREATE(iptr, 1);
