@@ -13,8 +13,8 @@
  * Copyright (c) 2007-2008 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
@@ -383,15 +383,10 @@ void opal_output(int output_id, const char *format, ...)
 /*
  * Send a message to a stream if the verbose level is high enough
  */
-void opal_output_verbose(int level, int output_id, const char *format, ...)
+bool opal_output_check_verbosity(int level, int output_id)
 {
-    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS &&
-        info[output_id].ldi_verbose_level >= level) {
-        va_list arglist;
-        va_start(arglist, format);
-        output(output_id, format, arglist);
-        va_end(arglist);
-    }
+    return (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS &&
+        info[output_id].ldi_verbose_level >= level);
 }
 
 

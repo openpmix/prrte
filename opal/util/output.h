@@ -11,6 +11,8 @@
  *                         All rights reserved.
  * Copyright (c) 2007-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -407,8 +409,12 @@ struct opal_output_stream_t {
      *
      * @see opal_output_set_verbosity()
      */
-    OPAL_DECLSPEC void opal_output_verbose(int verbose_level, int output_id,
-                                           const char *format, ...) __opal_attribute_format__(__printf__, 3, 4);
+#define opal_output_verbose(verbose_level, output_id, ...) \
+    if (opal_output_check_verbosity(verbose_level, output_id)) { \
+        opal_output(output_id, __VA_ARGS__); \
+    }
+
+    OPAL_DECLSPEC bool opal_output_check_verbosity(int verbose_level, int output_id);
 
    /**
     * Same as opal_output_verbose(), but takes a va_list form of varargs.
