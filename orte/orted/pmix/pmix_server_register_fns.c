@@ -349,8 +349,8 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
              * for register_nspace to complete and the PMIx library serializes
              * the registration requests, we don't need to wait here */
             OPAL_PMIX_CONVERT_VPID(pproc.rank,  pptr->name.vpid);
-            if (PMIX_SUCCESS != (ret = PMIx_server_register_client(&pproc, uid, gid,
-                                                                   (void*)pptr, NULL, NULL))) {
+            ret = PMIx_server_register_client(&pproc, uid, gid, (void*)pptr, NULL, NULL);
+            if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
                 PMIX_ERROR_LOG(ret);
             }
         }
