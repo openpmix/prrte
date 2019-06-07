@@ -14,7 +14,7 @@
  * Copyright (c) 2009-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2017 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2017      UT-Battelle, LLC. All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      IBM Corporation.  All rights reserved.
@@ -912,9 +912,9 @@ static int setup_fork(orte_job_t *jdata,
 
     /* setup yield schedule - do not override any user-supplied directive! */
     if (oversubscribed) {
-        opal_setenv("OMPI_MCA_mpi_yield_when_idle", "1", false, &app->env);
+        opal_setenv("OMPI_MCA_mpi_oversubscribe", "1", false, &app->env);
     } else {
-        opal_setenv("OMPI_MCA_mpi_yield_when_idle", "0", false, &app->env);
+        opal_setenv("OMPI_MCA_mpi_oversubscribe", "0", false, &app->env);
     }
 
     /* set the app_context number into the environment */
