@@ -12,7 +12,7 @@
  * Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -152,7 +152,7 @@ int orte_setup_top_session_dir(void)
         }
 
         if (0 > opal_asprintf(&orte_process_info.top_session_dir,
-                         "%s/ompi.%s.%lu", orte_process_info.tmpdir_base,
+                         "%s/prrte.%s.%lu", orte_process_info.tmpdir_base,
                          orte_process_info.nodename, (unsigned long)uid)) {
             orte_process_info.top_session_dir = NULL;
             rc = ORTE_ERR_OUT_OF_RESOURCE;
