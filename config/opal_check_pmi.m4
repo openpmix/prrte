@@ -36,6 +36,10 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
                 [AC_HELP_STRING([--with-pmix-libdir=DIR],
                                 [Look for libpmix in the given directory DIR, DIR/lib or DIR/lib64])])
 
+    AC_ARG_ENABLE([pmix-devel-support],
+                  [AC_HELP_STRING([--enable-pmix-devel-support],
+                                  [Add necessary wrapper flags to enable access to PMIx devel headers])])
+
     AS_IF([test "$with_pmix" = "no"],
           [AC_MSG_WARN([PRTE requires PMIx support using])
            AC_MSG_WARN([an external copy that you supply.])
@@ -170,6 +174,9 @@ AC_DEFUN([OPAL_CHECK_PMIX],[
 
     CPPFLAGS="$CPPFLAGS -I$pmix_ext_install_dir/include"
     OPAL_WRAPPER_FLAGS_ADD([CPPFLAGS], [-I$pmix_ext_install_dir/include])
+
+    AS_IF([test "$enable_pmix_devel_support" = "yes"],
+          [OPAL_WRAPPER_FLAGS_ADD([CPPFLAGS], [-I$pmix_ext_install_dir/include/pmix -I$pmix_ext_install_dir/include/pmix/src -I$pmix_ext_install_dir/include/pmix/src/include])])
 
     LDFLAGS="$LDFLAGS -L$pmix_ext_install_libdir"
     OPAL_WRAPPER_FLAGS_ADD([LDFLAGS], [-L$pmix_ext_install_libdir])
