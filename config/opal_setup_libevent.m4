@@ -157,7 +157,10 @@ AC_DEFUN([_OPAL_LIBEVENT_EXTERNAL],[
         opal_libevent_source=$opal_event_dir
         AS_IF([test "$opal_event_defaults" = "no"],
               [OPAL_FLAGS_APPEND_UNIQ(CPPFLAGS, $opal_libevent_CPPFLAGS)
-               OPAL_FLAGS_APPEND_UNIQ(LDFLAGS, $opal_libevent_LDFLAGS)])
+               OPAL_WRAPPER_FLAGS_ADD([CPPFLAGS], [$opal_libevent_CPPFLAGS])
+               OPAL_FLAGS_APPEND_UNIQ(LDFLAGS, $opal_libevent_LDFLAGS)
+               OPAL_WRAPPER_FLAGS_ADD([LDFLAGS], [$opal_libevent_LDFLAGS])
+               OPAL_WRAPPER_FLAGS_ADD([LIBS], [$opal_libevent_LIBS])])
         OPAL_FLAGS_APPEND_UNIQ(LIBS, $opal_libevent_LIBS)
     else
         AC_MSG_RESULT([no])

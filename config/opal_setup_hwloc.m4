@@ -67,7 +67,6 @@ AC_DEFUN([OPAL_HWLOC_CONFIG],[
                        [opal_hwloc_support=0])
     if test $opal_hwloc_support = "1"; then
         LIBS="$LIBS $opal_hwloc_LIBS"
-        OPAL_WRAPPER_FLAGS_ADD([CFLAGS], [$opal_hwloc_LIBS])
 
         if test "$opal_hwloc_standard_header_location" != "yes"; then
             CPPFLAGS="$CPPFLAGS $opal_hwloc_CPPFLAGS"
