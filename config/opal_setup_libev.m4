@@ -73,7 +73,7 @@ AC_DEFUN([OPAL_LIBEV_CONFIG],[
 
     AS_IF([test $opal_libev_support -eq 1],
           [LIBS="$LIBS $opal_libev_LIBS"
-
+           AC_SUBST(OPAL_EVENT_LIBS, "-lev")
            AS_IF([test "$opal_libev_standard_header_location" != "yes"],
                  [CPPFLAGS="$CPPFLAGS $opal_libev_CPPFLAGS"])
            AS_IF([test "$opal_libev_standard_lib_location" != "yes"],
