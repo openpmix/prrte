@@ -162,6 +162,7 @@ AC_DEFUN([_OPAL_LIBEVENT_EXTERNAL],[
                OPAL_WRAPPER_FLAGS_ADD([LDFLAGS], [$opal_libevent_LDFLAGS])
                OPAL_WRAPPER_FLAGS_ADD([LIBS], [$opal_libevent_LIBS])])
         OPAL_FLAGS_APPEND_UNIQ(LIBS, $opal_libevent_LIBS)
+        AC_SUBST(OPAL_EVENT_LIBS, "-levent -levent_pthreads")
     else
         AC_MSG_RESULT([no])
     fi
