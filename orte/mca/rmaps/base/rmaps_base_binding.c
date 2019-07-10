@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2014 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Inria.  All rights reserved.
@@ -168,8 +168,18 @@ static int bind_generic(orte_job_t *jdata,
         trg_obj = NULL;
         min_bound = UINT_MAX;
         while (NULL != (tmp_obj = hwloc_get_next_obj_by_depth(node->topology->topo, target_depth, tmp_obj))) {
+            hwloc_obj_t root;
+            opal_hwloc_topo_data_t *rdata;
+            root = hwloc_get_root_obj(node->topology->topo);
+            rdata = (opal_hwloc_topo_data_t*)root->userdata;
+
             if (!hwloc_bitmap_intersects(locale->cpuset, tmp_obj->cpuset))
                 continue;
+
+            /* if there are no available cpus under this object, then ignore it */
+            if (NULL != rdata && NULL != rdata->available && !hwloc_bitmap_intersects(rdata->available, tmp_obj->cpuset))
+                continue;
+
             data = (opal_hwloc_obj_data_t*)tmp_obj->userdata;
             if (NULL == data) {
                 data = OBJ_NEW(opal_hwloc_obj_data_t);

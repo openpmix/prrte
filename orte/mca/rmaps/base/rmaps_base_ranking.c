@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2014-2018 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -313,6 +313,7 @@ static int rank_by(orte_job_t *jdata,
     opal_pointer_array_t objs;
     hwloc_obj_t locale;
     orte_app_idx_t napp;
+    bool noassign;
 
     if (ORTE_RANKING_SPAN & ORTE_GET_RANKING_DIRECTIVE(jdata->map->ranking)) {
         return rank_span(jdata, target, cache_level);
@@ -331,7 +332,6 @@ static int rank_by(orte_job_t *jdata,
      *     0 2       1 3         8 10      9 11
      *     4 6       5 7        12 14     13 15
      */
-
     vpid = 0;
     for (n=0, napp=0; napp < jdata->num_apps && n < jdata->apps->size; n++) {
         if (NULL == (app = (orte_app_context_t*)opal_pointer_array_get_item(jdata->apps, n))) {
@@ -372,88 +372,92 @@ static int rank_by(orte_job_t *jdata,
              * of procs on the node can't be used to tell us when we
              * are done. Instead, we have to just keep going until all
              * procs are ranked - which means we have to make one extra
-             * pass thru the loop
+             * pass thru the loop. In addition, if we pass thru the entire
+             * loop without assigning anything then we are done
              *
              * Perhaps someday someone will come up with a more efficient
              * algorithm, but this works for now.
              */
-            i = 0;
-            while (cnt < app->num_procs && i < (int)node->num_procs) {
-                /* get the next object */
-                obj = (hwloc_obj_t)opal_pointer_array_get_item(&objs, i % num_objs);
-                if (NULL == obj) {
+            while (cnt < app->num_procs) {
+                noassign = true;
+                for (i=0; i < num_objs && cnt < app->num_procs; i++) {
+                    /* get the next object */
+                    obj = (hwloc_obj_t)opal_pointer_array_get_item(&objs, i % num_objs);
+                    if (NULL == obj) {
+                        break;
+                    }
+                    /* scan across the procs and find the one that is on this object */
+                    for (j=0; j < node->procs->size && cnt < app->num_procs; j++) {
+                        if (NULL == (proc = (orte_proc_t*)opal_pointer_array_get_item(node->procs, j))) {
+                            continue;
+                        }
+                        /* ignore procs from other jobs */
+                        if (proc->name.jobid != jdata->jobid) {
+                            opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
+                                                "mca:rmaps:rank_by skipping proc %s - from another job, num_ranked %d",
+                                                ORTE_NAME_PRINT(&proc->name), num_ranked);
+                            continue;
+                        }
+                        /* ignore procs that are already ranked */
+                        if (ORTE_VPID_INVALID != proc->name.vpid) {
+                            opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
+                                                "mca:rmaps:rank_by skipping proc %s - already ranked, num_ranked %d",
+                                                ORTE_NAME_PRINT(&proc->name), num_ranked);
+                            continue;
+                        }
+                        /* ignore procs from other apps */
+                        if (proc->app_idx != app->idx) {
+                            opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
+                                                "mca:rmaps:rank_by skipping proc %s - from another app, num_ranked %d",
+                                                ORTE_NAME_PRINT(&proc->name), num_ranked);
+                            continue;
+                        }
+                         /* protect against bozo case */
+                        locale = NULL;
+                        if (!orte_get_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, (void**)&locale, OPAL_PTR)) {
+                            ORTE_ERROR_LOG(ORTE_ERROR);
+                            return ORTE_ERROR;
+                        }
+                        /* ignore procs not on this object */
+                        if (NULL == locale ||
+                            !hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
+                            opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
+                                                "mca:rmaps:rank_by: proc at position %d is not on object %d",
+                                                j, i);
+                            continue;
+                        }
+                        /* assign the vpid */
+                        proc->name.vpid = vpid++;
+                        if (0 == cnt) {
+                            app->first_rank = proc->name.vpid;
+                        }
+                        cnt++;
+                        noassign = false;
+                        opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
+                                            "mca:rmaps:rank_by: proc in position %d is on object %d assigned rank %s",
+                                            j, i, ORTE_VPID_PRINT(proc->name.vpid));
+                        /* insert the proc into the jdata array */
+                        if (NULL != (pptr = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, proc->name.vpid))) {
+                            OBJ_RELEASE(pptr);
+                        }
+                        OBJ_RETAIN(proc);
+                        if (ORTE_SUCCESS != (rc = opal_pointer_array_set_item(jdata->procs, proc->name.vpid, proc))) {
+                            ORTE_ERROR_LOG(rc);
+                            OBJ_DESTRUCT(&objs);
+                            return rc;
+                        }
+                        num_ranked++;
+                        /* track where the highest vpid landed - this is our
+                         * new bookmark
+                         */
+                        jdata->bookmark = node;
+                        /* move to next object */
+                        break;
+                    }
+                }
+                if (noassign) {
                     break;
                 }
-                /* scan across the procs and find the one that is on this object */
-                np = 0;
-                for (j=0; np < node->num_procs && j < node->procs->size && cnt < app->num_procs; j++) {
-                    if (NULL == (proc = (orte_proc_t*)opal_pointer_array_get_item(node->procs, j))) {
-                        continue;
-                    }
-                    np++;
-                    /* ignore procs from other jobs */
-                    if (proc->name.jobid != jdata->jobid) {
-                        opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps:rank_by skipping proc %s - from another job, num_ranked %d",
-                                            ORTE_NAME_PRINT(&proc->name), num_ranked);
-                        continue;
-                    }
-                    /* ignore procs that are already ranked */
-                    if (ORTE_VPID_INVALID != proc->name.vpid) {
-                        opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps:rank_by skipping proc %s - already ranked, num_ranked %d",
-                                            ORTE_NAME_PRINT(&proc->name), num_ranked);
-                        continue;
-                    }
-                    /* ignore procs from other apps */
-                    if (proc->app_idx != app->idx) {
-                        opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps:rank_by skipping proc %s - from another app, num_ranked %d",
-                                            ORTE_NAME_PRINT(&proc->name), num_ranked);
-                        continue;
-                    }
-                     /* protect against bozo case */
-                    locale = NULL;
-                    if (!orte_get_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, (void**)&locale, OPAL_PTR)) {
-                        ORTE_ERROR_LOG(ORTE_ERROR);
-                        return ORTE_ERROR;
-                    }
-                    /* ignore procs not on this object */
-                    if (NULL == locale ||
-                        !hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
-                        opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps:rank_by: proc at position %d is not on object %d",
-                                            j, i);
-                        continue;
-                    }
-                    /* assign the vpid */
-                    proc->name.vpid = vpid++;
-                    if (0 == cnt) {
-                        app->first_rank = proc->name.vpid;
-                    }
-                    cnt++;
-                    opal_output_verbose(5, orte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps:rank_by: proc in position %d is on object %d assigned rank %s",
-                                        j, i, ORTE_VPID_PRINT(proc->name.vpid));
-                    /* insert the proc into the jdata array */
-                    if (NULL != (pptr = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, proc->name.vpid))) {
-                        OBJ_RELEASE(pptr);
-                    }
-                    OBJ_RETAIN(proc);
-                    if (ORTE_SUCCESS != (rc = opal_pointer_array_set_item(jdata->procs, proc->name.vpid, proc))) {
-                        ORTE_ERROR_LOG(rc);
-                        OBJ_DESTRUCT(&objs);
-                        return rc;
-                    }
-                    num_ranked++;
-                    /* track where the highest vpid landed - this is our
-                     * new bookmark
-                     */
-                    jdata->bookmark = node;
-                    /* move to next object */
-                    break;
-                }
-                i++;
             }
         }
         /* cleanup */
