@@ -14,6 +14,7 @@
 #                         reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -42,8 +43,8 @@ lib@ORTE_LIB_PREFIX@open_rte_la_SOURCES =
 lib@ORTE_LIB_PREFIX@open_rte_la_LIBADD = \
 	$(MCA_orte_FRAMEWORK_LIBS) \
 	$(ORTE_TOP_BUILDDIR)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
-lib@ORTE_LIB_PREFIX@open_rte_la_DEPENDENCIES = $(libopen_rte_la_LIBADD)
-lib@ORTE_LIB_PREFIX@open_rte_la_LDFLAGS = -version-info $(libopen_rte_so_version) -lpmix
+lib@ORTE_LIB_PREFIX@open_rte_la_DEPENDENCIES = $(lib@OPAL_LIB_PREFIX@open_rte_la_LIBADD)
+lib@ORTE_LIB_PREFIX@open_rte_la_LDFLAGS = -version-info $(lib@OPAL_LIB_PREFIX@open_rte_so_version) -lpmix
 
 # included subdirectory Makefile.am's and appended-to variables
 headers =
