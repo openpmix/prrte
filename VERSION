@@ -15,8 +15,8 @@
 # major, minor, and release are generally combined in the form
 # <major>.<minor>.<release>.
 
-major=4
-minor=1
+major=1
+minor=0
 release=0
 
 # greek is generally used for alpha or beta release tags.  If it is
@@ -26,7 +26,7 @@ release=0
 # requirement is that it must be entirely printable ASCII characters
 # and have no white space.
 
-greek=a1
+greek=rc1
 
 # If repo_rev is empty, then the repository version number will be
 # obtained during "make dist" via the "git describe --tags --always"
@@ -49,7 +49,7 @@ tarball_version=gitclone
 
 date="Nov 24, 2018"
 
-# The shared library version of each of PSRVR's public libraries.
+# The shared library version of each of PRRTE's public libraries.
 # These versions are maintained in accordance with the "Library
 # Interface Versions" chapter from the GNU Libtool documentation:
 #
@@ -65,21 +65,35 @@ date="Nov 24, 2018"
 # - If any interfaces have been removed since the last public release,
 #   then set age to 0.
 #
-# All changes in these version numbers are dictated by the PMIx
-# release managers (not individual developers).  Notes:
-
-# 1. Since these version numbers are associated with *releases*, the
-# version numbers maintained on the PMIx Github trunk (and developer
-# branches) is always 0:0:0 for all libraries.
-
-# 2. The version number of libpmix refers to the public pmix interfaces.
-# It does not refer to any internal interfaces.
+# All changes in these version numbers are dictated by the PRRTE
+# release managers (not individual developers). Since these version
+# numbers are associated with *releases*, the # version numbers
+# maintained on the PRRTE Github trunk (and developer # branches)
+# is always 0:0:0 for all libraries.
 
 # Version numbers are described in the Libtool current:revision:age
 # format.
 
-libopen_rte_so_version=0:0:0
-libopen_pal_so_version=0:0:0
+# NOTE: The ORTE and OPAL code in this package don't cleanly correlate
+# to any release point in the OMPI code base as the two codes (PRRTE
+# and OMPI) forked at some arbitrary point in time, and each has been
+# updated independently of each other. Since the libraries produced
+# by this package are explicitly prefixed with its name, there is
+# no issue of library confusion between the two packages. Thus, we
+# restart the PRRTE libraries at 1:0:0.
+#
+# At some future time, it is possible that the OMPI and PRRTE codes
+# will "re-converge" - there are open discussions of OMPI replacing
+# its copy of ORTE with PRRTE. Should that happen, it is expected
+# that the OPAL code in this package would be removed and replaced
+# with a Git submodule. This would result in major change in the
+# OPAL version number linked against PRRTE. Rather than trying to
+# anticipate that change, starting the numbering back at 1:0:0
+# guarantees that the revised OPAL version will be a step upward
+# to a higher number, thus ensuring that the linker "does the
+# right thing"
+libprteopen_rte_so_version=1:0:0
+libprteopen_pal_so_version=1:0:0
 
 # "Common" components install standalone libraries that are run-time
 # linked by one or more components.  So they need to be versioned as
@@ -88,5 +102,5 @@ libopen_pal_so_version=0:0:0
 
 
 # ORTE layer
-libmca_orte_common_alps_so_version=0:0:0
+libprtemca_orte_common_alps_so_version=1:0:0
 
