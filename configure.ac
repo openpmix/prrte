@@ -122,10 +122,10 @@ AC_SUBST([CONFIGURE_DEPENDENCIES], ['$(top_srcdir)/VERSION'])
 opal_show_subtitle "Checking versions"
 
 # Get the version of PRTE that we are installing
-OPAL_SAVE_VERSION([ORTE], [Open Run-Time Environment],
+OPAL_SAVE_VERSION([PRTEORTE], [Open Run-Time Environment],
                           [$srcdir/VERSION],
                           [orte/include/orte/version.h])
-OPAL_SAVE_VERSION([OPAL], [Open Portable Access Layer], [$srcdir/VERSION],
+OPAL_SAVE_VERSION([PRTEOPAL], [Open Portable Access Layer], [$srcdir/VERSION],
                   [opal/include/opal/version.h])
 
 # Get shared library version numbers
