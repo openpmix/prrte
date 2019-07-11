@@ -39,6 +39,7 @@
 #include "opal/util/opal_environ.h"
 #include "opal/util/os_dirpath.h"
 #include "opal/util/show_help.h"
+#include "opal/mca/shmem/base/base.h"
 
 #include "orte/mca/errmgr/errmgr.h"
 #include "orte/mca/ess/base/base.h"
@@ -910,11 +911,11 @@ static int setup_fork(orte_job_t *jdata,
         opal_setenv("OMPI_MCA_orte_hnp_uri", orte_process_info.my_hnp_uri, true, &app->env);
     }
 
-    /* setup yield schedule - do not override any user-supplied directive! */
+    /* setup yield schedule */
     if (oversubscribed) {
-        opal_setenv("OMPI_MCA_mpi_oversubscribe", "1", false, &app->env);
+        opal_setenv("OMPI_MCA_mpi_oversubscribe", "1", true, &app->env);
     } else {
-        opal_setenv("OMPI_MCA_mpi_oversubscribe", "0", false, &app->env);
+        opal_setenv("OMPI_MCA_mpi_oversubscribe", "0", true, &app->env);
     }
 
     /* set the app_context number into the environment */
@@ -964,6 +965,16 @@ static int setup_fork(orte_job_t *jdata,
         }
     }
 
+    /* get shmem's best component name so we can provide a hint to the shmem
+     * framework. the idea here is to have someone figure out what component to
+     * select (via the shmem framework) and then have the rest of the
+     * components in shmem obey that decision. for more details take a look at
+     * the shmem framework in opal.
+     */
+    if (NULL != (param = opal_shmem_base_best_runnable_component_name())) {
+        opal_setenv("OMPI_MCA_shmem_RUNTIME_QUERY_hint", param, true, &app->env);
+        free(param);
+     }
     /* Set an info MCA param that tells the launched processes that
      * any binding policy was applied by us (e.g., so that
      * MPI_INIT doesn't try to bind itself)

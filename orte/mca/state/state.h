@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,7 +68,8 @@ ORTE_DECLSPEC extern mca_base_framework_t orte_state_base_framework;
 #define ORTE_FORCED_TERMINATE(x)                                                    \
     do {                                                                            \
         if (!orte_abnormal_term_ordered) {                                          \
-            opal_output(0, "FORCE TERMINATE ORDERED %s:%d", __FILE__, __LINE__);    \
+            opal_output(0, "FORCE TERMINATE ORDERED AT %s:%d - error %s(%d)",       \
+                        __FILE__, __LINE__, ORTE_ERROR_NAME((x)), (x));             \
         } \
     } while(0);
 

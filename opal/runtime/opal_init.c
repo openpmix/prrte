@@ -49,6 +49,7 @@
 #include "opal/mca/installdirs/base/base.h"
 #include "opal/hwloc/hwloc-internal.h"
 #include "opal/mca/compress/base/base.h"
+#include "opal/mca/shmem/base/base.h"
 #include "opal/mca/timer/base/base.h"
 #include "opal/mca/if/base/base.h"
 #include "opal/dss/dss.h"
@@ -493,6 +494,11 @@ opal_init(int* pargc, char*** pargv)
 
     if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_timer_base_framework, 0))) {
         error = "opal_timer_base_open";
+        goto return_error;
+    }
+
+    if (OPAL_SUCCESS != (ret = mca_base_framework_open(&opal_shmem_base_framework, 0))) {
+        error = "opal_shmem_base_open";
         goto return_error;
     }
 

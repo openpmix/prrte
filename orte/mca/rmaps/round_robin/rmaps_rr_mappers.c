@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2009-2013 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -49,6 +49,7 @@ int orte_rmaps_rr_byslot(orte_job_t *jdata,
     hwloc_obj_t obj=NULL;
     float balance;
     bool add_one=false;
+    orte_proc_t *proc;
 
     opal_output_verbose(2, orte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by slot for job %s slots %d num_procs %lu",
@@ -104,7 +105,6 @@ int orte_rmaps_rr_byslot(orte_job_t *jdata,
                             (int)num_procs_to_assign, node->name);
 
         for (i=0; i < num_procs_to_assign && nprocs_mapped < app->num_procs; i++) {
-            orte_proc_t *proc;
             /* add this node to the map - do it only once */
             if (!ORTE_FLAG_TEST(node, ORTE_NODE_FLAG_MAPPED)) {
                 ORTE_FLAG_SET(node, ORTE_NODE_FLAG_MAPPED);
@@ -117,7 +117,6 @@ int orte_rmaps_rr_byslot(orte_job_t *jdata,
             }
             nprocs_mapped++;
             orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
-            OBJ_RELEASE(proc);
         }
     }
 
@@ -185,13 +184,11 @@ int orte_rmaps_rr_byslot(orte_job_t *jdata,
                             "mca:rmaps:rr:slot adding up to %d procs to node %s",
                             num_procs_to_assign, node->name);
         for (i=0; i < num_procs_to_assign && nprocs_mapped < app->num_procs; i++) {
-            orte_proc_t *proc;
             if (NULL == (proc = orte_rmaps_base_setup_proc(jdata, node, app->idx))) {
                 return ORTE_ERR_OUT_OF_RESOURCE;
             }
             nprocs_mapped++;
             orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
-            OBJ_RELEASE(proc);
         }
         /* not all nodes are equal, so only set oversubscribed for
          * this node if it is in that state
@@ -243,6 +240,7 @@ int orte_rmaps_rr_bynode(orte_job_t *jdata,
     float balance;
     bool add_one=false;
     bool oversubscribed=false;
+    orte_proc_t *proc;
 
     opal_output_verbose(2, orte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by node for job %s app %d slots %d num_procs %lu",
@@ -374,13 +372,11 @@ int orte_rmaps_rr_bynode(orte_job_t *jdata,
                                  ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), node->name,
                                  num_procs_to_assign));
             for (j=0; j < num_procs_to_assign && nprocs_mapped < app->num_procs; j++) {
-                orte_proc_t *proc;
                 if (NULL == (proc = orte_rmaps_base_setup_proc(jdata, node, app->idx))) {
                     return ORTE_ERR_OUT_OF_RESOURCE;
                 }
                 nprocs_mapped++;
                 orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
-                OBJ_RELEASE(proc);
             }
             /* not all nodes are equal, so only set oversubscribed for
              * this node if it is in that state
@@ -420,7 +416,6 @@ int orte_rmaps_rr_bynode(orte_job_t *jdata,
     /* now fillin as required until fully mapped */
     while (nprocs_mapped < app->num_procs) {
         OPAL_LIST_FOREACH(node, node_list, orte_node_t) {
-            orte_proc_t *proc;
             /* get the root object as we are not assigning
              * locale except at the node level
              */
@@ -436,7 +431,6 @@ int orte_rmaps_rr_bynode(orte_job_t *jdata,
             }
             nprocs_mapped++;
             orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
-            OBJ_RELEASE(proc);
             /* not all nodes are equal, so only set oversubscribed for
              * this node if it is in that state
              */
@@ -482,6 +476,7 @@ int orte_rmaps_rr_byobj(orte_job_t *jdata,
     unsigned int nobjs;
     bool add_one;
     bool second_pass;
+    orte_proc_t *proc;
 
     /* there are two modes for mapping by object: span and not-span. The
      * span mode essentially operates as if there was just a single
@@ -591,7 +586,6 @@ int orte_rmaps_rr_byobj(orte_job_t *jdata,
             do {
                 /* loop through the number of objects */
                 for (i=0; i < (int)nobjs && nmapped < nprocs && nprocs_mapped < (int)app->num_procs; i++) {
-                    orte_proc_t *proc;
                     opal_output_verbose(20, orte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:rr: assigning proc to object %d", (i+start) % nobjs);
                     /* get the hwloc object */
@@ -611,7 +605,6 @@ int orte_rmaps_rr_byobj(orte_job_t *jdata,
                     nprocs_mapped++;
                     nmapped++;
                     orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
-                    OBJ_RELEASE(proc);
                 }
             } while (nmapped < nprocs && nprocs_mapped < (int)app->num_procs);
             add_one = true;
@@ -671,6 +664,7 @@ static int byobj_span(orte_job_t *jdata,
     int nprocs, nxtra_objs;
     hwloc_obj_t obj=NULL;
     unsigned int nobjs;
+    orte_proc_t *proc;
 
     opal_output_verbose(2, orte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping span by %s for job %s slots %d num_procs %lu",
@@ -771,13 +765,11 @@ static int byobj_span(orte_job_t *jdata,
             }
             /* map the reqd number of procs */
             for (j=0; j < nprocs && nprocs_mapped < app->num_procs; j++) {
-                orte_proc_t *proc;
                 if (NULL == (proc = orte_rmaps_base_setup_proc(jdata, node, app->idx))) {
                     return ORTE_ERR_OUT_OF_RESOURCE;
                 }
                 nprocs_mapped++;
                 orte_set_attribute(&proc->attributes, ORTE_PROC_HWLOC_LOCALE, ORTE_ATTR_LOCAL, obj, OPAL_PTR);
-                OBJ_RELEASE(proc);
             }
             /* keep track of the node we last used */
             jdata->bookmark = node;
