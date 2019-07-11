@@ -42,9 +42,9 @@ lib_LTLIBRARIES = lib@ORTE_LIB_PREFIX@open-rte.la
 lib@ORTE_LIB_PREFIX@open_rte_la_SOURCES =
 lib@ORTE_LIB_PREFIX@open_rte_la_LIBADD = \
 	$(MCA_orte_FRAMEWORK_LIBS) \
-	$(ORTE_TOP_BUILDDIR)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
-lib@ORTE_LIB_PREFIX@open_rte_la_DEPENDENCIES = $(lib@OPAL_LIB_PREFIX@open_rte_la_LIBADD)
-lib@ORTE_LIB_PREFIX@open_rte_la_LDFLAGS = -version-info $(lib@OPAL_LIB_PREFIX@open_rte_so_version) -lpmix
+	$(ORTE_TOP_BUILDDIR)/opal/libprteopen-pal.la
+lib@ORTE_LIB_PREFIX@open_rte_la_DEPENDENCIES = $(libprteopen_rte_la_LIBADD)
+lib@ORTE_LIB_PREFIX@open_rte_la_LDFLAGS = -version-info $(libprteopen_rte_so_version) -lpmix
 
 # included subdirectory Makefile.am's and appended-to variables
 headers =

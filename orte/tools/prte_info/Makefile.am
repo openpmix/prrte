@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # $COPYRIGHT$
@@ -69,7 +69,7 @@ prte_info_SOURCES = \
 
 prte_info_LDADD = \
 	$(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la \
-	$(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
+	$(top_builddir)/opal/libprteopen-pal.la
 
 clean-local:
 	test -z "$(OMPI_CXX_TEMPLATE_REPOSITORY)" || rm -rf $(OMPI_CXX_TEMPLATE_REPOSITORY)

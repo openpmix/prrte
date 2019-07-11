@@ -19,7 +19,7 @@
 # Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
-# Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
@@ -241,11 +241,6 @@ if test "$enable_binaries" = "no" && test "$enable_dist" = "yes"; then
     AC_MSG_ERROR([Cannot continue])
 fi
 
-# The library prefixes must be set before we call OPAL MCA.  Here is
-# as good a place as any.
-
-OPAL_SET_LIB_PREFIX([prte])
-ORTE_SET_LIB_PREFIX([prte])
 
 ############################################################################
 # Libtool: part one

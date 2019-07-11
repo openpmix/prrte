@@ -34,7 +34,7 @@ mcacomponentdir = $(opallibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_compress_zlib_la_SOURCES = $(sources)
 mca_compress_zlib_la_LDFLAGS = -module -avoid-version $(compress_zlib_LDFLAGS)
-mca_compress_zlib_la_LIBADD = $(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la $(compress_zlib_LIBS)
+mca_compress_zlib_la_LIBADD = $(top_builddir)/opal/libprteopen-pal.la $(compress_zlib_LIBS)
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_compress_zlib_la_SOURCES = $(sources)

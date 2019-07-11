@@ -12,6 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,7 +27,7 @@ headers += \
         dss/dss_types.h \
         dss/dss_internal.h
 
-lib@OPAL_LIB_PREFIX@open_pal_la_SOURCES += \
+libprteopen_pal_la_SOURCES += \
         dss/dss_internal_functions.c \
         dss/dss_compare.c \
         dss/dss_copy.c \
