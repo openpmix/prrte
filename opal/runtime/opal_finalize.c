@@ -12,7 +12,7 @@
  * Copyright (c) 2008-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
@@ -42,6 +42,7 @@
 #include "opal/mca/if/base/base.h"
 #include "opal/mca/installdirs/base/base.h"
 #include "opal/mca/backtrace/base/base.h"
+#include "opal/mca/shmem/base/base.h"
 #include "opal/mca/timer/base/base.h"
 #include "opal/hwloc/hwloc-internal.h"
 #include "opal/event/event-internal.h"
@@ -124,6 +125,8 @@ opal_finalize(void)
     (void) mca_base_framework_close(&opal_timer_base_framework);
 
     (void) mca_base_framework_close(&opal_backtrace_base_framework);
+
+    (void) mca_base_framework_close(&opal_shmem_base_framework);
 
     /* close hwloc */
     opal_hwloc_base_close();

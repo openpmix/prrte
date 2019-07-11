@@ -308,7 +308,7 @@ static int rank_by(orte_job_t *jdata,
     orte_vpid_t num_ranked=0;
     orte_node_t *node;
     orte_proc_t *proc, *pptr;
-    orte_vpid_t vpid, np;
+    orte_vpid_t vpid;
     int cnt;
     opal_pointer_array_t objs;
     hwloc_obj_t locale;
