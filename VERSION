@@ -78,8 +78,28 @@ date="Nov 24, 2018"
 # Version numbers are described in the Libtool current:revision:age
 # format.
 
-libopen_rte_so_version=0:0:0
-libopen_pal_so_version=0:0:0
+#
+# NOTE: The ORTE and OPAL code in this package don't cleanly correlate
+# to any release point in the OMPI code base as the two codes (PRRTE
+# and OMPI) forked at some arbitrary point in time, and each has been
+# updated independently of each other. Since the libraries produced
+# by this package are explicitly prefixed with its name, there is
+# no issue of library confusion between the two packages. Thus, we
+# restart the PRRTE libraries at 1:0:0.
+#
+# At some future time, it is possible that the OMPI and PRRTE codes
+# will "re-converge" - there are open discussions of OMPI replacing
+# its copy of ORTE with PRRTE. Should that happen, it is expected
+# that the OPAL code in this package would be removed and replaced
+# with a Git submodule. This would result in major change in the
+# OPAL version number linked against PRRTE. Rather than trying to
+# anticipate that change, starting the numbering back at 1:0:0
+# guarantees that the revised OPAL version will be a step upward
+# to a higher number, thus ensuring that the linker "does the
+# right thing"
+
+libprteopen_rte_so_version=0:0:0
+libprteopen_pal_so_version=0:0:0
 
 # "Common" components install standalone libraries that are run-time
 # linked by one or more components.  So they need to be versioned as
@@ -88,5 +108,5 @@ libopen_pal_so_version=0:0:0
 
 
 # ORTE layer
-libmca_orte_common_alps_so_version=0:0:0
+libprtemca_orte_common_alps_so_version=0:0:0
 

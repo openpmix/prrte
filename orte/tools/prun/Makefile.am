@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2008-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
@@ -56,8 +56,8 @@ prun_SOURCES = \
         prun.h
 
 prun_LDADD = \
-	$(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la \
-	$(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
+	$(top_builddir)/orte/libprteopen-rte.la \
+	$(top_builddir)/opal/libprteopen-pal.la
 
 prun_LDFLAGS = \
         -lpmix

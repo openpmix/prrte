@@ -13,7 +13,7 @@
 # Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -27,5 +27,5 @@
 headers += \
         pmix/pmix-internal.h
 
-lib@OPAL_LIB_PREFIX@open_pal_la_SOURCES += \
+libprteopen_pal_la_SOURCES += \
         pmix/pmix.c
