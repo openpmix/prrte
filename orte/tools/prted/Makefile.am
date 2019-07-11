@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2007-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2016-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -47,7 +47,7 @@ prted_SOURCES = prted.c
 prted_LDFLAGS =
 prted_LDADD = \
 	$(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la \
-	$(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
+	$(top_builddir)/opal/libprteopen-pal.la
 
 distclean-local:
 	rm -f $(man_pages)

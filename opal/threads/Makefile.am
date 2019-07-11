@@ -13,6 +13,7 @@
 # Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -32,7 +33,7 @@ headers += \
         threads/wait_sync.h \
 	threads/thread_usage.h
 
-lib@OPAL_LIB_PREFIX@open_pal_la_SOURCES += \
+libprteopen_pal_la_SOURCES += \
         threads/condition.c \
         threads/mutex.c \
         threads/thread.c \

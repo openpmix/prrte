@@ -15,7 +15,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -537,3 +537,16 @@ static inline uint16_t ntohs(uint16_t netvar) { return netvar; }
 #undef HAVE_CONFIG_H
 
 #endif /* OMPI_BUILDING */
+
+#define OPAL_VERSION          PRTEOPAL_VERSION
+#define OPAL_MAJOR_VERSION    PRTEOPAL_MAJOR_VERSION
+#define OPAL_MINOR_VERSION    PRTEOPAL_MINOR_VERSION
+#define OPAL_RELEASE_VERSION  PRTEOPAL_RELEASE_VERSION
+#define OPAL_GREEK_VERSION    PRTEOPAL_GREEK_VERSION
+#define OPAL_REPO_REV         PRTEOPAL_REPO_REV
+#define OPAL_RELEASE_DATE     PRTEOPAL_RELEASE_DATE
+
+#define ORTE_VERSION          PRTEORTE_VERSION
+#define ORTE_MAJOR_VERSION    PRTEORTE_MAJOR_VERSION
+#define ORTE_MINOR_VERSION    PRTEORTE_MINOR_VERSION
+#define ORTE_RELEASE_VERSION  PRTEORTE_RELEASE_VERSION

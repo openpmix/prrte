@@ -13,7 +13,7 @@
 # Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2014-2018 Los Alamos National Security, LLC. All rights
 #                         reserved.
-# Copyright (c) 2018      Intel, Inc. All rights reserved.
+# Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -39,7 +39,7 @@ headers += \
         class/opal_value_array.h \
         class/opal_ring_buffer.h
 
-lib@OPAL_LIB_PREFIX@open_pal_la_SOURCES += \
+libprteopen_pal_la_SOURCES += \
         class/opal_bitmap.c \
         class/opal_hash_table.c \
         class/opal_hotel.c \

@@ -90,8 +90,9 @@ date="Nov 24, 2018"
 # OPAL version number linked against PRRTE. Rather than trying to
 # anticipate that change, starting the numbering back at 1:0:0
 # guarantees that the revised OPAL version will be a step upward
-# to a higher number, thus ensuring that the linker "does the
-# right thing"
+# to a higher number, thus ensuring that the linker does the
+# right thing
+
 libprteopen_rte_so_version=1:0:0
 libprteopen_pal_so_version=1:0:0
 
