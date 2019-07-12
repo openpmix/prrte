@@ -50,7 +50,7 @@ prte_SOURCES = \
         prte.c
 
 prte_LDADD = \
-	$(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la \
+	$(top_builddir)/orte/libprteopen-rte.la \
 	$(top_builddir)/opal/libprteopen-pal.la
 
 distclean-local:

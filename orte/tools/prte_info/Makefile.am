@@ -68,7 +68,7 @@ prte_info_SOURCES = \
         version.c
 
 prte_info_LDADD = \
-	$(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la \
+	$(top_builddir)/orte/libprteopen-rte.la \
 	$(top_builddir)/opal/libprteopen-pal.la
 
 clean-local:

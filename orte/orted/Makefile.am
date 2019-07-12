@@ -11,7 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2015-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2018      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -28,7 +28,7 @@ headers += \
 	orted/orted.h \
 	orted/orted_submit.h
 
-lib@ORTE_LIB_PREFIX@open_rte_la_SOURCES += \
+libprteopen_rte_la_SOURCES += \
         orted/orted_main.c \
         orted/orted_comm.c
 
