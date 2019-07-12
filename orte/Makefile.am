@@ -14,6 +14,7 @@
 #                         reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -37,19 +38,19 @@ DIST_SUBDIRS = \
 
 # Build the main ORTE library
 
-lib_LTLIBRARIES = lib@ORTE_LIB_PREFIX@open-rte.la
-lib@ORTE_LIB_PREFIX@open_rte_la_SOURCES =
-lib@ORTE_LIB_PREFIX@open_rte_la_LIBADD = \
+lib_LTLIBRARIES = libprteopen-rte.la
+libprteopen_rte_la_SOURCES =
+libprteopen_rte_la_LIBADD = \
 	$(MCA_orte_FRAMEWORK_LIBS) \
-	$(ORTE_TOP_BUILDDIR)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
-lib@ORTE_LIB_PREFIX@open_rte_la_DEPENDENCIES = $(libopen_rte_la_LIBADD)
-lib@ORTE_LIB_PREFIX@open_rte_la_LDFLAGS = -version-info $(libopen_rte_so_version) -lpmix
+	$(ORTE_TOP_BUILDDIR)/opal/libprteopen-pal.la
+libprteopen_rte_la_DEPENDENCIES = $(libprteopen_rte_la_LIBADD)
+libprteopen_rte_la_LDFLAGS = -version-info $(libprteopen_rte_so_version) -lpmix
 
 # included subdirectory Makefile.am's and appended-to variables
 headers =
 noinst_LTLIBRARIES =
 dist_ortedata_DATA =
-lib@ORTE_LIB_PREFIX@open_rte_la_SOURCES += $(headers)
+libprteopen_rte_la_SOURCES += $(headers)
 
 # Conditionally install the header files
 

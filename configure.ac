@@ -19,7 +19,7 @@
 # Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
-# Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
@@ -131,20 +131,10 @@ OPAL_SAVE_VERSION([OPAL], [Open Portable Access Layer], [$srcdir/VERSION],
 # Get shared library version numbers
 . $srcdir/VERSION
 
-AC_SUBST(libopen_rte_so_version)
-AC_SUBST(libopen_pal_so_version)
+AC_SUBST(libprteopen_rte_so_version)
+AC_SUBST(libprteopen_pal_so_version)
 
-# It's icky that we have to hard-code the names of the
-# common components here.  :-( This could probably be done
-# transparently by adding some intelligence in autogen.pl
-# and/or opal_mca.m4, but I don't have the cycles to do this
-# right now.
-AC_SUBST(libmca_opal_common_ofi_so_version)
-AC_SUBST(libmca_opal_common_cuda_so_version)
-AC_SUBST(libmca_opal_common_sm_so_version)
-AC_SUBST(libmca_opal_common_ugni_so_version)
-AC_SUBST(libmca_opal_common_verbs_so_version)
-AC_SUBST(libmca_orte_common_alps_so_version)
+AC_SUBST(libprtemca_orte_common_alps_so_version)
 
 #
 # Get the versions of the autotools that were used to bootstrap us
@@ -241,11 +231,6 @@ if test "$enable_binaries" = "no" && test "$enable_dist" = "yes"; then
     AC_MSG_ERROR([Cannot continue])
 fi
 
-# The library prefixes must be set before we call OPAL MCA.  Here is
-# as good a place as any.
-
-OPAL_SET_LIB_PREFIX([prte])
-ORTE_SET_LIB_PREFIX([prte])
 
 ############################################################################
 # Libtool: part one
