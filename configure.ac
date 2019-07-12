@@ -122,29 +122,19 @@ AC_SUBST([CONFIGURE_DEPENDENCIES], ['$(top_srcdir)/VERSION'])
 opal_show_subtitle "Checking versions"
 
 # Get the version of PRTE that we are installing
-OPAL_SAVE_VERSION([PRTEORTE], [Open Run-Time Environment],
+OPAL_SAVE_VERSION([ORTE], [Open Run-Time Environment],
                           [$srcdir/VERSION],
                           [orte/include/orte/version.h])
-OPAL_SAVE_VERSION([PRTEOPAL], [Open Portable Access Layer], [$srcdir/VERSION],
+OPAL_SAVE_VERSION([OPAL], [Open Portable Access Layer], [$srcdir/VERSION],
                   [opal/include/opal/version.h])
 
 # Get shared library version numbers
 . $srcdir/VERSION
 
-AC_SUBST(libopen_rte_so_version)
-AC_SUBST(libopen_pal_so_version)
+AC_SUBST(libprteopen_rte_so_version)
+AC_SUBST(libprteopen_pal_so_version)
 
-# It's icky that we have to hard-code the names of the
-# common components here.  :-( This could probably be done
-# transparently by adding some intelligence in autogen.pl
-# and/or opal_mca.m4, but I don't have the cycles to do this
-# right now.
-AC_SUBST(libmca_opal_common_ofi_so_version)
-AC_SUBST(libmca_opal_common_cuda_so_version)
-AC_SUBST(libmca_opal_common_sm_so_version)
-AC_SUBST(libmca_opal_common_ugni_so_version)
-AC_SUBST(libmca_opal_common_verbs_so_version)
-AC_SUBST(libmca_orte_common_alps_so_version)
+AC_SUBST(libprtemca_orte_common_alps_so_version)
 
 #
 # Get the versions of the autotools that were used to bootstrap us
