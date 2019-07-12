@@ -40,7 +40,7 @@ mcacomponentdir = $(ortelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_rml_oob_la_SOURCES = $(sources)
 mca_rml_oob_la_LDFLAGS = -module -avoid-version
-mca_rml_oob_la_LIBADD = $(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la
+mca_rml_oob_la_LIBADD = $(top_builddir)/orte/libprteopen-rte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_rml_oob_la_SOURCES = $(sources)

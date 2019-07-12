@@ -47,7 +47,7 @@ mca_odls_alps_la_SOURCES = $(sources)
 mca_odls_alps_la_CPPFLAGS = $(odls_alps_CPPFLAGS)
 mca_odls_alps_la_LDFLAGS = -module -avoid-version $(odls_alps_LDFLAGS)
 mca_odls_alps_la_LIBADD = $(odls_alps_LIBS) \
-    $(ORTE_TOP_BUILDDIR)/orte/mca/common/alps/lib@ORTE_LIB_PREFIX@mca_common_alps.la
+    $(ORTE_TOP_BUILDDIR)/orte/mca/common/alps/libprtemca_common_alps.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_odls_alps_la_SOURCES =$(sources)
