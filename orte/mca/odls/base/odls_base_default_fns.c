@@ -281,6 +281,13 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         }
     }
 
+    /* compute the ranks and add the proc objects
+     * to the jdata->procs array */
+    if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_vpids(jdata))) {
+        ORTE_ERROR_LOG(rc);
+        return rc;
+    }
+
     /* assemble the node and proc map info */
     list = NULL;
     procs = NULL;
@@ -544,20 +551,21 @@ int orte_odls_base_default_construct_child_list(opal_buffer_t *buffer,
             goto REPORT_ERROR;
         }
 
-        if (!ORTE_PROC_IS_HNP) {
+        if (!ORTE_PROC_IS_MASTER) {
             /* assign locations to the procs */
             if (ORTE_SUCCESS != (rc = orte_rmaps_base_assign_locations(jdata))) {
                 ORTE_ERROR_LOG(rc);
                 goto REPORT_ERROR;
             }
+
+            /* compute the ranks and add the proc objects
+             * to the jdata->procs array */
+            if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_vpids(jdata))) {
+                ORTE_ERROR_LOG(rc);
+                goto REPORT_ERROR;
+            }
         }
 
-        /* compute the ranks and add the proc objects
-         * to the jdata->procs array */
-        if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_vpids(jdata))) {
-            ORTE_ERROR_LOG(rc);
-            goto REPORT_ERROR;
-        }
         /* and finally, compute the local and node ranks */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_local_ranks(jdata))) {
             ORTE_ERROR_LOG(rc);
