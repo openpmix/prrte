@@ -375,10 +375,10 @@ int pmix_server_init(void)
         opal_list_append(&ilist, &kv->super);
     }
 
-    /* if we are the HNP or MASTER, then we are a gateway */
-    if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
+    /* if we are the MASTER, then we are the scheduler */
+    if (ORTE_PROC_IS_MASTER) {
         kv = OBJ_NEW(opal_value_t);
-        kv->key = strdup(PMIX_SERVER_GATEWAY);
+        kv->key = strdup(PMIX_SERVER_SCHEDULER);
         kv->type = OPAL_BOOL;
         kv->data.flag = true;
         opal_list_append(&ilist, &kv->super);
