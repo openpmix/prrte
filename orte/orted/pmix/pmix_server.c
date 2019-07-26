@@ -375,10 +375,16 @@ int pmix_server_init(void)
         opal_list_append(&ilist, &kv->super);
     }
 
-    /* if we are the MASTER, then we are the scheduler */
+    /* if we are the MASTER, then we are the scheduler
+     * as well as a gateway */
     if (ORTE_PROC_IS_MASTER) {
         kv = OBJ_NEW(opal_value_t);
         kv->key = strdup(PMIX_SERVER_SCHEDULER);
+        kv->type = OPAL_BOOL;
+        kv->data.flag = true;
+        opal_list_append(&ilist, &kv->super);
+        kv = OBJ_NEW(opal_value_t);
+        kv->key = strdup(PMIX_SERVER_GATEWAY);
         kv->type = OPAL_BOOL;
         kv->data.flag = true;
         opal_list_append(&ilist, &kv->super);
@@ -809,7 +815,7 @@ static void pmix_server_log(int status, orte_process_name_t* sender,
     int rc;
     int32_t cnt;
     size_t n, ninfo;
-    pmix_info_t *info;
+    pmix_info_t *info, directives[2];
     pmix_status_t ret;
     pmix_proc_t proc;
     opal_byte_object_t *boptr;
@@ -835,9 +841,7 @@ static void pmix_server_log(int status, orte_process_name_t* sender,
     }
 
     PMIX_INFO_CREATE(info, ninfo);
-    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-    pbkt.base_ptr = (char*)boptr->bytes;
-    pbkt.bytes_used = boptr->size;
+    PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
     for (n=0; n < ninfo; n++) {
         cnt = 1;
         ret = PMIx_Data_unpack(&proc, &pbkt, (void*)&info[n], &cnt, PMIX_INFO);
@@ -850,9 +854,16 @@ static void pmix_server_log(int status, orte_process_name_t* sender,
     }
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
+    /* mark that we only want it logged once */
+    PMIX_INFO_LOAD(&directives[0], PMIX_LOG_ONCE, NULL, PMIX_BOOL);
+    /* protect against infinite loop should the PMIx server push
+     * this back up to us */
+    PMIX_INFO_LOAD(&directives[1], "orte.log.noloop", NULL, PMIX_BOOL);
+
     /* pass the array down to be logged */
-    PMIx_Log(info, ninfo, NULL, 0);
-    PMIX_INFO_FREE(info, ninfo);
+    PMIx_Log(info, ninfo, directives, 2);
+    PMIX_INFO_FREE(info, ninfo+1);
+    PMIX_INFO_DESTRUCT(&directives[1]);
 }
 
 
