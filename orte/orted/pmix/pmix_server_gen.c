@@ -862,6 +862,16 @@ void pmix_server_log_fn(const pmix_proc_t *client,
                         "%s logging info",
                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME));
 
+    /* if we are the one that passed it down, then we don't pass it back */
+    for (n=0; n < ndirs; n++) {
+        if (PMIX_CHECK_KEY(&directives[n], "orte.log.noloop")) {
+            if (PMIX_INFO_TRUE(&directives[n])) {
+                rc = PMIX_SUCCESS;
+                goto done;
+            }
+        }
+    }
+
     PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
     OPAL_PMIX_CONVERT_NAME(&psender, ORTE_PROC_MY_NAME);
     cnt = 0;
@@ -881,11 +891,8 @@ void pmix_server_log_fn(const pmix_proc_t *client,
                 buf->base_ptr = NULL;
                 OBJ_RELEASE(buf);
             }
-        } else if (ORTE_PROC_IS_HNP || ORTE_PROC_IS_MASTER) {
-            /* we can't support this */
-            rc = ORTE_ERR_NOT_SUPPORTED;
         } else {
-            /* we need to ship this to our HNP/MASTER for processing */
+            /* ship this to our HNP/MASTER for processing, even if that is us */
             ret = PMIx_Data_pack(&psender, &pbuf, (pmix_info_t*)&data[n], 1, PMIX_INFO);
             if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
@@ -910,6 +917,8 @@ void pmix_server_log_fn(const pmix_proc_t *client,
             OBJ_RELEASE(buf);
         }
     }
+
+  done:
     /* we cannot directly execute the callback here
      * as it would threadlock - so shift to somewhere
      * safe */
