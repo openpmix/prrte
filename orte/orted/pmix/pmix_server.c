@@ -378,16 +378,20 @@ int pmix_server_init(void)
     /* if we are the MASTER, then we are the scheduler
      * as well as a gateway */
     if (ORTE_PROC_IS_MASTER) {
+#ifdef PMIX_SERVER_SCHEDULER
         kv = OBJ_NEW(opal_value_t);
         kv->key = strdup(PMIX_SERVER_SCHEDULER);
         kv->type = OPAL_BOOL;
         kv->data.flag = true;
         opal_list_append(&ilist, &kv->super);
+#endif
+#ifdef PMIX_SERVER_GATEWAY
         kv = OBJ_NEW(opal_value_t);
         kv->key = strdup(PMIX_SERVER_GATEWAY);
         kv->type = OPAL_BOOL;
         kv->data.flag = true;
         opal_list_append(&ilist, &kv->super);
+#endif
     }
 
     /* PRRTE always allows remote tool connections */
