@@ -15,6 +15,8 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2019      UT-Battelle, LLC. All rights reserved.
+ *
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -342,6 +344,7 @@ void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
         if (NULL == (node = (orte_node_t*)opal_pointer_array_get_item(orte_node_pool, 0))) {
             ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
             OBJ_RELEASE(caddy);
+            jdata->exit_code = ORTE_ERR_NOT_FOUND;
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
             return;
         }
@@ -376,6 +379,7 @@ void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
          */
         if (ORTE_ERR_TAKE_NEXT_OPTION != rc) {
             ORTE_ERROR_LOG(rc);
+            jdata->exit_code = rc;
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
@@ -386,6 +390,7 @@ void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
          * for launch as all the resources were busy
          */
         orte_show_help("help-orte-rmaps-base.txt", "cannot-launch", true);
+        jdata->exit_code = rc;
         ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
         goto cleanup;
     }
@@ -397,6 +402,7 @@ void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
         orte_show_help("help-orte-rmaps-base.txt", "failed-map", true,
                        did_map ? "mapped" : "unmapped",
                        jdata->num_procs, jdata->map->num_nodes);
+        jdata->exit_code = -ORTE_JOB_STATE_MAP_FAILED;
         ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
         goto cleanup;
     }
@@ -416,24 +422,28 @@ void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
          * to the jdata->procs array */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_vpids(jdata))) {
             ORTE_ERROR_LOG(rc);
+            jdata->exit_code = rc;
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
         /* compute and save local ranks */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_local_ranks(jdata))) {
             ORTE_ERROR_LOG(rc);
+            jdata->exit_code = rc;
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
         /* compute and save location assignments */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_assign_locations(jdata))) {
             ORTE_ERROR_LOG(rc);
+            jdata->exit_code = rc;
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
         /* compute and save bindings */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_bindings(jdata))) {
             ORTE_ERROR_LOG(rc);
+            jdata->exit_code = rc;
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
@@ -441,6 +451,7 @@ void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
         /* compute and save location assignments */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_assign_locations(jdata))) {
             ORTE_ERROR_LOG(rc);
+            jdata->exit_code = rc;
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
@@ -448,6 +459,7 @@ void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
         /* compute and save local ranks */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_local_ranks(jdata))) {
             ORTE_ERROR_LOG(rc);
+            jdata->exit_code = rc;
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
@@ -455,6 +467,7 @@ void orte_rmaps_base_map_job(int fd, short args, void *cbdata)
         /* compute and save bindings */
         if (ORTE_SUCCESS != (rc = orte_rmaps_base_compute_bindings(jdata))) {
             ORTE_ERROR_LOG(rc);
+            jdata->exit_code = rc;
             ORTE_ACTIVATE_JOB_STATE(jdata, ORTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
