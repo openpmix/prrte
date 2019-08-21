@@ -324,6 +324,7 @@ static int create_dmns(orte_grpcomm_signature_t *sig,
     bool found;
     size_t nds;
     orte_vpid_t *dns;
+    int rc = ORTE_SUCCESS;
 
     OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:base:create_dmns called with %s signature",
@@ -338,90 +339,74 @@ static int create_dmns(orte_grpcomm_signature_t *sig,
         return ORTE_SUCCESS;
     }
 
-    if (ORTE_VPID_WILDCARD == sig->signature[0].vpid) {
-        OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output,
-                             "%s grpcomm:base:create_dmns called for all procs in job %s",
-                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                             ORTE_JOBID_PRINT(sig->signature[0].jobid)));
-        /* all daemons hosting this jobid are participating */
-        if (NULL == (jdata = orte_get_job_data_object(sig->signature[0].jobid))) {
-            ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-            ORTE_FORCED_TERMINATE(ORTE_ERR_NOT_FOUND);
-            *ndmns = 0;
-            *dmns = NULL;
-            return ORTE_ERR_NOT_FOUND;
+    OBJ_CONSTRUCT(&ds, opal_list_t);
+    /* I am obviously participating */
+    nm = OBJ_NEW(orte_namelist_t);
+    nm->name.jobid = ORTE_PROC_MY_NAME->jobid;
+    nm->name.vpid = ORTE_PROC_MY_NAME->vpid;
+    opal_list_append(&ds, &nm->super);
+
+    for (n=0; n < sig->sz; n++) {
+        if (NULL == (jdata = orte_get_job_data_object(sig->signature[n].jobid))) {
+            rc = ORTE_ERR_NOT_FOUND;
+            break;
         }
         if (NULL == jdata->map || 0 == jdata->map->num_nodes) {
             /* we haven't generated a job map yet - if we are the HNP,
              * then we should only involve ourselves. Otherwise, we have
              * no choice but to abort to avoid hangs */
             if (ORTE_PROC_IS_HNP) {
-                dns = (orte_vpid_t*)malloc(sizeof(vpid));
-                dns[0] = ORTE_PROC_MY_NAME->vpid;
-                *ndmns = 1;
-                *dmns = dns;
-                return ORTE_SUCCESS;
+                rc = ORTE_SUCCESS;
+                break;
             }
-            ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-            ORTE_FORCED_TERMINATE(ORTE_ERR_NOT_FOUND);
-            *ndmns = 0;
-            *dmns = NULL;
-            return ORTE_ERR_NOT_FOUND;
+            rc = ORTE_ERR_NOT_FOUND;
+            break;
         }
-        dns = (orte_vpid_t*)malloc(jdata->map->num_nodes * sizeof(vpid));
-        nds = 0;
-        for (i=0; i < jdata->map->nodes->size && (int)nds < jdata->map->num_nodes; i++) {
-            if (NULL == (node = opal_pointer_array_get_item(jdata->map->nodes, i))) {
-                continue;
-            }
-            if (NULL == node->daemon) {
-                /* should never happen */
-                ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-                free(dns);
-                ORTE_FORCED_TERMINATE(ORTE_ERR_NOT_FOUND);
-                *ndmns = 0;
-                *dmns = NULL;
-                return ORTE_ERR_NOT_FOUND;
-            }
-            OPAL_OUTPUT_VERBOSE((5, orte_grpcomm_base_framework.framework_output,
-                                 "%s grpcomm:base:create_dmns adding daemon %s to array",
+        if (ORTE_VPID_WILDCARD == sig->signature[n].vpid) {
+            OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output,
+                                 "%s grpcomm:base:create_dmns called for all procs in job %s",
                                  ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                                 ORTE_NAME_PRINT(&node->daemon->name)));
-            dns[nds++] = node->daemon->name.vpid;
-        }
-    } else {
-        /* lookup the daemon for each proc and add it to the list, checking to
-         * ensure any daemon only gets added once. Yes, this isn't a scalable
-         * algo - someone can come up with something better! */
-        OBJ_CONSTRUCT(&ds, opal_list_t);
-        for (n=0; n < sig->sz; n++) {
-            if (NULL == (jdata = orte_get_job_data_object(sig->signature[n].jobid))) {
-                ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-                OPAL_LIST_DESTRUCT(&ds);
-                ORTE_FORCED_TERMINATE(ORTE_ERR_NOT_FOUND);
-                *ndmns = 0;
-                *dmns = NULL;
-                return ORTE_ERR_NOT_FOUND;
+                                 ORTE_JOBID_PRINT(sig->signature[0].jobid)));
+            /* all daemons hosting this jobid are participating */
+            for (i=0; i < jdata->map->nodes->size; i++) {
+                if (NULL == (node = opal_pointer_array_get_item(jdata->map->nodes, i))) {
+                    continue;
+                }
+                if (NULL == node->daemon) {
+                    rc = ORTE_ERR_NOT_FOUND;
+                    goto done;
+                }
+                found = false;
+                OPAL_LIST_FOREACH(nm, &ds, orte_namelist_t) {
+                    if (nm->name.vpid == node->daemon->name.vpid) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    OPAL_OUTPUT_VERBOSE((5, orte_grpcomm_base_framework.framework_output,
+                                         "%s grpcomm:base:create_dmns adding daemon %s to list",
+                                         ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                                         ORTE_NAME_PRINT(&node->daemon->name)));
+                    nm = OBJ_NEW(orte_namelist_t);
+                    nm->name.jobid = ORTE_PROC_MY_NAME->jobid;
+                    nm->name.vpid = node->daemon->name.vpid;
+                    opal_list_append(&ds, &nm->super);
+                }
             }
+        } else {
+            /* lookup the daemon for this proc and add it to the list */
             OPAL_OUTPUT_VERBOSE((5, orte_grpcomm_base_framework.framework_output,
                                 "%s sign: GETTING PROC OBJECT FOR %s",
                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
                                 ORTE_NAME_PRINT(&sig->signature[n])));
             if (NULL == (proc = (orte_proc_t*)opal_pointer_array_get_item(jdata->procs, sig->signature[n].vpid))) {
-                ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-                OPAL_LIST_DESTRUCT(&ds);
-                ORTE_FORCED_TERMINATE(ORTE_ERR_NOT_FOUND);
-                *ndmns = 0;
-                *dmns = NULL;
-                return ORTE_ERR_NOT_FOUND;
+                rc = ORTE_ERR_NOT_FOUND;
+                goto done;
             }
             if (NULL == proc->node || NULL == proc->node->daemon) {
-                ORTE_ERROR_LOG(ORTE_ERR_NOT_FOUND);
-                OPAL_LIST_DESTRUCT(&ds);
-                ORTE_FORCED_TERMINATE(ORTE_ERR_NOT_FOUND);
-                *ndmns = 0;
-                *dmns = NULL;
-                return ORTE_ERR_NOT_FOUND;
+                rc = ORTE_ERR_NOT_FOUND;
+                goto done;
             }
             vpid = proc->node->daemon->name.vpid;
             found = false;
@@ -438,29 +423,23 @@ static int create_dmns(orte_grpcomm_signature_t *sig,
                 opal_list_append(&ds, &nm->super);
             }
         }
-        if (0 == opal_list_get_size(&ds)) {
-            ORTE_ERROR_LOG(ORTE_ERR_BAD_PARAM);
-            OPAL_LIST_DESTRUCT(&ds);
-            ORTE_FORCED_TERMINATE(ORTE_ERR_NOT_FOUND);
-            *ndmns = 0;
-            *dmns = NULL;
-            return ORTE_ERR_NOT_FOUND;
-        }
-        dns = (orte_vpid_t*)malloc(opal_list_get_size(&ds) * sizeof(orte_vpid_t));
-        nds = 0;
-        while (NULL != (nm = (orte_namelist_t*)opal_list_remove_first(&ds))) {
-            OPAL_OUTPUT_VERBOSE((5, orte_grpcomm_base_framework.framework_output,
-                                 "%s grpcomm:base:create_dmns adding daemon %s to array",
-                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                                 ORTE_NAME_PRINT(&nm->name)));
-            dns[nds++] = nm->name.vpid;
-            OBJ_RELEASE(nm);
-        }
-        OPAL_LIST_DESTRUCT(&ds);
     }
+
+  done:
+    dns = (orte_vpid_t*)malloc(opal_list_get_size(&ds) * sizeof(orte_vpid_t));
+    nds = 0;
+    while (NULL != (nm = (orte_namelist_t*)opal_list_remove_first(&ds))) {
+        OPAL_OUTPUT_VERBOSE((5, orte_grpcomm_base_framework.framework_output,
+                             "%s grpcomm:base:create_dmns adding daemon %s to array",
+                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                             ORTE_NAME_PRINT(&nm->name)));
+        dns[nds++] = nm->name.vpid;
+        OBJ_RELEASE(nm);
+    }
+    OPAL_LIST_DESTRUCT(&ds);
     *dmns = dns;
     *ndmns = nds;
-    return ORTE_SUCCESS;
+    return rc;
 }
 
 static int pack_xcast(orte_grpcomm_signature_t *sig,
