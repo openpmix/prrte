@@ -322,8 +322,8 @@ static int create_dmns(orte_grpcomm_signature_t *sig,
     orte_namelist_t *nm;
     orte_vpid_t vpid;
     bool found;
-    size_t nds;
-    orte_vpid_t *dns;
+    size_t nds=0;
+    orte_vpid_t *dns=NULL;
     int rc = ORTE_SUCCESS;
 
     OPAL_OUTPUT_VERBOSE((1, orte_grpcomm_base_framework.framework_output,
@@ -340,12 +340,6 @@ static int create_dmns(orte_grpcomm_signature_t *sig,
     }
 
     OBJ_CONSTRUCT(&ds, opal_list_t);
-    /* I am obviously participating */
-    nm = OBJ_NEW(orte_namelist_t);
-    nm->name.jobid = ORTE_PROC_MY_NAME->jobid;
-    nm->name.vpid = ORTE_PROC_MY_NAME->vpid;
-    opal_list_append(&ds, &nm->super);
-
     for (n=0; n < sig->sz; n++) {
         if (NULL == (jdata = orte_get_job_data_object(sig->signature[n].jobid))) {
             rc = ORTE_ERR_NOT_FOUND;
@@ -426,15 +420,17 @@ static int create_dmns(orte_grpcomm_signature_t *sig,
     }
 
   done:
-    dns = (orte_vpid_t*)malloc(opal_list_get_size(&ds) * sizeof(orte_vpid_t));
-    nds = 0;
-    while (NULL != (nm = (orte_namelist_t*)opal_list_remove_first(&ds))) {
-        OPAL_OUTPUT_VERBOSE((5, orte_grpcomm_base_framework.framework_output,
-                             "%s grpcomm:base:create_dmns adding daemon %s to array",
-                             ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
-                             ORTE_NAME_PRINT(&nm->name)));
-        dns[nds++] = nm->name.vpid;
-        OBJ_RELEASE(nm);
+    if (0 < opal_list_get_size(&ds)) {
+        dns = (orte_vpid_t*)malloc(opal_list_get_size(&ds) * sizeof(orte_vpid_t));
+        nds = 0;
+        while (NULL != (nm = (orte_namelist_t*)opal_list_remove_first(&ds))) {
+            OPAL_OUTPUT_VERBOSE((5, orte_grpcomm_base_framework.framework_output,
+                                 "%s grpcomm:base:create_dmns adding daemon %s to array",
+                                 ORTE_NAME_PRINT(ORTE_PROC_MY_NAME),
+                                 ORTE_NAME_PRINT(&nm->name)));
+            dns[nds++] = nm->name.vpid;
+            OBJ_RELEASE(nm);
+        }
     }
     OPAL_LIST_DESTRUCT(&ds);
     *dmns = dns;
