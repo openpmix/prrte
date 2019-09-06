@@ -61,7 +61,7 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     orte_proc_t *pptr;
     int i, k, n;
     opal_list_t *info, *pmap;
-    opal_value_t *kv;
+    opal_info_item_t *kv, *kptr;
     orte_node_t *node, *mynode;
     opal_vpid_t vpid;
     char **list, **procs, **micro, *tmp, *regex;
@@ -81,6 +81,7 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     opal_namelist_t *nm;
     size_t nmsize;
     pmix_server_pset_t *pset;
+    opal_value_t *val;
 
     opal_output_verbose(2, orte_pmix_server_globals.output,
                         "%s register nspace for %s",
@@ -93,38 +94,42 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     gid = getegid();
 
     /* pass our nspace/rank */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_SERVER_NSPACE);
-    kv->data.name.jobid = ORTE_PROC_MY_NAME->jobid;
-    kv->type = OPAL_JOBID;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_LOAD_KEY(kv->info.key, PMIX_SERVER_NSPACE);
+    kv->info.value.type = PMIX_PROC;
+    /* have to stringify the jobid */
+    PMIX_PROC_CREATE(kv->info.value.data.proc, 1);
+    OPAL_PMIX_CONVERT_JOBID(kv->info.value.data.proc->nspace, ORTE_PROC_MY_NAME->jobid);
     opal_list_append(info, &kv->super);
 
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_SERVER_RANK);
-    kv->data.uint32 = ORTE_PROC_MY_NAME->vpid;
-    kv->type = OPAL_UINT32;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_RANK, &ORTE_PROC_MY_NAME->vpid, PMIX_PROC_RANK);
     opal_list_append(info, &kv->super);
 
     /* jobid */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_JOBID);
-    kv->data.name.jobid = jdata->jobid;
-    kv->type = OPAL_JOBID;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_LOAD_KEY(kv->info.key, PMIX_JOBID);
+    kv->info.value.type = PMIX_PROC;
+    /* have to stringify the jobid */
+    PMIX_PROC_CREATE(kv->info.value.data.proc, 1);
+    OPAL_PMIX_CONVERT_JOBID(kv->info.value.data.proc->nspace, jdata->jobid);
     opal_list_append(info, &kv->super);
 
     /* offset */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_NPROC_OFFSET);
-    kv->data.uint32 = jdata->offset;
-    kv->type = OPAL_UINT32;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_NPROC_OFFSET, &jdata->offset, PMIX_PROC_RANK);
     opal_list_append(info, &kv->super);
 
     /* check for cached values to add to the job info */
     cache = NULL;
     if (orte_get_attribute(&jdata->attributes, ORTE_JOB_INFO_CACHE, (void**)&cache, OPAL_PTR) &&
         NULL != cache) {
-        while (NULL != (kv = (opal_value_t*)opal_list_remove_first(cache))) {
+        while (NULL != (val = (opal_value_t*)opal_list_remove_first(cache))) {
+            kv = OBJ_NEW(opal_info_item_t);
+            PMIX_LOAD_KEY(kv->info.key, val->key);
+            opal_pmix_value_load(&kv->info.value, val);
             opal_list_append(info, &kv->super);
+            OBJ_RELEASE(val);
         }
         orte_remove_attribute(&jdata->attributes, ORTE_JOB_INFO_CACHE);
         OBJ_RELEASE(cache);
@@ -167,10 +172,13 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
             return rc;
         }
         free(tmp);
-        kv = OBJ_NEW(opal_value_t);
-        kv->key = strdup(PMIX_NODE_MAP);
-        kv->type = OPAL_STRING;
-        kv->data.string = regex;
+        kv = OBJ_NEW(opal_info_item_t);
+#ifdef PMIX_REGEX
+        PMIX_INFO_LOAD(&kv->info, PMIX_NODE_MAP, regex, PMIX_REGEX);
+#else
+        PMIX_INFO_LOAD(&kv->info, PMIX_NODE_MAP, regex, PMIX_STRING);
+#endif
+        free(regex);
         opal_list_append(info, &kv->super);
     }
 
@@ -186,10 +194,13 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
             return rc;
         }
         free(tmp);
-        kv = OBJ_NEW(opal_value_t);
-        kv->key = strdup(PMIX_PROC_MAP);
-        kv->type = OPAL_STRING;
-        kv->data.string = regex;
+        kv = OBJ_NEW(opal_info_item_t);
+#ifdef PMIX_REGEX
+        PMIX_INFO_LOAD(&kv->info, PMIX_PROC_MAP, regex, PMIX_REGEX);
+#else
+        PMIX_INFO_LOAD(&kv->info, PMIX_PROC_MAP, regex, PMIX_STRING);
+#endif
+        free(regex);
         opal_list_append(info, &kv->super);
     }
 
@@ -211,106 +222,86 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
         OPAL_LIST_RELEASE(info);
         return ORTE_ERR_NOT_FOUND;
     }
+
+    /* pass our hostname */
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, orte_process_info.nodename, PMIX_STRING);
+    opal_list_append(info, &kv->super);
+
     /* pass our node ID */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_NODEID);
-    kv->type = OPAL_UINT32;
-    kv->data.uint32 = mynode->index;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_NODEID, &mynode->index, PMIX_UINT32);
     opal_list_append(info, &kv->super);
 
     /* pass our node size */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_NODE_SIZE);
-    kv->type = OPAL_UINT32;
-    kv->data.uint32 = mynode->num_procs;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_NODE_SIZE, &mynode->num_procs, PMIX_UINT32);
     opal_list_append(info, &kv->super);
 
     /* pass the number of nodes in the job */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_NUM_NODES);
-    kv->type = OPAL_UINT32;
-    kv->data.uint32 = map->num_nodes;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_NUM_NODES, &map->num_nodes, PMIX_UINT32);
     opal_list_append(info, &kv->super);
 
     /* univ size */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_UNIV_SIZE);
-    kv->type = OPAL_UINT32;
-    kv->data.uint32 = jdata->total_slots_alloc;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_UNIV_SIZE, &jdata->total_slots_alloc, PMIX_UINT32);
     opal_list_append(info, &kv->super);
 
     /* job size */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_JOB_SIZE);
-    kv->type = OPAL_UINT32;
-    kv->data.uint32 = jdata->num_procs;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_JOB_SIZE, &jdata->num_procs, PMIX_UINT32);
     opal_list_append(info, &kv->super);
 
     /* number of apps in this job */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_JOB_NUM_APPS);
-    kv->type = OPAL_UINT32;
-    kv->data.uint32 = jdata->num_apps;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_JOB_NUM_APPS, &jdata->num_apps, PMIX_UINT32);
     opal_list_append(info, &kv->super);
 
     /* local size */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_LOCAL_SIZE);
-    kv->type = OPAL_UINT32;
-    kv->data.uint32 = jdata->num_local_procs;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_LOCAL_SIZE, &jdata->num_local_procs, PMIX_UINT32);
     opal_list_append(info, &kv->super);
 
     /* max procs */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_MAX_PROCS);
-    kv->type = OPAL_UINT32;
-    kv->data.uint32 = jdata->total_slots_alloc;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_MAX_PROCS, &jdata->total_slots_alloc, PMIX_UINT32);
     opal_list_append(info, &kv->super);
 
     /* topology signature */
-    kv = OBJ_NEW(opal_value_t);
+    kv = OBJ_NEW(opal_info_item_t);
 #if HWLOC_API_VERSION < 0x20000
-    kv->key = strdup(PMIX_HWLOC_XML_V1);
+    PMIX_INFO_LOAD(&kv->info, PMIX_HWLOC_XML_V1, orte_topo_signature, PMIX_STRING);
 #else
-    kv->key = strdup(PMIX_HWLOC_XML_V2);
+    PMIX_INFO_LOAD(&kv->info, PMIX_HWLOC_XML_V2, orte_topo_signature, PMIX_STRING);
 #endif
-    kv->type = OPAL_STRING;
-    kv->data.string = strdup(orte_topo_signature);
     opal_list_append(info, &kv->super);
 
     /* total available physical memory */
     machine = hwloc_get_next_obj_by_type (opal_hwloc_topology, HWLOC_OBJ_MACHINE, NULL);
     if (NULL != machine) {
-        kv = OBJ_NEW(opal_value_t);
-        kv->key = strdup(PMIX_AVAIL_PHYS_MEMORY);
-        kv->type = OPAL_UINT64;
+        kv = OBJ_NEW(opal_info_item_t);
 #if HWLOC_API_VERSION < 0x20000
-        kv->data.uint64 = machine->memory.total_memory;
+        PMIX_INFO_LOAD(&kv->info, PMIX_AVAIL_PHYS_MEMORY, &machine->memory.total_memory, PMIX_UINT64);
 #else
-        kv->data.uint64 = machine->total_memory;
+        PMIX_INFO_LOAD(&kv->info, PMIX_AVAIL_PHYS_MEMORY, &machine->total_memory, PMIX_UINT64);
 #endif
         opal_list_append(info, &kv->super);
     }
 
     /* pass the mapping policy used for this job */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_MAPBY);
-    kv->type = OPAL_STRING;
-    kv->data.string = strdup(orte_rmaps_base_print_mapping(jdata->map->mapping));
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_MAPBY, orte_rmaps_base_print_mapping(jdata->map->mapping), PMIX_STRING);
     opal_list_append(info, &kv->super);
 
     /* pass the ranking policy used for this job */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_RANKBY);
-    kv->type = OPAL_STRING;
-    kv->data.string = strdup(orte_rmaps_base_print_ranking(jdata->map->ranking));
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_RANKBY, orte_rmaps_base_print_ranking(jdata->map->ranking), PMIX_STRING);
     opal_list_append(info, &kv->super);
 
     /* pass the binding policy used for this job */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_BINDTO);
-    kv->type = OPAL_STRING;
-    kv->data.string = strdup(opal_hwloc_base_print_binding(jdata->map->binding));
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_BINDTO, opal_hwloc_base_print_binding(jdata->map->binding), PMIX_STRING);
     opal_list_append(info, &kv->super);
 
     /* register any psets for this job */
@@ -357,19 +348,17 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     }
     if (NULL != micro) {
         /* pass the local peers */
-        kv = OBJ_NEW(opal_value_t);
-        kv->key = strdup(PMIX_LOCAL_PEERS);
-        kv->type = OPAL_STRING;
-        kv->data.string = opal_argv_join(micro, ',');
+        kv = OBJ_NEW(opal_info_item_t);
+        tmp = opal_argv_join(micro, ',');
+        PMIX_INFO_LOAD(&kv->info, PMIX_LOCAL_PEERS, tmp, PMIX_STRING);
+        free(tmp);
         opal_argv_free(micro);
         opal_list_append(info, &kv->super);
     }
 
     /* pass the local ldr */
-    kv = OBJ_NEW(opal_value_t);
-    kv->key = strdup(PMIX_LOCALLDR);
-    kv->type = OPAL_VPID;
-    kv->data.name.vpid = vpid;
+    kv = OBJ_NEW(opal_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_LOCALLDR, &vpid, PMIX_PROC_RANK);
     opal_list_append(info, &kv->super);
 
     /* for each proc in this job, create an object that
@@ -394,18 +383,11 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
                 continue;
             }
             /* setup the proc map object */
-            kv = OBJ_NEW(opal_value_t);
-            kv->key = strdup(PMIX_PROC_DATA);
-            kv->type = OPAL_LIST;
-            kv->data.ptr = OBJ_NEW(opal_list_t);
-            opal_list_append(info, &kv->super);
-            pmap = kv->data.ptr;
+            pmap = OBJ_NEW(opal_list_t);
 
             /* must start with rank */
-            kv = OBJ_NEW(opal_value_t);
-            kv->key = strdup(PMIX_RANK);
-            kv->type = OPAL_VPID;
-            kv->data.name.vpid = pptr->name.vpid;
+            kv = OBJ_NEW(opal_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_RANK, &pptr->name.vpid, PMIX_PROC_RANK);
             opal_list_append(pmap, &kv->super);
 
             /* location, for local procs */
@@ -413,57 +395,44 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
                 tmp = NULL;
                 if (orte_get_attribute(&pptr->attributes, ORTE_PROC_CPU_BITMAP, (void**)&tmp, OPAL_STRING) &&
                     NULL != tmp) {
-                    kv = OBJ_NEW(opal_value_t);
-                    kv->key = strdup(PMIX_LOCALITY_STRING);
-                    kv->type = OPAL_STRING;
-                    kv->data.string = opal_hwloc_base_get_locality_string(opal_hwloc_topology, tmp);
+                    kv = OBJ_NEW(opal_info_item_t);
+                    PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, opal_hwloc_base_get_locality_string(opal_hwloc_topology, tmp), PMIX_STRING);
                     opal_list_append(pmap, &kv->super);
                     free(tmp);
                 } else {
                     /* the proc is not bound */
-                    kv = OBJ_NEW(opal_value_t);
-                    kv->key = strdup(PMIX_LOCALITY_STRING);
-                    kv->type = OPAL_STRING;
-                    kv->data.string = NULL;
+                    kv = OBJ_NEW(opal_info_item_t);
+                    PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, NULL, PMIX_STRING);
                     opal_list_append(pmap, &kv->super);
                 }
             }
 
             /* global/univ rank */
-            kv = OBJ_NEW(opal_value_t);
-            kv->key = strdup(PMIX_GLOBAL_RANK);
-            kv->type = OPAL_VPID;
-            kv->data.name.vpid = pptr->name.vpid + jdata->offset;
+            kv = OBJ_NEW(opal_info_item_t);
+            vpid = pptr->name.vpid + jdata->offset;
+            PMIX_INFO_LOAD(&kv->info, PMIX_GLOBAL_RANK, &vpid, PMIX_PROC_RANK);
             opal_list_append(pmap, &kv->super);
 
             if (1 < jdata->num_apps) {
                 /* appnum */
-                kv = OBJ_NEW(opal_value_t);
-                kv->key = strdup(PMIX_APPNUM);
-                kv->type = OPAL_UINT32;
-                kv->data.uint32 = pptr->app_idx;
+                kv = OBJ_NEW(opal_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_APPNUM, &pptr->app_idx, PMIX_UINT32);
                 opal_list_append(pmap, &kv->super);
 
                 /* app ldr */
                 app = (orte_app_context_t*)opal_pointer_array_get_item(jdata->apps, pptr->app_idx);
-                kv = OBJ_NEW(opal_value_t);
-                kv->key = strdup(PMIX_APPLDR);
-                kv->type = OPAL_VPID;
-                kv->data.name.vpid = app->first_rank;
+                kv = OBJ_NEW(opal_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_APPLDR, &app->first_rank, PMIX_PROC_RANK);
                 opal_list_append(pmap, &kv->super);
 
                 /* app rank */
-                kv = OBJ_NEW(opal_value_t);
-                kv->key = strdup(PMIX_APP_RANK);
-                kv->type = OPAL_VPID;
-                kv->data.name.vpid = pptr->app_rank;
+                kv = OBJ_NEW(opal_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_APP_RANK, &pptr->app_rank, PMIX_PROC_RANK);
                 opal_list_append(pmap, &kv->super);
 
                 /* app size */
-                kv = OBJ_NEW(opal_value_t);
-                kv->key = strdup(PMIX_APP_SIZE);
-                kv->type = OPAL_UINT32;
-                kv->data.uint32 = app->num_procs;
+                kv = OBJ_NEW(opal_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_APP_SIZE, &app->num_procs, PMIX_UINT32);
                 opal_list_append(info, &kv->super);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
@@ -471,10 +440,9 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
                 tmp = NULL;
                 if (orte_get_attribute(&app->attributes, ORTE_APP_PSET_NAME, (void**)&tmp, OPAL_STRING) &&
                     NULL != tmp) {
-                    kv = OBJ_NEW(opal_value_t);
-                    kv->key = strdup(PMIX_PSET_NAME);
-                    kv->type = OPAL_STRING;
-                    kv->data.string = tmp;
+                    kv = OBJ_NEW(opal_info_item_t);
+                    PMIX_INFO_LOAD(&kv->info, PMIX_PSET_NAME, tmp, PMIX_STRING);
+                    free(tmp);
                     opal_list_append(pmap, &kv->super);
                 }
             } else {
@@ -482,43 +450,49 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
                 tmp = NULL;
                 if (orte_get_attribute(&app->attributes, ORTE_APP_PSET_NAME, (void**)&tmp, OPAL_STRING) &&
                     NULL != tmp) {
-                    kv = OBJ_NEW(opal_value_t);
-                    kv->key = strdup(PMIX_PSET_NAME);
-                    kv->type = OPAL_STRING;
-                    kv->data.string = tmp;
+                    kv = OBJ_NEW(opal_info_item_t);
+                    PMIX_INFO_LOAD(&kv->info, PMIX_PSET_NAME, tmp, PMIX_STRING);
+                    free(tmp);
                     opal_list_append(pmap, &kv->super);
                 }
 #endif
             }
 
             /* local rank */
-            kv = OBJ_NEW(opal_value_t);
-            kv->key = strdup(PMIX_LOCAL_RANK);
-            kv->type = OPAL_UINT16;
-            kv->data.uint16 = pptr->local_rank;
+            kv = OBJ_NEW(opal_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_LOCAL_RANK, &pptr->local_rank, PMIX_UINT16);
             opal_list_append(pmap, &kv->super);
 
             /* node rank */
-            kv = OBJ_NEW(opal_value_t);
-            kv->key = strdup(PMIX_NODE_RANK);
-            kv->type = OPAL_UINT16;
-            kv->data.uint16 = pptr->node_rank;
+            kv = OBJ_NEW(opal_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_NODE_RANK, &pptr->node_rank, PMIX_UINT16);
             opal_list_append(pmap, &kv->super);
 
             /* node ID */
-            kv = OBJ_NEW(opal_value_t);
-            kv->key = strdup(PMIX_NODEID);
-            kv->type = OPAL_UINT32;
-            kv->data.uint32 = pptr->node->index;
+            kv = OBJ_NEW(opal_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_NODEID, &pptr->node->index, PMIX_UINT32);
             opal_list_append(pmap, &kv->super);
 
             if (map->num_nodes < orte_hostname_cutoff) {
-                kv = OBJ_NEW(opal_value_t);
-                kv->key = strdup(PMIX_HOSTNAME);
-                kv->type = OPAL_STRING;
-                kv->data.string = strdup(pptr->node->name);
+                kv = OBJ_NEW(opal_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, pptr->node->name, PMIX_STRING);
                 opal_list_append(pmap, &kv->super);
             }
+            kv = OBJ_NEW(opal_info_item_t);
+            PMIX_LOAD_KEY(kv->info.key, PMIX_PROC_DATA);
+            kv->info.value.type = PMIX_DATA_ARRAY;
+            ninfo = opal_list_get_size(pmap);
+            if (0 < ninfo) {
+                PMIX_DATA_ARRAY_CREATE(kv->info.value.data.darray, ninfo, PMIX_INFO);
+                pinfo = (pmix_info_t*)kv->info.value.data.darray->array;
+                n = 0;
+                while (NULL != (kptr = (opal_info_item_t*)opal_list_remove_first(pmap))) {
+                    PMIX_INFO_XFER(&pinfo[n], &kptr->info);
+                    OBJ_RELEASE(kptr);
+                    ++n;
+                }
+            }
+            opal_list_append(info, &kv->super);
         }
     }
 
@@ -558,9 +532,8 @@ int orte_pmix_server_register_nspace(orte_job_t *jdata)
     } else {
         n = 0;
     }
-    OPAL_LIST_FOREACH(kv, info, opal_value_t) {
-        (void)strncpy(pinfo[n].key, kv->key, PMIX_MAX_KEYLEN);
-        opal_pmix_value_load(&pinfo[n].value, kv);
+    OPAL_LIST_FOREACH(kv, info, opal_info_item_t) {
+        PMIX_INFO_XFER(&pinfo[n], &kv->info);
         ++n;
     }
     OPAL_LIST_RELEASE(info);
