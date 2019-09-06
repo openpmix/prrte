@@ -132,3 +132,7 @@ up aborting your job.
   Peer host:              %s
   Peer process name:      %s
   Peer Open MPI version:  %s
+#
+[no-listeners]
+No sockets were able to be opened on the available protocols
+(IPv4 and/or IPv6). Please check your network and retry.
