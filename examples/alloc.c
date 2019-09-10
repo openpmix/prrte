@@ -53,7 +53,7 @@ static void infocbfunc(pmix_status_t status,
     myquery_data_t *mq = (myquery_data_t*)cbdata;
     size_t n;
 
-    fprintf(stderr, "Allocation request returned %s", PMIx_Error_string(status));
+    fprintf(stderr, "Allocation request returned %s\n", PMIx_Error_string(status));
 
     /* save the returned info - the PMIx library "owns" it
      * and will release it and perform other cleanup actions
@@ -173,17 +173,17 @@ int main(int argc, char **argv)
     }
     fprintf(stderr, "Client ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
 
-    /* get our universe size */
+    /* get our job size */
     PMIX_PROC_CONSTRUCT(&proc);
     (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
-    if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_UNIV_SIZE, NULL, 0, &val))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Get universe size failed: %d\n", myproc.nspace, myproc.rank, rc);
+    if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_JOB_SIZE, NULL, 0, &val))) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get job size failed: %d\n", myproc.nspace, myproc.rank, rc);
         goto done;
     }
     nprocs = val->data.uint32;
     PMIX_VALUE_RELEASE(val);
-    fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, nprocs);
+    fprintf(stderr, "Client %s:%d job size %d\n", myproc.nspace, myproc.rank, nprocs);
 
     if (0 == myproc.rank) {
         /* try to get an allocation */
@@ -200,6 +200,9 @@ int main(int argc, char **argv)
         fprintf(stderr, "Client ns %s rank %d: Allocation returned status: %s\n",
                 myproc.nspace, myproc.rank, PMIx_Error_string(mydata.lock.status));
         DEBUG_DESTRUCT_MYQUERY(&mydata);
+        /* if it didn't succeed and we have peers out there, then we better wake
+         * them up */
+
 
     } else if (1 == myproc.rank) {
         /* demonstrate a notification based approach - register a handler

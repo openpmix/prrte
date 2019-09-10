@@ -71,9 +71,9 @@ int main(int argc, char **argv)
     (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
 
-    /* get our universe size */
-    if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_UNIV_SIZE, NULL, 0, &val))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Get universe size failed: %d\n", myproc.nspace, myproc.rank, rc);
+    /* get our job size */
+    if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_JOB_SIZE, NULL, 0, &val))) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get job size failed: %d\n", myproc.nspace, myproc.rank, rc);
         goto done;
     }
     nprocs = val->data.uint32;
@@ -103,28 +103,21 @@ int main(int argc, char **argv)
         app->env = (char**)malloc(2 * sizeof(char*));
         app->env[0] = strdup("PMIX_ENV_VALUE=3");
         app->env[1] = NULL;
-        PMIX_INFO_CREATE(app->info, 2);
-        (void)strncpy(app->info[0].key, "DARTH", PMIX_MAX_KEYLEN);
-        app->info[0].value.type = PMIX_INT8;
-        app->info[0].value.data.int8 = 12;
-        (void)strncpy(app->info[1].key, "VADER", PMIX_MAX_KEYLEN);
-        app->info[1].value.type = PMIX_DOUBLE;
-        app->info[1].value.data.dval = 12.34;
 
         fprintf(stderr, "Client ns %s rank %d: calling PMIx_Spawn\n", myproc.nspace, myproc.rank);
         if (PMIX_SUCCESS != (rc = PMIx_Spawn(NULL, 0, app, 1, nsp2))) {
-            fprintf(stderr, "Client ns %s rank %d: PMIx_Spawn failed: %d\n", myproc.nspace, myproc.rank, rc);
+            fprintf(stderr, "Client ns %s rank %d: PMIx_Spawn failed: %s(%d)\n", myproc.nspace, myproc.rank, PMIx_Error_string(rc), rc);
             goto done;
         }
         PMIX_APP_FREE(app, 1);
 
-        /* get their universe size */
+        /* get their job size */
         val = NULL;
         (void)strncpy(proc.nspace, nsp2, PMIX_MAX_NSLEN);
         proc.rank = PMIX_RANK_WILDCARD;
-        if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_UNIV_SIZE, NULL, 0, &val)) ||
+        if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_JOB_SIZE, NULL, 0, &val)) ||
             NULL == val) {
-            fprintf(stderr, "Client ns %s rank %d: PMIx_Get universe size failed: %d\n", myproc.nspace, myproc.rank, rc);
+            fprintf(stderr, "Client ns %s rank %d: PMIx_Get job size failed: %d\n", myproc.nspace, myproc.rank, rc);
             goto done;
         }
         ntmp = val->data.uint32;
@@ -150,7 +143,7 @@ int main(int argc, char **argv)
     /* finally, test the resolve functions */
     if (0 == myproc.rank) {
         if (PMIX_SUCCESS != (rc = PMIx_Resolve_peers(hostname, NULL, &peers, &npeers))) {
-            fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_peers failed for nspace %s: %d\n", myproc.nspace, myproc.rank, nsp2, rc);
+            fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_peers failed for nspace %s: %s(%d)\n", myproc.nspace, myproc.rank, nsp2, PMIx_Error_string(rc), rc);
             goto done;
         }
         if ((nprocs+ntmp) != npeers) {
@@ -162,7 +155,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_nodes failed for nspace %s: %d\n", myproc.nspace, myproc.rank, nsp2, rc);
             goto done;
         }
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_nodes %s", myproc.nspace, myproc.rank, nodelist);
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_nodes %s\n", myproc.nspace, myproc.rank, nodelist);
     } else {
         if (PMIX_SUCCESS != (rc = PMIx_Resolve_peers(hostname, myproc.nspace, &peers, &npeers))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_peers failed for nspace %s: %d\n", myproc.nspace, myproc.rank, myproc.nspace, rc);
@@ -173,7 +166,7 @@ int main(int argc, char **argv)
             goto done;
         }
         fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_peers returned %d npeers\n", myproc.nspace, myproc.rank, (int)npeers);
-        if (PMIX_SUCCESS != (rc = PMIx_Resolve_nodes(myproc.nspace, &nodelist))) {
+        if (PMIX_SUCCESS != (rc = PMIx_Resolve_nodes(NULL, &nodelist))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_nodes failed: %d\n", myproc.nspace, myproc.rank, rc);
             goto done;
         }
