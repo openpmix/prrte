@@ -1147,17 +1147,17 @@ case "`uname`" in
 esac
 
 # opaldatadir, opallibdir, and opalinclude are essentially the same as
-# pkg*dir, but will always be */pmix.
+# pkg*dir, but will always be */prrte.
 
-opaldatadir='${datadir}/pmix'
-opallibdir='${libdir}/pmix'
-opalincludedir='${includedir}/pmix'
+opaldatadir='${datadir}/prrte'
+opallibdir='${libdir}/prrte'
+opalincludedir='${includedir}/prrte'
 AC_SUBST(opaldatadir)
 AC_SUBST(opallibdir)
 AC_SUBST(opalincludedir)
 
-OPAL_SET_MCA_PREFIX([PMIX_MCA_])
-OPAL_SET_MCA_CMD_LINE_ID([pmca])
+OPAL_SET_MCA_PREFIX([PRTE_MCA_])
+OPAL_SET_MCA_CMD_LINE_ID([prtemca])
 
 ortedatadir="$opaldatadir"
 AC_SUBST(ortedatadir)
