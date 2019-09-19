@@ -40,27 +40,27 @@
 m4_include([config/autogen_found_items.m4])
 
 # Load the version number code
-m4_include([config/opal_get_version.m4])
+m4_include([config/prrte_get_version.m4])
 AC_LANG([C])
 
 # Init autoconf
 # We don't have the version number to put in here yet, and we can't
-# call OPAL_GET_VERSION (etc.) before AC_INIT.  So use the shell
+# call PRRTE_GET_VERSION (etc.) before AC_INIT.  So use the shell
 # version.  project_name_* comes from config/project_list.m4, which
 # was set during autogen.pl.
 
 AC_INIT([project_name_long],
-        [m4_normalize(esyscmd([config/opal_get_version.sh VERSION --tarball]))],
+        [m4_normalize(esyscmd([config/prrte_get_version.sh VERSION --tarball]))],
         [https://github.com/pmix/prrte/], [project_name_short])
 
 AC_PREREQ(2.60)
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
-OPAL_CAPTURE_CONFIGURE_CLI([OPAL_CONFIGURE_CLI])
+PRRTE_CAPTURE_CONFIGURE_CLI([PRRTE_CONFIGURE_CLI])
 
 # Get our platform support file.  This has to be done very, very early
 # because it twiddles random bits of autoconf
-OPAL_LOAD_PLATFORM
+PRRTE_LOAD_PLATFORM
 
 #
 # Start it up
@@ -68,21 +68,21 @@ OPAL_LOAD_PLATFORM
 
 AC_CHECK_PROG([PERL],[perl],[perl],[no])
 AS_IF([test "X$PERL" = "Xno"],
-      [AC_MSG_ERROR(["PRTE requires perl. Aborting"])])
+      [AC_MSG_ERROR(["PRRTE requires perl. Aborting"])])
 
-OPAL_CONFIGURE_SETUP
+PRRTE_CONFIGURE_SETUP
 
-opal_show_title "Configuring project_name_long"
+prrte_show_title "Configuring project_name_long"
 
 #
 # Setup some things that must be done before AM-INIT-AUTOMAKE
 #
 
-opal_show_subtitle "Startup tests"
+prrte_show_subtitle "Startup tests"
 
 AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
-AC_DEFINE_UNQUOTED(OPAL_ARCH, "$target", [PRTE architecture string])
+AC_DEFINE_UNQUOTED(PRRTE_ARCH, "$target", [PRTE architecture string])
 
 AS_IF([test "$host" != "$target"],
       [AC_MSG_WARN([Cross-compile detected])
@@ -91,7 +91,7 @@ AS_IF([test "$host" != "$target"],
 
 # AC_USE_SYSTEM_EXTENSIONS alters CFLAGS (e.g., adds -g -O2)
 
-OPAL_VAR_SCOPE_PUSH([CFLAGS_save])
+PRRTE_VAR_SCOPE_PUSH([CFLAGS_save])
 CFLAGS_save=$CFLAGS
 AC_USE_SYSTEM_EXTENSIONS
 
@@ -101,7 +101,7 @@ AC_USE_SYSTEM_EXTENSIONS
 
 AS_IF([test -z "$CFLAGS_save"], [CFLAGS=])
 
-OPAL_VAR_SCOPE_POP
+PRRTE_VAR_SCOPE_POP
 
 #
 # Init automake
@@ -119,22 +119,18 @@ AM_SILENT_RULES([yes])
 # Make configure depend on the VERSION file, since it's used in AC_INIT
 AC_SUBST([CONFIGURE_DEPENDENCIES], ['$(top_srcdir)/VERSION'])
 
-opal_show_subtitle "Checking versions"
+prrte_show_subtitle "Checking versions"
 
 # Get the version of PRTE that we are installing
-OPAL_SAVE_VERSION([ORTE], [Open Run-Time Environment],
+PRRTE_SAVE_VERSION([PRRTE], [PMIx Reference Run-Time Environment],
                           [$srcdir/VERSION],
-                          [orte/include/orte/version.h])
-OPAL_SAVE_VERSION([OPAL], [Open Portable Access Layer], [$srcdir/VERSION],
-                  [opal/include/opal/version.h])
+                          [src/include/version.h])
 
 # Get shared library version numbers
 . $srcdir/VERSION
 
-AC_SUBST(libprteopen_rte_so_version)
-AC_SUBST(libprteopen_pal_so_version)
-
-AC_SUBST(libprtemca_orte_common_alps_so_version)
+AC_SUBST(libprrte_so_version)
+AC_SUBST(libprrte_common_alps_so_version)
 
 #
 # Get the versions of the autotools that were used to bootstrap us
@@ -154,24 +150,24 @@ AC_MSG_RESULT([$ltversion])
 
 # List header files to generate
 
-AC_CONFIG_HEADERS([opal/include/opal_config.h])
+AC_CONFIG_HEADERS([src/include/prrte_config.h])
 
-opal_show_subtitle "Initialization, setup"
+prrte_show_subtitle "Initialization, setup"
 
-OMPI_TOP_BUILDDIR="`pwd`"
-AC_SUBST(OMPI_TOP_BUILDDIR)
+PRRTE_TOP_BUILDDIR="`pwd`"
+AC_SUBST(PRRTE_TOP_BUILDDIR)
 cd "$srcdir"
-OMPI_TOP_SRCDIR="`pwd`"
-AC_SUBST(OMPI_TOP_SRCDIR)
-cd "$OMPI_TOP_BUILDDIR"
-AC_MSG_NOTICE([builddir: $OMPI_TOP_BUILDDIR])
-AC_MSG_NOTICE([srcdir: $OMPI_TOP_SRCDIR])
+PRRTE_TOP_SRCDIR="`pwd`"
+AC_SUBST(PRRTE_TOP_SRCDIR)
+cd "$PRRTE_TOP_BUILDDIR"
+AC_MSG_NOTICE([builddir: $PRRTE_TOP_BUILDDIR])
+AC_MSG_NOTICE([srcdir: $PRRTE_TOP_SRCDIR])
 
-if test "$OMPI_TOP_BUILDDIR" != "$OMPI_TOP_SRCDIR"; then
+if test "$PRRTE_TOP_BUILDDIR" != "$PRRTE_TOP_SRCDIR"; then
     AC_MSG_NOTICE([Detected VPATH build])
 fi
 
-# Setup the top of the opal/include/opal_config.h file
+# Setup the top of the src/include/prrte_config.h file
 
 AH_TOP([/* -*- c -*-
  *
@@ -193,38 +189,33 @@ AH_TOP([/* -*- c -*-
  * Function: - OS, CPU and compiler dependent configuration
  */
 
-#ifndef OPAL_CONFIG_H
-#define OPAL_CONFIG_H
+#ifndef PRRTE_CONFIG_H
+#define PRRTE_CONFIG_H
 
-#include "opal_config_top.h"
+#include "prrte_config_top.h"
 ])
 
 AH_BOTTOM([
-#include "opal_config_bottom.h"
-#endif /* OPAL_CONFIG_H */
+#include "prrte_config_bottom.h"
+#endif /* PRRTE_CONFIG_H */
 ])
 
 # Other basic setup stuff (shared with components)
 
-OPAL_BASIC_SETUP
+PRRTE_BASIC_SETUP
 
-OPAL_TOP_SRCDIR="$OMPI_TOP_SRCDIR"
-OPAL_TOP_BUILDDIR="$OMPI_TOP_BUILDDIR"
-AC_SUBST(OPAL_TOP_SRCDIR)
-AC_SUBST(OPAL_TOP_BUILDDIR)
-
-ORTE_TOP_SRCDIR="$OMPI_TOP_SRCDIR"
-ORTE_TOP_BUILDDIR="$OMPI_TOP_BUILDDIR"
-AC_SUBST(ORTE_TOP_SRCDIR)
-AC_SUBST(ORTE_TOP_BUILDDIR)
+PRRTE_TOP_SRCDIR="$PRRTE_TOP_SRCDIR"
+PRRTE_TOP_BUILDDIR="$PRRTE_TOP_BUILDDIR"
+AC_SUBST(PRRTE_TOP_SRCDIR)
+AC_SUBST(PRRTE_TOP_BUILDDIR)
 
 ############################################################################
 # Configuration options
 ############################################################################
 
-OPAL_CONFIGURE_OPTIONS
-OPAL_CHECK_OS_FLAVORS
-ORTE_CONFIGURE_OPTIONS
+PRRTE_CONFIGURE_OPTIONS
+PRRTE_CHECK_OS_FLAVORS
+PRRTE_CONFIGURE_OPTIONS
 
 if test "$enable_binaries" = "no" && test "$enable_dist" = "yes"; then
     AC_MSG_WARN([--disable-binaries is incompatible with --enable dist])
@@ -243,7 +234,7 @@ fi
 
 AM_ENABLE_SHARED
 AM_DISABLE_STATIC
-OPAL_SETUP_WRAPPER_INIT
+PRRTE_SETUP_WRAPPER_INIT
 
 ##################################
 # Check for known incompatibility
@@ -272,23 +263,17 @@ esac
 # Check for compilers and preprocessors
 ############################################################################
 
-opal_show_title "Compiler and preprocessor tests"
+prrte_show_title "Compiler and preprocessor tests"
 
 ##################################
 # C compiler characteristics
 ##################################
 
-OPAL_SETUP_CC
-
-# If we build on a windows environment with the windows compiler and linker
-# then we need some translation functions from the opal/win32 directory.
-
-AM_CONDITIONAL(OMPI_NEED_WINDOWS_REPLACEMENTS,
-               test "$opal_cv_c_compiler_vendor" = "microsoft" )
+PRRTE_SETUP_CC
 
 # Does the compiler support "ident"-like constructs?
 
-OPAL_CHECK_IDENT([CC], [CFLAGS], [c], [C])
+PRRTE_CHECK_IDENT([CC], [CFLAGS], [c], [C])
 
 #
 # Check for some types
@@ -309,7 +294,7 @@ AC_CHECK_TYPES(long long)
 AC_CHECK_TYPES(__float128)
 AC_CHECK_TYPES(long double)
 # We only need these types if we're building the OMPI project, but
-# OPAL currently doesn't protect for their lack of presence well.
+# PRRTE currently doesn't protect for their lack of presence well.
 AC_CHECK_HEADERS(complex.h)
 AC_CHECK_TYPES(float _Complex)
 AC_CHECK_TYPES(double _Complex)
@@ -343,7 +328,7 @@ if test "$ac_cv_type___float128" = yes; then
 fi
 
 # We only need these types if we're building the OMPI project, but
-# OPAL currently doesn't protect for their lack of presence well.
+# PRRTE currently doesn't protect for their lack of presence well.
 AC_CHECK_SIZEOF(float _Complex)
 AC_CHECK_SIZEOF(double _Complex)
 AC_CHECK_SIZEOF(long double _Complex)
@@ -364,7 +349,7 @@ fi
 AC_CHECK_SIZEOF(wchar_t)
 AC_CHECK_SIZEOF(pid_t)
 
-# Check sizes of atomic types so we can define fixed-width types in OPAL
+# Check sizes of atomic types so we can define fixed-width types in PRRTE
 AC_CHECK_SIZEOF(atomic_short, [],[[#include <stdatomic.h>]])
 AC_CHECK_SIZEOF(atomic_int,[],[[#include <stdatomic.h>]])
 AC_CHECK_SIZEOF(atomic_long,[],[[#include <stdatomic.h>]])
@@ -374,76 +359,76 @@ AC_CHECK_SIZEOF(atomic_llong,[],[[#include <stdatomic.h>]])
 # Check for type alignments
 #
 
-OPAL_C_GET_ALIGNMENT(bool, OPAL_ALIGNMENT_BOOL)
-OPAL_C_GET_ALIGNMENT(int8_t, OPAL_ALIGNMENT_INT8)
-OPAL_C_GET_ALIGNMENT(int16_t, OPAL_ALIGNMENT_INT16)
-OPAL_C_GET_ALIGNMENT(int32_t, OPAL_ALIGNMENT_INT32)
-OPAL_C_GET_ALIGNMENT(int64_t, OPAL_ALIGNMENT_INT64)
+PRRTE_C_GET_ALIGNMENT(bool, PRRTE_ALIGNMENT_BOOL)
+PRRTE_C_GET_ALIGNMENT(int8_t, PRRTE_ALIGNMENT_INT8)
+PRRTE_C_GET_ALIGNMENT(int16_t, PRRTE_ALIGNMENT_INT16)
+PRRTE_C_GET_ALIGNMENT(int32_t, PRRTE_ALIGNMENT_INT32)
+PRRTE_C_GET_ALIGNMENT(int64_t, PRRTE_ALIGNMENT_INT64)
 
 if test "$ac_cv_type_int128_t" = yes ; then
-  OPAL_C_GET_ALIGNMENT(int128_t, OPAL_ALIGNMENT_INT128)
+  PRRTE_C_GET_ALIGNMENT(int128_t, PRRTE_ALIGNMENT_INT128)
 fi
 
-OPAL_C_GET_ALIGNMENT(char, OPAL_ALIGNMENT_CHAR)
-OPAL_C_GET_ALIGNMENT(short, OPAL_ALIGNMENT_SHORT)
-OPAL_C_GET_ALIGNMENT(wchar_t, OPAL_ALIGNMENT_WCHAR)
-OPAL_C_GET_ALIGNMENT(int, OPAL_ALIGNMENT_INT)
-OPAL_C_GET_ALIGNMENT(long, OPAL_ALIGNMENT_LONG)
-OPAL_C_GET_ALIGNMENT(long long, OPAL_ALIGNMENT_LONG_LONG)
-OPAL_C_GET_ALIGNMENT(float, OPAL_ALIGNMENT_FLOAT)
-OPAL_C_GET_ALIGNMENT(double, OPAL_ALIGNMENT_DOUBLE)
-OPAL_C_GET_ALIGNMENT(long double, OPAL_ALIGNMENT_LONG_DOUBLE)
+PRRTE_C_GET_ALIGNMENT(char, PRRTE_ALIGNMENT_CHAR)
+PRRTE_C_GET_ALIGNMENT(short, PRRTE_ALIGNMENT_SHORT)
+PRRTE_C_GET_ALIGNMENT(wchar_t, PRRTE_ALIGNMENT_WCHAR)
+PRRTE_C_GET_ALIGNMENT(int, PRRTE_ALIGNMENT_INT)
+PRRTE_C_GET_ALIGNMENT(long, PRRTE_ALIGNMENT_LONG)
+PRRTE_C_GET_ALIGNMENT(long long, PRRTE_ALIGNMENT_LONG_LONG)
+PRRTE_C_GET_ALIGNMENT(float, PRRTE_ALIGNMENT_FLOAT)
+PRRTE_C_GET_ALIGNMENT(double, PRRTE_ALIGNMENT_DOUBLE)
+PRRTE_C_GET_ALIGNMENT(long double, PRRTE_ALIGNMENT_LONG_DOUBLE)
 if test "$ac_cv_type___float128" = yes; then
-    OPAL_C_GET_ALIGNMENT(__float128, OPAL_ALIGNMENT___FLOAT128)
+    PRRTE_C_GET_ALIGNMENT(__float128, PRRTE_ALIGNMENT___FLOAT128)
 fi
 
 # We only need these types if we're building the OMPI project, but
-# OPAL currently doesn't protect for their lack of presence well.
-OPAL_C_GET_ALIGNMENT(float _Complex, OPAL_ALIGNMENT_FLOAT_COMPLEX)
-OPAL_C_GET_ALIGNMENT(double _Complex, OPAL_ALIGNMENT_DOUBLE_COMPLEX)
-OPAL_C_GET_ALIGNMENT(long double _Complex, OPAL_ALIGNMENT_LONG_DOUBLE_COMPLEX)
+# PRRTE currently doesn't protect for their lack of presence well.
+PRRTE_C_GET_ALIGNMENT(float _Complex, PRRTE_ALIGNMENT_FLOAT_COMPLEX)
+PRRTE_C_GET_ALIGNMENT(double _Complex, PRRTE_ALIGNMENT_DOUBLE_COMPLEX)
+PRRTE_C_GET_ALIGNMENT(long double _Complex, PRRTE_ALIGNMENT_LONG_DOUBLE_COMPLEX)
 
-OPAL_C_GET_ALIGNMENT(void *, OPAL_ALIGNMENT_VOID_P)
-OPAL_C_GET_ALIGNMENT(size_t, OPAL_ALIGNMENT_SIZE_T)
+PRRTE_C_GET_ALIGNMENT(void *, PRRTE_ALIGNMENT_VOID_P)
+PRRTE_C_GET_ALIGNMENT(size_t, PRRTE_ALIGNMENT_SIZE_T)
 
 #
 # Check for other compiler characteristics
 #
 
-OPAL_C_WEAK_SYMBOLS
-OPAL_C_MACRO_WEAK_SYMBOLS
+PRRTE_C_WEAK_SYMBOLS
+PRRTE_C_MACRO_WEAK_SYMBOLS
 
 
 if test "x$CC" = "xicc"; then
-    OPAL_CHECK_ICC_VARARGS
+    PRRTE_CHECK_ICC_VARARGS
 fi
 
 # Check if we support the offsetof compiler directive
-OPAL_CHECK_OFFSETOF
+PRRTE_CHECK_OFFSETOF
 
 ##################################
 # Only after setting up C check compiler attributes.
 ##################################
 
-opal_show_subtitle "Compiler characteristics"
+prrte_show_subtitle "Compiler characteristics"
 
-OPAL_CHECK_ATTRIBUTES
-OPAL_CHECK_COMPILER_VERSION_ID
+PRRTE_CHECK_ATTRIBUTES
+PRRTE_CHECK_COMPILER_VERSION_ID
 
 ##################################
 # Assembler Configuration
 ##################################
 
-opal_show_subtitle "Assembler"
+prrte_show_subtitle "Assembler"
 
 AM_PROG_AS
-OPAL_CONFIG_ASM
+PRRTE_CONFIG_ASM
 
 ##################################
 # Header files
 ##################################
 
-opal_show_title "Header file tests"
+prrte_show_title "Header file tests"
 
 AC_CHECK_HEADERS([alloca.h aio.h arpa/inet.h dirent.h \
     dlfcn.h endian.h execinfo.h err.h fcntl.h grp.h libgen.h \
@@ -498,7 +483,7 @@ AC_CACHE_SAVE
 # Types
 ##################################
 
-opal_show_title "Type tests"
+prrte_show_title "Type tests"
 
 AC_CHECK_TYPES([socklen_t, struct sockaddr_in, struct sockaddr_in6,
                 struct sockaddr_storage, struct ifreq, struct ethtool_cmd],
@@ -572,17 +557,17 @@ AC_CHECK_DECLS([AF_UNSPEC, PF_UNSPEC, AF_INET6, PF_INET6],
 
 # SA_RESTART in signal.h
 
-OPAL_VAR_SCOPE_PUSH([MSG])
+PRRTE_VAR_SCOPE_PUSH([MSG])
 AC_MSG_CHECKING([if SA_RESTART defined in signal.h])
 AC_EGREP_CPP(yes, [
 #include <signal.h>
 #ifdef SA_RESTART
     yes
 #endif ], [MSG=yes VALUE=1], [MSG=no VALUE=0])
-AC_DEFINE_UNQUOTED(OPAL_HAVE_SA_RESTART, $VALUE,
+AC_DEFINE_UNQUOTED(PRRTE_HAVE_SA_RESTART, $VALUE,
     [Whether we have SA_RESTART in <signal.h> or not])
 AC_MSG_RESULT([$MSG])
-OPAL_VAR_SCOPE_POP
+PRRTE_VAR_SCOPE_POP
 
 AC_CHECK_MEMBERS([struct sockaddr.sa_len], [], [], [
 #include <sys/types.h>
@@ -653,21 +638,21 @@ AC_INCLUDES_DEFAULT
 
 AC_MSG_CHECKING([for pointer diff type])
 if test $ac_cv_type_ptrdiff_t = yes ; then
-    opal_ptrdiff_t="ptrdiff_t"
-    opal_ptrdiff_size=$ac_cv_sizeof_ptrdiff_t
+    prrte_ptrdiff_t="ptrdiff_t"
+    prrte_ptrdiff_size=$ac_cv_sizeof_ptrdiff_t
 elif test $ac_cv_sizeof_void_p -eq $ac_cv_sizeof_long ; then
-    opal_ptrdiff_t="long"
-    opal_ptrdiff_size=$ac_cv_sizeof_long
+    prrte_ptrdiff_t="long"
+    prrte_ptrdiff_size=$ac_cv_sizeof_long
 elif test $ac_cv_type_long_long = yes && test $ac_cv_sizeof_void_p -eq $ac_cv_sizeof_long_long ; then
-    opal_ptrdiff_t="long long"
-    opal_ptrdiff_size=$ac_cv_sizeof_long_long
+    prrte_ptrdiff_t="long long"
+    prrte_ptrdiff_size=$ac_cv_sizeof_long_long
 else
     AC_MSG_ERROR([Could not find datatype to emulate ptrdiff_t.  Cannot continue])
 fi
 
-AC_DEFINE_UNQUOTED([OPAL_PTRDIFF_TYPE], [$opal_ptrdiff_t],
+AC_DEFINE_UNQUOTED([PRRTE_PTRDIFF_TYPE], [$prrte_ptrdiff_t],
     [type to use for ptrdiff_t])
-AC_MSG_RESULT([$opal_ptrdiff_t (size: $opal_ptrdiff_size)])
+AC_MSG_RESULT([$prrte_ptrdiff_t (size: $prrte_ptrdiff_size)])
 
 #
 # Find corresponding types for MPI_Aint, MPI_Count, and MPI_Offset.
@@ -683,39 +668,39 @@ AC_CACHE_SAVE
 ##################################
 
 AC_MSG_CHECKING([the linker for support for the -fini option])
-OPAL_VAR_SCOPE_PUSH([LDFLAGS_save])
+PRRTE_VAR_SCOPE_PUSH([LDFLAGS_save])
 LDFLAGS_save=$LDFLAGS
 LDFLAGS="$LDFLAGS_save -Wl,-fini -Wl,finalize"
 AC_TRY_LINK([void finalize (void) {}], [], [AC_MSG_RESULT([yes])
-        opal_ld_have_fini=1], [AC_MSG_RESULT([no])
-        opal_ld_have_fini=0])
+        prrte_ld_have_fini=1], [AC_MSG_RESULT([no])
+        prrte_ld_have_fini=0])
 LDFLAGS=$LDFLAGS_save
-OPAL_VAR_SCOPE_POP
+PRRTE_VAR_SCOPE_POP
 
 ##################################
 # Libraries
 ##################################
 
-opal_show_title "Library and Function tests"
+prrte_show_title "Library and Function tests"
 
 # Darwin doesn't need -lutil, as it's something other than this -lutil.
-OPAL_SEARCH_LIBS_CORE([openpty], [util])
+PRRTE_SEARCH_LIBS_CORE([openpty], [util])
 
-OPAL_SEARCH_LIBS_CORE([gethostbyname], [nsl])
+PRRTE_SEARCH_LIBS_CORE([gethostbyname], [nsl])
 
-OPAL_SEARCH_LIBS_CORE([socket], [socket])
+PRRTE_SEARCH_LIBS_CORE([socket], [socket])
 
 # Solaris has sched_yield in -lrt, usually in libc
-OPAL_SEARCH_LIBS_CORE([sched_yield], [rt])
+PRRTE_SEARCH_LIBS_CORE([sched_yield], [rt])
 
 # IRIX and CentOS have dirname in -lgen, usually in libc
-OPAL_SEARCH_LIBS_CORE([dirname], [gen])
+PRRTE_SEARCH_LIBS_CORE([dirname], [gen])
 
 # Darwin doesn't need -lm, as it's a symlink to libSystem.dylib
-OPAL_SEARCH_LIBS_CORE([ceil], [m])
+PRRTE_SEARCH_LIBS_CORE([ceil], [m])
 
 # -lrt might be needed for clock_gettime
-OPAL_SEARCH_LIBS_CORE([clock_gettime], [rt])
+PRRTE_SEARCH_LIBS_CORE([clock_gettime], [rt])
 
 AC_CHECK_FUNCS([asprintf snprintf vasprintf vsnprintf openpty isatty getpwuid fork waitpid execve pipe ptsname setsid mmap tcgetpgrp posix_memalign strsignal sysconf syslog vsyslog regcmp regexec regfree _NSGetEnviron socketpair strncpy_s usleep mkfifo dbopen dbm_open statfs statvfs setpgid setenv __malloc_initialize_hook])
 
@@ -746,11 +731,11 @@ AC_CACHE_CHECK([for htonl define],
 #ifndef ntohl
 #error "ntohl not defined"
 #endif
-])], [ompi_cv_htonl_define=yes], [ompi_cv_htonl_define=no])])
+])], [prrte_cv_htonl_define=yes], [prrte_cv_htonl_define=no])])
 
-AC_CHECK_FUNC([htonl], [ompi_have_htonl=yes], [ompi_have_htonl=no])
+AC_CHECK_FUNC([htonl], [prrte_have_htonl=yes], [prrte_have_htonl=no])
 
-AS_IF([test "$ompi_cv_htonl_define" = "yes" || test "$ompi_have_htonl" = "yes"],
+AS_IF([test "$prrte_cv_htonl_define" = "yes" || test "$prrte_have_htonl" = "yes"],
     [AC_DEFINE_UNQUOTED([HAVE_UNIX_BYTESWAP], [1],
         [whether unix byteswap routines -- htonl, htons, nothl, ntohs -- are available])])
 
@@ -758,16 +743,16 @@ AS_IF([test "$ompi_cv_htonl_define" = "yes" || test "$ompi_have_htonl" = "yes"],
 # Make sure we can copy va_lists (need check declared, not linkable)
 #
 
-AC_CHECK_DECL(va_copy, OPAL_HAVE_VA_COPY=1, OPAL_HAVE_VA_COPY=0,
+AC_CHECK_DECL(va_copy, PRRTE_HAVE_VA_COPY=1, PRRTE_HAVE_VA_COPY=0,
     [#include <stdarg.h>])
 
-AC_DEFINE_UNQUOTED(OPAL_HAVE_VA_COPY, $OPAL_HAVE_VA_COPY,
+AC_DEFINE_UNQUOTED(PRRTE_HAVE_VA_COPY, $PRRTE_HAVE_VA_COPY,
     [Whether we have va_copy or not])
 
-AC_CHECK_DECL(__va_copy, OPAL_HAVE_UNDERSCORE_VA_COPY=1,
-    OPAL_HAVE_UNDERSCORE_VA_COPY=0, [#include <stdarg.h>])
+AC_CHECK_DECL(__va_copy, PRRTE_HAVE_UNDERSCORE_VA_COPY=1,
+    PRRTE_HAVE_UNDERSCORE_VA_COPY=0, [#include <stdarg.h>])
 
-AC_DEFINE_UNQUOTED(OPAL_HAVE_UNDERSCORE_VA_COPY, $OPAL_HAVE_UNDERSCORE_VA_COPY,
+AC_DEFINE_UNQUOTED(PRRTE_HAVE_UNDERSCORE_VA_COPY, $PRRTE_HAVE_UNDERSCORE_VA_COPY,
     [Whether we have __va_copy or not])
 
 AC_CHECK_DECLS(__func__)
@@ -779,7 +764,7 @@ AC_CACHE_SAVE
 # System-specific tests
 ##################################
 
-opal_show_title "System-specific tests"
+prrte_show_title "System-specific tests"
 
 # Do we have _SC_NPROCESSORS_ONLN? (only going to pass if we also have
 # <unistd.h> and sysconf(), which is ok) OS X 10.4 has <unistd.h> and
@@ -798,26 +783,26 @@ AC_INCLUDES_DEFAULT
 AS_IF([test "$ompi_cv_have__SC_NPROCESSORS_ONLN" = "yes"],
       [result=1], [result=0])
 
-AC_DEFINE_UNQUOTED([OPAL_HAVE__SC_NPROCESSORS_ONLN], [$result],
+AC_DEFINE_UNQUOTED([PRRTE_HAVE__SC_NPROCESSORS_ONLN], [$result],
   [Define to 1 ifyou have the declaration of _SC_NPROCESSORS_ONLN, and to 0 otherwise])
 
 # all: endian
 AC_C_BIGENDIAN
 
-OPAL_CHECK_BROKEN_QSORT
+PRRTE_CHECK_BROKEN_QSORT
 
 #
 # Check out what thread support we have
 #
 
-OPAL_CONFIG_THREADS
+PRRTE_CONFIG_THREADS
 
 CFLAGS="$CFLAGS $THREAD_CFLAGS"
 LDFLAGS="$LDFLAGS $THREAD_LDFLAGS"
 LIBS="$LIBS $THREAD_LIBS"
 
-OPAL_WRAPPER_FLAGS_ADD([CFLAGS], [$THREAD_CFLAGS])
-OPAL_WRAPPER_FLAGS_ADD([LDFLAGS], [$THREAD_LDFLAGS])
+PRRTE_WRAPPER_FLAGS_ADD([CFLAGS], [$THREAD_CFLAGS])
+PRRTE_WRAPPER_FLAGS_ADD([LDFLAGS], [$THREAD_LDFLAGS])
 
 # no need to update WRAPPER_EXTRA_LIBS - we'll get it from LT later
 #
@@ -845,7 +830,7 @@ AM_PROG_LEX
 if test -z "$LEX" || \
    test -n "`echo $LEX | $GREP missing`" || \
    test "`basename $LEX`" != "flex"; then
-    if test ! -f "$srcdir/opal/util/show_help_lex.c"; then
+    if test ! -f "$srcdir/prrte/util/show_help_lex.c"; then
         AC_MSG_WARN([*** Could not find Flex on your system.])
         AC_MSG_WARN([*** Flex is required for developer builds of PRTE.])
         AC_MSG_WARN([*** Other versions of Lex are not supported.])
@@ -857,13 +842,13 @@ fi
 #
 # Look for ps command and arguments
 #
-OPAL_PS_FLAVOR_CHECK
+PRRTE_PS_FLAVOR_CHECK
 
 #
 # File system case sensitivity
 #
 
-OPAL_CASE_SENSITIVE_FS_SETUP
+PRRTE_CASE_SENSITIVE_FS_SETUP
 
 #
 # Do we have RLIMIT_NPROC in <sys/resources.h>? (e.g., Solaris does not)
@@ -942,18 +927,18 @@ AC_CACHE_SAVE
 # Libevent
 ##################################
 
-opal_show_title "Configure libevent"
+prrte_show_title "Configure libevent"
 
-OPAL_LIBEV_CONFIG
-OPAL_LIBEVENT_CONFIG
+PRRTE_LIBEV_CONFIG
+PRRTE_LIBEVENT_CONFIG
 
-AS_IF([test $opal_libevent_support -eq 1 && test $opal_libev_support -eq 1],
+AS_IF([test $prrte_libevent_support -eq 1 && test $prrte_libev_support -eq 1],
       [AC_MSG_WARN([Both libevent and libev support have been specified.])
        AC_MSG_WARN([Only one can be configured against at a time. Please])
        AC_MSG_WARN([remove one from the configure command line.])
        AC_MSG_ERROR([Cannot continue])])
 
-AS_IF([test $opal_libevent_support -eq 0 && test $opal_libev_support -eq 0],
+AS_IF([test $prrte_libevent_support -eq 0 && test $prrte_libev_support -eq 0],
       [AC_MSG_WARN([Either libevent or libev support is required, but neither])
        AC_MSG_WARN([was found. Please use the configure options to point us])
        AC_MSG_WARN([to where we can find one or the other library])
@@ -963,29 +948,29 @@ AS_IF([test $opal_libevent_support -eq 0 && test $opal_libev_support -eq 0],
 # PMIx
 ##################################
 
-opal_show_title "Configure PMIx"
+prrte_show_title "Configure PMIx"
 
-OPAL_CHECK_PMIX
+PRRTE_CHECK_PMIX
 
 ##################################
 # HWLOC
 ##################################
 
-opal_show_title "Configure HWLOC"
+prrte_show_title "Configure HWLOC"
 
-OPAL_HWLOC_CONFIG
+PRRTE_HWLOC_CONFIG
 
 ##################################
 # MCA
 ##################################
 
-opal_show_title "Modular Component Architecture (MCA) setup"
+prrte_show_title "Modular Component Architecture (MCA) setup"
 
 AC_MSG_CHECKING([for subdir args])
-OPAL_CONFIG_SUBDIR_ARGS([opal_subdir_args])
-AC_MSG_RESULT([$opal_subdir_args])
+PRRTE_CONFIG_SUBDIR_ARGS([prrte_subdir_args])
+AC_MSG_RESULT([$prrte_subdir_args])
 
-OPAL_MCA
+PRRTE_MCA
 
 # checkpoint results
 AC_CACHE_SAVE
@@ -997,25 +982,25 @@ AC_CACHE_SAVE
 # the previous tests that are not necessarily prepared for
 # the visibility feature.
 
-opal_show_title "Symbol visibility feature"
+prrte_show_title "Symbol visibility feature"
 
-OPAL_CHECK_VISIBILITY
+PRRTE_CHECK_VISIBILITY
 
 ############################################################################
 # Final top-level PRTE configuration
 ############################################################################
 
-opal_show_title "Final top-level PRTE configuration"
+prrte_show_title "Final top-level PRTE configuration"
 
 ############################################################################
 # Libtool: part two
 # (after C compiler setup = no compiler/linker tests after this)
 ############################################################################
-opal_show_subtitle "Libtool configuration"
+prrte_show_subtitle "Libtool configuration"
 
 # Use the undocumented solaris_use_stlport4 libtool variable to turn off any
 # Cstd/stlport4 linkage. This allows PRTE to be C++ STL agnostic.
-if test "x$opal_cv_c_compiler_vendor" = "xsun"; then
+if test "x$prrte_cv_c_compiler_vendor" = "xsun"; then
     solaris_use_stlport4="yes"
 fi
 
@@ -1027,35 +1012,35 @@ LT_INIT([dlopen win32-dll])
 # platforms, there didn't seem to be any harm in leaving in some of
 # them, alhtough I did remove some that we have never/will never
 # support, like OS/2).
-OPAL_DYN_LIB_PREFIX=lib
+PRRTE_DYN_LIB_PREFIX=lib
 case $host_os in
 cygwin*)
-    OPAL_DYN_LIB_PREFIX=cyg
-    OPAL_DYN_LIB_SUFFIX=dll
+    PRRTE_DYN_LIB_PREFIX=cyg
+    PRRTE_DYN_LIB_SUFFIX=dll
     ;;
 mingw* | pw32* | cegcc*)
-    OPAL_DYN_LIB_SUFFIX=dll
+    PRRTE_DYN_LIB_SUFFIX=dll
     ;;
 darwin* | rhapsody*)
-    OPAL_DYN_LIB_SUFFIX=dylib
+    PRRTE_DYN_LIB_SUFFIX=dylib
     ;;
 hpux9* | hpux10* | hpux11*)
     case $host_cpu in
         ia64*)
-        OPAL_DYN_LIB_SUFFIX=so
+        PRRTE_DYN_LIB_SUFFIX=so
         ;;
     *)
-        OPAL_DYN_LIB_SUFFIX=sl
+        PRRTE_DYN_LIB_SUFFIX=sl
         ;;
     esac
     ;;
 *)
-   OPAL_DYN_LIB_SUFFIX=so
+   PRRTE_DYN_LIB_SUFFIX=so
    ;;
 esac
 
-AC_SUBST(OPAL_DYN_LIB_PREFIX)
-AC_SUBST(OPAL_DYN_LIB_SUFFIX)
+AC_SUBST(PRRTE_DYN_LIB_PREFIX)
+AC_SUBST(PRRTE_DYN_LIB_SUFFIX)
 
 # Need the libtool binary before the rpathify stuff
 LT_OUTPUT
@@ -1063,7 +1048,7 @@ LT_OUTPUT
 ############################################################################
 # final compiler config
 ############################################################################
-opal_show_subtitle "Compiler flags"
+prrte_show_subtitle "Compiler flags"
 
 #
 # This is needed for VPATH builds, so that it will -I the appropriate
@@ -1072,26 +1057,22 @@ opal_show_subtitle "Compiler flags"
 # purely aesthetic.
 #
 
-# Because opal_config.h is created by AC_CONFIG_HEADERS, we
-# don't need to -I the builddir for opal/include. However, we do
-# need to add it for orte as it doesn't have an AC_CONFIG_HEADERS that
+# Because prrte_config.h is created by AC_CONFIG_HEADERS, we
+# don't need to -I the builddir for prrte/include. However, we do
+# need to add it for prrte as it doesn't have an AC_CONFIG_HEADERS that
 # will install it for us. If we VPATH building, we do need to include the
 # source directories, however.
 #
 
-if test "$OMPI_TOP_BUILDDIR" != "$OMPI_TOP_SRCDIR"; then
+if test "$PRRTE_TOP_BUILDDIR" != "$PRRTE_TOP_SRCDIR"; then
     # Note the embedded m4 directives here -- we must embed them
     # rather than have successive assignments to these shell
     # variables, lest the $(foo) names try to get evaluated here.
     # Yuck!
-    CPPFLAGS='-I$(top_srcdir) -I$(top_builddir) -I$(top_srcdir)/opal/include -I$(top_srcdir)/orte/include -I$(top_builddir)/orte/include'" $CPPFLAGS"
+    CPPFLAGS='-I$(top_srcdir) -I$(top_builddir) -I$(top_srcdir)/src/include -I$(top_builddir)/src/include'" $CPPFLAGS"
 else
-    CPPFLAGS='-I$(top_srcdir) -I$(top_srcdir)/orte/include'" $CPPFLAGS"
+    CPPFLAGS='-I$(top_srcdir) -I$(top_srcdir)/src/include'" $CPPFLAGS"
 fi
-
-# ORTE wants some additional processing of the flags (e.g., get
-# versions without optimization for debugger modules).
-ORTE_SETUP_DEBUGGER_FLAGS
 
 #
 # Delayed the substitution of CFLAGS and CXXFLAGS until now because
@@ -1103,34 +1084,21 @@ AC_SUBST(CFLAGS)
 #
 # Aggregate MCA parameters directory
 #
-AC_SUBST([AMCA_PARAM_SETS_DIR], ['$(opaldatadir)/amca-param-sets'])
+AC_SUBST([AMCA_PARAM_SETS_DIR], ['$(prrtedatadir)/amca-param-sets'])
 
 ############################################################################
 # final wrapper compiler config
 ############################################################################
-opal_show_subtitle "Wrapper compiler final setup"
+prrte_show_subtitle "Wrapper compiler final setup"
 
-# The ORTE and PMIx wrapper scripts (i.e., not the C-compiled
-# executables) need perl.
-AC_PATH_PROG(PERL, perl, perl)
+PRRTE_SETUP_WRAPPER_FINAL
 
-OPAL_SETUP_WRAPPER_FINAL
-
-# If there is a local hook for each project, call it.
-m4_ifdef([opal_CONFIG_LOCAL], [opal_CONFIG_LOCAL])
-m4_ifdef([orte_CONFIG_LOCAL], [orte_CONFIG_LOCAL])
+# If there is a local hook, call it.
+m4_ifdef([prrte_CONFIG_LOCAL], [prrte_CONFIG_LOCAL])
 
 ############################################################################
 # Party on
 ############################################################################
-
-# set projects good/no good AM_CONDITIONALS.  This is at the end so
-# that the OSHMEM/OMPI projects can be disabled, if needed, based on
-# MCA tests.  If a project is to be disabled, also remove it from
-# MCA_PROJECT_SUBDIRS to actually disable building.
-AM_CONDITIONAL([PROJECT_OMPI], [test "$project_ompi_amc" = "true"])
-AM_CONDITIONAL([PROJECT_ORTE], [test "$project_orte_amc" = "true"])
-AM_CONDITIONAL([PROJECT_OSHMEM], [test "$project_oshmem_amc" = "true"])
 
 AC_MSG_CHECKING([if libtool needs -no-undefined flag to build shared libraries])
 
@@ -1146,40 +1114,22 @@ case "`uname`" in
     ;;
 esac
 
-# opaldatadir, opallibdir, and opalinclude are essentially the same as
+# prrtedatadir, prrtelibdir, and prrteinclude are essentially the same as
 # pkg*dir, but will always be */prrte.
 
-opaldatadir='${datadir}/prrte'
-opallibdir='${libdir}/prrte'
-opalincludedir='${includedir}/prrte'
-AC_SUBST(opaldatadir)
-AC_SUBST(opallibdir)
-AC_SUBST(opalincludedir)
+prrtedatadir='${datadir}/prrte'
+prrtelibdir='${libdir}/prrte'
+prrteincludedir='${includedir}/prrte'
+AC_SUBST(prrtedatadir)
+AC_SUBST(prrtelibdir)
+AC_SUBST(prrteincludedir)
 
-OPAL_SET_MCA_PREFIX([PRTE_MCA_])
-OPAL_SET_MCA_CMD_LINE_ID([prtemca])
+PRRTE_SET_MCA_PREFIX([PRRTE_MCA_])
+PRRTE_SET_MCA_CMD_LINE_ID([mca])
 
-ortedatadir="$opaldatadir"
-AC_SUBST(ortedatadir)
-ortelibdir="$opallibdir"
-AC_SUBST(ortelibdir)
-orteincludedir="$opalincludedir"
-AC_SUBST(orteincludedir)
+prrte_want_prd=0
 
-# turn some things off
-AC_DEFINE_UNQUOTED(OPAL_ENABLE_FT, 0, [Turn off])
-AC_DEFINE_UNQUOTED(OPAL_ENABLE_FT_CR, 0, [Turn off])
-AC_DEFINE_UNQUOTED(OPAL_ENABLE_FT_THREAD, 0, [Turn off])
-opal_want_ft=0
-opal_want_ft_cr=0
-opal_want_prd=0
-opal_want_ft_thread=0
-AM_CONDITIONAL(WANT_FT, test "$opal_want_ft" = "1")
-AM_CONDITIONAL(WANT_FT_CR,  test "$opal_want_ft_cr" = "1")
-AM_CONDITIONAL(WANT_FT_THREAD, test "$opal_want_ft_thread" = "1")
-
-
-opal_show_subtitle "Final output"
+prrte_show_subtitle "Final output"
 
 AC_CONFIG_FILES([
     Makefile
@@ -1187,11 +1137,10 @@ AC_CONFIG_FILES([
     contrib/Makefile
 ])
 
-OPAL_CONFIG_FILES
-ORTE_CONFIG_FILES
+PRRTE_CONFIG_FILES
 
-OPAL_CHECK_LIBNL_SUMMARY
+PRRTE_CHECK_LIBNL_SUMMARY
 
 AC_OUTPUT
 
-OPAL_SUMMARY_PRINT
+PRRTE_SUMMARY_PRINT

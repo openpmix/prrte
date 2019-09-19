@@ -14,6 +14,7 @@
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -709,7 +710,7 @@ int mca_btl_tcp2_proc_remove(mca_btl_tcp2_proc_t* btl_proc, mca_btl_base_endpoin
  * Look for an existing TCP process instance based on the globally unique
  * process identifier.
  */
-mca_btl_tcp2_proc_t* mca_btl_tcp2_proc_lookup(const orte_process_name_t *name)
+mca_btl_tcp2_proc_t* mca_btl_tcp2_proc_lookup(const prrte_process_name_t *name)
 {
     mca_btl_tcp_proc_t* proc = NULL;
     MCA_BTL_TCP_CRITICAL_SECTION_ENTER(&mca_btl_tcp_component.tcp_lock);

@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2007-2008 Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -194,7 +195,7 @@ void mca_btl_tcp_endpoint_dump(mca_btl_base_endpoint_t* btl_endpoint, const char
     }
 
     mca_btl_base_err("%s %s: endpoint %p src %s - dst %s nodelay %d sndbuf %d rcvbuf %d flags %08x\n",
-                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), msg, (void*)btl_endpoint, src, dst, nodelay, sndbuf, rcvbuf, flags);
+                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), msg, (void*)btl_endpoint, src, dst, nodelay, sndbuf, rcvbuf, flags);
 
     switch(btl_endpoint->endpoint_state) {
     case MCA_BTL_TCP_CONNECTING:
@@ -338,9 +339,9 @@ static int mca_btl_tcp2_endpoint_send_connect_ack(mca_btl_base_endpoint_t* btl_e
 {
     /* send process identifier to remote endpoint */
     mca_btl_tcp2_proc_t* btl_proc = mca_btl_tcp2_proc_local();
-    orte_process_name_t guid = btl_proc->proc_ompi->proc_name;
+    prrte_process_name_t guid = btl_proc->proc_ompi->proc_name;
 
-    ORTE_PROCESS_NAME_HTON(guid);
+    PRRTE_PROCESS_NAME_HTON(guid);
     if(mca_btl_tcp2_endpoint_send_blocking(btl_endpoint, &guid, sizeof(guid)) !=
           sizeof(guid)) {
         return OMPI_ERR_UNREACH;
@@ -361,7 +362,7 @@ bool mca_btl_tcp2_endpoint_accept(mca_btl_base_endpoint_t* btl_endpoint,
                                  struct sockaddr* addr, int sd)
 {
     mca_btl_tcp_proc_t *endpoint_proc = btl_endpoint->endpoint_proc;
-    const orte_process_name_t *this_proc = &(ompi_proc_local()->proc_name);
+    const prrte_process_name_t *this_proc = &(ompi_proc_local()->proc_name);
     int cmpval;
 
     if(NULL == btl_endpoint->endpoint_addr) {
@@ -499,19 +500,19 @@ static int mca_btl_tcp2_endpoint_recv_blocking(mca_btl_base_endpoint_t* btl_endp
  */
 static int mca_btl_tcp2_endpoint_recv_connect_ack(mca_btl_base_endpoint_t* btl_endpoint)
 {
-    orte_process_name_t guid;
+    prrte_process_name_t guid;
     mca_btl_tcp2_proc_t* btl_proc = btl_endpoint->endpoint_proc;
 
-    if((mca_btl_tcp2_endpoint_recv_blocking(btl_endpoint, &guid, sizeof(orte_process_name_t))) != sizeof(orte_process_name_t)) {
+    if((mca_btl_tcp2_endpoint_recv_blocking(btl_endpoint, &guid, sizeof(prrte_process_name_t))) != sizeof(prrte_process_name_t)) {
         return OMPI_ERR_UNREACH;
     }
-    ORTE_PROCESS_NAME_NTOH(guid);
+    PRRTE_PROCESS_NAME_NTOH(guid);
     /* compare this to the expected values */
-    if (OPAL_EQUAL != orte_util_compare_name_fields(ORTE_NS_CMP_ALL,
+    if (OPAL_EQUAL != prrte_util_compare_name_fields(PRRTE_NS_CMP_ALL,
                                                     &btl_proc->proc_ompi->proc_name,
                                                     &guid)) {
         BTL_ERROR(("received unexpected process identifier %s",
-                   ORTE_NAME_PRINT(&guid)));
+                   PRRTE_NAME_PRINT(&guid)));
         mca_btl_tcp2_endpoint_close(btl_endpoint);
         return OMPI_ERR_UNREACH;
     }

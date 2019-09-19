@@ -1,0 +1,25 @@
+# There can be multiple blocks of configuration data, chosen by
+# compiler flags (using the compiler_args key to chose which block
+# should be activated.  This can be useful for multilib builds.  See the
+# multilib page at:
+#    https://github.com/open-mpi/ompi/wiki/compilerwrapper3264
+# for more information.
+
+project=PMIx Reference RunTime Environment (PRRTE)
+project_short=PRRTE
+version=@PRRTE_VERSION@
+language=C
+compiler_env=CC
+compiler_flags_env=CFLAGS
+compiler=@WRAPPER_CC@
+preprocessor_flags=@PRRTE_WRAPPER_EXTRA_CPPFLAGS@
+compiler_flags_prefix=@PRRTE_WRAPPER_EXTRA_CFLAGS_PREFIX@
+compiler_flags=@PRRTE_WRAPPER_EXTRA_CFLAGS@
+linker_flags=@PRRTE_WRAPPER_EXTRA_LDFLAGS@
+libs=@PRRTE_WRAPPER_EXTRA_LIBS@
+libs_static=@PRRTE_WRAPPER_EXTRA_LIBS@
+dyn_lib_file=
+static_lib_file=
+required_file=
+includedir=${includedir}
+libdir=${libdir}

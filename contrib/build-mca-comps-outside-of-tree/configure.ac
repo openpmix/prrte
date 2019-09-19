@@ -12,6 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2011-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -117,7 +118,7 @@ AC_ARG_WITH([openmpi-source],
              # fix, but I'm outta time today...
 
              AC_MSG_CHECKING([for Open MPI source tree])
-             AS_IF([test -d "$withval" -a -d "$withval/opal" -a -d "$withval/orte" -a -d "$withval/ompi" -a -f "$withval/VERSION" -a -f "$withval/Makefile.ompi-rules" -a -f "$withval/opal/include/opal_config.h" -a -x "$withval/config.status"],
+             AS_IF([test -d "$withval" -a -d "$withval/opal" -a -d "$withval/prrte" -a -d "$withval/ompi" -a -f "$withval/VERSION" -a -f "$withval/Makefile.ompi-rules" -a -f "$withval/opal/include/opal_config.h" -a -x "$withval/config.status"],
                     [AC_MSG_RESULT([$withval])],
                     [AC_MSG_RESULT([not found; double check --with-openmpi-source value])
                      AC_MSG_ERROR([Cannot continue])])
@@ -150,7 +151,7 @@ EOF
              echo "  --> CPPFLAGS:" $source_CPPFLAGS
              echo "  --> CFLAGS:" $source_CFLAGS
 
-             CPPFLAGS="$CPPFLAGS -I$withval -I$withval/opal/include -I$withval/orte/include -I$withval/ompi/include"
+             CPPFLAGS="$CPPFLAGS -I$withval -I$withval/opal/include -I$withval/prrte/include -I$withval/ompi/include"
 
              # Open MPI v1.7 libraries
              LDFLAGS="$LDFLAGS -L$withval/ompi/.libs"
@@ -172,8 +173,8 @@ AC_CHECK_HEADER([ompi/runtime/mpiruntime.h], [],
 AC_CHECK_FUNC([mca_btl_base_open], [],
               [AC_MSG_WARN([Could not find mca_btl_base_open])
                AC_MSG_ERROR([Cannot continue])])
-AC_CHECK_FUNC([orte_show_help], [],
-              [AC_MSG_WARN([Could not find orte_show_help])
+AC_CHECK_FUNC([prrte_show_help], [],
+              [AC_MSG_WARN([Could not find prrte_show_help])
                AC_MSG_ERROR([Cannot continue])])
 
 # Check for types we need for this component

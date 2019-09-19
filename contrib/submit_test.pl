@@ -10,6 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -28,7 +29,7 @@ my $pcm_file = "pcms.php";
 my $submit_uri = "submit.php";
 
 my $ua = LWP::UserAgent->new({ env_proxy => 1 });
-$ua->agent("Open MPI test reporter/1.0");
+$ua->agent("Open MPI test repprrter/1.0");
 
 #----------------------------------------------------------------------------
 

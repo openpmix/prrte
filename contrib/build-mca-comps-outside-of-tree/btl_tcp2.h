@@ -11,6 +11,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -96,7 +97,7 @@ struct mca_btl_tcp2_component_t {
 };
 typedef struct mca_btl_tcp2_component_t mca_btl_tcp2_component_t;
 
-OMPI_MODULE_DECLSPEC extern mca_btl_tcp2_component_t mca_btl_tcp2_component;
+OMPI_MODULE_EXPORT extern mca_btl_tcp2_component_t mca_btl_tcp2_component;
 
 /**
  * BTL Module Interface

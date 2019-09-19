@@ -6,11 +6,11 @@ SW_INSTALL_ROOT=/tmp/work/gshipman/ompi/install
 
 PLATFORM=ornl/cray_xt_cnl_romio
 
-ORTED_MAKEFILE=orte/tools/orted/Makefile
+PRRTED_MAKEFILE=prrte/tools/orted/Makefile
 
-if test -z "`grep "orted_LDFLAGS =.*-all-static" ${ORTED_MAKEFILE}`"; then
-    echo "WARNING: patching ${ORTED_MAKEFILE} to build it static"
-    sed -i 's/orted_LDFLAGS =/orted_LDFLAGS = -all-static/g' ${ORTED_MAKEFILE}
+if test -z "`grep "orted_LDFLAGS =.*-all-static" ${PRRTED_MAKEFILE}`"; then
+    echo "WARNING: patching ${PRRTED_MAKEFILE} to build it static"
+    sed -i 's/orted_LDFLAGS =/orted_LDFLAGS = -all-static/g' ${PRRTED_MAKEFILE}
 fi
 
 

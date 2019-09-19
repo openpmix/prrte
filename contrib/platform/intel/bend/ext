@@ -1,4 +1,4 @@
-enable_orterun_prefix_by_default=yes
+enable_prrterun_prefix_by_default=yes
 enable_mpi_thread_multiple=no
 enable_mem_debug=no
 enable_mem_profile=no

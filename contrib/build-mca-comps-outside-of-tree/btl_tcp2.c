@@ -13,6 +13,7 @@
  *                         reserved.
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  *
+ * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -509,7 +510,7 @@ void mca_btl_tcp_dump(struct mca_btl_base_module_t* base_btl,
                      " |   statistics: sent %lu recv %lu\n"
 #endif  /* MCA_BTL_TCP_STATISTICS */
                      " |   latency %u bandwidth %u\n",
-                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), (void*)btl, btl->tcp_ifkindex,
+                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), (void*)btl, btl->tcp_ifkindex,
 #if MCA_BTL_TCP_STATISTICS
                      btl->tcp_bytes_sent, btl->btl_bytes_recv,
 #endif  /* MCA_BTL_TCP_STATISTICS */

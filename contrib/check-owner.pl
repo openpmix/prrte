@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2015 Los Alamos National Security, LLC.  All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Simple script to traverse the OMPI source tree that looks for

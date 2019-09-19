@@ -3,6 +3,7 @@
 #                         University Research and Technology
 #                         Corporation.  All rights reserved.
 #
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -31,7 +32,7 @@ crs=
 opal_cr_use_thread=1
 
 #
-# ORTE Parameters
+# PRRTE Parameters
 # - Wrap the RML
 # - Use the 'full' Snapshot Coordinator
 #
@@ -63,4 +64,4 @@ btl_openib_cpc_include=oob
 # Enable SIGTSTP/SIGCONT capability
 #  killall -TSTP mpirun
 #  killall -CONT mpirun
-orte_forward_job_control=1
+prrte_forward_job_control=1

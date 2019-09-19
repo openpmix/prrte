@@ -112,7 +112,7 @@ _fuzzy_search() {
     done
 }
 
-# mpirun/orterun completion
+# mpirun/prrterun completion
 _mpirun() {
     local cur prv tb switches already_specified all_variables avail_variables enumerations save_IFS
     local disable_description=yes
@@ -202,5 +202,5 @@ _mpirun() {
 }
 
 complete -o nospace -F _mpirun mpirun
-complete -o nospace -F _mpirun orterun
+complete -o nospace -F _mpirun prrterun
 complete -o nospace -F _mpirun mpiexec

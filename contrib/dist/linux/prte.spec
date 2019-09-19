@@ -14,7 +14,7 @@
 #                         All rights reserved.
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -571,7 +571,7 @@ find $RPM_BUILD_ROOT -type f -o -type l | \
 cat all.files | egrep '/lib/|/lib64/|/lib32/|/bin/|/etc/|/help-' > tmp.files | /bin/true
 # Snip out a bunch of executables (e.g., wrapper compilers, pkgconfig
 # files, .la and .a files)
-egrep -vi 'mpic|mpif|ortec|f77|f90|pkgconfig|\.la$|\.a$' tmp.files > runtime.files | /bin/true
+egrep -vi 'mpic|mpif|prrtec|f77|f90|pkgconfig|\.la$|\.a$' tmp.files > runtime.files | /bin/true
 rm -f tmp.files
 
 # Now take the runtime files out of all.files so that we don't get

@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +24,7 @@
 
 #include "opal/class/opal_object.h"
 #include "ompi/proc/proc.h"
-#include "orte/types.h"
+#include "prrte/types.h"
 #include "btl_tcp2.h"
 #include "btl_tcp2_addr.h"
 #include "btl_tcp2_endpoint.h"
@@ -107,7 +108,7 @@ enum mca_btl_tcp2_connection_quality {
 
 
 mca_btl_tcp2_proc_t* mca_btl_tcp2_proc_create(ompi_proc_t* ompi_proc);
-mca_btl_tcp2_proc_t* mca_btl_tcp2_proc_lookup(const orte_process_name_t* name);
+mca_btl_tcp2_proc_t* mca_btl_tcp2_proc_lookup(const prrte_process_name_t* name);
 int  mca_btl_tcp2_proc_insert(mca_btl_tcp2_proc_t*, mca_btl_base_endpoint_t*);
 int  mca_btl_tcp2_proc_remove(mca_btl_tcp2_proc_t*, mca_btl_base_endpoint_t*);
 bool mca_btl_tcp2_proc_accept(mca_btl_tcp2_proc_t*, struct sockaddr*, int);

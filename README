@@ -15,7 +15,7 @@ Copyright (c) 2007      Myricom, Inc.  All rights reserved.
 Copyright (c) 2008-2018 IBM Corporation.  All rights reserved.
 Copyright (c) 2010      Oak Ridge National Labs.  All rights reserved.
 Copyright (c) 2011      University of Houston. All rights reserved.
-Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 Copyright (c) 2015      NVIDIA Corporation.  All rights reserved.
 Copyright (c) 2017-2018 Los Alamos National Security, LLC.  All rights
                         reserved.
@@ -353,7 +353,7 @@ Compiler Notes
 
 - The Portland Group compilers prior to version 7.0 require the
   "-Msignextend" compiler flag to extend the sign bit when converting
-  from a shorter to longer integer.  This is is different than other
+  from a shprrter to longer integer.  This is is different than other
   compilers (such as GNU).  When compiling Open MPI with the Portland
   compiler suite, the following flags should be passed to Open MPI's
   configure script:
@@ -1263,11 +1263,11 @@ RUN-TIME SYSTEM SUPPORT
   nodes.  Note, however, that such users may still desire to set PATH
   -- perhaps even in their shell startup files -- so that executables
   such as mpicc and mpirun can be found without needing to type long
-  path names.  --enable-orterun-prefix-by-default is a synonym for
+  path names.  --enable-prrterun-prefix-by-default is a synonym for
   this option.
 
---enable-orte-static-ports
-   Enable orte static ports for tcp oob (default: enabled).
+--enable-prrte-static-ports
+   Enable prrte static ports for tcp oob (default: enabled).
 
 --with-alps
   Force the building of for the Cray Alps run-time environment.  If
@@ -1626,7 +1626,7 @@ For example:
     setting different compilers (vs. setting environment variables and
     then invoking "./configure").  The above form will save all
     variables and values in the config.log file, which makes
-    post-mortem analysis easier if problems occur.
+    post-mprrtem analysis easier if problems occur.
 
 Note that if you intend to compile Open MPI with a "make" other than
 the default one in your PATH, then you must either set the $MAKE
@@ -2050,7 +2050,7 @@ configure script.  They are not necessary for MPI applications, but
 may be used by applications that use Open MPI's lower layer support
 libraries.
 
-orte:       Open MPI Run-Time Environment applications
+prrte:       Open MPI Run-Time Environment applications
 opal:       Open Portable Access Layer applications
 
 ===========================================================================

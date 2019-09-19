@@ -29,7 +29,7 @@ my $npmin = 1;
 my @csvrow;
 my $multiplier = 1;
 
-my @tests = qw(/bin/true ./orte_no_op ./mpi_no_op ./mpi_no_op ./mpi_no_op);
+my @tests = qw(/bin/true ./prrte_no_op ./mpi_no_op ./mpi_no_op ./mpi_no_op);
 my @options = ("", "", "", "-mca mpi_add_procs_cutoff 0 -mca pmix_base_async_modex 1 -mca pmix_base_collect_data 0", "-mca mpi_add_procs_cutoff 0 -mca pmix_base_async_modex 1 -mca async_mpi_init 1 -mca async_mpi_finalize 1 -mca pmix_base_collect_data 0");
 my @starterlist = qw(mpirun prun srun aprun);
 my @starteroptionlist = (" --novm --timeout 600",
@@ -69,8 +69,8 @@ if ($HELP) {
 --quiet | -q         Only output critical messages to stdout
 --showme             Show the actual commands without executing them
 --reps=s             Number of times to run each test (for statistics)
---mpirun             Use mpirun (or its equivalent orterun)
---dvm                Use orte-dvm to execute the test
+--mpirun             Use mpirun (or its equivalent prrterun)
+--dvm                Use prrte-dvm to execute the test
 --srun               Use srun (if available) to execute the test
 --arpun              Use aprun (if available) to execute the test
 --myapp=s            In addition to the standard tests, run this specific application (including any args)
@@ -292,7 +292,7 @@ foreach $starter (@starters) {
     print "STARTER: $starter\n";
     # if we are going to use the dvm, then we
     if ($starter eq "prun") {
-        my $dvm = "orte-dvm --system-server";
+        my $dvm = "prrte-dvm --system-server";
         if ($multiplier gt 1) {
             $dvm = $dvm . " --mca rtc ^hwloc --mca ras_base_multiplier " . $multiplier;
         }

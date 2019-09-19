@@ -1,4 +1,4 @@
-#compdef mpirun orterun mpiexec oshrun # -*- shell-script -*-
+#compdef mpirun prrterun mpiexec oshrun # -*- shell-script -*-
 
 # Completion script for Open MPI's mpirun command v1.0.1
 #
@@ -143,7 +143,7 @@ _mpirun() {
 	'(-cpu-set --cpu-set)'{-cpu-set,--cpu-set}'[Comma-separated list of ranges specifying logical cpus allocated to this job (default: none)]:CPU Set:' \
 	'(-cpus-per-rank --cpus-per-rank -cpus-per-proc --cpus-per-proc)'{-cpus-per-proc,--cpus-per-proc,-cpus-per-rank,--cpus-per-rank}'[Number of cpus to use for each process (default: 1)]:CPUs per proc:_guard "[[\:digit\:]]#" "number"' \
 	'(-d -debug-level --debug-level)'{-d,-debug-devel,--debug-devel}'[Enable debugging of OpenRTE]' \
-	'(-debug --debug -tv --tv)'{-debug,--debug,-tv,--tv}'[Invoke the user-level debugger indicated by the orte_base_user_debugger MCA parameter]' \
+	'(-debug --debug -tv --tv)'{-debug,--debug,-tv,--tv}'[Invoke the user-level debugger indicated by the prrte_base_user_debugger MCA parameter]' \
 	'(-debug-daemons --debug-daemons -debug-daemons-file --debug-daemons-file)'{-debug-daemons,--debug-daemons}'[Enable debugging of any OpenRTE daemons used by this application]' \
 	'(-debug-daemons --debug-daemons -debug-daemons-file --debug-daemons-file)'{-debug-daemons-file,--debug-daemons-file}'[Enable debugging of any OpenRTE daemons used by this application, storing output in files]' \
 	'(-debugger --debugger)'{-debugger,--debugger}'[Sequence of debuggers to search for when "--debug" is used]:Debuggers:' \

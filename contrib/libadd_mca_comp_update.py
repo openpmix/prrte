@@ -8,7 +8,7 @@
 import glob, os, re, shutil
 
 projects= {'opal' : ["$(top_builddir)/opal/libprteopen-pal.la"],
-           'orte' : ["$(top_builddir)/orte/libprteopen-rte.la"],
+           'prrte' : ["$(top_builddir)/prrte/libprteopen-rte.la"],
            'ompi' : ["$(top_builddir)/ompi/lib@OMPI_LIBMPI_NAME@.la"],
            'oshmem' : ["$(top_builddir)/oshmem/liboshmem.la"],
           }

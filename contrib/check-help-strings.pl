@@ -1,9 +1,10 @@
 #!/usr/bin/env perl
 #
 # Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
-# Simple script to check all the opal_show_help (and orte_show_help)
+# Simple script to check all the opal_show_help (and prrte_show_help)
 # strings against what is found in help files.
 #
 
@@ -276,7 +277,7 @@ foreach my $info (@source_files) {
     $src = check_name($info, "opal_show_help", "\\(", $src);
     # Find calls to opal_show_help_string()
     $src = check_name($info, "opal_show_help_string", "\\(", $src);
-    # Find calls to rte_show_help() (and also orte_show_help())
+    # Find calls to rte_show_help() (and also prrte_show_help())
     $src = check_name($info, "rte_show_help", "\\(", $src);
     # Find special tokens from comments
     $src = check_name($info, "SHOW_HELP", ":", $src);

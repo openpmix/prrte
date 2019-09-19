@@ -1,6 +1,7 @@
 # -*- makefile -*-
 #
 # Copyright (c) 2012      Los Alamos National Security, LLC.  All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,6 +22,6 @@ EXTRA_DIST += \
         contrib/scaling/Makefile \
         contrib/scaling/mpi_barrier.c \
 	contrib/scaling/mpi_no_op.c \
-	contrib/scaling/orte_no_op.c \
+	contrib/scaling/prrte_no_op.c \
 	scaling.pl
 

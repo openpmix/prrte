@@ -1,7 +1,7 @@
 # -*- makefile -*-
 # Copyright (c) 2008-2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2016      Intel, Inc.  All rights reserved.
+# Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -17,7 +17,7 @@ TRIM_OPTIONS=
 	  --package-version='@PACKAGE_VERSION@' \
 	  --ompi-date='@OMPI_RELEASE_DATE@' \
 	  --opal-date='@OPAL_RELEASE_DATE@' \
-	  --orte-date='@ORTE_RELEASE_DATE@' \
+	  --prrte-date='@PRRTE_RELEASE_DATE@' \
 	  --input=$< \
 	  --output=$@
 
@@ -27,7 +27,7 @@ TRIM_OPTIONS=
 	  --package-version='@PACKAGE_VERSION@' \
 	  --ompi-date='@OMPI_RELEASE_DATE@' \
 	  --opal-date='@OPAL_RELEASE_DATE@' \
-	  --orte-date='@ORTE_RELEASE_DATE@' \
+	  --prrte-date='@PRRTE_RELEASE_DATE@' \
 	  $(TRIM_OPTIONS) \
 	  --input=$< \
 	  --output=$@
@@ -38,7 +38,7 @@ TRIM_OPTIONS=
 	  --package-version='@PACKAGE_VERSION@' \
 	  --ompi-date='@OMPI_RELEASE_DATE@' \
 	  --opal-date='@OPAL_RELEASE_DATE@' \
-	  --orte-date='@ORTE_RELEASE_DATE@' \
+	  --prrte-date='@PRRTE_RELEASE_DATE@' \
 	  --input=$< \
 	  --output=$@
 

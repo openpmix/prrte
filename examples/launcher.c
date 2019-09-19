@@ -103,7 +103,7 @@ int main(int argc, char **argv)
     bool flag;
     myrel_t myrel;
     mylock_t mylock;
-    pmix_status_t code[6] = {PMIX_ERR_PROC_ABORTING, PMIX_ERR_PROC_ABORTED,
+    pmix_status_t code[6] = {PMIX_ERR_PROC_ABORTING, PMIX_ERR_PROC_ABPRRTED,
                              PMIX_ERR_PROC_REQUESTED_ABORT, PMIX_ERR_JOB_TERMINATED,
                              PMIX_ERR_UNREACH, PMIX_ERR_LOST_CONNECTION_TO_SERVER};
     pmix_nspace_t appspace;

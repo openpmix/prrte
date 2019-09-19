@@ -12,10 +12,10 @@
 #                         All rights reserved.
 # Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 #
-# orte_show_help_replacement.sh Script to detect occurences of
-# #include "orte/util/show_help.h", where actually either
+# prrte_show_help_replacement.sh Script to detect occurences of
+# #include "prrte/util/show_help.h", where actually either
 #  1. #include "opal/util/output.h"
-#  2. #include "orte/mca/rml/rml_types.h"
+#  2. #include "prrte/mca/rml/rml_types.h"
 # were required.
 #
 # Some grep/sed mojo may be of interest to others...
@@ -103,37 +103,37 @@ SEARCH_HEADER=show_help.h
 
 # Search for all source files with show_help.h in it.
 for i in `find . -type f '(' -name '*.[cChysSfF]' -o -iname '*.cc' -o -name '*.cpp' -o -name '*.[fF]77' -o -name '*.[fF]90' ')' | sort | xargs grep -n $SEARCH_HEADER | cut -f1 -d':' | sort | uniq` ; do
-    # Now we do know that we have orte/util/show_help.h
-    found_orte_show_help_h=1
-    need_orte_show_help_h=0
+    # Now we do know that we have prrte/util/show_help.h
+    found_prrte_show_help_h=1
+    need_prrte_show_help_h=0
 
     found_opal_util_output_h=0
     need_opal_util_output_h=0
 
-    found_orte_mca_rml_rml_types_h=0
-    need_orte_mca_rml_rml_types_h=0
+    found_prrte_mca_rml_rml_types_h=0
+    need_prrte_mca_rml_rml_types_h=0
 
-    grep -q orte_show_help $i && need_orte_show_help_h=1
+    grep -q prrte_show_help $i && need_prrte_show_help_h=1
 
     grep -q opal\/util\/output.h $i && found_opal_util_output_h=1
     grep -q opal_output $i          && need_opal_util_output_h=1
 
-    grep -q orte\/mca\/rml\/rml_types.h $i     && found_orte_mca_rml_rml_types_h=1
-    grep -q -E '(orte_rml_tag_t|ORTE_RML_)' $i && need_orte_mca_rml_rml_types_h=1
+    grep -q prrte\/mca\/rml\/rml_types.h $i     && found_prrte_mca_rml_rml_types_h=1
+    grep -q -E '(prrte_rml_tag_t|PRRTE_RML_)' $i && need_prrte_mca_rml_rml_types_h=1
 
     if [ $need_opal_util_output_h -eq 1 -a $found_opal_util_output_h -eq 0 ] ; then
         echo -e $i  \\t Found opal_output in file, but not include opal/util/output.h
         add_header $i   opal/util/output.h   opal/util/   opal/class/  opal/
     fi
 
-    if [ $need_orte_mca_rml_rml_types_h -eq 1 -a $found_orte_mca_rml_rml_types_h -eq 0 ] ; then
-        echo -e $i  \\t Found orte_rml_tag_t or ORTE_RML_ in file, but no include orte/mca/rml/rml_types.h
-        add_header $i   orte/mca/rml/rml_types.h   orte/mca/rml/  orte/mca/   orte/
+    if [ $need_prrte_mca_rml_rml_types_h -eq 1 -a $found_prrte_mca_rml_rml_types_h -eq 0 ] ; then
+        echo -e $i  \\t Found prrte_rml_tag_t or PRRTE_RML_ in file, but no include prrte/mca/rml/rml_types.h
+        add_header $i   prrte/mca/rml/rml_types.h   prrte/mca/rml/  prrte/mca/   prrte/
     fi
 
-    if [ $need_orte_show_help_h -eq 0 ] ; then
-        echo -e $i  \\t Found orte_rml_tag_t or ORTE_RML_ in file, but no include orte/mca/rml/rml_types.h
-        del_header $i orte/util/show_help.h
+    if [ $need_prrte_show_help_h -eq 0 ] ; then
+        echo -e $i  \\t Found prrte_rml_tag_t or PRRTE_RML_ in file, but no include prrte/mca/rml/rml_types.h
+        del_header $i prrte/util/show_help.h
     fi
 done
 

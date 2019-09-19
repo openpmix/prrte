@@ -5,18 +5,18 @@
  * The most basic of MPI applications
  */
 
-#include "orte_config.h"
+#include "prrte_config.h"
 
 #include <stdio.h>
 #include "mpi.h"
 #include "opal/mca/pmix/pmix.h"
 #include "opal/util/argv.h"
 #include "opal/util/printf.h"
-#include "orte/runtime/runtime.h"
-#include "orte/util/proc_info.h"
-#include "orte/util/name_fns.h"
-#include "orte/runtime/orte_globals.h"
-#include "orte/mca/errmgr/errmgr.h"
+#include "prrte/runtime/runtime.h"
+#include "prrte/util/proc_info.h"
+#include "prrte/util/name_fns.h"
+#include "prrte/runtime/prrte_globals.h"
+#include "prrte/mca/errmgr/errmgr.h"
 
 static int rank, size;
 static volatile bool wait_for_release = true;
@@ -114,7 +114,7 @@ static void sample(void)
     wait_for_release = true;
     /* log my own results as a single string so the output
      * doesn't get garbled on the other end */
-    opal_asprintf(&tmp, "Data for node %s", orte_process_info.nodename);
+    opal_asprintf(&tmp, "Data for node %s", prrte_process_info.nodename);
     opal_argv_append_nosize(&answer, tmp);
     free(tmp);
     OPAL_LIST_FOREACH(kv, &response, opal_value_t) {
@@ -208,7 +208,7 @@ int main(int argc, char* argv[])
     /* if I am the local leader (i.e., local_rank=0), then I ask
      * my daemon to report the local memory usage, and send it
      * to rank=0 */
-    if (0 == orte_process_info.my_local_rank) {
+    if (0 == prrte_process_info.my_local_rank) {
         sample();
     } else {
         /* now wait for notification */
@@ -226,7 +226,7 @@ int main(int argc, char* argv[])
         fprintf(stderr, "\n\nSampling memory usage after MPI_Barrier\n");
     }
 
-    if (0 == orte_process_info.my_local_rank) {
+    if (0 == prrte_process_info.my_local_rank) {
         if (0 != rank) {
             /* wait a little */
             usleep(1000);
