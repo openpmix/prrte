@@ -327,7 +327,11 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
             return opal_pmix_convert_status(ret);
         }
         free(tmp);
+#ifdef PMIX_REGEX
         PMIX_INFO_LOAD(&cd.info[0], PMIX_NODE_MAP, regex, PMIX_STRING);
+#else
+        PMIX_INFO_LOAD(&cd.info[0], PMIX_NODE_MAP, regex, PMIX_REGEX);
+#endif
         free(regex);
     }
 
@@ -343,7 +347,11 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
             return opal_pmix_convert_status(ret);
         }
         free(tmp);
+#ifdef PMIX_REGEX
         PMIX_INFO_LOAD(&cd.info[1], PMIX_PROC_MAP, regex, PMIX_STRING);
+#else
+        PMIX_INFO_LOAD(&cd.info[0], PMIX_PROC_MAP, regex, PMIX_REGEX);
+#endif
         free(regex);
     }
 
@@ -353,11 +361,13 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
     OPAL_PMIX_CONVERT_JOBID(pproc.nspace, jdata->jobid);
     (void)strncpy(cd.info[2].key, PMIX_ALLOC_NETWORK, PMIX_MAX_KEYLEN);
     cd.info[2].value.type = PMIX_DATA_ARRAY;
-    PMIX_DATA_ARRAY_CREATE(cd.info[2].value.data.darray, 3, PMIX_INFO);
-#if PMIX_NUMERIC_VERSION < 0x00030100
+#if PMIX_NUMERIC_VERSION < 0x00020203
     PMIX_INFO_CREATE(info, 3);
+    cd.info[2].value.data.darray = (pmix_data_array_t*)malloc(sizeof(pmix_data_array_t));
     cd.info[2].value.data.darray->array = info;
+    cd.info[2].value.data.darray->size = 3;
 #else
+    PMIX_DATA_ARRAY_CREATE(cd.info[2].value.data.darray, 3, PMIX_INFO);
     info = (pmix_info_t*)cd.info[2].value.data.darray->array;
 #endif
     asprintf(&tmp, "%s.net", pproc.nspace);
@@ -379,6 +389,7 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         OPAL_PMIX_WAIT_THREAD(&cd.lock);
     }
     OPAL_PMIX_DESTRUCT_LOCK(&cd.lock);
+    PMIX_INFO_FREE(cd.info, cd.ninfo);
     return rc;
 }
 
