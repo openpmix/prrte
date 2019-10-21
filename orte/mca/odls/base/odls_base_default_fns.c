@@ -328,9 +328,9 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         }
         free(tmp);
 #ifdef PMIX_REGEX
-        PMIX_INFO_LOAD(&cd.info[0], PMIX_NODE_MAP, regex, PMIX_STRING);
-#else
         PMIX_INFO_LOAD(&cd.info[0], PMIX_NODE_MAP, regex, PMIX_REGEX);
+#else
+        PMIX_INFO_LOAD(&cd.info[0], PMIX_NODE_MAP, regex, PMIX_STRING);
 #endif
         free(regex);
     }
@@ -348,9 +348,9 @@ int orte_odls_base_default_get_add_procs_data(opal_buffer_t *buffer,
         }
         free(tmp);
 #ifdef PMIX_REGEX
-        PMIX_INFO_LOAD(&cd.info[1], PMIX_PROC_MAP, regex, PMIX_STRING);
+        PMIX_INFO_LOAD(&cd.info[1], PMIX_PROC_MAP, regex, PMIX_REGEX);
 #else
-        PMIX_INFO_LOAD(&cd.info[0], PMIX_PROC_MAP, regex, PMIX_REGEX);
+        PMIX_INFO_LOAD(&cd.info[0], PMIX_PROC_MAP, regex, PMIX_STRING);
 #endif
         free(regex);
     }
