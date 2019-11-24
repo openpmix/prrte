@@ -20,6 +20,7 @@
  *                         All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2019      Sylabs, Inc. All rights reserved.
  *
  * $COPYRIGHT$
  *
