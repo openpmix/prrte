@@ -44,7 +44,7 @@
 #include "orte/mca/odls/base/odls_private.h"
 #include "orte/mca/odls/singularity/odls_singularity.h"
 
-int odls_singularity_priority = 9;
+int mca_odls_singularity_priority = 9;
 
 /*
  * Instantiate the public struct with all of our public information
@@ -87,7 +87,7 @@ int orte_odls_singularity_component_query(mca_base_module_t **module, int *prior
      * if we do. Hence, we only get here if we CAN build - in which
      * case, we definitely should be considered for selection
      */
-    *priority = odls_singularity_priority; /* let users override all other components - we are literally the singularity */
+    *priority = mca_odls_singularity_priority; /* let users override all other components - we are literally the singularity */
     *module = (mca_base_module_t *)&orte_odls_singularity_module;
     return ORTE_SUCCESS;
 }
@@ -102,7 +102,7 @@ int orte_odls_singularity_component_register(void)
                                           NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
                                           OPAL_INFO_LVL_3,
                                           MCA_BASE_VAR_SCOPE_ALL_EQ,
-                                          &odls_singularity_priority);
+                                          &mca_odls_singularity_priority);
     if (0 > ret)
     {
         return ret;

@@ -474,7 +474,13 @@ static int do_child(orte_odls_spawn_caddy_t *cd, int write_fd)
     /* Exec the new executable, i.e., fire up the Singularity container */
 
     // We need to parse the environment of the application because there is important
-    // information in it to be able to set everything up
+    // information in it to be able to set everything up. For example, we do not assume
+    // that the location of the singularity binary is set at compile time, it can change
+    // between jobs (not during a job). Also the arguments to use to start a container,
+    // i.e., the 'singularity exec' flags are based to some extends on the configuration
+    // of Singularity and on also on the image itself. Extra 'singularity exec' flags
+    // can set using an environment variable (its name is defined by the value of
+    // singularity_exec_argc_env_var_name).
     i = 0;
     while (cd->env && cd->env[i])
     {
@@ -511,8 +517,7 @@ static int do_child(orte_odls_spawn_caddy_t *cd, int write_fd)
         i++;
     }
 
-    ///home/gvallee/.sympi/install_singularity-master/bin/
-    execve("/home/gvallee/.sympi/install_singularity-master/bin/singularity", cmd_args, cd->env);
+    execve(singularity_bin_path, cmd_args, cd->env);
     getcwd(dir, sizeof(dir));
     send_error_show_help(write_fd, 1,
                          "help-orte-odls-singularity.txt", "execve error",
