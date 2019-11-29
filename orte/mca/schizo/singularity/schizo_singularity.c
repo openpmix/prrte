@@ -41,7 +41,7 @@ static int setup_fork(orte_job_t *jdata, orte_app_context_t *app)
 {
     int i;
     bool takeus = false;
-    char *pth = NULL;
+    char *pth = NULL; // Path to the directory where the Singularity binary is
     char *exec_args = NULL;
     opal_envar_t envar;
     char **cmd_args = NULL;
@@ -56,6 +56,9 @@ static int setup_fork(orte_job_t *jdata, orte_app_context_t *app)
             }
         }
     }
+    /* If we did not find the singularity binary in the environment of the
+     * application, we check if the arguments include the singularity
+     * command itself (assuming full path) or a Singularity image. */
     if (!takeus) {
         /* even if they didn't specify, check to see if
          * this involves a singularity container */
@@ -78,24 +81,57 @@ static int setup_fork(orte_job_t *jdata, orte_app_context_t *app)
     if (NULL != app->env) {
         pth = opal_path_findv("singularity", X_OK, app->env, NULL);
     }
-    if (NULL == pth) {
+    if (NULL != pth) {
+        /* opal_path_findv returned the absolute path to the Singularity binary,
+         * we want the directory where the binary is. */
+        pth = opal_dirname(pth);
+        opal_output_verbose(1, orte_schizo_base_framework.framework_output,
+                            "%s schizo:singularity: Singularity found from env: %s\n",
+                            ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), pth);
+    } else {
         /* wasn't in the environment - see if it was found somewhere */
         if (0 < strlen(OPAL_SINGULARITY_PATH)) {
             if (0 != strcmp(OPAL_SINGULARITY_PATH, "DEFAULT")) {
                 pth = OPAL_SINGULARITY_PATH;
+                opal_output_verbose(1, orte_schizo_base_framework.framework_output,
+                                     "%s schizo:singularity: using default Singularity from %s\n",
+                                     ORTE_NAME_PRINT(ORTE_PROC_MY_NAME), pth);
+                 /* Update (if possible) the PATH of the app so it can find singularity otherwise
+                    it will likely not find it and create a failure. The default path to singularity
+                    that is set at configuration time may not be in the environment that is passed in
+                    by the user. */
+                 for (i = 0; NULL != app->env[i]; i++) {
+                     if (0 == strncmp(app->env[i], "PATH", 4)) {
+                         char *cur_path_val = &app->env[i][5];
+                         if (app->env[i] != NULL) {
+                             free(app->env[i]);
+                         }
+                         opal_asprintf(&app->env[i], "PATH=%s:%s", pth, cur_path_val);
+                         break;
+                     }
+                 }
             }
         } else {
             return ORTE_ERR_TAKE_NEXT_OPTION;
         }
     }
-    if (NULL != pth) {
-        /* tell the odls component to prepend this to our PATH */
-        envar.envar = "PATH";
-        envar.value = pth;
-        envar.separator = ':';
-        orte_add_attribute(&jdata->attributes, ORTE_JOB_PREPEND_ENVAR,
-            ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
+    if (NULL == pth) {
+        // at this point, if we do not have a valid path to Singularity, there is nothing we can do
+        return ORTE_ERR_TAKE_NEXT_OPTION;
     }
+
+    /* tell the odls component to prepend this to our PATH */
+    envar.envar = "PATH";
+    envar.value = pth;
+    envar.separator = ':';
+    orte_add_attribute(&jdata->attributes, ORTE_JOB_PREPEND_ENVAR,
+                       ORTE_ATTR_GLOBAL, &envar, OPAL_ENVAR);
+
+    // the final command is now singularity
+    if (app->app) {
+        free(app->app);
+    }
+    asprintf(&app->app, "%s/singularity", pth);
 
     /* start building the final cmd */
     opal_argv_append_nosize(&cmd_args, "singularity");
