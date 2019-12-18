@@ -1,0 +1,9 @@
+# Ignore symbols in libopen-rte that are auto-generated and we can't
+# do anything about them (e.g., flex/bison symbols).
+prrte_util_hostfile_leng
+prrte_util_hostfile_text
+prrte_util_keyval_yyleng
+prrte_util_keyval_yytext
+prrte_show_help_yyleng
+prrte_show_help_yytext
+

@@ -9,7 +9,7 @@ enable_mem_debug=no
 enable_mem_profile=no
 enable_binaries=no
 enable_script_wrapper_compilers=yes
-with_orte=no
+with_prrte=no
 
 enable_event_rtsig=no
 enable_event_select=no

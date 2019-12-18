@@ -290,7 +290,7 @@ int main(int argc, char **argv)
         "prun",
         "mpirun",
         "mpiexec",
-        "orterun",
+        "prrterun",
         NULL
     };
     pmix_proc_t proc;

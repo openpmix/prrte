@@ -131,46 +131,46 @@ SEARCH_HEADER[45]=""
 delete_unnessary_header .
 
 ####################################
-SEARCH_HEADER[0]="orte/mca/errmgr/errmgr.h ORTE_ERROR_NAME ORTE_ERROR_LOG orte_errmgr_base_log orte_errmgr"
-SEARCH_HEADER[1]="orte/mca/ess/ess.h orte_ess"
-SEARCH_HEADER[2]="orte/mca/filem/filem.h orte_filem ORTE_FILEM_TYPE_ ORTE_FILEM_MOVE_ orte_filem_base_process_set_1_0_0_t orte_filem_base_process_set_t orte_filem_base_file_set_1_0_0_t orte_filem_base_file_set_t orte_filem_base_request_1_0_0_t orte_filem_base_request_t orte_filem_base_component_2_0_0_t orte_filem_base_component_t orte_filem_base_module_1_0_0_t orte_filem_base_module_t"
-SEARCH_HEADER[3]="orte/mca/grpcomm/grpcomm.h orte_grpcomm"
-SEARCH_HEADER[4]="orte/mca/iof/iof.h orte_iof"
-SEARCH_HEADER[5]="orte/mca/iof/iof_types.h orte_iof_tag_t ORTE_IOF_"
-SEARCH_HEADER[6]="orte/mca/notifier/notifier.h ORTE_NOTIFIER_MAX_BUF ORTE_NOTIFIER_INFRA ORTE_NOTIFIER_WARNING orte_notifier"
-SEARCH_HEADER[7]="orte/mca/odls/base/base.h orte_odls_base_open orte_odls_base_t orte_odls_base orte_base_default_waitpid_fired"
-SEARCH_HEADER[8]="orte/mca/odls/odls.h orte_odls_base_module_1_3_0_t orte_odls_base_module_t orte_odls_base_component_2_0_0_t orte_odls_base_component_t orte_odls"
-SEARCH_HEADER[9]="orte/mca/odls/odls_types.h orte_daemon_cmd_flag_t ORTE_DAEMON_ orte_odls_child_t orte_odls_job_t"
-SEARCH_HEADER[10]="orte/mca/oob/oob.h mca_oob_1_0_0_t mca_oob_t mca_oob_base_component_2_0_0_t mca_oob_base_component_t mca_oob"
-SEARCH_HEADER[11]="orte/mca/plm/plm.h orte_plm"
-SEARCH_HEADER[12]="orte/mca/plm/plm_types.h orte_exit_code_t ORTE_EXIT_CODE_T orte_proc_state_t ORTE_PROC_STATE_ orte_job_state_t ORTE_JOB_STATE_ ORTE_JOB_NEVER_LAUNCHED orte_node_state_t ORTE_NODE_STATE_ orte_plm_cmd_flag_t ORTE_PLM_CMD ORTE_PLM_LAUNCH_JOB_CMD ORTE_PLM_UPDATE_PROC_STATE ORTE_PLM_HEARTBEAT_CMD"
+SEARCH_HEADER[0]="prrte/mca/errmgr/errmgr.h PRRTE_ERROR_NAME PRRTE_ERROR_LOG prrte_errmgr_base_log prrte_errmgr"
+SEARCH_HEADER[1]="prrte/mca/ess/ess.h prrte_ess"
+SEARCH_HEADER[2]="prrte/mca/filem/filem.h prrte_filem PRRTE_FILEM_TYPE_ PRRTE_FILEM_MOVE_ prrte_filem_base_process_set_1_0_0_t prrte_filem_base_process_set_t prrte_filem_base_file_set_1_0_0_t prrte_filem_base_file_set_t prrte_filem_base_request_1_0_0_t prrte_filem_base_request_t prrte_filem_base_component_2_0_0_t prrte_filem_base_component_t prrte_filem_base_module_1_0_0_t prrte_filem_base_module_t"
+SEARCH_HEADER[3]="prrte/mca/grpcomm/grpcomm.h prrte_grpcomm"
+SEARCH_HEADER[4]="prrte/mca/iof/iof.h prrte_iof"
+SEARCH_HEADER[5]="prrte/mca/iof/iof_types.h prrte_iof_tag_t PRRTE_IOF_"
+SEARCH_HEADER[6]="prrte/mca/notifier/notifier.h PRRTE_NOTIFIER_MAX_BUF PRRTE_NOTIFIER_INFRA PRRTE_NOTIFIER_WARNING prrte_notifier"
+SEARCH_HEADER[7]="prrte/mca/odls/base/base.h prrte_odls_base_open prrte_odls_base_t prrte_odls_base prrte_base_default_waitpid_fired"
+SEARCH_HEADER[8]="prrte/mca/odls/odls.h prrte_odls_base_module_1_3_0_t prrte_odls_base_module_t prrte_odls_base_component_2_0_0_t prrte_odls_base_component_t prrte_odls"
+SEARCH_HEADER[9]="prrte/mca/odls/odls_types.h prrte_daemon_cmd_flag_t PRRTE_DAEMON_ prrte_odls_child_t prrte_odls_job_t"
+SEARCH_HEADER[10]="prrte/mca/oob/oob.h mca_oob_1_0_0_t mca_oob_t mca_oob_base_component_2_0_0_t mca_oob_base_component_t mca_oob"
+SEARCH_HEADER[11]="prrte/mca/plm/plm.h prrte_plm"
+SEARCH_HEADER[12]="prrte/mca/plm/plm_types.h prrte_exit_code_t PRRTE_EXIT_CODE_T prrte_proc_state_t PRRTE_PROC_STATE_ prrte_job_state_t PRRTE_JOB_STATE_ PRRTE_JOB_NEVER_LAUNCHED prrte_node_state_t PRRTE_NODE_STATE_ prrte_plm_cmd_flag_t PRRTE_PLM_CMD PRRTE_PLM_LAUNCH_JOB_CMD PRRTE_PLM_UPDATE_PROC_STATE PRRTE_PLM_HEARTBEAT_CMD"
 ###
-SEARCH_HEADER[13]="orte/mca/rmaps/rmaps.h orte_rmaps"
-SEARCH_HEADER[14]="orte/mca/rmaps/rmaps_types.h ORTE_RMAPS_ orte_job_map_t"
+SEARCH_HEADER[13]="prrte/mca/rmaps/rmaps.h prrte_rmaps"
+SEARCH_HEADER[14]="prrte/mca/rmaps/rmaps_types.h PRRTE_RMAPS_ prrte_job_map_t"
 ###
-SEARCH_HEADER[15]="orte/mca/rml/base/rml_contact.h orte_rml_base_get_contact_info orte_rml_base_update_contact_info orte_rml_base_parse_uris"
-SEARCH_HEADER[16]="orte/mca/rml/rml.h orte_rml"
-SEARCH_HEADER[17]="orte/mca/rml/rml_types.h ORTE_RML_TAG_ orte_rml_tag_t orte_rml_cmd_flag_t ORTE_RML_CMD ORTE_RML_UPDATE_CMD ORTE_RML_NON_PERSISTENT ORTE_RML_PEEK ORTE_RML_TRUNC ORTE_RML_ALLOC ORTE_RML_PERSISTENT ORTE_RML_FLAG_RECURSIVE_CALLBACK orte_rml_exception_t ORTE_RML_PEER_UNREACH ORTE_RML_PEER_DISCONNECTED"
+SEARCH_HEADER[15]="prrte/mca/rml/base/rml_contact.h prrte_rml_base_get_contact_info prrte_rml_base_update_contact_info prrte_rml_base_parse_uris"
+SEARCH_HEADER[16]="prrte/mca/rml/rml.h prrte_rml"
+SEARCH_HEADER[17]="prrte/mca/rml/rml_types.h PRRTE_RML_TAG_ prrte_rml_tag_t prrte_rml_cmd_flag_t PRRTE_RML_CMD PRRTE_RML_UPDATE_CMD PRRTE_RML_NON_PERSISTENT PRRTE_RML_PEEK PRRTE_RML_TRUNC PRRTE_RML_ALLOC PRRTE_RML_PERSISTENT PRRTE_RML_FLAG_RECURSIVE_CALLBACK prrte_rml_exception_t PRRTE_RML_PEER_UNREACH PRRTE_RML_PEER_DISCONNECTED"
 ###
-SEARCH_HEADER[18]="orte/runtime/orte_data_server.h orte_data_server_init orte_data_server_finalize orte_data_server_cmd_t ORTE_DATA_SERVER_"
-SEARCH_HEADER[19]="orte/runtime/orte_globals.h orte_debug_verbosity orte_prohibited_session_dirs orte_xml_output orte_help_want_aggregate ORTE_NAME_WILDCARD orte_name_wildcard ORTE_NAME_INVALID orte_name_invalid ORTE_PROC_MY_NAME ORTE_PROC_MY_HNP ORTE_PROC_MY_DAEMON orte_in_parallel_debugger ORTE_GLOBAL_ARRAY_BLOCK_SIZE ORTE_GLOBAL_ARRAY_MAX_SIZE ORTE_ERROR_DEFAULT_EXIT_CODE ORTE_UPDATE_EXIT_STATUS ORTE_COMPUTE_TIME_DIFF orte_app_context_t orte_node_t orte_job_controls_t ORTE_JOB_CONTROL orte_job_t orte_proc_t orte_attr_t orte_nid_t orte_pmap_t orte_jmap_t orte_get_job_data_object orte_timing orte_debug_daemons_flag orte_debug_daemons_file_flag orte_leave_session_attached orte_do_not_launch orted_spin_flag orte_static_ports orte_contiguous_nodes orte_keep_fqdn_hostnames orte_show_resolved_nodenames orted_debug_failure orte_homogeneous_nodes orte_hetero_apps orte_never_launched orte_devel_level_output orte_launch_environ orte_hnp_is_allocated orte_allocation_required orte_launch_agent orted_cmd_line orte_debugger_daemon orte_enable_debug_cospawn_while_running orte_debugger_check_rate orte_exit orteds_exit orte_exit_status orte_abnormal_term_ordered orte_routing_is_enabled orte_job_term_ordered  orte_heartbeat_rate orte_startup_timeout orte_timeout_usec_per_proc orte_max_timeout orte_default_hostfile orte_tree_launch_cmd orte_job_data orte_node_pool orte_clean_output orte_send_profile orte_nidmap orte_jobmap orte_local_children orte_local_jobdata orte_forward_job_control orte_tag_output orte_tag_output orte_timestamp_output orte_output_filename orte_xterm orte_rsh_agent"
-SEARCH_HEADER[20]="orte/runtime/runtime.h orte_version_string orte_initialized orte_finalizing orte_debug_output orte_debug_flag ORTE_NON_TOOL ORTE_TOOL orte_init orte_register_params orte_finalize"
+SEARCH_HEADER[18]="prrte/runtime/prrte_data_server.h prrte_data_server_init prrte_data_server_finalize prrte_data_server_cmd_t PRRTE_DATA_SERVER_"
+SEARCH_HEADER[19]="prrte/runtime/prrte_globals.h prrte_debug_verbosity prrte_prohibited_session_dirs prrte_xml_output prrte_help_want_aggregate PRRTE_NAME_WILDCARD prrte_name_wildcard PRRTE_NAME_INVALID prrte_name_invalid PRRTE_PROC_MY_NAME PRRTE_PROC_MY_HNP PRRTE_PROC_MY_DAEMON prrte_in_parallel_debugger PRRTE_GLOBAL_ARRAY_BLOCK_SIZE PRRTE_GLOBAL_ARRAY_MAX_SIZE PRRTE_ERROR_DEFAULT_EXIT_CODE PRRTE_UPDATE_EXIT_STATUS PRRTE_COMPUTE_TIME_DIFF prrte_app_context_t prrte_node_t prrte_job_controls_t PRRTE_JOB_CONTROL prrte_job_t prrte_proc_t prrte_attr_t prrte_nid_t prrte_pmap_t prrte_jmap_t prrte_get_job_data_object prrte_timing prrte_debug_daemons_flag prrte_debug_daemons_file_flag prrte_leave_session_attached prrte_do_not_launch prted_spin_flag prrte_static_ports prrte_contiguous_nodes prrte_keep_fqdn_hostnames prrte_show_resolved_nodenames prted_debug_failure prrte_homogeneous_nodes prrte_hetero_apps prrte_never_launched prrte_devel_level_output prrte_launch_environ prrte_hnp_is_allocated prrte_allocation_required prrte_launch_agent prted_cmd_line prrte_debugger_daemon prrte_enable_debug_cospawn_while_running prrte_debugger_check_rate prrte_exit orteds_exit prrte_exit_status prrte_abnormal_term_ordered prrte_routing_is_enabled prrte_job_term_ordered  prrte_heartbeat_rate prrte_startup_timeout prrte_timeout_usec_per_proc prrte_max_timeout prrte_default_hostfile prrte_tree_launch_cmd prrte_job_data prrte_node_pool prrte_clean_output prrte_send_profile prrte_nidmap prrte_jobmap prrte_local_children prrte_local_jobdata prrte_forward_job_control prrte_tag_output prrte_tag_output prrte_timestamp_output prrte_output_filename prrte_xterm prrte_rsh_agent"
+SEARCH_HEADER[20]="prrte/runtime/runtime.h prrte_version_string prrte_initialized prrte_finalizing prrte_debug_output prrte_debug_flag PRRTE_NON_TOOL PRRTE_TOOL prrte_init prrte_register_params prrte_finalize"
 ###
-SEARCH_HEADER[21]="orte/types.h orte_std_cntr_t ORTE_STD_CNTR_ orte_local_rank_t orte_node_rank_t ORTE_LOCAL_RANK ORTE_NODE_RANK ORTE_LOCAL_RANK_MAX ORTE_NODE_RANK_MAX ORTE_LOCAL_RANK_INVALID ORTE_NODE_RANK_INVALID orte_jobid_t ORTE_JOBID_ orte_vpid_t ORTE_VPID_ ORTE_PROCESS_NAME_HTON ORTE_PROCESS_NAME_NTOH ORTE_NAME_ARGS ORTE_JOBID_INVALID ORTE_VPID_INVALID ORTE_JOBID_WILDCARD ORTE_VPID_WILDCARD orte_process_name_t orte_iov_base_ptr_t ORTE_STD_CNTR ORTE_NAME ORTE_VPID ORTE_JOBID ORTE_NODE_STATE ORTE_PROC_STATE ORTE_JOB_STATE ORTE_EXIT_CODE ORTE_VALUE ORTE_APP_CONTEXT ORTE_NODE_DESC ORTE_SLOT_DESC ORTE_JOB ORTE_NODE ORTE_PROC ORTE_JOB_MAP ORTE_RML_TAG ORTE_DAEMON_CMD ORTE_GRPCOMM_MODE ORTE_IOF_TAG"
+SEARCH_HEADER[21]="prrte/types.h prrte_std_cntr_t PRRTE_STD_CNTR_ prrte_local_rank_t prrte_node_rank_t PRRTE_LOCAL_RANK PRRTE_NODE_RANK PRRTE_LOCAL_RANK_MAX PRRTE_NODE_RANK_MAX PRRTE_LOCAL_RANK_INVALID PRRTE_NODE_RANK_INVALID prrte_jobid_t PRRTE_JOBID_ prrte_vpid_t PRRTE_VPID_ PRRTE_PROCESS_NAME_HTON PRRTE_PROCESS_NAME_NTOH PRRTE_NAME_ARGS PRRTE_JOBID_INVALID PRRTE_VPID_INVALID PRRTE_JOBID_WILDCARD PRRTE_VPID_WILDCARD prrte_process_name_t prrte_iov_base_ptr_t PRRTE_STD_CNTR PRRTE_NAME PRRTE_VPID PRRTE_JOBID PRRTE_NODE_STATE PRRTE_PROC_STATE PRRTE_JOB_STATE PRRTE_EXIT_CODE PRRTE_VALUE PRRTE_APP_CONTEXT PRRTE_NODE_DESC PRRTE_SLOT_DESC PRRTE_JOB PRRTE_NODE PRRTE_PROC PRRTE_JOB_MAP PRRTE_RML_TAG PRRTE_DAEMON_CMD PRRTE_GRPCOMM_MODE PRRTE_IOF_TAG"
 ###
-SEARCH_HEADER[22]="orte/util/hnp_contact.h orte_hnp_contact_t orte_write_hnp_contact_file orte_read_hnp_contact_file orte_list_local_hnps"
+SEARCH_HEADER[22]="prrte/util/hnp_contact.h prrte_hnp_contact_t prrte_write_hnp_contact_file prrte_read_hnp_contact_file prrte_list_local_hnps"
 ###
-SEARCH_HEADER[23]="orte/util/name_fns.h ORTE_NS_CMP_ orte_ns_cmp_bitmask_t orte_util_print_name_args ORTE_NAME_PRINT orte_util_print_jobids ORTE_JOBID_PRINT orte_util_print_vpids ORTE_VPID_PRINT orte_util_print_job_family ORTE_JOB_FAMILY_PRINT orte_util_print_local_jobid ORTE_LOCAL_JOBID_PRINT ORTE_JOB_FAMILY ORTE_HNP_NAME_FROM_JOB ORTE_LOCAL_JOBID ORTE_CONSTRUCT_LOCAL_JOBID ORTE_PROC_IS_DAEMON orte_namelist_t orte_util_convert_ orte_util_create_process_name orte_util_compare_name_fields orte_util_hash_name"
+SEARCH_HEADER[23]="prrte/util/name_fns.h PRRTE_NS_CMP_ prrte_ns_cmp_bitmask_t prrte_util_print_name_args PRRTE_NAME_PRINT prrte_util_print_jobids PRRTE_JOBID_PRINT prrte_util_print_vpids PRRTE_VPID_PRINT prrte_util_print_job_family PRRTE_JOB_FAMILY_PRINT prrte_util_print_local_jobid PRRTE_LOCAL_JOBID_PRINT PRRTE_JOB_FAMILY PRRTE_HNP_NAME_FROM_JOB PRRTE_LOCAL_JOBID PRRTE_CONSTRUCT_LOCAL_JOBID PRRTE_PROC_IS_DAEMON prrte_namelist_t prrte_util_convert_ prrte_util_create_process_name prrte_util_compare_name_fields prrte_util_hash_name"
 ###
-SEARCH_HEADER[24]="orte/util/orte_wait.h orte_trigger_event_t orte_wait_enable orte_wait_disable orte_waitpid orte_wait_cb orte_wait_event ORTE_PROGRESSED_WAIT orte_trigger_event orte_message_event_t ORTE_MESSAGE_EVENT_DELAY ORTE_MESSAGE_EVENT orte_notify_event_t ORTE_DETECT_TIMEOUT ORTE_TIMER_EVENT orte_wait_init orte_wait_kill orte_wait_finalize"
+SEARCH_HEADER[24]="prrte/util/prrte_wait.h prrte_trigger_event_t prrte_wait_enable prrte_wait_disable prrte_waitpid prrte_wait_cb prrte_wait_event PRRTE_PROGRESSED_WAIT prrte_trigger_event prrte_message_event_t PRRTE_MESSAGE_EVENT_DELAY PRRTE_MESSAGE_EVENT prrte_notify_event_t PRRTE_DETECT_TIMEOUT PRRTE_TIMER_EVENT prrte_wait_init prrte_wait_kill prrte_wait_finalize"
 ###
-SEARCH_HEADER[25]="orte/util/parse_options.h orte_util_parse_range_options"
+SEARCH_HEADER[25]="prrte/util/parse_options.h prrte_util_parse_range_options"
 ###
-SEARCH_HEADER[26]="orte/util/proc_info.h ORTE_MAX_HOSTNAME_SIZE orte_proc_info_t orte_process_info orte_proc_info orte_proc_info_finalize"
+SEARCH_HEADER[26]="prrte/util/proc_info.h PRRTE_MAX_HOSTNAME_SIZE prrte_proc_info_t prrte_process_info prrte_proc_info prrte_proc_info_finalize"
 ###
-SEARCH_HEADER[27]="orte/util/session_dir.h orte_session_dir"
+SEARCH_HEADER[27]="prrte/util/session_dir.h prrte_session_dir"
 ###
-SEARCH_HEADER[28]="orte/util/show_help.h orte_show_help_init orte_show_help_finalize orte_show_help orte_show_help_recv"
+SEARCH_HEADER[28]="prrte/util/show_help.h prrte_show_help_init prrte_show_help_finalize prrte_show_help prrte_show_help_recv"
 ###
 SEARCH_HEADER[29]=""
 
@@ -234,8 +234,8 @@ echo "# for i in *.c ; do grep -q '#include \"ompi/runtime/params.h\"' $$i || ad
 
 
 # Finally erase a header that has been introduced for the STCI replacement
-# and is not necessary, if no occurences of #include "orte..."  reside...
-SEARCH_HEADER[0]="rte.h orte"
+# and is not necessary, if no occurences of #include "prrte..."  reside...
+SEARCH_HEADER[0]="rte.h prrte"
 SEARCH_HEADER[1]=""
 
 delete_unnessary_header .

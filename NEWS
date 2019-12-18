@@ -19,7 +19,7 @@ Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
 Copyright (c) 2012      Sandia National Laboratories.  All rights reserved.
 Copyright (c) 2012      University of Houston. All rights reserved.
 Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
-Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
                         reserved.
 $COPYRIGHT$
@@ -174,7 +174,7 @@ Master (not on release branches yet)
   support CUDA IPC.  Earlier versions would get error and abort.
 - Add a mca parameter ras_base_launch_orted_on_hn to allow for launching
   MPI processes on the same node where mpirun is executing using a separate
-  orte daemon, rather than the mpirun process.   This may be useful to set to
+  prrte daemon, rather than the mpirun process.   This may be useful to set to
   true when using SLURM, as it improves interoperability with SLURM's signal
   propagation tools.  By default it is set to false, except for Cray XC systems.
 - Remove LoadLeveler RAS support.
@@ -235,7 +235,7 @@ Master (not on release branches yet)
 - Numerous corrections to memchecker behavior.
 - Add a mca parameter ras_base_launch_orted_on_hn to allow for launching
   MPI processes on the same node where mpirun is executing using a separate
-  orte daemon, rather than the mpirun process.   This may be useful to set to
+  prrte daemon, rather than the mpirun process.   This may be useful to set to
   true when using SLURM, as it improves interoperability with SLURM's signal
   propagation tools.  By default it is set to false, except for Cray XC systems.
 - Fix a problem reported on the mailing separately by Kevin McGrattan and Stephen
@@ -409,9 +409,9 @@ Bug fixes/minor improvements:
 - Fix an issue with recent versions of PBSPro requiring libcrypto.
   Thanks to Petr Hanousek for reporting.
 - Fix a problem when using MPI_ANY_SOURCE with MPI_SENDRECV.
-- Fix an issue that prevented signals from being propagated to ORTE
+- Fix an issue that prevented signals from being propagated to PRRTE
   daemons.
-- Ensure that signals are forwarded from ORTE daemons to all processes
+- Ensure that signals are forwarded from PRRTE daemons to all processes
   in the process group created by the daemons.  Thanks to Ted Sussman
   for reporting.
 - Fix a problem with launching a job under a debugger. Thanks to
@@ -430,7 +430,7 @@ Bug fixes/minor improvements:
 - Use default socket buffer size to improve TCP BTL performance.
 - Add a mca parameter ras_base_launch_orted_on_hn to allow for launching
   MPI processes on the same node where mpirun is executing using a separate
-  orte daemon, rather than the mpirun process.   This may be useful to set to
+  prrte daemon, rather than the mpirun process.   This may be useful to set to
   true when using SLURM, as it improves interoperability with SLURM's signal
   propagation tools.  By default it is set to false, except for Cray XC systems.
 - Fix --without-lsf when lsf is installed in the default search path.
@@ -450,7 +450,7 @@ Bug fixes/minor improvements:
   Thanks to Aboorva Devarajan for reporting.
 - Fix the error return from MPI_WIN_LOCK when rank argument is invalid.
   Thanks to Jeff Hammond for reporting and fixing this issue.
-- Fix a problem with mpirun/orterun when started under a debugger. Thanks
+- Fix a problem with mpirun/prrterun when started under a debugger. Thanks
   to Gregory Leff for reporting.
 - Add configury option to disable use of CMA by the vader BTL.  Thanks
   to Sascha Hunold for reporting.
@@ -515,7 +515,7 @@ Bug fixes/minor improvements:
   - opal_stacktrace_output: indicate where stacktraces should be sent
     upon MPI / OpenSHMEM process crashes ("none", "stdout", "stderr",
     "file:filename").
-  - orte_timeout_for_stack_trace: number of seconds to wait for stack
+  - prrte_timeout_for_stack_trace: number of seconds to wait for stack
     traces to be reported (or <=0 to wait forever).
   - mtl_ofi_control_prog_type/mtl_ofi_data_prog_type: specify libfabric
     progress model to be used for control and data.
@@ -735,7 +735,7 @@ Bug fixes/minor improvements:
   reporting.
 - Fix a typo in the MPI_WIN_GET_NAME man page.  Thanks to Nicolas Joly
   for reporting.
-- Fix a race condition with ORTE's session directory setup.  Thanks to
+- Fix a race condition with PRRTE's session directory setup.  Thanks to
   @tbj900 for reporting this issue.
 - Fix a deadlock issue arising from Open MPI's approach to catching calls to
   munmap. Thanks to Paul Hargrove for reporting and helping to analyze this
@@ -891,8 +891,8 @@ Major new features:
   using native SLURM.
 - Add a --tune mpirun command line option to simplify setting many
   environment variables and MCA parameters.
-- Add a new MCA parameter "orte_default_dash_host" to offer an analogue
-  to the existing "orte_default_hostfile" MCA parameter.
+- Add a new MCA parameter "prrte_default_dash_host" to offer an analogue
+  to the existing "prrte_default_hostfile" MCA parameter.
 - Add the ability to specify the number of desired slots in the mpirun
   --host option.
 
@@ -1001,7 +1001,7 @@ Bug fixes / minor enhancements:
   PMI libs in a non-default location.
 - Various configure-related compatibility updates for newer versions
   of libibverbs and OFED.
-- Numerous fixes/improvements to orte-dvm.  Special thanks to Mark
+- Numerous fixes/improvements to prrte-dvm.  Special thanks to Mark
   Santcroos for his help.
 - Fix a problem with timer code on ia32 platforms.  Thanks to
   Paul Hargrove for reporting this and providing a patch.
@@ -1360,7 +1360,7 @@ Bug fixes / minor enhancements:
 - Fix mpi_f08 implementations of MPI_COMM_SET_INFO, and profiling
   versions of MPI_BUFFER_DETACH, MPI_WIN_ALLOCATE,
   MPI_WIN_ALLOCATE_SHARED, MPI_WTICK, and MPI_WTIME.
-- Add orte_rmaps_dist_device MCA param, allowing users to map near a
+- Add prrte_rmaps_dist_device MCA param, allowing users to map near a
   specific device.
 - Various updates/fixes to the openib BTL.
 - Add missing defaults for the Mellanox ConnectX 3 card to the openib BTL.
@@ -1665,7 +1665,7 @@ Bug fixes / minor enhancements:
 1.8.2: 25 Aug 2014
 ------------------
 
-- Fix auto-wireup of OOB, allowing ORTE to automatically
+- Fix auto-wireup of OOB, allowing PRRTE to automatically
   test all available NICs
 - "Un-deprecate" pernode, npernode, and npersocket options
   by popular demand
@@ -1746,9 +1746,9 @@ Bug fixes / minor enhancements:
   MPI_WEIGHTS_EMPTY and MPI_ERR_RMA_SHARED constants.  Thanks to
   Lisandro Dalcin for pointing out the issue.
 - Update some help messages in OSHMEM, the usnic BTL, the TCP BTL, and
-  ORTE, and update documentation about ompi_info's --level option.
+  PRRTE, and update documentation about ompi_info's --level option.
 - Fix some compiler warnings.
-- Ensure that ORTE daemons are not bound to a single processor
+- Ensure that PRRTE daemons are not bound to a single processor
   if TaskAffinity is set on by default in Slurm. Thanks to Artem Polyakov
   for identifying the problem and providing a patch
 
@@ -1762,8 +1762,8 @@ Bug fixes / minor enhancements:
 
 - Add Linux OpenSHMEM support built on top of Open MPI's MPI
   layer. Thanks to Mellanox for contributing this new feature.
-- Allow restricting ORTE daemons to specific cores using the
-  orte_daemon_cores MCA param.
+- Allow restricting PRRTE daemons to specific cores using the
+  prrte_daemon_cores MCA param.
 - Ensure to properly set "locality" flags for processes launched via
   MPI dynamic functions such as MPI_COMM_SPAWN.
 - Fix MPI_GRAPH_CREATE when nnodes is smaller than the size of the old
@@ -1811,7 +1811,7 @@ Bug fixes / minor enhancements:
 - Add new, more scalable endpoint exchange (commonly called "modex")
   method that only exchanges endpoint data on a per-peer basis
   on first message. Not all transports have been updated to use
-  this feature. Set the rte_orte_direct_modex parameter to "1"
+  this feature. Set the rte_prrte_direct_modex parameter to "1"
   to enable this mode.
 
 
@@ -1919,11 +1919,11 @@ Bug fixes / minor enhancements:
 - Update VampirTrace to 5.14.4.9.
 - Fix ptmalloc2 hook disable when used with ummunotify.
 - Change the default connection manager for the openib BTL to be based
-  on UD verbs data exchanges instead of ORTE OOB data exchanges.
+  on UD verbs data exchanges instead of PRRTE OOB data exchanges.
 - Fix Fortran compile error when compiling with 8-byte INTEGERs and
   4-byte ints.
 - Fix C++11 issue identified by Jeremiah Willcock.
-- Many changes, updates, and bug fixes to the ORTE run-time layer.
+- Many changes, updates, and bug fixes to the PRRTE run-time layer.
 - Correctly handle MPI_REDUCE_SCATTER with recvcounts of 0.
 - Update man pages for MPI-3, and add some missing man pages for
   MPI-2.x functions.
@@ -2146,9 +2146,9 @@ Bug fixes / minor enhancements:
 - Entirely new implementation of many MPI collective routines focused
   on better performance.
 - Revamped autogen / build system.
-- Add new sensor framework to ORTE that includes modules for detecting
+- Add new sensor framework to PRRTE that includes modules for detecting
   stalled applications and processes that consume too much memory.
-- Added new state machine framework to ORTE that converts ORTE into an
+- Added new state machine framework to PRRTE that converts PRRTE into an
   event-driven state machine using the event library.
 - Added a new MCA parameter (ess_base_stream_buffering) that allows the user
   to override the system default for buffering of stdout/stderr streams
@@ -2163,7 +2163,7 @@ Bug fixes / minor enhancements:
 - Dropped support for native Windows due to loss of maintainers. :-(
 - Added a new parallel I/O component and multiple new frameworks to
   support parallel I/O operations.
-- Fix typo in orte_setup_hadoop.m4. Thanks to Aleksej Saushev for
+- Fix typo in prrte_setup_hadoop.m4. Thanks to Aleksej Saushev for
   reporting it
 - Fix a very old error in opal_path_access(). Thanks to Marco Atzeri
   for chasing it down.
@@ -2546,7 +2546,7 @@ Bug fixes / minor enhancements:
 - Fix segv associated with MPI_Comm_create with MPI_GROUP_EMPTY.
   Thanks to Dominik Goeddeke for finding this.
   (** also to appear in 1.4.4)
-- Improved LoadLeveler ORTE support.
+- Improved LoadLeveler PRRTE support.
 - Add new WinVerbs BTL plugin, supporting native OpenFabrics verbs on
   Windows (the "wv" BTL).
 - Add new btl_openib_gid_index MCA parameter to allow selecting which
@@ -2830,11 +2830,11 @@ Bug fixes / minor enhancements:
 - Fixed return codes from MPI_PROBE and MPI_IPROBE.
   (** also appeared in 1.5.4)
 - Fixed undefined symbol error when using the vtf90 profiling tool.
-- Fix for referencing an uninitialized variable in DPM ORTE.  Thanks
+- Fix for referencing an uninitialized variable in DPM PRRTE.  Thanks
   to Avinash Malik for reporting the issue.
 - Fix for correctly handling multi-token args when using debuggers.
 - Eliminated the unneeded u_int*_t datatype definitions.
-- Change in ORTE DPM to get around gcc 4.[45].x compiler wanrings
+- Change in PRRTE DPM to get around gcc 4.[45].x compiler wanrings
   about possibly calling free() on a non-heap variable, even though it
   will never happen because the refcount will never go to zero.
 - Fixed incorrect text in MPI_File_set_view man page.
@@ -3075,7 +3075,7 @@ and v1.4.
   MPI_THREAD_MULTIPLE.
 - Fixed dynamic rules selection for the "tuned" coll component.
 - Added a launch progress meter to mpirun (useful for large jobs; set
-  the orte_report_launch_progress MCA parameter to 1 to see it).
+  the prrte_report_launch_progress MCA parameter to 1 to see it).
 - Reduced the number of file descriptors consumed by each MPI process.
 - Add new device IDs for Chelsio T3 RNICs to the openib BTL config file.
 - Fix some CRS self component issues.
@@ -3231,7 +3231,7 @@ and v1.4.
   options.
 - Fix the string name in MPI::ERRORS_THROW_EXCEPTIONS.
 - Add ability to forward SIFTSTP and SIGCONT to MPI processes if you
-  set the MCA parameter orte_forward_job_control to 1.
+  set the MCA parameter prrte_forward_job_control to 1.
 - Allow the sm BTL to allocate larger amounts of shared memory if
   desired (helpful for very large multi-core boxen).
 - Fix a few places where we used PATH_MAX instead of OPAL_PATH_MAX,
@@ -3246,7 +3246,7 @@ and v1.4.
 - Various fixes to VampirTrace, including fixing compile errors on
   some platforms.
 - Fixed missing MPI_Comm_accept.3 man page; fixed minor issue in
-  orterun.1 man page.  Thanks to Dirk Eddelbuettel for identifying the
+  prrterun.1 man page.  Thanks to Dirk Eddelbuettel for identifying the
   problem and submitting a patch.
 - Implement the XML formatted output of stdout/stderr/stddiag.
 - Fixed mpirun's -wdir switch to ensure that working directories for
@@ -3255,7 +3255,7 @@ and v1.4.
 - Improvements to the MPI C++ integer constants:
   - Allow MPI::SEEK_* constants to be used as constants
   - Allow other MPI C++ constants to be used as array sizes
-- Fix minor problem with orte-restart's command line options.  See
+- Fix minor problem with prrte-restart's command line options.  See
   ticket #1761 for details.  Thanks to Gregor Dschung for reporting
   the problem.
 
@@ -3443,7 +3443,7 @@ and v1.4.
 - Fixed F90 interface for MPI_CART_CREATE.  See ticket #1208.
   Thanks to Michal Charemza for reporting the problem.
 - Fixed some C++ compiler warnings. See ticket #1203.
-- Fixed formatting of the orterun man page.  See ticket #1202.
+- Fixed formatting of the prrterun man page.  See ticket #1202.
   Thanks to Peter Breitenlohner for the patch.
 
 
@@ -3455,7 +3455,7 @@ and v1.4.
 - Added run-time warnings during MPI_INIT when MPI_THREAD_MULTIPLE
   and/or progression threads are used (the OMPI v1.2 series does not
   support these well at all).
-- Better handling of ECONNABORTED from connect on Linux.  Thanks to
+- Better handling of ECONNABPRRTED from connect on Linux.  Thanks to
   Bob Soliday for noticing the problem; thanks to Brian Barrett for
   submitting a patch.
 - Reduce extraneous output from OOB when TCP connections must
@@ -3527,7 +3527,7 @@ and v1.4.
   correctly initialized.
 - Fixed several problems with stdin/stdout forwarding.
 - Fixed overflow problems with the sm mpool MCA parameters on large SMPs.
-- Added support for the DDT parallel debugger via orterun's --debug
+- Added support for the DDT parallel debugger via prrterun's --debug
   command line option.
 - Added some sanity/error checks to the openib MCA parameter parsing
   code.
@@ -3572,7 +3572,7 @@ and v1.4.
 - Rename the oob_tcp_include/exclude MCA params to oob_tcp_if_include/exclude
   so that they match the naming convention of the btl_tcp_if_include/exclude
   params.  The old names are depreciated, but will still work.
-- Add -wd as a synonym for the -wdir orterun/mpirun option.
+- Add -wd as a synonym for the -wdir prrterun/mpirun option.
 - Fix the mvapi BTL to compile properly with compilers that do not support
   anonymous unions.  Thanks to Luis Kornblueh for reporting the bug.
 
@@ -3589,7 +3589,7 @@ and v1.4.
 - Fixed some compiler warnings associated with ROMIO, OS X, and gridengine.
 - If pbs-config can be found, use it to look for TM support.  Thanks
   to Bas van der Vlies for the inspiration and preliminary work.
-- Fixed a deadlock in orterun when the rsh PLS encounters some errors.
+- Fixed a deadlock in prrterun when the rsh PLS encounters some errors.
 
 
 1.2.1: 25 Apr 2007
@@ -3599,7 +3599,7 @@ and v1.4.
   of-band messaging system.
 - Fixed a memory leak when using mpi_comm calls.
   Thanks to Bas van der Vlies for reporting the problem.
-- Fixed various memory leaks in OPAL and ORTE.
+- Fixed various memory leaks in OPAL and PRRTE.
 - Improved launch times when using TM (PBS Pro, Torque, Open PBS).
 - Fixed mpi_leave_pinned to work for all datatypes.
 - Fix functionality allowing users to disable sbrk() (the
@@ -3663,7 +3663,7 @@ and v1.4.
 - Allow run-time specification of the maximum amount of registered
   memory for OpenFabrics and GM.
 - Users who utilize the wrapper compilers (e.g., mpicc and mpif77)
-  will not notice, but the underlying library names for ORTE and OPAL
+  will not notice, but the underlying library names for PRRTE and OPAL
   have changed to libopen-rte and libopen-pal, respectively (listed
   here because there are undoubtedly some users who are not using the
   wrapper compilers).
@@ -3859,7 +3859,7 @@ and v1.4.
   Fournier for identifying this problem.
 - Fix some thread safety issues in MPI attributes and the openib BTL.
 - Fix the BProc allocator to not potentially use the same resources
-  across multiple ORTE universes.
+  across multiple PRRTE universes.
 - Fix gm resource leak.
 - More latency reduction throughout the code base.
 - Make the TM PLS (PBS Pro, Torque, Open PBS) more scalable, and fix
@@ -4018,10 +4018,10 @@ and v1.4.
   on multi-NIC nodes, a NIC could get paired with a NIC on another
   network (typically resulting in deadlock).  Thanks to Ken Mighell
   for pointing this out to us.
-- Change the behavior of orterun (mpirun, mpirexec) to search for
+- Change the behavior of prrterun (mpirun, mpirexec) to search for
   argv[0] and the cwd on the target node (i.e., the node where the
   executable will be running in all systems except BProc, where the
-  searches are run on the node where orterun is invoked).
+  searches are run on the node where prrterun is invoked).
 - Fix race condition in shared memory transport that could cause
   crashes on machines with weak memory consistency models (including
   POWER/PowerPC machines).

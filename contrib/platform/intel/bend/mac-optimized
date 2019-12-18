@@ -1,5 +1,5 @@
 enable_opal_multi_threads=yes
-enable_orte_progress_threads=yes
+enable_prrte_progress_threads=yes
 enable_mem_debug=no
 enable_mem_profile=no
 enable_debug_symbols=no

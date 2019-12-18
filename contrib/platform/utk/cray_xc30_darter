@@ -32,7 +32,7 @@ with_threads=yes
 enable_heterogeneous=no
 with_memory_manager=linux
 #enable_ipv6=no
-#enable_orte_static_ports=no
+#enable_prrte_static_ports=no
 #enable_pty_support=no
 
 # Setup for static build on Cray

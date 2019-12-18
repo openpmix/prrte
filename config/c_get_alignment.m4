@@ -11,7 +11,7 @@ dnl                         University of Stuttgart.  All rights reserved.
 dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright (c) 2009      Sun Microsystems, Inc.  All rights reserved.
-dnl Copyright (c) 2014-2015 Intel, Inc. All rights reserved.
+dnl Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2015      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl $COPYRIGHT$
@@ -21,7 +21,7 @@ dnl
 dnl $HEADER$
 dnl
 
-# OPAL_C_GET_ALIGN(type, config_var)
+# PRRTE_C_GET_ALIGN(type, config_var)
 # ----------------------------------
 # Determine datatype alignment.
 # First arg is type, 2nd arg is config var to define.
@@ -32,9 +32,9 @@ dnl
 # since we use "bool" in the code, let's be safe and check
 # what we use. Yes, they should be the same - but "should" and
 # "are" frequently differ
-AC_DEFUN([OPAL_C_GET_ALIGNMENT],[
+AC_DEFUN([PRRTE_C_GET_ALIGNMENT],[
     AC_CACHE_CHECK([alignment of $1],
-                   [AS_TR_SH([opal_cv_c_align_$1])],
+                   [AS_TR_SH([prrte_cv_c_align_$1])],
 		   [AC_RUN_IFELSE([AC_LANG_PROGRAM([AC_INCLUDES_DEFAULT
                                                     #include <stdbool.h> ],
 [[
@@ -45,28 +45,28 @@ AC_DEFUN([OPAL_C_GET_ALIGNMENT],[
     if (!f) exit(1);
     diff = ((char *)&p->x) - ((char *)&p->c);
     fprintf(f, "%d\n", (diff >= 0) ? diff : -diff);
-]])],                         [AS_TR_SH([opal_cv_c_align_$1])=`cat conftestval`],
+]])],                         [AS_TR_SH([prrte_cv_c_align_$1])=`cat conftestval`],
                                [AC_MSG_WARN([*** Problem running configure test!])
                                 AC_MSG_WARN([*** See config.log for details.])
                                 AC_MSG_ERROR([*** Cannot continue.])],
                                [ # cross compile - do a non-executable test.  Trick
                                  # taken from the Autoconf 2.59c.  Switch to using
                                  # AC_CHECK_ALIGNOF when we can require Autoconf 2.60.
-                                 _AC_COMPUTE_INT([(long int) offsetof (opal__type_alignof_, y)],
-                                                 [AS_TR_SH([opal_cv_c_align_$1])],
+                                 _AC_COMPUTE_INT([(long int) offsetof (prrte__type_alignof_, y)],
+                                                 [AS_TR_SH([prrte_cv_c_align_$1])],
                                                  [AC_INCLUDES_DEFAULT
 #include <stdbool.h>
 
 #ifndef offsetof
 # define offsetof(type, member) ((char *) &((type *) 0)->member - (char *) 0)
 #endif
-typedef struct { char x; $1 y; } opal__type_alignof_;
+typedef struct { char x; $1 y; } prrte__type_alignof_;
 ],
                                                  [AC_MSG_WARN([*** Problem running configure test!])
                                                   AC_MSG_WARN([*** See config.log for details.])
                                                   AC_MSG_ERROR([*** Cannot continue.])])])])
 
-AC_DEFINE_UNQUOTED([$2], [$AS_TR_SH([opal_cv_c_align_$1])], [Alignment of type $1])
-eval "$2=$AS_TR_SH([opal_cv_c_align_$1])"
+AC_DEFINE_UNQUOTED([$2], [$AS_TR_SH([prrte_cv_c_align_$1])], [Alignment of type $1])
+eval "$2=$AS_TR_SH([prrte_cv_c_align_$1])"
 
 rm -rf conftest* ]) dnl

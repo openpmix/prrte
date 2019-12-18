@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 #
 # Copyright (c) 2010-2014 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2016-2017 Intel, Inc. All rights reserved.
+# Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation. All rights reserved.
 # $COPYRIGHT$
 #
@@ -9,7 +9,7 @@
 # Short version:
 #
 # This script automates the tedious task of updating copyright notices
-# in the tops of OMPI/ORTE/OPAL source files before committing back to
+# in the tops of OMPI/PRRTE/OPAL source files before committing back to
 # the respository.  Set the environment variable
 # OMPI_COPYRIGHT_SEARCH_NAME to a short (case-insensitive) name that
 # indicates your copyright line (e.g., "cisco"), and set the env

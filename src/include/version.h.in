@@ -1,0 +1,40 @@
+/*
+ * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
+ *                         University Research and Technology
+ *                         Corporation.  All rights reserved.
+ * Copyright (c) 2004-2005 The University of Tennessee and The University
+ *                         of Tennessee Research Foundation.  All rights
+ *                         reserved.
+ * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
+ *                         University of Stuttgart.  All rights reserved.
+ * Copyright (c) 2004-2005 The Regents of the University of California.
+ *                         All rights reserved.
+ * Copyright (c) 2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * $COPYRIGHT$
+ *
+ * Additional copyrights may follow
+ *
+ * $HEADER$
+ *
+ * This file should be included by any file that needs full
+ * version information for the PRRTE project
+ */
+
+#ifndef PRRTE_VERSIONS_H
+#define PRRTE_VERSIONS_H
+
+#define PRRTE_MAJOR_VERSION @PRRTE_MAJOR_VERSION@
+#define PRRTE_MINOR_VERSION @PRRTE_MINOR_VERSION@
+#define PRRTE_RELEASE_VERSION @PRRTE_RELEASE_VERSION@
+#define PRRTE_GREEK_VERSION "@PRRTE_GREEK_VERSION@"
+#define PRRTE_WANT_REPO_REV @PRRTE_WANT_REPO_REV@
+#define PRRTE_REPO_REV "@PRRTE_REPO_REV@"
+#ifdef PRRTE_VERSION
+/* If we included version.h, we want the real version, not the
+   stripped (no-r number) verstion */
+#undef PRRTE_VERSION
+#endif
+#define PRRTE_VERSION "@PRRTE_VERSION@"
+
+#endif

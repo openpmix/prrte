@@ -15,6 +15,7 @@
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2015      Los Alamos National Security, LLC. All rights
 #                         reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -42,7 +43,7 @@ fi
 # or two corner cases in (but otherwise VPATH builds won't work).
 repo_rev=$OMPI_REPO_REV
 if test -d .git ; then
-    repo_rev=$(config/opal_get_version.sh VERSION --repo-rev)
+    repo_rev=$(config/prrte_get_version.sh VERSION --repo-rev)
 fi
 
 #

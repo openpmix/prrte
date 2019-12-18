@@ -1,11 +1,11 @@
-PROGS = orte_no_op mpi_no_op mpi_memprobe
+PROGS = prrte_no_op mpi_no_op mpi_memprobe
 
 all: $(PROGS)
 
 CFLAGS = -O
 
-orte_no_op: orte_no_op.c
-	ortecc -o orte_no_op orte_no_op.c
+prrte_no_op: prrte_no_op.c
+	prrtecc -o prrte_no_op prrte_no_op.c
 
 mpi_no_op: mpi_no_op.c
 	mpicc -o mpi_no_op mpi_no_op.c

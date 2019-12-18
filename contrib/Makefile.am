@@ -14,7 +14,7 @@
 # Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
 # Copyright (c) 2013-2018 Los Alamos National Security, Inc.  All rights
 #                         reserved.
-# Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -44,4 +44,4 @@ EXTRA_DIST = \
 	platform/intel/bend/linux-optimized \
 	platform/intel/bend/linux-optimized.conf
 
-dist_opaldata_DATA = openmpi-valgrind.supp
+dist_prrtedata_DATA = openmpi-valgrind.supp
