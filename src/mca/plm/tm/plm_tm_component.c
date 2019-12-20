@@ -31,7 +31,7 @@
 #include "constants.h"
 
 #include "src/util/argv.h"
-#include "src/mca/base/mca_base_var.h"
+#include "src/mca/base/prrte_mca_base_var.h"
 
 #include "src/mca/plm/plm.h"
 #include "src/mca/plm/base/base.h"

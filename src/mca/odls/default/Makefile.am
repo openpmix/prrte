@@ -42,6 +42,7 @@ mcacomponentdir = $(prrtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_odls_default_la_SOURCES = $(sources)
 mca_odls_default_la_LDFLAGS = -module -avoid-version
+mca_odls_default_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_odls_default_la_SOURCES =$(sources)

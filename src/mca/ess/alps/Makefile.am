@@ -45,7 +45,8 @@ mca_ess_alps_la_SOURCES = $(sources)
 mca_ess_alps_la_CPPFLAGS = $(ess_alps_CPPFLAGS)
 mca_ess_alps_la_LDFLAGS = -module -avoid-version $(ess_alps_LDFLAGS)
 mca_ess_alps_la_LIBADD = $(ess_alps_LIBS) \
-    $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libprtemca_common_alps.la
+                         $(top_builddir)/src/libprrte.la \
+                         $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libprtemca_common_alps.la
 
 
 noinst_LTLIBRARIES = $(component_noinst)

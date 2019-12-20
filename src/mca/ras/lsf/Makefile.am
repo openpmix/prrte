@@ -43,7 +43,8 @@ proxy_SOURCES = \
 mcacomponentdir = $(prrtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_ras_lsf_la_SOURCES = $(proxy_SOURCES)
-mca_ras_lsf_la_LIBADD = $(ras_lsf_LIBS)
+mca_ras_lsf_la_LIBADD = $(ras_lsf_LIBS) \
+                        $(top_builddir)/src/libprrte.la
 mca_ras_lsf_la_LDFLAGS = -module -avoid-version $(ras_lsf_LDFLAGS)
 
 noinst_LTLIBRARIES = $(component_noinst)

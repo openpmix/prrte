@@ -36,6 +36,7 @@ mcacomponentdir = $(prrtelibdir)
 mcacomponent_LTLIBRARIES = $(component)
 mca_ras_simulator_la_SOURCES = $(component_sources)
 mca_ras_simulator_la_LDFLAGS = -module -avoid-version
+mca_ras_simulator_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(lib)
 libmca_ras_simulator_la_SOURCES = $(lib_sources)

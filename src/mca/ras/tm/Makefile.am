@@ -52,7 +52,8 @@ mcacomponentdir = $(prrtelibdir)
 mcacomponent_LTLIBRARIES = $(component)
 mca_ras_tm_la_SOURCES = $(component_sources)
 mca_ras_tm_la_LDFLAGS = -module -avoid-version $(ras_tm_LDFLAGS)
-mca_ras_tm_la_LIBADD = $(ras_tm_LIBS)
+mca_ras_tm_la_LIBADD = $(ras_tm_LIBS)  \
+                       $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(lib)
 libmca_ras_tm_la_SOURCES = $(lib_sources)

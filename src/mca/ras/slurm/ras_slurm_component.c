@@ -24,6 +24,7 @@
 #include "constants.h"
 
 #include "src/mca/base/base.h"
+#include "src/mca/base/prrte_mca_base_var.h"
 #include "src/util/net.h"
 #include "src/include/prrte_socket_errno.h"
 

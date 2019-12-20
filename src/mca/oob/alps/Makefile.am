@@ -38,6 +38,7 @@ mca_oob_alps_la_SOURCES = $(sources)
 mca_oob_alps_la_LDFLAGS = -module -avoid-version
 mca_oob_alps_la_LIBADD = $(top_builddir)/src/libprrte.la \
 	$(ooob_alps_LIBS) \
+    $(top_builddir)/src/libprrte.la  \
     $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libprtemca_common_alps.la
 
 
