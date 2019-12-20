@@ -14,6 +14,8 @@
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,7 +66,7 @@ typedef struct {
     prrte_wait_cbfunc_t cbfunc;
     void *cbdata;
 } prrte_wait_tracker_t;
-PRRTE_CLASS_DECLARATION(prrte_wait_tracker_t);
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_wait_tracker_t);
 
 /**
  * Disable / re-Enable SIGCHLD handler

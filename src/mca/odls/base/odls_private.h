@@ -14,8 +14,8 @@
  *                         reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
- * Copyright (c) 2017      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -116,7 +116,7 @@ typedef struct {
     prrte_odls_base_fork_local_proc_fn_t fork_local;
     int retries;
 } prrte_odls_launch_local_t;
-PRRTE_CLASS_DECLARATION(prrte_odls_launch_local_t);
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_odls_launch_local_t);
 
 #define PRRTE_ACTIVATE_LOCAL_LAUNCH(j, f)                                \
     do {                                                                \

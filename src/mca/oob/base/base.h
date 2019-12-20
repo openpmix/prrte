@@ -12,6 +12,8 @@
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,7 +71,7 @@ typedef struct {
     mca_oob_base_component_t *component;
     prrte_bitmap_t addressable;
 } prrte_oob_base_peer_t;
-PRRTE_CLASS_DECLARATION(prrte_oob_base_peer_t);
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_oob_base_peer_t);
 
 /* MCA framework */
 PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_oob_base_framework;
@@ -89,7 +91,7 @@ typedef struct {
     prrte_event_t ev;
     prrte_rml_send_t *msg;
 } prrte_oob_send_t;
-PRRTE_CLASS_DECLARATION(prrte_oob_send_t);
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_oob_send_t);
 
 /* All OOB sends are based on iovec's and are async as the RML
  * acts as the initial interface to prepare all communications.

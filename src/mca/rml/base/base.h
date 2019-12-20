@@ -13,8 +13,8 @@
  * Copyright (c) 2007-2014 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2016      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2016-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -102,7 +102,7 @@ typedef struct {
      */
     char *data;
 } prrte_rml_send_t;
-PRRTE_CLASS_DECLARATION(prrte_rml_send_t);
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_rml_send_t);
 
 /* define an object for transferring send requests to the event lib */
 typedef struct {
@@ -121,7 +121,7 @@ typedef struct {
     uint32_t seq_num;             //sequence number
     struct iovec iov;            // the recvd data
 } prrte_rml_recv_t;
-PRRTE_CLASS_DECLARATION(prrte_rml_recv_t);
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_rml_recv_t);
 
 typedef struct {
     prrte_list_item_t super;
@@ -144,7 +144,7 @@ typedef struct {
     bool cancel;
     prrte_rml_posted_recv_t *post;
 } prrte_rml_recv_request_t;
-PRRTE_CLASS_DECLARATION(prrte_rml_recv_request_t);
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_rml_recv_request_t);
 
 /* define a structure for sending a message to myself */
 typedef struct {
@@ -160,7 +160,7 @@ typedef struct {
     } cbfunc;
     void *cbdata;
 } prrte_self_send_xfer_t;
-PRRTE_CLASS_DECLARATION(prrte_self_send_xfer_t);
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_self_send_xfer_t);
 
 #define PRRTE_RML_POST_MESSAGE(p, t, s, b, l)                            \
     do {                                                                \

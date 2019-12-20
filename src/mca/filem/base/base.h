@@ -12,6 +12,8 @@
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.
  *                         All rights reserved
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,14 +63,14 @@ PRRTE_EXPORT extern bool prrte_filem_base_is_active;
 int prrte_filem_base_module_init(void);
 int prrte_filem_base_module_finalize(void);
 
-int prrte_filem_base_none_put(prrte_filem_base_request_t *request);
-int prrte_filem_base_none_put_nb(prrte_filem_base_request_t *request);
-int prrte_filem_base_none_get(prrte_filem_base_request_t *request);
-int prrte_filem_base_none_get_nb(prrte_filem_base_request_t *request);
-int prrte_filem_base_none_rm( prrte_filem_base_request_t *request);
-int prrte_filem_base_none_rm_nb( prrte_filem_base_request_t *request);
-int prrte_filem_base_none_wait( prrte_filem_base_request_t *request);
-int prrte_filem_base_none_wait_all( prrte_list_t *request_list);
+PRRTE_EXPORT int prrte_filem_base_none_put(prrte_filem_base_request_t *request);
+PRRTE_EXPORT int prrte_filem_base_none_put_nb(prrte_filem_base_request_t *request);
+PRRTE_EXPORT int prrte_filem_base_none_get(prrte_filem_base_request_t *request);
+PRRTE_EXPORT int prrte_filem_base_none_get_nb(prrte_filem_base_request_t *request);
+PRRTE_EXPORT int prrte_filem_base_none_rm( prrte_filem_base_request_t *request);
+PRRTE_EXPORT int prrte_filem_base_none_rm_nb( prrte_filem_base_request_t *request);
+PRRTE_EXPORT int prrte_filem_base_none_wait( prrte_filem_base_request_t *request);
+PRRTE_EXPORT int prrte_filem_base_none_wait_all( prrte_list_t *request_list);
 int prrte_filem_base_none_preposition_files(prrte_job_t *jdata,
                                            prrte_filem_completion_cbfunc_t cbfunc,
                                            void *cbdata);

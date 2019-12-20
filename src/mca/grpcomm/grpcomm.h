@@ -12,8 +12,8 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2016 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2016      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2016-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -63,7 +63,7 @@ typedef struct {
     prrte_process_name_t *signature;
     size_t sz;
 } prrte_grpcomm_signature_t;
-PRRTE_CLASS_DECLARATION(prrte_grpcomm_signature_t);
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_grpcomm_signature_t);
 
 /* Internal component object for tracking ongoing
  * allgather operations */
