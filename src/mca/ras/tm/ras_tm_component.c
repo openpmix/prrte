@@ -25,6 +25,7 @@
 #include "constants.h"
 
 #include "src/mca/base/base.h"
+#include "src/mca/base/prrte_mca_base_var.h"
 #include "src/util/basename.h"
 
 #include "src/mca/ras/base/ras_private.h"

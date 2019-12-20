@@ -42,7 +42,8 @@ mcacomponentdir = $(prrtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_ess_lsf_la_SOURCES = $(sources)
 mca_ess_lsf_la_LDFLAGS = -module -avoid-version $(ess_lsf_LDFLAGS)
-mca_ess_lsf_la_LIBADD = $(ess_lsf_LIBS)
+mca_ess_lsf_la_LIBADD = $(ess_lsf_LIBS) \
+                        $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_ess_lsf_la_SOURCES =$(sources)

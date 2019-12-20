@@ -40,6 +40,7 @@ mcacomponentdir = $(prrtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_ess_env_la_SOURCES = $(sources)
 mca_ess_env_la_LDFLAGS = -module -avoid-version
+mca_ess_env_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_ess_env_la_SOURCES =$(sources)

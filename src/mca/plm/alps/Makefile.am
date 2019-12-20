@@ -46,6 +46,7 @@ mca_plm_alps_la_SOURCES = $(sources)
 mca_plm_alps_la_CPPFLAGS = $(plm_alps_CPPFLAGS)
 mca_plm_alps_la_LDFLAGS = -module -avoid-version $(plm_alps_LDFLAGS)
 mca_plm_alps_la_LIBADD = $(plm_alps_LIBS) \
+    $(top_builddir)/src/libprrte.la   \
     $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libprtemca_common_alps.la
 
 noinst_LTLIBRARIES = $(component_noinst)
