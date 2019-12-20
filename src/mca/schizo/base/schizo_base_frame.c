@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -98,7 +98,7 @@ static int prrte_schizo_base_open(prrte_mca_base_open_flag_t flags)
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, schizo, "PRRTE Schizo Subsystem",
                                  prrte_schizo_base_register,
                                  prrte_schizo_base_open, prrte_schizo_base_close,
-                                 mca_schizo_base_static_components, 0);
+                                 prrte_schizo_base_static_components, 0);
 
 PRRTE_CLASS_INSTANCE(prrte_schizo_base_active_module_t,
                    prrte_list_item_t,

@@ -2,6 +2,8 @@
  * Copyright (c) 2006-2007 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,7 +16,7 @@
 #include "src/mca/installdirs/installdirs.h"
 #include "src/mca/installdirs/config/install_dirs.h"
 
-const prrte_installdirs_base_component_t mca_installdirs_config_component = {
+const prrte_installdirs_base_component_t prrte_installdirs_config_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     {

@@ -11,8 +11,8 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -115,4 +115,4 @@ static int prrte_ras_base_open(prrte_mca_base_open_flag_t flags)
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, ras, "PRRTE Resource Allocation Subsystem",
                                  ras_register, prrte_ras_base_open, prrte_ras_base_close,
-                                 mca_ras_base_static_components, 0);
+                                 prrte_ras_base_static_components, 0);

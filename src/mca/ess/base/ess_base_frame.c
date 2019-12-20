@@ -12,8 +12,8 @@
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2017      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -144,7 +144,7 @@ static int prrte_ess_base_open(prrte_mca_base_open_flag_t flags)
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, ess, "PRRTE Environmenal System Setup",
                                  prrte_ess_base_register, prrte_ess_base_open, prrte_ess_base_close,
-                                 mca_ess_base_static_components, 0);
+                                 prrte_ess_base_static_components, 0);
 
 /* signal forwarding */
 

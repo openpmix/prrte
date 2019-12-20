@@ -3,7 +3,7 @@
  *                         reserved.
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010      Sandia National Laboratories. All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
+ * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
@@ -173,5 +173,5 @@ prrte_installdirs_base_close(void)
 
 /* Declare the installdirs framework */
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, installdirs, NULL, NULL, prrte_installdirs_base_open,
-                                 prrte_installdirs_base_close, mca_installdirs_base_static_components,
+                                 prrte_installdirs_base_close, prrte_installdirs_base_static_components,
                                  PRRTE_MCA_BASE_FRAMEWORK_FLAG_NOREGISTER | PRRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);

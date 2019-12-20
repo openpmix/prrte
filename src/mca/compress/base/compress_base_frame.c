@@ -4,8 +4,8 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -56,7 +56,7 @@ static int prrte_compress_base_register(prrte_mca_base_register_flag_t flags);
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, compress, "COMPRESS MCA",
                                  prrte_compress_base_register, prrte_compress_base_open,
-                                 prrte_compress_base_close, mca_compress_base_static_components, 0);
+                                 prrte_compress_base_close, prrte_compress_base_static_components, 0);
 
 static int prrte_compress_base_register(prrte_mca_base_register_flag_t flags)
 {

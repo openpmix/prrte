@@ -81,7 +81,7 @@ static int prrte_state_base_open(prrte_mca_base_open_flag_t flags)
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, state, "PRRTE State Machine",
                                  prrte_state_base_register,
                                  prrte_state_base_open, prrte_state_base_close,
-                                 mca_state_base_static_components, 0);
+                                 prrte_state_base_static_components, 0);
 
 
 static void prrte_state_construct(prrte_state_t *state)

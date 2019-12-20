@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -65,7 +65,7 @@ static int prrte_rtc_base_open(prrte_mca_base_open_flag_t flags)
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, rtc, "PRRTE Mapping Subsystem",
                                  NULL, prrte_rtc_base_open, prrte_rtc_base_close,
-                                 mca_rtc_base_static_components, 0);
+                                 prrte_rtc_base_static_components, 0);
 
 static void mdes(prrte_rtc_base_selected_module_t *active)
 {

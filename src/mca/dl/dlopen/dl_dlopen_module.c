@@ -6,6 +6,8 @@
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -72,9 +74,9 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
         int i;
         char *ext;
 
-        for (i = 0, ext = mca_dl_dlopen_component.filename_suffixes[i];
+        for (i = 0, ext = prrte_dl_dlopen_component.filename_suffixes[i];
              NULL != ext;
-             ext = mca_dl_dlopen_component.filename_suffixes[++i]) {
+             ext = prrte_dl_dlopen_component.filename_suffixes[++i]) {
             char *name;
 
             prrte_asprintf(&name, "%s%s", fname, ext);

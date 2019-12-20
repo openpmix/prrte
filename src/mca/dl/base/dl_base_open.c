@@ -5,6 +5,8 @@
  *                         All rights reserved.
  * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -51,5 +53,5 @@ PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, dl, "Dynamic loader framework",
                                  NULL /* register */,
                                  prrte_dl_base_open /* open */,
                                  NULL /* close */,
-                                 mca_dl_base_static_components,
+                                 prrte_dl_base_static_components,
                                  PRRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);
