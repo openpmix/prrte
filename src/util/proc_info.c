@@ -90,14 +90,99 @@ static bool init=false;
 static int prrte_ess_node_rank;
 static char *prrte_strip_prefix;
 
-int prrte_proc_info(void)
+void prrte_setup_hostname(void)
 {
-
-    int idx, i;
     char *ptr;
     char hostname[PRRTE_MAXHOSTNAMELEN];
     char **prefixes;
     bool match;
+    int i, idx;
+
+    /* whether or not to keep FQDN hostnames */
+    prrte_keep_fqdn_hostnames = false;
+    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "keep_fqdn_hostnames",
+                                  "Whether or not to keep FQDN hostnames [default: no]",
+                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                  &prrte_keep_fqdn_hostnames);
+
+    /* get the nodename */
+    gethostname(hostname, sizeof(hostname));
+    /* add this to our list of aliases */
+    prrte_argv_append_nosize(&prrte_process_info.aliases, hostname);
+
+    // Strip off the FQDN if present, ignore IP addresses
+    if( !prrte_keep_fqdn_hostnames && !prrte_net_isaddr(hostname) ) {
+        if (NULL != (ptr = strchr(hostname, '.'))) {
+            *ptr = '\0';
+            /* add this to our list of aliases */
+            prrte_argv_append_nosize(&prrte_process_info.aliases, hostname);
+        }
+    }
+
+    prrte_strip_prefix = NULL;
+    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "strip_prefix",
+                                        "Prefix(es) to match when deciding whether to strip leading characters and zeroes from "
+                                        "node names returned by daemons", PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                        PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                        &prrte_strip_prefix);
+
+    /* we have to strip node names here, if user directs, to ensure that
+     * the names exchanged in the modex match the names found locally
+     */
+    if (NULL != prrte_strip_prefix) {
+        prefixes = prrte_argv_split(prrte_strip_prefix, ',');
+        match = false;
+        for (i=0; NULL != prefixes[i]; i++) {
+            if (0 == strncmp(hostname, prefixes[i], strlen(prefixes[i]))) {
+                /* remove the prefix and leading zeroes */
+                idx = strlen(prefixes[i]);
+                while (idx < (int)strlen(hostname) &&
+                       (hostname[idx] <= '0' || '9' < hostname[idx])) {
+                    idx++;
+                }
+                if ((int)strlen(hostname) <= idx) {
+                    /* there were no non-zero numbers in the name */
+                    prrte_process_info.nodename = strdup(&hostname[strlen(prefixes[i])]);
+                } else {
+                    prrte_process_info.nodename = strdup(&hostname[idx]);
+                }
+                /* add this to our list of aliases */
+                prrte_argv_append_nosize(&prrte_process_info.aliases, prrte_process_info.nodename);
+                match = true;
+                break;
+            }
+        }
+        /* if we didn't find a match, then just use the hostname as-is */
+        if (!match) {
+            prrte_process_info.nodename = strdup(hostname);
+        }
+        prrte_argv_free(prefixes);
+    } else {
+        prrte_process_info.nodename = strdup(hostname);
+    }
+
+    /* add "localhost" to our list of aliases */
+    prrte_argv_append_nosize(&prrte_process_info.aliases, "localhost");
+
+}
+
+bool prrte_check_host_is_local(char *name)
+{
+    int i;
+
+    for (i=0; NULL != prrte_process_info.aliases[i]; i++) {
+        if (0 == strncmp(name, prrte_process_info.aliases[i], strlen(prrte_process_info.aliases[i]))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int prrte_proc_info(void)
+{
+
+    char *ptr;
 
     if (init) {
         return PRRTE_SUCCESS;
@@ -160,65 +245,6 @@ int prrte_proc_info(void)
 
     /* get the process id */
     prrte_process_info.pid = getpid();
-
-    /* get the nodename */
-    gethostname(hostname, sizeof(hostname));
-    /* add this to our list of aliases */
-    prrte_argv_append_nosize(&prrte_process_info.aliases, hostname);
-
-    // Strip off the FQDN if present, ignore IP addresses
-    if( !prrte_keep_fqdn_hostnames && !prrte_net_isaddr(hostname) ) {
-        if (NULL != (ptr = strchr(hostname, '.'))) {
-            *ptr = '\0';
-            /* add this to our list of aliases */
-            prrte_argv_append_nosize(&prrte_process_info.aliases, hostname);
-        }
-    }
-
-    prrte_strip_prefix = NULL;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "strip_prefix",
-                                        "Prefix(es) to match when deciding whether to strip leading characters and zeroes from "
-                                        "node names returned by daemons", PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
-                                        PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                        &prrte_strip_prefix);
-
-    /* we have to strip node names here, if user directs, to ensure that
-     * the names exchanged in the modex match the names found locally
-     */
-    if (NULL != prrte_strip_prefix) {
-        prefixes = prrte_argv_split(prrte_strip_prefix, ',');
-        match = false;
-        for (i=0; NULL != prefixes[i]; i++) {
-            if (0 == strncmp(hostname, prefixes[i], strlen(prefixes[i]))) {
-                /* remove the prefix and leading zeroes */
-                idx = strlen(prefixes[i]);
-                while (idx < (int)strlen(hostname) &&
-                       (hostname[idx] <= '0' || '9' < hostname[idx])) {
-                    idx++;
-                }
-                if ((int)strlen(hostname) <= idx) {
-                    /* there were no non-zero numbers in the name */
-                    prrte_process_info.nodename = strdup(&hostname[strlen(prefixes[i])]);
-                } else {
-                    prrte_process_info.nodename = strdup(&hostname[idx]);
-                }
-                /* add this to our list of aliases */
-                prrte_argv_append_nosize(&prrte_process_info.aliases, prrte_process_info.nodename);
-                match = true;
-                break;
-            }
-        }
-        /* if we didn't find a match, then just use the hostname as-is */
-        if (!match) {
-            prrte_process_info.nodename = strdup(hostname);
-        }
-        prrte_argv_free(prefixes);
-    } else {
-        prrte_process_info.nodename = strdup(hostname);
-    }
-
-    /* add "localhost" to our list of aliases */
-    prrte_argv_append_nosize(&prrte_process_info.aliases, "localhost");
 
     /* get the number of nodes in the job */
     prrte_process_info.num_nodes = 1;

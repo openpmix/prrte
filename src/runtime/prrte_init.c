@@ -112,7 +112,6 @@ int prrte_init_util(void)
 {
     int ret;
     char *error = NULL;
-    char hostname[PRRTE_MAXHOSTNAMELEN];
 
     if (0 < prrte_initialized) {
         /* track number of times we have been called */
@@ -121,12 +120,8 @@ int prrte_init_util(void)
     }
     prrte_initialized++;
 
-    /* set the nodename right away so anyone who needs it has it. Note
-     * that we don't bother with fqdn and prefix issues here - we let
-     * the RTE later replace this with a modified name if the user
-     * requests it */
-    gethostname(hostname, sizeof(hostname));
-    prrte_process_info.nodename = strdup(hostname);
+    /* set the nodename right away so anyone who needs it has it */
+    prrte_setup_hostname();
 
     /* initialize the memory allocator */
     prrte_malloc_init();

@@ -33,11 +33,11 @@
 #include "src/util/argv.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
+#include "src/util/proc_info.h"
 
 #include "src/mca/ras/base/base.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/mca/errmgr/errmgr.h"
-#include "src/util/proc_info.h"
 #include "src/runtime/prrte_globals.h"
 
 #include "dash_host.h"
@@ -52,7 +52,7 @@ int prrte_util_dash_host_compute_slots(prrte_node_t *node, char *hosts)
 
     /* see if this node appears in the list */
     for (n=0; NULL != specs[n]; n++) {
-        if (0 == strncmp(node->name, specs[n], strlen(node->name)) ||
+        if (prrte_check_host_is_local(specs[n]) ||
             (prrte_ifislocal(node->name) && prrte_ifislocal(specs[n]))) {
             /* check if the #slots was specified */
             if (NULL != (cptr = strchr(specs[n], ':'))) {
@@ -66,7 +66,6 @@ int prrte_util_dash_host_compute_slots(prrte_node_t *node, char *hosts)
             } else {
                 ++slots;
             }
-
         }
     }
     prrte_argv_free(specs);

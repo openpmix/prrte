@@ -63,7 +63,7 @@ static int if_bsdx_ipv6_open(void);
  * bsdi
  * Apple
  */
-prrte_if_base_component_t mca_if_bsdx_ipv6_component = {
+prrte_if_base_component_t prrte_if_bsdx_ipv6_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     {

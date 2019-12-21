@@ -22,7 +22,7 @@
 static int if_solaris_ipv6_open(void);
 
 /* Discovers Solaris IPv6 interfaces */
-prrte_if_base_component_t mca_if_solaris_ipv6_component = {
+prrte_if_base_component_t prrte_if_solaris_ipv6_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     {

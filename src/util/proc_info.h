@@ -139,6 +139,10 @@ PRRTE_EXPORT int prrte_proc_info(void);
 
 PRRTE_EXPORT int prrte_proc_info_finalize(void);
 
+PRRTE_EXPORT void prrte_setup_hostname(void);
+
+PRRTE_EXPORT bool prrte_check_host_is_local(char *name);
+
 END_C_DECLS
 
 #endif
