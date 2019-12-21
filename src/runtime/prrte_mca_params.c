@@ -523,14 +523,6 @@ int prrte_register_params(void)
         prrte_default_dash_host = NULL;
     }
 
-    /* whether or not to keep FQDN hostnames */
-    prrte_keep_fqdn_hostnames = false;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "keep_fqdn_hostnames",
-                                  "Whether or not to keep FQDN hostnames [default: no]",
-                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prrte_keep_fqdn_hostnames);
-
     /* whether or not to retain aliases of hostnames */
     prrte_retain_aliases = false;
     (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "retain_aliases",

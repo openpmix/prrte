@@ -165,6 +165,9 @@ static prrte_event_t term_handler;
 static int term_pipe[2];
 static prrte_atomic_lock_t prun_abort_inprogress_lock = {0};
 static prrte_event_base_t *myevbase = NULL;
+static char **hostfiles = NULL;
+static char **dash_hosts = NULL;
+static bool mpirun = false;
 
 static prrte_cmd_line_init_t cmd_line_init[] = {
     /* tell the dvm to terminate */
@@ -451,7 +454,6 @@ int prun(int argc, char *argv[])
     mylock_t mylock;
     bool notify_launch = false;
     char *mycmd;
-    bool mpirun = false;
     char **prteargs = NULL;
     FILE *fp;
     char buf[2048];
@@ -600,24 +602,55 @@ int prun(int argc, char *argv[])
         exit(1);
     }
 
-    if (mpirun) {
-        /* check for hostfile and/or dash-host options */
-        prrte_argv_append_nosize(&prteargs, "&");
-        param = prrte_argv_join(prteargs, ' ');
-        fp = popen(param, "r");
-        if (NULL == fp) {
-            fprintf(stderr, "Error executing prte\n");
-            exit(1);
+    if (!myoptions.terminate_dvm) {
+        /* they want to run an application, so let's parse
+         * the cmd line to get it */
+
+        if (PRRTE_SUCCESS != (rc = parse_locals(&apps, argc, argv))) {
+            PRRTE_ERROR_LOG(rc);
+            PRRTE_LIST_DESTRUCT(&apps);
+            goto DONE;
         }
-        i = 0;
-        while (fgets(buf, 2048, fp) != NULL) {
-            if (NULL != strstr(buf, "ready")) {
-                break;
+
+        /* bozo check */
+        if (0 == prrte_list_get_size(&apps)) {
+            prrte_output(0, "No application specified!");
+            goto DONE;
+        }
+
+        if (mpirun) {
+            /* check for hostfile and/or dash-host options */
+            if (NULL != hostfiles) {
+                ptr = prrte_argv_join(hostfiles, ',');
+                prrte_argv_append_nosize(&prteargs, "--hostfile");
+                prrte_argv_append_nosize(&prteargs, ptr);
+                free(ptr);
             }
-            ++i;
-            if (i > 6500000) {
-                fprintf(stderr, "prte failed to start\n");
+            if (NULL != dash_hosts) {
+                ptr = prrte_argv_join(dash_hosts, ',');
+                prrte_argv_append_nosize(&prteargs, "--host");
+                prrte_argv_append_nosize(&prteargs, ptr);
+                free(ptr);
+            }
+            prrte_argv_append_nosize(&prteargs, "&");
+            prrte_mca_base_cmd_line_wrap_args(prteargs);
+            param = prrte_argv_join(prteargs, ' ');
+            prrte_output(0, "FINAL CMD: %s", param);
+            fp = popen(param, "r");
+            if (NULL == fp) {
+                fprintf(stderr, "Error executing prte\n");
                 exit(1);
+            }
+            i = 0;
+            while (fgets(buf, 2048, fp) != NULL) {
+                if (NULL != strstr(buf, "ready")) {
+                    break;
+                }
+                ++i;
+                if (i > 6500000) {
+                    fprintf(stderr, "prte failed to start\n");
+                    exit(1);
+                }
             }
         }
     }
@@ -829,21 +862,6 @@ int prun(int argc, char *argv[])
     PMIx_Register_event_handler(NULL, 0, &info, 1, defhandler, regcbfunc, &lock);
     PRRTE_PMIX_WAIT_THREAD(&lock);
     PRRTE_PMIX_DESTRUCT_LOCK(&lock);
-
-    /* get here if they want to run an application, so let's parse
-     * the cmd line to get it */
-
-    if (PRRTE_SUCCESS != (rc = parse_locals(&apps, argc, argv))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_LIST_DESTRUCT(&apps);
-        goto DONE;
-    }
-
-    /* bozo check */
-    if (0 == prrte_list_get_size(&apps)) {
-        prrte_output(0, "No application specified!");
-        goto DONE;
-    }
 
     /* we want to be notified upon job completion */
     ds = PRRTE_NEW(prrte_ds_info_t);
@@ -1580,9 +1598,13 @@ static int create_app(int argc, char* argv[],
             val = PRRTE_NEW(prrte_ds_info_t);
             PMIX_INFO_CREATE(val->info, 1);
             PMIX_INFO_LOAD(val->info, PMIX_HOSTFILE, value, PMIX_STRING);
-            free(value);
             prrte_list_append(&app->info, &val->super);
             found = true;
+            if (mpirun) {
+                /* add this to the list of hostfiles for prte */
+                prrte_argv_append_nosize(&hostfiles, value);
+            }
+            free(value);
         }
     }
     if (0 < (j = prrte_cmd_line_get_ninsts(prrte_cmd_line, "machinefile"))) {
@@ -1595,8 +1617,12 @@ static int create_app(int argc, char* argv[],
             val = PRRTE_NEW(prrte_ds_info_t);
             PMIX_INFO_CREATE(val->info, 1);
             PMIX_INFO_LOAD(val->info, PMIX_HOSTFILE, value, PMIX_STRING);
-            free(value);
             prrte_list_append(&app->info, &val->super);
+            if (mpirun) {
+                /* add this to the list of hostfiles for prte */
+                prrte_argv_append_nosize(&hostfiles, value);
+            }
+            free(value);
         }
     }
 
@@ -1611,8 +1637,12 @@ static int create_app(int argc, char* argv[],
         val = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(val->info, 1);
         PMIX_INFO_LOAD(val->info, PMIX_HOST, tval, PMIX_STRING);
-        free(tval);
         prrte_list_append(&app->info, &val->super);
+        if (mpirun) {
+            /* add this to the list of -host options for prte */
+            prrte_argv_append_nosize(&dash_hosts, tval);
+        }
+        free(tval);
     }
 
     /* check for bozo error */

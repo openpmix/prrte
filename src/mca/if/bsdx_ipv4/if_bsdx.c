@@ -27,7 +27,7 @@ static int if_bsdx_open(void);
  * OpenBSD
  * DragonFly
  */
-prrte_if_base_component_t mca_if_bsdx_ipv4_component = {
+prrte_if_base_component_t prrte_if_bsdx_ipv4_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     {
