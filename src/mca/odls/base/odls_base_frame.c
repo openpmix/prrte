@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
+ * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
@@ -315,7 +315,7 @@ static int prrte_odls_base_open(prrte_mca_base_open_flag_t flags)
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, odls, "PRRTE Daemon Launch Subsystem",
                                  prrte_odls_base_register, prrte_odls_base_open, prrte_odls_base_close,
-                                 mca_odls_base_static_components, 0);
+                                 prrte_odls_base_static_components, 0);
 
 static void launch_local_const(prrte_odls_launch_local_t *ptr)
 {

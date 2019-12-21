@@ -4,6 +4,8 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +42,7 @@ static int dlopen_component_query(prrte_mca_base_module_t **module, int *priorit
  * and pointers to our public functions in it
  */
 
-prrte_dl_dlopen_component_t mca_dl_dlopen_component = {
+prrte_dl_dlopen_component_t prrte_dl_dlopen_component = {
 
     /* Fill in the mca_dl_base_component_t */
     .base = {
@@ -77,9 +79,9 @@ static int dlopen_component_register(void)
 {
     int ret;
 
-    mca_dl_dlopen_component.filename_suffixes_mca_storage = ".so,.dylib,.dll,.sl";
+    prrte_dl_dlopen_component.filename_suffixes_mca_storage = ".so,.dylib,.dll,.sl";
     ret =
-        prrte_mca_base_component_var_register(&mca_dl_dlopen_component.base.base_version,
+        prrte_mca_base_component_var_register(&prrte_dl_dlopen_component.base.base_version,
                                         "filename_suffixes",
                                         "Comma-delimited list of filename suffixes that the dlopen component will try",
                                         PRRTE_MCA_BASE_VAR_TYPE_STRING,
@@ -88,12 +90,12 @@ static int dlopen_component_register(void)
                                         PRRTE_MCA_BASE_VAR_FLAG_SETTABLE,
                                         PRRTE_INFO_LVL_5,
                                         PRRTE_MCA_BASE_VAR_SCOPE_LOCAL,
-                                        &mca_dl_dlopen_component.filename_suffixes_mca_storage);
+                                        &prrte_dl_dlopen_component.filename_suffixes_mca_storage);
     if (ret < 0) {
         return ret;
     }
-    mca_dl_dlopen_component.filename_suffixes =
-        prrte_argv_split(mca_dl_dlopen_component.filename_suffixes_mca_storage,
+    prrte_dl_dlopen_component.filename_suffixes =
+        prrte_argv_split(prrte_dl_dlopen_component.filename_suffixes_mca_storage,
                         ',');
 
     return PRRTE_SUCCESS;
@@ -107,9 +109,9 @@ static int dlopen_component_open(void)
 
 static int dlopen_component_close(void)
 {
-    if (NULL != mca_dl_dlopen_component.filename_suffixes) {
-        prrte_argv_free(mca_dl_dlopen_component.filename_suffixes);
-        mca_dl_dlopen_component.filename_suffixes = NULL;
+    if (NULL != prrte_dl_dlopen_component.filename_suffixes) {
+        prrte_argv_free(prrte_dl_dlopen_component.filename_suffixes);
+        prrte_dl_dlopen_component.filename_suffixes = NULL;
     }
 
     return PRRTE_SUCCESS;
@@ -121,7 +123,7 @@ static int dlopen_component_query(prrte_mca_base_module_t **module, int *priorit
     /* The priority value is somewhat meaningless here; by
        src/mca/dl/configure.m4, there's at most one component
        available. */
-    *priority = mca_dl_dlopen_component.base.priority;
+    *priority = prrte_dl_dlopen_component.base.priority;
     *module = &prrte_dl_dlopen_module.super;
 
     return PRRTE_SUCCESS;

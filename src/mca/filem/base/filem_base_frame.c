@@ -10,6 +10,8 @@
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.
  *                         All rights reserved
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,4 +71,4 @@ static int prrte_filem_base_open(prrte_mca_base_open_flag_t flags)
 }
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, filem, NULL, NULL, prrte_filem_base_open, prrte_filem_base_close,
-                                 mca_filem_base_static_components, 0);
+                                 prrte_filem_base_static_components, 0);

@@ -2,6 +2,8 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +34,7 @@
 
 BEGIN_C_DECLS
 
-extern bool prrte_state_base_run_fdcheck;
+PRRTE_EXPORT extern bool prrte_state_base_run_fdcheck;
 /*
  * Base functions
  */

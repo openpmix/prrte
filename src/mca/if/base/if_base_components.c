@@ -1,8 +1,8 @@
 /*
  * Copyright (c) 2010-2013 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2015-2016 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +37,7 @@ PRRTE_CLASS_INSTANCE(prrte_if_t, prrte_list_item_t, prrte_if_construct, NULL);
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, if, NULL, prrte_if_base_register,
                                  prrte_if_base_open, prrte_if_base_close,
-                                 mca_if_base_static_components, 0);
+                                 prrte_if_base_static_components, 0);
 
 static int prrte_if_base_register (prrte_mca_base_register_flag_t flags)
 {

@@ -8,8 +8,8 @@
  * Copyright (c) 2004-2011 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -62,7 +62,7 @@ static int prrte_routed_base_close(void)
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, routed, "PRRTE Message Routing Subsystem", NULL,
                                  prrte_routed_base_open, prrte_routed_base_close,
-                                 mca_routed_base_static_components, 0);
+                                 prrte_routed_base_static_components, 0);
 
 int prrte_routed_base_select(void)
 {

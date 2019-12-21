@@ -4,6 +4,8 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,7 +61,7 @@
 static int if_linux_ipv6_open(void);
 
 /* Discovers Linux IPv6 interfaces */
-prrte_if_base_component_t mca_if_linux_ipv6_component = {
+prrte_if_base_component_t prrte_if_linux_ipv6_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     {

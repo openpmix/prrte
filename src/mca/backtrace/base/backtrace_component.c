@@ -12,6 +12,8 @@
  * Copyright (c) 2013      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,4 +40,4 @@
 
 /* Uses default register/open/close functions */
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, backtrace, NULL, NULL, NULL, NULL,
-			   					 mca_backtrace_base_static_components, 0);
+			   					 prrte_backtrace_base_static_components, 0);

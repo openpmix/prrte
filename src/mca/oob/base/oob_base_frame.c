@@ -13,8 +13,8 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2013-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2015-2016 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -98,7 +98,7 @@ static int prrte_oob_base_open(prrte_mca_base_open_flag_t flags)
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, oob, "Out-of-Band Messaging Subsystem",
                                  NULL, prrte_oob_base_open, prrte_oob_base_close,
-                                 mca_oob_base_static_components, 0);
+                                 prrte_oob_base_static_components, 0);
 
 
 PRRTE_CLASS_INSTANCE(prrte_oob_send_t,

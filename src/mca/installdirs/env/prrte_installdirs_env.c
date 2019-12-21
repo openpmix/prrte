@@ -3,6 +3,8 @@
  *                         reserved.
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,7 +23,7 @@
 static int installdirs_env_open(void);
 
 
-prrte_installdirs_base_component_t mca_installdirs_env_component = {
+prrte_installdirs_base_component_t prrte_installdirs_env_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     {
@@ -55,7 +57,7 @@ prrte_installdirs_base_component_t mca_installdirs_env_component = {
          if (NULL != tmp && 0 == strlen(tmp)) {                           \
              tmp = NULL;                                                  \
          }                                                                \
-         mca_installdirs_env_component.install_dirs_data.field = tmp;     \
+         prrte_installdirs_env_component.install_dirs_data.field = tmp;   \
     } while (0)
 
 

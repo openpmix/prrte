@@ -11,8 +11,8 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2007-2014 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2014      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -296,18 +296,18 @@ static inline prrte_object_t *prrte_obj_new_debug(prrte_class_t* type, const cha
  * an object change.
  */
 #if PRRTE_ENABLE_DEBUG
-#define OBJ_REMEMBER_FILE_AND_LINENO( OBJECT, FILE, LINENO )    \
+#define PRRTE_REMEMBER_FILE_AND_LINENO( OBJECT, FILE, LINENO )    \
     do {                                                        \
         ((prrte_object_t*)(OBJECT))->cls_init_file_name = FILE;  \
         ((prrte_object_t*)(OBJECT))->cls_init_lineno = LINENO;   \
     } while(0)
-#define OBJ_SET_MAGIC_ID( OBJECT, VALUE )                       \
+#define PRRTE_SET_MAGIC_ID( OBJECT, VALUE )                       \
     do {                                                        \
         ((prrte_object_t*)(OBJECT))->obj_magic_id = (VALUE);     \
     } while(0)
 #else
-#define OBJ_REMEMBER_FILE_AND_LINENO( OBJECT, FILE, LINENO )
-#define OBJ_SET_MAGIC_ID( OBJECT, VALUE )
+#define PRRTE_REMEMBER_FILE_AND_LINENO( OBJECT, FILE, LINENO )
+#define PRRTE_SET_MAGIC_ID( OBJECT, VALUE )
 #endif  /* PRRTE_ENABLE_DEBUG */
 
 /**
@@ -328,9 +328,9 @@ static inline prrte_object_t *prrte_obj_new_debug(prrte_class_t* type, const cha
         assert(PRRTE_OBJ_MAGIC_ID == ((prrte_object_t *) (object))->obj_magic_id); \
         assert(NULL != ((prrte_object_t *) (object))->obj_class);        \
         if (0 == prrte_obj_update((prrte_object_t *) (object), -1)) {     \
-            OBJ_SET_MAGIC_ID((object), 0);                              \
+            PRRTE_SET_MAGIC_ID((object), 0);                              \
             prrte_obj_run_destructors((prrte_object_t *) (object));       \
-            OBJ_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
+            PRRTE_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
             free(object);                                               \
             object = NULL;                                              \
         }                                                               \
@@ -361,14 +361,14 @@ do {                                                            \
 
 #define PRRTE_CONSTRUCT_INTERNAL(object, type)                        \
 do {                                                                \
-    OBJ_SET_MAGIC_ID((object), PRRTE_OBJ_MAGIC_ID);                  \
+    PRRTE_SET_MAGIC_ID((object), PRRTE_OBJ_MAGIC_ID);                  \
     if (prrte_class_init_epoch != (type)->cls_initialized) {         \
         prrte_class_initialize((type));                              \
     }                                                               \
     ((prrte_object_t *) (object))->obj_class = (type);               \
     ((prrte_object_t *) (object))->obj_reference_count = 1;          \
     prrte_obj_run_constructors((prrte_object_t *) (object));          \
-    OBJ_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
+    PRRTE_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
 } while (0)
 
 
@@ -381,15 +381,15 @@ do {                                                                \
 #define PRRTE_DESTRUCT(object)                                    \
 do {                                                            \
     assert(PRRTE_OBJ_MAGIC_ID == ((prrte_object_t *) (object))->obj_magic_id); \
-    OBJ_SET_MAGIC_ID((object), 0);                              \
+    PRRTE_SET_MAGIC_ID((object), 0);                              \
     prrte_obj_run_destructors((prrte_object_t *) (object));       \
-    OBJ_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
+    PRRTE_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
 } while (0)
 #else
 #define PRRTE_DESTRUCT(object)                                    \
 do {                                                            \
     prrte_obj_run_destructors((prrte_object_t *) (object));       \
-    OBJ_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
+    PRRTE_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
 } while (0)
 #endif
 

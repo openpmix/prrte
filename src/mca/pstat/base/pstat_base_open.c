@@ -11,6 +11,8 @@
  *                         All rights reserved.
  * Copyright (c) 2008      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -70,7 +72,7 @@ static int prrte_pstat_base_open(prrte_mca_base_open_flag_t flags)
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, pstat, "process statistics", NULL,
                                  prrte_pstat_base_open, prrte_pstat_base_close,
-                                 mca_pstat_base_static_components, 0);
+                                 prrte_pstat_base_static_components, 0);
 
 static int prrte_pstat_base_unsupported_init(void)
 {

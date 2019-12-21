@@ -12,7 +12,7 @@
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2015-2018 Research Organization for Information Science
+ * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
@@ -153,7 +153,7 @@ static int prrte_iof_base_open(prrte_mca_base_open_flag_t flags)
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, iof, "PRRTE I/O Forwarding",
                                  prrte_iof_base_register, prrte_iof_base_open, prrte_iof_base_close,
-                                 mca_iof_base_static_components, 0);
+                                 prrte_iof_base_static_components, 0);
 
 
 /* class instances */

@@ -15,7 +15,7 @@
  *                         All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2017-2018 Research Organization for Information Science
+ * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
@@ -109,7 +109,7 @@ typedef struct {
     prrte_event_t *ev;
     void *payload;
 } prrte_timer_t;
-PRRTE_CLASS_DECLARATION(prrte_timer_t);
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_timer_t);
 
 PRRTE_EXPORT extern int prrte_exit_status;
 

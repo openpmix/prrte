@@ -13,8 +13,8 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2014-2015 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -102,4 +102,4 @@ static int prrte_errmgr_base_open(prrte_mca_base_open_flag_t flags)
 
 PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, errmgr, "PRRTE Error Manager", NULL,
                                  prrte_errmgr_base_open, prrte_errmgr_base_close,
-                                 mca_errmgr_base_static_components, 0);
+                                 prrte_errmgr_base_static_components, 0);
