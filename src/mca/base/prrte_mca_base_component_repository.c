@@ -13,9 +13,9 @@
  * Copyright (c) 2008-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2017 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
@@ -447,7 +447,7 @@ int prrte_mca_base_component_repository_open (prrte_mca_base_framework_t *framew
        Malloc out enough space for it. */
 
     do {
-        ret = prrte_asprintf (&struct_name, "mca_%s_%s_component", ri->ri_type, ri->ri_name);
+        ret = prrte_asprintf (&struct_name, "prrte_%s_%s_component", ri->ri_type, ri->ri_name);
         if (0 > ret) {
             ret = PRRTE_ERR_OUT_OF_RESOURCE;
             break;
