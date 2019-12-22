@@ -20,8 +20,8 @@
  * $HEADER$
  */
 
-#ifndef MCA_PSTAT_TEST_EXPORT_H
-#define MCA_PSTAT_TEST_EXPORT_H
+#ifndef prrte_pstat_TEST_EXPORT_H
+#define prrte_pstat_TEST_EXPORT_H
 
 #include "prrte_config.h"
 
@@ -40,4 +40,4 @@ PRRTE_EXPORT extern const prrte_pstat_base_module_t prrte_pstat_test_module;
 
 END_C_DECLS
 
-#endif /* MCA_PSTAT_TEST_EXPORT_H */
+#endif /* prrte_pstat_TEST_EXPORT_H */

@@ -22,8 +22,8 @@
  * $HEADER$
  */
 
-#ifndef MCA_RML_OOB_RML_OOB_H
-#define MCA_RML_OOB_RML_OOB_H
+#ifndef prrte_rml_OOB_RML_OOB_H
+#define prrte_rml_OOB_RML_OOB_H
 
 #include "prrte_config.h"
 

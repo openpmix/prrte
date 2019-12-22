@@ -155,6 +155,7 @@ int prrte_oob_tcp_start_listening(void)
     }
 
     /* otherwise, setup to listen via the event lib */
+
     PRRTE_LIST_FOREACH(listener, &prrte_oob_tcp_component.listeners, prrte_oob_tcp_listener_t) {
         listener->ev_active = true;
         prrte_event_set(prrte_event_base, &listener->event,

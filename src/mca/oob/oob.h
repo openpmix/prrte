@@ -70,12 +70,12 @@ typedef struct {
     mca_oob_base_component_get_addr_fn_t            get_addr;
     mca_oob_base_component_set_addr_fn_t            set_addr;
     mca_oob_base_component_is_reachable_fn_t        is_reachable;
-} mca_oob_base_component_t;
+} prrte_oob_base_component_t;
 
 /**
  * Macro for use in components that are of type oob
  */
-#define MCA_OOB_BASE_VERSION_2_0_0 \
+#define PRRTE_OOB_BASE_VERSION_2_0_0 \
     PRRTE_MCA_BASE_VERSION_2_1_0("oob", 2, 0, 0)
 
 END_C_DECLS

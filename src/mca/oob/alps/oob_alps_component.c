@@ -89,7 +89,7 @@ static bool component_is_reachable(char *routed, prrte_process_name_t *peer);
  */
 prrte_oob_base_component_t prrte_oob_alps_component = {
     .oob_base = {
-        MCA_OOB_BASE_VERSION_2_0_0,
+        PRRTE_OOB_BASE_VERSION_2_0_0,
         .mca_component_name = "alps",
         PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
                                     PRRTE_RELEASE_VERSION),

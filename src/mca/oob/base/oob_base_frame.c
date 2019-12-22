@@ -51,14 +51,14 @@ prrte_oob_base_t prrte_oob_base = {0};
 
 static int prrte_oob_base_close(void)
 {
-    mca_oob_base_component_t *component;
+    prrte_oob_base_component_t *component;
     prrte_mca_base_component_list_item_t *cli;
     prrte_object_t *value;
     uint64_t key;
 
     /* shutdown all active transports */
     while (NULL != (cli = (prrte_mca_base_component_list_item_t *) prrte_list_remove_first (&prrte_oob_base.actives))) {
-        component = (mca_oob_base_component_t*)cli->cli_component;
+        component = (prrte_oob_base_component_t*)cli->cli_component;
         if (NULL != component->shutdown) {
             component->shutdown();
         }

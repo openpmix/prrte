@@ -33,15 +33,7 @@
 extern "C" {
 #endif
 
-    /*
-     * Local Component structures
-     */
-    struct prrte_compress_zlib_component_t {
-        prrte_compress_base_component_t super;  /** Base COMPRESS component */
-
-    };
-    typedef struct prrte_compress_zlib_component_t prrte_compress_zlib_component_t;
-    extern prrte_compress_zlib_component_t prrte_compress_zlib_component;
+    extern prrte_compress_base_component_t prrte_compress_zlib_component;
 
     int prrte_compress_zlib_component_query(prrte_mca_base_module_t **module, int *priority);
 

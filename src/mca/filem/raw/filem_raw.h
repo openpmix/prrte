@@ -11,8 +11,8 @@
  * $HEADER$
  */
 
-#ifndef MCA_FILEM_RAW_EXPORT_H
-#define MCA_FILEM_RAW_EXPORT_H
+#ifndef PRRtE_FILEM_RAW_EXPORT_H
+#define PRRtE_FILEM_RAW_EXPORT_H
 
 #include "prrte_config.h"
 
@@ -80,4 +80,4 @@ PRRTE_CLASS_DECLARATION(prrte_filem_raw_output_t);
 
 END_C_DECLS
 
-#endif /* MCA_FILEM_RAW_EXPORT_H */
+#endif /* PRRtE_FILEM_RAW_EXPORT_H */

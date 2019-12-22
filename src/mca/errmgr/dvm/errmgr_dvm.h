@@ -19,8 +19,8 @@
  *
  */
 
-#ifndef MCA_ERRMGR_dvm_EXPORT_H
-#define MCA_ERRMGR_dvm_EXPORT_H
+#ifndef prrte_errmgr_dvm_EXPORT_H
+#define prrte_errmgr_dvm_EXPORT_H
 
 #include "prrte_config.h"
 
@@ -38,4 +38,4 @@ PRRTE_EXPORT extern prrte_errmgr_base_module_t prrte_errmgr_dvm_module;
 
 END_C_DECLS
 
-#endif /* MCA_ERRMGR_dvm_EXPORT_H */
+#endif /* prrte_errmgr_dvm_EXPORT_H */

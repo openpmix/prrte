@@ -44,7 +44,7 @@
  *  OOB TCP Component
  */
 typedef struct {
-    mca_oob_base_component_t super;          /**< base OOB component */
+    prrte_oob_base_component_t super;          /**< base OOB component */
     uint32_t addr_count;                     /**< total number of addresses */
     int num_links;                           /**< number of logical links per physical device */
     int                  max_retries;        /**< max number of retries before declaring peer gone */

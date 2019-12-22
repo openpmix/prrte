@@ -36,7 +36,7 @@ void prrte_oob_base_send_nb(int fd, short args, void *cbdata)
     int rc;
     uint64_t ui64;
     bool msg_sent;
-    mca_oob_base_component_t *component;
+    prrte_oob_base_component_t *component;
     bool reachable;
     char *uri;
 
@@ -102,7 +102,7 @@ void prrte_oob_base_send_nb(int fd, short args, void *cbdata)
             reachable = false;
             pr = NULL;
             PRRTE_LIST_FOREACH(cli, &prrte_oob_base.actives, prrte_mca_base_component_list_item_t) {
-                component = (mca_oob_base_component_t*)cli->cli_component;
+                component = (prrte_oob_base_component_t*)cli->cli_component;
                 if (NULL != component->is_reachable) {
                     if (component->is_reachable(&msg->dst)) {
                         /* there is a way to reach this peer - record it
@@ -165,7 +165,7 @@ void prrte_oob_base_send_nb(int fd, short args, void *cbdata)
      */
     msg_sent = false;
     PRRTE_LIST_FOREACH(cli, &prrte_oob_base.actives, prrte_mca_base_component_list_item_t) {
-        component = (mca_oob_base_component_t*)cli->cli_component;
+        component = (prrte_oob_base_component_t*)cli->cli_component;
         /* is this peer reachable via this component? */
         if (!component->is_reachable(&msg->dst)) {
             continue;
@@ -223,7 +223,7 @@ void prrte_oob_base_get_addr(char **uri)
     size_t len = 0;
     bool one_added = false;
     prrte_mca_base_component_list_item_t *cli;
-    mca_oob_base_component_t *component;
+    prrte_oob_base_component_t *component;
     pmix_value_t val;
     pmix_proc_t proc;
     pmix_status_t rc;
@@ -240,7 +240,7 @@ void prrte_oob_base_get_addr(char **uri)
      * up to the max length
      */
     PRRTE_LIST_FOREACH(cli, &prrte_oob_base.actives, prrte_mca_base_component_list_item_t) {
-        component = (mca_oob_base_component_t*)cli->cli_component;
+        component = (prrte_oob_base_component_t*)cli->cli_component;
         /* ask the component for its input, obtained when it
          * opened its modules
          */
@@ -296,7 +296,7 @@ static void process_uri(char *uri)
     prrte_process_name_t peer;
     char *cptr;
     prrte_mca_base_component_list_item_t *cli;
-    mca_oob_base_component_t *component;
+    prrte_oob_base_component_t *component;
     char **uris=NULL;
     int rc;
     uint64_t ui64;
@@ -353,7 +353,7 @@ static void process_uri(char *uri)
      */
     rc = PRRTE_ERR_UNREACH;
     PRRTE_LIST_FOREACH(cli, &prrte_oob_base.actives, prrte_mca_base_component_list_item_t) {
-        component = (mca_oob_base_component_t*)cli->cli_component;
+        component = (prrte_oob_base_component_t*)cli->cli_component;
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
                             "%s:set_addr checking if peer %s is reachable via component %s",
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
