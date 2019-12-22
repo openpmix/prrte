@@ -423,7 +423,7 @@ static int create_listen6(void)
             prrte_argv_append_nosize(&ports, "0");
             prrte_static_ports = false;
         }
-    } else if (PRRTE_PROC_IS_MASTER) {
+    } else {
         if (NULL != prrte_oob_tcp_component.tcp6_static_ports) {
             /* if static ports were provided, take the
              * first entry in the list
@@ -438,47 +438,6 @@ static int create_listen6(void)
         } else {
             /* flag the system to dynamically take any available port */
             prrte_argv_append_nosize(&ports, "0");
-            prrte_static_ports = false;
-        }
-    } else if (PRRTE_PROC_IS_MPI) {
-        if (NULL != prrte_oob_tcp_component.tcp6_static_ports) {
-            /* if static ports were provided, an mpi proc takes its
-             * node_local_rank entry in the list IF it has that info
-             * AND enough ports were provided - otherwise, we "pick any port"
-             */
-            prrte_node_rank_t nrank;
-            /* do I know my node_local_rank yet? */
-            if (PRRTE_NODE_RANK_INVALID != (nrank = prrte_process_info.my_node_rank) &&
-                (nrank+1) < prrte_argv_count(prrte_oob_tcp_component.tcp6_static_ports)) {
-                /* any daemon takes the first entry, so we start with the second */
-                prrte_argv_append_nosize(&ports, prrte_oob_tcp_component.tcp6_static_ports[nrank+1]);
-                /* flag that we are using static ports */
-                prrte_static_ports = true;
-            } else {
-                /* flag the system to dynamically take any available port */
-                prrte_argv_append_nosize(&ports, "0");
-                prrte_static_ports = false;
-            }
-        } else if (NULL != prrte_oob_tcp_component.tcp6_dyn_ports) {
-            /* take the entire range */
-            ports = prrte_argv_copy(prrte_oob_tcp_component.tcp6_dyn_ports);
-            prrte_static_ports = false;
-        } else {
-            /* flag the system to dynamically take any available port */
-            prrte_argv_append_nosize(&ports, "0");
-            prrte_static_ports = false;
-        }
-    } else {
-        /* if we are a tool, then we must let the
-         * system pick any port
-         */
-        prrte_argv_append_nosize(&ports, "0");
-        /* if static ports were specified, flag it
-         * so the HNP does the right thing
-         */
-        if (NULL != prrte_oob_tcp_component.tcp6_static_ports) {
-            prrte_static_ports = true;
-        } else {
             prrte_static_ports = false;
         }
     }
