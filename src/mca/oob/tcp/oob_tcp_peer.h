@@ -13,6 +13,8 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,9 +37,9 @@ typedef struct {
     prrte_list_item_t super;
     struct sockaddr_storage addr; // an address where a peer can be found
     int retries;                  // number of times we have tried to connect to this address
-    mca_oob_tcp_state_t state;    // state of this address
-} mca_oob_tcp_addr_t;
-PRRTE_CLASS_DECLARATION(mca_oob_tcp_addr_t);
+    prrte_oob_tcp_state_t state;    // state of this address
+} prrte_oob_tcp_addr_t;
+PRRTE_CLASS_DECLARATION(prrte_oob_tcp_addr_t);
 
 /* object for tracking peers in the module */
 typedef struct {
@@ -49,8 +51,8 @@ typedef struct {
     char *auth_method;  // method they used to authenticate
     int sd;
     prrte_list_t addrs;
-    mca_oob_tcp_addr_t *active_addr;
-    mca_oob_tcp_state_t state;
+    prrte_oob_tcp_addr_t *active_addr;
+    prrte_oob_tcp_state_t state;
     int num_retries;
     prrte_event_t send_event;    /**< registration with event thread for send events */
     bool send_ev_active;
@@ -59,10 +61,10 @@ typedef struct {
     prrte_event_t timer_event;   /**< timer for retrying connection failures */
     bool timer_ev_active;
     prrte_list_t send_queue;      /**< list of messages to send */
-    mca_oob_tcp_send_t *send_msg; /**< current send in progress */
-    mca_oob_tcp_recv_t *recv_msg; /**< current recv in progress */
-} mca_oob_tcp_peer_t;
-PRRTE_CLASS_DECLARATION(mca_oob_tcp_peer_t);
+    prrte_oob_tcp_send_t *send_msg; /**< current send in progress */
+    prrte_oob_tcp_recv_t *recv_msg; /**< current recv in progress */
+} prrte_oob_tcp_peer_t;
+PRRTE_CLASS_DECLARATION(prrte_oob_tcp_peer_t);
 
 /* state machine for processing peer data */
 typedef struct {
@@ -72,13 +74,13 @@ typedef struct {
     uint16_t af_family;
     char *net;
     char *port;
-} mca_oob_tcp_peer_op_t;
-PRRTE_CLASS_DECLARATION(mca_oob_tcp_peer_op_t);
+} prrte_oob_tcp_peer_op_t;
+PRRTE_CLASS_DECLARATION(prrte_oob_tcp_peer_op_t);
 
 #define PRRTE_ACTIVATE_TCP_CMP_OP(p, cbfunc)                          \
     do {                                                                \
-        mca_oob_tcp_peer_op_t *pop;                                     \
-        pop = PRRTE_NEW(mca_oob_tcp_peer_op_t);                           \
+        prrte_oob_tcp_peer_op_t *pop;                                     \
+        pop = PRRTE_NEW(prrte_oob_tcp_peer_op_t);                           \
         pop->peer.jobid = (p)->name.jobid;                              \
         pop->peer.vpid = (p)->name.vpid;                                \
         PRRTE_THREADSHIFT(pop, prrte_event_base,                    \

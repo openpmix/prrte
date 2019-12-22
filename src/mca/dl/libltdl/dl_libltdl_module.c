@@ -2,6 +2,8 @@
  * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +32,7 @@ static int libltdl_open(const char *fname, bool use_ext, bool private_namespace,
     lt_dlhandle local_handle;
 
 #if PRRTE_DL_LIBLTDL_HAVE_LT_DLADVISE
-    prrte_dl_libltdl_component_t *c = &mca_dl_libltdl_component;
+    prrte_dl_libltdl_component_t *c = &prrte_dl_libltdl_component;
 
     if (use_ext && private_namespace) {
         local_handle = lt_dlopenadvise(fname, c->advise_private_ext);

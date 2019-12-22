@@ -5,6 +5,8 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,7 +70,6 @@ int prrte_compress_zlib_component_query(prrte_mca_base_module_t **module, int *p
 {
     *module   = (prrte_mca_base_module_t *)&loc_module;
     *priority = 10;
-
     return PRRTE_SUCCESS;
 }
 

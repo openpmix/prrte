@@ -13,6 +13,8 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,34 +36,34 @@
 #include "oob_tcp_hdr.h"
 
 /* forward declare */
-struct mca_oob_tcp_peer_t;
+struct prrte_oob_tcp_peer_t;
 
 /* tcp structure for sending a message */
 typedef struct {
     prrte_list_item_t super;
     prrte_event_t ev;
-    struct mca_oob_tcp_peer_t *peer;
+    struct prrte_oob_tcp_peer_t *peer;
     bool activate;
-    mca_oob_tcp_hdr_t hdr;
+    prrte_oob_tcp_hdr_t hdr;
     prrte_rml_send_t *msg;
     char *data;
     bool hdr_sent;
     int iovnum;
     char *sdptr;
     size_t sdbytes;
-} mca_oob_tcp_send_t;
-PRRTE_CLASS_DECLARATION(mca_oob_tcp_send_t);
+} prrte_oob_tcp_send_t;
+PRRTE_CLASS_DECLARATION(prrte_oob_tcp_send_t);
 
 /* tcp structure for recving a message */
 typedef struct {
     prrte_list_item_t super;
-    mca_oob_tcp_hdr_t hdr;
+    prrte_oob_tcp_hdr_t hdr;
     bool hdr_recvd;
     char *data;
     char *rdptr;
     size_t rdbytes;
-} mca_oob_tcp_recv_t;
-PRRTE_CLASS_DECLARATION(mca_oob_tcp_recv_t);
+} prrte_oob_tcp_recv_t;
+PRRTE_CLASS_DECLARATION(prrte_oob_tcp_recv_t);
 
 /* Queue a message to be sent to a specified peer. The macro
  * checks to see if a message is already in position to be
@@ -75,16 +77,16 @@ PRRTE_CLASS_DECLARATION(mca_oob_tcp_recv_t);
  * it as "pending" for later transmission - e.g., after the
  * connection procedure is completed
  *
- * p => pointer to mca_oob_tcp_peer_t
- * s => pointer to mca_oob_tcp_send_t
+ * p => pointer to prrte_oob_tcp_peer_t
+ * s => pointer to prrte_oob_tcp_send_t
  * f => true if send event is to be activated
  */
 #define MCA_OOB_TCP_QUEUE_MSG(p, s, f)                                  \
     do {                                                                \
-        (s)->peer = (struct mca_oob_tcp_peer_t*)(p);                    \
+        (s)->peer = (struct prrte_oob_tcp_peer_t*)(p);                    \
         (s)->activate = (f);                                            \
         PRRTE_THREADSHIFT((s), prrte_event_base,                             \
-                         mca_oob_tcp_queue_msg, PRRTE_MSG_PRI);          \
+                         prrte_oob_tcp_queue_msg, PRRTE_MSG_PRI);          \
     } while(0)
 
 /* queue a message to be sent by one of our modules - must
@@ -95,14 +97,14 @@ PRRTE_CLASS_DECLARATION(mca_oob_tcp_recv_t);
  */
 #define MCA_OOB_TCP_QUEUE_SEND(m, p)                                    \
     do {                                                                \
-        mca_oob_tcp_send_t *_s;                                         \
+        prrte_oob_tcp_send_t *_s;                                         \
         int i;                                                          \
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output, \
                             "%s:[%s:%d] queue send to %s",              \
                              PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),        \
                              __FILE__, __LINE__,                        \
                             PRRTE_NAME_PRINT(&((m)->dst)));              \
-        _s = PRRTE_NEW(mca_oob_tcp_send_t);                              \
+        _s = PRRTE_NEW(prrte_oob_tcp_send_t);                              \
         /* setup the header */                                          \
         _s->hdr.origin = (m)->origin;                                  \
         _s->hdr.dst = (m)->dst;                                        \
@@ -126,7 +128,7 @@ PRRTE_CLASS_DECLARATION(mca_oob_tcp_recv_t);
         MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                \
         /* start the send with the header */                            \
         _s->sdptr = (char*)&_s->hdr;                                  \
-        _s->sdbytes = sizeof(mca_oob_tcp_hdr_t);                       \
+        _s->sdbytes = sizeof(prrte_oob_tcp_hdr_t);                       \
         /* add to the msg queue for this peer */                        \
         MCA_OOB_TCP_QUEUE_MSG((p), _s, true);                          \
     } while(0)
@@ -139,14 +141,14 @@ PRRTE_CLASS_DECLARATION(mca_oob_tcp_recv_t);
  */
 #define MCA_OOB_TCP_QUEUE_PENDING(m, p)                                 \
     do {                                                                \
-        mca_oob_tcp_send_t *_s;                                        \
+        prrte_oob_tcp_send_t *_s;                                        \
         int i;                                                          \
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output, \
                             "%s:[%s:%d] queue pending to %s",           \
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),         \
                             __FILE__, __LINE__,                         \
                             PRRTE_NAME_PRINT(&((m)->dst)));              \
-        _s = PRRTE_NEW(mca_oob_tcp_send_t);                              \
+        _s = PRRTE_NEW(prrte_oob_tcp_send_t);                              \
         /* setup the header */                                          \
         _s->hdr.origin = (m)->origin;                                  \
         _s->hdr.dst = (m)->dst;                                        \
@@ -170,7 +172,7 @@ PRRTE_CLASS_DECLARATION(mca_oob_tcp_recv_t);
         MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                \
         /* start the send with the header */                            \
         _s->sdptr = (char*)&_s->hdr;                                  \
-        _s->sdbytes = sizeof(mca_oob_tcp_hdr_t);                       \
+        _s->sdbytes = sizeof(prrte_oob_tcp_hdr_t);                       \
         /* add to the msg queue for this peer */                        \
         MCA_OOB_TCP_QUEUE_MSG((p), _s, false);                         \
     } while(0)
@@ -178,18 +180,18 @@ PRRTE_CLASS_DECLARATION(mca_oob_tcp_recv_t);
 /* queue a message for relay by one of our modules - must
  * provide the following params:
  *
- * m = the mca_oob_tcp_recv_t that was received
+ * m = the prrte_oob_tcp_recv_t that was received
  * p - the next hop
 */
 #define MCA_OOB_TCP_QUEUE_RELAY(m, p)                                   \
     do {                                                                \
-        mca_oob_tcp_send_t *_s;                                        \
+        prrte_oob_tcp_send_t *_s;                                        \
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output, \
                             "%s:[%s:%d] queue relay to %s",             \
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),         \
                             __FILE__, __LINE__,                         \
                             PRRTE_NAME_PRINT(&((p)->name)));             \
-        _s = PRRTE_NEW(mca_oob_tcp_send_t);                              \
+        _s = PRRTE_NEW(prrte_oob_tcp_send_t);                              \
         /* setup the header */                                          \
         _s->hdr.origin = (m)->hdr.origin;                              \
         _s->hdr.dst = (m)->hdr.dst;                                    \
@@ -205,7 +207,7 @@ PRRTE_CLASS_DECLARATION(mca_oob_tcp_recv_t);
         MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                \
         /* start the send with the header */                            \
         _s->sdptr = (char*)&_s->hdr;                                  \
-        _s->sdbytes = sizeof(mca_oob_tcp_hdr_t);                       \
+        _s->sdbytes = sizeof(prrte_oob_tcp_hdr_t);                       \
         /* add to the msg queue for this peer */                        \
         MCA_OOB_TCP_QUEUE_MSG((p), _s, true);                          \
     } while(0)
@@ -215,18 +217,18 @@ typedef struct {
     prrte_object_t super;
     prrte_event_t ev;
     prrte_rml_send_t *msg;
-} mca_oob_tcp_msg_op_t;
-PRRTE_CLASS_DECLARATION(mca_oob_tcp_msg_op_t);
+} prrte_oob_tcp_msg_op_t;
+PRRTE_CLASS_DECLARATION(prrte_oob_tcp_msg_op_t);
 
 #define PRRTE_ACTIVATE_TCP_POST_SEND(ms, cbfunc)                         \
     do {                                                                \
-        mca_oob_tcp_msg_op_t *mop;                                      \
+        prrte_oob_tcp_msg_op_t *mop;                                      \
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output, \
                             "%s:[%s:%d] post send to %s",               \
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),         \
                             __FILE__, __LINE__,                         \
                             PRRTE_NAME_PRINT(&((ms)->dst)));             \
-        mop = PRRTE_NEW(mca_oob_tcp_msg_op_t);                            \
+        mop = PRRTE_NEW(prrte_oob_tcp_msg_op_t);                            \
         mop->msg = (ms);                                                \
         PRRTE_THREADSHIFT(mop, prrte_event_base,                      \
                          (cbfunc), PRRTE_MSG_PRI);                       \
@@ -236,29 +238,29 @@ typedef struct {
     prrte_object_t super;
     prrte_event_t ev;
     prrte_rml_send_t *rmsg;
-    mca_oob_tcp_send_t *snd;
+    prrte_oob_tcp_send_t *snd;
     prrte_process_name_t hop;
-} mca_oob_tcp_msg_error_t;
-PRRTE_CLASS_DECLARATION(mca_oob_tcp_msg_error_t);
+} prrte_oob_tcp_msg_error_t;
+PRRTE_CLASS_DECLARATION(prrte_oob_tcp_msg_error_t);
 
 #define PRRTE_ACTIVATE_TCP_MSG_ERROR(s, r, h, cbfunc)                    \
     do {                                                                \
-        mca_oob_tcp_msg_error_t *mop;                                   \
-        mca_oob_tcp_send_t *snd;                                        \
-        mca_oob_tcp_recv_t *proxy;                                      \
+        prrte_oob_tcp_msg_error_t *mop;                                   \
+        prrte_oob_tcp_send_t *snd;                                        \
+        prrte_oob_tcp_recv_t *proxy;                                      \
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output, \
                             "%s:[%s:%d] post msg error to %s",          \
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),         \
                             __FILE__, __LINE__,                         \
                             PRRTE_NAME_PRINT((h)));                      \
-        mop = PRRTE_NEW(mca_oob_tcp_msg_error_t);                         \
+        mop = PRRTE_NEW(prrte_oob_tcp_msg_error_t);                         \
         if (NULL != (s)) {                                              \
             mop->snd = (s);                                             \
         } else if (NULL != (r)) {                                       \
             /* use a proxy so we can pass NULL into the macro */        \
             proxy = (r);                                                \
             /* create a send object for this message */                 \
-            snd = PRRTE_NEW(mca_oob_tcp_send_t);                          \
+            snd = PRRTE_NEW(prrte_oob_tcp_send_t);                          \
             mop->snd = snd;                                             \
             /* transfer and prep the header */                          \
             snd->hdr = proxy->hdr;                                      \
@@ -267,7 +269,7 @@ PRRTE_CLASS_DECLARATION(mca_oob_tcp_msg_error_t);
             snd->data = proxy->data;                                    \
             /* start the message with the header */                     \
             snd->sdptr = (char*)&snd->hdr;                              \
-            snd->sdbytes = sizeof(mca_oob_tcp_hdr_t);                   \
+            snd->sdbytes = sizeof(prrte_oob_tcp_hdr_t);                   \
             /* protect the data */                                      \
             proxy->data = NULL;                                         \
         }                                                               \
@@ -280,13 +282,13 @@ PRRTE_CLASS_DECLARATION(mca_oob_tcp_msg_error_t);
 
 #define PRRTE_ACTIVATE_TCP_NO_ROUTE(r, h, c)                             \
     do {                                                                \
-        mca_oob_tcp_msg_error_t *mop;                                   \
+        prrte_oob_tcp_msg_error_t *mop;                                   \
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output, \
                             "%s:[%s:%d] post no route to %s",           \
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),         \
                             __FILE__, __LINE__,                         \
                             PRRTE_NAME_PRINT((h)));                      \
-        mop = PRRTE_NEW(mca_oob_tcp_msg_error_t);                         \
+        mop = PRRTE_NEW(prrte_oob_tcp_msg_error_t);                         \
         mop->rmsg = (r);                                                \
         mop->hop.jobid = (h)->jobid;                                    \
         mop->hop.vpid = (h)->vpid;                                      \

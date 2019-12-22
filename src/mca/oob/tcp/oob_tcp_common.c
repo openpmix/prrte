@@ -14,8 +14,8 @@
  * Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2014      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -188,9 +188,9 @@ void prrte_oob_tcp_set_socket_options(int sd)
     }
 }
 
-mca_oob_tcp_peer_t* mca_oob_tcp_peer_lookup(const prrte_process_name_t *name)
+prrte_oob_tcp_peer_t* prrte_oob_tcp_peer_lookup(const prrte_process_name_t *name)
 {
-    mca_oob_tcp_peer_t *peer;
+    prrte_oob_tcp_peer_t *peer;
     uint64_t ui64;
 
     memcpy(&ui64, (char*)name, sizeof(uint64_t));
@@ -200,7 +200,7 @@ mca_oob_tcp_peer_t* mca_oob_tcp_peer_lookup(const prrte_process_name_t *name)
     return peer;
 }
 
-char* mca_oob_tcp_state_print(mca_oob_tcp_state_t state)
+char* prrte_oob_tcp_state_print(prrte_oob_tcp_state_t state)
 {
     switch (state) {
     case MCA_OOB_TCP_UNCONNECTED:

@@ -1,9 +1,11 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2015       Los Alamos National Security, Inc.  All rights
- *                          reserved.
+ * Copyright (c) 2015      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2015      Los Alamos National Security, Inc.  All rights
+ *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,7 +43,7 @@ static int libltdl_component_query(prrte_mca_base_module_t **module, int *priori
  * and pointers to our public functions in it
  */
 
-prrte_dl_libltdl_component_t mca_dl_libltdl_component = {
+prrte_dl_libltdl_component_t prrte_dl_libltdl_component = {
 
     /* Fill in the mca_dl_base_component_t */
     .base = {
@@ -81,7 +83,7 @@ static int libltdl_component_register(void)
     /* Register an info param indicating whether we have lt_dladvise
        support or not */
     bool supported = PRRTE_INT_TO_BOOL(PRRTE_DL_LIBLTDL_HAVE_LT_DLADVISE);
-    prrte_mca_base_component_var_register(&mca_dl_libltdl_component.base.base_version,
+    prrte_mca_base_component_var_register(&prrte_dl_libltdl_component.base.base_version,
                                     "have_lt_dladvise",
                                     "Whether the version of libltdl that this component is built against supports lt_dladvise functionality or not",
                                     PRRTE_MCA_BASE_VAR_TYPE_BOOL,
@@ -102,7 +104,7 @@ static int libltdl_component_open(void)
     }
 
 #if PRRTE_DL_LIBLTDL_HAVE_LT_DLADVISE
-    prrte_dl_libltdl_component_t *c = &mca_dl_libltdl_component;
+    prrte_dl_libltdl_component_t *c = &prrte_dl_libltdl_component;
 
     if (lt_dladvise_init(&c->advise_private_noext)) {
         return PRRTE_ERR_OUT_OF_RESOURCE;
@@ -132,7 +134,7 @@ static int libltdl_component_open(void)
 static int libltdl_component_close(void)
 {
 #if PRRTE_DL_LIBLTDL_HAVE_LT_DLADVISE
-    prrte_dl_libltdl_component_t *c = &mca_dl_libltdl_component;
+    prrte_dl_libltdl_component_t *c = &prrte_dl_libltdl_component;
 
     lt_dladvise_destroy(&c->advise_private_noext);
     lt_dladvise_destroy(&c->advise_private_ext);
@@ -151,7 +153,7 @@ static int libltdl_component_query(prrte_mca_base_module_t **module, int *priori
     /* The priority value is somewhat meaningless here; by
        src/mca/dl/configure.m4, there's at most one component
        available. */
-    *priority = mca_dl_libltdl_component.base.priority;
+    *priority = prrte_dl_libltdl_component.base.priority;
     *module = &prrte_dl_libltdl_module.super;
 
     return PRRTE_SUCCESS;

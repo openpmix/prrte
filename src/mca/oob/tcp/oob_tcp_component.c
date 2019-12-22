@@ -16,8 +16,8 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
- * Copyright (c) 2015-2017 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -295,7 +295,7 @@ static int tcp_component_register(void)
 
 #if PRRTE_ENABLE_IPV6
     static_port_string6 = NULL;
-    (voidprrte_)mca_base_component_var_register(component, "static_ipv6_ports",
+    (void)prrte_mca_base_component_var_register(component, "static_ipv6_ports",
                                           "Static ports for daemons and procs (IPv6)",
                                           PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                           PRRTE_INFO_LVL_2,
@@ -635,7 +635,7 @@ static int component_startup(void)
 
 static void component_shutdown(void)
 {
-    mca_oob_tcp_peer_t *peer;
+    prrte_oob_tcp_peer_t *peer;
     int i = 0, rc;
     uint64_t key;
     void *node;
@@ -691,7 +691,7 @@ static int component_send(prrte_rml_send_t *msg)
      * some reason, it will pass the error to our fn below so
      * it can do something about it
      */
-    mca_oob_tcp_module.send_nb(msg);
+    prrte_oob_tcp_module.send_nb(msg);
     return PRRTE_SUCCESS;
 }
 
@@ -790,8 +790,8 @@ static int component_set_addr(prrte_process_name_t *peer,
     uint16_t af_family = AF_UNSPEC;
     uint64_t ui64;
     bool found;
-    mca_oob_tcp_peer_t *pr;
-    mca_oob_tcp_addr_t *maddr;
+    prrte_oob_tcp_peer_t *pr;
+    prrte_oob_tcp_addr_t *maddr;
 
     memcpy(&ui64, (char*)peer, sizeof(uint64_t));
     /* cycle across component parts and see if one belongs to us */
@@ -888,8 +888,8 @@ static int component_set_addr(prrte_process_name_t *peer,
                 host = addrs[j];
             }
 
-            if (NULL == (pr = mca_oob_tcp_peer_lookup(peer))) {
-                pr = PRRTE_NEW(mca_oob_tcp_peer_t);
+            if (NULL == (pr = prrte_oob_tcp_peer_lookup(peer))) {
+                pr = PRRTE_NEW(prrte_oob_tcp_peer_t);
                 pr->name.jobid = peer->jobid;
                 pr->name.vpid = peer->vpid;
                 prrte_output_verbose(20, prrte_oob_base_framework.framework_output,
@@ -902,7 +902,7 @@ static int component_set_addr(prrte_process_name_t *peer,
                 }
             }
 
-            maddr = PRRTE_NEW(mca_oob_tcp_addr_t);
+            maddr = PRRTE_NEW(prrte_oob_tcp_addr_t);
             ((struct sockaddr_storage*) &(maddr->addr))->ss_family = af_family;
             if (PRRTE_SUCCESS != (rc = parse_uri(af_family, host, ports, (struct sockaddr_storage*) &(maddr->addr)))) {
                 PRRTE_ERROR_LOG(rc);
@@ -957,7 +957,7 @@ static bool component_is_reachable(prrte_process_name_t *peer)
 
 void prrte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
 {
-    mca_oob_tcp_peer_op_t *pop = (mca_oob_tcp_peer_op_t*)cbdata;
+    prrte_oob_tcp_peer_op_t *pop = (prrte_oob_tcp_peer_op_t*)cbdata;
     uint64_t ui64;
     int rc;
     prrte_oob_base_peer_t *bpr;
@@ -990,7 +990,7 @@ void prrte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
 
 void prrte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
 {
-    mca_oob_tcp_peer_op_t *pop = (mca_oob_tcp_peer_op_t*)cbdata;
+    prrte_oob_tcp_peer_op_t *pop = (prrte_oob_tcp_peer_op_t*)cbdata;
     uint64_t ui64;
     prrte_oob_base_peer_t *bpr;
     int rc;
@@ -1027,7 +1027,7 @@ void prrte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
 
 void prrte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
 {
-    mca_oob_tcp_msg_error_t *mop = (mca_oob_tcp_msg_error_t*)cbdata;
+    prrte_oob_tcp_msg_error_t *mop = (prrte_oob_tcp_msg_error_t*)cbdata;
     uint64_t ui64;
     int rc;
     prrte_oob_base_peer_t *bpr;
@@ -1063,7 +1063,7 @@ void prrte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
 
 void prrte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
 {
-    mca_oob_tcp_msg_error_t *mop = (mca_oob_tcp_msg_error_t*)cbdata;
+    prrte_oob_tcp_msg_error_t *mop = (prrte_oob_tcp_msg_error_t*)cbdata;
     uint64_t ui64;
     prrte_rml_send_t *snd;
     prrte_oob_base_peer_t *bpr;
@@ -1140,7 +1140,7 @@ void prrte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
 
 void prrte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
 {
-    mca_oob_tcp_peer_op_t *pop = (mca_oob_tcp_peer_op_t*)cbdata;
+    prrte_oob_tcp_peer_op_t *pop = (prrte_oob_tcp_peer_op_t*)cbdata;
 
     PRRTE_ACQUIRE_OBJECT(pop);
 
@@ -1272,7 +1272,7 @@ static char **split_and_resolve(char **orig_str, char *name)
 
 /* OOB TCP Class instances */
 
-static void peer_cons(mca_oob_tcp_peer_t *peer)
+static void peer_cons(prrte_oob_tcp_peer_t *peer)
 {
     peer->auth_method = NULL;
     peer->sd = -1;
@@ -1287,7 +1287,7 @@ static void peer_cons(mca_oob_tcp_peer_t *peer)
     peer->recv_ev_active = false;
     peer->timer_ev_active = false;
 }
-static void peer_des(mca_oob_tcp_peer_t *peer)
+static void peer_des(prrte_oob_tcp_peer_t *peer)
 {
     if (NULL != peer->auth_method) {
         free(peer->auth_method);
@@ -1311,27 +1311,27 @@ static void peer_des(mca_oob_tcp_peer_t *peer)
     PRRTE_LIST_DESTRUCT(&peer->addrs);
     PRRTE_LIST_DESTRUCT(&peer->send_queue);
 }
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_peer_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_peer_t,
                    prrte_list_item_t,
                    peer_cons, peer_des);
 
-static void padd_cons(mca_oob_tcp_addr_t *ptr)
+static void padd_cons(prrte_oob_tcp_addr_t *ptr)
 {
     memset(&ptr->addr, 0, sizeof(ptr->addr));
     ptr->retries = 0;
     ptr->state = MCA_OOB_TCP_UNCONNECTED;
 }
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_addr_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_addr_t,
                    prrte_list_item_t,
                    padd_cons, NULL);
 
 
-static void pop_cons(mca_oob_tcp_peer_op_t *pop)
+static void pop_cons(prrte_oob_tcp_peer_op_t *pop)
 {
     pop->net = NULL;
     pop->port = NULL;
 }
-static void pop_des(mca_oob_tcp_peer_op_t *pop)
+static void pop_des(prrte_oob_tcp_peer_op_t *pop)
 {
     if (NULL != pop->net) {
         free(pop->net);
@@ -1340,23 +1340,23 @@ static void pop_des(mca_oob_tcp_peer_op_t *pop)
         free(pop->port);
     }
 }
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_peer_op_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_peer_op_t,
                    prrte_object_t,
                    pop_cons, pop_des);
 
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_msg_op_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_msg_op_t,
                    prrte_object_t,
                    NULL, NULL);
 
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_conn_op_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_conn_op_t,
                    prrte_object_t,
                    NULL, NULL);
 
-static void nicaddr_cons(mca_oob_tcp_nicaddr_t *ptr)
+static void nicaddr_cons(prrte_oob_tcp_nicaddr_t *ptr)
 {
     ptr->af_family = PF_UNSPEC;
     memset(&ptr->addr, 0, sizeof(ptr->addr));
 }
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_nicaddr_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_nicaddr_t,
                    prrte_list_item_t,
                    nicaddr_cons, NULL);

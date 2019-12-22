@@ -14,8 +14,8 @@
  * Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -99,7 +99,7 @@ static void connection_event_handler(int sd, short flags, void* cbdata);
 int prrte_oob_tcp_start_listening(void)
 {
     int rc = PRRTE_SUCCESS, rc2 = PRRTE_SUCCESS;
-    mca_oob_tcp_listener_t *listener;
+    prrte_oob_tcp_listener_t *listener;
 
     /* if we don't have any TCP interfaces, we shouldn't be here */
     if (NULL == prrte_oob_tcp_component.ipv4conns
@@ -155,7 +155,8 @@ int prrte_oob_tcp_start_listening(void)
     }
 
     /* otherwise, setup to listen via the event lib */
-    PRRTE_LIST_FOREACH(listener, &prrte_oob_tcp_component.listeners, mca_oob_tcp_listener_t) {
+
+    PRRTE_LIST_FOREACH(listener, &prrte_oob_tcp_component.listeners, prrte_oob_tcp_listener_t) {
         listener->ev_active = true;
         prrte_event_set(prrte_event_base, &listener->event,
                        listener->sd,
@@ -188,7 +189,7 @@ static int create_listen(void)
     char **ports=NULL;
     int sd = -1;
     char *tconn;
-    mca_oob_tcp_listener_t *conn;
+    prrte_oob_tcp_listener_t *conn;
 
     /* If an explicit range of ports was given, find the first open
      * port in the range.  Otherwise, tcp_port_min will be 0, which
@@ -276,7 +277,7 @@ static int create_listen(void)
             flags = 0;
         }
         if (setsockopt (sd, SOL_SOCKET, SO_REUSEADDR, (const char *)&flags, sizeof(flags)) < 0) {
-            prrte_output(0, "mca_oob_tcp_create_listen: unable to set the "
+            prrte_output(0, "prrte_oob_tcp_create_listen: unable to set the "
                         "SO_REUSEADDR option (%s:%d)\n",
                         strerror(prrte_socket_errno), prrte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -287,7 +288,7 @@ static int create_listen(void)
         /* Set the socket to close-on-exec so that no children inherit
            this FD */
         if (prrte_fd_set_cloexec(sd) != PRRTE_SUCCESS) {
-            prrte_output(0, "mca_oob_tcp_create_listen: unable to set the "
+            prrte_output(0, "prrte_oob_tcp_create_listen: unable to set the "
                         "listening socket to CLOEXEC (%s:%d)\n",
                         strerror(prrte_socket_errno), prrte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -310,7 +311,7 @@ static int create_listen(void)
         }
         /* resolve assigned port */
         if (getsockname(sd, (struct sockaddr*)&inaddr, &addrlen) < 0) {
-            prrte_output(0, "mca_oob_tcp_create_listen: getsockname(): %s (%d)",
+            prrte_output(0, "prrte_oob_tcp_create_listen: getsockname(): %s (%d)",
                         strerror(prrte_socket_errno), prrte_socket_errno);
             CLOSE_THE_SOCKET(sd);
             prrte_argv_free(ports);
@@ -344,7 +345,7 @@ static int create_listen(void)
         }
 
         /* add this port to our connections */
-        conn = PRRTE_NEW(mca_oob_tcp_listener_t);
+        conn = PRRTE_NEW(prrte_oob_tcp_listener_t);
         conn->sd = sd;
         conn->port = ntohs(((struct sockaddr_in*) &inaddr)->sin_port);
         if (0 == prrte_process_info.my_port) {
@@ -400,7 +401,7 @@ static int create_listen6(void)
     char **ports=NULL;
     int sd;
     char *tconn;
-    mca_oob_tcp_listener_t *conn;
+    prrte_oob_tcp_listener_t *conn;
 
     /* If an explicit range of ports was given, find the first open
      * port in the range.  Otherwise, tcp_port_min will be 0, which
@@ -423,7 +424,7 @@ static int create_listen6(void)
             prrte_argv_append_nosize(&ports, "0");
             prrte_static_ports = false;
         }
-    } else if (PRRTE_PROC_IS_MASTER) {
+    } else {
         if (NULL != prrte_oob_tcp_component.tcp6_static_ports) {
             /* if static ports were provided, take the
              * first entry in the list
@@ -438,47 +439,6 @@ static int create_listen6(void)
         } else {
             /* flag the system to dynamically take any available port */
             prrte_argv_append_nosize(&ports, "0");
-            prrte_static_ports = false;
-        }
-    } else if (PRRTE_PROC_IS_MPI) {
-        if (NULL != prrte_oob_tcp_component.tcp6_static_ports) {
-            /* if static ports were provided, an mpi proc takes its
-             * node_local_rank entry in the list IF it has that info
-             * AND enough ports were provided - otherwise, we "pick any port"
-             */
-            prrte_node_rank_t nrank;
-            /* do I know my node_local_rank yet? */
-            if (PRRTE_NODE_RANK_INVALID != (nrank = prrte_process_info.my_node_rank) &&
-                (nrank+1) < prrte_argv_count(prrte_oob_tcp_component.tcp6_static_ports)) {
-                /* any daemon takes the first entry, so we start with the second */
-                prrte_argv_append_nosize(&ports, prrte_oob_tcp_component.tcp6_static_ports[nrank+1]);
-                /* flag that we are using static ports */
-                prrte_static_ports = true;
-            } else {
-                /* flag the system to dynamically take any available port */
-                prrte_argv_append_nosize(&ports, "0");
-                prrte_static_ports = false;
-            }
-        } else if (NULL != prrte_oob_tcp_component.tcp6_dyn_ports) {
-            /* take the entire range */
-            ports = prrte_argv_copy(prrte_oob_tcp_component.tcp6_dyn_ports);
-            prrte_static_ports = false;
-        } else {
-            /* flag the system to dynamically take any available port */
-            prrte_argv_append_nosize(&ports, "0");
-            prrte_static_ports = false;
-        }
-    } else {
-        /* if we are a tool, then we must let the
-         * system pick any port
-         */
-        prrte_argv_append_nosize(&ports, "0");
-        /* if static ports were specified, flag it
-         * so the HNP does the right thing
-         */
-        if (NULL != prrte_oob_tcp_component.tcp6_static_ports) {
-            prrte_static_ports = true;
-        } else {
             prrte_static_ports = false;
         }
     }
@@ -523,7 +483,7 @@ static int create_listen6(void)
         /* Set the socket to close-on-exec so that no children inherit
            this FD */
         if (prrte_fd_set_cloexec(sd) != PRRTE_SUCCESS) {
-            prrte_output(0, "mca_oob_tcp_create_listen6: unable to set the "
+            prrte_output(0, "prrte_oob_tcp_create_listen6: unable to set the "
                         "listening socket to CLOEXEC (%s:%d)\n",
                         strerror(prrte_socket_errno), prrte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -538,7 +498,7 @@ static int create_listen6(void)
             flags = 0;
         }
         if (setsockopt (sd, SOL_SOCKET, SO_REUSEADDR, (const char *)&flags, sizeof(flags)) < 0) {
-            prrte_output(0, "mca_oob_tcp_create_listen: unable to set the "
+            prrte_output(0, "prrte_oob_tcp_create_listen: unable to set the "
                         "SO_REUSEADDR option (%s:%d)\n",
                         strerror(prrte_socket_errno), prrte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -561,7 +521,7 @@ static int create_listen6(void)
         }
         /* resolve assigned port */
         if (getsockname(sd, (struct sockaddr*)&inaddr, &addrlen) < 0) {
-            prrte_output(0, "mca_oob_tcp_create_listen: getsockname(): %s (%d)",
+            prrte_output(0, "prrte_oob_tcp_create_listen: getsockname(): %s (%d)",
                         strerror(prrte_socket_errno), prrte_socket_errno);
             CLOSE_THE_SOCKET(sd);
             return PRRTE_ERROR;
@@ -588,7 +548,7 @@ static int create_listen6(void)
         }
 
         /* add this port to our connections */
-        conn = PRRTE_NEW(mca_oob_tcp_listener_t);
+        conn = PRRTE_NEW(prrte_oob_tcp_listener_t);
         conn->tcp6 = true;
         conn->sd = sd;
         conn->port = ntohs(((struct sockaddr_in6*) &inaddr)->sin6_port);
@@ -627,16 +587,16 @@ static int create_listen6(void)
  * incoming connections and places them in a queue for further
  * processing
  *
- * Runs until mca_oob_tcp_compnent.shutdown is set to true.
+ * Runs until prrte_oob_tcp_compnent.shutdown is set to true.
  */
 static void* listen_thread(prrte_object_t *obj)
 {
     int rc, max, accepted_connections, sd;
     prrte_socklen_t addrlen = sizeof(struct sockaddr_storage);
-    mca_oob_tcp_pending_connection_t *pending_connection;
+    prrte_oob_tcp_pending_connection_t *pending_connection;
     struct timeval timeout;
     fd_set readfds;
-    mca_oob_tcp_listener_t *listener;
+    prrte_oob_tcp_listener_t *listener;
 
     /* only execute during the initial VM startup stage - once
      * all the initial daemons have reported in, we will revert
@@ -646,7 +606,7 @@ static void* listen_thread(prrte_object_t *obj)
     while (prrte_oob_tcp_component.listen_thread_active) {
         FD_ZERO(&readfds);
         max = -1;
-        PRRTE_LIST_FOREACH(listener, &prrte_oob_tcp_component.listeners, mca_oob_tcp_listener_t) {
+        PRRTE_LIST_FOREACH(listener, &prrte_oob_tcp_component.listeners, prrte_oob_tcp_listener_t) {
             FD_SET(listener->sd, &readfds);
             max = (listener->sd > max) ? listener->sd : max;
         }
@@ -681,7 +641,7 @@ static void* listen_thread(prrte_object_t *obj)
          */
         do {
             accepted_connections = 0;
-            PRRTE_LIST_FOREACH(listener, &prrte_oob_tcp_component.listeners, mca_oob_tcp_listener_t) {
+            PRRTE_LIST_FOREACH(listener, &prrte_oob_tcp_component.listeners, prrte_oob_tcp_listener_t) {
                 sd = listener->sd;
 
                 /* according to the man pages, select replaces the given descriptor
@@ -702,7 +662,7 @@ static void* listen_thread(prrte_object_t *obj)
                  * process the connection here as it takes too long, and so the
                  * OS might start rejecting connections due to timeout.
                  */
-                pending_connection = PRRTE_NEW(mca_oob_tcp_pending_connection_t);
+                pending_connection = PRRTE_NEW(prrte_oob_tcp_pending_connection_t);
                 prrte_event_set(prrte_event_base, &pending_connection->ev, -1,
                                PRRTE_EV_WRITE, connection_handler, pending_connection);
                 prrte_event_set_priority(&pending_connection->ev, PRRTE_MSG_PRI);
@@ -751,7 +711,7 @@ static void* listen_thread(prrte_object_t *obj)
                 }
 
                 prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                                    "%s mca_oob_tcp_listen_thread: incoming connection: "
+                                    "%s prrte_oob_tcp_listen_thread: incoming connection: "
                                     "(%d, %d) %s:%d\n",
                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                                     pending_connection->fd, prrte_socket_errno,
@@ -797,10 +757,10 @@ static void* listen_thread(prrte_object_t *obj)
      * lib handler now
      */
     prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                        "%s mca_oob_tcp_listen_thread: switching to event lib",
+                        "%s prrte_oob_tcp_listen_thread: switching to event lib",
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
     /* setup to listen via event library */
-    PRRTE_LIST_FOREACH(listener, &prrte_oob_tcp_component.listeners, mca_oob_tcp_listener_t) {
+    PRRTE_LIST_FOREACH(listener, &prrte_oob_tcp_component.listeners, prrte_oob_tcp_listener_t) {
         prrte_event_set(prrte_event_base, listener->event,
                    listener->sd,
                    PRRTE_EV_READ|PRRTE_EV_PERSIST,
@@ -818,9 +778,9 @@ static void* listen_thread(prrte_object_t *obj)
  */
 static void connection_handler(int sd, short flags, void* cbdata)
 {
-    mca_oob_tcp_pending_connection_t *new_connection;
+    prrte_oob_tcp_pending_connection_t *new_connection;
 
-    new_connection = (mca_oob_tcp_pending_connection_t*)cbdata;
+    new_connection = (prrte_oob_tcp_pending_connection_t*)cbdata;
 
     PRRTE_ACQUIRE_OBJECT(new_connection);
 
@@ -833,7 +793,7 @@ static void connection_handler(int sd, short flags, void* cbdata)
                         prrte_net_get_port((struct sockaddr*) &new_connection->addr));
 
     /* process the connection */
-    mca_oob_tcp_module.accept_connection(new_connection->fd,
+    prrte_oob_tcp_module.accept_connection(new_connection->fd,
                                          (struct sockaddr*) &(new_connection->addr));
     /* cleanup */
     PRRTE_RELEASE(new_connection);
@@ -897,18 +857,18 @@ static void connection_event_handler(int incoming_sd, short flags, void* cbdata)
     }
 
     /* process the connection */
-    mca_oob_tcp_module.accept_connection(sd, &addr);
+    prrte_oob_tcp_module.accept_connection(sd, &addr);
 }
 
 
-static void tcp_ev_cons(mca_oob_tcp_listener_t* event)
+static void tcp_ev_cons(prrte_oob_tcp_listener_t* event)
 {
     event->ev_active = false;
     event->tcp6 = false;
     event->sd = -1;
     event->port = 0;
 }
-static void tcp_ev_des(mca_oob_tcp_listener_t* event)
+static void tcp_ev_des(prrte_oob_tcp_listener_t* event)
 {
     if (event->ev_active) {
         prrte_event_del(&event->event);
@@ -920,11 +880,11 @@ static void tcp_ev_des(mca_oob_tcp_listener_t* event)
     }
 }
 
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_listener_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_listener_t,
                    prrte_list_item_t,
                    tcp_ev_cons, tcp_ev_des);
 
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_pending_connection_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_pending_connection_t,
                    prrte_object_t,
                    NULL,
                    NULL);

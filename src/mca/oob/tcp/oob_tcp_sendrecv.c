@@ -14,8 +14,8 @@
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2017      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -80,13 +80,13 @@
 
 #define OOB_SEND_MAX_RETRIES 3
 
-void mca_oob_tcp_queue_msg(int sd, short args, void *cbdata)
+void prrte_oob_tcp_queue_msg(int sd, short args, void *cbdata)
 {
-    mca_oob_tcp_send_t *snd = (mca_oob_tcp_send_t*)cbdata;
-    mca_oob_tcp_peer_t *peer;
+    prrte_oob_tcp_send_t *snd = (prrte_oob_tcp_send_t*)cbdata;
+    prrte_oob_tcp_peer_t *peer;
 
     PRRTE_ACQUIRE_OBJECT(snd);
-    peer = (mca_oob_tcp_peer_t*)snd->peer;
+    peer = (prrte_oob_tcp_peer_t*)snd->peer;
 
     /* if there is no message on-deck, put this one there */
     if (NULL == peer->send_msg) {
@@ -99,7 +99,7 @@ void mca_oob_tcp_queue_msg(int sd, short args, void *cbdata)
         /* if we aren't connected, then start connecting */
         if (MCA_OOB_TCP_CONNECTED != peer->state) {
             peer->state = MCA_OOB_TCP_CONNECTING;
-            PRRTE_ACTIVATE_TCP_CONN_STATE(peer, mca_oob_tcp_peer_try_connect);
+            PRRTE_ACTIVATE_TCP_CONN_STATE(peer, prrte_oob_tcp_peer_try_connect);
         } else {
             /* ensure the send event is active */
             if (!peer->send_ev_active) {
@@ -111,7 +111,7 @@ void mca_oob_tcp_queue_msg(int sd, short args, void *cbdata)
     }
 }
 
-static int send_msg(mca_oob_tcp_peer_t* peer, mca_oob_tcp_send_t* msg)
+static int send_msg(prrte_oob_tcp_peer_t* peer, prrte_oob_tcp_send_t* msg)
 {
     struct iovec iov[2];
     int iov_count, retries = 0;
@@ -198,10 +198,10 @@ static int send_msg(mca_oob_tcp_peer_t* peer, mca_oob_tcp_send_t* msg)
  * A file descriptor is available/ready for send. Check the state
  * of the socket and take the appropriate action.
  */
-void mca_oob_tcp_send_handler(int sd, short flags, void *cbdata)
+void prrte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
 {
-    mca_oob_tcp_peer_t* peer = (mca_oob_tcp_peer_t*)cbdata;
-    mca_oob_tcp_send_t* msg;
+    prrte_oob_tcp_peer_t* peer = (prrte_oob_tcp_peer_t*)cbdata;
+    prrte_oob_tcp_send_t* msg;
     int rc;
 
     PRRTE_ACQUIRE_OBJECT(peer);
@@ -218,8 +218,8 @@ void mca_oob_tcp_send_handler(int sd, short flags, void *cbdata)
         prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
                             "%s tcp:send_handler %s",
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                            mca_oob_tcp_state_print(peer->state));
-        mca_oob_tcp_peer_complete_connect(peer);
+                            prrte_oob_tcp_state_print(peer->state));
+        prrte_oob_tcp_peer_complete_connect(peer);
         /* de-activate the send event until the connection
          * handshake completes
          */
@@ -302,7 +302,7 @@ void mca_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                 return;
             } else {
                 // report the error
-                prrte_output(0, "%s-%s mca_oob_tcp_peer_send_handler: unable to send message ON SOCKET %d",
+                prrte_output(0, "%s-%s prrte_oob_tcp_peer_send_handler: unable to send message ON SOCKET %d",
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                             PRRTE_NAME_PRINT(&(peer->name)), peer->sd);
                 prrte_event_del(&peer->send_event);
@@ -320,7 +320,7 @@ void mca_oob_tcp_send_handler(int sd, short flags, void *cbdata)
              * wait for another send_event to fire before doing so. This gives
              * us a chance to service any pending recvs.
              */
-            peer->send_msg = (mca_oob_tcp_send_t*)
+            peer->send_msg = (prrte_oob_tcp_send_t*)
                 prrte_list_remove_first(&peer->send_queue);
         }
 
@@ -331,7 +331,7 @@ void mca_oob_tcp_send_handler(int sd, short flags, void *cbdata)
         }
         break;
     default:
-        prrte_output(0, "%s-%s mca_oob_tcp_peer_send_handler: invalid connection state (%d) on socket %d",
+        prrte_output(0, "%s-%s prrte_oob_tcp_peer_send_handler: invalid connection state (%d) on socket %d",
                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                     PRRTE_NAME_PRINT(&(peer->name)),
                     peer->state, peer->sd);
@@ -343,7 +343,7 @@ void mca_oob_tcp_send_handler(int sd, short flags, void *cbdata)
     }
 }
 
-static int read_bytes(mca_oob_tcp_peer_t* peer)
+static int read_bytes(prrte_oob_tcp_peer_t* peer)
 {
     int rc;
 
@@ -371,12 +371,12 @@ static int read_bytes(mca_oob_tcp_peer_t* peer)
              * to abort this message
              */
             prrte_output_verbose(OOB_TCP_DEBUG_FAIL, prrte_oob_base_framework.framework_output,
-                                "%s-%s mca_oob_tcp_msg_recv: readv failed: %s (%d)",
+                                "%s-%s prrte_oob_tcp_msg_recv: readv failed: %s (%d)",
                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                                 PRRTE_NAME_PRINT(&(peer->name)),
                                 strerror(prrte_socket_errno),
                                 prrte_socket_errno);
-            // mca_oob_tcp_peer_close(peer);
+            // prrte_oob_tcp_peer_close(peer);
             // if (NULL != mca_oob_tcp.oob_exception_callback) {
             // mca_oob_tcp.oob_exception_callback(&peer->name, PRRTE_RML_PEER_DISCONNECTED);
             //}
@@ -386,7 +386,7 @@ static int read_bytes(mca_oob_tcp_peer_t* peer)
              * and let the caller know
              */
             prrte_output_verbose(OOB_TCP_DEBUG_FAIL, prrte_oob_base_framework.framework_output,
-                                "%s-%s mca_oob_tcp_msg_recv: peer closed connection",
+                                "%s-%s prrte_oob_tcp_msg_recv: peer closed connection",
                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                                 PRRTE_NAME_PRINT(&(peer->name)));
             /* stop all events */
@@ -406,7 +406,7 @@ static int read_bytes(mca_oob_tcp_peer_t* peer)
                 PRRTE_RELEASE(peer->recv_msg);
                 peer->recv_msg = NULL;
             }
-            mca_oob_tcp_peer_close(peer);
+            prrte_oob_tcp_peer_close(peer);
             //if (NULL != mca_oob_tcp.oob_exception_callback) {
             //   mca_oob_tcp.oob_exception_callback(&peer->peer_name, PRRTE_RML_PEER_DISCONNECTED);
             //}
@@ -426,9 +426,9 @@ static int read_bytes(mca_oob_tcp_peer_t* peer)
  * of the connection with the peer.
  */
 
-void mca_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
+void prrte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
 {
-    mca_oob_tcp_peer_t* peer = (mca_oob_tcp_peer_t*)cbdata;
+    prrte_oob_tcp_peer_t* peer = (prrte_oob_tcp_peer_t*)cbdata;
     int rc;
     prrte_rml_send_t *snd;
 
@@ -441,7 +441,7 @@ void mca_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
 
     switch (peer->state) {
     case MCA_OOB_TCP_CONNECT_ACK:
-        if (PRRTE_SUCCESS == (rc = mca_oob_tcp_peer_recv_connect_ack(peer, peer->sd, NULL))) {
+        if (PRRTE_SUCCESS == (rc = prrte_oob_tcp_peer_recv_connect_ack(peer, peer->sd, NULL))) {
             prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
                                 "%s:tcp:recv:handler starting send/recv events",
                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
@@ -457,7 +457,7 @@ void mca_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             }
             /* if there is a message waiting to be sent, queue it */
             if (NULL == peer->send_msg) {
-                peer->send_msg = (mca_oob_tcp_send_t*)prrte_list_remove_first(&peer->send_queue);
+                peer->send_msg = (prrte_oob_tcp_send_t*)prrte_list_remove_first(&peer->send_queue);
             }
             if (NULL != peer->send_msg && !peer->send_ev_active) {
                 peer->send_ev_active = true;
@@ -488,16 +488,16 @@ void mca_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
                                 "%s:tcp:recv:handler allocate new recv msg",
                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-            peer->recv_msg = PRRTE_NEW(mca_oob_tcp_recv_t);
+            peer->recv_msg = PRRTE_NEW(prrte_oob_tcp_recv_t);
             if (NULL == peer->recv_msg) {
-                prrte_output(0, "%s-%s mca_oob_tcp_peer_recv_handler: unable to allocate recv message\n",
+                prrte_output(0, "%s-%s prrte_oob_tcp_peer_recv_handler: unable to allocate recv message\n",
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                             PRRTE_NAME_PRINT(&(peer->name)));
                 return;
             }
             /* start by reading the header */
             peer->recv_msg->rdptr = (char*)&peer->recv_msg->hdr;
-            peer->recv_msg->rdbytes = sizeof(mca_oob_tcp_hdr_t);
+            peer->recv_msg->rdbytes = sizeof(prrte_oob_tcp_hdr_t);
         }
         /* if the header hasn't been completely read, read it */
         if (!peer->recv_msg->hdr_recvd) {
@@ -536,7 +536,7 @@ void mca_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
                                     "%s:tcp:recv:handler error reading bytes - closing connection",
                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-                mca_oob_tcp_peer_close(peer);
+                prrte_oob_tcp_peer_close(peer);
                 return;
             }
         }
@@ -603,7 +603,7 @@ void mca_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 return;
             } else {
                 // report the error
-                prrte_output(0, "%s-%s mca_oob_tcp_peer_recv_handler: unable to recv message",
+                prrte_output(0, "%s-%s prrte_oob_tcp_peer_recv_handler: unable to recv message",
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                             PRRTE_NAME_PRINT(&(peer->name)));
                 /* turn off the recv event */
@@ -614,18 +614,18 @@ void mca_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
         }
         break;
     default:
-        prrte_output(0, "%s-%s mca_oob_tcp_peer_recv_handler: invalid socket state(%d)",
+        prrte_output(0, "%s-%s prrte_oob_tcp_peer_recv_handler: invalid socket state(%d)",
                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                     PRRTE_NAME_PRINT(&(peer->name)),
                     peer->state);
-        // mca_oob_tcp_peer_close(peer);
+        // prrte_oob_tcp_peer_close(peer);
         break;
     }
 }
 
-static void snd_cons(mca_oob_tcp_send_t *ptr)
+static void snd_cons(prrte_oob_tcp_send_t *ptr)
 {
-    memset(&ptr->hdr, 0, sizeof(mca_oob_tcp_hdr_t));
+    memset(&ptr->hdr, 0, sizeof(prrte_oob_tcp_hdr_t));
     ptr->msg = NULL;
     ptr->data = NULL;
     ptr->hdr_sent = false;
@@ -639,32 +639,32 @@ static void snd_cons(mca_oob_tcp_send_t *ptr)
  * msg, the data in the relay belongs to
  * us and must be free'd
  */
-static void snd_des(mca_oob_tcp_send_t *ptr)
+static void snd_des(prrte_oob_tcp_send_t *ptr)
 {
     if (NULL != ptr->data) {
         free(ptr->data);
     }
 }
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_send_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_send_t,
                    prrte_list_item_t,
                    snd_cons, snd_des);
 
-static void rcv_cons(mca_oob_tcp_recv_t *ptr)
+static void rcv_cons(prrte_oob_tcp_recv_t *ptr)
 {
-    memset(&ptr->hdr, 0, sizeof(mca_oob_tcp_hdr_t));
+    memset(&ptr->hdr, 0, sizeof(prrte_oob_tcp_hdr_t));
     ptr->hdr_recvd = false;
     ptr->rdptr = NULL;
     ptr->rdbytes = 0;
 }
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_recv_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_recv_t,
                    prrte_list_item_t,
                    rcv_cons, NULL);
 
-static void err_cons(mca_oob_tcp_msg_error_t *ptr)
+static void err_cons(prrte_oob_tcp_msg_error_t *ptr)
 {
     ptr->rmsg = NULL;
     ptr->snd = NULL;
 }
-PRRTE_CLASS_INSTANCE(mca_oob_tcp_msg_error_t,
+PRRTE_CLASS_INSTANCE(prrte_oob_tcp_msg_error_t,
                    prrte_object_t,
                    err_cons, NULL);
