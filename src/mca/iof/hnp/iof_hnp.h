@@ -11,6 +11,8 @@
  *                         All rights reserved.
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -67,7 +69,7 @@ struct prrte_iof_hnp_component_t {
 };
 typedef struct prrte_iof_hnp_component_t prrte_iof_hnp_component_t;
 
-PRRTE_MODULE_EXPORT extern prrte_iof_hnp_component_t mca_iof_hnp_component;
+PRRTE_MODULE_EXPORT extern prrte_iof_hnp_component_t prrte_iof_hnp_component;
 extern prrte_iof_base_module_t prrte_iof_hnp_module;
 
 void prrte_iof_hnp_recv(int status, prrte_process_name_t* sender,

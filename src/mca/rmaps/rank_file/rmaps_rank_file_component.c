@@ -15,6 +15,8 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,7 +50,7 @@ static int prrte_rmaps_rank_file_query(prrte_mca_base_module_t **module, int *pr
 
 static int my_priority;
 
-prrte_rmaps_rf_component_t mca_rmaps_rank_file_component = {
+prrte_rmaps_rf_component_t prrte_rmaps_rank_file_component = {
     {
         /* First, the prrte_mca_base_component_t struct containing meta
            information about the component itself */
@@ -76,7 +78,7 @@ prrte_rmaps_rf_component_t mca_rmaps_rank_file_component = {
   */
 static int prrte_rmaps_rank_file_register(void)
 {
-    prrte_mca_base_component_t *c = &mca_rmaps_rank_file_component.super.base_version;
+    prrte_mca_base_component_t *c = &prrte_rmaps_rank_file_component.super.base_version;
     int tmp;
 
     my_priority = 0;
@@ -92,12 +94,12 @@ static int prrte_rmaps_rank_file_register(void)
                                           PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_rankfile);
     (void) prrte_mca_base_var_register_synonym(tmp, "prrte", "prrte", NULL, "rankfile", 0);
 
-    mca_rmaps_rank_file_component.physical = false;
+    prrte_rmaps_rank_file_component.physical = false;
     (void) prrte_mca_base_component_var_register(c, "physical", "Rankfile contains physical cpu designations",
                                            PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                            PRRTE_INFO_LVL_5,
                                            PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                           &mca_rmaps_rank_file_component.physical);
+                                           &prrte_rmaps_rank_file_component.physical);
 
 
     return PRRTE_SUCCESS;

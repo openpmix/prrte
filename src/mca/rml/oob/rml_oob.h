@@ -12,8 +12,8 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -44,7 +44,7 @@ typedef struct {
     char                    *routed; // name of routed module to be used
 } prrte_rml_oob_module_t;
 
-PRRTE_MODULE_EXPORT extern prrte_rml_component_t mca_rml_oob_component;
+PRRTE_MODULE_EXPORT extern prrte_rml_component_t prrte_rml_oob_component;
 
 void prrte_rml_oob_fini(struct prrte_rml_base_module_t *mod);
 

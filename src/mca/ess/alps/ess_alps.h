@@ -10,6 +10,8 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,7 +52,7 @@ int prrte_ess_alps_sync_complete(void);
  * ODLS Alps module
  */
 extern prrte_ess_base_module_t prrte_ess_alps_module;
-PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t mca_ess_alps_component;
+PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t prrte_ess_alps_component;
 
 END_C_DECLS
 

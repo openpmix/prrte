@@ -11,6 +11,8 @@
  *                         All rights reserved.
  * Copyright (c) 2006      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,7 +38,7 @@ struct prrte_plm_tm_component_t {
 typedef struct prrte_plm_tm_component_t prrte_plm_tm_component_t;
 
 /* Globally exported variables */
-PRRTE_EXPORT extern prrte_plm_tm_component_t mca_plm_tm_component;
+PRRTE_EXPORT extern prrte_plm_tm_component_t prrte_plm_tm_component;
 extern prrte_plm_base_module_t prrte_plm_tm_module;
 
 END_C_DECLS

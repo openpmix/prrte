@@ -3,8 +3,8 @@
  *                         All rights reserved
  * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2015-2017 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,7 +68,7 @@ static int raw_preposition_files(prrte_job_t *jdata,
 static int raw_link_local_files(prrte_job_t *jdata,
                                 prrte_app_context_t *app);
 
-prrte_filem_base_module_t mca_filem_raw_module = {
+prrte_filem_base_module_t prrte_filem_raw_module = {
     .filem_init = raw_init,
     .filem_finalize = raw_finalize,
     /* we don't use any of the following */

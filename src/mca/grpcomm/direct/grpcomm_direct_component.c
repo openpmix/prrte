@@ -4,6 +4,8 @@
  * Copyright (c) 2011-2016 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +33,7 @@ static int direct_register(void);
 /*
  * Struct of function pointers that need to be initialized
  */
-prrte_grpcomm_base_component_t mca_grpcomm_direct_component = {
+prrte_grpcomm_base_component_t prrte_grpcomm_direct_component = {
     .base_version = {
         PRRTE_GRPCOMM_BASE_VERSION_3_0_0,
 
@@ -51,7 +53,7 @@ prrte_grpcomm_base_component_t mca_grpcomm_direct_component = {
 
 static int direct_register(void)
 {
-    prrte_mca_base_component_t *c = &mca_grpcomm_direct_component.base_version;
+    prrte_mca_base_component_t *c = &prrte_grpcomm_direct_component.base_version;
 
     /* make the priority adjustable so users can select
      * direct for use by apps without affecting daemons

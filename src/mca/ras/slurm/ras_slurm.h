@@ -12,6 +12,8 @@
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +42,7 @@ typedef struct {
     bool rolling_alloc;
     bool use_all;
 } prrte_ras_slurm_component_t;
-PRRTE_EXPORT extern prrte_ras_slurm_component_t mca_ras_slurm_component;
+PRRTE_EXPORT extern prrte_ras_slurm_component_t prrte_ras_slurm_component;
 
 PRRTE_EXPORT extern prrte_ras_base_module_t prrte_ras_slurm_module;
 

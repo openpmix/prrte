@@ -13,6 +13,8 @@
  * Copyright (c) 2011      Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -131,7 +133,7 @@ void prrte_iof_prted_recv(int status, prrte_process_name_t* sender,
                          PRRTE_NAME_PRINT(&target)));
 
     /* cycle through our list of procs */
-    PRRTE_LIST_FOREACH(proct, &mca_iof_prted_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH(proct, &prrte_iof_prted_component.procs, prrte_iof_proc_t) {
         /* is this intended for this jobid? */
         if (target.jobid == proct->name.jobid) {
             /* yes - is this intended for all vpids or this vpid? */
@@ -152,8 +154,8 @@ void prrte_iof_prted_recv(int status, prrte_process_name_t* sender,
                     /* getting too backed up - tell the HNP to hold off any more input if we
                      * haven't already told it
                      */
-                    if (!mca_iof_prted_component.xoff) {
-                        mca_iof_prted_component.xoff = true;
+                    if (!prrte_iof_prted_component.xoff) {
+                        prrte_iof_prted_component.xoff = true;
                         prrte_iof_prted_send_xonxoff(PRRTE_IOF_XOFF);
                     }
                 }

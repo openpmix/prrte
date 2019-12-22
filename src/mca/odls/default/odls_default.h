@@ -10,6 +10,8 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,7 +44,7 @@ int prrte_odls_default_component_query(prrte_mca_base_module_t **module, int *pr
  * ODLS Default module
  */
 extern prrte_odls_base_module_t prrte_odls_default_module;
-PRRTE_MODULE_EXPORT extern prrte_odls_base_component_t mca_odls_default_component;
+PRRTE_MODULE_EXPORT extern prrte_odls_base_component_t prrte_odls_default_component;
 
 END_C_DECLS
 

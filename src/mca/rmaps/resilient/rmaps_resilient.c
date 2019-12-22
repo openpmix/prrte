@@ -6,7 +6,8 @@
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- *
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -76,7 +77,7 @@ static int prrte_rmaps_resilient_map(prrte_job_t *jdata)
     prrte_list_t node_list;
     prrte_std_cntr_t num_slots;
     prrte_list_item_t *item;
-    prrte_mca_base_component_t *c = &mca_rmaps_resilient_component.super.base_version;
+    prrte_mca_base_component_t *c = &prrte_rmaps_resilient_component.super.base_version;
     bool found;
 
     if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_RESTART)) {
@@ -88,7 +89,7 @@ static int prrte_rmaps_resilient_map(prrte_job_t *jdata)
                                 PRRTE_JOBID_PRINT(jdata->jobid));
             return PRRTE_ERR_TAKE_NEXT_OPTION;
         }
-        if (NULL == mca_rmaps_resilient_component.fault_group_file) {
+        if (NULL == prrte_rmaps_resilient_component.fault_group_file) {
             prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:resilient: cannot perform initial map of job %s - no fault groups",
                                 PRRTE_JOBID_PRINT(jdata->jobid));
@@ -280,7 +281,7 @@ static int prrte_rmaps_resilient_map(prrte_job_t *jdata)
 
 static int resilient_assign(prrte_job_t *jdata)
 {
-    prrte_mca_base_component_t *c = &mca_rmaps_resilient_component.super.base_version;
+    prrte_mca_base_component_t *c = &prrte_rmaps_resilient_component.super.base_version;
 
     if (NULL == jdata->map->last_mapper ||
         0 != strcasecmp(jdata->map->last_mapper, c->mca_component_name)) {
@@ -325,7 +326,7 @@ static int construct_ftgrps(void)
     /* flag that we did this */
     made_ftgrps = true;
 
-    if (NULL == mca_rmaps_resilient_component.fault_group_file) {
+    if (NULL == prrte_rmaps_resilient_component.fault_group_file) {
         /* nothing to build */
         return PRRTE_SUCCESS;
     }
@@ -334,10 +335,10 @@ static int construct_ftgrps(void)
     PRRTE_OUTPUT_VERBOSE((1, prrte_rmaps_base_framework.framework_output,
                          "%s rmaps:resilient: constructing fault groups",
                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
-    fp = fopen(mca_rmaps_resilient_component.fault_group_file, "r");
+    fp = fopen(prrte_rmaps_resilient_component.fault_group_file, "r");
     if (NULL == fp) { /* not found */
         prrte_show_help("help-prrte-rmaps-resilient.txt", "prrte-rmaps-resilient:file-not-found",
-                       true, mca_rmaps_resilient_component.fault_group_file);
+                       true, prrte_rmaps_resilient_component.fault_group_file);
         return PRRTE_ERR_FAILED_TO_MAP;
     }
 
@@ -366,7 +367,7 @@ static int construct_ftgrps(void)
                 }
             }
         }
-        prrte_list_append(&mca_rmaps_resilient_component.fault_grps, &ftgrp->super);
+        prrte_list_append(&prrte_rmaps_resilient_component.fault_grps, &ftgrp->super);
         prrte_argv_free(nodes);
         free(ftinput);
     }
@@ -397,8 +398,8 @@ static int get_ftgrp_target(prrte_proc_t *proc,
      */
     minload = 1000000.0;
     target = NULL;
-    for (item = prrte_list_get_first(&mca_rmaps_resilient_component.fault_grps);
-         item != prrte_list_get_end(&mca_rmaps_resilient_component.fault_grps);
+    for (item = prrte_list_get_first(&prrte_rmaps_resilient_component.fault_grps);
+         item != prrte_list_get_end(&prrte_rmaps_resilient_component.fault_grps);
          item = prrte_list_get_next(item)) {
         ftgrp = (prrte_rmaps_res_ftgrp_t*)item;
         /* see if the node is in this fault group */
@@ -667,8 +668,8 @@ static void flag_nodes(prrte_list_t *node_list)
     prrte_rmaps_res_ftgrp_t *ftgrp;
     int k;
 
-    for (item = prrte_list_get_first(&mca_rmaps_resilient_component.fault_grps);
-         item != prrte_list_get_end(&mca_rmaps_resilient_component.fault_grps);
+    for (item = prrte_list_get_first(&prrte_rmaps_resilient_component.fault_grps);
+         item != prrte_list_get_end(&prrte_rmaps_resilient_component.fault_grps);
          item = prrte_list_get_next(item)) {
         ftgrp = (prrte_rmaps_res_ftgrp_t*)item;
         /* reset the flags */
@@ -772,8 +773,8 @@ static int map_to_ftgrps(prrte_job_t *jdata)
              */
             target = NULL;
             minload = 1000000000.0;
-            for (item = prrte_list_get_first(&mca_rmaps_resilient_component.fault_grps);
-                 item != prrte_list_get_end(&mca_rmaps_resilient_component.fault_grps);
+            for (item = prrte_list_get_first(&prrte_rmaps_resilient_component.fault_grps);
+                 item != prrte_list_get_end(&prrte_rmaps_resilient_component.fault_grps);
                  item = prrte_list_get_next(item)) {
                 ftgrp = (prrte_rmaps_res_ftgrp_t*)item;
                 PRRTE_OUTPUT_VERBOSE((2, prrte_rmaps_base_framework.framework_output,

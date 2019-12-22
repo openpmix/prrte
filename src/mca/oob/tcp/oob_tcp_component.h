@@ -13,6 +13,8 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -83,14 +85,14 @@ typedef struct {
     int                keepalive_intvl;        /**< time between keepalives, in seconds */
     int                retry_delay;            /**< time to wait before retrying connection */
     int                max_recon_attempts;     /**< maximum number of times to attempt connect before giving up (-1 for never) */
-} mca_oob_tcp_component_t;
+} prrte_oob_tcp_component_t;
 
-PRRTE_MODULE_EXPORT extern mca_oob_tcp_component_t mca_oob_tcp_component;
+PRRTE_MODULE_EXPORT extern prrte_oob_tcp_component_t prrte_oob_tcp_component;
 
-PRRTE_MODULE_EXPORT void mca_oob_tcp_component_set_module(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void mca_oob_tcp_component_lost_connection(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void mca_oob_tcp_component_no_route(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata);
+PRRTE_MODULE_EXPORT void prrte_oob_tcp_component_set_module(int fd, short args, void *cbdata);
+PRRTE_MODULE_EXPORT void prrte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata);
+PRRTE_MODULE_EXPORT void prrte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata);
+PRRTE_MODULE_EXPORT void prrte_oob_tcp_component_no_route(int fd, short args, void *cbdata);
+PRRTE_MODULE_EXPORT void prrte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata);
 
 #endif /* _MCA_OOB_TCP_COMPONENT_H_ */

@@ -55,10 +55,10 @@ static void restart_stdin(int fd, short event, void *cbdata)
 
     PRRTE_ACQUIRE_OBJECT(tm);
 
-    if (NULL != mca_iof_hnp_component.stdinev &&
+    if (NULL != prrte_iof_hnp_component.stdinev &&
         !prrte_job_term_ordered &&
-        !mca_iof_hnp_component.stdinev->active) {
-        PRRTE_IOF_READ_ACTIVATE(mca_iof_hnp_component.stdinev);
+        !prrte_iof_hnp_component.stdinev->active) {
+        PRRTE_IOF_READ_ACTIVATE(prrte_iof_hnp_component.stdinev);
     }
 
     /* if this was a timer callback, then release the timer */
@@ -82,16 +82,16 @@ void prrte_iof_hnp_stdin_cb(int fd, short event, void *cbdata)
 {
     bool should_process;
 
-    PRRTE_ACQUIRE_OBJECT(mca_iof_hnp_component.stdinev);
+    PRRTE_ACQUIRE_OBJECT(prrte_iof_hnp_component.stdinev);
 
     should_process = prrte_iof_hnp_stdin_check(0);
 
     if (should_process) {
-        PRRTE_IOF_READ_ACTIVATE(mca_iof_hnp_component.stdinev);
+        PRRTE_IOF_READ_ACTIVATE(prrte_iof_hnp_component.stdinev);
     } else {
 
-        prrte_event_del(mca_iof_hnp_component.stdinev->ev);
-        mca_iof_hnp_component.stdinev->active = false;
+        prrte_event_del(prrte_iof_hnp_component.stdinev->ev);
+        prrte_iof_hnp_component.stdinev->active = false;
     }
 }
 

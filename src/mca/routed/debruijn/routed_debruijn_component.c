@@ -5,6 +5,8 @@
  * Copyright (c) 2004-2008 The Trustees of Indiana University.
  *                         All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,7 +27,7 @@ static int prrte_routed_debruijn_component_query(prrte_mca_base_module_t **modul
 /**
  * component definition
  */
-prrte_routed_component_t mca_routed_debruijn_component = {
+prrte_routed_component_t prrte_routed_debruijn_component = {
       /* First, the prrte_mca_base_component_t struct containing meta
          information about the component itself */
 

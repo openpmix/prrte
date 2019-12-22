@@ -15,6 +15,8 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,7 +51,7 @@ static int prrte_ras_gridengine_component_query(prrte_mca_base_module_t **module
 
 static int prrte_ras_gridengine_verbose;
 
-prrte_ras_gridengine_component_t mca_ras_gridengine_component = {
+prrte_ras_gridengine_component_t prrte_ras_gridengine_component = {
     {
         /* First, the prrte_mca_base_component_t struct containing meta
            information about the component itself */
@@ -73,12 +75,12 @@ prrte_ras_gridengine_component_t mca_ras_gridengine_component = {
 
 static int prrte_ras_gridengine_register(void)
 {
-    prrte_mca_base_component_t *c = &mca_ras_gridengine_component.super.base_version;
+    prrte_mca_base_component_t *c = &prrte_ras_gridengine_component.super.base_version;
 
-    mca_ras_gridengine_component.priority = 100;
+    prrte_ras_gridengine_component.priority = 100;
     (void) prrte_mca_base_component_var_register (c, "priority", "Priority of the gridengine ras component",
                                             PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                            PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &mca_ras_gridengine_component.priority);
+                                            PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_ras_gridengine_component.priority);
 
     prrte_ras_gridengine_verbose = 0;
     (void) prrte_mca_base_component_var_register (c, "verbose",
@@ -86,10 +88,10 @@ static int prrte_ras_gridengine_register(void)
                                             PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prrte_ras_gridengine_verbose);
 
-    mca_ras_gridengine_component.show_jobid = false;
+    prrte_ras_gridengine_component.show_jobid = false;
     (void) prrte_mca_base_component_var_register (c, "show_jobid", "Show the JOB_ID of the Grid Engine job",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                            PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &mca_ras_gridengine_component.show_jobid);
+                                            PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_ras_gridengine_component.show_jobid);
 
     return PRRTE_SUCCESS;
 }
@@ -100,9 +102,9 @@ static int prrte_ras_gridengine_register(void)
 static int prrte_ras_gridengine_open(void)
 {
     if (prrte_ras_gridengine_verbose != 0) {
-        mca_ras_gridengine_component.verbose = prrte_output_open(NULL);
+        prrte_ras_gridengine_component.verbose = prrte_output_open(NULL);
     } else {
-        mca_ras_gridengine_component.verbose = -1;
+        prrte_ras_gridengine_component.verbose = -1;
     }
 
     return PRRTE_SUCCESS;
@@ -110,7 +112,7 @@ static int prrte_ras_gridengine_open(void)
 
 static int prrte_ras_gridengine_component_query(prrte_mca_base_module_t **module, int *priority)
 {
-    *priority = mca_ras_gridengine_component.priority;
+    *priority = prrte_ras_gridengine_component.priority;
 
     if (NULL != getenv("SGE_ROOT") && NULL != getenv("ARC") &&
         NULL != getenv("PE_HOSTFILE") && NULL != getenv("JOB_ID")) {

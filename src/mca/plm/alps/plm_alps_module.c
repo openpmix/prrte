@@ -259,11 +259,11 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
 
     /* add the aprun command */
-    prrte_argv_append(&argc, &argv, mca_plm_alps_component.aprun_cmd);
+    prrte_argv_append(&argc, &argv, prrte_plm_alps_component.aprun_cmd);
 
     /* Append user defined arguments to aprun */
-    if ( NULL != mca_plm_alps_component.custom_args ) {
-        custom_strings = prrte_argv_split(mca_plm_alps_component.custom_args, ' ');
+    if ( NULL != prrte_plm_alps_component.custom_args ) {
+        custom_strings = prrte_argv_split(prrte_plm_alps_component.custom_args, ' ');
         num_args       = prrte_argv_count(custom_strings);
         for (i = 0; i < num_args; ++i) {
             prrte_argv_append(&argc, &argv, custom_strings[i]);
@@ -358,7 +358,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     argv[proc_vpid_index] = strdup(vpid_string);
     free(vpid_string);
 
-    if (mca_plm_alps_component.debug) {
+    if (prrte_plm_alps_component.debug) {
         param = prrte_argv_join(argv, ' ');
         if (NULL != param) {
             prrte_output(0, "plm:alps: final top-level argv:");
@@ -394,7 +394,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                same anyway */
             if (NULL == cur_prefix) {
                 cur_prefix = strdup(app_prefix_dir);
-                if (mca_plm_alps_component.debug) {
+                if (prrte_plm_alps_component.debug) {
                     prrte_output (0, "plm:alps: Set prefix:%s",
                                  cur_prefix);
                 }
@@ -606,7 +606,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env,
                 prrte_asprintf(&newenv, "%s/%s", prefix, bin_base);
             }
             prrte_setenv("PATH", newenv, true, &env);
-            if (mca_plm_alps_component.debug) {
+            if (prrte_plm_alps_component.debug) {
                 prrte_output(0, "plm:alps: reset PATH: %s", newenv);
             }
             free(newenv);
@@ -619,7 +619,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env,
                 prrte_asprintf(&newenv, "%s/%s", prefix, lib_base);
             }
             prrte_setenv("LD_LIBRARY_PATH", newenv, true, &env);
-            if (mca_plm_alps_component.debug) {
+            if (prrte_plm_alps_component.debug) {
                 prrte_output(0, "plm:alps: reset LD_LIBRARY_PATH: %s",
                             newenv);
             }
@@ -633,7 +633,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env,
 
         /* When not in debug mode and --debug-daemons was not passed,
          * tie stdout/stderr to dev null so we don't see messages from orted */
-        if (0 == mca_plm_alps_component.debug && !prrte_debug_daemons_flag) {
+        if (0 == prrte_plm_alps_component.debug && !prrte_debug_daemons_flag) {
             if (fd >= 0) {
                 if (fd != 1) {
                     dup2(fd,1);

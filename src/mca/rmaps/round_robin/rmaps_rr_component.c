@@ -13,6 +13,8 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +41,7 @@ static int prrte_rmaps_round_robin_query(prrte_mca_base_module_t **module, int *
 
 static int my_priority;
 
-prrte_rmaps_base_component_t mca_rmaps_round_robin_component = {
+prrte_rmaps_base_component_t prrte_rmaps_round_robin_component = {
     .base_version = {
         PRRTE_RMAPS_BASE_VERSION_2_0_0,
 
@@ -64,7 +66,7 @@ prrte_rmaps_base_component_t mca_rmaps_round_robin_component = {
 static int prrte_rmaps_round_robin_register(void)
 {
     my_priority = 10;
-    (void) prrte_mca_base_component_var_register(&mca_rmaps_round_robin_component.base_version,
+    (void) prrte_mca_base_component_var_register(&prrte_rmaps_round_robin_component.base_version,
                                            "priority", "Priority of the rr rmaps component",
                                            PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                            PRRTE_INFO_LVL_9,

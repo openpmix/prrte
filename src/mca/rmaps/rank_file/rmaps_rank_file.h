@@ -12,6 +12,8 @@
  * Copyright (c) 2008      Voltaire. All rights reserved
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,7 +47,7 @@ struct prrte_rmaps_rf_component_t {
 };
 typedef struct prrte_rmaps_rf_component_t prrte_rmaps_rf_component_t;
 
-PRRTE_MODULE_EXPORT extern prrte_rmaps_rf_component_t mca_rmaps_rank_file_component;
+PRRTE_MODULE_EXPORT extern prrte_rmaps_rf_component_t prrte_rmaps_rank_file_component;
 extern prrte_rmaps_base_module_t prrte_rmaps_rank_file_module;
 
 

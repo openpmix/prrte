@@ -12,6 +12,8 @@
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2017      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +37,7 @@
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t mca_rmaps_mindist_component;
+PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t prrte_rmaps_mindist_component;
 extern prrte_rmaps_base_module_t prrte_rmaps_mindist_module;
 
 END_C_DECLS

@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,7 +31,7 @@ struct prrte_ras_sim_component_t {
 };
 typedef struct prrte_ras_sim_component_t prrte_ras_sim_component_t;
 
-PRRTE_EXPORT extern prrte_ras_sim_component_t mca_ras_simulator_component;
+PRRTE_EXPORT extern prrte_ras_sim_component_t prrte_ras_simulator_component;
 PRRTE_EXPORT extern prrte_ras_base_module_t prrte_ras_sim_module;
 
 END_C_DECLS

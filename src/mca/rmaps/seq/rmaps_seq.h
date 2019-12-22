@@ -10,6 +10,8 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,7 +35,7 @@ BEGIN_C_DECLS
  * RMGR Component
  */
 
-PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t mca_rmaps_seq_component;
+PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t prrte_rmaps_seq_component;
 extern prrte_rmaps_base_module_t prrte_rmaps_seq_module;
 
 

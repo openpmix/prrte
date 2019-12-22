@@ -12,6 +12,8 @@
  * Copyright (c) 2014      Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,7 +49,7 @@ int prrte_odls_alps_component_query(prrte_mca_base_module_t **module, int *prior
  * ODLS Alps module
  */
 extern prrte_odls_base_module_t prrte_odls_alps_module;
-PRRTE_MODULE_EXPORT extern prrte_odls_base_component_t mca_odls_alps_component;
+PRRTE_MODULE_EXPORT extern prrte_odls_base_component_t prrte_odls_alps_component;
 
 /*
  * ODLS alps utils

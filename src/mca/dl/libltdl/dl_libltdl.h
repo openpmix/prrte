@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,6 +48,6 @@ typedef struct {
 #endif
 } prrte_dl_libltdl_component_t;
 
-PRRTE_EXPORT extern prrte_dl_libltdl_component_t mca_dl_libltdl_component;
+PRRTE_EXPORT extern prrte_dl_libltdl_component_t prrte_dl_libltdl_component;
 
 #endif /* PRRTE_DL_LIBLTDL */

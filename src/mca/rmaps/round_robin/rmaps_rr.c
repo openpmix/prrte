@@ -13,8 +13,8 @@
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2017      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -51,7 +51,7 @@ static int prrte_rmaps_rr_map(prrte_job_t *jdata)
     prrte_list_item_t *item;
     prrte_std_cntr_t num_slots;
     int rc;
-    prrte_mca_base_component_t *c = &mca_rmaps_round_robin_component.base_version;
+    prrte_mca_base_component_t *c = &prrte_rmaps_round_robin_component.base_version;
     bool initial_map=true;
 
     /* this mapper can only handle initial launch
@@ -278,7 +278,7 @@ static int prrte_rmaps_rr_map(prrte_job_t *jdata)
 
 static int prrte_rmaps_rr_assign_locations(prrte_job_t *jdata)
 {
-    prrte_mca_base_component_t *c = &mca_rmaps_round_robin_component.base_version;
+    prrte_mca_base_component_t *c = &prrte_rmaps_round_robin_component.base_version;
     hwloc_obj_type_t target;
     unsigned cache_level;
     int rc;

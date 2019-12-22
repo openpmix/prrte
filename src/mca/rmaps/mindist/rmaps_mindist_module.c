@@ -13,8 +13,8 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2014      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2018 Mellanox Technologies, Inc.
  *                         All rights reserved.
  * $COPYRIGHT$
@@ -73,7 +73,7 @@ static int mindist_map(prrte_job_t *jdata)
     prrte_std_cntr_t num_nodes, num_slots;
     unsigned int npus, total_npus, num_procs_to_assign=0, required;
     int rc;
-    prrte_mca_base_component_t *c = &mca_rmaps_mindist_component.base_version;
+    prrte_mca_base_component_t *c = &prrte_rmaps_mindist_component.base_version;
     bool initial_map=true;
     bool bynode = false;
     float balance;
@@ -447,7 +447,7 @@ static int assign_locations(prrte_job_t *jdata)
     prrte_node_t *node;
     prrte_proc_t *proc;
     hwloc_obj_t obj=NULL;
-    prrte_mca_base_component_t *c = &mca_rmaps_mindist_component.base_version;
+    prrte_mca_base_component_t *c = &prrte_rmaps_mindist_component.base_version;
     int rc;
     prrte_list_t numa_list;
     prrte_rmaps_numa_node_t *numa;

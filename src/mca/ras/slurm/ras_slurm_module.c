@@ -14,8 +14,8 @@
  *                         reserved.
  * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -152,13 +152,13 @@ static int init(void)
     int flags;
     struct hostent *h;
 
-    if (mca_ras_slurm_component.dyn_alloc_enabled) {
-        if (NULL == mca_ras_slurm_component.config_file) {
+    if (prrte_ras_slurm_component.dyn_alloc_enabled) {
+        if (NULL == prrte_ras_slurm_component.config_file) {
             prrte_show_help("help-ras-slurm.txt", "dyn-alloc-no-config", true);
             return PRRTE_ERR_SILENT;
         }
         /* setup the socket */
-        if (PRRTE_SUCCESS != read_ip_port(mca_ras_slurm_component.config_file,
+        if (PRRTE_SUCCESS != read_ip_port(prrte_ras_slurm_component.config_file,
                                          &slurm_host, &port) ||
             NULL == slurm_host || 0 == port) {
             if (NULL != slurm_host) {
@@ -168,7 +168,7 @@ static int init(void)
         }
         PRRTE_OUTPUT_VERBOSE((2, prrte_ras_base_framework.framework_output,
                              "ras:slurm got [ ip = %s, port = %u ] from %s\n",
-                             slurm_host, port, mca_ras_slurm_component.config_file));
+                             slurm_host, port, prrte_ras_slurm_component.config_file));
 
         /* obtain a socket for our use */
         if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -246,7 +246,7 @@ static int prrte_ras_slurm_allocate(prrte_job_t *jdata, prrte_list_t *nodes)
         /* we are not in a slurm allocation - see if dyn alloc
          * is enabled
          */
-        if (!mca_ras_slurm_component.dyn_alloc_enabled) {
+        if (!prrte_ras_slurm_component.dyn_alloc_enabled) {
             /* nope - nothing we can do */
             prrte_output_verbose(2, prrte_ras_base_framework.framework_output,
                                 "%s ras:slurm: no prior allocation and dynamic alloc disabled",
@@ -263,7 +263,7 @@ static int prrte_ras_slurm_allocate(prrte_job_t *jdata, prrte_list_t *nodes)
     slurm_node_str = getenv("SLURM_NODELIST");
     if (NULL == slurm_node_str) {
         /* see if dynamic allocation is enabled */
-        if (mca_ras_slurm_component.dyn_alloc_enabled) {
+        if (prrte_ras_slurm_component.dyn_alloc_enabled) {
             /* attempt to get the allocation - the function
              * dyn_allocate will return as PRRTE_ERR_ALLOCATION_PENDING
              * if it succeeds in sending the allocation request
@@ -284,7 +284,7 @@ static int prrte_ras_slurm_allocate(prrte_job_t *jdata, prrte_list_t *nodes)
         return PRRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    if (mca_ras_slurm_component.use_all) {
+    if (prrte_ras_slurm_component.use_all) {
         /* this is an oddball case required for debug situations where
          * a tool is started that will then call mpirun. In this case,
          * Slurm will assign only 1 tasks/per node to the tool, but
@@ -369,7 +369,7 @@ static int prrte_ras_slurm_finalize(void)
 {
     prrte_list_item_t *item;
 
-    if (mca_ras_slurm_component.dyn_alloc_enabled) {
+    if (prrte_ras_slurm_component.dyn_alloc_enabled) {
         /* delete the recv event */
         prrte_event_del(&recv_ev);
         while (NULL != (item = prrte_list_remove_first(&jobs))) {
@@ -994,7 +994,7 @@ static int dyn_allocate(prrte_job_t *jdata)
     local_jobtracker_t *jtrk;
     int64_t i64, *i64ptr;
 
-    if (NULL == mca_ras_slurm_component.config_file) {
+    if (NULL == prrte_ras_slurm_component.config_file) {
         prrte_output(0, "Cannot perform dynamic allocation as no Slurm configuration file provided");
         return PRRTE_ERR_NOT_FOUND;
     }
@@ -1028,7 +1028,7 @@ static int dyn_allocate(prrte_job_t *jdata)
      * rolling allocations in the rest of the code base
      */
 #if 0
-    if (!mca_ras_slurm_component.rolling_alloc) {
+    if (!prrte_ras_slurm_component.rolling_alloc) {
         prrte_argv_append_nosize(&cmd, "return=all");
     }
 #else
@@ -1036,7 +1036,7 @@ static int dyn_allocate(prrte_job_t *jdata)
 #endif
 
     /* pass the timeout */
-    prrte_asprintf(&tmp, "timeout=%d", mca_ras_slurm_component.timeout);
+    prrte_asprintf(&tmp, "timeout=%d", prrte_ras_slurm_component.timeout);
     prrte_argv_append_nosize(&cmd, tmp);
     free(tmp);
 
@@ -1087,7 +1087,7 @@ static int dyn_allocate(prrte_job_t *jdata)
      * responding to us
      */
     prrte_event_evtimer_set(prrte_event_base, &jtrk->timeout_ev, timeout, jtrk);
-    tv.tv_sec = mca_ras_slurm_component.timeout * 2;
+    tv.tv_sec = prrte_ras_slurm_component.timeout * 2;
     tv.tv_usec = 0;
     prrte_event_evtimer_add(&jtrk->timeout_ev, &tv);
 

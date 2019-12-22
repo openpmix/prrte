@@ -16,6 +16,8 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -85,7 +87,7 @@ static bool component_is_reachable(char *routed, prrte_process_name_t *peer);
 /*
  * Struct of function pointers and all that to let us be initialized
  */
-mca_oob_base_component_t mca_oob_alps_component = {
+prrte_oob_base_component_t prrte_oob_alps_component = {
     .oob_base = {
         MCA_OOB_BASE_VERSION_2_0_0,
         .mca_component_name = "alps",

@@ -4,6 +4,8 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +32,7 @@ static int prrte_rmaps_ppr_close(void);
 static int prrte_rmaps_ppr_query(prrte_mca_base_module_t **module, int *priority);
 static int prrte_rmaps_ppr_register(void);
 
-prrte_rmaps_base_component_t mca_rmaps_ppr_component = {
+prrte_rmaps_base_component_t prrte_rmaps_ppr_component = {
     .base_version = {
         PRRTE_RMAPS_BASE_VERSION_2_0_0,
 
@@ -76,7 +78,7 @@ static int prrte_rmaps_ppr_close(void)
 static int prrte_rmaps_ppr_register(void)
 {
     my_priority = 90;
-    (void) prrte_mca_base_component_var_register(&mca_rmaps_ppr_component.base_version,
+    (void) prrte_mca_base_component_var_register(&prrte_rmaps_ppr_component.base_version,
                                            "priority", "Priority of the ppr rmaps component",
                                            PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                            PRRTE_INFO_LVL_9,

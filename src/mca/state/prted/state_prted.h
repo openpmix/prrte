@@ -1,8 +1,9 @@
 /*
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
- *
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +29,7 @@ BEGIN_C_DECLS
  * Local Component structures
  */
 
-PRRTE_MODULE_EXPORT extern prrte_state_base_component_t mca_state_prted_component;
+PRRTE_MODULE_EXPORT extern prrte_state_base_component_t prrte_state_prted_component;
 
 PRRTE_EXPORT extern prrte_state_base_module_t prrte_state_prted_module;
 
