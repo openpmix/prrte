@@ -40,11 +40,11 @@ static int prrte_iof_prted_query(prrte_mca_base_module_t **module, int *priority
 /*
  * Public string showing the iof prted component version number
  */
-const char *mca_iof_prted_component_version_string =
+const char *prrte_iof_prted_component_version_string =
 "PRRTE prted iof MCA component version " PRRTE_VERSION;
 
 
-prrte_iof_prted_component_t mca_iof_prted_component = {
+prrte_iof_prted_component_t prrte_iof_prted_component = {
     {
         .iof_version = {
             PRRTE_IOF_BASE_VERSION_2_0_0,

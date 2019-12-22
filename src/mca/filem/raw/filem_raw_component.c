@@ -36,7 +36,7 @@ static int filem_raw_query(prrte_mca_base_module_t **module, int *priority);
 
 bool prrte_filem_raw_flatten_trees=false;
 
-prrte_filem_base_component_t mca_filem_raw_component = {
+prrte_filem_base_component_t prrte_filem_raw_component = {
     .base_version = {
         PRRTE_FILEM_BASE_VERSION_2_0_0,
         /* Component name and version */
@@ -58,7 +58,7 @@ prrte_filem_base_component_t mca_filem_raw_component = {
 
 static int filem_raw_register(void)
 {
-    prrte_mca_base_component_t *c = &mca_filem_raw_component.base_version;
+    prrte_mca_base_component_t *c = &prrte_filem_raw_component.base_version;
 
     prrte_filem_raw_flatten_trees = false;
     (void) prrte_mca_base_component_var_register(c, "flatten_directory_trees",
@@ -84,6 +84,6 @@ static int filem_raw_close(void)
 static int filem_raw_query(prrte_mca_base_module_t **module, int *priority)
 {
     *priority = 0;
-    *module = (prrte_mca_base_module_t*) &mca_filem_raw_module;
+    *module = (prrte_mca_base_module_t*) &prrte_filem_raw_module;
     return PRRTE_SUCCESS;
 }

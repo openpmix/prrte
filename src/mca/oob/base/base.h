@@ -68,7 +68,7 @@ PRRTE_EXPORT extern prrte_oob_base_t prrte_oob_base;
 
 typedef struct {
     prrte_object_t super;
-    mca_oob_base_component_t *component;
+    prrte_oob_base_component_t *component;
     prrte_bitmap_t addressable;
 } prrte_oob_base_peer_t;
 PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_oob_base_peer_t);

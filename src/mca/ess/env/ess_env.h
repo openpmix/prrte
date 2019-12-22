@@ -30,7 +30,7 @@ int prrte_ess_env_component_close(void);
 int prrte_ess_env_component_query(prrte_mca_base_module_t **module, int *priority);
 
 
-PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t mca_ess_env_component;
+PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t prrte_ess_env_component;
 
 END_C_DECLS
 

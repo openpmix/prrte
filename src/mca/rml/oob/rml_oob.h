@@ -22,8 +22,8 @@
  * $HEADER$
  */
 
-#ifndef MCA_RML_OOB_RML_OOB_H
-#define MCA_RML_OOB_RML_OOB_H
+#ifndef prrte_rml_OOB_RML_OOB_H
+#define prrte_rml_OOB_RML_OOB_H
 
 #include "prrte_config.h"
 
@@ -44,7 +44,7 @@ typedef struct {
     char                    *routed; // name of routed module to be used
 } prrte_rml_oob_module_t;
 
-PRRTE_MODULE_EXPORT extern prrte_rml_component_t mca_rml_oob_component;
+PRRTE_MODULE_EXPORT extern prrte_rml_component_t prrte_rml_oob_component;
 
 void prrte_rml_oob_fini(struct prrte_rml_base_module_t *mod);
 

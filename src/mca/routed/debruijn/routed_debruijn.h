@@ -19,7 +19,7 @@
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_routed_component_t mca_routed_debruijn_component;
+PRRTE_MODULE_EXPORT extern prrte_routed_component_t prrte_routed_debruijn_component;
 
 extern prrte_routed_module_t prrte_routed_debruijn_module;
 

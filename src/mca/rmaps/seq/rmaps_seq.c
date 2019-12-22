@@ -104,7 +104,7 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
     prrte_list_t default_seq_list;
     prrte_list_t node_list, *seq_list, sq_list;
     prrte_proc_t *proc;
-    prrte_mca_base_component_t *c = &mca_rmaps_seq_component.base_version;
+    prrte_mca_base_component_t *c = &prrte_rmaps_seq_component.base_version;
     char *hosts = NULL, *sep, *eptr;
     FILE *fp;
     prrte_hwloc_resource_type_t rtype;

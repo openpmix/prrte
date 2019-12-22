@@ -43,7 +43,7 @@ static int prrte_rmaps_resilient_query(prrte_mca_base_module_t **module, int *pr
 
 static int my_priority;
 
-prrte_rmaps_res_component_t mca_rmaps_resilient_component = {
+prrte_rmaps_res_component_t prrte_rmaps_resilient_component = {
     {
         .base_version = {
             PRRTE_RMAPS_BASE_VERSION_2_0_0,
@@ -70,20 +70,20 @@ prrte_rmaps_res_component_t mca_rmaps_resilient_component = {
 static int prrte_rmaps_resilient_register (void)
 {
     my_priority = 40;
-    (void) prrte_mca_base_component_var_register (&mca_rmaps_resilient_component.super.base_version,
+    (void) prrte_mca_base_component_var_register (&prrte_rmaps_resilient_component.super.base_version,
                                             "priority", "Priority of the resilient rmaps component",
                                             PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
 
-    mca_rmaps_resilient_component.fault_group_file = NULL;
-    (void) prrte_mca_base_component_var_register (&mca_rmaps_resilient_component.super.base_version,
+    prrte_rmaps_resilient_component.fault_group_file = NULL;
+    (void) prrte_mca_base_component_var_register (&prrte_rmaps_resilient_component.super.base_version,
                                             "fault_grp_file",
                                             "Filename that contains a description of fault groups for this system",
                                             PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_rmaps_resilient_component.fault_group_file);
+                                            &prrte_rmaps_resilient_component.fault_group_file);
 
     return PRRTE_SUCCESS;
 }
@@ -91,7 +91,7 @@ static int prrte_rmaps_resilient_register (void)
 static int prrte_rmaps_resilient_open(void)
 {
     /* initialize globals */
-    PRRTE_CONSTRUCT(&mca_rmaps_resilient_component.fault_grps, prrte_list_t);
+    PRRTE_CONSTRUCT(&prrte_rmaps_resilient_component.fault_grps, prrte_list_t);
 
     return PRRTE_SUCCESS;
 }
@@ -103,7 +103,7 @@ static int prrte_rmaps_resilient_query(prrte_mca_base_module_t **module, int *pr
     *module = (prrte_mca_base_module_t *)&prrte_rmaps_resilient_module;
 
     /* if a fault group file was provided, we should be first */
-    if (NULL != mca_rmaps_resilient_component.fault_group_file) {
+    if (NULL != prrte_rmaps_resilient_component.fault_group_file) {
         *priority = 1000;
     }
 
@@ -118,13 +118,13 @@ static int prrte_rmaps_resilient_close(void)
 {
     prrte_list_item_t *item;
 
-    while (NULL != (item = prrte_list_remove_first(&mca_rmaps_resilient_component.fault_grps))) {
+    while (NULL != (item = prrte_list_remove_first(&prrte_rmaps_resilient_component.fault_grps))) {
         PRRTE_RELEASE(item);
     }
-    PRRTE_DESTRUCT(&mca_rmaps_resilient_component.fault_grps);
+    PRRTE_DESTRUCT(&prrte_rmaps_resilient_component.fault_grps);
 
-    if (NULL != mca_rmaps_resilient_component.fault_group_file) {
-        free(mca_rmaps_resilient_component.fault_group_file);
+    if (NULL != prrte_rmaps_resilient_component.fault_group_file) {
+        free(prrte_rmaps_resilient_component.fault_group_file);
     }
 
     return PRRTE_SUCCESS;

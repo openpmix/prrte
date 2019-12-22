@@ -98,8 +98,8 @@ static void set_keepalive(int sd)
 #if defined(TCP_KEEPALIVE)
     /* set the idle time */
     if (setsockopt(sd, IPPROTO_TCP, TCP_KEEPALIVE,
-                   &mca_oob_tcp_component.keepalive_time,
-                   sizeof(mca_oob_tcp_component.keepalive_time)) < 0) {
+                   &prrte_oob_tcp_component.keepalive_time,
+                   sizeof(prrte_oob_tcp_component.keepalive_time)) < 0) {
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(TCP_KEEPALIVE) failed: %s (%d)",
                             __FILE__, __LINE__,
@@ -110,8 +110,8 @@ static void set_keepalive(int sd)
 #elif defined(TCP_KEEPIDLE)
     /* set the idle time */
     if (setsockopt(sd, IPPROTO_TCP, TCP_KEEPIDLE,
-                   &mca_oob_tcp_component.keepalive_time,
-                   sizeof(mca_oob_tcp_component.keepalive_time)) < 0) {
+                   &prrte_oob_tcp_component.keepalive_time,
+                   sizeof(prrte_oob_tcp_component.keepalive_time)) < 0) {
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(TCP_KEEPIDLE) failed: %s (%d)",
                             __FILE__, __LINE__,
@@ -123,8 +123,8 @@ static void set_keepalive(int sd)
 #if defined(TCP_KEEPINTVL)
     /* set the keepalive interval */
     if (setsockopt(sd, IPPROTO_TCP, TCP_KEEPINTVL,
-                   &mca_oob_tcp_component.keepalive_intvl,
-                   sizeof(mca_oob_tcp_component.keepalive_intvl)) < 0) {
+                   &prrte_oob_tcp_component.keepalive_intvl,
+                   sizeof(prrte_oob_tcp_component.keepalive_intvl)) < 0) {
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(TCP_KEEPINTVL) failed: %s (%d)",
                             __FILE__, __LINE__,
@@ -136,8 +136,8 @@ static void set_keepalive(int sd)
 #if defined(TCP_KEEPCNT)
     /* set the miss rate */
     if (setsockopt(sd, IPPROTO_TCP, TCP_KEEPCNT,
-                   &mca_oob_tcp_component.keepalive_probes,
-                   sizeof(mca_oob_tcp_component.keepalive_probes)) < 0) {
+                   &prrte_oob_tcp_component.keepalive_probes,
+                   sizeof(prrte_oob_tcp_component.keepalive_probes)) < 0) {
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(TCP_KEEPCNT) failed: %s (%d)",
                             __FILE__, __LINE__,
@@ -163,8 +163,8 @@ void prrte_oob_tcp_set_socket_options(int sd)
     }
 #endif
 #if defined(SO_SNDBUF)
-    if (mca_oob_tcp_component.tcp_sndbuf > 0 &&
-        setsockopt(sd, SOL_SOCKET, SO_SNDBUF, (char *)&mca_oob_tcp_component.tcp_sndbuf, sizeof(int)) < 0) {
+    if (prrte_oob_tcp_component.tcp_sndbuf > 0 &&
+        setsockopt(sd, SOL_SOCKET, SO_SNDBUF, (char *)&prrte_oob_tcp_component.tcp_sndbuf, sizeof(int)) < 0) {
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(SO_SNDBUF) failed: %s (%d)",
                             __FILE__, __LINE__,
@@ -173,8 +173,8 @@ void prrte_oob_tcp_set_socket_options(int sd)
     }
 #endif
 #if defined(SO_RCVBUF)
-    if (mca_oob_tcp_component.tcp_rcvbuf > 0 &&
-        setsockopt(sd, SOL_SOCKET, SO_RCVBUF, (char *)&mca_oob_tcp_component.tcp_rcvbuf, sizeof(int)) < 0) {
+    if (prrte_oob_tcp_component.tcp_rcvbuf > 0 &&
+        setsockopt(sd, SOL_SOCKET, SO_RCVBUF, (char *)&prrte_oob_tcp_component.tcp_rcvbuf, sizeof(int)) < 0) {
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(SO_RCVBUF) failed: %s (%d)",
                             __FILE__, __LINE__,
@@ -183,7 +183,7 @@ void prrte_oob_tcp_set_socket_options(int sd)
     }
 #endif
 
-    if (0 < mca_oob_tcp_component.keepalive_time) {
+    if (0 < prrte_oob_tcp_component.keepalive_time) {
         set_keepalive(sd);
     }
 }
@@ -194,7 +194,7 @@ mca_oob_tcp_peer_t* mca_oob_tcp_peer_lookup(const prrte_process_name_t *name)
     uint64_t ui64;
 
     memcpy(&ui64, (char*)name, sizeof(uint64_t));
-    if (PRRTE_SUCCESS != prrte_hash_table_get_value_uint64(&mca_oob_tcp_component.peers, ui64, (void**)&peer)) {
+    if (PRRTE_SUCCESS != prrte_hash_table_get_value_uint64(&prrte_oob_tcp_component.peers, ui64, (void**)&peer)) {
         return NULL;
     }
     return peer;

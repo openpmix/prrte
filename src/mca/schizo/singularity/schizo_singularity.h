@@ -20,7 +20,7 @@
 
 BEGIN_C_DECLS
 
-PRRTE_EXPORT extern prrte_schizo_base_component_t mca_schizo_singularity_component;
+PRRTE_EXPORT extern prrte_schizo_base_component_t prrte_schizo_singularity_component;
 extern prrte_schizo_base_module_t prrte_schizo_singularity_module;
 
 END_C_DECLS

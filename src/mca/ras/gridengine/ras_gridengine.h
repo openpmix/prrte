@@ -43,7 +43,7 @@ struct prrte_ras_gridengine_component_t {
 };
 typedef struct prrte_ras_gridengine_component_t prrte_ras_gridengine_component_t;
 
-PRRTE_EXPORT extern prrte_ras_gridengine_component_t mca_ras_gridengine_component;
+PRRTE_EXPORT extern prrte_ras_gridengine_component_t prrte_ras_gridengine_component;
 PRRTE_EXPORT extern prrte_ras_base_module_t prrte_ras_gridengine_module;
 
 

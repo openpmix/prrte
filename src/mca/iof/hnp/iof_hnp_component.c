@@ -42,10 +42,10 @@ static int prrte_iof_hnp_query(prrte_mca_base_module_t **module, int *priority);
 /*
  * Public string showing the iof hnp component version number
  */
-const char *mca_iof_hnp_component_version_string =
+const char *prrte_iof_hnp_component_version_string =
     "PRRTE hnp iof MCA component version " PRRTE_VERSION;
 
-prrte_iof_hnp_component_t mca_iof_hnp_component = {
+prrte_iof_hnp_component_t prrte_iof_hnp_component = {
     {
         /* First, the prrte_mca_base_component_t struct containing meta
          information about the component itself */

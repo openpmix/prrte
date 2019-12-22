@@ -46,13 +46,13 @@
 int prrte_oob_base_select(void)
 {
     prrte_mca_base_component_list_item_t *cli, *cmp, *c2;
-    mca_oob_base_component_t *component, *c3;
+    prrte_oob_base_component_t *component, *c3;
     bool added;
     int i, rc;
 
     /* Query all available components and ask if their transport is available */
     PRRTE_LIST_FOREACH(cli, &prrte_oob_base_framework.framework_components, prrte_mca_base_component_list_item_t) {
-        component = (mca_oob_base_component_t *) cli->cli_component;
+        component = (prrte_oob_base_component_t *) cli->cli_component;
 
         prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
                             "mca:oob:select: checking available component %s",
@@ -95,7 +95,7 @@ int prrte_oob_base_select(void)
             /* this component shall be the *only* component allowed
              * for use, so shutdown and remove any prior ones */
             while (NULL != (cmp = (prrte_mca_base_component_list_item_t*)prrte_list_remove_first(&prrte_oob_base.actives))) {
-                c3 = (mca_oob_base_component_t *) cmp->cli_component;
+                c3 = (prrte_oob_base_component_t *) cmp->cli_component;
                 if (NULL != c3->shutdown) {
                     c3->shutdown();
                 }
@@ -110,7 +110,7 @@ int prrte_oob_base_select(void)
         /* record it, but maintain priority order */
         added = false;
         PRRTE_LIST_FOREACH(cmp, &prrte_oob_base.actives, prrte_mca_base_component_list_item_t) {
-            c3 = (mca_oob_base_component_t *) cmp->cli_component;
+            c3 = (prrte_oob_base_component_t *) cmp->cli_component;
             if (c3->priority > component->priority) {
                 continue;
             }
@@ -144,7 +144,7 @@ int prrte_oob_base_select(void)
     /* provide them an index so we can track their usability in a bitmap */
     i=0;
     PRRTE_LIST_FOREACH(cmp, &prrte_oob_base.actives, prrte_mca_base_component_list_item_t) {
-        c3 = (mca_oob_base_component_t *) cmp->cli_component;
+        c3 = (prrte_oob_base_component_t *) cmp->cli_component;
         c3->idx = i++;
     }
 

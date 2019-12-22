@@ -37,7 +37,7 @@ extern prrte_ess_base_module_t prrte_ess_lsf_module;
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
-prrte_ess_base_component_t mca_ess_lsf_component = {
+prrte_ess_base_component_t prrte_ess_lsf_component = {
     .base_version = {
         PRRTE_ESS_BASE_VERSION_3_0_0,
 

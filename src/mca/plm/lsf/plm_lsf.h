@@ -36,7 +36,7 @@ struct prrte_plm_lsf_component_t {
 typedef struct prrte_plm_lsf_component_t prrte_plm_lsf_component_t;
 
 /* Globally exported variables */
-PRRTE_EXPORT extern prrte_plm_lsf_component_t mca_plm_lsf_component;
+PRRTE_EXPORT extern prrte_plm_lsf_component_t prrte_plm_lsf_component;
 extern prrte_plm_base_module_t prrte_plm_lsf_module;
 
 END_C_DECLS

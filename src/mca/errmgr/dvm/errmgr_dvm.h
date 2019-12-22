@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef MCA_ERRMGR_dvm_EXPORT_H
-#define MCA_ERRMGR_dvm_EXPORT_H
+#ifndef prrte_errmgr_dvm_EXPORT_H
+#define prrte_errmgr_dvm_EXPORT_H
 
 #include "prrte_config.h"
 
@@ -30,10 +30,10 @@ BEGIN_C_DECLS
  * Local Component structures
  */
 
-PRRTE_MODULE_EXPORT extern prrte_errmgr_base_component_t mca_errmgr_dvm_component;
+PRRTE_MODULE_EXPORT extern prrte_errmgr_base_component_t prrte_errmgr_dvm_component;
 
 PRRTE_EXPORT extern prrte_errmgr_base_module_t prrte_errmgr_dvm_module;
 
 END_C_DECLS
 
-#endif /* MCA_ERRMGR_dvm_EXPORT_H */
+#endif /* prrte_errmgr_dvm_EXPORT_H */

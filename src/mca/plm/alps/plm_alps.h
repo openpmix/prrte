@@ -44,7 +44,7 @@ typedef struct prrte_plm_alps_component_t prrte_plm_alps_component_t;
  */
 
 PRRTE_MODULE_EXPORT extern prrte_plm_alps_component_t
-    mca_plm_alps_component;
+    prrte_plm_alps_component;
 PRRTE_EXPORT extern prrte_plm_base_module_t
     prrte_plm_alps_module;
 

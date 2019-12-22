@@ -47,7 +47,7 @@
  * and pointers to our public functions in it
  */
 
-prrte_odls_base_component_t mca_odls_default_component = {
+prrte_odls_base_component_t prrte_odls_default_component = {
     /* First, the mca_component_t struct containing meta information
     about the component itself */
     .version = {

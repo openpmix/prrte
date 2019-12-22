@@ -45,7 +45,7 @@ static int ras_slurm_close(void);
 static int prrte_ras_slurm_component_query(prrte_mca_base_module_t **module, int *priority);
 
 
-prrte_ras_slurm_component_t mca_ras_slurm_component = {
+prrte_ras_slurm_component_t prrte_ras_slurm_component = {
     {
         /* First, the prrte_mca_base_component_t struct containing meta
            information about the component itself */
@@ -74,47 +74,47 @@ prrte_ras_slurm_component_t mca_ras_slurm_component = {
 
 static int ras_slurm_register(void)
 {
-    prrte_mca_base_component_t *component = &mca_ras_slurm_component.super.base_version;
+    prrte_mca_base_component_t *component = &prrte_ras_slurm_component.super.base_version;
 
-    mca_ras_slurm_component.timeout = 30;
+    prrte_ras_slurm_component.timeout = 30;
     (void) prrte_mca_base_component_var_register (component, "dyn_allocate_timeout",
                                             "Number of seconds to wait for Slurm dynamic allocation",
                                             PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_ras_slurm_component.timeout);
+                                            &prrte_ras_slurm_component.timeout);
 
-    mca_ras_slurm_component.dyn_alloc_enabled = false;
+    prrte_ras_slurm_component.dyn_alloc_enabled = false;
     (void) prrte_mca_base_component_var_register (component, "enable_dyn_alloc",
                                             "Whether or not dynamic allocations are enabled",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_ras_slurm_component.dyn_alloc_enabled);
+                                            &prrte_ras_slurm_component.dyn_alloc_enabled);
 
-    mca_ras_slurm_component.config_file = NULL;
+    prrte_ras_slurm_component.config_file = NULL;
     (void) prrte_mca_base_component_var_register (component, "config_file",
                                             "Path to Slurm configuration file",
                                             PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_ras_slurm_component.config_file);
+                                            &prrte_ras_slurm_component.config_file);
 
-    mca_ras_slurm_component.rolling_alloc = false;
+    prrte_ras_slurm_component.rolling_alloc = false;
     (void) prrte_mca_base_component_var_register (component, "enable_rolling_alloc",
                                             "Enable partial dynamic allocations",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_ras_slurm_component.rolling_alloc);
+                                            &prrte_ras_slurm_component.rolling_alloc);
 
-    mca_ras_slurm_component.use_all = false;
+    prrte_ras_slurm_component.use_all = false;
     (void) prrte_mca_base_component_var_register (component, "use_entire_allocation",
                                             "Use entire allocation (not just job step nodes) for this application",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_5,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_ras_slurm_component.use_all);
+                                            &prrte_ras_slurm_component.use_all);
 
     return PRRTE_SUCCESS;
 }
@@ -136,7 +136,7 @@ static int prrte_ras_slurm_component_query(prrte_mca_base_module_t **module, int
      * is not enabled, then disqualify myself
      */
     if (NULL == getenv("SLURM_JOBID") &&
-        !mca_ras_slurm_component.dyn_alloc_enabled) {
+        !prrte_ras_slurm_component.dyn_alloc_enabled) {
         /* disqualify ourselves */
         *priority = 0;
         *module = NULL;

@@ -59,7 +59,7 @@
 /*
  * Public string showing the plm ompi_rsh component version number
  */
-const char *mca_plm_rsh_component_version_string =
+const char *prrte_plm_rsh_component_version_string =
   "Open MPI rsh plm MCA component version " PRRTE_VERSION;
 
 
@@ -70,7 +70,7 @@ static int rsh_component_close(void);
 static int rsh_launch_agent_lookup(const char *agent_list, char *path);
 
 /* Local variables */
-static char *mca_plm_rsh_delay_string = NULL;
+static char *prrte_plm_rsh_delay_string = NULL;
 static int agent_var_id = -1;
 
 /*
@@ -78,7 +78,7 @@ static int agent_var_id = -1;
  * and pointers to our public functions in it
  */
 
-prrte_plm_rsh_component_t mca_plm_rsh_component = {
+prrte_plm_rsh_component_t prrte_plm_rsh_component = {
     {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
@@ -106,130 +106,130 @@ prrte_plm_rsh_component_t mca_plm_rsh_component = {
 
 static int rsh_component_register(void)
 {
-    prrte_mca_base_component_t *c = &mca_plm_rsh_component.super.base_version;
+    prrte_mca_base_component_t *c = &prrte_plm_rsh_component.super.base_version;
     int var_id;
 
-    mca_plm_rsh_component.num_concurrent = 128;
+    prrte_plm_rsh_component.num_concurrent = 128;
     (void) prrte_mca_base_component_var_register (c, "num_concurrent",
                                             "How many plm_rsh_agent instances to invoke concurrently (must be > 0)",
                                             PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                             PRRTE_INFO_LVL_5,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.num_concurrent);
+                                            &prrte_plm_rsh_component.num_concurrent);
 
-    mca_plm_rsh_component.force_rsh = false;
+    prrte_plm_rsh_component.force_rsh = false;
     (void) prrte_mca_base_component_var_register (c, "force_rsh", "Force the launcher to always use rsh",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_2,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.force_rsh);
-    mca_plm_rsh_component.disable_qrsh = false;
+                                            &prrte_plm_rsh_component.force_rsh);
+    prrte_plm_rsh_component.disable_qrsh = false;
     (void) prrte_mca_base_component_var_register (c, "disable_qrsh",
                                             "Disable the use of qrsh when under the Grid Engine parallel environment",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_2,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.disable_qrsh);
+                                            &prrte_plm_rsh_component.disable_qrsh);
 
-    mca_plm_rsh_component.daemonize_qrsh = false;
+    prrte_plm_rsh_component.daemonize_qrsh = false;
     (void) prrte_mca_base_component_var_register (c, "daemonize_qrsh",
                                             "Daemonize the orted under the Grid Engine parallel environment",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_2,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.daemonize_qrsh);
+                                            &prrte_plm_rsh_component.daemonize_qrsh);
 
-    mca_plm_rsh_component.disable_llspawn = false;
+    prrte_plm_rsh_component.disable_llspawn = false;
     (void) prrte_mca_base_component_var_register (c, "disable_llspawn",
                                             "Disable the use of llspawn when under the LoadLeveler environment",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_2,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.disable_llspawn);
+                                            &prrte_plm_rsh_component.disable_llspawn);
 
-    mca_plm_rsh_component.daemonize_llspawn = false;
+    prrte_plm_rsh_component.daemonize_llspawn = false;
     (void) prrte_mca_base_component_var_register (c, "daemonize_llspawn",
                                             "Daemonize the orted when under the LoadLeveler environment",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_2,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.daemonize_llspawn);
+                                            &prrte_plm_rsh_component.daemonize_llspawn);
 
-    mca_plm_rsh_component.priority = 10;
+    prrte_plm_rsh_component.priority = 10;
     (void) prrte_mca_base_component_var_register (c, "priority", "Priority of the rsh plm component",
                                             PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.priority);
+                                            &prrte_plm_rsh_component.priority);
 
-    mca_plm_rsh_delay_string = NULL;
+    prrte_plm_rsh_delay_string = NULL;
     (void) prrte_mca_base_component_var_register (c, "delay",
                                             "Delay between invocations of the remote agent (sec[:usec])",
                                             PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                             PRRTE_INFO_LVL_4,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_delay_string);
+                                            &prrte_plm_rsh_delay_string);
 
-    mca_plm_rsh_component.no_tree_spawn = false;
+    prrte_plm_rsh_component.no_tree_spawn = false;
     (void) prrte_mca_base_component_var_register (c, "no_tree_spawn",
                                             "If set to true, do not launch via a tree-based topology",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_5,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.no_tree_spawn);
+                                            &prrte_plm_rsh_component.no_tree_spawn);
 
     /* local rsh/ssh launch agent */
-    mca_plm_rsh_component.agent = "ssh : rsh";
+    prrte_plm_rsh_component.agent = "ssh : rsh";
     var_id = prrte_mca_base_component_var_register (c, "agent",
                                               "The command used to launch executables on remote nodes (typically either \"ssh\" or \"rsh\")",
                                               PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                               PRRTE_INFO_LVL_2,
                                               PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                              &mca_plm_rsh_component.agent);
+                                              &prrte_plm_rsh_component.agent);
     (void) prrte_mca_base_var_register_synonym (var_id, "prrte", "pls", NULL, "rsh_agent", PRRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     (void) prrte_mca_base_var_register_synonym (var_id, "prrte", "prrte", NULL, "rsh_agent", PRRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     agent_var_id = var_id;
 
-    mca_plm_rsh_component.assume_same_shell = true;
+    prrte_plm_rsh_component.assume_same_shell = true;
     var_id = prrte_mca_base_component_var_register (c, "assume_same_shell",
                                               "If set to true, assume that the shell on the remote node is the same as the shell on the local node.  Otherwise, probe for what the remote shell [default: 1]",
                                               PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                               PRRTE_INFO_LVL_2,
                                               PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                              &mca_plm_rsh_component.assume_same_shell);
+                                              &prrte_plm_rsh_component.assume_same_shell);
     /* XXX -- var_conversion -- Why does this component register prrte_assume_same_shell? Components should ONLY register THEIR OWN variables. */
     (void) prrte_mca_base_var_register_synonym (var_id, "prrte", "prrte", NULL, "assume_same_shell", 0);
 
-    mca_plm_rsh_component.pass_environ_mca_params = true;
+    prrte_plm_rsh_component.pass_environ_mca_params = true;
     (void) prrte_mca_base_component_var_register (c, "pass_environ_mca_params",
                                             "If set to false, do not include mca params from the environment on the orted cmd line",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_2,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.pass_environ_mca_params);
-    mca_plm_rsh_component.ssh_args = NULL;
+                                            &prrte_plm_rsh_component.pass_environ_mca_params);
+    prrte_plm_rsh_component.ssh_args = NULL;
     (void) prrte_mca_base_component_var_register (c, "args",
                                             "Arguments to add to rsh/ssh",
                                             PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                             PRRTE_INFO_LVL_2,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.ssh_args);
+                                            &prrte_plm_rsh_component.ssh_args);
 
-    mca_plm_rsh_component.pass_libpath = NULL;
+    prrte_plm_rsh_component.pass_libpath = NULL;
     (void) prrte_mca_base_component_var_register (c, "pass_libpath",
                                             "Prepend the specified library path to the remote shell's LD_LIBRARY_PATH",
                                             PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                             PRRTE_INFO_LVL_2,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_rsh_component.pass_libpath);
+                                            &prrte_plm_rsh_component.pass_libpath);
 
-    mca_plm_rsh_component.chdir = NULL;
+    prrte_plm_rsh_component.chdir = NULL;
     (void) prrte_mca_base_component_var_register (c, "chdir",
                                                   "Change working directory after rsh/ssh, but before exec of prted",
                                                   PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                                   PRRTE_INFO_LVL_2,
                                                   PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                                  &mca_plm_rsh_component.chdir);
+                                                  &prrte_plm_rsh_component.chdir);
     return PRRTE_SUCCESS;
 }
 
@@ -238,24 +238,24 @@ static int rsh_component_open(void)
     char *ctmp;
 
     /* initialize globals */
-    mca_plm_rsh_component.using_qrsh = false;
-    mca_plm_rsh_component.using_llspawn = false;
-    mca_plm_rsh_component.agent_argv = NULL;
+    prrte_plm_rsh_component.using_qrsh = false;
+    prrte_plm_rsh_component.using_llspawn = false;
+    prrte_plm_rsh_component.agent_argv = NULL;
 
     /* lookup parameters */
-    if (mca_plm_rsh_component.num_concurrent <= 0) {
+    if (prrte_plm_rsh_component.num_concurrent <= 0) {
         prrte_show_help("help-plm-rsh.txt", "concurrency-less-than-zero",
-                       true, mca_plm_rsh_component.num_concurrent);
-        mca_plm_rsh_component.num_concurrent = 1;
+                       true, prrte_plm_rsh_component.num_concurrent);
+        prrte_plm_rsh_component.num_concurrent = 1;
     }
 
-    if (NULL != mca_plm_rsh_delay_string) {
-        mca_plm_rsh_component.delay.tv_sec = strtol(mca_plm_rsh_delay_string, &ctmp, 10);
-        if (ctmp == mca_plm_rsh_delay_string) {
-            mca_plm_rsh_component.delay.tv_sec = 0;
+    if (NULL != prrte_plm_rsh_delay_string) {
+        prrte_plm_rsh_component.delay.tv_sec = strtol(prrte_plm_rsh_delay_string, &ctmp, 10);
+        if (ctmp == prrte_plm_rsh_delay_string) {
+            prrte_plm_rsh_component.delay.tv_sec = 0;
         }
         if (':' == ctmp[0]) {
-            mca_plm_rsh_component.delay.tv_nsec = 1000 * strtol (ctmp + 1, NULL, 10);
+            prrte_plm_rsh_component.delay.tv_nsec = 1000 * strtol (ctmp + 1, NULL, 10);
         }
     }
 
@@ -284,7 +284,7 @@ static int rsh_component_query(prrte_mca_base_module_t **module, int *priority)
     }
 
     /* check for SGE */
-    if (!mca_plm_rsh_component.disable_qrsh &&
+    if (!prrte_plm_rsh_component.disable_qrsh &&
         NULL != getenv("SGE_ROOT") && NULL != getenv("ARC") &&
         NULL != getenv("PE_HOSTFILE") && NULL != getenv("JOB_ID")) {
         /* setup the search path for qrsh */
@@ -300,13 +300,13 @@ static int rsh_component_query(prrte_mca_base_module_t **module, int *priority)
              *module = NULL;
              return PRRTE_ERROR;
         }
-        mca_plm_rsh_component.agent = tmp;
-        mca_plm_rsh_component.using_qrsh = true;
+        prrte_plm_rsh_component.agent = tmp;
+        prrte_plm_rsh_component.using_qrsh = true;
         goto success;
     }
 
     /* otherwise, check for LoadLeveler */
-    if (!mca_plm_rsh_component.disable_llspawn &&
+    if (!prrte_plm_rsh_component.disable_llspawn &&
         NULL != getenv("LOADL_STEP_ID")) {
         /* Search for llspawn in the users PATH */
         if (PRRTE_SUCCESS != rsh_launch_agent_lookup("llspawn", NULL)) {
@@ -318,8 +318,8 @@ static int rsh_component_query(prrte_mca_base_module_t **module, int *priority)
             *module = NULL;
             return PRRTE_ERROR;
         }
-        mca_plm_rsh_component.agent = strdup("llspawn");
-        mca_plm_rsh_component.using_llspawn = true;
+        prrte_plm_rsh_component.agent = strdup("llspawn");
+        prrte_plm_rsh_component.using_llspawn = true;
         goto success;
     }
 
@@ -329,9 +329,9 @@ static int rsh_component_query(prrte_mca_base_module_t **module, int *priority)
     if (PRRTE_SUCCESS != rsh_launch_agent_lookup(NULL, NULL)) {
         /* if the user specified an agent and we couldn't find it,
          * then we want to error out and not continue */
-        if (NULL != mca_plm_rsh_component.agent) {
+        if (NULL != prrte_plm_rsh_component.agent) {
             prrte_show_help("help-plm-rsh.txt", "agent-not-found", true,
-                           mca_plm_rsh_component.agent);
+                           prrte_plm_rsh_component.agent);
             PRRTE_FORCED_TERMINATE(PRRTE_ERR_NOT_FOUND);
             return PRRTE_ERR_FATAL;
         }
@@ -340,14 +340,14 @@ static int rsh_component_query(prrte_mca_base_module_t **module, int *priority)
                              "%s plm:rsh: unable to be used: cannot find path "
                              "for launching agent \"%s\"\n",
                              PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                             mca_plm_rsh_component.agent));
+                             prrte_plm_rsh_component.agent));
         *module = NULL;
         return PRRTE_ERROR;
     }
 
   success:
     /* we are good - make ourselves available */
-    *priority = mca_plm_rsh_component.priority;
+    *priority = prrte_plm_rsh_component.priority;
     *module = (prrte_mca_base_module_t *) &prrte_plm_rsh_module;
     return PRRTE_SUCCESS;
 }
@@ -376,7 +376,7 @@ char **prrte_plm_rsh_search(const char* agent_list, const char *path)
         prrte_string_copy(cwd, path, PRRTE_PATH_MAX);
     }
     if (NULL == agent_list) {
-        lines = prrte_argv_split(mca_plm_rsh_component.agent, ':');
+        lines = prrte_argv_split(prrte_plm_rsh_component.agent, ':');
     } else {
         lines = prrte_argv_split(agent_list, ':');
     }
@@ -423,39 +423,39 @@ static int rsh_launch_agent_lookup(const char *agent_list, char *path)
     PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
                          "%s plm:rsh_lookup on agent %s path %s",
                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         (NULL == agent_list) ? mca_plm_rsh_component.agent : agent_list,
+                         (NULL == agent_list) ? prrte_plm_rsh_component.agent : agent_list,
                          (NULL == path) ? "NULL" : path));
-    if (NULL == (mca_plm_rsh_component.agent_argv = prrte_plm_rsh_search(agent_list, path))) {
+    if (NULL == (prrte_plm_rsh_component.agent_argv = prrte_plm_rsh_search(agent_list, path))) {
         return PRRTE_ERR_NOT_FOUND;
     }
 
     /* if we got here, then one of the given agents could be found - the
      * complete path is in the argv[0] position */
-    mca_plm_rsh_component.agent_path = strdup(mca_plm_rsh_component.agent_argv[0]);
-    bname = prrte_basename(mca_plm_rsh_component.agent_argv[0]);
+    prrte_plm_rsh_component.agent_path = strdup(prrte_plm_rsh_component.agent_argv[0]);
+    bname = prrte_basename(prrte_plm_rsh_component.agent_argv[0]);
     if (NULL == bname) {
         return PRRTE_SUCCESS;
     }
     /* replace the initial position with the basename */
-    free(mca_plm_rsh_component.agent_argv[0]);
-    mca_plm_rsh_component.agent_argv[0] = bname;
+    free(prrte_plm_rsh_component.agent_argv[0]);
+    prrte_plm_rsh_component.agent_argv[0] = bname;
     /* see if we need to add an xterm argument */
     if (0 == strcmp(bname, "ssh")) {
         /* if xterm option was given, add '-X', ensuring we don't do it twice */
         if (NULL != prrte_xterm) {
-            prrte_argv_append_unique_nosize(&mca_plm_rsh_component.agent_argv, "-X", false);
+            prrte_argv_append_unique_nosize(&prrte_plm_rsh_component.agent_argv, "-X", false);
         } else if (0 >= prrte_output_get_verbosity(prrte_plm_base_framework.framework_output)) {
             /* if debug was not specified, and the user didn't explicitly
              * specify X11 forwarding/non-forwarding, add "-x" if it
              * isn't already there (check either case)
              */
-            for (i = 1; NULL != mca_plm_rsh_component.agent_argv[i]; ++i) {
-                if (0 == strcasecmp("-x", mca_plm_rsh_component.agent_argv[i])) {
+            for (i = 1; NULL != prrte_plm_rsh_component.agent_argv[i]; ++i) {
+                if (0 == strcasecmp("-x", prrte_plm_rsh_component.agent_argv[i])) {
                     break;
                 }
             }
-            if (NULL == mca_plm_rsh_component.agent_argv[i]) {
-                prrte_argv_append_nosize(&mca_plm_rsh_component.agent_argv, "-x");
+            if (NULL == prrte_plm_rsh_component.agent_argv[i]) {
+                prrte_argv_append_nosize(&prrte_plm_rsh_component.agent_argv, "-x");
             }
         }
     }

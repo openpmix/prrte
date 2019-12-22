@@ -58,7 +58,7 @@ static int component_query(prrte_mca_base_module_t **module, int *priority);
 /**
  * component definition
  */
-prrte_rml_component_t mca_rml_oob_component = {
+prrte_rml_component_t prrte_rml_oob_component = {
       /* First, the prrte_mca_base_component_t struct containing meta
          information about the component itself */
 
@@ -161,7 +161,7 @@ static int oob_ping(const char* uri, const struct timeval* tv)
 }
 
 static prrte_rml_base_module_t base_module = {
-    .component = (struct prrte_rml_component_t*)&mca_rml_oob_component,
+    .component = (struct prrte_rml_component_t*)&prrte_rml_oob_component,
     .ping = oob_ping,
     .send_nb = prrte_rml_oob_send_nb,
     .send_buffer_nb = prrte_rml_oob_send_buffer_nb,

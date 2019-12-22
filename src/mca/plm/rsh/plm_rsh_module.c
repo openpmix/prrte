@@ -192,7 +192,7 @@ static int rsh_init(void)
     int rc;
 
     /* we were selected, so setup the launch agent */
-    if (mca_plm_rsh_component.using_qrsh) {
+    if (prrte_plm_rsh_component.using_qrsh) {
         /* perform base setup for qrsh */
         prrte_asprintf(&tmp, "%s/bin/%s", getenv("SGE_ROOT"), getenv("ARC"));
         if (PRRTE_SUCCESS != (rc = launch_agent_setup("qrsh", tmp))) {
@@ -215,7 +215,7 @@ static int rsh_init(void)
                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), tmp);
             free(tmp);
         }
-    } else if(mca_plm_rsh_component.using_llspawn) {
+    } else if(prrte_plm_rsh_component.using_llspawn) {
         /* perform base setup for llspawn */
         if (PRRTE_SUCCESS != (rc = launch_agent_setup("llspawn", NULL))) {
             PRRTE_ERROR_LOG(rc);
@@ -227,7 +227,7 @@ static int rsh_init(void)
                             rsh_agent_path);
     } else {
         /* not using qrsh or llspawn - use MCA-specified agent */
-        if (PRRTE_SUCCESS != (rc = launch_agent_setup(mca_plm_rsh_component.agent, NULL))) {
+        if (PRRTE_SUCCESS != (rc = launch_agent_setup(prrte_plm_rsh_component.agent, NULL))) {
             PRRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -318,7 +318,7 @@ static void rsh_wait_daemon(int sd, short flags, void *cbdata)
 
     /* release any delay */
     --num_in_progress;
-    if (num_in_progress < mca_plm_rsh_component.num_concurrent) {
+    if (num_in_progress < prrte_plm_rsh_component.num_concurrent) {
         /* trigger continuation of the launch */
         prrte_event_active(&launch_event, EV_WRITE, 1);
     }
@@ -379,9 +379,9 @@ static int setup_launch(int *argcptr, char ***argvptr,
     argv = prrte_argv_copy(rsh_agent_argv);
     argc = prrte_argv_count(argv);
     /* if any ssh args were provided, now is the time to add them */
-    if (NULL != mca_plm_rsh_component.ssh_args) {
+    if (NULL != prrte_plm_rsh_component.ssh_args) {
         char **ssh_argv;
-        ssh_argv = prrte_argv_split(mca_plm_rsh_component.ssh_args, ' ');
+        ssh_argv = prrte_argv_split(prrte_plm_rsh_component.ssh_args, ' ');
         for (i=0; NULL != ssh_argv[i]; i++) {
             prrte_argv_append(&argc, &argv, ssh_argv[i]);
         }
@@ -449,11 +449,11 @@ static int setup_launch(int *argcptr, char ***argvptr,
 
     /* if the user specified a library path to pass, set it up now */
     param = prrte_basename(prrte_install_dirs.libdir);
-    if (NULL != mca_plm_rsh_component.pass_libpath) {
+    if (NULL != prrte_plm_rsh_component.pass_libpath) {
         if (NULL != prefix_dir) {
-            prrte_asprintf(&lib_base, "%s:%s/%s", mca_plm_rsh_component.pass_libpath, prefix_dir, param);
+            prrte_asprintf(&lib_base, "%s:%s/%s", prrte_plm_rsh_component.pass_libpath, prefix_dir, param);
         } else {
-            prrte_asprintf(&lib_base, "%s:%s", mca_plm_rsh_component.pass_libpath, param);
+            prrte_asprintf(&lib_base, "%s:%s", prrte_plm_rsh_component.pass_libpath, param);
         }
     } else if (NULL != prefix_dir) {
         prrte_asprintf(&lib_base, "%s/%s", prefix_dir, param);
@@ -501,9 +501,9 @@ static int setup_launch(int *argcptr, char ***argvptr,
                             "LD_LIBRARY_PATH=%s%s$LD_LIBRARY_PATH ; export LD_LIBRARY_PATH ; "
                             "DYLD_LIBRARY_PATH=%s%s$DYLD_LIBRARY_PATH ; export DYLD_LIBRARY_PATH ; "
                             "%s %s",
-                            (NULL != mca_plm_rsh_component.chdir ? "cd " : " "),
-                            (NULL != mca_plm_rsh_component.chdir ? mca_plm_rsh_component.chdir : " "),
-                            (NULL != mca_plm_rsh_component.chdir ? " ; " : " "),
+                            (NULL != prrte_plm_rsh_component.chdir ? "cd " : " "),
+                            (NULL != prrte_plm_rsh_component.chdir ? prrte_plm_rsh_component.chdir : " "),
+                            (NULL != prrte_plm_rsh_component.chdir ? " ; " : " "),
                             (prrte_prefix != NULL ? "PRRTE_PREFIX=" : " "),
                             (prrte_prefix != NULL ? prrte_prefix : " "),
                             (prrte_prefix != NULL ? " ; export PRRTE_PREFIX;" : " "),
@@ -544,9 +544,9 @@ static int setup_launch(int *argcptr, char ***argvptr,
                             "if ( $?OMPI_have_dllp == 1 ) "
                             "setenv DYLD_LIBRARY_PATH %s%s$DYLD_LIBRARY_PATH ; "
                             "%s %s",
-                            (NULL != mca_plm_rsh_component.chdir ? "cd " : " "),
-                            (NULL != mca_plm_rsh_component.chdir ? mca_plm_rsh_component.chdir : " "),
-                            (NULL != mca_plm_rsh_component.chdir ? " ; " : " "),
+                            (NULL != prrte_plm_rsh_component.chdir ? "cd " : " "),
+                            (NULL != prrte_plm_rsh_component.chdir ? prrte_plm_rsh_component.chdir : " "),
+                            (NULL != prrte_plm_rsh_component.chdir ? " ; " : " "),
                             (prrte_prefix != NULL ? "setenv PRRTE_PREFIX " : " "),
                             (prrte_prefix != NULL ? prrte_prefix : " "),
                             (prrte_prefix != NULL ? " ;" : " "),
@@ -599,17 +599,17 @@ static int setup_launch(int *argcptr, char ***argvptr,
     /* if we are not tree launching or debugging, tell the daemon
      * to daemonize so we can launch the next group
      */
-    if (mca_plm_rsh_component.no_tree_spawn &&
+    if (prrte_plm_rsh_component.no_tree_spawn &&
         !prrte_debug_flag &&
         !prrte_debug_daemons_flag &&
         !prrte_debug_daemons_file_flag &&
         !prrte_leave_session_attached &&
         /* Daemonize when not using qrsh.  Or, if using qrsh, only
          * daemonize if told to by user with daemonize_qrsh flag. */
-        ((!mca_plm_rsh_component.using_qrsh) ||
-         (mca_plm_rsh_component.using_qrsh && mca_plm_rsh_component.daemonize_qrsh)) &&
-        ((!mca_plm_rsh_component.using_llspawn) ||
-         (mca_plm_rsh_component.using_llspawn && mca_plm_rsh_component.daemonize_llspawn))) {
+        ((!prrte_plm_rsh_component.using_qrsh) ||
+         (prrte_plm_rsh_component.using_qrsh && prrte_plm_rsh_component.daemonize_qrsh)) &&
+        ((!prrte_plm_rsh_component.using_llspawn) ||
+         (prrte_plm_rsh_component.using_llspawn && prrte_plm_rsh_component.daemonize_llspawn))) {
     }
 
     /*
@@ -627,7 +627,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
 
     /* if we are tree-spawning, tell our child daemons the
      * uri of their parent (me) */
-    if (!mca_plm_rsh_component.no_tree_spawn) {
+    if (!prrte_plm_rsh_component.no_tree_spawn) {
         prrte_argv_append(&argc, &argv, "--tree-spawn");
         prrte_oob_base_get_addr(&param);
         prrte_argv_append(&argc, &argv, "-"PRRTE_MCA_CMD_LINE_ID);
@@ -637,7 +637,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
     }
 
     /* unless told otherwise... */
-    if (mca_plm_rsh_component.pass_environ_mca_params) {
+    if (prrte_plm_rsh_component.pass_environ_mca_params) {
         /* now check our local environment for MCA params - add them
          * only if they aren't already present
          */
@@ -891,7 +891,7 @@ static int remote_spawn(void)
     /* we NEVER use tree-spawn for secondary launches - e.g.,
      * due to a dynamic launch requesting add_hosts - so be
      * sure to turn it off here */
-    mca_plm_rsh_component.no_tree_spawn = true;
+    prrte_plm_rsh_component.no_tree_spawn = true;
 
     /* trigger the event to start processing the launch list */
     PRRTE_OUTPUT_VERBOSE((1, prrte_plm_base_framework.framework_output,
@@ -947,7 +947,7 @@ static void process_launch_list(int fd, short args, void *cbdata)
 
     PRRTE_ACQUIRE_OBJECT(caddy);
 
-    while (num_in_progress < mca_plm_rsh_component.num_concurrent) {
+    while (num_in_progress < prrte_plm_rsh_component.num_concurrent) {
         item = prrte_list_remove_first(&launch_list);
         if (NULL == item) {
             /* we are done */
@@ -1099,7 +1099,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     if ((0 < prrte_output_get_verbosity(prrte_plm_base_framework.framework_output) ||
          prrte_leave_session_attached) &&
-        mca_plm_rsh_component.num_concurrent < map->num_new_daemons) {
+        prrte_plm_rsh_component.num_concurrent < map->num_new_daemons) {
         /**
          * If we are in '--debug-daemons' we keep the ssh connection
          * alive for the span of the run. If we use this option
@@ -1114,7 +1114,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * and return an error code.
          */
         prrte_show_help("help-plm-rsh.txt", "deadlock-params",
-                       true, mca_plm_rsh_component.num_concurrent, map->num_new_daemons);
+                       true, prrte_plm_rsh_component.num_concurrent, map->num_new_daemons);
         PRRTE_ERROR_LOG(PRRTE_ERR_FATAL);
         PRRTE_RELEASE(state);
         rc = PRRTE_ERR_SILENT;
@@ -1172,7 +1172,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* if we are tree launching, find our children and create the launch cmd */
-    if (!mca_plm_rsh_component.no_tree_spawn) {
+    if (!prrte_plm_rsh_component.no_tree_spawn) {
         prrte_job_t *jdatorted;
 
         /* get the orted job data object */
@@ -1203,7 +1203,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         }
 
         /* if we are tree launching, only launch our own children */
-        if (!mca_plm_rsh_component.no_tree_spawn) {
+        if (!prrte_plm_rsh_component.no_tree_spawn) {
             PRRTE_LIST_FOREACH(child, &coll, prrte_namelist_t) {
                 if (child->name.vpid == node->daemon->name.vpid) {
                     goto launch;
@@ -1285,7 +1285,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* we NEVER use tree-spawn for secondary launches - e.g.,
      * due to a dynamic launch requesting add_hosts - so be
      * sure to turn it off here */
-    mca_plm_rsh_component.no_tree_spawn = true;
+    prrte_plm_rsh_component.no_tree_spawn = true;
 
     /* set the job state to indicate the daemons are launched */
     state->jdata->state = PRRTE_JOB_STATE_DAEMONS_LAUNCHED;
@@ -1365,9 +1365,9 @@ static int rsh_finalize(void)
             }
         }
     }
-    free(mca_plm_rsh_component.agent_path);
+    free(prrte_plm_rsh_component.agent_path);
     free(rsh_agent_path);
-    prrte_argv_free(mca_plm_rsh_component.agent_argv);
+    prrte_argv_free(prrte_plm_rsh_component.agent_argv);
     prrte_argv_free(rsh_agent_argv);
 
     return rc;
@@ -1421,7 +1421,7 @@ static int launch_agent_setup(const char *agent, char *path)
     int i;
 
     /* if no agent was provided, then report not found */
-    if (NULL == mca_plm_rsh_component.agent && NULL == agent) {
+    if (NULL == prrte_plm_rsh_component.agent && NULL == agent) {
         return PRRTE_ERR_NOT_FOUND;
     }
 
@@ -1429,7 +1429,7 @@ static int launch_agent_setup(const char *agent, char *path)
     PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
                          "%s plm:rsh_setup on agent %s path %s",
                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         (NULL == agent) ? mca_plm_rsh_component.agent : agent,
+                         (NULL == agent) ? prrte_plm_rsh_component.agent : agent,
                          (NULL == path) ? "NULL" : path));
     rsh_agent_argv = prrte_plm_rsh_search(agent, path);
 
@@ -1516,8 +1516,8 @@ static int rsh_probe(char *nodename,
             exit(01);
         }
         /* Build argv array */
-        argv = prrte_argv_copy(mca_plm_rsh_component.agent_argv);
-        argc = prrte_argv_count(mca_plm_rsh_component.agent_argv);
+        argv = prrte_argv_copy(prrte_plm_rsh_component.agent_argv);
+        argc = prrte_argv_count(prrte_plm_rsh_component.agent_argv);
         prrte_argv_append(&argc, &argv, nodename);
         prrte_argv_append(&argc, &argv, "echo $SHELL");
 
@@ -1625,7 +1625,7 @@ static int setup_shell(prrte_plm_rsh_shell_t *rshell,
                          local_shell, prrte_plm_rsh_shell_name[local_shell]));
 
     /* What is our remote shell? */
-    if (mca_plm_rsh_component.assume_same_shell) {
+    if (prrte_plm_rsh_component.assume_same_shell) {
         remote_shell = local_shell;
         PRRTE_OUTPUT_VERBOSE((1, prrte_plm_base_framework.framework_output,
                              "%s plm:rsh: assuming same remote shell as local shell",

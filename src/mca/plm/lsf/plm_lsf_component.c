@@ -46,7 +46,7 @@
 /*
  * Public string showing the plm lsf component version number
  */
-const char *mca_plm_lsf_component_version_string =
+const char *prrte_plm_lsf_component_version_string =
   "PRRTE lsf plm MCA component version " PRRTE_VERSION;
 
 
@@ -64,7 +64,7 @@ static int prrte_plm_lsf_component_query(prrte_mca_base_module_t **module, int *
  * and pointers to our public functions in it
  */
 
-prrte_plm_lsf_component_t mca_plm_lsf_component = {
+prrte_plm_lsf_component_t prrte_plm_lsf_component = {
     {
         /* First, the mca_component_t struct containing meta information
            about the component itself */

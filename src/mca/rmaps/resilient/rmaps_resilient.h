@@ -40,7 +40,7 @@ typedef struct {
 } prrte_rmaps_res_ftgrp_t;
 PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_rmaps_res_ftgrp_t);
 
-PRRTE_MODULE_EXPORT extern prrte_rmaps_res_component_t mca_rmaps_resilient_component;
+PRRTE_MODULE_EXPORT extern prrte_rmaps_res_component_t prrte_rmaps_resilient_component;
 extern prrte_rmaps_base_module_t prrte_rmaps_resilient_module;
 
 

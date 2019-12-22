@@ -135,7 +135,7 @@ static void ping(const prrte_process_name_t *proc)
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                             __FILE__, __LINE__,
                             PRRTE_NAME_PRINT(proc));
-        PRRTE_ACTIVATE_TCP_MSG_ERROR(NULL, NULL, proc, mca_oob_tcp_component_hop_unknown);
+        PRRTE_ACTIVATE_TCP_MSG_ERROR(NULL, NULL, proc, prrte_oob_tcp_component_hop_unknown);
         return;
     }
 
@@ -186,7 +186,7 @@ static void send_nb(prrte_rml_send_t *msg)
                             __FILE__, __LINE__,
                             PRRTE_NAME_PRINT(&msg->dst), msg->tag, msg->seq_num,
                             PRRTE_NAME_PRINT(&hop));
-        PRRTE_ACTIVATE_TCP_NO_ROUTE(msg, &hop, mca_oob_tcp_component_no_route);
+        PRRTE_ACTIVATE_TCP_NO_ROUTE(msg, &hop, prrte_oob_tcp_component_no_route);
         return;
     }
 

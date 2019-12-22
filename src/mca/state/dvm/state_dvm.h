@@ -26,7 +26,7 @@ BEGIN_C_DECLS
  * Local Component structures
  */
 
-PRRTE_MODULE_EXPORT extern prrte_state_base_component_t mca_state_dvm_component;
+PRRTE_MODULE_EXPORT extern prrte_state_base_component_t prrte_state_dvm_component;
 
 PRRTE_EXPORT extern prrte_state_base_module_t prrte_state_dvm_module;
 

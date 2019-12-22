@@ -22,7 +22,7 @@
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t mca_ess_tm_component;
+PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t prrte_ess_tm_component;
 
 /*
  * Module open / close

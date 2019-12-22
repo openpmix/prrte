@@ -22,7 +22,7 @@ static int component_query(prrte_mca_base_module_t **module, int *priority);
 /*
  * Struct of function pointers and all that to let us be initialized
  */
-prrte_schizo_base_component_t mca_schizo_slurm_component = {
+prrte_schizo_base_component_t prrte_schizo_slurm_component = {
     .base_version = {
         PRRTE_MCA_SCHIZO_BASE_VERSION_1_0_0,
         .mca_component_name = "slurm",

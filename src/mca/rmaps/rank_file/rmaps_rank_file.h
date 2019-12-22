@@ -45,7 +45,7 @@ struct prrte_rmaps_rf_component_t {
 };
 typedef struct prrte_rmaps_rf_component_t prrte_rmaps_rf_component_t;
 
-PRRTE_MODULE_EXPORT extern prrte_rmaps_rf_component_t mca_rmaps_rank_file_component;
+PRRTE_MODULE_EXPORT extern prrte_rmaps_rf_component_t prrte_rmaps_rank_file_component;
 extern prrte_rmaps_base_module_t prrte_rmaps_rank_file_module;
 
 

@@ -35,7 +35,7 @@ static int state_prted_component_query(prrte_mca_base_module_t **module, int *pr
  * Instantiate the public struct with all of our public information
  * and pointer to our public functions in it
  */
-prrte_state_base_component_t mca_state_prted_component =
+prrte_state_base_component_t prrte_state_prted_component =
 {
     /* Handle the general mca_component_t struct containing
      *  meta information about the component

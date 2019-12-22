@@ -39,7 +39,7 @@ static int prrte_rmaps_seq_query(prrte_mca_base_module_t **module, int *priority
 
 static int my_priority;
 
-prrte_rmaps_base_component_t mca_rmaps_seq_component = {
+prrte_rmaps_base_component_t prrte_rmaps_seq_component = {
     .base_version = {
         PRRTE_RMAPS_BASE_VERSION_2_0_0,
 
@@ -64,7 +64,7 @@ prrte_rmaps_base_component_t mca_rmaps_seq_component = {
 static int prrte_rmaps_seq_register(void)
 {
     my_priority = 60;
-    (void) prrte_mca_base_component_var_register(&mca_rmaps_seq_component.base_version,
+    (void) prrte_mca_base_component_var_register(&prrte_rmaps_seq_component.base_version,
                                            "priority", "Priority of the seq rmaps component",
                                            PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                            PRRTE_INFO_LVL_9,

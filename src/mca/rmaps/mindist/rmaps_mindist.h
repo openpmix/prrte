@@ -35,7 +35,7 @@
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t mca_rmaps_mindist_component;
+PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t prrte_rmaps_mindist_component;
 extern prrte_rmaps_base_module_t prrte_rmaps_mindist_module;
 
 END_C_DECLS

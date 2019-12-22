@@ -90,18 +90,18 @@ void prrte_iof_hnp_recv(int status, prrte_process_name_t* sender,
 
     if (PRRTE_IOF_XON & stream) {
         /* re-start the stdin read event */
-        if (NULL != mca_iof_hnp_component.stdinev &&
+        if (NULL != prrte_iof_hnp_component.stdinev &&
             !prrte_job_term_ordered &&
-            !mca_iof_hnp_component.stdinev->active) {
-            PRRTE_IOF_READ_ACTIVATE(mca_iof_hnp_component.stdinev);
+            !prrte_iof_hnp_component.stdinev->active) {
+            PRRTE_IOF_READ_ACTIVATE(prrte_iof_hnp_component.stdinev);
         }
         goto CLEAN_RETURN;
     } else if (PRRTE_IOF_XOFF & stream) {
         /* stop the stdin read event */
-        if (NULL != mca_iof_hnp_component.stdinev &&
-            !mca_iof_hnp_component.stdinev->active) {
-            prrte_event_del(mca_iof_hnp_component.stdinev->ev);
-            mca_iof_hnp_component.stdinev->active = false;
+        if (NULL != prrte_iof_hnp_component.stdinev &&
+            !prrte_iof_hnp_component.stdinev->active) {
+            prrte_event_del(prrte_iof_hnp_component.stdinev->ev);
+            prrte_iof_hnp_component.stdinev->active = false;
         }
         goto CLEAN_RETURN;
     }
@@ -139,7 +139,7 @@ void prrte_iof_hnp_recv(int status, prrte_process_name_t* sender,
             exclusive = false;
         }
         /* do we already have this process in our list? */
-        PRRTE_LIST_FOREACH(proct, &mca_iof_hnp_component.procs, prrte_iof_proc_t) {
+        PRRTE_LIST_FOREACH(proct, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
             if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, &origin)) {
                 /* found it */
                 goto PROCESS;
@@ -149,7 +149,7 @@ void prrte_iof_hnp_recv(int status, prrte_process_name_t* sender,
         proct = PRRTE_NEW(prrte_iof_proc_t);
         proct->name.jobid = origin.jobid;
         proct->name.vpid = origin.vpid;
-        prrte_list_append(&mca_iof_hnp_component.procs, &proct->super);
+        prrte_list_append(&prrte_iof_hnp_component.procs, &proct->super);
 
       PROCESS:
         /* a tool is requesting that we send it a copy of the specified stream(s)
@@ -191,7 +191,7 @@ void prrte_iof_hnp_recv(int status, prrte_process_name_t* sender,
         /* a tool is requesting that we no longer forward a copy of the
          * specified stream(s) from the specified process(es) - remove the sink
          */
-        PRRTE_LIST_FOREACH(proct, &mca_iof_hnp_component.procs, prrte_iof_proc_t) {
+        PRRTE_LIST_FOREACH(proct, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
             if (PRRTE_EQUAL != prrte_util_compare_name_fields(mask, &proct->name, &origin)) {
                 continue;
             }
@@ -232,7 +232,7 @@ void prrte_iof_hnp_recv(int status, prrte_process_name_t* sender,
                          PRRTE_NAME_PRINT(&origin)));
 
     /* do we already have this process in our list? */
-    PRRTE_LIST_FOREACH(proct, &mca_iof_hnp_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH(proct, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
         if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, &origin)) {
             /* found it */
             goto NSTEP;
@@ -242,7 +242,7 @@ void prrte_iof_hnp_recv(int status, prrte_process_name_t* sender,
     proct = PRRTE_NEW(prrte_iof_proc_t);
     proct->name.jobid = origin.jobid;
     proct->name.vpid = origin.vpid;
-    prrte_list_append(&mca_iof_hnp_component.procs, &proct->super);
+    prrte_list_append(&prrte_iof_hnp_component.procs, &proct->super);
 
   NSTEP:
     /* cycle through the endpoints to see if someone else wants a copy */

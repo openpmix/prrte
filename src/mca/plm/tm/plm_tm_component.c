@@ -42,7 +42,7 @@
 /*
  * Public string showing the plm ompi_tm component version number
  */
-const char *mca_plm_tm_component_version_string =
+const char *prrte_plm_tm_component_version_string =
   "PRRTE tm plm MCA component version " PRRTE_VERSION;
 
 
@@ -61,7 +61,7 @@ static int prrte_plm_tm_component_query(prrte_mca_base_module_t **module, int *p
  * and pointers to our public functions in it
  */
 
-prrte_plm_tm_component_t mca_plm_tm_component = {
+prrte_plm_tm_component_t prrte_plm_tm_component = {
     {
         /* First, the mca_component_t struct containing meta information
            about the component itself */
@@ -89,22 +89,22 @@ prrte_plm_tm_component_t mca_plm_tm_component = {
 
 static int plm_tm_register(void)
 {
-    prrte_mca_base_component_t *comp = &mca_plm_tm_component.super.base_version;
+    prrte_mca_base_component_t *comp = &prrte_plm_tm_component.super.base_version;
 
-    mca_plm_tm_component.want_path_check = true;
+    prrte_plm_tm_component.want_path_check = true;
     (void) prrte_mca_base_component_var_register (comp, "want_path_check",
                                             "Whether the launching process should check for the plm_tm_orted executable in the PATH before launching (the TM API does not give an indication of failure; this is a somewhat-lame workaround; non-zero values enable this check)",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_tm_component.want_path_check);
+                                            &prrte_plm_tm_component.want_path_check);
 
     return PRRTE_SUCCESS;
 }
 
 static int plm_tm_open(void)
 {
-    mca_plm_tm_component.checked_paths = NULL;
+    prrte_plm_tm_component.checked_paths = NULL;
 
     return PRRTE_SUCCESS;
 }
@@ -112,8 +112,8 @@ static int plm_tm_open(void)
 
 static int plm_tm_close(void)
 {
-    if (NULL != mca_plm_tm_component.checked_paths) {
-        prrte_argv_free(mca_plm_tm_component.checked_paths);
+    if (NULL != prrte_plm_tm_component.checked_paths) {
+        prrte_argv_free(prrte_plm_tm_component.checked_paths);
     }
 
     return PRRTE_SUCCESS;

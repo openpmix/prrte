@@ -27,7 +27,7 @@ BEGIN_C_DECLS
  * Local Component structures
  */
 
-PRRTE_MODULE_EXPORT extern prrte_errmgr_base_component_t mca_errmgr_prted_component;
+PRRTE_MODULE_EXPORT extern prrte_errmgr_base_component_t prrte_errmgr_prted_component;
 
 PRRTE_EXPORT extern prrte_errmgr_base_module_t prrte_errmgr_prted_module;
 

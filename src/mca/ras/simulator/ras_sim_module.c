@@ -65,17 +65,17 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
     char *tmp;
     char prefix[6];
 
-    node_cnt = prrte_argv_split(mca_ras_simulator_component.num_nodes, ',');
-    if (NULL != mca_ras_simulator_component.slots) {
-        slot_cnt = prrte_argv_split(mca_ras_simulator_component.slots, ',');
+    node_cnt = prrte_argv_split(prrte_ras_simulator_component.num_nodes, ',');
+    if (NULL != prrte_ras_simulator_component.slots) {
+        slot_cnt = prrte_argv_split(prrte_ras_simulator_component.slots, ',');
         /* backfile the slot_cnt so every topology has a cnt */
         tmp = slot_cnt[prrte_argv_count(slot_cnt)-1];
         for (n=prrte_argv_count(slot_cnt); n < prrte_argv_count(node_cnt); n++) {
             prrte_argv_append_nosize(&slot_cnt, tmp);
         }
     }
-    if (NULL != mca_ras_simulator_component.slots_max) {
-        max_slot_cnt = prrte_argv_split(mca_ras_simulator_component.slots_max, ',');
+    if (NULL != prrte_ras_simulator_component.slots_max) {
+        max_slot_cnt = prrte_argv_split(prrte_ras_simulator_component.slots_max, ',');
         /* backfill the max_slot_cnt as reqd */
         tmp = max_slot_cnt[prrte_argv_count(slot_cnt)-1];
         for (n=prrte_argv_count(max_slot_cnt); n < prrte_argv_count(max_slot_cnt); n++) {
@@ -83,14 +83,14 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
         }
     }
 
-    if (NULL != mca_ras_simulator_component.topofiles) {
-        files = prrte_argv_split(mca_ras_simulator_component.topofiles, ',');
+    if (NULL != prrte_ras_simulator_component.topofiles) {
+        files = prrte_argv_split(prrte_ras_simulator_component.topofiles, ',');
         if (prrte_argv_count(files) != prrte_argv_count(node_cnt)) {
             prrte_show_help("help-ras-base.txt", "ras-sim:mismatch", true);
             goto error_silent;
         }
-    } else if (NULL != mca_ras_simulator_component.topologies) {
-        topos = prrte_argv_split(mca_ras_simulator_component.topologies, ',');
+    } else if (NULL != prrte_ras_simulator_component.topologies) {
+        topos = prrte_argv_split(prrte_ras_simulator_component.topologies, ',');
         if (prrte_argv_count(topos) != prrte_argv_count(node_cnt)) {
             prrte_show_help("help-ras-base.txt", "ras-sim:mismatch", true);
             goto error_silent;
@@ -178,8 +178,8 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
              * xml output :-(( To aid in debugging, we set it here
              */
             support = (struct hwloc_topology_support*)hwloc_topology_get_support(topo);
-            support->cpubind->set_thisproc_cpubind = mca_ras_simulator_component.have_cpubind;
-            support->membind->set_thisproc_membind = mca_ras_simulator_component.have_membind;
+            support->cpubind->set_thisproc_cpubind = prrte_ras_simulator_component.have_cpubind;
+            support->membind->set_thisproc_membind = prrte_ras_simulator_component.have_membind;
             /* pass it thru the filter so we create the summaries required by the mappers */
             if (PRRTE_SUCCESS != prrte_hwloc_base_filter_cpus(topo)) {
                 PRRTE_ERROR_LOG(PRRTE_ERROR);
@@ -238,8 +238,8 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
              * xml output :-(( To aid in debugging, we set it here
              */
             support = (struct hwloc_topology_support*)hwloc_topology_get_support(topo);
-            support->cpubind->set_thisproc_cpubind = mca_ras_simulator_component.have_cpubind;
-            support->membind->set_thisproc_membind = mca_ras_simulator_component.have_membind;
+            support->cpubind->set_thisproc_cpubind = prrte_ras_simulator_component.have_cpubind;
+            support->membind->set_thisproc_membind = prrte_ras_simulator_component.have_membind;
             /* add it to our array */
             t = PRRTE_NEW(prrte_topology_t);
             t->topo = topo;

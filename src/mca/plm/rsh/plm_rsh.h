@@ -69,7 +69,7 @@ struct prrte_plm_rsh_component_t {
 };
 typedef struct prrte_plm_rsh_component_t prrte_plm_rsh_component_t;
 
-PRRTE_MODULE_EXPORT extern prrte_plm_rsh_component_t mca_plm_rsh_component;
+PRRTE_MODULE_EXPORT extern prrte_plm_rsh_component_t prrte_plm_rsh_component;
 extern prrte_plm_base_module_t prrte_plm_rsh_module;
 
 PRRTE_MODULE_EXPORT char **prrte_plm_rsh_search(const char* agent_list, const char *path);

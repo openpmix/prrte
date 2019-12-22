@@ -43,7 +43,7 @@
 /*
  * Public string showing the plm ompi_slurm component version number
  */
-const char *mca_plm_slurm_component_version_string =
+const char *prrte_plm_slurm_component_version_string =
   "PRRTE slurm plm MCA component version " PRRTE_VERSION;
 
 
@@ -61,7 +61,7 @@ static int prrte_plm_slurm_component_query(prrte_mca_base_module_t **module, int
  * and pointers to our public functions in it
  */
 
-prrte_plm_slurm_component_t mca_plm_slurm_component = {
+prrte_plm_slurm_component_t prrte_plm_slurm_component = {
 
     {
         /* First, the mca_component_t struct containing meta
@@ -94,21 +94,21 @@ prrte_plm_slurm_component_t mca_plm_slurm_component = {
 
 static int plm_slurm_register(void)
 {
-    prrte_mca_base_component_t *comp = &mca_plm_slurm_component.super.base_version;
+    prrte_mca_base_component_t *comp = &prrte_plm_slurm_component.super.base_version;
 
-    mca_plm_slurm_component.custom_args = NULL;
+    prrte_plm_slurm_component.custom_args = NULL;
     (void) prrte_mca_base_component_var_register (comp, "args", "Custom arguments to srun",
                                             PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_slurm_component.custom_args);
+                                            &prrte_plm_slurm_component.custom_args);
 
-    mca_plm_slurm_component.slurm_warning_msg = true;
+    prrte_plm_slurm_component.slurm_warning_msg = true;
     (void) prrte_mca_base_component_var_register (comp, "warning", "Turn off warning message",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_slurm_component.slurm_warning_msg);
+                                            &prrte_plm_slurm_component.slurm_warning_msg);
 
     return PRRTE_SUCCESS;
 }

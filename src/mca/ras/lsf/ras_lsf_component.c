@@ -39,7 +39,7 @@ static int prrte_ras_lsf_close(void);
 static int prrte_ras_lsf_component_query(prrte_mca_base_module_t **module, int *priority);
 
 
-prrte_ras_base_component_t mca_ras_lsf_component = {
+prrte_ras_base_component_t prrte_ras_lsf_component = {
     .base_version = {
         /* Indicate that we are a ras v2.0.0 component (which also
            implies a specific MCA version) */

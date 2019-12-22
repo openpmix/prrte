@@ -304,8 +304,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
 #endif
 
     /* Append user defined arguments to srun */
-    if ( NULL != mca_plm_slurm_component.custom_args ) {
-        custom_strings = prrte_argv_split(mca_plm_slurm_component.custom_args, ' ');
+    if ( NULL != prrte_plm_slurm_component.custom_args ) {
+        custom_strings = prrte_argv_split(prrte_plm_slurm_component.custom_args, ' ');
         num_args       = prrte_argv_count(custom_strings);
         for (i = 0; i < num_args; ++i) {
             prrte_argv_append(&argc, &argv, custom_strings[i]);

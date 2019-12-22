@@ -86,7 +86,7 @@ static int prrte_rmaps_rf_map(prrte_job_t *jdata)
     prrte_std_cntr_t relative_index, tmp_cnt;
     int rc;
     prrte_proc_t *proc;
-    prrte_mca_base_component_t *c = &mca_rmaps_rank_file_component.super.base_version;
+    prrte_mca_base_component_t *c = &prrte_rmaps_rank_file_component.super.base_version;
     char *slots;
     bool initial_map=true;
     prrte_hwloc_resource_type_t rtype;
@@ -128,7 +128,7 @@ static int prrte_rmaps_rf_map(prrte_job_t *jdata)
     map = jdata->map;
 
     /* default to LOGICAL processors */
-    if (mca_rmaps_rank_file_component.physical) {
+    if (prrte_rmaps_rank_file_component.physical) {
         prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rank_file: using PHYSICAL processors");
         rtype = PRRTE_HWLOC_PHYSICAL;

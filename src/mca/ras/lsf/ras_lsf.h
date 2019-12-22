@@ -32,7 +32,7 @@ BEGIN_C_DECLS
 /**
  * RAS Component
  */
-PRRTE_EXPORT extern prrte_ras_base_component_t mca_ras_lsf_component;
+PRRTE_EXPORT extern prrte_ras_base_component_t prrte_ras_lsf_component;
 PRRTE_EXPORT extern prrte_ras_base_module_t prrte_ras_lsf_module;
 
 END_C_DECLS

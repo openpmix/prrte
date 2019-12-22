@@ -19,7 +19,7 @@
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t mca_rmaps_ppr_component;
+PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t prrte_rmaps_ppr_component;
 extern prrte_rmaps_base_module_t prrte_rmaps_ppr_module;
 
 

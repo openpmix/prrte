@@ -113,8 +113,8 @@ static int init(void)
                             NULL);
 
     /* setup the local global variables */
-    PRRTE_CONSTRUCT(&mca_iof_prted_component.procs, prrte_list_t);
-    mca_iof_prted_component.xoff = false;
+    PRRTE_CONSTRUCT(&prrte_iof_prted_component.procs, prrte_list_t);
+    prrte_iof_prted_component.xoff = false;
 
     return PRRTE_SUCCESS;
 }
@@ -150,7 +150,7 @@ static int prted_push(const prrte_process_name_t* dst_name,
     }
 
     /* do we already have this process in our list? */
-    PRRTE_LIST_FOREACH(proct, &mca_iof_prted_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH(proct, &prrte_iof_prted_component.procs, prrte_iof_proc_t) {
         mask = PRRTE_NS_CMP_ALL;
 
         if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, dst_name)) {
@@ -162,7 +162,7 @@ static int prted_push(const prrte_process_name_t* dst_name,
     proct = PRRTE_NEW(prrte_iof_proc_t);
     proct->name.jobid = dst_name->jobid;
     proct->name.vpid = dst_name->vpid;
-    prrte_list_append(&mca_iof_prted_component.procs, &proct->super);
+    prrte_list_append(&prrte_iof_prted_component.procs, &proct->super);
 
   SETUP:
     /* get the local jobdata for this proc */
@@ -239,7 +239,7 @@ static int prted_pull(const prrte_process_name_t* dst_name,
     }
 
     /* do we already have this process in our list? */
-    PRRTE_LIST_FOREACH(proct, &mca_iof_prted_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH(proct, &prrte_iof_prted_component.procs, prrte_iof_proc_t) {
         if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, dst_name)) {
             /* found it */
             goto SETUP;
@@ -249,7 +249,7 @@ static int prted_pull(const prrte_process_name_t* dst_name,
     proct = PRRTE_NEW(prrte_iof_proc_t);
     proct->name.jobid = dst_name->jobid;
     proct->name.vpid = dst_name->vpid;
-    prrte_list_append(&mca_iof_prted_component.procs, &proct->super);
+    prrte_list_append(&prrte_iof_prted_component.procs, &proct->super);
 
   SETUP:
     PRRTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, fd, PRRTE_IOF_STDIN,
@@ -270,7 +270,7 @@ static int prted_close(const prrte_process_name_t* peer,
     prrte_iof_proc_t* proct;
     prrte_ns_cmp_bitmask_t mask = PRRTE_NS_CMP_ALL;
 
-    PRRTE_LIST_FOREACH(proct, &mca_iof_prted_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH(proct, &prrte_iof_prted_component.procs, prrte_iof_proc_t) {
         if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, peer)) {
             if (PRRTE_IOF_STDIN & source_tag) {
                 if (NULL != proct->stdinev) {
@@ -297,7 +297,7 @@ static int prted_close(const prrte_process_name_t* peer,
             if (NULL == proct->stdinev &&
                 NULL == proct->revstdout &&
                 NULL == proct->revstderr) {
-                prrte_list_remove_item(&mca_iof_prted_component.procs, &proct->super);
+                prrte_list_remove_item(&prrte_iof_prted_component.procs, &proct->super);
                 PRRTE_RELEASE(proct);
             }
             break;
@@ -312,9 +312,9 @@ static void prted_complete(const prrte_job_t *jdata)
     prrte_iof_proc_t *proct, *next;
 
     /* cleanout any lingering sinks */
-    PRRTE_LIST_FOREACH_SAFE(proct, next, &mca_iof_prted_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH_SAFE(proct, next, &prrte_iof_prted_component.procs, prrte_iof_proc_t) {
         if (jdata->jobid == proct->name.jobid) {
-            prrte_list_remove_item(&mca_iof_prted_component.procs, &proct->super);
+            prrte_list_remove_item(&prrte_iof_prted_component.procs, &proct->super);
             PRRTE_RELEASE(proct);
         }
     }
@@ -326,7 +326,7 @@ static int finalize(void)
 
     /* cycle thru the procs and ensure all their output was delivered
      * if they were writing to files */
-    while (NULL != (proct = (prrte_iof_proc_t*)prrte_list_remove_first(&mca_iof_prted_component.procs))) {
+    while (NULL != (proct = (prrte_iof_proc_t*)prrte_list_remove_first(&prrte_iof_prted_component.procs))) {
         if (NULL != proct->revstdout) {
             prrte_iof_base_static_dump_output(proct->revstdout);
         }
@@ -335,7 +335,7 @@ static int finalize(void)
         }
         PRRTE_RELEASE(proct);
     }
-    PRRTE_DESTRUCT(&mca_iof_prted_component.procs);
+    PRRTE_DESTRUCT(&prrte_iof_prted_component.procs);
 
     /* Cancel the RML receive */
     prrte_rml.recv_cancel(PRRTE_NAME_WILDCARD, PRRTE_RML_TAG_IOF_PROXY);
@@ -406,8 +406,8 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
             PRRTE_RELEASE(wev);
             sink->wev = NULL;
             /* tell the HNP to stop sending us stuff */
-            if (!mca_iof_prted_component.xoff) {
-                mca_iof_prted_component.xoff = true;
+            if (!prrte_iof_prted_component.xoff) {
+                prrte_iof_prted_component.xoff = true;
                 prrte_iof_prted_send_xonxoff(PRRTE_IOF_XOFF);
             }
             return;
@@ -429,7 +429,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
     }
 
 CHECK:
-    if (mca_iof_prted_component.xoff) {
+    if (prrte_iof_prted_component.xoff) {
         /* if we have told the HNP to stop reading stdin, see if
          * the proc has absorbed enough to justify restart
          *
@@ -441,7 +441,7 @@ CHECK:
          */
         if (prrte_list_get_size(&wev->outputs) < PRRTE_IOF_MAX_INPUT_BUFFERS) {
             /* restart the read */
-            mca_iof_prted_component.xoff = false;
+            prrte_iof_prted_component.xoff = false;
             prrte_iof_prted_send_xonxoff(PRRTE_IOF_XON);
         }
     }

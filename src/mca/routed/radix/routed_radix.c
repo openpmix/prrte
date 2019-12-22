@@ -349,13 +349,13 @@ static void radix_tree(int rank, int *num_children,
     NInLevel=1;
 
     while ( Sum < (rank+1) ) {
-        NInLevel *= mca_routed_radix_component.radix;
+        NInLevel *= prrte_routed_radix_component.radix;
         Sum += NInLevel;
     }
 
     /* our children start at our rank + num_in_level */
     peer = rank + NInLevel;
-    for (i = 0; i < mca_routed_radix_component.radix; i++) {
+    for (i = 0; i < prrte_routed_radix_component.radix; i++) {
         if (peer < (int)prrte_process_info.num_procs) {
             child = PRRTE_NEW(prrte_routed_tree_t);
             child->vpid = peer;
@@ -405,12 +405,12 @@ static void update_routing_plan(void)
 
     while ( Sum < (Ii+1) ) {
         Level++;
-        NInLevel *= mca_routed_radix_component.radix;
+        NInLevel *= prrte_routed_radix_component.radix;
         Sum += NInLevel;
     }
     Sum -= NInLevel;
 
-    NInPrevLevel = NInLevel/mca_routed_radix_component.radix;
+    NInPrevLevel = NInLevel/prrte_routed_radix_component.radix;
 
     if( 0 == Ii ) {
         PRRTE_PROC_MY_PARENT->vpid = -1;

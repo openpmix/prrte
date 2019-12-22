@@ -114,8 +114,8 @@ static int init(void)
                             prrte_iof_hnp_recv,
                             NULL);
 
-    PRRTE_CONSTRUCT(&mca_iof_hnp_component.procs, prrte_list_t);
-    mca_iof_hnp_component.stdinev = NULL;
+    PRRTE_CONSTRUCT(&prrte_iof_hnp_component.procs, prrte_list_t);
+    prrte_iof_hnp_component.stdinev = NULL;
 
     return PRRTE_SUCCESS;
 }
@@ -154,7 +154,7 @@ static int hnp_push(const prrte_process_name_t* dst_name, prrte_iof_tag_t src_ta
                          fd, PRRTE_NAME_PRINT(dst_name)));
 
     /* do we already have this process in our list? */
-    PRRTE_LIST_FOREACH(proct, &mca_iof_hnp_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH(proct, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
         if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, dst_name)) {
             /* found it */
             goto SETUP;
@@ -164,7 +164,7 @@ static int hnp_push(const prrte_process_name_t* dst_name, prrte_iof_tag_t src_ta
     proct = PRRTE_NEW(prrte_iof_proc_t);
     proct->name.jobid = dst_name->jobid;
     proct->name.vpid = dst_name->vpid;
-    prrte_list_append(&mca_iof_hnp_component.procs, &proct->super);
+    prrte_list_append(&prrte_iof_hnp_component.procs, &proct->super);
 
   SETUP:
     /* set the file descriptor to non-blocking - do this before we setup
@@ -206,7 +206,7 @@ static int hnp_push(const prrte_process_name_t* dst_name, prrte_iof_tag_t src_ta
         if (proct->copy) {
             /* see if there are any wildcard subscribers out there that
              * apply to us */
-            PRRTE_LIST_FOREACH(pptr, &mca_iof_hnp_component.procs, prrte_iof_proc_t) {
+            PRRTE_LIST_FOREACH(pptr, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
                 if (dst_name->jobid == pptr->name.jobid &&
                     PRRTE_VPID_WILDCARD == pptr->name.vpid &&
                     NULL != pptr->subscribers) {
@@ -250,7 +250,7 @@ static int push_stdin(const prrte_process_name_t* dst_name,
 
     /* do we already have this process in our list? */
     proct = NULL;
-    PRRTE_LIST_FOREACH(pptr, &mca_iof_hnp_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH(pptr, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
         if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &pptr->name, dst_name)) {
             /* found it */
             proct = pptr;
@@ -341,7 +341,7 @@ static int hnp_pull(const prrte_process_name_t* dst_name,
     }
 
     /* do we already have this process in our list? */
-    PRRTE_LIST_FOREACH(proct, &mca_iof_hnp_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH(proct, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
         if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, dst_name)) {
             /* found it */
             goto SETUP;
@@ -351,7 +351,7 @@ static int hnp_pull(const prrte_process_name_t* dst_name,
     proct = PRRTE_NEW(prrte_iof_proc_t);
     proct->name.jobid = dst_name->jobid;
     proct->name.vpid = dst_name->vpid;
-    prrte_list_append(&mca_iof_hnp_component.procs, &proct->super);
+    prrte_list_append(&prrte_iof_hnp_component.procs, &proct->super);
 
   SETUP:
     PRRTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, fd, PRRTE_IOF_STDIN,
@@ -372,7 +372,7 @@ static int hnp_close(const prrte_process_name_t* peer,
     prrte_iof_proc_t* proct;
     prrte_ns_cmp_bitmask_t mask = PRRTE_NS_CMP_ALL;
 
-    PRRTE_LIST_FOREACH(proct, &mca_iof_hnp_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH(proct, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
         if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, peer)) {
             if (PRRTE_IOF_STDIN & source_tag) {
                 if (NULL != proct->stdinev) {
@@ -399,7 +399,7 @@ static int hnp_close(const prrte_process_name_t* peer,
             if (NULL == proct->stdinev &&
                 NULL == proct->revstdout &&
                 NULL == proct->revstderr) {
-                prrte_list_remove_item(&mca_iof_hnp_component.procs, &proct->super);
+                prrte_list_remove_item(&prrte_iof_hnp_component.procs, &proct->super);
                 PRRTE_RELEASE(proct);
             }
             break;
@@ -413,9 +413,9 @@ static void hnp_complete(const prrte_job_t *jdata)
     prrte_iof_proc_t *proct, *next;
 
     /* cleanout any lingering sinks */
-    PRRTE_LIST_FOREACH_SAFE(proct, next, &mca_iof_hnp_component.procs, prrte_iof_proc_t) {
+    PRRTE_LIST_FOREACH_SAFE(proct, next, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
         if (jdata->jobid == proct->name.jobid) {
-            prrte_list_remove_item(&mca_iof_hnp_component.procs, &proct->super);
+            prrte_list_remove_item(&prrte_iof_hnp_component.procs, &proct->super);
             if (NULL != proct->revstdout) {
                 prrte_iof_base_static_dump_output(proct->revstdout);
                 PRRTE_RELEASE(proct->revstdout);
@@ -476,7 +476,7 @@ static int finalize(void)
 
     /* cycle thru the procs and ensure all their output was delivered
      * if they were writing to files */
-    while (NULL != (proct = (prrte_iof_proc_t*)prrte_list_remove_first(&mca_iof_hnp_component.procs))) {
+    while (NULL != (proct = (prrte_iof_proc_t*)prrte_list_remove_first(&prrte_iof_hnp_component.procs))) {
         if (NULL != proct->revstdout) {
             prrte_iof_base_static_dump_output(proct->revstdout);
         }
@@ -485,7 +485,7 @@ static int finalize(void)
         }
         PRRTE_RELEASE(proct);
     }
-    PRRTE_DESTRUCT(&mca_iof_hnp_component.procs);
+    PRRTE_DESTRUCT(&prrte_iof_hnp_component.procs);
 
     return PRRTE_SUCCESS;
 }

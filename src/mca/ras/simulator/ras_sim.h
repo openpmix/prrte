@@ -29,7 +29,7 @@ struct prrte_ras_sim_component_t {
 };
 typedef struct prrte_ras_sim_component_t prrte_ras_sim_component_t;
 
-PRRTE_EXPORT extern prrte_ras_sim_component_t mca_ras_simulator_component;
+PRRTE_EXPORT extern prrte_ras_sim_component_t prrte_ras_simulator_component;
 PRRTE_EXPORT extern prrte_ras_base_module_t prrte_ras_sim_module;
 
 END_C_DECLS

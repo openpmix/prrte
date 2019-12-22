@@ -33,7 +33,7 @@ BEGIN_C_DECLS
  * RMGR Component
  */
 
-PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t mca_rmaps_seq_component;
+PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t prrte_rmaps_seq_component;
 extern prrte_rmaps_base_module_t prrte_rmaps_seq_module;
 
 

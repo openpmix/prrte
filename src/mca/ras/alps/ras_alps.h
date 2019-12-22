@@ -33,7 +33,7 @@
 
 BEGIN_C_DECLS
 
-PRRTE_EXPORT extern prrte_ras_base_component_t mca_ras_alps_component;
+PRRTE_EXPORT extern prrte_ras_base_component_t prrte_ras_alps_component;
 PRRTE_EXPORT extern prrte_ras_base_module_t prrte_ras_alps_module;
 PRRTE_EXPORT int prrte_ras_alps_get_appinfo_attempts(int *attempts);
 PRRTE_EXPORT extern unsigned long int prrte_ras_alps_res_id;

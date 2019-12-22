@@ -40,7 +40,7 @@ typedef struct {
     bool rolling_alloc;
     bool use_all;
 } prrte_ras_slurm_component_t;
-PRRTE_EXPORT extern prrte_ras_slurm_component_t mca_ras_slurm_component;
+PRRTE_EXPORT extern prrte_ras_slurm_component_t prrte_ras_slurm_component;
 
 PRRTE_EXPORT extern prrte_ras_base_module_t prrte_ras_slurm_module;
 

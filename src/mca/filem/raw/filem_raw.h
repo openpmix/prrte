@@ -9,8 +9,8 @@
  * $HEADER$
  */
 
-#ifndef MCA_FILEM_RAW_EXPORT_H
-#define MCA_FILEM_RAW_EXPORT_H
+#ifndef PRRtE_FILEM_RAW_EXPORT_H
+#define PRRtE_FILEM_RAW_EXPORT_H
 
 #include "prrte_config.h"
 
@@ -22,8 +22,8 @@
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_filem_base_component_t mca_filem_raw_component;
-PRRTE_EXPORT extern prrte_filem_base_module_t mca_filem_raw_module;
+PRRTE_MODULE_EXPORT extern prrte_filem_base_component_t prrte_filem_raw_component;
+PRRTE_EXPORT extern prrte_filem_base_module_t prrte_filem_raw_module;
 
 extern bool prrte_filem_raw_flatten_trees;
 
@@ -78,4 +78,4 @@ PRRTE_CLASS_DECLARATION(prrte_filem_raw_output_t);
 
 END_C_DECLS
 
-#endif /* MCA_FILEM_RAW_EXPORT_H */
+#endif /* PRRtE_FILEM_RAW_EXPORT_H */

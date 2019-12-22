@@ -25,7 +25,7 @@ static int prrte_routed_debruijn_component_query(prrte_mca_base_module_t **modul
 /**
  * component definition
  */
-prrte_routed_component_t mca_routed_debruijn_component = {
+prrte_routed_component_t prrte_routed_debruijn_component = {
       /* First, the prrte_mca_base_component_t struct containing meta
          information about the component itself */
 

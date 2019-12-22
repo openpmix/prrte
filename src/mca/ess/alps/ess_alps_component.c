@@ -42,7 +42,7 @@
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
-prrte_ess_base_component_t mca_ess_alps_component = {
+prrte_ess_base_component_t prrte_ess_alps_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     .base_version = {

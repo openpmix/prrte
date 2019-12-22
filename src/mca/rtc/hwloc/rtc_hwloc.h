@@ -42,7 +42,7 @@ typedef struct {
     prrte_rtc_hwloc_vm_hole_kind_t kind;
 } prrte_rtc_hwloc_component_t;
 
-PRRTE_MODULE_EXPORT extern prrte_rtc_hwloc_component_t mca_rtc_hwloc_component;
+PRRTE_MODULE_EXPORT extern prrte_rtc_hwloc_component_t prrte_rtc_hwloc_component;
 
 extern prrte_rtc_base_module_t prrte_rtc_hwloc_module;
 

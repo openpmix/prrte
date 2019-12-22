@@ -27,8 +27,8 @@
  */
 
 
-#ifndef MCA_PSTAT_LINUX_EXPORT_H
-#define MCA_PSTAT_LINUX_EXPORT_H
+#ifndef prrte_pstat_LINUX_EXPORT_H
+#define prrte_pstat_LINUX_EXPORT_H
 
 #include "prrte_config.h"
 
@@ -41,9 +41,9 @@ BEGIN_C_DECLS
 /**
  * Globally exported variable
  */
-PRRTE_EXPORT extern const prrte_pstat_base_component_t mca_pstat_linux_component;
+PRRTE_EXPORT extern const prrte_pstat_base_component_t prrte_pstat_linux_component;
 
 PRRTE_EXPORT extern const prrte_pstat_base_module_t prrte_pstat_linux_module;
 
 END_C_DECLS
-#endif /* MCA_PSTAT_LINUX_EXPORT_H */
+#endif /* prrte_pstat_LINUX_EXPORT_H */

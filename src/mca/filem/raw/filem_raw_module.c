@@ -68,7 +68,7 @@ static int raw_preposition_files(prrte_job_t *jdata,
 static int raw_link_local_files(prrte_job_t *jdata,
                                 prrte_app_context_t *app);
 
-prrte_filem_base_module_t mca_filem_raw_module = {
+prrte_filem_base_module_t prrte_filem_raw_module = {
     .filem_init = raw_init,
     .filem_finalize = raw_finalize,
     /* we don't use any of the following */
