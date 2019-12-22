@@ -13,6 +13,8 @@
  * Copyright (c) 2017      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,7 +31,7 @@ BEGIN_C_DECLS
  * Module open / close
  */
 
-PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t mca_ess_hnp_component;
+PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t prrte_ess_hnp_component;
 
 END_C_DECLS
 

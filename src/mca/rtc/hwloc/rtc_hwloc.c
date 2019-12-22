@@ -2,6 +2,8 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017      Inria.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -103,7 +105,7 @@ static int init(void)
         return rc;
     }
 
-    if (VM_HOLE_NONE == mca_rtc_hwloc_component.kind) {
+    if (VM_HOLE_NONE == prrte_rtc_hwloc_component.kind) {
         return PRRTE_SUCCESS;
     }
 
@@ -115,7 +117,7 @@ static int init(void)
         return PRRTE_SUCCESS;
     }
 
-    if (PRRTE_SUCCESS != (rc = find_hole(mca_rtc_hwloc_component.kind,
+    if (PRRTE_SUCCESS != (rc = find_hole(prrte_rtc_hwloc_component.kind,
                                         &shmemaddr, shmemsize))) {
         /* we couldn't find a hole, so don't use the shmem support */
         if (4 < prrte_output_get_verbosity(prrte_rtc_base_framework.framework_output)) {
@@ -215,7 +217,7 @@ static void assign(prrte_job_t *jdata)
     prrte_list_t *cache;
     prrte_value_t *kv;
 
-    if (VM_HOLE_NONE == mca_rtc_hwloc_component.kind ||
+    if (VM_HOLE_NONE == prrte_rtc_hwloc_component.kind ||
         NULL == shmemfile) {
         return;
     }

@@ -12,6 +12,8 @@
  * Copyright (c) 2006      Sun Microsystems, Inc.  All rights reserved.
  *                         Use is subject to license terms.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +45,7 @@ struct prrte_ras_gridengine_component_t {
 };
 typedef struct prrte_ras_gridengine_component_t prrte_ras_gridengine_component_t;
 
-PRRTE_EXPORT extern prrte_ras_gridengine_component_t mca_ras_gridengine_component;
+PRRTE_EXPORT extern prrte_ras_gridengine_component_t prrte_ras_gridengine_component;
 PRRTE_EXPORT extern prrte_ras_base_module_t prrte_ras_gridengine_module;
 
 

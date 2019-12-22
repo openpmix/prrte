@@ -12,6 +12,8 @@
  * Copyright (c) 2006      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -144,7 +146,7 @@ static int discover(prrte_list_t* nodelist, char *pbs_jobid)
     /* if we are in SMP mode, then read the environment to get the
      * number of cpus for each node read in the file
      */
-    if (mca_ras_tm_component.smp_mode) {
+    if (prrte_ras_tm_component.smp_mode) {
         if (NULL == (cppn = getenv("PBS_PPN"))) {
             prrte_show_help("help-ras-tm.txt", "smp-error", true);
             return PRRTE_ERR_NOT_FOUND;
@@ -155,7 +157,7 @@ static int discover(prrte_list_t* nodelist, char *pbs_jobid)
     }
 
     /* setup the full path to the PBS file */
-    filename = prrte_os_path(false, mca_ras_tm_component.nodefile_dir,
+    filename = prrte_os_path(false, prrte_ras_tm_component.nodefile_dir,
                             pbs_jobid, NULL);
     fp = fopen(filename, "r");
     if (NULL == fp) {
@@ -189,7 +191,7 @@ static int discover(prrte_list_t* nodelist, char *pbs_jobid)
              item = prrte_list_get_next(item)) {
             node = (prrte_node_t*) item;
             if (0 == strcmp(node->name, hostname)) {
-                if (mca_ras_tm_component.smp_mode) {
+                if (prrte_ras_tm_component.smp_mode) {
                     /* this cannot happen in smp mode */
                     prrte_show_help("help-ras-tm.txt", "smp-multi", true);
                     return PRRTE_ERR_BAD_PARAM;

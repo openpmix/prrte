@@ -13,6 +13,8 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,7 +49,7 @@
  * and pointers to our public functions in it
  */
 
-prrte_odls_base_component_t mca_odls_default_component = {
+prrte_odls_base_component_t prrte_odls_default_component = {
     /* First, the mca_component_t struct containing meta information
     about the component itself */
     .version = {

@@ -14,6 +14,8 @@
  * Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2011-2019 IBM Corporation.  All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,7 +71,7 @@ struct prrte_plm_rsh_component_t {
 };
 typedef struct prrte_plm_rsh_component_t prrte_plm_rsh_component_t;
 
-PRRTE_MODULE_EXPORT extern prrte_plm_rsh_component_t mca_plm_rsh_component;
+PRRTE_MODULE_EXPORT extern prrte_plm_rsh_component_t prrte_plm_rsh_component;
 extern prrte_plm_base_module_t prrte_plm_rsh_module;
 
 PRRTE_MODULE_EXPORT char **prrte_plm_rsh_search(const char* agent_list, const char *path);

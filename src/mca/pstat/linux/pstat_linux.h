@@ -10,8 +10,9 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2006-2007 Cisco Systems, Inc.  All rights reserved.
- *
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,7 +42,7 @@ BEGIN_C_DECLS
 /**
  * Globally exported variable
  */
-PRRTE_EXPORT extern const prrte_pstat_base_component_t mca_pstat_linux_component;
+PRRTE_EXPORT extern const prrte_pstat_base_component_t prrte_pstat_linux_component;
 
 PRRTE_EXPORT extern const prrte_pstat_base_module_t prrte_pstat_linux_module;
 

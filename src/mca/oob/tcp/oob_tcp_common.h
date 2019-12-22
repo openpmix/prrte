@@ -13,6 +13,8 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,6 +31,6 @@
 #include "oob_tcp_peer.h"
 
 PRRTE_MODULE_EXPORT void prrte_oob_tcp_set_socket_options(int sd);
-PRRTE_MODULE_EXPORT char* mca_oob_tcp_state_print(mca_oob_tcp_state_t state);
-PRRTE_MODULE_EXPORT mca_oob_tcp_peer_t* mca_oob_tcp_peer_lookup(const prrte_process_name_t *name);
+PRRTE_MODULE_EXPORT char* prrte_oob_tcp_state_print(prrte_oob_tcp_state_t state);
+PRRTE_MODULE_EXPORT prrte_oob_tcp_peer_t* prrte_oob_tcp_peer_lookup(const prrte_process_name_t *name);
 #endif /* _MCA_OOB_TCP_COMMON_H_ */

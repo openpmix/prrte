@@ -13,8 +13,8 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2017      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2017-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -34,7 +34,7 @@
  * the message came from an external (to
  * this component) source
  */
-typedef uint8_t mca_oob_tcp_msg_type_t;
+typedef uint8_t prrte_oob_tcp_msg_type_t;
 
 #define MCA_OOB_TCP_IDENT 1
 #define MCA_OOB_TCP_PROBE 2
@@ -63,10 +63,10 @@ typedef struct {
     /* number of bytes in message */
     uint32_t nbytes;
     /* type of message */
-    mca_oob_tcp_msg_type_t type;
+    prrte_oob_tcp_msg_type_t type;
     /* routed module to be used */
     char routed[PRRTE_MAX_RTD_SIZE+1];
-} mca_oob_tcp_hdr_t;
+} prrte_oob_tcp_hdr_t;
 /**
  * Convert the message header to host byte order
  */

@@ -2,6 +2,8 @@
  * Copyright (c) 2012      Los Alamos National Security, LLC.
  *                         All rights reserved
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,8 +24,8 @@
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_filem_base_component_t mca_filem_raw_component;
-PRRTE_EXPORT extern prrte_filem_base_module_t mca_filem_raw_module;
+PRRTE_MODULE_EXPORT extern prrte_filem_base_component_t prrte_filem_raw_component;
+PRRTE_EXPORT extern prrte_filem_base_module_t prrte_filem_raw_module;
 
 extern bool prrte_filem_raw_flatten_trees;
 

@@ -3,7 +3,7 @@
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2015-2018 Research Organization for Information Science
+ * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
@@ -72,7 +72,7 @@ static int ppr_mapper(prrte_job_t *jdata)
 {
     int rc = PRRTE_SUCCESS, j, n;
     prrte_proc_t *proc;
-    prrte_mca_base_component_t *c=&mca_rmaps_ppr_component.base_version;
+    prrte_mca_base_component_t *c=&prrte_rmaps_ppr_component.base_version;
     prrte_node_t *node;
     prrte_app_context_t *app;
     prrte_vpid_t total_procs, nprocs_mapped;
@@ -618,7 +618,7 @@ static void prune(prrte_jobid_t jobid,
 static int assign_locations(prrte_job_t *jdata)
 {
     int i, j, m, n;
-    prrte_mca_base_component_t *c=&mca_rmaps_ppr_component.base_version;
+    prrte_mca_base_component_t *c=&prrte_rmaps_ppr_component.base_version;
     prrte_node_t *node;
     prrte_proc_t *proc;
     prrte_app_context_t *app;

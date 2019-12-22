@@ -13,6 +13,8 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,7 +40,7 @@
 /*
  * Data structure for accepting connections.
  */
-struct mca_oob_tcp_listener_t {
+struct prrte_oob_tcp_listener_t {
     prrte_list_item_t item;
     bool ev_active;
     prrte_event_t event;
@@ -46,16 +48,16 @@ struct mca_oob_tcp_listener_t {
     int sd;
     uint16_t port;
 };
-typedef struct mca_oob_tcp_listener_t mca_oob_tcp_listener_t;
-PRRTE_CLASS_DECLARATION(mca_oob_tcp_listener_t);
+typedef struct prrte_oob_tcp_listener_t prrte_oob_tcp_listener_t;
+PRRTE_CLASS_DECLARATION(prrte_oob_tcp_listener_t);
 
 typedef struct {
     prrte_object_t super;
     prrte_event_t ev;
     int fd;
     struct sockaddr_storage addr;
-} mca_oob_tcp_pending_connection_t;
-PRRTE_CLASS_DECLARATION(mca_oob_tcp_pending_connection_t);
+} prrte_oob_tcp_pending_connection_t;
+PRRTE_CLASS_DECLARATION(prrte_oob_tcp_pending_connection_t);
 
 PRRTE_MODULE_EXPORT int prrte_oob_tcp_start_listening(void);
 

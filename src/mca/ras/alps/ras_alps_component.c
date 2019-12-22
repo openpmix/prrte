@@ -14,6 +14,8 @@
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +45,7 @@ static int prrte_ras_alps_component_query(prrte_mca_base_module_t **module,
 unsigned long int prrte_ras_alps_res_id = 0UL;
 char *ras_alps_apstat_cmd = NULL;
 
-prrte_ras_base_component_t mca_ras_alps_component = {
+prrte_ras_base_component_t prrte_ras_alps_component = {
     /* First, the prrte_mca_base_component_t struct containing meta information about
      * the component itself
      * */
@@ -149,7 +151,7 @@ static int
 ras_alps_register(void)
 {
     param_priority = 75;
-    (void) mca_base_component_var_register (&mca_ras_alps_component.base_version,
+    (void) mca_base_component_var_register (&prrte_ras_alps_component.base_version,
                                             "priority", "Priority of the alps ras component",
                                             MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
@@ -157,7 +159,7 @@ ras_alps_register(void)
                                             &param_priority);
 
     ras_alps_read_attempts = 10;
-    (void) mca_base_component_var_register (&mca_ras_alps_component.base_version,
+    (void) mca_base_component_var_register (&prrte_ras_alps_component.base_version,
                                             "appinfo_read_attempts",
                                             "Maximum number of attempts to read ALPS "
                                             "appinfo file", MCA_BASE_VAR_TYPE_INT,
@@ -166,7 +168,7 @@ ras_alps_register(void)
 
     ras_alps_apstat_cmd = "apstat";         /* by default apstat is in a user's path on a Cray XE/XC if
                                                alps is the site's job launcher  */
-    (void) mca_base_component_var_register (&mca_ras_alps_component.base_version,
+    (void) mca_base_component_var_register (&prrte_ras_alps_component.base_version,
                                             "apstat_cmd", "Location of the apstat command",
                                             MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_6,
                                             MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_apstat_cmd);

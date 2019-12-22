@@ -3,7 +3,8 @@
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
- *
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +36,7 @@ static int state_dvm_component_query(prrte_mca_base_module_t **module, int *prio
  * Instantiate the public struct with all of our public information
  * and pointer to our public functions in it
  */
-prrte_state_base_component_t mca_state_dvm_component =
+prrte_state_base_component_t prrte_state_dvm_component =
 {
     /* Handle the general mca_component_t struct containing
      *  meta information about the component

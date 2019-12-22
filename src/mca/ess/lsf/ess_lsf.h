@@ -11,6 +11,8 @@
  *                         All rights reserved.
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +25,7 @@
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t mca_ess_lsf_component;
+PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t prrte_ess_lsf_component;
 
 /*
  * Module open / close

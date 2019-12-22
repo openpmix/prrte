@@ -14,6 +14,8 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +48,7 @@ static int ras_tm_open(void);
 static int prrte_ras_tm_component_query(prrte_mca_base_module_t **module, int *priority);
 
 
-prrte_ras_tm_component_t mca_ras_tm_component = {
+prrte_ras_tm_component_t prrte_ras_tm_component = {
     {
         /* First, the prrte_mca_base_component_t struct containing meta
            information about the component itself */
@@ -73,7 +75,7 @@ prrte_ras_tm_component_t mca_ras_tm_component = {
 
 static int ras_tm_register(void)
 {
-    prrte_mca_base_component_t *c        = &mca_ras_tm_component.super.base_version;
+    prrte_mca_base_component_t *c        = &prrte_ras_tm_component.super.base_version;
     char *pbs_nodefile_env         = NULL;
 
     param_priority = 100;
@@ -83,16 +85,16 @@ static int ras_tm_register(void)
                                            PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                            &param_priority);
 
-    mca_ras_tm_component.nodefile_dir = NULL;
+    prrte_ras_tm_component.nodefile_dir = NULL;
 
     /* try to detect the default directory */
     pbs_nodefile_env = getenv("PBS_NODEFILE");
     if (NULL != pbs_nodefile_env) {
-        mca_ras_tm_component.nodefile_dir = prrte_dirname(pbs_nodefile_env);
+        prrte_ras_tm_component.nodefile_dir = prrte_dirname(pbs_nodefile_env);
     }
 
-    if (NULL == mca_ras_tm_component.nodefile_dir) {
-        mca_ras_tm_component.nodefile_dir = strdup ("/var/torque/aux");
+    if (NULL == prrte_ras_tm_component.nodefile_dir) {
+        prrte_ras_tm_component.nodefile_dir = strdup ("/var/torque/aux");
     }
 
     (void) prrte_mca_base_component_var_register (c, "nodefile_dir",
@@ -100,7 +102,7 @@ static int ras_tm_register(void)
                                             PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_ras_tm_component.nodefile_dir);
+                                            &prrte_ras_tm_component.nodefile_dir);
 
     /* for big SMP machines (e.g., those from SGI), listing the nodes
      * once/slot in the nodefile is extreme. In those cases, they may
@@ -108,14 +110,14 @@ static int ras_tm_register(void)
      * tells us how many cpus/node were allocated. Allow the user to
      * inform us that we are in such an environment
      */
-    mca_ras_tm_component.smp_mode = false;
+    prrte_ras_tm_component.smp_mode = false;
     (void) prrte_mca_base_component_var_register (c, "smp",
                                             "The Torque system is configured in SMP mode "
                                             "with the number of cpus/node given in the environment",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_ras_tm_component.smp_mode);
+                                            &prrte_ras_tm_component.smp_mode);
 
     return PRRTE_SUCCESS;
 }

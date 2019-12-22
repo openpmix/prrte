@@ -8,6 +8,8 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -227,7 +229,7 @@ PRRTE_EXPORT extern prrte_routed_module_t prrte_routed;
  * routed component interface
  *
  * Component interface for the routed framework.  A public instance of
- * this structure, called mca_routed_[component name]_component, must
+ * this structure, called prrte_routed_[component name]_component, must
  * exist in any routed component.
  */
 

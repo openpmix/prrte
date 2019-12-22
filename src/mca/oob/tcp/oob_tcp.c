@@ -14,8 +14,8 @@
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2016      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2016-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -77,7 +77,7 @@ static void accept_connection(const int accepted_fd,
 static void ping(const prrte_process_name_t *proc);
 static void send_nb(prrte_rml_send_t *msg);
 
-mca_oob_tcp_module_t mca_oob_tcp_module = {
+prrte_oob_tcp_module_t prrte_oob_tcp_module = {
     .accept_connection = accept_connection,
     .ping = ping,
     .send_nb = send_nb
@@ -88,7 +88,7 @@ mca_oob_tcp_module_t mca_oob_tcp_module = {
  */
 static void recv_handler(int sd, short flags, void* user);
 
-/* Called by mca_oob_tcp_accept() and connection_handler() on
+/* Called by prrte_oob_tcp_accept() and connection_handler() on
  * a socket that has been accepted.  This call finishes processing the
  * socket, including setting socket options and registering for the
  * OOB-level connection handshake.  Used in both the threaded and
@@ -115,7 +115,7 @@ static void accept_connection(const int accepted_fd,
 /* API functions */
 static void ping(const prrte_process_name_t *proc)
 {
-    mca_oob_tcp_peer_t *peer;
+    prrte_oob_tcp_peer_t *peer;
 
     prrte_output_verbose(2, prrte_oob_base_framework.framework_output,
                         "%s:[%s:%d] processing ping to peer %s",
@@ -124,7 +124,7 @@ static void ping(const prrte_process_name_t *proc)
                         PRRTE_NAME_PRINT(proc));
 
     /* do we know this peer? */
-    if (NULL == (peer = mca_oob_tcp_peer_lookup(proc))) {
+    if (NULL == (peer = prrte_oob_tcp_peer_lookup(proc))) {
         /* push this back to the component so it can try
          * another module within this transport. If no
          * module can be found, the component can push back
@@ -135,7 +135,7 @@ static void ping(const prrte_process_name_t *proc)
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                             __FILE__, __LINE__,
                             PRRTE_NAME_PRINT(proc));
-        PRRTE_ACTIVATE_TCP_MSG_ERROR(NULL, NULL, proc, mca_oob_tcp_component_hop_unknown);
+        PRRTE_ACTIVATE_TCP_MSG_ERROR(NULL, NULL, proc, prrte_oob_tcp_component_hop_unknown);
         return;
     }
 
@@ -162,19 +162,19 @@ static void ping(const prrte_process_name_t *proc)
 
     /* attempt the connection */
     peer->state = MCA_OOB_TCP_CONNECTING;
-    PRRTE_ACTIVATE_TCP_CONN_STATE(peer, mca_oob_tcp_peer_try_connect);
+    PRRTE_ACTIVATE_TCP_CONN_STATE(peer, prrte_oob_tcp_peer_try_connect);
 }
 
 static void send_nb(prrte_rml_send_t *msg)
 {
-    mca_oob_tcp_peer_t *peer;
+    prrte_oob_tcp_peer_t *peer;
     prrte_process_name_t hop;
 
 
     /* do we have a route to this peer (could be direct)? */
     hop = prrte_routed.get_route(&msg->dst);
     /* do we know this hop? */
-    if (NULL == (peer = mca_oob_tcp_peer_lookup(&hop))) {
+    if (NULL == (peer = prrte_oob_tcp_peer_lookup(&hop))) {
         /* push this back to the component so it can try
          * another module within this transport. If no
          * module can be found, the component can push back
@@ -186,7 +186,7 @@ static void send_nb(prrte_rml_send_t *msg)
                             __FILE__, __LINE__,
                             PRRTE_NAME_PRINT(&msg->dst), msg->tag, msg->seq_num,
                             PRRTE_NAME_PRINT(&hop));
-        PRRTE_ACTIVATE_TCP_NO_ROUTE(msg, &hop, mca_oob_tcp_component_no_route);
+        PRRTE_ACTIVATE_TCP_NO_ROUTE(msg, &hop, prrte_oob_tcp_component_no_route);
         return;
     }
 
@@ -224,7 +224,7 @@ static void send_nb(prrte_rml_send_t *msg)
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                             PRRTE_NAME_PRINT(&peer->name));
         peer->state = MCA_OOB_TCP_CONNECTING;
-        PRRTE_ACTIVATE_TCP_CONN_STATE(peer, mca_oob_tcp_peer_try_connect);
+        PRRTE_ACTIVATE_TCP_CONN_STATE(peer, prrte_oob_tcp_peer_try_connect);
     }
 }
 
@@ -237,10 +237,10 @@ static void send_nb(prrte_rml_send_t *msg)
  */
 static void recv_handler(int sd, short flg, void *cbdata)
 {
-    mca_oob_tcp_conn_op_t *op = (mca_oob_tcp_conn_op_t*)cbdata;
+    prrte_oob_tcp_conn_op_t *op = (prrte_oob_tcp_conn_op_t*)cbdata;
     int flags;
-    mca_oob_tcp_hdr_t hdr;
-    mca_oob_tcp_peer_t *peer;
+    prrte_oob_tcp_hdr_t hdr;
+    prrte_oob_tcp_peer_t *peer;
 
     PRRTE_ACQUIRE_OBJECT(op);
 
@@ -249,33 +249,33 @@ static void recv_handler(int sd, short flg, void *cbdata)
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
 
     /* get the handshake */
-    if (PRRTE_SUCCESS != mca_oob_tcp_peer_recv_connect_ack(NULL, sd, &hdr)) {
+    if (PRRTE_SUCCESS != prrte_oob_tcp_peer_recv_connect_ack(NULL, sd, &hdr)) {
         goto cleanup;
     }
 
     /* finish processing ident */
     if (MCA_OOB_TCP_IDENT == hdr.type) {
-        if (NULL == (peer = mca_oob_tcp_peer_lookup(&hdr.origin))) {
+        if (NULL == (peer = prrte_oob_tcp_peer_lookup(&hdr.origin))) {
             /* should never happen */
-            mca_oob_tcp_peer_close(peer);
+            prrte_oob_tcp_peer_close(peer);
             goto cleanup;
         }
         /* set socket up to be non-blocking */
         if ((flags = fcntl(sd, F_GETFL, 0)) < 0) {
-            prrte_output(0, "%s mca_oob_tcp_recv_connect: fcntl(F_GETFL) failed: %s (%d)",
+            prrte_output(0, "%s prrte_oob_tcp_recv_connect: fcntl(F_GETFL) failed: %s (%d)",
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), strerror(prrte_socket_errno), prrte_socket_errno);
         } else {
             flags |= O_NONBLOCK;
             if (fcntl(sd, F_SETFL, flags) < 0) {
-                prrte_output(0, "%s mca_oob_tcp_recv_connect: fcntl(F_SETFL) failed: %s (%d)",
+                prrte_output(0, "%s prrte_oob_tcp_recv_connect: fcntl(F_SETFL) failed: %s (%d)",
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), strerror(prrte_socket_errno), prrte_socket_errno);
             }
         }
         /* is the peer instance willing to accept this connection */
         peer->sd = sd;
-        if (mca_oob_tcp_peer_accept(peer) == false) {
+        if (prrte_oob_tcp_peer_accept(peer) == false) {
             if (OOB_TCP_DEBUG_CONNECT <= prrte_output_get_verbosity(prrte_oob_base_framework.framework_output)) {
-                prrte_output(0, "%s-%s mca_oob_tcp_recv_connect: "
+                prrte_output(0, "%s-%s prrte_oob_tcp_recv_connect: "
                             "rejected connection from %s connection state %d",
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                             PRRTE_NAME_PRINT(&(peer->name)),

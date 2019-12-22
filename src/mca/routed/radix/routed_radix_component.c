@@ -6,6 +6,8 @@
  *                         All rights reserved.
  * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,7 +29,7 @@ static int prrte_routed_radix_component_query(prrte_mca_base_module_t **module, 
 /**
  * component definition
  */
-prrte_routed_radix_component_t mca_routed_radix_component = {
+prrte_routed_radix_component_t prrte_routed_radix_component = {
     {
         /* First, the prrte_mca_base_component_t struct containing meta
         information about the component itself */
@@ -50,22 +52,22 @@ prrte_routed_radix_component_t mca_routed_radix_component = {
 
 static int prrte_routed_radix_component_register(void)
 {
-    prrte_mca_base_component_t *c = &mca_routed_radix_component.super.base_version;
+    prrte_mca_base_component_t *c = &prrte_routed_radix_component.super.base_version;
 
-    mca_routed_radix_component.radix = 64;
+    prrte_routed_radix_component.radix = 64;
     (void) prrte_mca_base_component_var_register(c, NULL,
                                            "Radix to be used for routed radix tree",
                                            PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                            PRRTE_INFO_LVL_9,
                                            PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                           &mca_routed_radix_component.radix);
+                                           &prrte_routed_radix_component.radix);
 
     return PRRTE_SUCCESS;
 }
 
 static int prrte_routed_radix_component_query(prrte_mca_base_module_t **module, int *priority)
 {
-    if (0 > mca_routed_radix_component.radix) {
+    if (0 > prrte_routed_radix_component.radix) {
         return PRRTE_ERR_BAD_PARAM;
     }
 

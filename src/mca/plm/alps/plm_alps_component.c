@@ -13,6 +13,8 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,7 +44,7 @@
 /*
  * Public string showing the plm ompi_alps component version number
  */
-const char *mca_plm_alps_component_version_string =
+const char *prrte_plm_alps_component_version_string =
   "PRRTE alps plm MCA component version " PRRTE_VERSION;
 
 
@@ -60,7 +62,7 @@ static int prrte_plm_alps_component_query(prrte_mca_base_module_t **module, int 
  * and pointers to our public functions in it
  */
 
-prrte_plm_alps_component_t mca_plm_alps_component = {
+prrte_plm_alps_component_t prrte_plm_alps_component = {
 
     {
         /* First, the mca_component_t struct containing meta
@@ -93,39 +95,39 @@ prrte_plm_alps_component_t mca_plm_alps_component = {
 
 static int plm_alps_register(void)
 {
-    prrte_mca_base_component_t *comp = &mca_plm_alps_component.super.base_version;
+    prrte_mca_base_component_t *comp = &prrte_plm_alps_component.super.base_version;
 
-    mca_plm_alps_component.debug = false;
+    prrte_plm_alps_component.debug = false;
     (void) prrte_mca_base_component_var_register (comp, "debug", "Enable debugging of alps plm",
                                             PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_alps_component.debug);
+                                            &prrte_plm_alps_component.debug);
 
-    if (mca_plm_alps_component.debug == 0) {
-        mca_plm_alps_component.debug = prrte_debug_flag;
+    if (prrte_plm_alps_component.debug == 0) {
+        prrte_plm_alps_component.debug = prrte_debug_flag;
     }
 
-    mca_plm_alps_component.priority = 100;
+    prrte_plm_alps_component.priority = 100;
     (void) prrte_mca_base_component_var_register (comp, "priority", "Default selection priority",
                                             PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_alps_component.priority);
+                                            &prrte_plm_alps_component.priority);
 
-    mca_plm_alps_component.aprun_cmd = "aprun";
+    prrte_plm_alps_component.aprun_cmd = "aprun";
     (void) prrte_mca_base_component_var_register (comp, "aprun", "Command to run instead of aprun",
                                             PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_alps_component.aprun_cmd);
+                                            &prrte_plm_alps_component.aprun_cmd);
 
-    mca_plm_alps_component.custom_args = NULL;
+    prrte_plm_alps_component.custom_args = NULL;
     (void) prrte_mca_base_component_var_register (comp, "args", "Custom arguments to aprun",
                                             PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                             PRRTE_INFO_LVL_9,
                                             PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &mca_plm_alps_component.custom_args);
+                                            &prrte_plm_alps_component.custom_args);
     return PRRTE_SUCCESS;
 }
 
@@ -166,7 +168,7 @@ static int prrte_plm_alps_component_query(prrte_mca_base_module_t **module, int 
     }
 #endif
 
-    *priority = mca_plm_alps_component.priority;
+    *priority = prrte_plm_alps_component.priority;
     *module = (prrte_mca_base_module_t *) &prrte_plm_alps_module;
     PRRTE_OUTPUT_VERBOSE((1, prrte_plm_base_framework.framework_output,
                         "%s plm:alps: available for selection",

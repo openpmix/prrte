@@ -4,6 +4,8 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -38,7 +40,7 @@ static int dvm_component_query(prrte_mca_base_module_t **module, int *priority);
  * Instantiate the public struct with all of our public information
  * and pointer to our public functions in it
  */
-prrte_errmgr_base_component_t mca_errmgr_dvm_component = {
+prrte_errmgr_base_component_t prrte_errmgr_dvm_component = {
     /* Handle the general mca_component_t struct containing
      *  meta information about the component dvm
      */
@@ -65,7 +67,7 @@ static int my_priority;
 
 static int dvm_register(void)
 {
-    prrte_mca_base_component_t *c = &mca_errmgr_dvm_component.base_version;
+    prrte_mca_base_component_t *c = &prrte_errmgr_dvm_component.base_version;
 
     my_priority = 1000;
     (void) prrte_mca_base_component_var_register(c, "priority",

@@ -2,6 +2,8 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +41,7 @@ extern "C" {
 
     };
     typedef struct prrte_compress_zlib_component_t prrte_compress_zlib_component_t;
-    extern prrte_compress_zlib_component_t mca_compress_zlib_component;
+    extern prrte_compress_zlib_component_t prrte_compress_zlib_component;
 
     int prrte_compress_zlib_component_query(prrte_mca_base_module_t **module, int *priority);
 

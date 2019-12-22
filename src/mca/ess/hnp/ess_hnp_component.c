@@ -13,7 +13,7 @@
  * Copyright (c) 2015-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2017      Research Organization for Information Science
+ * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
  *
@@ -49,7 +49,7 @@ static int hnp_component_query(prrte_mca_base_module_t **module, int *priority);
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
-prrte_ess_base_component_t mca_ess_hnp_component = {
+prrte_ess_base_component_t prrte_ess_hnp_component = {
     .base_version = {
         PRRTE_ESS_BASE_VERSION_3_0_0,
 

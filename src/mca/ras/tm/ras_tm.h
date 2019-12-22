@@ -10,6 +10,8 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +39,7 @@ struct prrte_ras_tm_component_t {
 };
 typedef struct prrte_ras_tm_component_t prrte_ras_tm_component_t;
 
-PRRTE_EXPORT extern prrte_ras_tm_component_t mca_ras_tm_component;
+PRRTE_EXPORT extern prrte_ras_tm_component_t prrte_ras_tm_component;
 PRRTE_EXPORT extern prrte_ras_base_module_t prrte_ras_tm_module;
 
 END_C_DECLS

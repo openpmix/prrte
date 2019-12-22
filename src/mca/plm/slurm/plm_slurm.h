@@ -10,6 +10,8 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,7 +40,7 @@ typedef struct prrte_plm_slurm_component_t prrte_plm_slurm_component_t;
  * Globally exported variable
  */
 
-PRRTE_MODULE_EXPORT extern prrte_plm_slurm_component_t mca_plm_slurm_component;
+PRRTE_MODULE_EXPORT extern prrte_plm_slurm_component_t prrte_plm_slurm_component;
 PRRTE_EXPORT extern prrte_plm_base_module_t prrte_plm_slurm_module;
 
 END_C_DECLS
