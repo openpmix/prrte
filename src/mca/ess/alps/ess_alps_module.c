@@ -97,7 +97,7 @@ static int rte_init(int argc, char **argv)
                        "prrte_init:startup:internal-failure",
                        true, error, PRRTE_ERROR_NAME(ret), ret);
     }
-    goto fn_exit;
+    return ret;
 }
 
 static int rte_finalize(void)
