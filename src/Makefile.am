@@ -72,7 +72,6 @@ include class/Makefile.am
 include runtime/Makefile.am
 include tools/Makefile.am
 include prted/Makefile.am
-include test/system/Makefile.include
 include mca/Makefile.am
 include dss/Makefile.am
 include sys/Makefile.am
