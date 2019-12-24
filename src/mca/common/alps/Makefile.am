@@ -3,6 +3,8 @@
 # Copyright (c) 2009-2012 Oak Ridge National Laboratory.  All rights reserved.
 # Copyright (c) 2012-2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019      Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,8 +23,8 @@ sources = \
 
 lib_LTLIBRARIES =
 noinst_LTLIBRARIES =
-comp_inst = libprtemca_common_alps.la
-comp_noinst = libprtemca_common_alps_noinst.la
+comp_inst = libmca_common_alps.la
+comp_noinst = libmca_common_alps_noinst.la
 
 if MCA_BUILD_prrte_common_alps_DSO
 lib_LTLIBRARIES += $(comp_inst)
@@ -30,13 +32,13 @@ else
 noinst_LTLIBRARIES += $(comp_noinst)
 endif
 
-libprtemca_common_alps_la_SOURCES = $(headers) $(sources)
-libprtemca_common_alps_la_CPPFLAGS = $(common_alps_CPPFLAGS)
-libprtemca_common_alps_la_LDFLAGS =  \
+libmca_common_alps_la_SOURCES = $(headers) $(sources)
+libmca_common_alps_la_CPPFLAGS = $(common_alps_CPPFLAGS)
+libmca_common_alps_la_LDFLAGS =  \
         -version-info $(libmca_prrte_common_alps_so_version) \
         $(common_alps_LDFLAGS)
-libprtemca_common_alps_la_LIBADD = $(common_alps_LIBS)
-libprtemca_common_alps_noinst_la_SOURCES = $(headers) $(sources)
+libmca_common_alps_la_LIBADD = $(common_alps_LIBS)
+libmca_common_alps_noinst_la_SOURCES = $(headers) $(sources)
 
 # Conditionally install the header files
 
