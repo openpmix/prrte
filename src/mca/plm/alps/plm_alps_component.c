@@ -31,7 +31,7 @@
 #include "prrte_config.h"
 #include "constants.h"
 
-#include "src/mca/base/mca_base_var.h"
+#include "src/mca/base/prrte_mca_base_var.h"
 
 #include "src/runtime/prrte_globals.h"
 

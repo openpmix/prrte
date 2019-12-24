@@ -49,10 +49,12 @@ prun_LDADD = \
 install-exec-hook:
 	(cd $(DESTDIR)$(bindir); rm -f mpirun$(EXEEXT); $(LN_S) prun$(EXEEXT) mpirun$(EXEEXT))
 	(cd $(DESTDIR)$(bindir); rm -f mpiexec$(EXEEXT); $(LN_S) prun$(EXEEXT) mpiexec$(EXEEXT))
+	(cd $(DESTDIR)$(bindir); rm -f oshrun$(EXEEXT); $(LN_S) prun$(EXEEXT) oshrun$(EXEEXT))
 
 uninstall-local:
 	rm -f $(DESTDIR)$(bindir)/mpirun$(EXEEXT) \
-		$(DESTDIR)$(bindir)/mpiexec$(EXEEXT)
+		$(DESTDIR)$(bindir)/mpiexec$(EXEEXT)  \
+		$(DESTDIR)$(bindir)/oshrun$(EXEEXT)
 
 distclean-local:
 	rm -f $(man_pages)
