@@ -27,12 +27,12 @@ EXTRA_DIST = README INSTALL VERSION Doxyfile LICENSE autogen.pl
 
 include examples/Makefile.include
 
-dist-hook:
-	env LS_COLORS= sh "$(top_srcdir)/config/distscript.sh" "$(top_srcdir)" "$(distdir)" "$(PRRTE_REPO_REV)"
-	@if test ! -s $(distdir)/AUTHORS ; then \
-		echo "AUTHORS file is empty; aborting distribution"; \
-		exit 1; \
-	fi
+# dist-hook:
+#	env LS_COLORS= sh "$(top_srcdir)/config/distscript.sh" "$(top_srcdir)" "$(distdir)" "$(PRRTE_REPO_REV)"
+#	@if test ! -s $(distdir)/AUTHORS ; then \
+#		echo "AUTHORS file is empty; aborting distribution"; \
+#		exit 1; \
+#	fi
 
 # Check for common symbols.  Use a "-hook" to increase the odds that a
 # developer will see it at the end of their installation process.
@@ -54,7 +54,7 @@ ACLOCAL_AMFLAGS = -I config
 # copy behavior), it's easier to always build AUTHORS here, rather
 # than trying to handle the EXTRA_DIST dependency from a clean repo
 # (no AUTHORS file present) and use dist-hook to run every time.
-AUTHORS: FORCE
-	$(PERL) "$(top_srcdir)/contrib/dist/make-authors.pl" --skip-ok --quiet --srcdir="$(top_srcdir)"
+#AUTHORS: FORCE
+#	$(PERL) "$(top_srcdir)/contrib/dist/make-authors.pl" --skip-ok --quiet --srcdir="$(top_srcdir)"
 
-FORCE:
+#FORCE:
