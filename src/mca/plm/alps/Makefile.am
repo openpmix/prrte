@@ -14,6 +14,8 @@
 #                         reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2019      Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -47,7 +49,7 @@ mca_plm_alps_la_CPPFLAGS = $(plm_alps_CPPFLAGS)
 mca_plm_alps_la_LDFLAGS = -module -avoid-version $(plm_alps_LDFLAGS)
 mca_plm_alps_la_LIBADD = $(plm_alps_LIBS) \
     $(top_builddir)/src/libprrte.la   \
-    $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libprtemca_common_alps.la
+    $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_plm_alps_la_SOURCES =$(sources)

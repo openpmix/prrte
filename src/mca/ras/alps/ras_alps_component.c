@@ -151,27 +151,27 @@ static int
 ras_alps_register(void)
 {
     param_priority = 75;
-    (void) mca_base_component_var_register (&prrte_ras_alps_component.base_version,
-                                            "priority", "Priority of the alps ras component",
-                                            MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
-                                            PRRTE_INFO_LVL_9,
-                                            MCA_BASE_VAR_SCOPE_READONLY,
-                                            &param_priority);
+    (void) prrte_mca_base_component_var_register (&prrte_ras_alps_component.base_version,
+                                                  "priority", "Priority of the alps ras component",
+                                                  MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                                  PRRTE_INFO_LVL_9,
+                                                  MCA_BASE_VAR_SCOPE_READONLY,
+                                                  &param_priority);
 
     ras_alps_read_attempts = 10;
-    (void) mca_base_component_var_register (&prrte_ras_alps_component.base_version,
-                                            "appinfo_read_attempts",
-                                            "Maximum number of attempts to read ALPS "
-                                            "appinfo file", MCA_BASE_VAR_TYPE_INT,
-                                            NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                            MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_read_attempts);
+    (void) prrte_mca_base_component_var_register (&prrte_ras_alps_component.base_version,
+                                                  "appinfo_read_attempts",
+                                                  "Maximum number of attempts to read ALPS "
+                                                  "appinfo file", MCA_BASE_VAR_TYPE_INT,
+                                                  NULL, 0, 0, PRRTE_INFO_LVL_9,
+                                                  MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_read_attempts);
 
     ras_alps_apstat_cmd = "apstat";         /* by default apstat is in a user's path on a Cray XE/XC if
                                                alps is the site's job launcher  */
-    (void) mca_base_component_var_register (&prrte_ras_alps_component.base_version,
-                                            "apstat_cmd", "Location of the apstat command",
-                                            MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_6,
-                                            MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_apstat_cmd);
+    (void) prrte_mca_base_component_var_register (&prrte_ras_alps_component.base_version,
+                                                  "apstat_cmd", "Location of the apstat command",
+                                                  MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_6,
+                                                  MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_apstat_cmd);
 
     return PRRTE_SUCCESS;
 }

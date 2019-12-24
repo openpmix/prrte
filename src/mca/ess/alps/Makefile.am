@@ -14,6 +14,8 @@
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2019      Triad National Security, LLC. All rights
 #                         reserved.
+# Copyright (c) 2019      Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -46,7 +48,7 @@ mca_ess_alps_la_CPPFLAGS = $(ess_alps_CPPFLAGS)
 mca_ess_alps_la_LDFLAGS = -module -avoid-version $(ess_alps_LDFLAGS)
 mca_ess_alps_la_LIBADD = $(ess_alps_LIBS) \
                          $(top_builddir)/src/libprrte.la \
-                         $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libprtemca_common_alps.la
+                         $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
 
 
 noinst_LTLIBRARIES = $(component_noinst)
