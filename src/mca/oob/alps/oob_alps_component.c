@@ -55,7 +55,7 @@
 #include "src/util/show_help.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
-#include "src/prrte_socket_errno.h"
+#include "src/include/prrte_socket_errno.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/argv.h"
