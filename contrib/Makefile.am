@@ -34,8 +34,6 @@ EXTRA_DIST = \
 	dist/make_dist_tarball \
 	dist/make-authors.pl \
 	dist/linux/prte.spec \
-	dist/mofed/compile_debian_mlnx_example.in \
-	dist/mofed/debian \
 	platform/optimized \
 	platform/intel/bend/linux \
 	platform/intel/bend/linux.conf \
