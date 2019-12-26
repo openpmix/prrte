@@ -79,6 +79,7 @@
 #include "src/runtime/prrte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
+#include "src/util/fd.h"
 #include "src/threads/threads.h"
 
 #include "src/mca/rml/rml.h"
@@ -714,7 +715,6 @@ static void ssh_child(int argc, char **argv)
 {
     char** env;
     char* var;
-    long fd, fdmax = sysconf(_SC_OPEN_MAX);
     char *exec_path;
     char **exec_argv;
     int fdin;
@@ -743,8 +743,7 @@ static void ssh_child(int argc, char **argv)
     close(fdin);
 
     /* close all file descriptors w/ exception of stdin/stdout/stderr */
-    for(fd=3; fd<fdmax; fd++)
-        close(fd);
+    prrte_close_open_file_descriptors(-1);
 
     /* Set signal handlers back to the default.  Do this close
      to the execve() because the event library may (and likely
