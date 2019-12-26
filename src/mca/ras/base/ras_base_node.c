@@ -33,6 +33,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
 #include "src/runtime/prrte_globals.h"
 
 #include "src/mca/ras/base/ras_private.h"
@@ -88,7 +89,7 @@ int prrte_ras_base_node_insert(prrte_list_t* nodes, prrte_job_t *jdata)
     if (prrte_ras_base.launch_orted_on_hn) {
         if (NULL != hnp_node) {
             PRRTE_LIST_FOREACH(node, nodes, prrte_node_t) {
-                if (prrte_ifislocal(node->name)) {
+                if (prrte_check_host_is_local(node->name)) {
                     prrte_hnp_is_allocated = true;
                     break;
                 }
@@ -113,7 +114,7 @@ int prrte_ras_base_node_insert(prrte_list_t* nodes, prrte_job_t *jdata)
          * first position since it is the first one entered. We need to check to see
          * if this node is the same as the HNP's node so we don't double-enter it
          */
-        if (!skiphnp && NULL != hnp_node && prrte_ifislocal(node->name)) {
+        if (!skiphnp && NULL != hnp_node && prrte_check_host_is_local(node->name)) {
             PRRTE_OUTPUT_VERBOSE((5, prrte_ras_base_framework.framework_output,
                                  "%s ras:base:node_insert updating HNP [%s] info to %ld slots",
                                  PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),

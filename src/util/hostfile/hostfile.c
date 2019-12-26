@@ -191,7 +191,7 @@ static int hostfile_parse_line(int token, prrte_list_t* updates,
                                  PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), node_name));
 
             /* see if this is another name for us */
-            if (prrte_ifislocal(node_name)) {
+            if (prrte_check_host_is_local(node_name)) {
                 /* Nodename has been allocated, that is for sure */
                 free (node_name);
                 node_name = strdup(prrte_process_info.nodename);
@@ -215,7 +215,7 @@ static int hostfile_parse_line(int token, prrte_list_t* updates,
         /* this is not a node to be excluded, so we need to process it and
          * add it to the "include" list. See if this host is actually us.
          */
-        if (prrte_ifislocal(node_name)) {
+        if (prrte_check_host_is_local(node_name)) {
             /* Nodename has been allocated, that is for sure */
             free (node_name);
             node_name = strdup(prrte_process_info.nodename);

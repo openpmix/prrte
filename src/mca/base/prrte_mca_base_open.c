@@ -40,6 +40,7 @@
 #include "src/mca/installdirs/installdirs.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
+#include "src/util/proc_info.h"
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
 #include "src/mca/base/prrte_mca_base_component_repository.h"
@@ -75,7 +76,6 @@ int prrte_mca_base_open(void)
 {
     char *value;
     prrte_output_stream_t lds;
-    char hostname[PRRTE_MAXHOSTNAMELEN];
 
     if (prrte_mca_base_opened++) {
         return PRRTE_SUCCESS;
@@ -152,8 +152,7 @@ int prrte_mca_base_open(void)
     } else {
         set_defaults(&lds);
     }
-    gethostname(hostname, sizeof(hostname));
-    prrte_asprintf(&lds.lds_prefix, "[%s:%05d] ", hostname, getpid());
+    prrte_asprintf(&lds.lds_prefix, "[%s:%05d] ", prrte_process_info.nodename, getpid());
     prrte_output_reopen(0, &lds);
     prrte_output_verbose (PRRTE_MCA_BASE_VERBOSE_COMPONENT, 0, "mca: base: opening components");
     free(lds.lds_prefix);

@@ -33,6 +33,7 @@
 
 #include "src/mca/pstat/pstat.h"
 #include "src/mca/pstat/base/base.h"
+#include "src/util/proc_info.h"
 #include "src/util/string_copy.h"
 
 #include "pstat_test.h"
@@ -67,7 +68,6 @@ static int query(pid_t pid,
                  prrte_node_stats_t *nstats)
 {
     double dtime;
-    char hostname[PRRTE_MAXHOSTNAMELEN];
 
     if (NULL != stats) {
         /* record the time of this sample */
@@ -85,8 +85,7 @@ static int query(pid_t pid,
     }
 
     if (NULL != stats) {
-        gethostname(hostname, sizeof(hostname));
-        prrte_string_copy(stats->node, hostname, PRRTE_PSTAT_MAX_STRING_LEN);
+        prrte_string_copy(stats->node, prrte_process_info.nodename, PRRTE_PSTAT_MAX_STRING_LEN);
 
         stats->pid = pid;
         prrte_string_copy(stats->cmd, "UNKNOWN", PRRTE_PSTAT_MAX_STRING_LEN);

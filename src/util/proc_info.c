@@ -130,7 +130,7 @@ void prrte_setup_hostname(void)
     /* we have to strip node names here, if user directs, to ensure that
      * the names exchanged in the modex match the names found locally
      */
-    if (NULL != prrte_strip_prefix) {
+    if (NULL != prrte_strip_prefix && !prrte_net_isaddr(hostname)) {
         prefixes = prrte_argv_split(prrte_strip_prefix, ',');
         match = false;
         for (i=0; NULL != prefixes[i]; i++) {

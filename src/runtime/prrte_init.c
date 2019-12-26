@@ -214,7 +214,9 @@ int prrte_init_util(void)
                 __FILE__, __LINE__, ret);
         return ret;
     }
-
+    /* add network aliases to our list of alias hostnames */
+    prrte_ifgetaliases(&prrte_process_info.aliases);
+    
     /* open hwloc */
     prrte_hwloc_base_open();
 

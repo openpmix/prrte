@@ -244,7 +244,6 @@ int prrte_daemon(int argc, char *argv[])
     prrte_cmd_line_t *cmd_line = NULL;
     int i;
     prrte_buffer_t *buffer;
-    char hostname[PRRTE_MAXHOSTNAMELEN];
     pmix_value_t val;
     pmix_proc_t proc;
     pmix_status_t prc;
@@ -311,8 +310,7 @@ int prrte_daemon(int argc, char *argv[])
      * away just in case we have a problem along the way
      */
     if (prted_globals.debug) {
-        gethostname(hostname, sizeof(hostname));
-        fprintf(stderr, "Daemon was launched on %s - beginning to initialize\n", hostname);
+        fprintf(stderr, "Daemon was launched on %s - beginning to initialize\n", prrte_process_info.nodename);
     }
 
     /* check for help request */
@@ -609,34 +607,21 @@ int prrte_daemon(int argc, char *argv[])
 
     /* if requested, include any non-loopback aliases for this node */
     if (prrte_retain_aliases) {
-        char **aliases=NULL;
         uint8_t naliases, ni;
-        char hostname[PRRTE_MAXHOSTNAMELEN];
 
-        /* if we stripped the prefix or removed the fqdn,
-         * include full hostname as an alias
-         */
-        gethostname(hostname, sizeof(hostname));
-        if (strlen(prrte_process_info.nodename) < strlen(hostname)) {
-            prrte_argv_append_nosize(&aliases, hostname);
-        }
-        prrte_ifgetaliases(&aliases);
-        naliases = prrte_argv_count(aliases);
+        naliases = prrte_argv_count(prrte_process_info.aliases);
         if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &naliases, 1, PRRTE_UINT8))) {
             PRRTE_ERROR_LOG(ret);
             PRRTE_RELEASE(buffer);
-            prrte_argv_free(aliases);
             goto DONE;
         }
         for (ni=0; ni < naliases; ni++) {
-            if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &aliases[ni], 1, PRRTE_STRING))) {
+            if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &prrte_process_info.aliases[ni], 1, PRRTE_STRING))) {
                 PRRTE_ERROR_LOG(ret);
                 PRRTE_RELEASE(buffer);
-                prrte_argv_free(aliases);
                 goto DONE;
             }
         }
-        prrte_argv_free(aliases);
     }
 
     /* always send back our topology signature - this is a small string
