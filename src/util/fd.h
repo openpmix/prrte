@@ -105,6 +105,12 @@ PRRTE_EXPORT bool prrte_fd_is_blkdev(int fd);
  */
 PRRTE_EXPORT const char *prrte_fd_get_peer_name(int fd);
 
+/**
+ * Close all open sockets other than stdin/out/err prior to
+ * exec'ing a new binary
+ */
+PRRTE_EXPORT void prrte_close_open_file_descriptors(int protected_fd);
+
 END_C_DECLS
 
 #endif

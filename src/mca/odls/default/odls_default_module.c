@@ -293,48 +293,10 @@ static void send_error_show_help(int fd, int exit_status,
     exit(exit_status);
 }
 
-/* close all open file descriptors w/ exception of stdin/stdout/stderr
-   and the pipe up to the parent. */
-static int close_open_file_descriptors(int write_fd,
-                                      prrte_iof_base_io_conf_t opts) {
-    DIR *dir = opendir("/proc/self/fd");
-    if (NULL == dir) {
-        return PRRTE_ERR_FILE_OPEN_FAILURE;
-    }
-    struct dirent *files;
-
-    /* grab the fd of the opendir above so we don't close in the 
-     * middle of the scan. */
-    int dir_scan_fd = dirfd(dir);
-    if(dir_scan_fd < 0 ) {
-        return PRRTE_ERR_FILE_OPEN_FAILURE;
-    }
-
-    
-    while (NULL != (files = readdir(dir))) {
-        if (!isdigit(files->d_name[0])) {
-            continue;
-        }
-        int fd = strtol(files->d_name, NULL, 10);
-        if (errno == EINVAL || errno == ERANGE) {
-            closedir(dir);
-            return PRRTE_ERR_TYPE_MISMATCH;
-        }
-        if (fd >=3 &&
-            fd != write_fd &&
-	    fd != dir_scan_fd) {
-            close(fd);
-        }
-    }
-    closedir(dir);
-    return PRRTE_SUCCESS;
-}
-
 static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
 {
     int i;
     sigset_t sigs;
-    long fd, fdmax = sysconf(_SC_OPEN_MAX);
     char dir[MAXPATHLEN];
 
 #if HAVE_SETPGID
@@ -389,15 +351,7 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
     /* close all open file descriptors w/ exception of stdin/stdout/stderr,
        the pipe used for the IOF INTERNAL messages, and the pipe up to
        the parent. */
-    if (PRRTE_SUCCESS != close_open_file_descriptors(write_fd, cd->opts)) {
-        // close *all* file descriptors -- slow
-        for(fd=3; fd<fdmax; fd++) {
-            if (
-                fd != write_fd) {
-                close(fd);
-            }
-        }
-    }
+    prrte_close_open_file_descriptors(write_fd);
 
     if (cd->argv == NULL) {
         cd->argv = malloc(sizeof(char*)*2);

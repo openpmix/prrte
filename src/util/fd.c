@@ -35,6 +35,16 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef HAVE_PWD_H
+#include <pwd.h>
+#endif
+#ifdef HAVE_DIRENT_H
+#include <dirent.h>
+#endif
+#ifdef HAVE_STRINGS_H
+#include <strings.h>
+#endif
+#include <ctype.h>
 
 #include "src/util/fd.h"
 #include "src/util/string_copy.h"
@@ -185,3 +195,57 @@ const char *prrte_fd_get_peer_name(int fd)
 
     return ret;
 }
+
+static int fdmax = -1;
+
+/* close all open file descriptors w/ exception of stdin/stdout/stderr
+   and the pipe up to the parent. */
+void prrte_close_open_file_descriptors(int protected_fd)
+{
+    DIR *dir = opendir("/proc/self/fd");
+    int fd;
+    struct dirent *files;
+
+    if (NULL == dir) {
+        goto slow;
+    }
+
+    /* grab the fd of the opendir above so we don't close in the 
+     * middle of the scan. */
+    int dir_scan_fd = dirfd(dir);
+    if(dir_scan_fd < 0 ) {
+        goto slow;
+    }
+
+    
+    while (NULL != (files = readdir(dir))) {
+        if (!isdigit(files->d_name[0])) {
+            continue;
+        }
+        int fd = strtol(files->d_name, NULL, 10);
+        if (errno == EINVAL || errno == ERANGE) {
+            closedir(dir);
+            goto slow;
+        }
+        if (fd >=3 &&
+            (-1 == protected_fd || fd != protected_fd) &&
+            fd != dir_scan_fd) {
+            close(fd);
+        }
+    }
+    closedir(dir);
+    return;
+
+  slow:
+    // close *all* file descriptors -- slow
+    if (0 > fdmax) {
+        fdmax = sysconf(_SC_OPEN_MAX);
+    }
+    for(fd=3; fd<fdmax; fd++) {
+        if (fd != protected_fd) {
+            close(fd);
+        }
+    }
+}
+
+
