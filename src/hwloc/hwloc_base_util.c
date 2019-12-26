@@ -51,6 +51,7 @@
 #include "src/util/argv.h"
 #include "src/util/output.h"
 #include "src/util/os_dirpath.h"
+#include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 #include "src/util/printf.h"
 #include "src/threads/tsd.h"
@@ -548,11 +549,9 @@ int prrte_hwloc_base_report_bind_failure(const char *file,
 
     if (!already_reported &&
         PRRTE_HWLOC_BASE_MBFA_SILENT != prrte_hwloc_base_mbfa) {
-        char hostname[PRRTE_MAXHOSTNAMELEN];
-        gethostname(hostname, sizeof(hostname));
 
         prrte_show_help("help-prrte-hwloc-base.txt", "mbind failure", true,
-                       hostname, getpid(), file, line, msg,
+                       prrte_process_info.nodename, getpid(), file, line, msg,
                        (PRRTE_HWLOC_BASE_MBFA_WARN == prrte_hwloc_base_mbfa) ?
                        "Warning -- your job will continue, but possibly with degraded performance" :
                        "ERROR -- your job may abort or behave erraticly");

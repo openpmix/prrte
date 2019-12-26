@@ -52,8 +52,7 @@ int prrte_util_dash_host_compute_slots(prrte_node_t *node, char *hosts)
 
     /* see if this node appears in the list */
     for (n=0; NULL != specs[n]; n++) {
-        if (prrte_check_host_is_local(specs[n]) ||
-            (prrte_ifislocal(node->name) && prrte_ifislocal(specs[n]))) {
+        if (prrte_check_host_is_local(specs[n])) {
             /* check if the #slots was specified */
             if (NULL != (cptr = strchr(specs[n], ':'))) {
                 *cptr = '\0';
@@ -236,21 +235,17 @@ int prrte_util_add_dash_host_nodes(prrte_list_t *nodes,
         }
 
         /* check for local name */
-        if (prrte_ifislocal(mini_map[i])) {
+        if (prrte_check_host_is_local(mini_map[i])) {
             ndname = prrte_process_info.nodename;
         } else {
             ndname = mini_map[i];
-        }
 
-        // Strip off the FQDN if present, ignore IP addresses
-        if( !prrte_keep_fqdn_hostnames && !prrte_net_isaddr(ndname) ) {
-            if (NULL != (ptr = strchr(ndname, '.'))) {
-                *ptr = '\0';
+            // Strip off the FQDN if present, ignore IP addresses
+            if( !prrte_keep_fqdn_hostnames && !prrte_net_isaddr(ndname) ) {
+                if (NULL != (ptr = strchr(ndname, '.'))) {
+                    *ptr = '\0';
+                }
             }
-        }
-        /* remove any modifier */
-        if (NULL != (ptr = strchr(ndname, ':'))) {
-            *ptr = '\0';
         }
         /* see if the node is already on the list */
         found = false;
@@ -427,7 +422,7 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                     *cptr = '\0';
                 }
                 /* check for local alias */
-                if (prrte_ifislocal(mini_map[k])) {
+                if (prrte_check_host_is_local(mini_map[k])) {
                     prrte_argv_append_nosize(mapped_nodes, prrte_process_info.nodename);
                 } else {
                     prrte_argv_append_nosize(mapped_nodes, mini_map[k]);

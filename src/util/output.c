@@ -49,6 +49,7 @@
 #include "src/util/output.h"
 #include "src/util/string_copy.h"
 #include "src/util/printf.h"
+#include "src/util/proc_info.h"
 #include "src/threads/mutex.h"
 #include "src/runtime/runtime.h"
 #include "src/pmix/pmix-internal.h"
@@ -137,7 +138,6 @@ PRRTE_CLASS_INSTANCE(prrte_output_stream_t, prrte_object_t, construct, destruct)
 bool prrte_output_init(void)
 {
     int i;
-    char hostname[PRRTE_MAXHOSTNAMELEN];
     char *str;
 
     if (initialized) {
@@ -193,8 +193,7 @@ bool prrte_output_init(void)
             verbose.lds_want_stderr = true;
         }
     }
-    gethostname(hostname, sizeof(hostname));
-    prrte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", hostname, getpid());
+    prrte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prrte_process_info.nodename, getpid());
 
     for (i = 0; i < PRRTE_OUTPUT_MAX_STREAMS; ++i) {
         info[i].ldi_used = false;
@@ -271,7 +270,6 @@ bool prrte_output_switch(int output_id, bool enable)
 void prrte_output_reopen_all(void)
 {
     char *str;
-    char hostname[PRRTE_MAXHOSTNAMELEN];
 
     str = getenv("PRRTE_OUTPUT_STDERR_FD");
     if (NULL != str) {
@@ -280,12 +278,11 @@ void prrte_output_reopen_all(void)
         default_stderr_fd = -1;
     }
 
-    gethostname(hostname, sizeof(hostname));
     if( NULL != verbose.lds_prefix ) {
         free(verbose.lds_prefix);
         verbose.lds_prefix = NULL;
     }
-    prrte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", hostname, getpid());
+    prrte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prrte_process_info.nodename, getpid());
 #if 0
     int i;
     prrte_output_stream_t lds;

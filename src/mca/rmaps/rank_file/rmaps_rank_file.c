@@ -39,6 +39,7 @@
 #include "src/util/argv.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
+#include "src/util/proc_info.h"
 #include "src/class/prrte_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
 
@@ -517,7 +518,7 @@ static int prrte_rmaps_rank_file_parse(const char *rankfile)
                             goto unlock;
                         }
                         /* check if this is the local node */
-                        if (prrte_ifislocal(node_name)) {
+                        if (prrte_check_host_is_local(node_name)) {
                             rfmap->node_name = strdup(hnp_node->name);
                         } else {
                             rfmap->node_name = strdup(node_name);

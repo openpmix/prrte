@@ -44,6 +44,7 @@
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
 #include "src/runtime/prrte_globals.h"
 
 #include "src/mca/rmaps/base/rmaps_private.h"
@@ -336,7 +337,7 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                  * hostfile may not have been FQDN, while name returned
                  * by gethostname may have been (or vice versa)
                  */
-                if (prrte_ifislocal(seq->hostname)) {
+                if (prrte_check_host_is_local(seq->hostname)) {
                     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:seq: removing head node %s", seq->hostname);
                     prrte_list_remove_item(seq_list, item);

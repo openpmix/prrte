@@ -48,6 +48,7 @@
 
 #include "src/mca/installdirs/installdirs.h"
 #include "src/util/prrte_environ.h"
+#include "src/util/proc_info.h"
 #include "src/util/output.h"
 #include "src/util/argv.h"
 #include "src/util/show_help.h"
@@ -331,11 +332,9 @@ static int component_find_check (prrte_mca_base_framework_t *framework, char **r
         }
 
         if (!found) {
-            char h[PRRTE_MAXHOSTNAMELEN];
-            gethostname(h, sizeof(h));
             prrte_show_help("help-prrte-mca-base.txt",
                            "find-available:not-valid", true,
-                           h, framework->framework_name, requested_component_names[i]);
+                           prrte_process_info.nodename, framework->framework_name, requested_component_names[i]);
             return PRRTE_ERR_NOT_FOUND;
         }
     }

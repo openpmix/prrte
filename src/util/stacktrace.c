@@ -63,7 +63,6 @@
 int    prrte_stacktrace_output_fileno = -1;
 static char  *prrte_stacktrace_output_filename_base = NULL;
 static size_t prrte_stacktrace_output_filename_max_len = 0;
-static char stacktrace_hostname[PRRTE_MAXHOSTNAMELEN];
 static char *unable_to_print_msg = "Unable to print stack trace!\n";
 
 /*
@@ -132,7 +131,7 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     memset (print_buffer, 0, sizeof (print_buffer));
     ret = snprintf(print_buffer, sizeof(print_buffer),
                    HOSTFORMAT "*** Process received signal ***\n",
-                   stacktrace_hostname, getpid());
+                   prrte_process_info.nodename, getpid());
     write(prrte_stacktrace_output_fileno, print_buffer, ret);
 
 
@@ -140,10 +139,10 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
 
 #ifdef HAVE_STRSIGNAL
     ret = snprintf (tmp, size, HOSTFORMAT "Signal: %s (%d)\n",
-                    stacktrace_hostname, getpid(), strsignal(signo), signo);
+                    prrte_process_info.nodename, getpid(), strsignal(signo), signo);
 #else
     ret = snprintf (tmp, size, HOSTFORMAT "Signal: %d\n",
-                    stacktrace_hostname, getpid(), signo);
+                    prrte_process_info.nodename, getpid(), signo);
 #endif
     size -= ret;
     tmp += ret;
@@ -322,14 +321,14 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
         /* print signal errno information */
         if (0 != info->si_errno) {
             ret = snprintf(tmp, size, HOSTFORMAT "Associated errno: %s (%d)\n",
-                           stacktrace_hostname, getpid(),
+                           prrte_process_info.nodename, getpid(),
                            strerror (info->si_errno), info->si_errno);
             size -= ret;
             tmp += ret;
         }
 
         ret = snprintf(tmp, size, HOSTFORMAT "Signal code: %s (%d)\n",
-                       stacktrace_hostname, getpid(),
+                       prrte_process_info.nodename, getpid(),
                        si_code_str, info->si_code);
         size -= ret;
         tmp += ret;
@@ -342,7 +341,7 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
         case SIGBUS:
         {
             ret = snprintf(tmp, size, HOSTFORMAT "Failing at address: %p\n",
-                           stacktrace_hostname, getpid(), info->si_addr);
+                           prrte_process_info.nodename, getpid(), info->si_addr);
             size -= ret;
             tmp += ret;
             break;
@@ -350,7 +349,7 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
         case SIGCHLD:
         {
             ret = snprintf(tmp, size, HOSTFORMAT "Sending PID: %d, Sending UID: %d, Status: %d\n",
-                           stacktrace_hostname, getpid(),
+                           prrte_process_info.nodename, getpid(),
                            info->si_pid, info->si_uid, info->si_status);
             size -= ret;
             tmp += ret;
@@ -361,10 +360,10 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
         {
 #ifdef HAVE_SIGINFO_T_SI_FD
             ret = snprintf(tmp, size, HOSTFORMAT "Band event: %ld, File Descriptor : %d\n",
-                           stacktrace_hostname, getpid(), (long)info->si_band, info->si_fd);
+                           prrte_process_info.nodename, getpid(), (long)info->si_band, info->si_fd);
 #elif HAVE_SIGINFO_T_SI_BAND
             ret = snprintf(tmp, size, HOSTFORMAT "Band event: %ld\n",
-                           stacktrace_hostname, getpid(), (long)info->si_band);
+                           prrte_process_info.nodename, getpid(), (long)info->si_band);
 #else
             ret = 0;
 #endif
@@ -377,7 +376,7 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     } else {
         ret = snprintf(tmp, size,
                        HOSTFORMAT "siginfo is NULL, additional information unavailable\n",
-                       stacktrace_hostname, getpid());
+                       prrte_process_info.nodename, getpid());
         size -= ret;
         tmp += ret;
     }
@@ -387,7 +386,7 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
 
     /* print out the stack trace */
     snprintf(print_buffer, sizeof(print_buffer), HOSTFORMAT,
-             stacktrace_hostname, getpid());
+             prrte_process_info.nodename, getpid());
     ret = prrte_backtrace_print(NULL, print_buffer, 2);
     if (PRRTE_SUCCESS != ret) {
         write(prrte_stacktrace_output_fileno, unable_to_print_msg, strlen(unable_to_print_msg));
@@ -397,7 +396,7 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     memset (print_buffer, 0, sizeof (print_buffer));
     ret = snprintf(print_buffer, sizeof(print_buffer),
                    HOSTFORMAT "*** End of error message ***\n",
-                   stacktrace_hostname, getpid());
+                   prrte_process_info.nodename, getpid());
     if (ret > 0) {
         write(prrte_stacktrace_output_fileno, print_buffer, ret);
     } else {
@@ -506,7 +505,7 @@ char *prrte_stackframe_output_string(void)
 
 /**
  * Here we register the show_stackframe function for signals
- * passed to OpenMPI by the mpi_signal-parameter passed to mpirun
+ * passed to PRRTE by the mpi_signal-parameter passed to mpirun
  * by the user.
  *
  *  @returnvalue PRRTE_SUCCESS
@@ -520,17 +519,8 @@ int prrte_util_register_stackhandlers (void)
     struct sigaction act, old;
     char * tmp;
     char * next;
-    int i;
     bool complain, showed_help = false;
 
-    gethostname(stacktrace_hostname, sizeof(stacktrace_hostname));
-    /* to keep these somewhat readable, only print the machine name */
-    for (i = 0 ; i < (int)strlen(stacktrace_hostname) ; ++i) {
-        if (stacktrace_hostname[i] == '.') {
-            stacktrace_hostname[i] = '\0';
-            break;
-        }
-    }
 
     /* Setup the output stream to use */
     if( NULL == prrte_stacktrace_output_filename ||

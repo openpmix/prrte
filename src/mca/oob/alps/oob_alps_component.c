@@ -71,6 +71,7 @@
 #include "src/mca/common/alps/common_alps.h"
 #include "src/util/name_fns.h"
 #include "src/util/parse_options.h"
+#include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 #include "src/runtime/prrte_globals.h"
 
@@ -157,16 +158,14 @@ static int component_send(prrte_rml_send_t *msg)
 
 static char* component_get_addr(void)
 {
-    char hn[PRRTE_MAXHOSTNAMELEN], *cptr;
+    char *cptr;
 
     /*
      * TODO: for aries want to plug in GNI addr here instead to
      * eventually be able to support connect/accept using aprun.
      */
 
-    gethostname(hn, sizeof(hn));
-
-    prrte_asprintf(&cptr, "gni://%s:%d", hn, getpid());
+    prrte_asprintf(&cptr, "gni://%s:%d", prrte_process_info.nodename, getpid());
 
     prrte_output_verbose(10, prrte_oob_base_framework.framework_output,
                         "%s oob:alps: component_get_addr invoked - %s",

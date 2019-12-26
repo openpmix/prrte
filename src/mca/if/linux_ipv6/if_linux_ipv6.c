@@ -51,6 +51,7 @@
 #include "constants.h"
 #include "src/util/if.h"
 #include "src/util/output.h"
+#include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 #include "src/util/string_copy.h"
 #include "src/mca/if/if.h"
@@ -130,11 +131,9 @@ static int if_linux_ipv6_open(void)
             prrte_if_t *intf;
 
             if (!hexdecode(addrhex, a6.s6_addr, sizeof a6.s6_addr)) {
-                char hostname[PRRTE_MAXHOSTNAMELEN];
-                gethostname(hostname, sizeof(hostname));
-                prrte_show_help("help-prrte-if-linux-ipv6.txt",
+                 prrte_show_help("help-prrte-if-linux-ipv6.txt",
                                "fail to parse if_inet6", true,
-                               hostname, ifname, addrhex);
+                               prrte_process_info.nodename, ifname, addrhex);
                 continue;
             };
             inet_ntop(AF_INET6, a6.s6_addr, addrstr, sizeof addrstr);
