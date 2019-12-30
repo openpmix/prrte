@@ -1119,7 +1119,7 @@ int prrte_util_decode_ppn(prrte_job_t *jdata,
 {
     prrte_std_cntr_t index;
     prrte_app_idx_t n;
-    int cnt, rc, m;
+    int cnt, rc=PRRTE_SUCCESS, m;
     prrte_byte_object_t *boptr;
     bool compressed;
     uint8_t *bytes;

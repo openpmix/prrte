@@ -1,3 +1,4 @@
+# -*- text -*-
 #
 # Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
 #                         University Research and Technology
@@ -9,9 +10,9 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
-# Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
-# Copyright (c) 2019      Research Organization for Information Science
+# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017      IBM Corporation.  All rights reserved.
+# Copyright (c) 2018      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
 #
@@ -19,15 +20,12 @@
 #
 # $HEADER$
 #
+#
+[unrecognized-directive]
+The following directive was given to "--%s":
 
-dist_prrtedata_DATA += base/help-ess-base.txt
+  Directive:     %s
 
-headers += \
-        base/base.h
-
-libmca_ess_la_SOURCES += \
-        base/ess_base_frame.c \
-        base/ess_base_select.c \
-		base/ess_base_get.c \
-		base/ess_base_std_prted.c \
-        base/ess_base_std_prolog.c
+This directive is not recognized. Please check your spelling
+and/or use the "--help" option to find the supported values.
+#

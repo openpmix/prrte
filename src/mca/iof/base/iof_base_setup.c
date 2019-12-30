@@ -59,15 +59,16 @@
 #include <libutil.h>
 #endif
 
-#include "src/util/prrte_pty.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/argv.h"
+#include "src/util/basename.h"
+#include "src/util/name_fns.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/output.h"
-#include "src/util/argv.h"
 #include "src/util/printf.h"
-
+#include "src/util/prrte_pty.h"
+#include "src/util/prrte_environ.h"
+#include "src/util/show_help.h"
 #include "src/mca/errmgr/errmgr.h"
-#include "src/util/name_fns.h"
 #include "src/runtime/prrte_globals.h"
 
 #include "src/mca/iof/iof.h"
@@ -257,9 +258,9 @@ int prrte_iof_base_setup_output_files(const prrte_process_name_t* dst_name,
     char *p, **s;
     bool usejobid = true;
 
-    /* see if we are to output to a file */
+    /* see if we are to output to a directory */
     dirname = NULL;
-    if (prrte_get_attribute(&jobdat->attributes, PRRTE_JOB_OUTPUT_TO_FILE, (void**)&dirname, PRRTE_STRING) &&
+    if (prrte_get_attribute(&jobdat->attributes, PRRTE_JOB_OUTPUT_TO_DIRECTORY, (void**)&dirname, PRRTE_STRING) &&
         NULL != dirname) {
         np = jobdat->num_procs / 10;
         /* determine the number of digits required for max vpid */
@@ -279,6 +280,12 @@ int prrte_iof_base_setup_output_files(const prrte_process_name_t* dst_name,
                     usejobid = false;
                 } else if (0 == strcasecmp(s[i], "nocopy")) {
                     proct->copy = false;
+                } else {
+                    prrte_show_help("help-iof-base",
+                                    "unrecognized-directive",
+                                    true, "output-directory", s[i]);
+                    prrte_argv_free(s);
+                    return PRRTE_ERROR;
                 }
             }
         }
@@ -338,6 +345,73 @@ int prrte_iof_base_setup_output_files(const prrte_process_name_t* dst_name,
                                      prrte_iof_base_write_handler);
             }
         }
+        return PRRTE_SUCCESS;
+    }
+
+    /* see if we are to output to a file */
+    dirname = NULL;
+    if (prrte_get_attribute(&jobdat->attributes, PRRTE_JOB_OUTPUT_TO_FILE, (void**)&dirname, PRRTE_STRING) &&
+        NULL != dirname) {
+        np = jobdat->num_procs / 10;
+        /* determine the number of digits required for max vpid */
+        numdigs = 1;
+        while (np > 0) {
+            numdigs++;
+            np = np / 10;
+        }
+        /* check for a conditional in the directory name */
+        if (NULL != (p = strchr(dirname, ':'))) {
+            *p = '\0';
+            ++p;
+            /* could me more than one directive */
+            s = prrte_argv_split(p, ',');
+            for (i=0; NULL != s[i]; i++) {
+                if (0 == strcasecmp(s[i], "nocopy")) {
+                    proct->copy = false;
+                } else {
+                    prrte_show_help("help-iof-base",
+                                   "unrecognized-directive",
+                                   true, "output-filename", s[i]);
+                    prrte_argv_free(s);
+                    return PRRTE_ERROR;
+                }
+            }
+        }
+
+        /* construct the directory where the output files will go */
+        outdir = prrte_dirname(dirname);
+
+        /* ensure the directory exists */
+        if (PRRTE_SUCCESS != (rc = prrte_os_dirpath_create(outdir, S_IRWXU|S_IRGRP|S_IXGRP))) {
+            PRRTE_ERROR_LOG(rc);
+            free(outdir);
+            return rc;
+        }
+        if (NULL != proct->revstdout && NULL == proct->revstdout->sink) {
+            /* setup the stdout sink */
+            prrte_asprintf(&outfile, "%s.%d.%0*lu", dirname,
+                           (int)PRRTE_LOCAL_JOBID(proct->name.jobid),
+                           numdigs, (unsigned long)proct->name.vpid);
+            fdout = open(outfile, O_CREAT|O_RDWR|O_TRUNC, 0644);
+            free(outfile);
+            if (fdout < 0) {
+                /* couldn't be opened */
+                PRRTE_ERROR_LOG(PRRTE_ERR_FILE_OPEN_FAILURE);
+                return PRRTE_ERR_FILE_OPEN_FAILURE;
+            }
+            /* define a sink to that file descriptor */
+            PRRTE_IOF_SINK_DEFINE(&proct->revstdout->sink, dst_name,
+                                  fdout, PRRTE_IOF_STDOUTALL,
+                                  prrte_iof_base_write_handler);
+        }
+
+        if (NULL != proct->revstderr && NULL == proct->revstderr->sink) {
+            /* we only create one file - all output goes there */
+            PRRTE_RETAIN(proct->revstdout->sink);
+            proct->revstdout->sink->tag = PRRTE_IOF_STDMERGE;  // show that it is merged
+            proct->revstderr->sink = proct->revstdout->sink;
+        }
+        return PRRTE_SUCCESS;
     }
 
     return PRRTE_SUCCESS;

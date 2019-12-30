@@ -18,6 +18,8 @@
 # $HEADER$
 #
 
+ dist_prrtedata_DATA = base/help-iof-base.txt
+
 headers += \
         base/base.h \
 	base/iof_base_setup.h

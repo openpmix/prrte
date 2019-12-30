@@ -581,6 +581,14 @@ int prun(int argc, char *argv[])
      * exit with a giant warning flag
      */
     if (0 == geteuid() && !prrte_cmd_options.run_as_root) {
+        /* bit of an abstraction break required here for backward compatibility in OMPI */
+        char *r1, *r2;
+        if (NULL != (r1 = getenv("OMPI_ALLOW_RUN_AS_ROOT")) &&
+            NULL != (r2 = getenv("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM"))) {
+            if (0 == strcmp(r1, "1") && 0 == strcmp(r2, "1")) {
+                goto moveon;
+            }
+        }
         /* show_help is not yet available, so print an error manually */
         fprintf(stderr, "--------------------------------------------------------------------------\n");
         if (prrte_cmd_options.help) {
@@ -602,6 +610,7 @@ int prun(int argc, char *argv[])
         exit(1);
     }
 
+  moveon:
     if (!myoptions.terminate_dvm) {
         /* they want to run an application, so let's parse
          * the cmd line to get it */
@@ -895,8 +904,15 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LOAD(ds->info, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
         prrte_list_append(&job_info, &ds->super);
     }
-    /* if we were asked to output to files, pass it along */
-    if (NULL != prrte_cmd_options.output_filename) {
+   /* cannot have both files and directory set for output */
+    if (NULL != prrte_cmd_options.output_filename &&
+        NULL != prrte_cmd_options.output_directory) {
+        prrte_show_help("help-prted.txt", "both-file-and-dir-set", true,
+                        prrte_cmd_options.output_directory,
+                        prrte_cmd_options.output_filename);
+        return PRRTE_ERR_FATAL;
+    } else if (NULL != prrte_cmd_options.output_filename) {
+        /* if we were asked to output to files, pass it along. */
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         /* if the given filename isn't an absolute path, then
@@ -913,6 +929,23 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LOAD(ds->info, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
         free(ptr);
         prrte_list_append(&job_info, &ds->super);
+    } else if (NULL != prrte_cmd_options.output_directory) {
+        /* if we were asked to output to a directory, pass it along. */
+        ds = PRRTE_NEW(prrte_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        /* If the given filename isn't an absolute path, then
+         * convert it to one so the name will be relative to
+         * the directory where prun was given as that is what
+         * the user will have seen */
+        if (!prrte_path_is_absolute(prrte_cmd_options.output_directory)) {
+            char cwd[PRRTE_PATH_MAX];
+            getcwd(cwd, sizeof(cwd));
+            ptr = prrte_os_path(false, cwd, prrte_cmd_options.output_directory, NULL);
+        } else {
+            ptr = strdup(prrte_cmd_options.output_directory);
+        }
+        PMIX_INFO_LOAD(ds->info, PMIX_OUTPUT_TO_DIRECTORY, ptr, PMIX_STRING);
+        free(ptr);
     }
     /* if we were asked to merge stderr to stdout, mark it so */
     if (prrte_cmd_options.merge) {

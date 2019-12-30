@@ -386,6 +386,9 @@ const char *prrte_attr_key_to_str(prrte_attribute_key_t key)
             return "PRRTE_APP_ADD_ENVAR";
         case PRRTE_JOB_APP_SETUP_DATA:
             return "PRRTE_JOB_APP_SETUP_DATA";
+        case PRRTE_JOB_OUTPUT_TO_DIRECTORY:
+            return "PRRTE_JOB_OUTPUT_TO_DIRECTORY";
+
 
         case PRRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

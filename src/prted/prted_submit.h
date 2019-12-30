@@ -69,6 +69,7 @@ struct prrte_cmd_options_t {
     bool debug;
     bool tag_output;
     bool timestamp_output;
+    char *output_directory;
     char *output_filename;
     bool merge;
     bool continuous;

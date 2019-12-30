@@ -15,12 +15,8 @@ use Getopt::Long;
 
 my $package_name;
 my $package_version;
-my $ompi_date;
-my $opal_date;
 my $prrte_date;
 my $cxx = '1';
-my $fortran = '1';
-my $f08 = '1';
 my $input;
 my $output;
 my $help_arg = 0;
@@ -28,12 +24,8 @@ my $help_arg = 0;
 &Getopt::Long::Configure("bundling");
 my $ok = Getopt::Long::GetOptions("package-name=s" => \$package_name,
                                   "package-version=s" => \$package_version,
-                                  "ompi-date=s" => \$ompi_date,
-                                  "opal-date=s" => \$opal_date,
                                   "prrte-date=s" => \$prrte_date,
                                   "cxx!" => \$cxx,
-                                  "fortran!" => \$fortran,
-                                  "f08!" => \$f08,
                                   "input=s" => \$input,
                                   "output=s" => \$output);
 
@@ -42,10 +34,8 @@ if ($help_arg || !$ok ||
     !defined($output) ||
     !defined($package_name) ||
     !defined($package_version) ||
-    !defined($ompi_date) ||
-    !defined($opal_date) ||
     !defined($prrte_date)) {
-    print "Usage: $0 --package-name=<package name> --package-version=<package version> --ompi-date=<ompi date> --opal-date=<opal date> --prrte-date=<prrte date> --input=<input file> --output=<output file> [--nocxx] [ --nofortran] [--nof08]\n";
+    print "Usage: $0 --package-name=<package name> --package-version=<package version> --prrte-date=<prrte date> --input=<input file> --output=<output file> [--nocxx]\n";
     exit(1 - $ok);
 }
 
@@ -58,20 +48,10 @@ close(FILE);
 
 $file =~ s/#PACKAGE_NAME#/$package_name/g;
 $file =~ s/#PACKAGE_VERSION#/$package_version/g;
-$file =~ s/#OMPI_DATE#/$ompi_date/g;
-$file =~ s/#OPAL_DATE#/$opal_date/g;
 $file =~ s/#PRRTE_DATE#/$prrte_date/g;
 
 if ($cxx == 0) {
     $file =~ s/\n\.SH C\+\+ Syntax.+?\n\.SH/\n\.SH/s;
-}
-
-if ($fortran == 0) {
-    $file =~ s/\n\.SH Fortran Syntax.+?\n\.SH/\n\.SH/s;
-}
-
-if ($f08 == 0) {
-    $file =~ s/\n\.SH Fortran 2008 Syntax.+?\n\.SH/\n\.SH/s;
 }
 
 open(FILE, ">$output") ||
