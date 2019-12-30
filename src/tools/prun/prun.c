@@ -581,6 +581,14 @@ int prun(int argc, char *argv[])
      * exit with a giant warning flag
      */
     if (0 == geteuid() && !prrte_cmd_options.run_as_root) {
+        /* bit of an abstraction break required here for backward compatibility in OMPI */
+        char *r1, *r2;
+        if (NULL != (r1 = getenv("OMPI_ALLOW_RUN_AS_ROOT")) &&
+            NULL != (r2 = getenv("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM"))) {
+            if (0 == strcmp(r1, "1") && 0 == strcmp(r2, "1")) {
+                goto moveon;
+            }
+        }
         /* show_help is not yet available, so print an error manually */
         fprintf(stderr, "--------------------------------------------------------------------------\n");
         if (prrte_cmd_options.help) {
@@ -602,6 +610,7 @@ int prun(int argc, char *argv[])
         exit(1);
     }
 
+  moveon:
     if (!myoptions.terminate_dvm) {
         /* they want to run an application, so let's parse
          * the cmd line to get it */
