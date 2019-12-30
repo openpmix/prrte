@@ -28,7 +28,6 @@ headers += \
 libmca_ess_la_SOURCES += \
         base/ess_base_frame.c \
         base/ess_base_select.c \
-	base/ess_base_get.c \
-	base/ess_base_std_prted.c \
-        base/ess_base_std_prolog.c \
-        base/ess_base_fns.c
+		base/ess_base_get.c \
+		base/ess_base_std_prted.c \
+        base/ess_base_std_prolog.c
