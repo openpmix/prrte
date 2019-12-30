@@ -146,7 +146,7 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_FIXED_DVM              (PRRTE_JOB_START_KEY + 42)    // bool - do not change the size of the DVM for this job
 #define PRRTE_JOB_DVM_JOB                (PRRTE_JOB_START_KEY + 43)    // bool - job is using a DVM
 #define PRRTE_JOB_CANCELLED              (PRRTE_JOB_START_KEY + 44)    // bool - job was cancelled
-#define PRRTE_JOB_OUTPUT_TO_FILE         (PRRTE_JOB_START_KEY + 45)    // string - name of directory to which stdout/err is to be directed
+#define PRRTE_JOB_OUTPUT_TO_FILE         (PRRTE_JOB_START_KEY + 45)    // string - path to use as basename of files to which stdout/err is to be directed
 #define PRRTE_JOB_MERGE_STDERR_STDOUT    (PRRTE_JOB_START_KEY + 46)    // bool - merge stderr into stdout stream
 #define PRRTE_JOB_TAG_OUTPUT             (PRRTE_JOB_START_KEY + 47)    // bool - tag stdout/stderr
 #define PRRTE_JOB_TIMESTAMP_OUTPUT       (PRRTE_JOB_START_KEY + 48)    // bool - timestamp stdout/stderr
@@ -163,6 +163,7 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_APPEND_ENVAR           (PRRTE_JOB_START_KEY + 58)    // prrte_envar_t - append the specified value to the given envar
 #define PRRTE_JOB_ADD_ENVAR              (PRRTE_JOB_START_KEY + 59)    // prrte_envar_t - add envar, do not override pre-existing one
 #define PRRTE_JOB_APP_SETUP_DATA         (PRRTE_JOB_START_KEY + 60)    // prrte_byte_object_t - blob containing app setup data
+#define PRRTE_JOB_OUTPUT_TO_DIRECTORY    (PRRTE_JOB_START_KEY + 61)    // string - path of directory to which stdout/err is to be directed
 
 #define PRRTE_JOB_MAX_KEY   300
 

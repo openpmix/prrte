@@ -6,7 +6,7 @@
 .\"                         reserved.
 .\" $COPYRIGHT$
 .\"
-.\" Man page for PSRVR's prun command
+.\" Man page for PRRTE's prun command
 .\"
 .\" .TH name     section center-footer   left-footer  center-header
 .TH PRUN 1 "#OMPI_DATE#" "#PACKAGE_VERSION#" "#PACKAGE_NAME#"
@@ -396,7 +396,25 @@ Redirect the stdout, stderr, and stddiag of all processes to a process-unique ve
 the specified filename. Any directories in the filename will automatically be created.
 Each output file will consist of filename.id, where the id will be the
 processes' rank, left-filled with
-zero's for correct ordering in listings.
+zero's for correct ordering in listings.B oth stdout and stderr will be redirected to the file.
+A relative path value will be converted to an
+absolute path based on the cwd where prun is executed. Note that this \fIwill not\fP work
+on environments where the file system on compute nodes differs from that where prun
+is executed. This option accepts one case-insensitive directive, specified after a colon: NOCOPY
+indicates that the output is not to be echoed to the terminal.
+.
+.
+.TP
+.B -output-directory\fR,\fP --output-directory \fR<path>\fP
+Redirect the stdout, stderr, and stddiag of all processes to a process-unique location
+consisting of "<path>/<jobid>/rank.id/stdout[err]", where the id will be the
+processes' rank, left-filled with
+zero's for correct ordering in listings. Any directories in the filename will automatically be created.
+A relative path value will be converted to an
+absolute path based on the cwd where prun is executed. Note that this \fIwill not\fP work
+on environments where the file system on compute nodes differs from that where prun
+is executed. This option also supports two case-insensitive directives, specified in comma-delimited form after a colon: NOJOBID (omits the jobid directory layer) and NOCOPY (do
+not copy the output to the terminal).
 .
 .
 .TP
