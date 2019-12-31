@@ -16,7 +16,7 @@
  * Copyright (c) 2009      Institut National de Recherche en Informatique
  *                         et Automatique. All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -632,9 +632,11 @@ int prrte_daemon(int argc, char *argv[])
      * and won't hurt anything */
     if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &prrte_topo_signature, 1, PRRTE_STRING))) {
         PRRTE_ERROR_LOG(ret);
+        PRRTE_RELEASE(buffer);
+        goto DONE;
     }
 
-    /* if we are rank=1, then send our topology back - otherwise, mpirun
+    /* if we are rank=1, then send our topology back - otherwise, prte
      * will request it if necessary */
     if (1 == PRRTE_PROC_MY_NAME->vpid) {
         prrte_buffer_t data;
@@ -647,6 +649,8 @@ int prrte_daemon(int argc, char *argv[])
 
         if (PRRTE_SUCCESS != (ret = prrte_dss.pack(&data, &prrte_hwloc_topology, 1, PRRTE_HWLOC_TOPO))) {
             PRRTE_ERROR_LOG(ret);
+            PRRTE_RELEASE(buffer);
+            goto DONE;
         }
         if (prrte_compress.compress_block((uint8_t*)data.base_ptr, data.bytes_used,
                                          &cmpdata, &cmplen)) {
