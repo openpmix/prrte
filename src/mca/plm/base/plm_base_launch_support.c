@@ -718,6 +718,8 @@ void prrte_plm_base_daemon_topology(int status, prrte_process_name_t* sender,
                                    prrte_rml_tag_t tag, void *cbdata)
 {
     hwloc_topology_t topo;
+    hwloc_obj_t root;
+    prrte_hwloc_topo_data_t *sum;
     int rc, idx;
     char *sig, *coprocessors, **sns;
     prrte_proc_t *daemon=NULL;
@@ -825,6 +827,17 @@ void prrte_plm_base_daemon_topology(int status, prrte_process_name_t* sender,
     }
     /* record the final topology */
     t->topo = topo;
+    /* setup the summary data for this topology as we will need
+     * it when we go to map/bind procs to it */
+    root = hwloc_get_root_obj(topo);
+    root->userdata = (void*)PRRTE_NEW(prrte_hwloc_topo_data_t);
+    sum = (prrte_hwloc_topo_data_t*)root->userdata;
+    #if HWLOC_API_VERSION < 0x20000
+        sum->available = hwloc_bitmap_alloc();
+        hwloc_bitmap_and(sum->available, root->online_cpuset, root->allowed_cpuset);
+    #else
+        sum->available = hwloc_bitmap_dup(hwloc_topology_get_allowed_cpuset(topo));
+    #endif
 
     /* unpack any coprocessors */
     idx=1;
@@ -1160,6 +1173,7 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
             } else {
                 data = buffer;
             }
+            /* unpack the available topology information */
             idx=1;
             if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(data, &topo, &idx, PRRTE_HWLOC_TOPO))) {
                 PRRTE_ERROR_LOG(rc);

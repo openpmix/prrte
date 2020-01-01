@@ -469,7 +469,6 @@ PRRTE_EXPORT int prrte_hwloc_base_topology_export_xmlbuffer(hwloc_topology_t top
 
 PRRTE_EXPORT int prrte_hwloc_base_topology_set_flags (hwloc_topology_t topology, unsigned long flags, bool io);
 
-
 PRRTE_EXPORT int prrte_hwloc_base_open(void);
 PRRTE_EXPORT void prrte_hwloc_base_close(void);
 PRRTE_EXPORT int prrte_hwloc_base_register(void);

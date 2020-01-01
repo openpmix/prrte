@@ -13,12 +13,13 @@
  * Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012-2017 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (C) 2018      Mellanox Technologies, Ltd.
  *                         All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
+ # Copyright (c) 2019      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -154,7 +155,7 @@ int prrte_hwloc_base_filter_cpus(hwloc_topology_t topo)
             avail = hwloc_bitmap_alloc();
             hwloc_bitmap_and(avail, root->online_cpuset, root->allowed_cpuset);
         #else
-            avail = hwloc_bitmap_dup(root->cpuset);
+            avail = hwloc_bitmap_dup(hwloc_topology_get_allowed_cpuset(topo));
         #endif
         PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
                              "hwloc:base: no cpus specified - using root available cpuset"));
@@ -177,8 +178,7 @@ int prrte_hwloc_base_filter_cpus(hwloc_topology_t topo)
                     #if HWLOC_API_VERSION < 0x20000
                         hwloc_bitmap_and(pucpus, pu->online_cpuset, pu->allowed_cpuset);
                     #else
-                        hwloc_bitmap_free(pucpus);
-                        pucpus = hwloc_bitmap_dup(pu->cpuset);
+                        hwloc_bitmap_and(pucpus, pu->cpuset, hwloc_topology_get_allowed_cpuset(topo));
                     #endif
                     hwloc_bitmap_or(res, avail, pucpus);
                     hwloc_bitmap_copy(avail, res);
@@ -199,8 +199,7 @@ int prrte_hwloc_base_filter_cpus(hwloc_topology_t topo)
                         #if HWLOC_API_VERSION < 0x20000
                             hwloc_bitmap_and(pucpus, pu->online_cpuset, pu->allowed_cpuset);
                         #else
-                            hwloc_bitmap_free(pucpus);
-                            pucpus = hwloc_bitmap_dup(pu->cpuset);
+                            hwloc_bitmap_and(pucpus, pu->cpuset, hwloc_topology_get_allowed_cpuset(topo));
                         #endif
                         hwloc_bitmap_or(res, avail, pucpus);
                         hwloc_bitmap_copy(avail, res);
@@ -274,13 +273,6 @@ static void fill_cache_line_size(void)
 int prrte_hwloc_base_get_topology(void)
 {
     int rc;
-    prrte_process_name_t wildcard_rank;
-    char *val = NULL;
-#if HWLOC_API_VERSION >= 0x20000
-    int rc2, rc3, fd;
-    uint64_t addr, *aptr, size, *sptr;
-    char *shmemfile;
-#endif
 
     prrte_output_verbose(2, prrte_hwloc_base_output,
                          "hwloc:base:get_topology");
@@ -289,110 +281,8 @@ int prrte_hwloc_base_get_topology(void)
     if (NULL != prrte_hwloc_topology) {
         return PRRTE_SUCCESS;
     }
-    wildcard_rank.jobid = PRRTE_PROC_MY_NAME->jobid;
-    wildcard_rank.vpid = PRRTE_VPID_WILDCARD;
 
-#if HWLOC_API_VERSION >= 0x20000
-    prrte_output_verbose(2, prrte_hwloc_base_output,
-                         "hwloc:base: looking for topology in shared memory");
-
-    /* first try to get the shmem link, if available */
-    aptr = &addr;
-    sptr = &size;
-    PRRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_HWLOC_SHMEM_FILE,
-                                   &wildcard_rank, (void**)&shmemfile, PRRTE_STRING);
-    PRRTE_MODEX_RECV_VALUE_OPTIONAL(rc2, PMIX_HWLOC_SHMEM_ADDR,
-                                   &wildcard_rank, (void**)&aptr, PRRTE_SIZE);
-    PRRTE_MODEX_RECV_VALUE_OPTIONAL(rc3, PMIX_HWLOC_SHMEM_SIZE,
-                                   &wildcard_rank, (void**)&sptr, PRRTE_SIZE);
-    if (PRRTE_SUCCESS == rc && PRRTE_SUCCESS == rc2 && PRRTE_SUCCESS == rc3) {
-        if (0 > (fd = open(shmemfile, O_RDONLY))) {
-            free(shmemfile);
-            PRRTE_ERROR_LOG(PRRTE_ERR_FILE_OPEN_FAILURE)
-            return PRRTE_ERR_FILE_OPEN_FAILURE;
-        }
-        free(shmemfile);
-        if (0 != hwloc_shmem_topology_adopt(&prrte_hwloc_topology, fd,
-                                            0, (void*)addr, size, 0)) {
-            if (4 < prrte_output_get_verbosity(prrte_hwloc_base_output)) {
-                FILE *file = fopen("/proc/self/maps", "r");
-                if (file) {
-                    char line[256];
-                    prrte_output(0, "Dumping /proc/self/maps");
-
-                    while (fgets(line, sizeof(line), file) != NULL) {
-                        char *end = strchr(line, '\n');
-                        if (end) {
-                            *end = '\0';
-                        }
-                        prrte_output(0, "%s", line);
-                    }
-                    fclose(file);
-                }
-            }
-            /* failed to adopt from shmem, fallback to other ways to get the topology */
-        } else {
-            prrte_output_verbose(2, prrte_hwloc_base_output,
-                                "hwloc:base: topology in shared memory");
-            topo_in_shmem = true;
-            return PRRTE_SUCCESS;
-        }
-    }
-#endif
-    /* if that isn't available, then try to retrieve
-     * the xml representation from the PMIx data store */
-    prrte_output_verbose(1, prrte_hwloc_base_output,
-                        "hwloc:base[%s:%d] getting topology XML string",
-                        __FILE__, __LINE__);
-#if HWLOC_API_VERSION >= 0x20000
-    PRRTE_MODEX_RECV_VALUE_IMMEDIATE(rc, PMIX_HWLOC_XML_V2,
-                                    &wildcard_rank, &val, PRRTE_STRING);
-#else
-    PRRTE_MODEX_RECV_VALUE_IMMEDIATE(rc, PMIX_HWLOC_XML_V1,
-                                    &wildcard_rank, &val, PRRTE_STRING);
-#endif
-    if (rc != PRRTE_SUCCESS) {
-        /* check the old topo key to keep compatibility with older RMs */
-        PRRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_LOCAL_TOPO,
-                                       &wildcard_rank, &val, PRRTE_STRING);
-    }
-
-    if (PRRTE_SUCCESS == rc && NULL != val) {
-        prrte_output_verbose(1, prrte_hwloc_base_output,
-                            "hwloc:base loading topology from XML");
-        /* load the topology */
-        if (0 != hwloc_topology_init(&prrte_hwloc_topology)) {
-            free(val);
-            return PRRTE_ERROR;
-        }
-        if (0 != hwloc_topology_set_xmlbuffer(prrte_hwloc_topology, val, strlen(val))) {
-            free(val);
-            hwloc_topology_destroy(prrte_hwloc_topology);
-            return PRRTE_ERROR;
-        }
-        /* since we are loading this from an external source, we have to
-         * explicitly set a flag so hwloc sets things up correctly
-         */
-        if (0 != prrte_hwloc_base_topology_set_flags(prrte_hwloc_topology,
-                                                    HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM,
-                                                    true)) {
-            hwloc_topology_destroy(prrte_hwloc_topology);
-            free(val);
-            return PRRTE_ERROR;
-        }
-        /* now load the topology */
-        if (0 != hwloc_topology_load(prrte_hwloc_topology)) {
-            hwloc_topology_destroy(prrte_hwloc_topology);
-            free(val);
-            return PRRTE_ERROR;
-        }
-        free(val);
-        /* filter the cpus thru any default cpu set */
-        if (PRRTE_SUCCESS != (rc = prrte_hwloc_base_filter_cpus(prrte_hwloc_topology))) {
-            hwloc_topology_destroy(prrte_hwloc_topology);
-            return rc;
-        }
-    } else if (NULL == prrte_hwloc_base_topo_file) {
+    if (NULL == prrte_hwloc_base_topo_file) {
         prrte_output_verbose(1, prrte_hwloc_base_output,
                             "hwloc:base discovering topology");
         if (0 != hwloc_topology_init(&prrte_hwloc_topology) ||
@@ -523,7 +413,9 @@ void prrte_hwloc_base_free_topology(hwloc_topology_t topo)
 
 void prrte_hwloc_base_get_local_cpuset(void)
 {
+#if HWLOC_API_VERSION < 0x20000
     hwloc_obj_t root;
+#endif
 
     if (NULL != prrte_hwloc_topology) {
         if (NULL == prrte_hwloc_my_cpuset) {
@@ -535,8 +427,12 @@ void prrte_hwloc_base_get_local_cpuset(void)
                               prrte_hwloc_my_cpuset,
                               HWLOC_CPUBIND_PROCESS) < 0) {
             /* we are not bound - use the root's available cpuset */
-            root = hwloc_get_root_obj(prrte_hwloc_topology);
-            hwloc_bitmap_copy(prrte_hwloc_my_cpuset, root->cpuset);
+            #if HWLOC_API_VERSION < 0x20000
+                root = hwloc_get_root_obj(prrte_hwloc_topology);
+                hwloc_bitmap_and(prrte_hwloc_my_cpuset, root->online_cpuset, root->allowed_cpuset);
+            #else
+                hwloc_bitmap_copy(prrte_hwloc_my_cpuset, hwloc_topology_get_allowed_cpuset(prrte_hwloc_topology));
+            #endif
         }
     }
 }
@@ -1743,13 +1639,109 @@ int prrte_hwloc_base_cset2str(char *str, int len,
     return PRRTE_SUCCESS;
 }
 
+
+/* given an input obj somewhere in the hwloc tree, look for a
+ * numa object that contains it
+ */
+static hwloc_obj_t find_my_numa(hwloc_obj_t obj)
+{
+    hwloc_obj_t p;
+
+#if HWLOC_API_VERSION >= 0x20000
+    size_t i;
+    hwloc_obj_t numa;
+
+    p = obj;
+    while (NULL != p && 0 == p->memory_arity) {
+        p = p->parent;
+    }
+    // p should have either found a level that contains numas or reached NULL
+    if (NULL == p) {
+        return NULL;
+    }
+    for (i=0; i < p->memory_arity; ++i) {
+        numa = &(p->memory_first_child[i]);
+
+        if (hwloc_bitmap_isincluded(obj->complete_cpuset, numa->complete_cpuset)) {
+            return numa;
+        }
+    }
+#else
+    p = obj;
+    while (NULL != p && HWLOC_OBJ_NUMANODE != p->type) {
+        p = p->parent;
+    }
+    // p should have either found a level that contains numas or reached NULL
+    if (NULL == p) {
+        return NULL;
+    }
+    if (hwloc_bitmap_isincluded(obj->complete_cpuset, p->complete_cpuset)) {
+        return p;
+    }
+#endif
+    return NULL;
+}
+
+/* which level from the set {socket, core, pu} has
+ * the first descendent underneath the lowest numa level.
+ * returns MACHINE if there is no numa level
+ *
+ * Eg if an hwloc tree had numas containing sockets like this
+ *   <[../..][../..]><[../..][../..]>
+ * the tree would be
+ *   mach               +memory_children: n n
+ *   s   s   s   s
+ *   c c c c c c c c
+ *   pppppppppppppppp
+ * so this should return SOCKET
+ */
+static hwloc_obj_type_t first_type_under_a_numa(hwloc_topology_t topo)
+{
+    hwloc_obj_t p;
+
+    p = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PU, 0);
+#if HWLOC_API_VERSION >= 0x20000
+    hwloc_obj_type_t type;
+
+    /* climb the ladder */
+    while (NULL != p && 0 == p->memory_arity) {
+        if (HWLOC_OBJ_PU == p->type||
+            HWLOC_OBJ_CORE == p->type ||
+            HWLOC_OBJ_SOCKET == p->type) {
+            type = p->type;
+        }
+        p = p->parent;
+    }
+    if (NULL != p && 0 < p->memory_arity) {
+        return type;
+    }
+#else
+    /* climb the ladder */
+    while (NULL != p) {
+        if (NULL == p->parent) {
+            /* we are at the top and have not
+             * found a NUMANODE, so the entire
+             * object must be one big NUMANODE */
+            return HWLOC_OBJ_MACHINE;
+        }
+        if (HWLOC_OBJ_NUMANODE == p->parent->type) {
+            return p->type;
+        }
+        p = p->parent;
+    }
+#endif
+    return HWLOC_OBJ_MACHINE;
+}
+
 /*
- * Make a prettyprint string for a cset in a map format.
+ * Make a prettyprint string for a cset in a map format with NUMA markers.
  * Example: [B./..]
  * Key:  [] - signifies socket
+ *       <> - signifies numa
  *        / - divider between cores
  *        . - signifies PU a process not bound to
  *        B - signifies PU a process is bound to
+ *        ~ - signifies PU that is disallowed, eg not in our cgroup:
  */
 int prrte_hwloc_base_cset2mapstr(char *str, int len,
                                 hwloc_topology_t topo,
@@ -1757,68 +1749,172 @@ int prrte_hwloc_base_cset2mapstr(char *str, int len,
 {
     char tmp[BUFSIZ];
     int core_index, pu_index;
-    const int stmp = sizeof(tmp) - 1;
     hwloc_obj_t socket, core, pu;
     hwloc_obj_t root;
     prrte_hwloc_topo_data_t *sum;
+    bool fake_on_first_socket;
+    bool fake_on_first_core;
+    hwloc_cpuset_t cpuset_for_socket;
+    hwloc_cpuset_t cpuset_for_core;
+    hwloc_obj_t prev_numa = NULL;
+    hwloc_obj_t cur_numa = NULL;
+    hwloc_obj_type_t type_under_numa;
+    bool a_numa_marker_is_open;
 
-    str[0] = tmp[stmp] = '\0';
-
-    /* if the cpuset is all zero, then not bound */
+   /* if the cpuset is all zero, then not bound */
     if (hwloc_bitmap_iszero(cpuset)) {
         return PRRTE_ERR_NOT_BOUND;
     }
 
-    /* if the cpuset includes all available cpus, then we are unbound */
+    str[0] = '\0';
+    memset(tmp, 0, BUFSIZ);
+
+     /* if the cpuset includes all available cpus, then we are unbound */
     root = hwloc_get_root_obj(topo);
-    if (NULL != root->userdata) {
-        sum = (prrte_hwloc_topo_data_t*)root->userdata;
-        if (NULL == sum->available) {
-           return PRRTE_ERROR;
-        }
-        if (0 != hwloc_bitmap_isincluded(sum->available, cpuset)) {
-            return PRRTE_ERR_NOT_BOUND;
-        }
+    if (NULL == root->userdata) {
+        /* this should never happen */
+        return PRRTE_ERROR;
+    }
+    sum = (prrte_hwloc_topo_data_t*)root->userdata;
+    if (NULL == sum->available) {
+        /* again, should never happen */
+       return PRRTE_ERROR;
+    }
+    if (0 != hwloc_bitmap_isincluded(sum->available, cpuset)) {
+        return PRRTE_ERR_NOT_BOUND;
     }
 
+    /* hwloc trees aren't required to have sockets and cores,
+     * just a MACHINE at the top and PU at the bottom. The 'fake_*' vars make
+     * the loops always iterate at least once, even if the initial socket = ...
+     * etc lookup is NULL. So we have to take a little extra care here in
+     * case we are in a no-socket or no-core scenario. Thankfully, everyone
+     * still has NUMA regions! */
+    type_under_numa = first_type_under_a_numa(topo);
+
     /* Iterate over all existing sockets */
-    for (socket = hwloc_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0);
-         NULL != socket;
-         socket = socket->next_cousin) {
+    fake_on_first_socket = true;
+    do {
+        socket = hwloc_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0);
+        fake_on_first_socket = false;
         strncat(str, "[", len - strlen(str) - 1);
 
+        // if numas contain sockets, example output <[../..][../..]><[../..][../..]>
+        if (HWLOC_OBJ_SOCKET == type_under_numa) {
+            prev_numa = cur_numa;
+            cur_numa = find_my_numa(socket);
+            if (cur_numa && cur_numa != prev_numa) {
+                if (a_numa_marker_is_open) {
+                    strncat(str, ">", len - strlen(str) - 1);
+                }
+                strncat(str, "<", len - strlen(str) - 1);
+                a_numa_marker_is_open = true;
+            }
+        }
+        if (NULL != socket) {
+            strncat(str, "[", len - strlen(str) - 1);
+            cpuset_for_socket = socket->complete_cpuset;
+        } else {
+            cpuset_for_socket = root->complete_cpuset;
+        }
+
         /* Iterate over all existing cores in this socket */
+        fake_on_first_core = true;
         core_index = 0;
-        for (core = hwloc_get_obj_inside_cpuset_by_type(topo,
-                                                        socket->cpuset,
-                                                        HWLOC_OBJ_CORE, core_index);
-             NULL != core;
-             core = hwloc_get_obj_inside_cpuset_by_type(topo,
-                                                        socket->cpuset,
-                                                        HWLOC_OBJ_CORE, ++core_index)) {
-            if (core_index > 0) {
+        core = hwloc_get_obj_inside_cpuset_by_type(topo,
+                                                   cpuset_for_socket,
+                                                   HWLOC_OBJ_CORE, core_index);
+        while (NULL != core || fake_on_first_core) {
+            fake_on_first_core = false;
+
+            /* if numas contain cores and are contained by sockets,
+             * example output [<../..><../..>][<../../../..>]
+             */
+            if (HWLOC_OBJ_CORE == type_under_numa) {
+                prev_numa = cur_numa;
+                cur_numa = find_my_numa(core);
+                if (cur_numa && cur_numa != prev_numa) {
+                    if (a_numa_marker_is_open) {
+                        strncat(str, ">", len - strlen(str) - 1);
+                    }
+                    strncat(str, "<", len - strlen(str) - 1);
+                    a_numa_marker_is_open = true;
+                }
+            }
+
+
+            if (0 < core_index) {
                 strncat(str, "/", len - strlen(str) - 1);
+            }
+
+            if (NULL != core) {
+                cpuset_for_core = core->complete_cpuset;
+            } else {
+                cpuset_for_core = cpuset_for_socket;
             }
 
             /* Iterate over all existing PUs in this core */
             pu_index = 0;
-            for (pu = hwloc_get_obj_inside_cpuset_by_type(topo,
-                                                          core->cpuset,
-                                                          HWLOC_OBJ_PU, pu_index);
-                 NULL != pu;
-                 pu = hwloc_get_obj_inside_cpuset_by_type(topo,
-                                                          core->cpuset,
-                                                          HWLOC_OBJ_PU, ++pu_index)) {
+            pu = hwloc_get_obj_inside_cpuset_by_type(topo,
+                                                     cpuset_for_core,
+                                                     HWLOC_OBJ_PU, pu_index);
+            while (NULL != pu) {
+                /* if numas contain PU and are contained by cores (seems unlikely)
+                 * example output [<..../....>/<..../....>/<..../....>/<..../....>]
+                 */
+                if (HWLOC_OBJ_PU == type_under_numa) {
+                    prev_numa = cur_numa;
+                    cur_numa = find_my_numa(pu);
+                    if (cur_numa && cur_numa != prev_numa) {
+                        if (a_numa_marker_is_open) {
+                            strncat(str, ">", len - strlen(str) - 1);
+                        }
+                        strncat(str, "<", len - strlen(str) - 1);
+                        a_numa_marker_is_open = true;
+                    }
+                }
 
                 /* Is this PU in the cpuset? */
                 if (hwloc_bitmap_isset(cpuset, pu->os_index)) {
                     strncat(str, "B", len - strlen(str) - 1);
                 } else {
-                    strncat(str, ".", len - strlen(str) - 1);
+                    if (hwloc_bitmap_isset(sum->available, pu->os_index)) {
+                        strncat(str, ".", len - strlen(str) - 1);
+                    } else {
+                        strncat(str, "~", len - strlen(str) - 1);
+                    }
+                }
+                pu = hwloc_get_obj_inside_cpuset_by_type(topo,
+                                                          cpuset_for_core,
+                                                          HWLOC_OBJ_PU, ++pu_index);
+            }  /* end while pu */
+            if (HWLOC_OBJ_PU == type_under_numa) {
+                if (a_numa_marker_is_open) {
+                    strncat(str, ">", len - strlen(str) - 1);
+                    a_numa_marker_is_open = false;
                 }
             }
+            core = hwloc_get_obj_inside_cpuset_by_type(topo,
+                                                        cpuset_for_socket,
+                                                        HWLOC_OBJ_CORE, ++core_index);
+        } /* end while core */
+        if (HWLOC_OBJ_CORE == type_under_numa) {
+            if (a_numa_marker_is_open) {
+                strncat(str, ">", len - strlen(str) - 1);
+                a_numa_marker_is_open = false;
+            }
         }
-        strncat(str, "]", len - strlen(str) - 1);
+        if (NULL != socket) {
+            strncat(str, "]", len - strlen(str) - 1);
+            socket = socket->next_cousin;
+        }
+    } while (NULL != socket || fake_on_first_socket);
+
+    if (HWLOC_OBJ_SOCKET == type_under_numa) {
+        if (a_numa_marker_is_open) {
+            strncat(str, ">", len - strlen(str) - 1);
+            a_numa_marker_is_open = false;
+        }
     }
 
     return PRRTE_SUCCESS;
@@ -2024,9 +2120,10 @@ int prrte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char* device_name, p
 char* prrte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
 {
     int nnuma, nsocket, nl3, nl2, nl1, ncore, nhwt;
-    char *sig=NULL, *arch = NULL, *endian;
+    char *sig=NULL, *arch = NULL, *endian, *pus, *cpus;
     hwloc_obj_t obj;
     unsigned i;
+    hwloc_bitmap_t complete, allowed;
 
     nnuma = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NODE, 0, PRRTE_HWLOC_AVAILABLE);
     nsocket = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_SOCKET, 0, PRRTE_HWLOC_AVAILABLE);
@@ -2058,8 +2155,25 @@ char* prrte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
     endian = "unknown";
 #endif
 
-    prrte_asprintf(&sig, "%dN:%dS:%dL3:%dL2:%dL1:%dC:%dH:%s:%s",
-             nnuma, nsocket, nl3, nl2, nl1, ncore, nhwt, arch, endian);
+    /* print the cpu bitmap itself so we can detect mismatches in the available
+     * cores across the nodes - we send the complete set along with the available
+     * one in cases where the two differ */
+    complete = (hwloc_bitmap_t)hwloc_topology_get_complete_cpuset(topo);
+    allowed = (hwloc_bitmap_t)hwloc_topology_get_allowed_cpuset(topo);
+    if (0 != hwloc_bitmap_list_asprintf(&pus, allowed)) {
+        pus = strdup("unknown");
+    }
+    if (hwloc_bitmap_isequal(complete, allowed)) {
+        cpus = strdup("");
+    } else {
+        if (0 != hwloc_bitmap_list_asprintf(&cpus, complete)) {
+            cpus = strdup("unknown");
+        }
+    }
+    prrte_asprintf(&sig, "%dN:%dS:%dL3:%dL2:%dL1:%dC:%dH:%s:%s:%s:%s",
+             nnuma, nsocket, nl3, nl2, nl1, ncore, nhwt, pus, cpus, arch, endian);
+    free(pus);
+    free(cpus);
     return sig;
 }
 
