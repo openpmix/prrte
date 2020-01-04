@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2007-2008 Sun Microsystems, Inc.  All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,7 +21,7 @@
 /**
  * @file
  *
- * Interface into the Open MPI Run Time Environment
+ * Interface into the PRRTE Run Time Environment
  */
 #ifndef PRRTE_RUNTIME_INTERNALS_H
 #define PRRTE_RUNTIME_INTERNALS_H

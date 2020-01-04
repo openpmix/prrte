@@ -13,7 +13,7 @@
  * Copyright (c) 2007-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010-2016 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -47,6 +47,7 @@
 #include "src/util/error.h"
 #include "src/util/argv.h"
 #include "src/mca/base/base.h"
+#include "src/mca/schizo/base/base.h"
 #include "src/util/show_help.h"
 
 #include "constants.h"
@@ -76,8 +77,7 @@ int main(int argc, char *argv[])
     bool cmd_error = false;
     bool acted = false;
     bool want_all = false;
-    char **app_env = NULL, **global_env = NULL;
-    int i, len;
+    int i;
     char *str;
 
     /* protect against problems if someone passes us thru a pipe
@@ -92,31 +92,31 @@ int main(int argc, char *argv[])
         exit(ret);
     }
 
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, 'v', NULL, "version", 2,
-                            "Show version of PRRTE or a component.  The first parameter can be the keywords \"prrte\" or \"all\", a framework name (indicating all components in a framework), or a framework:component string (indicating a specific component).  The second parameter can be one of: full, major, minor, release, greek, svn.");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', NULL, "param", 2,
-                            "Show MCA parameters.  The first parameter is the framework (or the keyword \"all\"); the second parameter is the specific component name (or the keyword \"all\").");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', NULL, "internal", 0,
-                            "Show internal MCA parameters (not meant to be modified by users)");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', NULL, "path", 1,
-                            "Show paths that Open MPI was configured with.  Accepts the following parameters: prefix, bindir, libdir, incdir, mandir, pkglibdir, sysconfdir");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', NULL, "arch", 0,
-                            "Show architecture Open MPI was cprrteled on");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, 'c', NULL, "config", 0,
-                            "Show configuration options");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, 'h', NULL, "help", 0,
-                            "Show this help message");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', NULL, "prrte_info_pretty", 0,
-                            "When used in conjunction with other parameters, the output is displayed in 'prrte_info_prettyprint' format (default)");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', NULL, "parsable", 0,
-                            "When used in conjunction with other parameters, the output is displayed in a machine-parsable format");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', NULL, "parseable", 0,
-                            "Synonym for --parsable");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', NULL, "hostname", 0,
-                            "Show the hostname that Open MPI was configured "
-                            "and built on");
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, 'a', NULL, "all", 0,
-                            "Show all configuration options and MCA parameters");
+    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "show-version", 2,
+                            "Show version of PRRTE or a component.  The first parameter can be the keywords \"prrte\" or \"all\", a framework name (indicating all components in a framework), or a framework:component string (indicating a specific component).  The second parameter can be one of: full, major, minor, release, greek, svn.",
+                            PRRTE_CMD_LINE_OTYPE_GENERAL);
+    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "param", 2,
+                            "Show MCA parameters.  The first parameter is the framework (or the keyword \"all\"); the second parameter is the specific component name (or the keyword \"all\").",
+                            PRRTE_CMD_LINE_OTYPE_GENERAL);
+    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "internal", 0,
+                            "Show internal MCA parameters (not meant to be modified by users)",
+                            PRRTE_CMD_LINE_OTYPE_GENERAL);
+    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "path", 1,
+                            "Show paths that PRRTE was configured with.  Accepts the following parameters: prefix, bindir, libdir, incdir, mandir, pkglibdir, sysconfdir",
+                            PRRTE_CMD_LINE_OTYPE_GENERAL);
+    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "arch", 0,
+                            "Show architecture PRRTE was compiled on",
+                            PRRTE_CMD_LINE_OTYPE_GENERAL);
+    prrte_cmd_line_make_opt3(prrte_info_cmd_line, 'c', "config", 0,
+                            "Show configuration options",
+                            PRRTE_CMD_LINE_OTYPE_GENERAL);
+    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "hostname", 0,
+                            "Show the hostname that PRRTE was configured "
+                            "and built on",
+                            PRRTE_CMD_LINE_OTYPE_GENERAL);
+    prrte_cmd_line_make_opt3(prrte_info_cmd_line, 'a', "all", 0,
+                            "Show all configuration options and MCA parameters",
+                            PRRTE_CMD_LINE_OTYPE_GENERAL);
 
     /* Call some useless functions in order to guarantee to link in some
      * global variables.  Only check the return value so that the
@@ -144,7 +144,28 @@ int main(int argc, char *argv[])
         PRRTE_RELEASE(prrte_info_cmd_line);
         exit(1);
     }
-    prrte_mca_base_cmd_line_setup(prrte_info_cmd_line);
+    /* open the SCHIZO framework */
+    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_schizo_base_framework, 0))) {
+        PRRTE_ERROR_LOG(ret);
+        return ret;
+    }
+
+    if (PRRTE_SUCCESS != (ret = prrte_schizo_base_select())) {
+        PRRTE_ERROR_LOG(ret);
+        return ret;
+    }
+    /* scan for personalities */
+    for (i=0; NULL != argv[i]; i++) {
+        if (0 == strcmp(argv[i], "--personality")) {
+            prrte_argv_append_nosize(&prrte_schizo_base.personalities, argv[i+1]);
+        }
+    }
+
+    /* setup the rest of the cmd line only once */
+    if (PRRTE_SUCCESS != (ret = prrte_schizo.define_cli(prrte_info_cmd_line))) {
+        PRRTE_ERROR_LOG(ret);
+        return ret;
+    }
 
     /* Do the parsing */
 
@@ -162,7 +183,7 @@ int main(int argc, char *argv[])
         char *str, *usage;
 
         want_help = true;
-        usage = prrte_cmd_line_get_usage_msg(prrte_info_cmd_line);
+        usage = prrte_cmd_line_get_usage_msg(prrte_info_cmd_line, false);
         str = prrte_show_help_string("help-pinfo.txt", "usage", true,
                                     usage);
         if (NULL != str) {
@@ -175,23 +196,6 @@ int main(int argc, char *argv[])
         prrte_mca_base_close();
         PRRTE_RELEASE(prrte_info_cmd_line);
         exit(cmd_error ? 1 : 0);
-    }
-
-    prrte_mca_base_cmd_line_process_args(prrte_info_cmd_line, &app_env, &global_env);
-
-    /* putenv() all the stuff that we got back from env (in case the
-     * user specified some --mca params on the command line).  This
-     * creates a memory leak, but that's unfortunately how putenv()
-     * works.  :-(
-     */
-
-    len = prrte_argv_count(app_env);
-    for (i = 0; i < len; ++i) {
-        putenv(app_env[i]);
-    }
-    len = prrte_argv_count(global_env);
-    for (i = 0; i < len; ++i) {
-        putenv(global_env[i]);
     }
 
     /* setup the mca_types array */
@@ -212,7 +216,7 @@ int main(int argc, char *argv[])
     }
 
     want_all = prrte_cmd_line_is_taken(prrte_info_cmd_line, "all");
-    if (want_all || prrte_cmd_line_is_taken(prrte_info_cmd_line, "version")) {
+    if (want_all || prrte_cmd_line_is_taken(prrte_info_cmd_line, "show-version")) {
         prrte_info_do_version(want_all, prrte_info_cmd_line);
         acted = true;
     }
@@ -256,15 +260,7 @@ int main(int argc, char *argv[])
     }
 
     /* All done */
-
-    if (NULL != app_env) {
-        prrte_argv_free(app_env);
-    }
-    if (NULL != global_env) {
-        prrte_argv_free(global_env);
-    }
-    prrte_info_components_close ();
-    PRRTE_RELEASE(prrte_info_cmd_line);
+    prrte_info_components_close();
     PRRTE_DESTRUCT(&mca_types);
     prrte_mca_base_close();
 

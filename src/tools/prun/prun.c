@@ -86,9 +86,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"
-#include "src/prted/prted_submit.h"
 
-/* ensure I can behave like a daemon */
 #include "prun.h"
 
 typedef struct {
@@ -111,7 +109,7 @@ static void mdes(myinfo_t *p)
     }
 }
 static PRRTE_CLASS_INSTANCE(myinfo_t, prrte_object_t,
-                          mcon, mdes);
+                            mcon, mdes);
 
 typedef struct {
     prrte_list_item_t super;
@@ -131,16 +129,6 @@ static void ades(prrte_pmix_app_t *p)
 static PRRTE_CLASS_INSTANCE(prrte_pmix_app_t,
                           prrte_list_item_t,
                           acon, ades);
-
-static struct {
-    bool terminate_dvm;
-    bool system_server_first;
-    bool system_server_only;
-    bool do_not_connect;
-    bool wait_to_connect;
-    int num_retries;
-    int pid;
-} myoptions;
 
 typedef struct {
     prrte_pmix_lock_t lock;
@@ -165,56 +153,231 @@ static prrte_event_t term_handler;
 static int term_pipe[2];
 static prrte_atomic_lock_t prun_abort_inprogress_lock = {0};
 static prrte_event_base_t *myevbase = NULL;
-static char **hostfiles = NULL;
-static char **dash_hosts = NULL;
-static bool mpirun = false;
+static bool proxyrun = false;
+static bool verbose = false;
+static prrte_cmd_line_t *prrte_cmd_line = NULL;
 
+/* prun-specific options */
 static prrte_cmd_line_init_t cmd_line_init[] = {
+
     /* tell the dvm to terminate */
-    { NULL, '\0', "terminate", "terminate", 0,
-      &myoptions.terminate_dvm, PRRTE_CMD_LINE_TYPE_BOOL,
+    { '\0', "terminate", 0, PRRTE_CMD_LINE_TYPE_BOOL,
       "Terminate the DVM", PRRTE_CMD_LINE_OTYPE_DVM },
-
     /* look first for a system server */
-    { NULL, '\0', "system-server-first", "system-server-first", 0,
-      &myoptions.system_server_first, PRRTE_CMD_LINE_TYPE_BOOL,
-      "First look for a system server and connect to it if found", PRRTE_CMD_LINE_OTYPE_DVM },
-
+    { '\0', "system-server-first", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "First look for a system server and connect to it if found",
+      PRRTE_CMD_LINE_OTYPE_DVM },
     /* connect only to a system server */
-    { NULL, '\0', "system-server-only", "system-server-only", 0,
-      &myoptions.system_server_only, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Connect only to a system-level server", PRRTE_CMD_LINE_OTYPE_DVM },
-
+    { '\0', "system-server-only", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Connect only to a system-level server",
+      PRRTE_CMD_LINE_OTYPE_DVM },
     /* do not connect */
-    { NULL, '\0', "do-not-connect", "do-not-connect", 0,
-      &myoptions.do_not_connect, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Do not connect to a server", PRRTE_CMD_LINE_OTYPE_DVM },
-
+    { '\0', "do-not-connect", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Do not connect to a server",
+      PRRTE_CMD_LINE_OTYPE_DVM },
     /* wait to connect */
-    { NULL, '\0', "wait-to-connect", "wait-to-connect", 0,
-      &myoptions.wait_to_connect, PRRTE_CMD_LINE_TYPE_INT,
-      "Delay specified number of seconds before trying to connect", PRRTE_CMD_LINE_OTYPE_DVM },
-
+    { '\0', "wait-to-connect", 0, PRRTE_CMD_LINE_TYPE_INT,
+      "Delay specified number of seconds before trying to connect",
+      PRRTE_CMD_LINE_OTYPE_DVM },
     /* number of times to try to connect */
-    { NULL, '\0', "num-connect-retries", "num-connect-retries", 0,
-      &myoptions.num_retries, PRRTE_CMD_LINE_TYPE_INT,
-      "Max number of times to try to connect", PRRTE_CMD_LINE_OTYPE_DVM },
-
+    { '\0', "num-connect-retries", 0, PRRTE_CMD_LINE_TYPE_INT,
+      "Max number of times to try to connect",
+      PRRTE_CMD_LINE_OTYPE_DVM },
     /* provide a connection PID */
-    { NULL, '\0', "pid", "pid", 1,
-      &myoptions.pid, PRRTE_CMD_LINE_TYPE_INT,
+    { '\0', "pid", 1, PRRTE_CMD_LINE_TYPE_INT,
       "PID of the session-level daemon to which we should connect",
       PRRTE_CMD_LINE_OTYPE_DVM },
+    /* uri of the dvm, or at least where to get it */
+    { '\0', "dvm-uri", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Specify the URI of the DVM master, or the name of the file (specified as file:filename) that contains that info",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+
+
+    /* testing options */
+    { '\0', "timeout", 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Timeout the job after the specified number of seconds",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "report-state-on-timeout", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Report all job and process states upon timeout",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "get-stack-traces", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Get stack traces of all application procs on timeout",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+
+
+    /* Conventional options - for historical compatibility, support
+     * both single and multi dash versions */
+    /* Number of processes; -c, -n, --n, -np, and --np are all
+       synonyms */
+    { 'c', "np", 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Number of processes to run",
+      PRRTE_CMD_LINE_OTYPE_GENERAL },
+    { 'n', "n", 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Number of processes to run",
+      PRRTE_CMD_LINE_OTYPE_GENERAL },
+    /* Use an appfile */
+    { '\0',  "app", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Provide an appfile; ignore all other command line options",
+      PRRTE_CMD_LINE_OTYPE_GENERAL },
+
+
+      /* Output options */
+    /* exit status reporting */
+    { '\0', "report-child-jobs-separately", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Return the exit status of the primary job only",
+      PRRTE_CMD_LINE_OTYPE_OUTPUT },
+    /* select XML output */
+    { '\0', "xml", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Provide all output in XML format",
+      PRRTE_CMD_LINE_OTYPE_OUTPUT },
+    { '\0', "xml-file", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Provide all output in XML format to the specified file",
+      PRRTE_CMD_LINE_OTYPE_OUTPUT },
+    /* tag output */
+    { '\0', "tag-output", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Tag all output with [job,rank]",
+      PRRTE_CMD_LINE_OTYPE_OUTPUT },
+    { '\0', "timestamp-output", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Timestamp all application process output",
+      PRRTE_CMD_LINE_OTYPE_OUTPUT },
+    { '\0', "output-directory", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Redirect output from application processes into filename/job/rank/std[out,err,diag]. A relative path value will be converted to an absolute path. The directory name may include a colon followed by a comma-delimited list of optional case-insensitive directives. Supported directives currently include NOJOBID (do not include a job-id directory level) and NOCOPY (do not copy the output to the stdout/err streams)",
+      PRRTE_CMD_LINE_OTYPE_OUTPUT },
+    { '\0', "output-filename", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Redirect output from application processes into filename.rank. A relative path value will be converted to an absolute path. The directory name may include a colon followed by a comma-delimited list of optional case-insensitive directives. Supported directives currently include NOCOPY (do not copy the output to the stdout/err streams)",
+      PRRTE_CMD_LINE_OTYPE_OUTPUT },
+    { '\0', "merge-stderr-to-stdout", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Merge stderr to stdout for each process",
+      PRRTE_CMD_LINE_OTYPE_OUTPUT },
+    { '\0', "xterm", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Create a new xterm window and display output from the specified ranks there",
+      PRRTE_CMD_LINE_OTYPE_OUTPUT },
+
+    /* select stdin option */
+    { '\0', "stdin", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Specify procs to receive stdin [rank, all, none] (default: 0, indicating rank 0)",
+      PRRTE_CMD_LINE_OTYPE_INPUT },
+
+
+    /* User-level debugger arguments */
+    { '\0', "debug", 1, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Invoke the indicated user-level debugger (provide a comma-delimited list of debuggers to search for)",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "output-proctable", 1, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Print the complete proctable to stdout [-], stderr [+], or a file [anything else] after launch",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+
+
+    /* Launch options */
+    /* request that argv[0] be indexed */
+    { '\0', "index-argv-by-rank", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Uniquely index argv[0] for each process using its rank",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    /* Preload the binary on the remote machine */
+    { 's', "preload-binary", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Preload the binary on the remote machine before starting the remote process.",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    /* Preload files on the remote machine */
+    { '\0', "preload-files", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Preload the comma separated list of files to the remote machines current working directory before starting the remote process.",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    /* Export environment variables; potentially used multiple times,
+       so it does not make sense to set into a variable */
+    { 'x', NULL, 1, PRRTE_CMD_LINE_TYPE_NULL,
+      "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the environment variable foo and takes its value from the current environment; \"-x foo=bar\" exports the environment variable name foo and sets its value to \"bar\" in the started processes)",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "wdir", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Set the working directory of the started processes",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "wd", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Synonym for --wdir",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "set-cwd-to-session-dir", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Set the working directory of the started processes to their session directory",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "path", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "PATH to be used to look for executables to start processes",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "show-progress", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Output a brief periodic report on launch progress",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "pset", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "User-specified name assigned to the processes in their given application",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+
+
+    /* Developer options */
+    { '\0', "do-not-resolve", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Do not attempt to resolve interfaces - usually used to determine proposed process placement/binding prior to obtaining an allocation",
+      PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { '\0', "do-not-launch", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Perform all necessary operations to prepare to launch the application, but do not actually launch it (usually used to test mapping patterns)",
+      PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { '\0', "display-devel-map", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+       "Display a detailed process map (mostly intended for developers) just before launch",
+       PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { '\0', "display-topo", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+       "Display the topology as part of the process map (mostly intended for developers) just before launch",
+       PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { '\0', "display-diffable-map", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+       "Display a diffable process map (mostly intended for developers) just before launch",
+       PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { '\0', "report-bindings", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Whether to report process bindings to stderr",
+      PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { '\0', "display-devel-allocation", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Display a detailed list (mostly intended for developers) of the allocation being used by this job",
+      PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { '\0', "display-map", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Display the process map just before launch",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "display-allocation", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Display the allocation being used by this job",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+
+
+    /* Mapping options */
+    { '\0', "map-by", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Mapping Policy [slot | hwthread | core (default:np<=2) | l1cache | l2cache | l3cache | socket | numa (default:np>2) | board | node | seq | dist | ppr(:N:RESOURCE) | rankfile(:FILENAME)], with allowed modifiers :PE=y:PE-LIST=a,b:SPAN:OVERSUBSCRIBE:NOOVERSUBSCRIBE:NOLOCAL",
+      PRRTE_CMD_LINE_OTYPE_MAPPING },
+
+
+      /* Ranking options */
+    { '\0', "rank-by", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Ranking Policy [slot (default) | hwthread | core | socket | numa | board | node], with allowed modifiers :SPAN",
+      PRRTE_CMD_LINE_OTYPE_RANKING },
+
+
+      /* Binding options */
+    { '\0', "bind-to", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Policy for binding processes [none (default:oversubscribed), hwthread, core (default:np<=2), l1cache, l2cache, l3cache, socket, numa] Allowed qualifiers: OVERLOAD:IF-SUPPORTED",
+      PRRTE_CMD_LINE_OTYPE_BINDING },
+
+
+    /* Fault Tolerance options */
+    { '\0', "enable-recovery", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Enable recovery from process failure [Default = disabled]",
+      PRRTE_CMD_LINE_OTYPE_FT },
+    { '\0', "max-restarts", 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Max number of times to restart a failed process",
+      PRRTE_CMD_LINE_OTYPE_FT },
+    { '\0', "disable-recovery", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Disable recovery (resets all recovery options to off)",
+      PRRTE_CMD_LINE_OTYPE_FT },
+    { '\0', "continuous", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Job is to run until explicitly terminated",
+      PRRTE_CMD_LINE_OTYPE_FT },
+
+
 
     /* End of list */
-    { NULL, '\0', NULL, NULL, 0,
-      NULL, PRRTE_CMD_LINE_TYPE_NULL, NULL }
+    { '\0', NULL, 0, PRRTE_CMD_LINE_TYPE_NULL, NULL }
 };
 
 
 static void abort_signal_callback(int signal);
 static void clean_abort(int fd, short flags, void *arg);
-
 
 static void infocb(pmix_status_t status,
                    pmix_info_t *info, size_t ninfo,
@@ -232,7 +395,7 @@ static void infocb(pmix_status_t status,
 #endif
     PRRTE_ACQUIRE_OBJECT(lock);
 
-    if (prrte_cmd_options.verbose) {
+    if (verbose) {
         prrte_output(0, "PRUN: INFOCB");
     }
 
@@ -270,7 +433,7 @@ static void defhandler(size_t evhdlr_registration_id,
     pmix_proc_t target;
     pmix_info_t directive;
 
-    if (prrte_cmd_options.verbose) {
+    if (verbose) {
         prrte_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
     }
 
@@ -333,7 +496,7 @@ static void evhandler(size_t evhdlr_registration_id,
     size_t n;
     char *msg = NULL;
 
-    if (prrte_cmd_options.verbose) {
+    if (verbose) {
         prrte_output(0, "PRUN: EVHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
     }
 
@@ -356,7 +519,7 @@ static void evhandler(size_t evhdlr_registration_id,
         #endif
             }
         }
-        if (prrte_cmd_options.verbose && (myjobid != PRRTE_JOBID_INVALID && jobid == myjobid)) {
+        if (verbose && (myjobid != PRRTE_JOBID_INVALID && jobid == myjobid)) {
             prrte_output(0, "JOB %s COMPLETED WITH STATUS %d",
                         PRRTE_JOBID_PRINT(jobid), jobstatus);
         }
@@ -453,14 +616,14 @@ int prun(int argc, char *argv[])
     char nspace[PMIX_MAX_NSLEN+1];
     mylock_t mylock;
     bool notify_launch = false;
-    char *mycmd;
     char **prteargs = NULL;
     FILE *fp;
     char buf[2048];
+    prrte_value_t *pval;
+    uint32_t ui32;
+    pid_t pid;
 
     /* init the globals */
-    memset(&prrte_cmd_options, 0, sizeof(prrte_cmd_options));
-    memset(&myoptions, 0, sizeof(myoptions));
     PRRTE_CONSTRUCT(&job_info, prrte_list_t);
     PRRTE_CONSTRUCT(&apps, prrte_list_t);
 
@@ -468,40 +631,27 @@ int prun(int argc, char *argv[])
     /* init the tiny part of PRRTE we use */
     prrte_init_util();
 
-    mycmd = prrte_basename(argv[0]);
-    if (0 != strcmp(mycmd, "prun")) {
-        mpirun = true;
-        prrte_argv_append_nosize(&prteargs, "prte");
-    }
-
-    /* search the argv for MCA params */
-    for (i=0; NULL != argv[i]; i++) {
-        if (':' == argv[i][0] ||
-            NULL == argv[i+1] || NULL == argv[i+2]) {
-            break;
+    prrte_tool_basename = prrte_basename(argv[0]);
+    if (0 != strcmp(prrte_tool_basename, "prun")) {
+        proxyrun = true;
+        /* see if we were given a path to the proxy */
+        ptr = prrte_dirname(argv[0]);
+        if (NULL == ptr) {
+            fprintf(stderr, "Could not parse the given cmd line\n");
+            exit(1);
         }
-        if (0 == strncmp(argv[i], "-"PRRTE_MCA_CMD_LINE_ID, strlen("-"PRRTE_MCA_CMD_LINE_ID)) ||
-            0 == strncmp(argv[i], "--"PRRTE_MCA_CMD_LINE_ID, strlen("--"PRRTE_MCA_CMD_LINE_ID)) ||
-            0 == strncmp(argv[i], "-g"PRRTE_MCA_CMD_LINE_ID, strlen("-g"PRRTE_MCA_CMD_LINE_ID)) ||
-            0 == strncmp(argv[i], "--g"PRRTE_MCA_CMD_LINE_ID, strlen("--g"PRRTE_MCA_CMD_LINE_ID))) {
-            if (mpirun) {
-                prrte_argv_append_nosize(&prteargs, argv[i]);
-                prrte_argv_append_nosize(&prteargs, argv[i+1]);
-                prrte_argv_append_nosize(&prteargs, argv[i+2]);
+        if (0 != strcmp(ptr, argv[0])) {
+            /* they gave us a path, so prefix the "prte" cmd with it */
+            if ('/' == ptr[strlen(ptr)-1]) {
+                prrte_asprintf(&param, "%sprte", ptr);
+            } else {
+                prrte_asprintf(&param, "%s/prte", ptr);
             }
-            (void) prrte_mca_base_var_env_name (argv[i+1], &param);
-            prrte_setenv(param, argv[i+2], true, &environ);
+            prrte_argv_append_nosize(&prteargs, param);
+            free(ptr);
             free(param);
-        } else if (0 == strcmp(argv[i], "-am") ||
-                   0 == strcmp(argv[i], "--am")) {
-            (void)prrte_mca_base_var_env_name("mca_base_param_file_prefix", &param);
-            prrte_setenv(param, argv[i+1], true, &environ);
-            free(param);
-        } else if (0 == strcmp(argv[i], "-tune") ||
-                   0 == strcmp(argv[i], "--tune")) {
-            (void)prrte_mca_base_var_env_name("mca_base_envar_file_prefix", &param);
-            prrte_setenv(param, argv[i+1], true, &environ);
-            free(param);
+        } else {
+            prrte_argv_append_nosize(&prteargs, "prte");
         }
     }
 
@@ -518,9 +668,18 @@ int prun(int argc, char *argv[])
         return rc;
     }
 
-    if (PRRTE_SUCCESS != (ret = prrte_schizo_base_select())) {
+    if (PRRTE_SUCCESS != (rc = prrte_schizo_base_select())) {
         PRRTE_ERROR_LOG(rc);
         return rc;
+    }
+    /* scan for personalities */
+    for (i=0; NULL != argv[i]; i++) {
+        if (0 == strcmp(argv[i], "--personality")) {
+            prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, argv[i+1], false);
+        }
+    }
+    if (proxyrun) {
+        prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi", false);
     }
 
     /* setup the rest of the cmd line only once */
@@ -529,12 +688,9 @@ int prun(int argc, char *argv[])
         return rc;
     }
 
-    /* now that options have been defined, finish setup */
-    prrte_mca_base_cmd_line_setup(prrte_cmd_line);
-
-    /* parse the result to get values */
+    /* parse the result to get values - this will not include MCA params */
     if (PRRTE_SUCCESS != (rc = prrte_cmd_line_parse(prrte_cmd_line,
-                                                  true, false, argc, argv)) ) {
+                                                    true, false, argc, argv)) ) {
         if (PRRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", argv[0],
                     prrte_strerror(rc));
@@ -543,28 +699,27 @@ int prun(int argc, char *argv[])
        return rc;
     }
 
-    /* process any mca params */
-    rc = prrte_mca_base_cmd_line_process_args(prrte_cmd_line, &environ, &environ);
-    if (PRRTE_SUCCESS != rc) {
-        return rc;
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "verbose")) {
+        verbose = true;
     }
 
     /* see if print version is requested. Do this before
      * check for help so that --version --help works as
      * one might expect. */
-     if (prrte_cmd_options.version) {
+     if (prrte_cmd_line_is_taken(prrte_cmd_line, "version")) {
         fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n",
-                "prun", "PMIx Reference RunTime Environment", PRRTE_REPO_REV, PACKAGE_BUGREPORT);
+                prrte_tool_basename, "PMIx Reference RunTime Environment",
+                PRRTE_VERSION, PACKAGE_BUGREPORT);
         exit(0);
     }
 
     /* Check for help request */
-    if (prrte_cmd_options.help) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "help")) {
         char *str, *args = NULL;
-        args = prrte_cmd_line_get_usage_msg(prrte_cmd_line);
+        args = prrte_cmd_line_get_usage_msg(prrte_cmd_line, false);
         str = prrte_show_help_string("help-prrterun.txt", "prrterun:usage", false,
-                                    "prun", "PRRTE", PRRTE_VERSION,
-                                    "prun", args,
+                                    prrte_tool_basename, "PRRTE", PRRTE_VERSION,
+                                    prrte_tool_basename, args,
                                     PACKAGE_BUGREPORT);
         if (NULL != str) {
             printf("%s", str);
@@ -580,38 +735,11 @@ int prun(int argc, char *argv[])
      * us to proceed if the allow-run-as-root flag was given. Otherwise,
      * exit with a giant warning flag
      */
-    if (0 == geteuid() && !prrte_cmd_options.run_as_root) {
-        /* bit of an abstraction break required here for backward compatibility in OMPI */
-        char *r1, *r2;
-        if (NULL != (r1 = getenv("OMPI_ALLOW_RUN_AS_ROOT")) &&
-            NULL != (r2 = getenv("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM"))) {
-            if (0 == strcmp(r1, "1") && 0 == strcmp(r2, "1")) {
-                goto moveon;
-            }
-        }
-        /* show_help is not yet available, so print an error manually */
-        fprintf(stderr, "--------------------------------------------------------------------------\n");
-        if (prrte_cmd_options.help) {
-            fprintf(stderr, "prun cannot provide the help message when run as root.\n\n");
-        } else {
-            fprintf(stderr, "prun has detected an attempt to run as root.\n\n");
-        }
-
-        fprintf(stderr, "Running as root is *strongly* discouraged as any mistake (e.g., in\n");
-        fprintf(stderr, "defining TMPDIR) or bug can result in catastrophic damage to the OS\n");
-        fprintf(stderr, "file system, leaving your system in an unusable state.\n\n");
-
-        fprintf(stderr, "We strongly suggest that you run prun as a non-root user.\n\n");
-
-        fprintf(stderr, "You can override this protection by adding the --allow-run-as-root\n");
-        fprintf(stderr, "option to your command line.  However, we reiterate our strong advice\n");
-        fprintf(stderr, "against doing so - please do so at your own risk.\n");
-        fprintf(stderr, "--------------------------------------------------------------------------\n");
-        exit(1);
+    if (0 == geteuid()) {
+        prrte_schizo.allow_run_as_root(prrte_cmd_line);  // will exit us if not allowed
     }
 
-  moveon:
-    if (!myoptions.terminate_dvm) {
+    if (!prrte_cmd_line_is_taken(prrte_cmd_line, "terminate")) {
         /* they want to run an application, so let's parse
          * the cmd line to get it */
 
@@ -627,22 +755,10 @@ int prun(int argc, char *argv[])
             goto DONE;
         }
 
-        if (mpirun) {
-            /* check for hostfile and/or dash-host options */
-            if (NULL != hostfiles) {
-                ptr = prrte_argv_join(hostfiles, ',');
-                prrte_argv_append_nosize(&prteargs, "--hostfile");
-                prrte_argv_append_nosize(&prteargs, ptr);
-                free(ptr);
-            }
-            if (NULL != dash_hosts) {
-                ptr = prrte_argv_join(dash_hosts, ',');
-                prrte_argv_append_nosize(&prteargs, "--host");
-                prrte_argv_append_nosize(&prteargs, ptr);
-                free(ptr);
-            }
+        if (proxyrun) {
+            prrte_schizo.parse_proxy_cli(prrte_cmd_line, &prteargs);
             prrte_argv_append_nosize(&prteargs, "&");
-            prrte_mca_base_cmd_line_wrap_args(prteargs);
+            prrte_schizo.wrap_args(prteargs);
             param = prrte_argv_join(prteargs, ' ');
             fp = popen(param, "r");
             if (NULL == fp) {
@@ -665,38 +781,44 @@ int prun(int argc, char *argv[])
 
     /* setup options */
     PRRTE_CONSTRUCT(&tinfo, prrte_list_t);
-    if (myoptions.do_not_connect) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "do-not-connect")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         PMIX_INFO_LOAD(ds->info, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
-    } else if (myoptions.system_server_first) {
+    } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "system-server-first")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
-    } else if (myoptions.system_server_only) {
+    } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "system-server-only")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
     }
-    if (0 < myoptions.wait_to_connect) {
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "wait-to-connect", 0, 0)) &&
+        0 < pval->data.integer) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_RETRY_DELAY, &myoptions.wait_to_connect, PMIX_UINT32);
+        ui32 = pval->data.integer;
+        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
         prrte_list_append(&tinfo, &ds->super);
     }
-    if (0 < myoptions.num_retries) {
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "num-connect-retries", 0, 0)) &&
+        0 < pval->data.integer) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_MAX_RETRIES, &myoptions.num_retries, PMIX_UINT32);
+        ui32 = pval->data.integer;
+        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
         prrte_list_append(&tinfo, &ds->super);
     }
-    if (0 < myoptions.pid) {
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "pid", 0, 0)) &&
+        0 < pval->data.integer) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &myoptions.pid, PMIX_PID);
+        pid = pval->data.integer;
+        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
         prrte_list_append(&tinfo, &ds->super);
     }
     /* ensure we don't try to use the usock PTL component */
@@ -723,19 +845,19 @@ int prun(int argc, char *argv[])
     prrte_list_append(&tinfo, &ds->super);
 
     /* setup any output format requests */
-    if (prrte_cmd_options.tag_output) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "tag-output")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         PMIX_INFO_LOAD(ds->info, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
     }
-    if (prrte_cmd_options.timestamp_output) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "timestamp-output")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         PMIX_INFO_LOAD(ds->info, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
     }
-    if (prrte_xml_output) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "xml")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         PMIX_INFO_LOAD(ds->info, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
@@ -743,10 +865,10 @@ int prun(int argc, char *argv[])
     }
 
     /* if they specified the URI, then pass it along */
-    if (NULL != prrte_cmd_options.hnp) {
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "dvm-uri", 0, 0))) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_URI, prrte_cmd_options.hnp, PMIX_STRING);
+        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_URI, pval->data.string, PMIX_STRING);
         prrte_list_append(&tinfo, &ds->super);
     }
 
@@ -824,7 +946,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_FREE(iptr, ninfo);
 
     /* if the user just wants us to terminate a DVM, then do so */
-    if (myoptions.terminate_dvm) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "terminate")) {
         /* setup a lock to track the connection */
         PRRTE_PMIX_CONSTRUCT_LOCK(&rellock);
         /* register to trap connection loss */
@@ -837,14 +959,14 @@ int prun(int argc, char *argv[])
         PRRTE_PMIX_DESTRUCT_LOCK(&lock);
         flag = true;
         PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
-        if (!mpirun) {
+        if (!proxyrun) {
             fprintf(stderr, "TERMINATING DVM...");
         }
         PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
         PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
 #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
         /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
-         * being called when the server successes. The callback might be eventually
+         * being called when the server terminates. The callback might be eventually
          * called though then the connection to the server closes with
          * status PMIX_ERR_COMM_FAILURE */
         poll(NULL, 0, 1000);
@@ -856,7 +978,7 @@ int prun(int argc, char *argv[])
         PRRTE_PMIX_WAIT_THREAD(&rellock);
         PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
         /* wait for the connection to go away */
-        if (!mpirun) {
+        if (!proxyrun) {
             fprintf(stderr, "DONE\n");
         }
 #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
@@ -883,16 +1005,16 @@ int prun(int argc, char *argv[])
     prrte_list_append(&job_info, &ds->super);
 
     /* see if they specified the personality */
-    if (NULL != prrte_cmd_options.personality) {
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "personality", 0, 0))) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_PERSONALITY, prrte_cmd_options.personality, PMIX_STRING);
+        PMIX_INFO_LOAD(ds->info, PMIX_PERSONALITY, pval->data.string, PMIX_STRING);
         prrte_list_append(&job_info, &ds->super);
     }
 
     /* check for stdout/err directives */
     /* if we were asked to tag output, mark it so */
-    if (prrte_cmd_options.tag_output) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "tag-output")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         flag = true;
@@ -900,7 +1022,7 @@ int prun(int argc, char *argv[])
         prrte_list_append(&job_info, &ds->super);
     }
     /* if we were asked to timestamp output, mark it so */
-    if (prrte_cmd_options.timestamp_output) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "timestamp-output")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         flag = true;
@@ -908,13 +1030,19 @@ int prun(int argc, char *argv[])
         prrte_list_append(&job_info, &ds->super);
     }
    /* cannot have both files and directory set for output */
-    if (NULL != prrte_cmd_options.output_filename &&
-        NULL != prrte_cmd_options.output_directory) {
+    param = NULL;
+    ptr = NULL;
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "output-filename", 0, 0))) {
+        param = pval->data.string;
+    }
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "output-directory", 0, 0))) {
+        ptr = pval->data.string;
+    }
+    if (NULL != param && NULL != ptr) {
         prrte_show_help("help-prted.txt", "both-file-and-dir-set", true,
-                        prrte_cmd_options.output_directory,
-                        prrte_cmd_options.output_filename);
+                        param, ptr);
         return PRRTE_ERR_FATAL;
-    } else if (NULL != prrte_cmd_options.output_filename) {
+    } else if (NULL != param) {
         /* if we were asked to output to files, pass it along. */
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
@@ -922,17 +1050,17 @@ int prun(int argc, char *argv[])
          * convert it to one so the name will be relative to
          * the directory where prun was given as that is what
          * the user will have seen */
-        if (!prrte_path_is_absolute(prrte_cmd_options.output_filename)) {
+        if (!prrte_path_is_absolute(param)) {
             char cwd[PRRTE_PATH_MAX];
             getcwd(cwd, sizeof(cwd));
-            ptr = prrte_os_path(false, cwd, prrte_cmd_options.output_filename, NULL);
+            ptr = prrte_os_path(false, cwd, param, NULL);
         } else {
-            ptr = strdup(prrte_cmd_options.output_filename);
+            ptr = strdup(param);
         }
         PMIX_INFO_LOAD(ds->info, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
         free(ptr);
         prrte_list_append(&job_info, &ds->super);
-    } else if (NULL != prrte_cmd_options.output_directory) {
+    } else if (NULL != ptr) {
         /* if we were asked to output to a directory, pass it along. */
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
@@ -940,18 +1068,18 @@ int prun(int argc, char *argv[])
          * convert it to one so the name will be relative to
          * the directory where prun was given as that is what
          * the user will have seen */
-        if (!prrte_path_is_absolute(prrte_cmd_options.output_directory)) {
+        if (!prrte_path_is_absolute(ptr)) {
             char cwd[PRRTE_PATH_MAX];
             getcwd(cwd, sizeof(cwd));
-            ptr = prrte_os_path(false, cwd, prrte_cmd_options.output_directory, NULL);
+            param = prrte_os_path(false, cwd, ptr, NULL);
         } else {
-            ptr = strdup(prrte_cmd_options.output_directory);
+            param = strdup(ptr);
         }
-        PMIX_INFO_LOAD(ds->info, PMIX_OUTPUT_TO_DIRECTORY, ptr, PMIX_STRING);
-        free(ptr);
+        PMIX_INFO_LOAD(ds->info, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
+        free(param);
     }
     /* if we were asked to merge stderr to stdout, mark it so */
-    if (prrte_cmd_options.merge) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "merge-stderr-to-stdout")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         flag = true;
@@ -960,15 +1088,15 @@ int prun(int argc, char *argv[])
     }
 
     /* check what user wants us to do with stdin */
-    if (NULL != prrte_cmd_options.stdin_target) {
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "stdin", 0, 0))) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_STDIN_TGT, prrte_cmd_options.stdin_target, PMIX_STRING);
+        PMIX_INFO_LOAD(ds->info, PMIX_STDIN_TGT, pval->data.string, PMIX_STRING);
         prrte_list_append(&job_info, &ds->super);
     }
 
     /* if we want the argv's indexed, indicate that */
-    if (prrte_cmd_options.index_argv) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "index-argv-by-rank")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         flag = true;
@@ -976,96 +1104,39 @@ int prun(int argc, char *argv[])
         prrte_list_append(&job_info, &ds->super);
     }
 
-    if (NULL != prrte_cmd_options.mapping_policy) {
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "map-by", 0, 0))) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_MAPBY, prrte_cmd_options.mapping_policy, PMIX_STRING);
-        prrte_list_append(&job_info, &ds->super);
-    } else if (prrte_cmd_options.pernode) {
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_PPR, "1:node", PMIX_STRING);
-        prrte_list_append(&job_info, &ds->super);
-    } else if (0 < prrte_cmd_options.npernode) {
-        /* define the ppr */
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        prrte_asprintf(&ptr, "%d:node", prrte_cmd_options.npernode);
-        PMIX_INFO_LOAD(ds->info, PMIX_PPR, ptr, PMIX_STRING);
-        free(ptr);
-        prrte_list_append(&job_info, &ds->super);
-    } else if (0 < prrte_cmd_options.npersocket) {
-        /* define the ppr */
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        prrte_asprintf(&ptr, "%d:socket", prrte_cmd_options.npersocket);
-        PMIX_INFO_LOAD(ds->info, PMIX_PPR, ptr, PMIX_STRING);
-        free(ptr);
-        prrte_list_append(&job_info, &ds->super);
-    }
-
-    /* if the user specified cpus/rank, set it */
-    if (0 < prrte_cmd_options.cpus_per_proc) {
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_CPUS_PER_PROC, &prrte_cmd_options.cpus_per_proc, PMIX_UINT32);
+        PMIX_INFO_LOAD(ds->info, PMIX_MAPBY, pval->data.string, PMIX_STRING);
         prrte_list_append(&job_info, &ds->super);
     }
 
     /* if the user specified a ranking policy, then set it */
-    if (NULL != prrte_cmd_options.ranking_policy) {
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "rank-by", 0, 0))) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_RANKBY, prrte_cmd_options.ranking_policy, PMIX_STRING);
+        PMIX_INFO_LOAD(ds->info, PMIX_RANKBY, pval->data.string, PMIX_STRING);
         prrte_list_append(&job_info, &ds->super);
     }
 
     /* if the user specified a binding policy, then set it */
-    if (NULL != prrte_cmd_options.binding_policy) {
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "bind-to", 0, 0))) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_BINDTO, prrte_cmd_options.binding_policy, PMIX_STRING);
+        PMIX_INFO_LOAD(ds->info, PMIX_BINDTO, pval->data.string, PMIX_STRING);
         prrte_list_append(&job_info, &ds->super);
     }
 
-    /* if they asked for nolocal, mark it so */
-    if (prrte_cmd_options.nolocal) {
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_NO_PROCS_ON_HEAD, &flag, PMIX_BOOL);
-        prrte_list_append(&job_info, &ds->super);
-    }
-    if (prrte_cmd_options.no_oversubscribe) {
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_NO_OVERSUBSCRIBE, &flag, PMIX_BOOL);
-        prrte_list_append(&job_info, &ds->super);
-    }
-    if (prrte_cmd_options.oversubscribe) {
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = false;
-        PMIX_INFO_LOAD(ds->info, PMIX_NO_OVERSUBSCRIBE, &flag, PMIX_BOOL);
-        prrte_list_append(&job_info, &ds->super);
-    }
-    if (prrte_cmd_options.report_bindings) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "report-bindings")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         flag = true;
         PMIX_INFO_LOAD(ds->info, PMIX_REPORT_BINDINGS, &flag, PMIX_BOOL);
         prrte_list_append(&job_info, &ds->super);
     }
-    if (NULL != prrte_cmd_options.cpu_list) {
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_CPU_LIST, prrte_cmd_options.cpu_list, PMIX_STRING);
-        prrte_list_append(&job_info, &ds->super);
-    }
 
     /* mark if recovery was enabled on the cmd line */
-    if (prrte_enable_recovery) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "enable-recovery")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         flag = true;
@@ -1073,16 +1144,18 @@ int prun(int argc, char *argv[])
         prrte_list_append(&job_info, &ds->super);
     }
     /* record the max restarts */
-    if (0 < prrte_max_restarts) {
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "max-restarts", 0, 0)) &&
+        0 < pval->data.integer) {
+        ui32 = pval->data.integer;
         PRRTE_LIST_FOREACH(app, &apps, prrte_pmix_app_t) {
             ds = PRRTE_NEW(prrte_ds_info_t);
             PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_MAX_RESTARTS, &prrte_max_restarts, PMIX_UINT32);
+            PMIX_INFO_LOAD(ds->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
             prrte_list_append(&app->info, &ds->super);
         }
     }
     /* if continuous operation was specified */
-    if (prrte_cmd_options.continuous) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "continuous")) {
         /* mark this job as continuously operating */
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
@@ -1287,7 +1360,7 @@ int prun(int argc, char *argv[])
     PRRTE_PMIX_WAIT_THREAD(&lock);
     PRRTE_PMIX_DESTRUCT_LOCK(&lock);
 
-    if (prrte_cmd_options.verbose) {
+    if (verbose) {
         prrte_output(0, "JOB %s EXECUTING", PRRTE_JOBID_PRINT(myjobid));
     }
     PRRTE_PMIX_WAIT_THREAD(&rellock);
@@ -1327,7 +1400,7 @@ int prun(int argc, char *argv[])
 #endif
 
   DONE:
-    if (mpirun) {
+    if (proxyrun) {
         /* setup a lock to track the connection */
         PRRTE_PMIX_CONSTRUCT_LOCK(&rellock);
         /* register to trap connection loss */
@@ -1473,13 +1546,14 @@ static int create_app(int argc, char* argv[],
     bool found = false;
     char *appname = NULL;
     prrte_ds_info_t *val;
+    prrte_value_t *pvalue;
 
     *made_app = false;
 
     /* parse the cmd line - do this every time thru so we can
      * repopulate the globals */
     if (PRRTE_SUCCESS != (rc = prrte_cmd_line_parse(prrte_cmd_line, true, false,
-                                                  argc, argv)) ) {
+                                                    argc, argv)) ) {
         if (PRRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", argv[0],
                     prrte_strerror(rc));
@@ -1528,7 +1602,8 @@ static int create_app(int argc, char* argv[],
         }
         j = prrte_cmd_line_get_ninsts(prrte_cmd_line, "x");
         for (i = 0; i < j; ++i) {
-            param = prrte_cmd_line_get_param(prrte_cmd_line, "x", i, 0);
+            pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "x", i, 0);
+            param = pvalue->data.string;
 
             if (NULL != (value = strchr(param, '='))) {
                 /* terminate the name of the param */
@@ -1581,10 +1656,11 @@ static int create_app(int argc, char* argv[],
 
     /* Did the user request a specific wdir? */
 
-    if (NULL != prrte_cmd_options.wdir) {
+    if (NULL != (pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "wdir", 0, 0))) {
+        param = pvalue->data.string;
         /* if this is a relative path, convert it to an absolute path */
-        if (prrte_path_is_absolute(prrte_cmd_options.wdir)) {
-            app->app.cwd = strdup(prrte_cmd_options.wdir);
+        if (prrte_path_is_absolute(param)) {
+            app->app.cwd = strdup(param);
         } else {
             /* get the cwd */
             if (PRRTE_SUCCESS != (rc = prrte_getcwd(cwd, sizeof(cwd)))) {
@@ -1593,9 +1669,9 @@ static int create_app(int argc, char* argv[],
                 goto cleanup;
             }
             /* construct the absolute path */
-            app->app.cwd = prrte_os_path(false, cwd, prrte_cmd_options.wdir, NULL);
+            app->app.cwd = prrte_os_path(false, cwd, param, NULL);
         }
-    } else if (prrte_cmd_options.set_cwd_to_session_dir) {
+    } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "set-cwd-to-session-dir")) {
         val = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(val->info, 1);
         PMIX_INFO_LOAD(val->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
@@ -1611,10 +1687,10 @@ static int create_app(int argc, char* argv[],
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* if they specified a process set name, then pass it along */
-    if (NULL != prrte_cmd_options.pset) {
+    if (NULL != (pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "pset", 0, 0))) {
         val = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(val->info, 1);
-        PMIX_INFO_LOAD(val->info, PMIX_PSET_NAME, prrte_cmd_options.pset, PMIX_STRING);
+        PMIX_INFO_LOAD(val->info, PMIX_PSET_NAME, pvalue->data.string, PMIX_STRING);
         prrte_list_append(&app->info, &val->super);
     }
 #endif
@@ -1630,17 +1706,12 @@ static int create_app(int argc, char* argv[],
                            true, "prun", NULL);
             return PRRTE_ERR_FATAL;
         } else {
-            value = prrte_cmd_line_get_param(prrte_cmd_line, "hostfile", 0, 0);
+            pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "hostfile", 0, 0);
             val = PRRTE_NEW(prrte_ds_info_t);
             PMIX_INFO_CREATE(val->info, 1);
-            PMIX_INFO_LOAD(val->info, PMIX_HOSTFILE, value, PMIX_STRING);
+            PMIX_INFO_LOAD(val->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
             prrte_list_append(&app->info, &val->super);
             found = true;
-            if (mpirun) {
-                /* add this to the list of hostfiles for prte */
-                prrte_argv_append_nosize(&hostfiles, value);
-            }
-            free(value);
         }
     }
     if (0 < (j = prrte_cmd_line_get_ninsts(prrte_cmd_line, "machinefile"))) {
@@ -1649,16 +1720,11 @@ static int create_app(int argc, char* argv[],
                            true, "prun", NULL);
             return PRRTE_ERR_FATAL;
         } else {
-            value = prrte_cmd_line_get_param(prrte_cmd_line, "machinefile", 0, 0);
+            pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "machinefile", 0, 0);
             val = PRRTE_NEW(prrte_ds_info_t);
             PMIX_INFO_CREATE(val->info, 1);
-            PMIX_INFO_LOAD(val->info, PMIX_HOSTFILE, value, PMIX_STRING);
+            PMIX_INFO_LOAD(val->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
             prrte_list_append(&app->info, &val->super);
-            if (mpirun) {
-                /* add this to the list of hostfiles for prte */
-                prrte_argv_append_nosize(&hostfiles, value);
-            }
-            free(value);
         }
     }
 
@@ -1666,30 +1732,33 @@ static int create_app(int argc, char* argv[],
     if (0 < (j = prrte_cmd_line_get_ninsts(prrte_cmd_line, "host"))) {
         char **targ=NULL, *tval;
         for (i = 0; i < j; ++i) {
-            value = prrte_cmd_line_get_param(prrte_cmd_line, "host", i, 0);
-            prrte_argv_append_nosize(&targ, value);
+            pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "host", i, 0);
+            prrte_argv_append_nosize(&targ, pvalue->data.string);
         }
         tval = prrte_argv_join(targ, ',');
         val = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(val->info, 1);
         PMIX_INFO_LOAD(val->info, PMIX_HOST, tval, PMIX_STRING);
         prrte_list_append(&app->info, &val->super);
-        if (mpirun) {
-            /* add this to the list of -host options for prte */
-            prrte_argv_append_nosize(&dash_hosts, tval);
-        }
         free(tval);
     }
 
     /* check for bozo error */
-    if (0 > prrte_cmd_options.num_procs) {
-        prrte_show_help("help-prrterun.txt", "prrterun:negative-nprocs",
-                       true, "prun", app->app.argv[0],
-                       prrte_cmd_options.num_procs, NULL);
+    if (NULL != (pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "np", 0, 0)) ||
+        NULL != (pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "n", 0, 0))) {
+        if (0 > pvalue->data.integer) {
+            prrte_show_help("help-prrterun.txt", "prrterun:negative-nprocs",
+                           true, "prun", app->app.argv[0],
+                           pvalue->data.integer, NULL);
+            return PRRTE_ERR_FATAL;
+        }
+    }
+    if (NULL == pvalue) {
+        prrte_output(0, "NO NP");
         return PRRTE_ERR_FATAL;
     }
 
-    app->app.maxprocs = prrte_cmd_options.num_procs;
+    app->app.maxprocs = pvalue->data.integer;
 
     /* see if we need to preload the binary to
      * find the app - don't do this for java apps, however, as we
@@ -1697,7 +1766,7 @@ static int create_app(int argc, char* argv[],
      * preload their binary via the preload_files option
      */
     if (NULL == strstr(app->app.argv[0], "java")) {
-        if (prrte_cmd_options.preload_binaries) {
+        if (prrte_cmd_line_is_taken(prrte_cmd_line, "preload-binaries")) {
             val = PRRTE_NEW(prrte_ds_info_t);
             PMIX_INFO_CREATE(val->info, 1);
             PMIX_INFO_LOAD(val->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
@@ -1708,7 +1777,7 @@ static int create_app(int argc, char* argv[],
             prrte_list_append(&app->info, &val->super);
         }
     }
-    if (NULL != prrte_cmd_options.preload_files) {
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "preload-files")) {
         val = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(val->info, 1);
         PMIX_INFO_LOAD(val->info, PMIX_PRELOAD_FILES, NULL, PMIX_BOOL);
@@ -1862,7 +1931,7 @@ static int create_app(int argc, char* argv[],
 
     /* All done */
 
- cleanup:
+  cleanup:
     if (NULL != app) {
         PRRTE_RELEASE(app);
     }

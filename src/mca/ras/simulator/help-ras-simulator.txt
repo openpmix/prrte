@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2012 Cisco Systems, Inc.  All rights reserved.
 #
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -11,14 +11,14 @@
 #
 [no hwloc support for topofiles]
 The ras_simulator_topo_files MCA parameter was specified, but this
-Open MPI installation has no "hwloc" support, meaning that topo files
+PRRTE installation has no "hwloc" support, meaning that topo files
 cannot be used.
 
 Your job will now abort.
 #
 [hwloc API fail]
 An internal hwloc API call failed in the RAS simulator module.  This
-is unusual, and should likely be reported to the Open MPI developers.
+is unusual, and should likely be reported to the PRRTE developers.
 
 Your job will now abort.
 

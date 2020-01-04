@@ -13,7 +13,7 @@
  * Copyright (c) 2007-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -27,7 +27,7 @@
 /**
  * @file
  *
- * Global params for OpenRTE
+ * Global params for PRRTE
  */
 #ifndef PRRTE_RUNTIME_PRRTE_GLOBALS_H
 #define PRRTE_RUNTIME_PRRTE_GLOBALS_H

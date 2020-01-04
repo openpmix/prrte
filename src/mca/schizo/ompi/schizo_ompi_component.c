@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
@@ -45,7 +45,7 @@ prrte_schizo_base_component_t prrte_schizo_ompi_component = {
 static int component_query(prrte_mca_base_module_t **module, int *priority)
 {
     *module = (prrte_mca_base_module_t*)&prrte_schizo_ompi_module;
-    *priority = 10;
+    *priority = 15;
     return PRRTE_SUCCESS;
 }
 

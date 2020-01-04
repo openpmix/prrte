@@ -71,6 +71,7 @@
 #include "src/runtime/prrte_wait.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
+#include "src/mca/schizo/schizo.h"
 #include "src/mca/state/state.h"
 
 #include "src/mca/plm/plm.h"

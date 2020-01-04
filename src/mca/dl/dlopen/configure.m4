@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2009-2017 Cisco Systems, Inc.  All rights reserved
 #
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -27,11 +27,11 @@ AC_DEFUN([MCA_prrte_dl_dlopen_COMPILE_MODE], [
 AC_DEFUN([MCA_prrte_dl_dlopen_CONFIG],[
     AC_CONFIG_FILES([src/mca/dl/dlopen/Makefile])
 
-    dnl This is effectively a back-door for Open MPI developers to
+    dnl This is effectively a back-door for PRRTE developers to
     dnl force the use of the libltdl dl component.
     AC_ARG_ENABLE([dl-dlopen],
         [AS_HELP_STRING([--disable-dl-dlopen],
-            [Disable the "dlopen" DL component (and probably force the use of the "libltdl" DL component).  This option should really only be used by Open MPI developers.  You are probably actually looking for the "--disable-dlopen" option, which disables all dlopen-like functionality from Open MPI.])
+            [Disable the "dlopen" DL component (and probably force the use of the "libltdl" DL component).  This option should really only be used by PRRTE developers.  You are probably actually looking for the "--disable-dlopen" option, which disables all dlopen-like functionality from PRRTE.])
         ])
 
     prrte_dl_dlopen_happy=no

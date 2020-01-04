@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,7 +20,7 @@ void prrte_string_copy(char *dest, const char *src, size_t dest_len)
     size_t i;
     char *new_dest = dest;
 
-    // Open MPI does not do *giant* string copies.  Hence, we use the
+    // PRRTE does not do *giant* string copies.  Hence, we use the
     // hueristic: if "dest_len" is too large, this is a programmer
     // error.  We pseudo-arbitrarily pick a large value to be the max
     // allowable dest_len: 128K.  If we ever need to increase this

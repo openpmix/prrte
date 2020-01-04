@@ -13,7 +13,7 @@
  * Copyright (c) 2008-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2018 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
@@ -57,7 +57,7 @@
  * Note that there is a second header file (mca_base_vari.h)
  * that contains several internal type delcarations for the variable
  * system.  The internal file is only used within the variable system
- * itself; it should not be required by any other Open MPI entities.
+ * itself; it should not be required by any other PRRTE entities.
  */
 
 #ifndef PRRTE_MCA_BASE_VAR_H
@@ -393,7 +393,7 @@ PRRTE_EXPORT void prrte_mca_base_var_finalize (void);
  *
  * If MCA_BASE_VAR_FLAG_INTERNAL is set in {flags}, this variable
  * is not shown by default in the output of ompi_info.  That is,
- * this variable is considered internal to the Open MPI implementation
+ * this variable is considered internal to the PRRTE implementation
  * and is not supposed to be viewed / changed by the user.
  *
  * If MCA_BASE_VAR_FLAG_DEFAULT_ONLY is set in {flags}, then the value

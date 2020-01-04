@@ -10,14 +10,14 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
-# This is the US/English help file for Open MPI MCA error messages.
+# This is the US/English help file for PRRTE MCA error messages.
 #
 [nodelist-failed]
 While trying to determine what resources are available, LSF failed when

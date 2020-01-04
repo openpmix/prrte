@@ -16,7 +16,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
- * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -649,21 +649,21 @@ main(int argc, char *argv[])
             flags &= ~COMP_WANT_STATIC;
         } else if (0 == strcmp(user_argv[i], "--openmpi:linkall")) {
             /* This is an intentionally undocummented wrapper compiler
-               switch.  It should only be used by Open MPI developers
+               switch.  It should only be used by PRRTE developers
                -- not end users.  It will cause mpicc to use the
                static library list, even if we're compiling
                dynamically (i.e., it'll specifically -lopen-rte and
                -lopen-pal (and all their dependent libs)).  We provide
                this flag for test MPI applications that also invoke
-               ORTE and/or PRRTE function calls.
+               PRRTE and/or PRRTE function calls.
 
                On some systems (e.g., OS X), if the top-level
-               application calls ORTE/PRRTE functions and you don't -l
-               ORTE and PRRTE, then the functions won't be resolved at
+               application calls PRRTE functions and you don't -l
+               PRRTE and PRRTE, then the functions won't be resolved at
                link time (i.e., the implicit library dependencies of
                libmpi won't be pulled in at link time), and therefore
                the link will fail.  This flag will cause the wrapper
-               to explicitly list the ORTE and PRRTE libs on the
+               to explicitly list the PRRTE and PRRTE libs on the
                underlying compiler command line, so the application
                will therefore link properly. */
             flags |= COMP_WANT_LINKALL;

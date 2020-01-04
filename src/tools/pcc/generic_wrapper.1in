@@ -55,7 +55,7 @@ names that the wrapper compiler would have used to link an
 application.  For example: "mpi open-rte open-pal util".
 .TP
 --showme:version
-Outputs the version number of Open MPI.
+Outputs the version number of PRRTE.
 .TP
 --showme:help
 Output a brief usage help message.
@@ -80,8 +80,8 @@ back-end compiler.
 .
 .
 .SS Background
-Open MPI is comprised of three software layers: OPAL (Open Portable
-Access Layer), ORTE (Open Run-Time Environment), and OMPI (Open MPI).
+PRRTE is comprised of three software layers: OPAL (Open Portable
+Access Layer), PRRTE (Open Run-Time Environment), and OMPI (PRRTE).
 There are wrapper compilers for each layer; each layer's wrapper only
 links in the libraries relevant for that layer.  Specifically, each
 layer provides the following wrapper compilers:
@@ -91,7 +91,7 @@ OPAL
 \fIopalcc\fR and \fIopalc++\fR
 .
 .TP
-ORTE
+PRRTE
 \fIortecc\fR and \fIortec++\fR
 .
 .TP
@@ -114,7 +114,7 @@ the
 .I mpi
 module, and the
 .I mpi_f08
-module (assuming Open MPI was installed with support for each of these
+module (assuming PRRTE was installed with support for each of these
 Fortran bindings).  Specifically: it is no longer necessary to use
 different wrapper compilers for applications that use
 .I mpif.h
@@ -213,7 +213,7 @@ line.
 .PP
 By default, the wrappers use the compilers that were selected when
 #PROJECT# was configured.  These compilers were either found
-automatically by Open MPI's "configure" script, or were selected by
+automatically by PRRTE's "configure" script, or were selected by
 the user in the CC, CXX, F77, and/or FC environment variables
 before "configure" was invoked.  Additionally, other arguments
 specific to the compiler may have been selected by configure.

@@ -15,7 +15,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,7 +24,7 @@
  *
  * This file is included at the bottom of prrte_config.h, and is
  * therefore a) after all the #define's that were output from
- * configure, and b) included in most/all files in Open MPI.
+ * configure, and b) included in most/all files in PRRTE.
  *
  * Since this file is *only* ever included by prrte_config.h, and
  * prrte_config.h already has #ifndef/#endif protection, there is no
@@ -40,7 +40,7 @@
  * case of a shared library _USERDLL get defined.
  *
  * OMPI_BUILDING and _LIB define how prrte_config.h
- * handles configuring all of Open MPI's "compatibility" code.  Both
+ * handles configuring all of PRRTE's "compatibility" code.  Both
  * constants will always be defined by the end of prrte_config.h.
  *
  * OMPI_BUILDING affects how much compatibility code is included by
@@ -265,8 +265,8 @@
 
 /***********************************************************************
  *
- * Code that is only for when building Open MPI or utilities that are
- * using the internals of Open MPI.  It should not be included when
+ * Code that is only for when building PRRTE or utilities that are
+ * using the internals of PRRTE.  It should not be included when
  * building MPI applications
  *
  **********************************************************************/
@@ -305,7 +305,7 @@
 #define PRRTE_DEBUG_ZERO(obj)
 
 /*
- * printf functions for portability (only when building Open MPI)
+ * printf functions for portability (only when building PRRTE)
  */
 #if !defined(HAVE_VASPRINTF) || !defined(HAVE_VSNPRINTF)
 #include <stdarg.h>
@@ -474,7 +474,7 @@ static inline uint16_t ntohs(uint16_t netvar) { return netvar; }
    directly in prrte_config.h because they'll be turned into #defines'
    via autoconf.
 
-   So put them here in case any only else includes OMPI/PRRTE/PRRTE's
+   So put them here in case any only else includes OMPI/PRRTE's
    config.h files. */
 
 #undef PACKAGE_BUGREPORT

@@ -15,7 +15,7 @@
  *                         reserved.
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -118,7 +118,7 @@ typedef struct {
 #define    PRRTE_ENVAR               (prrte_data_type_t)   39 /**< corresponds to PMIx envar type */
 #define    PRRTE_LIST                (prrte_data_type_t)   40 /**< an prrte list */
 
-/* General ORTE types - support handled within DSS */
+/* General PRRTE types - support handled within DSS */
 #define    PRRTE_STD_CNTR            (prrte_data_type_t)   41 /**< standard counter type */
     /* State-related types */
 #define    PRRTE_NODE_STATE          (prrte_data_type_t)   42 /**< node status flag */

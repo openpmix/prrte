@@ -18,7 +18,7 @@
  * Copyright (c) 2017 IBM Corporation.  All rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -95,7 +95,7 @@ enum {
     /** also emit relevant tracing information (e.g., which functions were invoked /
      * call stack entry/exit info) */
     PRRTE_MCA_BASE_VERBOSE_TRACE = 60,
-    /** also emit Open MPI-developer-level (i.e,. highly detailed) information */
+    /** also emit PRRTE-developer-level (i.e,. highly detailed) information */
     PRRTE_MCA_BASE_VERBOSE_DEBUG = 80,
     /** also output anything else that might be useful */
     PRRTE_MCA_BASE_VERBOSE_MAX   = 100,
@@ -157,14 +157,6 @@ PRRTE_EXPORT int prrte_mca_base_is_component_required(prrte_list_t *components_a
                                                  prrte_mca_base_component_t *component,
                                                  bool exclusive,
                                                  bool *is_required);
-
-/* mca_base_cmd_line.c */
-
-PRRTE_EXPORT int prrte_mca_base_cmd_line_setup(prrte_cmd_line_t *cmd);
-PRRTE_EXPORT int prrte_mca_base_cmd_line_process_args(prrte_cmd_line_t *cmd,
-                                                 char ***app_env,
-                                                 char ***global_env);
-PRRTE_EXPORT void prrte_mca_base_cmd_line_wrap_args(char **args);
 
 /* prrte_mca_base_component_compare.c */
 

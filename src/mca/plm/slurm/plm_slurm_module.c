@@ -69,6 +69,7 @@
 #include "src/runtime/prrte_quit.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
+#include "src/mca/schizo/schizo.h"
 #include "src/mca/state/state.h"
 
 #include "src/prted/prted.h"
@@ -426,7 +427,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* protect the args in case someone has a script wrapper around srun */
-    prrte_mca_base_cmd_line_wrap_args(argv);
+    prrte_schizo.wrap_args(argv);
 
     /* setup environment */
     env = prrte_argv_copy(prrte_launch_environ);

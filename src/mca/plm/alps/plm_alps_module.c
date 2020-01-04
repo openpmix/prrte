@@ -68,6 +68,7 @@
 #include "src/runtime/prrte_wait.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
+#include "src/mca/schizo/schizo.h"
 #include "src/mca/state/state.h"
 
 #include "src/mca/plm/plm.h"
@@ -281,7 +282,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prrte_argv_append(&argc, &argv, "-cc");
     prrte_argv_append(&argc, &argv, "none");
     /*
-     * stuff below is necessary in the event that we've sadly configured Open MPI with --disable-dlopen,
+     * stuff below is necessary in the event that we've sadly configured PRRTE with --disable-dlopen,
      * which results in the orted's being linked against all kinds of unnecessary cray libraries, including
      * the cray pmi, which has a ctor that cause bad things if run when using mpirun/orted based launch.
      *
@@ -404,7 +405,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* protect the args in case someone has a script wrapper around aprun */
-    mca_base_cmd_line_wrap_args(argv);
+    prrte_schizo.wrap_args(argv);
 
     /* setup environment */
     env = prrte_argv_copy(prrte_launch_environ);

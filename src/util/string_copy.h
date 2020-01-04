@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +43,7 @@ BEGIN_C_DECLS
  *
  * If dest_len is larger than
  * PRRTE_MAX_SIZE_ALLOWED_BY_PRRTE_STRING_COPY, we assume that this is
- * a programmer error (because Open MPI does not generally need to do
+ * a programmer error (because PRRTE does not generally need to do
  * large string copies), and will assert() fail / abort.
  *
  * There is no return value.

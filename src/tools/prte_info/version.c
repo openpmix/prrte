@@ -13,7 +13,7 @@
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -101,6 +101,7 @@ void prrte_info_do_version(bool want_all, prrte_cmd_line_t *cmd_line)
     char *arg1, *scope, *type, *component;
     char *pos;
     int j;
+    prrte_value_t *pval;
 
     prrte_info_components_open();
 
@@ -113,12 +114,14 @@ void prrte_info_do_version(bool want_all, prrte_cmd_line_t *cmd_line)
             prrte_info_show_component_version(pos, prrte_info_component_all, prrte_info_ver_full, prrte_info_type_all);
         }
     } else {
-        count = prrte_cmd_line_get_ninsts(cmd_line, "version");
+        count = prrte_cmd_line_get_ninsts(cmd_line, "show-version");
         for (i = 0; i < count; ++i) {
-            arg1 = prrte_cmd_line_get_param(cmd_line, "version", (int)i, 0);
-            scope = prrte_cmd_line_get_param(cmd_line, "version", (int)i, 1);
+            pval = prrte_cmd_line_get_param(cmd_line, "show-version", (int)i, 0);
+            arg1 = pval->data.string;
+            pval = prrte_cmd_line_get_param(cmd_line, "show-version", (int)i, 1);
+            scope = pval->data.string;
 
-            /* Version of Open MPI */
+            /* Version of PRRTE */
 
             if (0 == strcmp(prrte_info_type_prrte, arg1)) {
                 prrte_info_show_prrte_version(scope);

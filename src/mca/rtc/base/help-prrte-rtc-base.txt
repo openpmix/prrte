@@ -13,7 +13,7 @@
 # Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2011      Los Alamos National Security, LLC.
 #                         All rights reserved.
-# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -222,7 +222,7 @@ been deprecated and replaced as follows:
     Deprecated:  %s
     Replacement: %s
 
-The deprecated forms *will* disappear in a future version of Open MPI.
+The deprecated forms *will* disappear in a future version of PRRTE.
 Please update to the new syntax.
 #
 [mismatch-binding]

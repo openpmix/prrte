@@ -73,7 +73,6 @@
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
 
-#include "src/prted/prted_submit.h"
 #include "src/prted/pmix/pmix_server.h"
 
 #include "src/util/show_help.h"

@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,7 +21,7 @@
 #
 [ess-base:execv-error]
 The singleton application was not able to find the executable "orted" in
-your PATH or in the directory where Open MPI/OpenRTE was initially installed,
+your PATH or in the directory where PRRTE was initially installed,
 and therefore cannot continue.
 
 For reference, we tried the following command:
@@ -61,7 +61,7 @@ SLURM, depending upon the SLURM version you are using:
 
   Versions earlier than 16.05: you must use either SLURM's PMI-1 or
   PMI-2 support. SLURM builds PMI-1 by default, or you can manually
-  install PMI-2. You must then build Open MPI using --with-pmi pointing
+  install PMI-2. You must then build PRRTE using --with-pmi pointing
   to the SLURM PMI library location.
 
 Please configure as appropriate and try again.
@@ -77,7 +77,7 @@ Please configure as appropriate and try again.
 [alps-error]
 The application appears to have been direct launched using "aprun",
 but OMPI was not built with ALPS PMI support and therefore cannot
-execute. You must build Open MPI using --with-pmi pointing
+execute. You must build PRRTE using --with-pmi pointing
 to the ALPS PMI library location.
 
 Please configure as appropriate and try again.

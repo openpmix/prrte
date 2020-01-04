@@ -16,7 +16,7 @@
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,8 +47,8 @@
  * WARNING: When using "file" as an output destination, be aware that
  * the file may not exist until the session directory for the process
  * exists.  This is at least part of the way through MPI_INIT (for
- * example).  Most MCA components and internals of Open MPI won't be
- * affected by this, but some RTE / startup aspects of Open MPI will
+ * example).  Most MCA components and internals of PRRTE won't be
+ * affected by this, but some RTE / startup aspects of PRRTE will
  * not be able to write to a file for output.  See prrte_output() for
  * details on what happens in these cases.
  *

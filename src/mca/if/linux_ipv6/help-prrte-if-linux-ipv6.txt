@@ -1,7 +1,7 @@
 # -*- text -*-
 #
 # Copyright (c) 2019 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -9,9 +9,9 @@
 # $HEADER$
 #
 [fail to parse if_inet6]
-Open MPI failed to parse at least one of the lines in
+PRRTE failed to parse at least one of the lines in
 /proc/net/if_inet6.  This is extremely unusual and should never
-happen.  Open MPI will skip this interface and attempt to continue.
+happen.  PRRTE will skip this interface and attempt to continue.
 
   Host:      %s
   Interface: %s

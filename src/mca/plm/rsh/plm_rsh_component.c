@@ -17,7 +17,7 @@
  *                         reserved.
  * Copyright (c) 2009-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2019 IBM Corporation.  All rights reserved.
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -62,7 +62,7 @@
  * Public string showing the plm ompi_rsh component version number
  */
 const char *prrte_plm_rsh_component_version_string =
-  "Open MPI rsh plm MCA component version " PRRTE_VERSION;
+  "PRRTE rsh plm MCA component version " PRRTE_VERSION;
 
 
 static int rsh_component_register(void);

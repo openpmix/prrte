@@ -22,7 +22,7 @@ FileM framework, and selected modules.  #PACKAGE_NAME# #PACKAGE_VERSION#
 .SH DESCRIPTION
 .
 .PP
-FileM is a utility framework used by OpenRTE for a variety of purposes, including
+FileM is a utility framework used by PRRTE for a variety of purposes, including
 the transport of checkpoint files, preloading user binaries, and preloading of user files.
 .
 .\" **********************************

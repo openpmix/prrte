@@ -3,7 +3,7 @@
  * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +31,7 @@
  * installation).  Meaning: the static_components of the dl framework
  * will always contain 0 or 1 components.
  *
- * SIDENOTE: Open MPI used to embed libltdl.  However, as of early
+ * SIDENOTE: PRRTE used to embed libltdl.  However, as of early
  * 2015, this became problematic, for a variety of complex and
  * uninteresting reasons (see the following if you care about the
  * details: https://github.com/open-mpi/ompi/issues/311,

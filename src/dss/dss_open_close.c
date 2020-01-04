@@ -11,7 +11,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, Inc.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
@@ -284,7 +284,7 @@ int prrte_dss_register_vars (void)
     }
 
     ret = prrte_mca_base_var_register ("prrte", "dss", NULL, "buffer_type",
-                                 "Set the default mode for OpenRTE buffers (0=non-described, 1=described)",
+                                 "Set the default mode for PRRTE buffers (0=non-described, 1=described)",
                                  PRRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, PRRTE_MCA_BASE_VAR_FLAG_SETTABLE,
                                  PRRTE_INFO_LVL_8, PRRTE_MCA_BASE_VAR_SCOPE_ALL_EQ,
                                  &default_buf_type);

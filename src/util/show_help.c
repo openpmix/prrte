@@ -16,7 +16,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -604,7 +604,7 @@ int prrte_show_help_suppress(const char *filename, const char *topic)
 }
 
 /*
- * Returns PRRTE_SUCCESS if the strings match; ORTE_ERROR otherwise.
+ * Returns PRRTE_SUCCESS if the strings match; PRRTE_ERROR otherwise.
  */
 static int match(const char *a, const char *b)
 {
@@ -652,7 +652,7 @@ static int match(const char *a, const char *b)
 
 /*
  * Check to see if a given (filename, topic) tuple has been displayed
- * already.  Return ORTE_SUCCESS if so, or ORTE_ERR_NOT_FOUND if not.
+ * already.  Return PRRTE_SUCCESS if so, or PRRTE_ERR_NOT_FOUND if not.
  *
  * Always return a tuple_list_item_t representing this (filename,
  * topic) entry in the list of "already been displayed tuples" (if it

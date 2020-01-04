@@ -1284,7 +1284,7 @@ char* prrte_hwloc_base_find_coprocessors(hwloc_topology_t topo)
                          (NULL == cpstring) ? "NONE" : cpstring));
 #else
     PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
-                         "hwloc:base:find_coprocessors: the version of hwloc that Open MPI was built against (v%d.%d.%d) does not support detecting coprocessors",
+                         "hwloc:base:find_coprocessors: the version of hwloc that PRRTE was built against (v%d.%d.%d) does not support detecting coprocessors",
                          (HWLOC_API_VERSION>>16)&&0xFF, (HWLOC_API_VERSION>>8)&0xFF, HWLOC_API_VERSION&&0xFF));
 #endif
     return cpstring;

@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,10 +18,10 @@
  */
 /** @file:
  *
- * Find and/or create Open MPI session directory.
+ * Find and/or create PRRTE session directory.
  *
  * The prrte_session_dir() function searches for a temporary directory
- * that is used by the Open MPI system for storing system-critical
+ * that is used by the PRRTE system for storing system-critical
  * information. For a given system and user, the function attempts to
  * find (or create, if not found and create is requested) a directory
  * that will be used to independently house information for multiple
@@ -49,7 +49,7 @@
  * returns an error code.
  *
  * \par \em [openmpi-sessions]-[user-id]@[host]:[batchid] This serves
- * as a concentrator for all Open MPI session directories for this
+ * as a concentrator for all PRRTE session directories for this
  * user on the local system. If it doesn't already exist, this
  * directory is created with read-write-execute permissions
  * exclusively restricted to the user. If it does exist, the access
@@ -61,7 +61,7 @@
  *
  * \par Note: The [prefix]/openmpi-sessions-[user-id]@[host]:[batchid]
  * directory is left on the system upon termination of an application
- * and/or an Open MPI universe for future use by the user. Thus, when
+ * and/or an PRRTE universe for future use by the user. Thus, when
  * checking a potential location for the directory, the
  * prrte_session_tree_init() function first checks to see if an
  * appropriate directory already exists, and uses it if it does.
