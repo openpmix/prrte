@@ -89,6 +89,18 @@ AC_DEFUN([PRRTE_HWLOC_CONFIG],[
             AC_MSG_ERROR([CANNOT CONTINUE])
         fi
 
+        AS_IF([test "$prrte_hwloc_standard_header_location" != "yes"],
+              [PRRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prrte_hwloc_CPPFLAGS)
+               PRRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prrte_hwloc_CPPFLAGS)])
+
+        AS_IF([test "$prrte_hwloc_standard_lib_location" != "yes"],
+              [PRRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prrte_hwloc_LDFLAGS)
+               PRRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prrte_hwloc_LDFLAGS)])
+        PRRTE_FLAGS_APPEND_UNIQ(LIBS, $prrte_hwloc_LIBS)
+        PRRTE_WRAPPER_FLAGS_ADD(LIBS, $prrte_hwloc_LIBS)
+        PRRTE_HWLOC_HEADER="<hwloc.h>"
+        prrte_hwloc_source=$prrte_hwloc_dir
+
         if test $prrte_hwloc_support = "1"; then
             AC_MSG_CHECKING([if external hwloc version is 1.5 or greater])
             AC_COMPILE_IFELSE(
@@ -102,19 +114,6 @@ AC_DEFUN([PRRTE_HWLOC_CONFIG],[
                   [AC_MSG_RESULT([no])
                    AC_MSG_ERROR([Cannot continue])])
         fi
-        
-        AS_IF([test "$prrte_hwloc_standard_header_location" != "yes"],
-              [PRRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prrte_hwloc_CPPFLAGS)
-               PRRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prrte_hwloc_CPPFLAGS)])
-
-        AS_IF([test "$prrte_hwloc_standard_lib_location" != "yes"],
-              [PRRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prrte_hwloc_LDFLAGS)
-               PRRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prrte_hwloc_LDFLAGS)])
-        PRRTE_FLAGS_APPEND_UNIQ(LIBS, $prrte_hwloc_LIBS)
-        PRRTE_WRAPPER_FLAGS_ADD(LIBS, $prrte_hwloc_LIBS)
-        PRRTE_HWLOC_HEADER="<hwloc.h>"
-        prrte_hwloc_source=$prrte_hwloc_dir
-
     fi
 
     AC_MSG_CHECKING([hwloc header])
