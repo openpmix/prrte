@@ -272,6 +272,7 @@ src/test/system/threads
 src/tools/prun/prun
 src/tools/prun/prun.1
 src/tools/prte_info/prte_info
+src/tools/prte_info/prte_info.1
 src/tools/prte_info/pinfo.1
 src/tools/prted/prted
 src/tools/prted/prted.1
@@ -282,4 +283,5 @@ src/tools/pcc/pcc.1
 src/tools/pcc/pcc-wrapper-data.txt
 
 src/util/hostfile/hostfile_lex.c
+src/util/keyval/keyval_lex.c
 src/util/hostfile/src_hosts.7
