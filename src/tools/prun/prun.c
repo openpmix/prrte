@@ -644,7 +644,6 @@ int prun(int argc, char *argv[])
             prrte_argv_append_nosize(&prteargs, "&");
             prrte_mca_base_cmd_line_wrap_args(prteargs);
             param = prrte_argv_join(prteargs, ' ');
-            prrte_output(0, "FINAL CMD: %s", param);
             fp = popen(param, "r");
             if (NULL == fp) {
                 fprintf(stderr, "Error executing prte\n");
@@ -838,7 +837,9 @@ int prun(int argc, char *argv[])
         PRRTE_PMIX_DESTRUCT_LOCK(&lock);
         flag = true;
         PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
-        fprintf(stderr, "TERMINATING DVM...");
+        if (!mpirun) {
+            fprintf(stderr, "TERMINATING DVM...");
+        }
         PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
         PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
 #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
@@ -855,7 +856,9 @@ int prun(int argc, char *argv[])
         PRRTE_PMIX_WAIT_THREAD(&rellock);
         PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
         /* wait for the connection to go away */
-        fprintf(stderr, "DONE\n");
+        if (!mpirun) {
+            fprintf(stderr, "DONE\n");
+        }
 #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
         return rc;
 #else

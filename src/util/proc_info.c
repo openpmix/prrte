@@ -12,7 +12,7 @@
  * Copyright (c) 2009-2016 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -172,7 +172,7 @@ bool prrte_check_host_is_local(char *name)
     int i;
 
     for (i=0; NULL != prrte_process_info.aliases[i]; i++) {
-        if (0 == strncmp(name, prrte_process_info.aliases[i], strlen(prrte_process_info.aliases[i]))) {
+        if (0 == strcmp(name, prrte_process_info.aliases[i])) {
             return true;
         }
     }
