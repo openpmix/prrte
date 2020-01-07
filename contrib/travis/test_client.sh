@@ -8,9 +8,9 @@ make client
 
 set -x
 
-prte --daemonize
+prte --daemonize --host localhost:5
 
-prun --oversubscribe -n 2 ./client
+prun -n 2 ./client
 ret=$?
 
 prun --terminate

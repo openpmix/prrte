@@ -18,7 +18,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -685,9 +685,6 @@ void prrte_ifgetaliases(char ***aliases)
     struct sockaddr_in6 *addr6;
 #endif
 
-    /* set default answer */
-    *aliases = NULL;
-
     PRRTE_LIST_FOREACH(intf, &prrte_if_list, prrte_if_t) {
         addr = (struct sockaddr_in*) &intf->if_addr;
         /* ignore purely loopback interfaces */
@@ -806,8 +803,7 @@ int prrte_ifmatches(int idx, char **nets)
 
 void prrte_ifgetaliases(char ***aliases)
 {
-    /* set default answer */
-    *aliases = NULL;
+    return;
 }
 
 #endif /* HAVE_STRUCT_SOCKADDR_IN */

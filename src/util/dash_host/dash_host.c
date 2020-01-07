@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -52,11 +52,16 @@ int prrte_util_dash_host_compute_slots(prrte_node_t *node, char *hosts)
 
     /* see if this node appears in the list */
     for (n=0; NULL != specs[n]; n++) {
-        if (prrte_check_host_is_local(specs[n])) {
-            /* check if the #slots was specified */
-            if (NULL != (cptr = strchr(specs[n], ':'))) {
-                *cptr = '\0';
-                ++cptr;
+        /* check if the #slots was specified */
+        if (NULL != (cptr = strchr(specs[n], ':'))) {
+            *cptr = '\0';
+            ++cptr;
+        } else {
+            cptr = NULL;
+        }
+        if (0 == strcmp(specs[n], node->name) ||
+            (prrte_check_host_is_local(node->name) && prrte_check_host_is_local(specs[n]))) {
+            if (NULL != cptr) {
                 if ('*' == *cptr || 0 == strcmp(cptr, "auto")) {
                     slots += node->slots - node->slots_inuse;
                 } else {
