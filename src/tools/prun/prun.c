@@ -14,7 +14,7 @@
  * Copyright (c) 2007-2009 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2007-2017 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -469,7 +469,7 @@ int prun(int argc, char *argv[])
     prrte_init_util();
 
     mycmd = prrte_basename(argv[0]);
-    if (0 == strcmp(mycmd, "mpirun") || 0 == strcmp(mycmd, "mpiexec")) {
+    if (0 != strcmp(mycmd, "prun")) {
         mpirun = true;
         prrte_argv_append_nosize(&prteargs, "prte");
     }
