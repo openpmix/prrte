@@ -9,28 +9,28 @@
 #
 
 sources = \
-          schizo_ompi_component.c \
-          schizo_ompi.h \
-          schizo_ompi.c
+          schizo_prrte_component.c \
+          schizo_prrte.h \
+          schizo_prrte.c
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_schizo_ompi_DSO
+if MCA_BUILD_prrte_schizo_prrte_DSO
 component_noinst =
-component_install = mca_schizo_ompi.la
+component_install = mca_schizo_prrte.la
 else
-component_noinst = libmca_schizo_ompi.la
+component_noinst = libmca_schizo_prrte.la
 component_install =
 endif
 
 mcacomponentdir = $(prrtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
-mca_schizo_ompi_la_SOURCES = $(sources)
-mca_schizo_ompi_la_LDFLAGS = -module -avoid-version
-mca_schizo_ompi_la_LIBADD = $(top_builddir)/src/libprrte.la
+mca_schizo_prrte_la_SOURCES = $(sources)
+mca_schizo_prrte_la_LDFLAGS = -module -avoid-version
+mca_schizo_prrte_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
-libmca_schizo_ompi_la_SOURCES = $(sources)
-libmca_schizo_ompi_la_LDFLAGS = -module -avoid-version
+libmca_schizo_prrte_la_SOURCES = $(sources)
+libmca_schizo_prrte_la_LDFLAGS = -module -avoid-version

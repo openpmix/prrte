@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -52,7 +52,7 @@ static char *personalities = NULL;
 static int prrte_schizo_base_register(prrte_mca_base_register_flag_t flags)
 {
     /* pickup any defined personalities */
-    personalities = NULL;
+    personalities = strdup("prrte");
     prrte_mca_base_var_register("prrte", "schizo", "base", "personalities",
                                 "Comma-separated list of personalities",
                                 PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
