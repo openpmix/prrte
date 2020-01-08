@@ -47,7 +47,7 @@ static int component_register(void);
  * and pointers to our public functions in it
  */
 
-prrte_reachable_weighted_component_t mca_reachable_weighted_component = {
+prrte_reachable_weighted_component_t prrte_reachable_weighted_component = {
     {
 
         /* First, the mca_component_t struct containing meta information

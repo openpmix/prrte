@@ -32,7 +32,7 @@ typedef struct {
     prrte_reachable_base_component_t super;
 } prrte_reachable_weighted_component_t;
 
-PRRTE_EXPORT extern prrte_reachable_weighted_component_t mca_reachable_weighted_component;
+PRRTE_EXPORT extern prrte_reachable_weighted_component_t prrte_reachable_weighted_component;
 
 PRRTE_EXPORT extern const prrte_reachable_base_module_t prrte_reachable_weighted_module;
 
