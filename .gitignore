@@ -120,6 +120,8 @@ examples/debugger/attach
 examples/debugger/daemon
 examples/debugger/hello
 
+test/double-get
+
 src/sys/powerpc/atomic-32.s
 src/sys/powerpc/atomic-64.s
 src/sys/powerpc/atomic-32-64.s
