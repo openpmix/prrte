@@ -11,6 +11,8 @@ set -x
 
 prte --host localhost:5 --mca state_base_verbose 10 &
 
+sleep 3
+
 prun -n 2 ./client
 ret=$?
 
