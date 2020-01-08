@@ -9,7 +9,7 @@ make client
 
 set -x
 
-prte --daemonize --host localhost:5 --mca state_base_verbose 10
+prte --host localhost:5 --mca state_base_verbose 10 &
 
 prun -n 2 ./client
 ret=$?
