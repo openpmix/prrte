@@ -13,7 +13,7 @@
  * Copyright (c) 2009      Institut National de Recherche en Informatique
  *                         et Automatique. All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -174,7 +174,7 @@ void prrte_plm_base_daemons_reported(int fd, short args, void *cbdata)
     prrte_routed.update_routing_plan();
 
     /* progress the job */
-    caddy->jdata->state = PRRTE_JOB_STATE_DAEMONS_REPPRRTED;
+    caddy->jdata->state = PRRTE_JOB_STATE_DAEMONS_REPORTED;
     PRRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRRTE_JOB_STATE_VM_READY);
 
     /* cleanup */
@@ -908,7 +908,7 @@ void prrte_plm_base_daemon_topology(int status, prrte_process_name_t* sender,
             bool dvm = true;
             uint32_t key;
             void *nptr;
-            jdatorted->state = PRRTE_JOB_STATE_DAEMONS_REPPRRTED;
+            jdatorted->state = PRRTE_JOB_STATE_DAEMONS_REPORTED;
             /* activate the daemons_reported state for all jobs
              * whose daemons were launched
              */
@@ -917,14 +917,14 @@ void prrte_plm_base_daemon_topology(int status, prrte_process_name_t* sender,
                 if (PRRTE_PROC_MY_NAME->jobid != jdata->jobid) {
                     dvm = false;
                     if (PRRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
-                        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPPRRTED);
+                        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPORTED);
                     }
                 }
                 rc = prrte_hash_table_get_next_key_uint32(prrte_job_data, &key, (void **)&jdata, nptr, &nptr);
             }
             if (dvm) {
                 /* must be launching a DVM - activate the state */
-                PRRTE_ACTIVATE_JOB_STATE(jdatorted, PRRTE_JOB_STATE_DAEMONS_REPPRRTED);
+                PRRTE_ACTIVATE_JOB_STATE(jdatorted, PRRTE_JOB_STATE_DAEMONS_REPORTED);
             }
         }
     }
@@ -1335,7 +1335,7 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
                 bool dvm = true;
                 uint32_t key;
                 void *nptr;
-                jdatorted->state = PRRTE_JOB_STATE_DAEMONS_REPPRRTED;
+                jdatorted->state = PRRTE_JOB_STATE_DAEMONS_REPORTED;
                 /* activate the daemons_reported state for all jobs
                  * whose daemons were launched
                  */
@@ -1346,14 +1346,14 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
                     }
                     dvm = false;
                     if (PRRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
-                        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPPRRTED);
+                        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPORTED);
                     }
                   next:
                     rc = prrte_hash_table_get_next_key_uint32(prrte_job_data, &key, (void **)&jdata, nptr, &nptr);
                 }
                 if (dvm) {
                     /* must be launching a DVM - activate the state */
-                    PRRTE_ACTIVATE_JOB_STATE(jdatorted, PRRTE_JOB_STATE_DAEMONS_REPPRRTED);
+                    PRRTE_ACTIVATE_JOB_STATE(jdatorted, PRRTE_JOB_STATE_DAEMONS_REPORTED);
                 }
             }
         }
@@ -1737,7 +1737,7 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
      * nothing for us to do - the DVM will stand as is */
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_FIXED_DVM, NULL, PRRTE_BOOL)) {
         /* mark that the daemons have reported so we can proceed */
-        daemons->state = PRRTE_JOB_STATE_DAEMONS_REPPRRTED;
+        daemons->state = PRRTE_JOB_STATE_DAEMONS_REPORTED;
         map->num_new_daemons = 0;
         return PRRTE_SUCCESS;
     }
@@ -1796,7 +1796,7 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
                                  PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
             PRRTE_DESTRUCT(&nodes);
             /* mark that the daemons have reported so we can proceed */
-            daemons->state = PRRTE_JOB_STATE_DAEMONS_REPPRRTED;
+            daemons->state = PRRTE_JOB_STATE_DAEMONS_REPORTED;
             PRRTE_FLAG_UNSET(daemons, PRRTE_JOB_FLAG_UPDATED);
             return PRRTE_SUCCESS;
         }
@@ -1859,7 +1859,7 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
                 PRRTE_DESTRUCT(&nodes);
                 map->num_nodes = 1;
                 /* mark that the daemons have reported so we can proceed */
-                daemons->state = PRRTE_JOB_STATE_DAEMONS_REPPRRTED;
+                daemons->state = PRRTE_JOB_STATE_DAEMONS_REPORTED;
                 return PRRTE_SUCCESS;
             }
             /* well, if the HNP doesn't have any procs, and neither did
@@ -2024,7 +2024,7 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
                                  PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
             PRRTE_DESTRUCT(&nodes);
             /* mark that the daemons have reported so we can proceed */
-            daemons->state = PRRTE_JOB_STATE_DAEMONS_REPPRRTED;
+            daemons->state = PRRTE_JOB_STATE_DAEMONS_REPORTED;
             PRRTE_FLAG_UNSET(daemons, PRRTE_JOB_FLAG_UPDATED);
             return PRRTE_SUCCESS;
         }
@@ -2077,7 +2077,7 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
         /* cleanup */
         PRRTE_DESTRUCT(&nodes);
         /* mark that the daemons have reported so we can proceed */
-        daemons->state = PRRTE_JOB_STATE_DAEMONS_REPPRRTED;
+        daemons->state = PRRTE_JOB_STATE_DAEMONS_REPORTED;
         PRRTE_FLAG_UNSET(daemons, PRRTE_JOB_FLAG_UPDATED);
         return PRRTE_SUCCESS;
     }
@@ -2149,7 +2149,7 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
                              PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
         PRRTE_DESTRUCT(&nodes);
         /* mark that the daemons have reported so we can proceed */
-        daemons->state = PRRTE_JOB_STATE_DAEMONS_REPPRRTED;
+        daemons->state = PRRTE_JOB_STATE_DAEMONS_REPORTED;
         PRRTE_FLAG_UNSET(daemons, PRRTE_JOB_FLAG_UPDATED);
         return PRRTE_SUCCESS;
     }

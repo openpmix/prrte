@@ -12,7 +12,7 @@
  * Copyright (c) 2006      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2007-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -198,7 +198,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     if (PRRTE_FLAG_TEST(state->jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON)) {
         jdata->state = PRRTE_JOB_STATE_DAEMONS_LAUNCHED;
-        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPPRRTED);
+        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPORTED);
         PRRTE_RELEASE(state);
         return;
     }
@@ -220,7 +220,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * job to move to the following step
          */
         jdata->state = PRRTE_JOB_STATE_DAEMONS_LAUNCHED;
-        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPPRRTED);
+        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPORTED);
         PRRTE_RELEASE(state);
         return;
     }
@@ -238,7 +238,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * job to move to the following step
          */
         jdata->state = PRRTE_JOB_STATE_DAEMONS_LAUNCHED;
-        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPPRRTED);
+        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPORTED);
         PRRTE_RELEASE(state);
         return;
     }

@@ -27,7 +27,8 @@
  */
 
 #include "prrte_config.h"
-#include "src/include/types.h"
+#include "types.h"
+#include "types.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -73,242 +74,435 @@ prrte_schizo_base_module_t prrte_schizo_prrte_module = {
 
 
 static prrte_cmd_line_init_t cmd_line_init[] = {
+    /* Various "obvious" options */
+    { NULL, 'h', NULL, "help", 1,
+      &prrte_cmd_options.help, PRRTE_CMD_LINE_TYPE_STRING,
+      "This help message", PRRTE_CMD_LINE_OTYPE_GENERAL },
+    { NULL, 'V', NULL, "version", 0,
+      &prrte_cmd_options.version, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Print version and exit", PRRTE_CMD_LINE_OTYPE_GENERAL },
+    { NULL, 'v', NULL, "verbose", 0,
+      &prrte_cmd_options.verbose, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Be verbose", PRRTE_CMD_LINE_OTYPE_GENERAL },
+    { "prrte_execute_quiet", 'q', NULL, "quiet", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Suppress helpful messages", PRRTE_CMD_LINE_OTYPE_GENERAL },
+    { NULL, '\0', "report-pid", "report-pid", 1,
+      &prrte_cmd_options.report_pid, PRRTE_CMD_LINE_TYPE_STRING,
+      "Printout pid on stdout [-], stderr [+], or a file [anything else]",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { NULL, '\0', "report-uri", "report-uri", 1,
+      &prrte_cmd_options.report_uri, PRRTE_CMD_LINE_TYPE_STRING,
+      "Printout URI on stdout [-], stderr [+], or a file [anything else]",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+
+    /* testing options */
+    { NULL, '\0', "timeout", "timeout", 1,
+      &prrte_cmd_options.timeout, PRRTE_CMD_LINE_TYPE_INT,
+      "Timeout the job after the specified number of seconds",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { NULL, '\0', "report-state-on-timeout", "report-state-on-timeout", 0,
+      &prrte_cmd_options.report_state_on_timeout, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Report all job and process states upon timeout",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { NULL, '\0', "get-stack-traces", "get-stack-traces", 0,
+      &prrte_cmd_options.get_stack_traces, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Get stack traces of all application procs on timeout",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+
 
     /* exit status reporting */
-    { NULL, '\0', NULL, "report-child-jobs-separately", 0,
-      &myoptions.report_child_jobs_separately, PRRTE_CMD_LINE_TYPE_BOOL,
+    { "prrte_report_child_jobs_separately", '\0', "report-child-jobs-separately", "report-child-jobs-separately", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
       "Return the exit status of the primary job only", PRRTE_CMD_LINE_OTYPE_OUTPUT },
 
+    /* uri of the dvm, or at least where to get it */
+    { NULL, '\0', "hnp", "hnp", 1,
+      &prrte_cmd_options.hnp, PRRTE_CMD_LINE_TYPE_STRING,
+      "Specify the URI of the HNP, or the name of the file (specified as file:filename) that contains that info",
+      PRRTE_CMD_LINE_OTYPE_DVM },
 
-    /* options to control application stdin/out/err */
     /* select XML output */
-    { NULL, '\0', NULL, "xml", 0,
-      &myoptions.xml_output, PRRTE_CMD_LINE_TYPE_BOOL,
+    { "prrte_xml_output", '\0', "xml", "xml", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
       "Provide all output in XML format", PRRTE_CMD_LINE_OTYPE_OUTPUT },
-    { NULL, '\0', NULL, "xml-file", 1,
-      &myoptions.xml_file, PRRTE_CMD_LINE_TYPE_STRING,
+    { "prrte_xml_file", '\0', "xml-file", "xml-file", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
       "Provide all output in XML format to the specified file", PRRTE_CMD_LINE_OTYPE_OUTPUT },
+
     /* tag output */
-    { NULL, '\0', NULL, "tag-output", 0,
-      &myoptions.tag_output, PRRTE_CMD_LINE_TYPE_BOOL,
+    { "prrte_tag_output", '\0', "tag-output", "tag-output", 0,
+      &prrte_cmd_options.tag_output, PRRTE_CMD_LINE_TYPE_BOOL,
       "Tag all output with [job,rank]", PRRTE_CMD_LINE_OTYPE_OUTPUT },
-    { NULL, '\0', NULL, "timestamp-output", 0,
-      &myoptions.timestamp_output, PRRTE_CMD_LINE_TYPE_BOOL,
+    { "prrte_timestamp_output", '\0', "timestamp-output", "timestamp-output", 0,
+      &prrte_cmd_options.timestamp_output, PRRTE_CMD_LINE_TYPE_BOOL,
       "Timestamp all application process output", PRRTE_CMD_LINE_OTYPE_OUTPUT },
-    { NULL, '\0', NULL, "output-directory", 1,
-      &myoptions.output_directory, PRRTE_CMD_LINE_TYPE_STRING,
+    { "prrte_output_directory", '\0', "output-directory", "output-directory", 1,
+      &prrte_cmd_options.output_directory, PRRTE_CMD_LINE_TYPE_STRING,
       "Redirect output from application processes into filename/job/rank/std[out,err,diag]. A relative path value will be converted to an absolute path. The directory name may include a colon followed by a comma-delimited list of optional case-insensitive directives. Supported directives currently include NOJOBID (do not include a job-id directory level) and NOCOPY (do not copy the output to the stdout/err streams)",
       PRRTE_CMD_LINE_OTYPE_OUTPUT },
-    { NULL, '\0', NULL, "output-filename", 1,
-      &myoptions.output_filename, PRRTE_CMD_LINE_TYPE_STRING,
+    { "prrte_output_filename", '\0', "output-filename", "output-filename", 1,
+      &prrte_cmd_options.output_filename, PRRTE_CMD_LINE_TYPE_STRING,
       "Redirect output from application processes into filename.rank. A relative path value will be converted to an absolute path. The directory name may include a colon followed by a comma-delimited list of optional case-insensitive directives. Supported directives currently include NOCOPY (do not copy the output to the stdout/err streams)",
       PRRTE_CMD_LINE_OTYPE_OUTPUT },
-    { NULL, '\0',NULL, "merge-stderr-to-stdout", 0,
-      &myoptions.merge, PRRTE_CMD_LINE_TYPE_BOOL,
+    { NULL, '\0', "merge-stderr-to-stdout", "merge-stderr-to-stdout", 0,
+      &prrte_cmd_options.merge, PRRTE_CMD_LINE_TYPE_BOOL,
       "Merge stderr to stdout for each process", PRRTE_CMD_LINE_OTYPE_OUTPUT },
-    { NULL, '\0', NULL, "xterm", 1,
-      &myoptions.xterm, PRRTE_CMD_LINE_TYPE_STRING,
+    { "prrte_xterm", '\0', "xterm", "xterm", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
       "Create a new xterm window and display output from the specified ranks there",
       PRRTE_CMD_LINE_OTYPE_OUTPUT },
+
     /* select stdin option */
-    { NULL, '\0', NULL, "stdin", 1,
-      &myoptions.stdin_target, PRRTE_CMD_LINE_TYPE_STRING,
+    { NULL, '\0', "stdin", "stdin", 1,
+      &prrte_cmd_options.stdin_target, PRRTE_CMD_LINE_TYPE_STRING,
       "Specify procs to receive stdin [rank, all, none] (default: 0, indicating rank 0)",
       PRRTE_CMD_LINE_OTYPE_INPUT },
 
-
-    /* Set a hostfile */
-    { NULL, '\0', NULL, "hostfile", 1,
-      NULL, PRRTE_CMD_LINE_TYPE_STRING,
-      "Provide a hostfile", PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { NULL, '\0', NULL, "machinefile", 1,
-      NULL, PRRTE_CMD_LINE_TYPE_STRING,
-      "Provide a hostfile", PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { NULL, 'H', NULL, "host", 1,
-      NULL, PRRTE_CMD_LINE_TYPE_STRING,
-      "List of hosts to invoke processes on",
-      PRRTE_CMD_LINE_OTYPE_MAPPING },
-
-
-    /* Control details of the launch */
-    /* Specify the launch agent to be used */
-    { NULL, '\0', NULL, "launch-agent", 1,
-      &myoptions.launch_agent, PRRTE_CMD_LINE_TYPE_STRING,
-      "Command used to start processes on remote nodes (default: orted)",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    /* Preload the binary on the remote machine */
-    { NULL, 's', NULL, "preload-binary", 0,
-      &myoptions.preload_binaries, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Preload the binary on the remote machine before starting the remote process.",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    /* Preload files on the remote machine */
-    { NULL, '\0', NULL, "preload-files", 1,
-      &myoptions.preload_files, PRRTE_CMD_LINE_TYPE_STRING,
-      "Preload the comma separated list of files to the remote machines current working directory before starting the remote process.",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { NULL, '\0', NULL, "do-not-launch", 0,
-      &myoptions.do_not_launch, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Perform all necessary operations to prepare to launch the application, but do not actually launch it",
-      PRRTE_CMD_LINE_OTYPE_DEVEL },
-    { NULL, '\0', NULL, "show-progress", 0,
-      &myoptions.report_launch_progress, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Output a brief periodic report on launch progress",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-
-
-    /* How we want the argv treated/specified */
     /* request that argv[0] be indexed */
-    { NULL, '\0', NULL, "index-argv-by-rank", 0,
-      &myoptions.index_argv, PRRTE_CMD_LINE_TYPE_BOOL,
+    { NULL, '\0', "index-argv-by-rank", "index-argv-by-rank", 0,
+      &prrte_cmd_options.index_argv, PRRTE_CMD_LINE_TYPE_BOOL,
       "Uniquely index argv[0] for each process using its rank",
       PRRTE_CMD_LINE_OTYPE_INPUT },
+
+    /* Specify the launch agent to be used */
+    { "prrte_launch_agent", '\0', "launch-agent", "launch-agent", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Command used to start processes on remote nodes (default: orted)",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    /* Preload the binary on the remote machine */
+    { NULL, 's', NULL, "preload-binary", 0,
+      &prrte_cmd_options.preload_binaries, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Preload the binary on the remote machine before starting the remote process.",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    /* Preload files on the remote machine */
+    { NULL, '\0', NULL, "preload-files", 1,
+      &prrte_cmd_options.preload_files, PRRTE_CMD_LINE_TYPE_STRING,
+      "Preload the comma separated list of files to the remote machines current working directory before starting the remote process.",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
     /* Use an appfile */
     { NULL, '\0', NULL, "app", 1,
-      &myoptions.appfile, PRRTE_CMD_LINE_TYPE_STRING,
+      &prrte_cmd_options.appfile, PRRTE_CMD_LINE_TYPE_STRING,
       "Provide an appfile; ignore all other command line options",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
 
+    /* Number of processes; -c, -n, --n, -np, and --np are all
+       synonyms */
+    { NULL, 'c', "np", "np", 1,
+      &prrte_cmd_options.num_procs, PRRTE_CMD_LINE_TYPE_INT,
+      "Number of processes to run", PRRTE_CMD_LINE_OTYPE_GENERAL },
+    { NULL, '\0', "n", "n", 1,
+      &prrte_cmd_options.num_procs, PRRTE_CMD_LINE_TYPE_INT,
+      "Number of processes to run", PRRTE_CMD_LINE_OTYPE_GENERAL },
+
+    /* maximum size of VM - typically used to subdivide an allocation */
+    { "prrte_max_vm_size", '\0', "max-vm-size", "max-vm-size", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_INT,
+      "Number of processes to run", PRRTE_CMD_LINE_OTYPE_DVM },
+
+    /* Set a hostfile */
+    { NULL, '\0', "hostfile", "hostfile", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Provide a hostfile", PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { NULL, '\0', "machinefile", "machinefile", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Provide a hostfile", PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { "prrte_default_hostfile", '\0', "default-hostfile", "default-hostfile", 1,
+        NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Provide a default hostfile", PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { "prrte_if_do_not_resolve", '\0', "do-not-resolve", "do-not-resolve", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Do not attempt to resolve interfaces", PRRTE_CMD_LINE_OTYPE_DEVEL },
 
     /* uri of PMIx publish/lookup server, or at least where to get it */
-    { NULL, '\0', NULL, "ompi-server", 1,
-      &myoptions.server_uri, PRRTE_CMD_LINE_TYPE_STRING,
+    { "pmix_server_uri", '\0', "prrte-server", "prrte-server", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
       "Specify the URI of the publish/lookup server, or the name of the file (specified as file:filename) that contains that info",
       PRRTE_CMD_LINE_OTYPE_DVM },
-
-
-      /* Mapping controls */
-    { NULL, '\0', NULL, "display-map", 0,
-      &myoptions.display_map, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Display the process map just before launch", PRRTE_CMD_LINE_OTYPE_DEBUG },
-    { NULL, '\0', NULL, "display-devel-map", 0,
-       &myoptions.display_devel_map, PRRTE_CMD_LINE_TYPE_BOOL,
-       "Display a detailed process map (mostly intended for developers) just before launch",
-       PRRTE_CMD_LINE_OTYPE_DEVEL },
-    { NULL, '\0', NULL, "display-topo", 0,
-       &myoptions.display_topo_with_map, PRRTE_CMD_LINE_TYPE_BOOL,
-       "Display the topology as part of the process map (mostly intended for developers) just before launch",
-       PRRTE_CMD_LINE_OTYPE_DEVEL },
-    { NULL, '\0', NULL, "display-diffable-map", 0,
-       &myoptions.display_diffable_map, PRRTE_CMD_LINE_TYPE_BOOL,
-       "Display a diffable process map (mostly intended for developers) just before launch",
-       PRRTE_CMD_LINE_OTYPE_DEVEL },
-    { NULL, '\0', NULL, "nolocal", 0,
-      &myoptions.nolocal, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Do not run any MPI applications on the local node",
-      PRRTE_CMD_LINE_OTYPE_MAPPING },
-    { NULL, '\0', NULL, "nooversubscribe", 0,
-      &myoptions.no_oversubscribe, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Nodes are not to be oversubscribed, even if the system supports such operation",
-      PRRTE_CMD_LINE_OTYPE_MAPPING },
-    { NULL, '\0', NULL, "oversubscribe", 0,
-      &myoptions.oversubscribe, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Nodes are allowed to be oversubscribed, even on a managed system, and overloading of processing elements",
-      PRRTE_CMD_LINE_OTYPE_MAPPING },
-
-
-    /* Mapping options */
-    { NULL, '\0', NULL, "map-by", 1,
-      &myoptions.mapping_policy, PRRTE_CMD_LINE_TYPE_STRING,
-      "Mapping Policy [slot | hwthread | core | socket (default) | numa | board | node | rankfile]",
-      PRRTE_CMD_LINE_OTYPE_MAPPING },
-
-
-      /* Ranking options */
-    { NULL, '\0', NULL, "rank-by", 1,
-      &myoptions.ranking_policy, PRRTE_CMD_LINE_TYPE_STRING,
-      "Ranking Policy [slot (default) | hwthread | core | socket | numa | board | node]",
-      PRRTE_CMD_LINE_OTYPE_RANKING },
-
-
-      /* Binding options */
-    { NULL, '\0', NULL, "bind-to", 1,
-      &myoptions.binding_policy, PRRTE_CMD_LINE_TYPE_STRING,
-      "Policy for binding processes. Allowed values: none, hwthread, core, l1cache, l2cache, l3cache, socket, numa, board, cpu-list (\"none\" is the default when oversubscribed, \"core\" is the default when np<=2, and \"socket\" is the default when np>2). Allowed qualifiers: overload-allowed, if-supported, ordered", PRRTE_CMD_LINE_OTYPE_BINDING },
-    { NULL, '\0', NULL, "report-bindings", 0,
-      &myoptions.report_bindings, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Whether to report process bindings to stderr",
-      PRRTE_CMD_LINE_OTYPE_BINDING },
-
-
-    /* Directory options */
-    { NULL, '\0', NULL, "wdir", 1,
-      &myoptions.wdir, PRRTE_CMD_LINE_TYPE_STRING,
-      "Set the working directory of the started processes",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { NULL, '\0', NULL, "set-cwd-to-session-dir", 0,
-      &myoptions.set_cwd_to_session_dir, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Set the working directory of the started processes to their session directory",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { NULL, '\0', NULL, "path", 1,
-      &myoptions.path, PRRTE_CMD_LINE_TYPE_STRING,
-      "PATH to be used to look for executables to start processes",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-
-
-    /* User-level debugger options */
-    { NULL, '\0', NULL, "debug", 0,
-      &myoptions.debugger, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Invoke the user-level debugger indicated by the prrte_base_user_debugger MCA parameter",
-      PRRTE_CMD_LINE_OTYPE_DEBUG },
-    { NULL, '\0', NULL, "debugger", 1,
-      &myoptions.user_debugger, PRRTE_CMD_LINE_TYPE_STRING,
-      "Sequence of debuggers to search for when \"--debug\" is used",
-      PRRTE_CMD_LINE_OTYPE_DEBUG },
-
-
-    /* Allocation options */
-    { NULL, '\0', NULL, "display-allocation", 0,
-      &myoptions.display_alloc, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Display the allocation being used by this job", PRRTE_CMD_LINE_OTYPE_DEBUG },
-    { "prrte_", '\0', "display-devel-allocation", "display-devel-allocation", 0,
-      &myoptions.display_devel_alloc, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Display a detailed list (mostly intended for developers) of the allocation being used by this job",
-      PRRTE_CMD_LINE_OTYPE_DEVEL },
-
-
-    /* Fault-tolerance options */
-    { "prrte_", '\0', NULL, "enable-recovery", 0,
-      &myoptions.enable_recovery, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Enable recovery from process failure [Default = disabled]",
-      PRRTE_CMD_LINE_OTYPE_UNSUPPORTED },
-    { "prrte_", '\0', NULL, "max-restarts", 1,
-      &myoptions.max_restarts, PRRTE_CMD_LINE_TYPE_INT,
-      "Max number of times to restart a failed process",
-      PRRTE_CMD_LINE_OTYPE_UNSUPPORTED },
-    { NULL, '\0', NULL, "continuous", 0,
-      &myoptions.continuous, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Job is to run until explicitly terminated", PRRTE_CMD_LINE_OTYPE_DEBUG },
-    { NULL, '\0', NULL, "disable-recovery", 0,
-      &myoptions.disable_recovery, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Disable recovery (resets all recovery options to off)",
-      PRRTE_CMD_LINE_OTYPE_UNSUPPORTED },
-
-
-    /* Various other options */
-    { NULL, '\0', NULL, "allow-run-as-root", 0,
-      &myoptions.run_as_root, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Allow execution as root (STRONGLY DISCOURAGED)",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { NULL, '\0', NULL, "personality", 1,
-      &myoptions.personality, PRRTE_CMD_LINE_TYPE_STRING,
-      "Comma-separated list of programming model, languages, and containers being used (default=\"ompi\")",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { NULL, '\0', NULL, "pset", 1,
-      &myoptions.pset, PRRTE_CMD_LINE_TYPE_STRING,
-      "User-specified name assigned to the processes in their given application",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    /* Export environment variables; potentially used multiple times */
-    { NULL, 'x', NULL, NULL, 1,
-      NULL, PRRTE_CMD_LINE_TYPE_NULL,
-      "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the environment variable foo and takes its value from the current environment; \"-x foo=bar\" exports the environment variable name foo and sets its value to \"bar\" in the started processes)",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-
-
 
     { "carto_file_path", '\0', "cf", "cartofile", 1,
       NULL, PRRTE_CMD_LINE_TYPE_STRING,
       "Provide a cartography file", PRRTE_CMD_LINE_OTYPE_MAPPING },
 
+    { "prrte_rankfile", '\0', "rf", "rankfile", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Provide a rankfile file", PRRTE_CMD_LINE_OTYPE_MAPPING },
+
+    /* Export environment variables; potentially used multiple times,
+       so it does not make sense to set into a variable */
+    { NULL, 'x', NULL, NULL, 1,
+      NULL, PRRTE_CMD_LINE_TYPE_NULL,
+      "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the environment variable foo and takes its value from the current environment; \"-x foo=bar\" exports the environment variable name foo and sets its value to \"bar\" in the started processes)", PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+      /* Mapping controls */
+    { "rmaps_base_display_map", '\0', "display-map", "display-map", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Display the process map just before launch", PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { "rmaps_base_display_devel_map", '\0', "display-devel-map", "display-devel-map", 0,
+       NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+       "Display a detailed process map (mostly intended for developers) just before launch",
+       PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { "rmaps_base_display_topo_with_map", '\0', "display-topo", "display-topo", 0,
+       NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+       "Display the topology as part of the process map (mostly intended for developers) just before launch",
+       PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { "rmaps_base_display_diffable_map", '\0', "display-diffable-map", "display-diffable-map", 0,
+       NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+       "Display a diffable process map (mostly intended for developers) just before launch",
+       PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { NULL, 'H', "host", "host", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "List of hosts to invoke processes on",
+      PRRTE_CMD_LINE_OTYPE_MAPPING },
+    { "rmaps_base_no_schedule_local", '\0', "nolocal", "nolocal", 0,
+      &prrte_cmd_options.nolocal, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Do not run any MPI applications on the local node",
+      PRRTE_CMD_LINE_OTYPE_MAPPING },
+    { "rmaps_base_no_oversubscribe", '\0', "nooversubscribe", "nooversubscribe", 0,
+      &prrte_cmd_options.no_oversubscribe, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Nodes are not to be oversubscribed, even if the system supports such operation",
+      PRRTE_CMD_LINE_OTYPE_MAPPING },
+    { "rmaps_base_oversubscribe", '\0', "oversubscribe", "oversubscribe", 0,
+      &prrte_cmd_options.oversubscribe, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Nodes are allowed to be oversubscribed, even on a managed system, and overloading of processing elements",
+      PRRTE_CMD_LINE_OTYPE_MAPPING },
+    { "rmaps_base_cpus_per_rank", '\0', "cpus-per-proc", "cpus-per-proc", 1,
+      &prrte_cmd_options.cpus_per_proc, PRRTE_CMD_LINE_TYPE_INT,
+      "Number of cpus to use for each process [default=1]",
+      PRRTE_CMD_LINE_OTYPE_MAPPING },
+    { "rmaps_base_cpus_per_rank", '\0', "cpus-per-rank", "cpus-per-rank", 1,
+      &prrte_cmd_options.cpus_per_proc, PRRTE_CMD_LINE_TYPE_INT,
+      "Synonym for cpus-per-proc", PRRTE_CMD_LINE_OTYPE_MAPPING },
+
+    /* backward compatiblity */
+    { "rmaps_base_bycore", '\0', "bycore", "bycore", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Whether to map and rank processes round-robin by core",
+      PRRTE_CMD_LINE_OTYPE_COMPAT },
+    { "rmaps_base_bynode", '\0', "bynode", "bynode", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Whether to map and rank processes round-robin by node",
+      PRRTE_CMD_LINE_OTYPE_COMPAT },
+    { "rmaps_base_byslot", '\0', "byslot", "byslot", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Whether to map and rank processes round-robin by slot",
+      PRRTE_CMD_LINE_OTYPE_COMPAT },
+
+    /* Nperxxx options that do not require topology and are always
+     * available - included for backwards compatibility
+     */
+    { "rmaps_ppr_pernode", '\0', "pernode", "pernode", 0,
+      &prrte_cmd_options.pernode, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Launch one process per available node",
+      PRRTE_CMD_LINE_OTYPE_COMPAT },
+    { "rmaps_ppr_n_pernode", '\0', "npernode", "npernode", 1,
+      &prrte_cmd_options.npernode, PRRTE_CMD_LINE_TYPE_INT,
+      "Launch n processes per node on all allocated nodes",
+      PRRTE_CMD_LINE_OTYPE_COMPAT },
+    { "rmaps_ppr_n_pernode", '\0', "N", NULL, 1,
+      &prrte_cmd_options.npernode, PRRTE_CMD_LINE_TYPE_INT,
+      "Launch n processes per node on all allocated nodes (synonym for 'map-by node')",
+      PRRTE_CMD_LINE_OTYPE_MAPPING },
+
+    /* declare hardware threads as independent cpus */
+    { "hwloc_base_use_hwthreads_as_cpus", '\0', "use-hwthread-cpus", "use-hwthread-cpus", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Use hardware threads as independent cpus", PRRTE_CMD_LINE_OTYPE_MAPPING },
+
+    /* include npersocket for backwards compatibility */
+    { "rmaps_ppr_n_persocket", '\0', "npersocket", "npersocket", 1,
+      &prrte_cmd_options.npersocket, PRRTE_CMD_LINE_TYPE_INT,
+      "Launch n processes per socket on all allocated nodes",
+      PRRTE_CMD_LINE_OTYPE_COMPAT },
+
+    /* Mapping options */
+    { "rmaps_base_mapping_policy", '\0', NULL, "map-by", 1,
+      &prrte_cmd_options.mapping_policy, PRRTE_CMD_LINE_TYPE_STRING,
+      "Mapping Policy [slot | hwthread | core | socket (default) | numa | board | node]",
+      PRRTE_CMD_LINE_OTYPE_MAPPING },
+
+      /* Ranking options */
+    { "rmaps_base_ranking_policy", '\0', NULL, "rank-by", 1,
+      &prrte_cmd_options.ranking_policy, PRRTE_CMD_LINE_TYPE_STRING,
+      "Ranking Policy [slot (default) | hwthread | core | socket | numa | board | node]",
+      PRRTE_CMD_LINE_OTYPE_RANKING },
+
+      /* Binding options */
+    { "hwloc_base_binding_policy", '\0', NULL, "bind-to", 1,
+      &prrte_cmd_options.binding_policy, PRRTE_CMD_LINE_TYPE_STRING,
+      "Policy for binding processes. Allowed values: none, hwthread, core, l1cache, l2cache, l3cache, socket, numa, board, cpu-list (\"none\" is the default when oversubscribed, \"core\" is the default when np<=2, and \"socket\" is the default when np>2). Allowed qualifiers: overload-allowed, if-supported, ordered", PRRTE_CMD_LINE_OTYPE_BINDING },
+
+    /* backward compatiblity */
+    { "hwloc_base_bind_to_core", '\0', "bind-to-core", "bind-to-core", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Bind processes to cores", PRRTE_CMD_LINE_OTYPE_COMPAT },
+    { "hwloc_base_bind_to_socket", '\0', "bind-to-socket", "bind-to-socket", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Bind processes to sockets", PRRTE_CMD_LINE_OTYPE_COMPAT },
+
+    { "hwloc_base_report_bindings", '\0', "report-bindings", "report-bindings", 0,
+      &prrte_cmd_options.report_bindings, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Whether to report process bindings to stderr",
+      PRRTE_CMD_LINE_OTYPE_BINDING },
+
+    /* slot list option */
+    { "hwloc_base_cpu_list", '\0', "cpu-list", "cpu-list", 1,
+      &prrte_cmd_options.cpu_list, PRRTE_CMD_LINE_TYPE_STRING,
+      "List of processor IDs to bind processes to [default=NULL]",
+      PRRTE_CMD_LINE_OTYPE_BINDING },
+
+    /* generalized pattern mapping option */
+    { "rmaps_ppr_pattern", '\0', NULL, "ppr", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Comma-separated list of number of processes on a given resource type [default: none]",
+      PRRTE_CMD_LINE_OTYPE_MAPPING },
+
+    /* Allocation options */
+    { "prrte_display_alloc", '\0', "display-allocation", "display-allocation", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Display the allocation being used by this job", PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { "prrte_display_devel_alloc", '\0', "display-devel-allocation", "display-devel-allocation", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Display a detailed list (mostly intended for developers) of the allocation being used by this job",
+      PRRTE_CMD_LINE_OTYPE_DEVEL },
+    { "hwloc_base_cpu_set", '\0', "cpu-set", "cpu-set", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Comma-separated list of ranges specifying logical cpus allocated to this job [default: none]",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+
+    /* mpiexec-like arguments */
+    { NULL, '\0', "wdir", "wdir", 1,
+      &prrte_cmd_options.wdir, PRRTE_CMD_LINE_TYPE_STRING,
+      "Set the working directory of the started processes",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { NULL, '\0', "wd", "wd", 1,
+      &prrte_cmd_options.wdir, PRRTE_CMD_LINE_TYPE_STRING,
+      "Synonym for --wdir", PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { NULL, '\0', "set-cwd-to-session-dir", "set-cwd-to-session-dir", 0,
+      &prrte_cmd_options.set_cwd_to_session_dir, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Set the working directory of the started processes to their session directory",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { NULL, '\0', "path", "path", 1,
+      &prrte_cmd_options.path, PRRTE_CMD_LINE_TYPE_STRING,
+      "PATH to be used to look for executables to start processes",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    /* User-level debugger arguments */
+    { NULL, '\0', "tv", "tv", 0,
+      &prrte_cmd_options.debugger, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Deprecated backwards compatibility flag; synonym for \"--debug\"",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { NULL, '\0', "debug", "debug", 0,
+      &prrte_cmd_options.debugger, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Invoke the user-level debugger indicated by the prrte_base_user_debugger MCA parameter",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { "prrte_base_user_debugger", '\0', "debugger", "debugger", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Sequence of debuggers to search for when \"--debug\" is used",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { "prrte_output_debugger_proctable", '\0', "output-proctable", "output-proctable", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Output the debugger proctable after launch",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+
+    /* OpenRTE arguments */
+    { "prrte_debug", 'd', "debug-devel", "debug-devel", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Enable debugging of OpenRTE", PRRTE_CMD_LINE_OTYPE_DEVEL },
+
+    { "prrte_debug_daemons", '\0', "debug-daemons", "debug-daemons", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_INT,
+      "Enable debugging of any OpenRTE daemons used by this application",
+      PRRTE_CMD_LINE_OTYPE_DEVEL },
+
+    { "prrte_debug_daemons_file", '\0', "debug-daemons-file", "debug-daemons-file", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Enable debugging of any OpenRTE daemons used by this application, storing output in files",
+      PRRTE_CMD_LINE_OTYPE_DEVEL },
+
+    { "prrte_leave_session_attached", '\0', "leave-session-attached", "leave-session-attached", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Enable debugging of OpenRTE", PRRTE_CMD_LINE_OTYPE_DEBUG },
+
+    { "prrte_do_not_launch", '\0', "do-not-launch", "do-not-launch", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Perform all necessary operations to prepare to launch the application, but do not actually launch it",
+      PRRTE_CMD_LINE_OTYPE_DEVEL },
+
+    { NULL, '\0', NULL, "prefix", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Prefix where Open MPI is installed on remote nodes",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { NULL, '\0', NULL, "noprefix", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Disable automatic --prefix behavior",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    { "prrte_report_launch_progress", '\0', "show-progress", "show-progress", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Output a brief periodic report on launch progress",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    { "prrte_use_regexp", '\0', "use-regexp", "use-regexp", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Use regular expressions for launch", PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    { "prrte_report_events", '\0', "report-events", "report-events", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_STRING,
+      "Report events to a tool listening at the specified URI", PRRTE_CMD_LINE_OTYPE_DEBUG },
+
+    { "prrte_enable_recovery", '\0', "enable-recovery", "enable-recovery", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Enable recovery from process failure [Default = disabled]",
+      PRRTE_CMD_LINE_OTYPE_UNSUPPORTED },
+
+    { "prrte_max_restarts", '\0', "max-restarts", "max-restarts", 1,
+      NULL, PRRTE_CMD_LINE_TYPE_INT,
+      "Max number of times to restart a failed process",
+      PRRTE_CMD_LINE_OTYPE_UNSUPPORTED },
+
+    { NULL, '\0', "continuous", "continuous", 0,
+      &prrte_cmd_options.continuous, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Job is to run until explicitly terminated", PRRTE_CMD_LINE_OTYPE_DEBUG },
+
+    { NULL, '\0', "disable-recovery", "disable-recovery", 0,
+      &prrte_cmd_options.disable_recovery, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Disable recovery (resets all recovery options to off)",
+      PRRTE_CMD_LINE_OTYPE_UNSUPPORTED },
+
+    { "prrte_no_vm", '\0', "novm", "novm", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Execute without creating an allocation-spanning virtual machine (only start daemons on nodes hosting application procs)",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+
+    { NULL, '\0', "allow-run-as-root", "allow-run-as-root", 0,
+      &prrte_cmd_options.run_as_root, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Allow execution as root (STRONGLY DISCOURAGED)",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    { NULL, '\0', "personality", "personality", 1,
+      &prrte_cmd_options.personality, PRRTE_CMD_LINE_TYPE_STRING,
+      "Comma-separated list of programming model, languages, and containers being used (default=\"prrte\")",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    { NULL, '\0', "pset", "pset", 1,
+      &prrte_cmd_options.pset, PRRTE_CMD_LINE_TYPE_STRING,
+      "User-specified name assigned to the processes in their given application",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    { NULL, '\0', "dvm", "dvm", 0,
+      &prrte_cmd_options.create_dvm, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Create a persistent distributed virtual machine (DVM)",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+
+    /* fwd mpirun port */
+    { "prrte_fwd_mpirun_port", '\0', "fwd-mpirun-port", "fwd-mpirun-port", 0,
+      NULL, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Forward mpirun port to compute node daemons so all will use it",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
 
     /* End of list */
     { NULL, '\0', NULL, NULL, 0,
@@ -402,10 +596,10 @@ static int parse_cli(int argc, int start, char **argv)
              * of the orted cmd line by removing any non-PRRTE
              * params. However, this raises a problem since
              * there could be PRRTE directives that we really
-             * -do- want the orted to see - it's only the PRRTE
+             * -do- want the orted to see - it's only the OMPI
              * related directives we could ignore. This becomes
              * a very complicated procedure, however, since
-             * the PRRTE mca params are not cleanly separated - so
+             * the OMPI mca params are not cleanly separated - so
              * filtering them out is nearly impossible.
              *
              * see if this is already present so we at least can
@@ -488,7 +682,7 @@ static int parse_env(char *path,
     }
 
     for (i = 0; NULL != srcenv[i]; ++i) {
-        if (0 == strncmp("PRRTE_", srcenv[i], 5) ||
+        if (0 == strncmp("OMPI_", srcenv[i], 5) ||
             0 == strncmp("PMIX_", srcenv[i], 5)) {
             /* check for duplicate in app->env - this
              * would have been placed there by the
@@ -525,7 +719,7 @@ static int parse_env(char *path,
         prrte_argv_free(vars);
     }
     /* Did the user request to export any environment variables on the cmd line? */
-    env_set_flag = getenv("PRRTE_MCA_mca_base_env_list");
+    env_set_flag = getenv("OMPI_MCA_mca_base_env_list");
     if (prrte_cmd_line_is_taken(cmd_line, "x")) {
         if (NULL != env_set_flag) {
             prrte_show_help("help-prrterun.txt", "prrterun:conflict-env-set", false);
@@ -585,9 +779,9 @@ static int parse_env(char *path,
     }
 
     /* If the user specified --path, store it in the user's app
-       environment via the PRRTE_exec_path variable. */
+       environment via the OMPI_exec_path variable. */
     if (NULL != path) {
-        prrte_asprintf(&value, "PRRTE_exec_path=%s", path);
+        prrte_asprintf(&value, "OMPI_exec_path=%s", path);
         prrte_argv_append_nosize(dstenv, value);
         /* save it for any comm_spawn'd apps */
         prrte_argv_append_nosize(&prrte_forwarded_envars, value);
@@ -698,25 +892,25 @@ static int setup_fork(prrte_job_t *jdata,
     }
 
     /* pass my contact info to the local proc so we can talk */
-    prrte_setenv("PRRTE_MCA_prrte_local_daemon_uri", prrte_process_info.my_daemon_uri, true, &app->env);
+    prrte_setenv("OMPI_MCA_prrte_local_daemon_uri", prrte_process_info.my_daemon_uri, true, &app->env);
 
     /* pass the hnp's contact info to the local proc in case it
      * needs it
      */
     if (NULL != prrte_process_info.my_hnp_uri) {
-        prrte_setenv("PRRTE_MCA_prrte_hnp_uri", prrte_process_info.my_hnp_uri, true, &app->env);
+        prrte_setenv("OMPI_MCA_prrte_hnp_uri", prrte_process_info.my_hnp_uri, true, &app->env);
     }
 
     /* setup yield schedule */
     if (oversubscribed) {
-        prrte_setenv("PRRTE_MCA_mpi_oversubscribe", "1", true, &app->env);
+        prrte_setenv("OMPI_MCA_mpi_oversubscribe", "1", true, &app->env);
     } else {
-        prrte_setenv("PRRTE_MCA_mpi_oversubscribe", "0", true, &app->env);
+        prrte_setenv("OMPI_MCA_mpi_oversubscribe", "0", true, &app->env);
     }
 
     /* set the app_context number into the environment */
     prrte_asprintf(&param, "%ld", (long)app->idx);
-    prrte_setenv("PRRTE_MCA_prrte_app_num", param, true, &app->env);
+    prrte_setenv("OMPI_MCA_prrte_app_num", param, true, &app->env);
     free(param);
 
     /* although the total_slots_alloc is the universe size, users
@@ -728,12 +922,12 @@ static int setup_fork(prrte_job_t *jdata,
      * We know - just live with it
      */
     prrte_asprintf(&param, "%ld", (long)jdata->total_slots_alloc);
-    prrte_setenv("PRRTE_UNIVERSE_SIZE", param, true, &app->env);
+    prrte_setenv("OMPI_UNIVERSE_SIZE", param, true, &app->env);
     free(param);
 
     /* pass the number of nodes involved in this job */
     prrte_asprintf(&param, "%ld", (long)(jdata->map->num_nodes));
-    prrte_setenv("PRRTE_MCA_prrte_num_nodes", param, true, &app->env);
+    prrte_setenv("OMPI_MCA_prrte_num_nodes", param, true, &app->env);
     free(param);
 
     /* pass a param telling the child what type and model of cpu we are on,
@@ -746,18 +940,18 @@ static int setup_fork(prrte_job_t *jdata,
         obj = hwloc_get_root_obj(prrte_hwloc_topology);
         if (NULL != (htmp = (char*)hwloc_obj_get_info_by_name(obj, "CPUType")) ||
             NULL != (htmp = prrte_local_cpu_type)) {
-            prrte_setenv("PRRTE_MCA_prrte_cpu_type", htmp, true, &app->env);
+            prrte_setenv("OMPI_MCA_prrte_cpu_type", htmp, true, &app->env);
         }
         if (NULL != (htmp = (char*)hwloc_obj_get_info_by_name(obj, "CPUModel")) ||
             NULL != (htmp = prrte_local_cpu_model)) {
-            prrte_setenv("PRRTE_MCA_prrte_cpu_model", htmp, true, &app->env);
+            prrte_setenv("OMPI_MCA_prrte_cpu_model", htmp, true, &app->env);
         }
     } else {
         if (NULL != prrte_local_cpu_type) {
-            prrte_setenv("PRRTE_MCA_prrte_cpu_type", prrte_local_cpu_type, true, &app->env);
+            prrte_setenv("OMPI_MCA_prrte_cpu_type", prrte_local_cpu_type, true, &app->env);
         }
         if (NULL != prrte_local_cpu_model) {
-            prrte_setenv("PRRTE_MCA_prrte_cpu_model", prrte_local_cpu_model, true, &app->env);
+            prrte_setenv("OMPI_MCA_prrte_cpu_model", prrte_local_cpu_model, true, &app->env);
         }
     }
 
@@ -766,25 +960,25 @@ static int setup_fork(prrte_job_t *jdata,
      * MPI_INIT doesn't try to bind itself)
      */
     if (PRRTE_BIND_TO_NONE != PRRTE_GET_BINDING_POLICY(jdata->map->binding)) {
-        prrte_setenv("PRRTE_MCA_prrte_bound_at_launch", "1", true, &app->env);
+        prrte_setenv("OMPI_MCA_prrte_bound_at_launch", "1", true, &app->env);
     }
 
     /* tell the ESS to avoid the singleton component - but don't override
      * anything that may have been provided elsewhere
      */
-    prrte_setenv("PRRTE_MCA_ess", "^singleton", false, &app->env);
+    prrte_setenv("OMPI_MCA_ess", "^singleton", false, &app->env);
 
     /* ensure that the spawned process ignores direct launch components,
      * but do not overrride anything we were given */
-    prrte_setenv("PRRTE_MCA_pmix", "^s1,s2,cray", false, &app->env);
+    prrte_setenv("OMPI_MCA_pmix", "^s1,s2,cray", false, &app->env);
 
     /* since we want to pass the name as separate components, make sure
      * that the "name" environmental variable is cleared!
      */
-    prrte_unsetenv("PRRTE_MCA_prrte_ess_name", &app->env);
+    prrte_unsetenv("OMPI_MCA_prrte_ess_name", &app->env);
 
     prrte_asprintf(&param, "%ld", (long)jdata->num_procs);
-    prrte_setenv("PRRTE_MCA_prrte_ess_num_procs", param, true, &app->env);
+    prrte_setenv("OMPI_MCA_prrte_ess_num_procs", param, true, &app->env);
 
     /* although the num_procs is the comm_world size, users
      * would appreciate being given a public environmental variable
@@ -794,7 +988,7 @@ static int setup_fork(prrte_job_t *jdata,
      * AND YES - THIS BREAKS THE ABSTRACTION BARRIER TO SOME EXTENT.
      * We know - just live with it
      */
-    prrte_setenv("PRRTE_COMM_WORLD_SIZE", param, true, &app->env);
+    prrte_setenv("OMPI_COMM_WORLD_SIZE", param, true, &app->env);
     free(param);
 
     /* users would appreciate being given a public environmental variable
@@ -805,14 +999,14 @@ static int setup_fork(prrte_job_t *jdata,
      * We know - just live with it
      */
     prrte_asprintf(&param, "%ld", (long)jdata->num_local_procs);
-    prrte_setenv("PRRTE_COMM_WORLD_LOCAL_SIZE", param, true, &app->env);
+    prrte_setenv("OMPI_COMM_WORLD_LOCAL_SIZE", param, true, &app->env);
     free(param);
 
     /* forcibly set the local tmpdir base and top session dir to match ours */
-    prrte_setenv("PRRTE_MCA_prrte_tmpdir_base", prrte_process_info.tmpdir_base, true, &app->env);
+    prrte_setenv("OMPI_MCA_prrte_tmpdir_base", prrte_process_info.tmpdir_base, true, &app->env);
     /* TODO: should we use PMIx key to pass this data? */
-    prrte_setenv("PRRTE_MCA_prrte_top_session_dir", prrte_process_info.top_session_dir, true, &app->env);
-    prrte_setenv("PRRTE_MCA_prrte_jobfam_session_dir", prrte_process_info.jobfam_session_dir, true, &app->env);
+    prrte_setenv("OMPI_MCA_prrte_top_session_dir", prrte_process_info.top_session_dir, true, &app->env);
+    prrte_setenv("OMPI_MCA_prrte_jobfam_session_dir", prrte_process_info.jobfam_session_dir, true, &app->env);
 
     /* MPI-3 requires we provide some further info to the procs,
      * so we pass them as envars to avoid introducing further
@@ -836,9 +1030,9 @@ static int setup_fork(prrte_job_t *jdata,
     prrte_argv_free(firstranks);
 
     /* add the MPI-3 envars */
-    prrte_setenv("PRRTE_NUM_APP_CTX", num_app_ctx, true, &app->env);
-    prrte_setenv("PRRTE_FIRST_RANKS", firstrankstring, true, &app->env);
-    prrte_setenv("PRRTE_APP_CTX_NUM_PROCS", npstring, true, &app->env);
+    prrte_setenv("OMPI_NUM_APP_CTX", num_app_ctx, true, &app->env);
+    prrte_setenv("OMPI_FIRST_RANKS", firstrankstring, true, &app->env);
+    prrte_setenv("OMPI_APP_CTX_NUM_PROCS", npstring, true, &app->env);
     free(num_app_ctx);
     free(firstrankstring);
     free(npstring);
@@ -1009,7 +1203,7 @@ static int setup_child(prrte_job_t *jdata,
         PRRTE_ERROR_LOG(rc);
         return rc;
     }
-    prrte_setenv("PRRTE_MCA_ess_base_jobid", value, true, env);
+    prrte_setenv("OMPI_MCA_ess_base_jobid", value, true, env);
     free(value);
 
     /* setup the vpid */
@@ -1017,7 +1211,7 @@ static int setup_child(prrte_job_t *jdata,
         PRRTE_ERROR_LOG(rc);
         return rc;
     }
-    prrte_setenv("PRRTE_MCA_ess_base_vpid", value, true, env);
+    prrte_setenv("OMPI_MCA_ess_base_vpid", value, true, env);
 
     /* although the vpid IS the process' rank within the job, users
      * would appreciate being given a public environmental variable
@@ -1027,7 +1221,7 @@ static int setup_child(prrte_job_t *jdata,
      * AND YES - THIS BREAKS THE ABSTRACTION BARRIER TO SOME EXTENT.
      * We know - just live with it
      */
-    prrte_setenv("PRRTE_COMM_WORLD_RANK", value, true, env);
+    prrte_setenv("OMPI_COMM_WORLD_RANK", value, true, env);
     free(value);  /* done with this now */
 
     /* users would appreciate being given a public environmental variable
@@ -1043,7 +1237,7 @@ static int setup_child(prrte_job_t *jdata,
         return rc;
     }
     prrte_asprintf(&value, "%lu", (unsigned long) child->local_rank);
-    prrte_setenv("PRRTE_COMM_WORLD_LOCAL_RANK", value, true, env);
+    prrte_setenv("OMPI_COMM_WORLD_LOCAL_RANK", value, true, env);
     free(value);
 
     /* users would appreciate being given a public environmental variable
@@ -1059,9 +1253,9 @@ static int setup_child(prrte_job_t *jdata,
         return rc;
     }
     prrte_asprintf(&value, "%lu", (unsigned long) child->node_rank);
-    prrte_setenv("PRRTE_COMM_WORLD_NODE_RANK", value, true, env);
+    prrte_setenv("OMPI_COMM_WORLD_NODE_RANK", value, true, env);
     /* set an mca param for it too */
-    prrte_setenv("PRRTE_MCA_prrte_ess_node_rank", value, true, env);
+    prrte_setenv("OMPI_MCA_prrte_ess_node_rank", value, true, env);
     free(value);
 
     /* provide the identifier for the PMIx connection - the
@@ -1080,14 +1274,14 @@ static int setup_child(prrte_job_t *jdata,
          * restarted so they can take appropriate action
          */
         prrte_asprintf(&value, "%d", nrestarts);
-        prrte_setenv("PRRTE_MCA_prrte_num_restarts", value, true, env);
+        prrte_setenv("OMPI_MCA_prrte_num_restarts", value, true, env);
         free(value);
     }
 
     /* if the proc should not barrier in prrte_init, tell it */
     if (prrte_get_attribute(&child->attributes, PRRTE_PROC_NOBARRIER, NULL, PRRTE_BOOL)
         || 0 < nrestarts) {
-        prrte_setenv("PRRTE_MCA_prrte_do_not_barrier", "1", true, env);
+        prrte_setenv("OMPI_MCA_prrte_do_not_barrier", "1", true, env);
     }
 
     /* if the proc isn't going to forward IO, then we need to flag that
@@ -1099,7 +1293,7 @@ static int setup_child(prrte_job_t *jdata,
 
     /* pass an envar so the proc can find any files it had prepositioned */
     param = prrte_process_info.proc_session_dir;
-    prrte_setenv("PRRTE_FILE_LOCATION", param, true, env);
+    prrte_setenv("OMPI_FILE_LOCATION", param, true, env);
 
     /* if the user wanted the cwd to be the proc's session dir, then
      * switch to that location now
@@ -1129,7 +1323,7 @@ static int setup_child(prrte_job_t *jdata,
          */
         prrte_setenv("PWD", param, true, env);
         /* update the initial wdir value too */
-        prrte_setenv("PRRTE_MCA_initial_wdir", param, true, env);
+        prrte_setenv("OMPI_MCA_initial_wdir", param, true, env);
     } else if (NULL != app->cwd) {
         /* change to it */
         if (0 != chdir(app->cwd)) {

@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -120,7 +120,7 @@ typedef int32_t prrte_job_state_t;
 #define PRRTE_JOB_STATE_SYSTEM_PREP               7  /* ready for final sanity check and system values updated */
 #define PRRTE_JOB_STATE_LAUNCH_DAEMONS            8  /* ready to launch daemons */
 #define PRRTE_JOB_STATE_DAEMONS_LAUNCHED          9  /* daemons for this job have been launched */
-#define PRRTE_JOB_STATE_DAEMONS_REPPRRTED         10  /* all launched daemons have reported */
+#define PRRTE_JOB_STATE_DAEMONS_REPORTED         10  /* all launched daemons have reported */
 #define PRRTE_JOB_STATE_VM_READY                 11  /* the VM is ready for operation */
 #define PRRTE_JOB_STATE_LAUNCH_APPS              12  /* ready to launch apps */
 #define PRRTE_JOB_STATE_SEND_LAUNCH_MSG          13  /* send launch msg to daemons */

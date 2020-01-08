@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -174,7 +174,7 @@ typedef uint16_t prrte_proc_flags_t;
 #define PRRTE_PROC_FLAG_ABORT         0x0002  // proc called abort
 #define PRRTE_PROC_FLAG_UPDATED       0x0004  // proc has been updated and need to be included in the next pidmap message
 #define PRRTE_PROC_FLAG_LOCAL         0x0008  // indicate that this proc is local
-#define PRRTE_PROC_FLAG_REPPRRTED      0x0010  // indicate proc has reported in
+#define PRRTE_PROC_FLAG_REPORTED      0x0010  // indicate proc has reported in
 #define PRRTE_PROC_FLAG_REG           0x0020  // proc has registered
 #define PRRTE_PROC_FLAG_HAS_DEREG     0x0040  // proc has deregistered
 #define PRRTE_PROC_FLAG_AS_MPI        0x0080  // proc is MPI process

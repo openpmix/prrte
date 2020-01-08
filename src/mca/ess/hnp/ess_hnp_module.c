@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2014 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2017 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -403,7 +403,7 @@ static int rte_init(int argc, char **argv)
      * only ones in the system right now, and we definitely
      * are running!
      */
-    jdata->state = PRRTE_JOB_STATE_DAEMONS_REPPRRTED;
+    jdata->state = PRRTE_JOB_STATE_DAEMONS_REPORTED;
 
     /* every job requires at least one app */
     app = PRRTE_NEW(prrte_app_context_t);

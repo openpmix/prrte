@@ -22,8 +22,8 @@
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_schizo_base_component_t prrte_schizo_ompi_component;
-extern prrte_schizo_base_module_t prrte_schizo_ompi_module;
+PRRTE_MODULE_EXPORT extern prrte_schizo_base_component_t prrte_schizo_prrte_component;
+extern prrte_schizo_base_module_t prrte_schizo_prrte_module;
 
 END_C_DECLS
 
