@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -231,7 +231,7 @@ int prrte_util_decode_nidmap(prrte_buffer_t *buf)
     prrte_node_t *nd;
     prrte_job_t *daemons;
     prrte_proc_t *proc;
-    prrte_topology_t *t;
+    prrte_topology_t *t = NULL;
 
     /* unpack the flag indicating if HNP is in allocation */
     cnt = 1;
@@ -367,6 +367,7 @@ int prrte_util_decode_nidmap(prrte_buffer_t *buf)
 
     /* if we are the HNP, we don't need any of this stuff */
     if (PRRTE_PROC_IS_MASTER) {
+        rc = PRRTE_SUCCESS;
         goto cleanup;
     }
 
@@ -379,7 +380,12 @@ int prrte_util_decode_nidmap(prrte_buffer_t *buf)
             break;
         }
     }
-
+    if (NULL == t) {
+        /* should never happen */
+        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+        rc = PRRTE_ERR_NOT_FOUND;
+        goto cleanup;
+    }
     /* create the node pool array - this will include
      * _all_ nodes known to the allocation */
     for (n=0; NULL != names[n]; n++) {

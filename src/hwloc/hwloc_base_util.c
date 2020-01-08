@@ -1759,7 +1759,7 @@ int prrte_hwloc_base_cset2mapstr(char *str, int len,
     hwloc_obj_t prev_numa = NULL;
     hwloc_obj_t cur_numa = NULL;
     hwloc_obj_type_t type_under_numa;
-    bool a_numa_marker_is_open;
+    bool a_numa_marker_is_open = false;
 
    /* if the cpuset is all zero, then not bound */
     if (hwloc_bitmap_iszero(cpuset)) {
