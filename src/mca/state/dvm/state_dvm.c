@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -84,7 +84,7 @@ static prrte_job_state_t launch_states[] = {
     PRRTE_JOB_STATE_ALLOCATE,
     PRRTE_JOB_STATE_ALLOCATION_COMPLETE,
     PRRTE_JOB_STATE_DAEMONS_LAUNCHED,
-    PRRTE_JOB_STATE_DAEMONS_REPPRRTED,
+    PRRTE_JOB_STATE_DAEMONS_REPORTED,
     PRRTE_JOB_STATE_VM_READY,
     PRRTE_JOB_STATE_MAP,
     PRRTE_JOB_STATE_MAP_COMPLETE,
@@ -313,7 +313,6 @@ static void vm_ready(int fd, short args, void *cbdata)
                 if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                    PMIX_ERROR_LOG(ret);
                     PRRTE_RELEASE(wireup);
                     return;
                 }

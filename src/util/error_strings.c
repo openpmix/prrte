@@ -12,7 +12,7 @@
  * Copyright (c) 2010-2016 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,8 +59,8 @@ const char *prrte_job_state_to_str(prrte_job_state_t state)
         return "PENDING DAEMON LAUNCH";
     case PRRTE_JOB_STATE_DAEMONS_LAUNCHED:
         return "DAEMONS LAUNCHED";
-    case PRRTE_JOB_STATE_DAEMONS_REPPRRTED:
-        return "ALL DAEMONS REPPRRTED";
+    case PRRTE_JOB_STATE_DAEMONS_REPORTED:
+        return "ALL DAEMONS REPORTED";
     case PRRTE_JOB_STATE_VM_READY:
         return "VM READY";
     case PRRTE_JOB_STATE_LAUNCH_APPS:
@@ -118,7 +118,7 @@ const char *prrte_job_state_to_str(prrte_job_state_t state)
     case PRRTE_JOB_STATE_DAEMONS_TERMINATED:
         return "DAEMONS TERMINATED";
     case PRRTE_JOB_STATE_SILENT_ABORT:
-        return "ERROR REPPRRTED ELSEWHERE";
+        return "ERROR REPORTED ELSEWHERE";
     case PRRTE_JOB_STATE_REPORT_PROGRESS:
         return "REPORT PROGRESS";
     case PRRTE_JOB_STATE_ALLOC_FAILED:

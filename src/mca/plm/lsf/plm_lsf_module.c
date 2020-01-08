@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2008      Institut National de Recherche en Informatique
  *                         et Automatique. All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -197,7 +197,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * job to move to the following step
          */
         state->jdata->state = PRRTE_JOB_STATE_DAEMONS_LAUNCHED;
-        PRRTE_ACTIVATE_JOB_STATE(state->jdata, PRRTE_JOB_STATE_DAEMONS_REPPRRTED);
+        PRRTE_ACTIVATE_JOB_STATE(state->jdata, PRRTE_JOB_STATE_DAEMONS_REPORTED);
         PRRTE_RELEASE(state);
         return;
     }
@@ -224,7 +224,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                              "%s plm:lsf: no new daemons to launch",
                              PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
         state->jdata->state = PRRTE_JOB_STATE_DAEMONS_LAUNCHED;
-        PRRTE_ACTIVATE_JOB_STATE(state->jdata, PRRTE_JOB_STATE_DAEMONS_REPPRRTED);
+        PRRTE_ACTIVATE_JOB_STATE(state->jdata, PRRTE_JOB_STATE_DAEMONS_REPORTED);
         PRRTE_RELEASE(state);
         return;
     }
