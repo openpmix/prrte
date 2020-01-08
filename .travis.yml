@@ -12,7 +12,7 @@ language: c
 # Iterate over 2 different compilers
 compiler:
     - gcc
-    - clang
+#   - clang
 
 # Test only linux now
 os:
@@ -46,7 +46,7 @@ env:
         - LD_LIBRARY_PATH="$HOME/bogus/lib"
     matrix:
         - GCC_VERSION=default
-        - GCC_VERSION=7
+          #        - GCC_VERSION=7
 
 before_install:
     - env
