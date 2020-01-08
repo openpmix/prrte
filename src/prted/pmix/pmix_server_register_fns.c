@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2017      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,7 +59,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
 {
     int rc;
     prrte_proc_t *pptr;
-    int i, k, n;
+    int i, k, n, p;
     prrte_list_t *info, *pmap;
     prrte_info_item_t *kv, *kptr;
     prrte_node_t *node, *mynode;
@@ -485,11 +485,11 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
             if (0 < ninfo) {
                 PMIX_DATA_ARRAY_CREATE(kv->info.value.data.darray, ninfo, PMIX_INFO);
                 pinfo = (pmix_info_t*)kv->info.value.data.darray->array;
-                n = 0;
+                p = 0;
                 while (NULL != (kptr = (prrte_info_item_t*)prrte_list_remove_first(pmap))) {
-                    PMIX_INFO_XFER(&pinfo[n], &kptr->info);
+                    PMIX_INFO_XFER(&pinfo[p], &kptr->info);
                     PRRTE_RELEASE(kptr);
-                    ++n;
+                    ++p;
                 }
             }
             prrte_list_append(info, &kv->super);
