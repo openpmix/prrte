@@ -73,7 +73,7 @@ install:
 
 script:
     - make check
-    - ./contrib/travis/test_client.sh
+#   - ./contrib/travis/test_client.sh
 
 matrix:
   exclude:
