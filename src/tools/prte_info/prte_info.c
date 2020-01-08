@@ -130,6 +130,13 @@ int main(int argc, char *argv[])
         --ret;
     }
 
+    /* initialize install dirs code */
+    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_installdirs_base_framework, 0))) {
+        fprintf(stderr, "prrte_installdirs_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRRTE_SUCCESS)\n",
+                __FILE__, __LINE__, ret);
+        return ret;
+    }
+
     /* Get MCA parameters, if any */
 
     if( PRRTE_SUCCESS != prrte_mca_base_open() ) {
