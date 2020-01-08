@@ -19,7 +19,7 @@
  * Copyright (C) 2018      Mellanox Technologies, Ltd.
  *                         All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
- # Copyright (c) 2019      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2019-2020 IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1794,8 +1794,8 @@ int prrte_hwloc_base_cset2mapstr(char *str, int len,
 
     /* Iterate over all existing sockets */
     fake_on_first_socket = true;
+    socket = hwloc_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0);
     do {
-        socket = hwloc_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0);
         fake_on_first_socket = false;
         strncat(str, "[", len - strlen(str) - 1);
 
