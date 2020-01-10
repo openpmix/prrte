@@ -52,7 +52,7 @@ int pmi_get_string(uint32_t peer_rank, const char *key, void **data_out, size_t 
     (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = peer_rank;
     if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, key, NULL, 0, &pvalue))) {
-        ERR("Client ns %s rank %d: PMIx_Get %s: %d\n", myproc.nspace, myproc.rank, key, rc);
+        ERR("Client ns %s rank %d: PMIx_Get %s: %s\n", myproc.nspace, myproc.rank, key, PMIx_Error_string(rc));
     }
     if(pvalue->type != PMIX_BYTE_OBJECT){
         ERR("Client ns %s rank %d: PMIx_Get %s: got wrong data type\n", myproc.nspace, myproc.rank, key);
@@ -76,7 +76,7 @@ static void fence_status_cb(pmix_status_t status, void *cbdata)
 {
     fence_active = 0;
 }
-    
+
 int pmix_exchange(bool flag)
 {
     int rc;
@@ -90,20 +90,23 @@ int pmix_exchange(bool flag)
         exit(1);
     }
     PMIX_INFO_DESTRUCT(&info);
-        
+
     /* wait for completion */
     while(fence_active);
-    
+
     return 0;
 }
 
 int main(int argc, char *argv[])
 {
-    char data[256] = {};
+    char data[256] = {}, *key;
     char *data_out;
     size_t size_out;
     int rc;
     pmix_value_t *pvalue;
+    pmix_pdata_t pdata;
+    pmix_info_t info;
+    pmix_byte_object_t bo;
 
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
 	ERR("PMIx_Init failed");
@@ -128,15 +131,50 @@ int main(int argc, char *argv[])
 
     /* the below two lines break the subsequent PMIx_Get query on a key set later */
     pmi_set_string("test-key-1", data, 256);
- 
+    pmix_exchange(true);
+
     sprintf(data, "rank %d", myproc.rank);
-    pmi_set_string("test-key-2", data, 256);
-    
+    bo.bytes = data;
+    bo.size = 256;
+    if (0 == myproc.rank) {
+        key = "test-key-0";
+    } else {
+        key = "test-key-1";
+    }
+    PMIX_INFO_LOAD(&info, key, &bo, PMIX_BYTE_OBJECT);
+    rc = PMIx_Publish(&info, 1);
+    PMIX_INFO_DESTRUCT(&info);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "Error on Publish: %s\n", PMIx_Error_string(rc));
+        exit(1);
+    } else {
+        fprintf(stderr, "%d: Publish %s succeeded\n", myproc.rank, key);
+    }
+
     /* An explicit Fence has to be called again to read the `test-key-2` */
     // pmix_exchange(false);
 
-    pmi_get_string((myproc.rank+1)%2, "test-key-2", (void**)&data_out, &size_out);
-    printf("%d: obtained data \"%s\"\n", myproc.rank, data_out);
+    if (0 == myproc.rank) {
+        key = "test-key-1";
+    } else {
+        key = "test-key-0";
+    }
+    PMIX_LOAD_KEY(pdata.key, key);
+    PMIX_INFO_LOAD(&info, PMIX_WAIT, NULL, PMIX_BOOL);
+    rc = PMIx_Lookup(&pdata, 1, &info, 1);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "%d: Lookup failed with error %s\n", myproc.rank, PMIx_Error_string(rc));
+    } else {
+        fprintf(stderr, "%d: PMIx Lookup succeeded\n", myproc.rank);
+    }
+
+   // pmi_get_string((myproc.rank+1)%2, "test-key-2", (void**)&data_out, &size_out);
+    if (PMIX_BYTE_OBJECT != pdata.value.type) {
+        fprintf(stderr, "%d: obtained wrong data type %s\n", PMIx_Data_type_string(pdata.value.type));
+    } else {
+        fprintf(stderr, "%d: obtained data \"%s\"\n", myproc.rank, pdata.value.data.bo.bytes);
+    }
+    fflush(stderr);
 
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
         ERR("Client ns %s rank %d:PMIx_Finalize failed: %d\n", myproc.nspace, myproc.rank, rc);
