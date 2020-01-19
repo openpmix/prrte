@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -245,7 +245,7 @@ static int tcp_component_register(void)
 
     prrte_oob_tcp_component.if_include = NULL;
     var_id = prrte_mca_base_component_var_register(component, "if_include",
-                                             "Comma-delimited list of devices and/or CIDR notation of TCP networks to use for Open MPI bootstrap communication (e.g., \"eth0,192.168.0.0/16\").  Mutually exclusive with oob_tcp_if_exclude.",
+                                             "Comma-delimited list of devices and/or CIDR notation of TCP networks to use for PRRTE bootstrap communication (e.g., \"eth0,192.168.0.0/16\").  Mutually exclusive with oob_tcp_if_exclude.",
                                              PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                              PRRTE_INFO_LVL_2,
                                              PRRTE_MCA_BASE_VAR_SCOPE_LOCAL,
@@ -255,7 +255,7 @@ static int tcp_component_register(void)
 
     prrte_oob_tcp_component.if_exclude = NULL;
     var_id = prrte_mca_base_component_var_register(component, "if_exclude",
-                                             "Comma-delimited list of devices and/or CIDR notation of TCP networks to NOT use for Open MPI bootstrap communication -- all devices not matching these specifications will be used (e.g., \"eth0,192.168.0.0/16\").  If set to a non-default value, it is mutually exclusive with oob_tcp_if_include.",
+                                             "Comma-delimited list of devices and/or CIDR notation of TCP networks to NOT use for PRRTE bootstrap communication -- all devices not matching these specifications will be used (e.g., \"eth0,192.168.0.0/16\").  If set to a non-default value, it is mutually exclusive with oob_tcp_if_include.",
                                              PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                              PRRTE_INFO_LVL_2,
                                              PRRTE_MCA_BASE_VAR_SCOPE_LOCAL,

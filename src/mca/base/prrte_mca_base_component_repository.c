@@ -17,7 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -428,7 +428,7 @@ int prrte_mca_base_component_repository_open (prrte_mca_base_framework_t *framew
              file_exists(ri->ri_path, "so") ||
              file_exists(ri->ri_path, "dylib") ||
              file_exists(ri->ri_path, "dll"))) {
-            err_msg = "perhaps a missing symbol, or compiled for a different version of Open MPI?";
+            err_msg = "perhaps a missing symbol, or compiled for a different version of PRRTE?";
         }
         prrte_output_verbose(vl, 0, "mca_base_component_repository_open: unable to open %s: %s (ignored)",
                             ri->ri_base, err_msg);

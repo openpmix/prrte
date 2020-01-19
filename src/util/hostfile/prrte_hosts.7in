@@ -11,7 +11,7 @@
 .\" **************************
 .SH NAME
 .
-PRRTE_HOSTS \- OpenRTE Hostfile and HOST Behavior: Overview of OpenRTE's support for user-supplied
+PRRTE_HOSTS \- PRRTE Hostfile and HOST Behavior: Overview of PRRTE's support for user-supplied
 hostfiles and comma-delimited lists of hosts
 .
 .\" **************************
@@ -20,7 +20,7 @@ hostfiles and comma-delimited lists of hosts
 .SH DESCRIPTION
 .
 .PP
-OpenRTE supports several levels of user-specified host lists based on an established
+PRRTE supports several levels of user-specified host lists based on an established
 precedence order. Users can specify a \fIdefault hostfile\fP that contains a list of
 nodes available to all app_contexts given on the command line. Only \fIone\fP default
 hostfile can be provided for any job. In addition, users
@@ -80,7 +80,7 @@ to use the last two nodes. Of course, the user could printout the allocation to 
 of the nodes allocated to them and then use -host to specify this layout, but this is cumbersome
 and would require hand-manipulation for every invocation.
 .sp
-A simpler method is to utilize OpenRTE's relative indexing capability to specify the desired
+A simpler method is to utilize PRRTE's relative indexing capability to specify the desired
 layout. In this case, a command line of:
 .sp
 mpirun -pernode -host +n1,+n2 ./app1 : -host +n3,+n4 ./app2
@@ -92,15 +92,15 @@ are supported:
 .sp
 .TP
 .B +n<#>
-A relative index into the allocation referencing the <#> node. OpenRTE will substitute
+A relative index into the allocation referencing the <#> node. PRRTE will substitute
 the <#> node in the allocation
 .
 .
 .TP
 .B +e[:<#>]
-A request for <#> empty nodes - i.e., OpenRTE is to substitute this reference with
+A request for <#> empty nodes - i.e., PRRTE is to substitute this reference with
 <#> nodes that have not yet been used by any other app_context. If the ":<#>" is not
-provided, OpenRTE will substitute the reference with all empty nodes. Note that OpenRTE
+provided, PRRTE will substitute the reference with all empty nodes. Note that PRRTE
 does track the empty nodes that have been assigned in this manner, so multiple
 uses of this option will result in assignment of unique nodes up to the limit of the
 available empty nodes. Requests for more empty nodes than are available will generate
@@ -141,7 +141,7 @@ dummy4 slots=1
 .fi
 .sp
 .PP
-The user can now use this information in combination with OpenRTE's sequential mapper to
+The user can now use this information in combination with PRRTE's sequential mapper to
 obtain their specific layout:
 .sp
 .nf

@@ -14,7 +14,7 @@
  * Copyright (c) 2015-2016 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,12 +28,12 @@
  *
  * Historical notes:
  *
- * Open MPI originally used a v1.0.0 of the MCA component structs, but
+ * PRRTE originally used a v1.0.0 of the MCA component structs, but
  * did not have a version number in the struct name.  If I recall
  * correctly, this is because we simply didn't think through (or never
  * envisioned) changing the MCA base component struct itself.  Oops.
  *
- * We made some changes in the base struct in Open MPI v1.3, and
+ * We made some changes in the base struct in PRRTE v1.3, and
  * decided the following at the same time:
  *
  * - Bump the MCA version number to 2.0.0 and add some "reserved"
@@ -45,14 +45,14 @@
  *   the change).  If we need to add more space to the struct, we'll
  *   increment the major version number.
  * - The MCA base component struct now has a version number in it
- *   (starting with Open MPI v1.3, it is 2.0.0).
- * - As was an unstated assumption in prior versions of Open MPI, the
+ *   (starting with PRRTE v1.3, it is 2.0.0).
+ * - As was an unstated assumption in prior versions of PRRTE, the
  *   unversioned versions of struct names (both in the MCA base and in
  *   individual framework bases) are intended for components who want
  *   to be forward source-compatible.  That is, the unversioned struct
  *   name always represents the most recent interface version.  If you
  *   need to use an older version, you can explicitly use that older
- *   struct version name.  Please note, however, the Open MPI
+ *   struct version name.  Please note, however, the PRRTE
  *   developers may not generally provide older versions of framework
  *   interface structs unless they know if someone outside of the Open
  *   MPI community needs it.
@@ -65,7 +65,7 @@
  *   are major changes coming in the v1.3 series, and does not expect to
  *   be able to use his v1.2 DSO binaries in v1.3.  As such, we are
  *   breaking backwards binary compatibility in v1.3: there is no
- *   possibility of loading an MCA v1.0 binary component in Open MPI
+ *   possibility of loading an MCA v1.0 binary component in PRRTE
  *   v1.3 or beyond (source compatibility is much easier -- the binary
  *   "refuse to load MCA components <v2.0.0" policy is enforced in
  *   mca_base_component_find.c).
@@ -269,7 +269,7 @@ enum {
      * work properly the component must always be built statically.
      *
      * Enforecement of this flag is left to the individual frameworks
-     * so as to limit its use. See discussion from the Open MPI
+     * so as to limit its use. See discussion from the PRRTE
      * face-to-face meeting Jan. 2017 */
     PRRTE_MCA_BASE_COMPONENT_FLAG_REQUIRED = 1,
 };

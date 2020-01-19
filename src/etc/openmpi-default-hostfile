@@ -9,14 +9,14 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
-# This is the default hostfile for Open MPI.  Notice that it does not
+# This is the default hostfile for PRRTE.  Notice that it does not
 # contain any hosts (not even localhost).  This file should only
 # contain hosts if a system administrator wants users to always have
 # the same set of default hosts, and is not using a batch scheduler
@@ -26,7 +26,7 @@
 # environments (e.g., running in a job under a job scheduler, such as
 # SLURM or PBS / Torque).
 #
-# If you are primarily interested in running Open MPI on one node, you
+# If you are primarily interested in running PRRTE on one node, you
 # should *not* simply list "localhost" in here (contrary to prior MPI
 # implementations, such as LAM/MPI).  A localhost-only node list is
 # created by the RAS component named "localhost" if no other RAS

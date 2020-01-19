@@ -14,7 +14,7 @@
  * Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2015-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2018      Intel, Inc.  All rights reserved.
@@ -84,6 +84,7 @@ void prrte_info_do_params(bool want_all_in, bool want_internal)
     bool found;
     int i;
     bool want_all = false;
+    prrte_value_t *pval;
 
     prrte_info_components_open();
 
@@ -95,8 +96,8 @@ void prrte_info_do_params(bool want_all_in, bool want_internal)
          */
         count = prrte_cmd_line_get_ninsts(prrte_info_cmd_line, "param");
         for (i = 0; i < count; ++i) {
-            type = prrte_cmd_line_get_param(prrte_info_cmd_line, "param", (int)i, 0);
-            if (0 == strcmp(prrte_info_type_all, type)) {
+            pval = prrte_cmd_line_get_param(prrte_info_cmd_line, "param", (int)i, 0);
+            if (0 == strcmp(prrte_info_type_all, pval->data.string)) {
                 want_all = true;
                 break;
             }
@@ -113,8 +114,10 @@ void prrte_info_do_params(bool want_all_in, bool want_internal)
         }
     } else {
         for (i = 0; i < count; ++i) {
-            type = prrte_cmd_line_get_param(prrte_info_cmd_line, "param", (int)i, 0);
-            component = prrte_cmd_line_get_param(prrte_info_cmd_line, "param", (int)i, 1);
+            pval = prrte_cmd_line_get_param(prrte_info_cmd_line, "param", (int)i, 0);
+            type = pval->data.string;
+            pval = prrte_cmd_line_get_param(prrte_info_cmd_line, "param", (int)i, 1);
+            component = pval->data.string;
 
             for (found = false, i = 0; i < mca_types.size; ++i) {
                 if (NULL == (str = (char *)prrte_pointer_array_get_item(&mca_types, i))) {
@@ -127,7 +130,7 @@ void prrte_info_do_params(bool want_all_in, bool want_internal)
             }
 
             if (!found) {
-                char *usage = prrte_cmd_line_get_usage_msg(prrte_info_cmd_line);
+                char *usage = prrte_cmd_line_get_usage_msg(prrte_info_cmd_line, false);
                 prrte_show_help("help-pinfo.txt", "not-found", true, type);
                 free(usage);
                 exit(1);
@@ -218,11 +221,13 @@ void prrte_info_do_path(bool want_all, prrte_cmd_line_t *cmd_line)
 {
     int i, count;
     char *scope;
+    prrte_value_t *pval;
 
     /* Check bozo case */
     count = prrte_cmd_line_get_ninsts(cmd_line, "path");
     for (i = 0; i < count; ++i) {
-        scope = prrte_cmd_line_get_param(cmd_line, "path", i, 0);
+        pval = prrte_cmd_line_get_param(cmd_line, "path", i, 0);
+        scope = pval->data.string;
         if (0 == strcmp("all", scope)) {
             want_all = true;
             break;
@@ -251,7 +256,8 @@ void prrte_info_do_path(bool want_all, prrte_cmd_line_t *cmd_line)
     } else {
         count = prrte_cmd_line_get_ninsts(cmd_line, "path");
         for (i = 0; i < count; ++i) {
-            scope = prrte_cmd_line_get_param(cmd_line, "path", i, 0);
+            pval = prrte_cmd_line_get_param(cmd_line, "path", i, 0);
+            scope = pval->data.string;
 
             if (0 == strcmp(prrte_info_path_prefix, scope)) {
                 prrte_info_show_path(prrte_info_path_prefix, prrte_install_dirs.prefix);
@@ -288,7 +294,7 @@ void prrte_info_do_path(bool want_all, prrte_cmd_line_t *cmd_line)
             } else if (0 == strcmp(prrte_info_path_pkgincludedir, scope)) {
                 prrte_info_show_path(prrte_info_path_pkgincludedir, prrte_install_dirs.prrteincludedir);
             } else {
-                char *usage = prrte_cmd_line_get_usage_msg(cmd_line);
+                char *usage = prrte_cmd_line_get_usage_msg(cmd_line, false);
                 prrte_show_help("help-pinfo.txt", "usage", true, usage);
                 free(usage);
                 exit(1);
@@ -340,7 +346,6 @@ void prrte_info_do_config(bool want_all)
 {
     char *heterogeneous;
     char *debug;
-    char *threads;
     char *have_dl;
     char *prrterun_prefix_by_default;
     char *symbol_visibility;
@@ -351,10 +356,6 @@ void prrte_info_do_config(bool want_all)
     have_dl = PRRTE_HAVE_DL_SUPPORT ? "yes" : "no";
     prrterun_prefix_by_default = PRRTE_WANT_PRRTE_PREFIX_BY_DEFAULT ? "yes" : "no";
     symbol_visibility = PRRTE_C_HAVE_VISIBILITY ? "yes" : "no";
-
-    /* setup strings that require allocation */
-    prrte_asprintf(&threads, "%s (PRRTE: yes, PRRTE progress: yes, Event lib: yes)",
-             "posix");
 
     /* output values */
     prrte_info_out("Configured by", "config:user", PRRTE_CONFIGURE_USER);
@@ -368,8 +369,8 @@ void prrte_info_do_config(bool want_all)
 
     prrte_info_out("C compiler", "compiler:c:command", PRRTE_CC);
     prrte_info_out("C compiler absolute", "compiler:c:absolute", PRRTE_CC_ABSOLUTE);
-    prrte_info_out("C compiler family name", "compiler:c:familyname", _STRINGIFY(PRRTE_BUILD_PLATFORM_COMPILER_FAMILYNAME));
-    prrte_info_out("C compiler version", "compiler:c:version", _STRINGIFY(PRRTE_BUILD_PLATFORM_COMPILER_VERSION_STR));
+    prrte_info_out("C compiler family name", "compiler:c:familyname", _STRINGIFY(PLATFORM_COMPILER_FAMILYNAME));
+    prrte_info_out("C compiler version", "compiler:c:version", _STRINGIFY(PLATFORM_COMPILER_VERSION_STR));
 
     if (want_all) {
         prrte_info_out_int("C char size", "compiler:c:sizeof:char", sizeof(char));
@@ -394,7 +395,7 @@ void prrte_info_do_config(bool want_all)
         prrte_info_out_int("C double align", "compiler:c:align:double", PRRTE_ALIGNMENT_DOUBLE);
     }
 
-    prrte_info_out("Thread support", "option:threads", threads);
+    prrte_info_out("Thread support", "option:threads", "posix");
 
     if (want_all) {
 
@@ -410,12 +411,11 @@ void prrte_info_do_config(bool want_all)
         prrte_info_out("Wrapper extra LIBS", "option:wrapper:extra_libs",
                       PRRTE_WRAPPER_EXTRA_LIBS);
     }
-    free(threads);
 
     prrte_info_out("Internal debug support", "option:debug", debug);
     prrte_info_out("dl support", "option:dlopen", have_dl);
     prrte_info_out("Heterogeneous support", "options:heterogeneous", heterogeneous);
-    prrte_info_out("prrterun default --prefix", "prrterun:prefix_by_default",
+    prrte_info_out("prun default --prefix", "prrterun:prefix_by_default",
                   prrterun_prefix_by_default);
     prrte_info_out("Symbol vis. support", "options:visibility", symbol_visibility);
 

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -104,7 +104,7 @@ int prrte_hwloc_base_register(void)
     prrte_hwloc_base_mbfa = PRRTE_HWLOC_BASE_MBFA_WARN;
     prrte_mca_base_var_enum_create("hwloc memory bind failure action", hwloc_failure_action, &new_enum);
     ret = prrte_mca_base_var_register("prrte", "hwloc", "base", "mem_bind_failure_action",
-                                "What Open MPI will do if it explicitly tries to bind memory to a specific NUMA location, and fails.  Note that this is a different case than the general allocation policy described by hwloc_base_alloc_policy.  A value of \"silent\" means that Open MPI will proceed without comment. A value of \"warn\" means that Open MPI will warn the first time this happens, but allow the job to continue (possibly with degraded performance).  A value of \"error\" means that Open MPI will abort the job if this happens.",
+                                "What PRRTE will do if it explicitly tries to bind memory to a specific NUMA location, and fails.  Note that this is a different case than the general allocation policy described by hwloc_base_alloc_policy.  A value of \"silent\" means that PRRTE will proceed without comment. A value of \"warn\" means that PRRTE will warn the first time this happens, but allow the job to continue (possibly with degraded performance).  A value of \"error\" means that PRRTE will abort the job if this happens.",
                                 PRRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, 0, PRRTE_INFO_LVL_9,
                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_base_mbfa);
     PRRTE_RELEASE(new_enum);

@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,9 +23,9 @@
  */
 /** @file:
  *
- * The OpenRTE Group Communications
+ * The PRRTE Group Communications
  *
- * The OpenRTE Group Comm framework provides communication services that
+ * The PRRTE Group Comm framework provides communication services that
  * span entire jobs or collections of processes. It is not intended to be
  * used for point-to-point communications (the RML does that), nor should
  * it be viewed as a high-performance communication channel for large-scale

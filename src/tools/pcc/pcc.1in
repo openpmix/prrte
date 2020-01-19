@@ -3,14 +3,14 @@
 .\" and released under the BSD license
 .TH OPAL_WRAPPER 1 "#OPAL_DATE#" "#PACKAGE_VERSION#" "#PACKAGE_NAME#"
 .SH NAME
-opal_wrapper - Back-end Open MPI wrapper command
+opal_wrapper - Back-end PRRTE wrapper command
 .SH SYNOPSIS
 .B opal_wrapper [options]
 .SH DESCRIPTION
 .PP
 .B opal_wrapper
 is not meant to be called directly by end users.  It is automatically
-invoked as the back-end by the Open MPI wrapper commands such as:
+invoked as the back-end by the PRRTE wrapper commands such as:
 .BR mpicc ,
 .BR mpiCC ,
 .BR mpic++ ,
@@ -21,7 +21,7 @@ and
 and
 .BR mpif90 ).
 .PP
-Some Open MPI installations may have additional wrapper commands,
+Some PRRTE installations may have additional wrapper commands,
 and/or have renamed the wrapper compilers listed above to avoid
 executable name conflicts with other MPI implementations.  Hence, you
 may also have wrapper compilers installed including the following
@@ -46,7 +46,7 @@ and
 .\"    See Also Section
 .\" **************************
 .SH SEE ALSO
-The following may exist depending on your particular Open MPI
+The following may exist depending on your particular PRRTE
 installation:
 .BR mpicc (1),
 .BR mpiCC (1),
@@ -68,7 +68,7 @@ and the website at
 .\"    Authors Section
 .\" **************************
 .SH AUTHORS
-The Open MPI maintainers -- see
+The PRRTE maintainers -- see
 .I http://www.openmpi.org/
 or the file
 .IR AUTHORS .

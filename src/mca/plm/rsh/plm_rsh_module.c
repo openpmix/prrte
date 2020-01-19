@@ -92,6 +92,7 @@
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/rml/base/rml_contact.h"
+#include "src/mca/schizo/schizo.h"
 #include "src/mca/state/state.h"
 
 #include "src/mca/plm/plm.h"
@@ -341,8 +342,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
     char *orted_cmd, *orted_prefix, *final_cmd;
     int orted_index;
     int rc;
-    int i, j;
-    bool found;
+    int i;
     char *lib_base=NULL, *bin_base=NULL;
     char *prrte_prefix = getenv("PRRTE_PREFIX");
     char* full_orted_cmd = NULL;
@@ -622,7 +622,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
                                            proc_vpid_index);
 
     /* ensure that only the ssh plm is selected on the remote daemon */
-    prrte_argv_append(&argc, &argv, "-"PRRTE_MCA_CMD_LINE_ID);
+    prrte_argv_append(&argc, &argv, "--prtemca");
     prrte_argv_append(&argc, &argv, "plm");
     prrte_argv_append(&argc, &argv, "rsh");
 
@@ -631,7 +631,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
     if (!prrte_plm_rsh_component.no_tree_spawn) {
         prrte_argv_append(&argc, &argv, "--tree-spawn");
         prrte_oob_base_get_addr(&param);
-        prrte_argv_append(&argc, &argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(&argc, &argv, "--prtemca");
         prrte_argv_append(&argc, &argv, "prrte_parent_uri");
         prrte_argv_append(&argc, &argv, param);
         free(param);
@@ -642,44 +642,15 @@ static int setup_launch(int *argcptr, char ***argvptr,
         /* now check our local environment for MCA params - add them
          * only if they aren't already present
          */
-        for (i = 0; NULL != environ[i]; ++i) {
-            if (0 == strncmp(PRRTE_MCA_PREFIX"mca_base_env_list", environ[i],
-                             strlen(PRRTE_MCA_PREFIX"mca_base_env_list"))) {
-                /* ignore this one */
-                continue;
-            }
-            if (0 == strncmp(PRRTE_MCA_PREFIX, environ[i], 9)) {
-                /* check for duplicate in app->env - this
-                 * would have been placed there by the
-                 * cmd line processor. By convention, we
-                 * always let the cmd line override the
-                 * environment
-                 */
-                param = strdup(&environ[i][9]);
-                value = strchr(param, '=');
-                *value = '\0';
-                value++;
-                found = false;
-                /* see if this param exists on the cmd line */
-                for (j=0; NULL != argv[j]; j++) {
-                    if (0 == strcmp(param, argv[j])) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    /* add it */
-                    prrte_argv_append(&argc, &argv, "-"PRRTE_MCA_CMD_LINE_ID);
-                    prrte_argv_append(&argc, &argv, param);
-                    prrte_argv_append(&argc, &argv, value);
-                }
-                free(param);
-            }
+        if (PRRTE_SUCCESS != (rc = prrte_schizo.parse_env(NULL, NULL, environ, &argv))) {
+            prrte_argv_free(argv);
+            return rc;
         }
+        argc = prrte_argv_count(argv);
     }
 
     /* protect the params */
-    prrte_mca_base_cmd_line_wrap_args(argv);
+    prrte_schizo.wrap_args(argv);
 
     value = prrte_argv_join(argv, ' ');
     if (sysconf(_SC_ARG_MAX) < (int)strlen(value)) {
@@ -1124,11 +1095,11 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * After a discussion between Ralph & Jeff, we concluded that we
      * really are handling the prefix dir option incorrectly. It currently
      * is associated with an app_context, yet it really refers to the
-     * location where OpenRTE/Open MPI is installed on a NODE. Fixing
+     * location where PRRTE is installed on a NODE. Fixing
      * this right now would involve significant change to prrterun as well
      * as elsewhere, so we will intentionally leave this incorrect at this
      * point. The error, however, is identical to that seen in all prior
-     * releases of OpenRTE/Open MPI, so our behavior is no worse than before.
+     * releases of PRRTE, so our behavior is no worse than before.
      *
      * A note to fix this, along with ideas on how to do so, has been filed
      * on the project's Trac system under "feature enhancement".

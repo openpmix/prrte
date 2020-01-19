@@ -1,24 +1,24 @@
 # -*- text -*-
 #
 # Copyright (c) 2009 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
-# This is the US/English general help file for Open MPI.
+# This is the US/English general help file for PRRTE.
 #
 [stacktrace signal override]
-Open MPI was inserting a signal handler for signal %d but noticed
-that there is already a non-default handler installed.  Open MPI's
+PRRTE was inserting a signal handler for signal %d but noticed
+that there is already a non-default handler installed.  PRRTE's
 handler was therefore not installed; your job will continue.  This
-warning message will only be displayed once, even if Open MPI
+warning message will only be displayed once, even if PRRTE
 encounters this situation again.
 
 To avoid displaying this warning message, you can either not install
-the error handler for signal %d or you can have Open MPI not try to
+the error handler for signal %d or you can have PRRTE not try to
 install its own signal handler for this signal by setting the
 "prrte_signals" MCA parameter.
 
@@ -26,7 +26,7 @@ install its own signal handler for this signal by setting the
   Current prrte_signal value: %s
 #
 [stacktrace bad signal]
-Open MPI was inserting a signal handler but was given an invalid
+PRRTE was inserting a signal handler but was given an invalid
 signal number:
 
   Signal string: %s
@@ -36,7 +36,7 @@ The given value must be an integer within the signal number
 range. Please correct the value and try again.
 #
 [malformed net_private_ipv4]
-Open MPI has detected at least one malformed IP address or netmask in
+PRRTE has detected at least one malformed IP address or netmask in
 the value of the prrte_net_private_ipv4 MCA parameter.  The
 prrte_net_private_ipv4 MCA parameter accepts a semicolon-delimited list
 of Classless Inter-Domain Routing (CIDR) notation specifications, each
@@ -47,7 +47,7 @@ of the form <ipaddress>/<mask>.  For example:
 The first detected malformed entry was %s.
 #
 [invalid-net-mask]
-Open MPI has detected a malformed IPv4 address or netmask:
+PRRTE has detected a malformed IPv4 address or netmask:
 
   Value provided: %s
 
@@ -60,7 +60,7 @@ Routing (CIDR) notation specifications. For example:
      169.254.0.0/16
 #
 [malformed-uri]
-Open MPI has detected a malformed URI:
+PRRTE has detected a malformed URI:
 
   URI:  %s
 
@@ -74,7 +74,7 @@ When creating a URI, all files must be specified in absolute paths:
 Please update your application to provide the full path to the file.
 #
 [sys-limit-failed]
-Per request, Open MPI attempted to set a system resource
+Per request, PRRTE attempted to set a system resource
 limit to a given value:
 
   Resource:  %s
@@ -86,7 +86,7 @@ value. Please check the system or remove the request and try
 again.
 #
 [sys-limit-unrecognized]
-Open MPI received a request to set a system resource limit.
+PRRTE received a request to set a system resource limit.
 Sadly, OMPI does not recognize or currently support the specified
 resource:
 

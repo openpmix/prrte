@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -19,7 +19,7 @@
 #
 #
 [multi-apps-and-zero-np]
-Open MPI found multiple applications to be launched, and at least one
+PRRTE found multiple applications to be launched, and at least one
 that failed to specify the number of processes to execute.  When
 specifying multiple applications, you must specify how many processes
 of each to launch via the -np argument.
@@ -29,7 +29,7 @@ No PCI locality information could be found on at least one node. Please, upgrade
 
   Node: %s
 
-Open MPI will map the application by default (BYSLOT).
+PRRTE will map the application by default (BYSLOT).
 #
 [prrte-rmaps-mindist:several-devices]
 On at least one node, more than one of the specified device was discovered.
@@ -43,7 +43,7 @@ e.g. --map-by dist -mca rmaps_dist_device mlx4_0.
   #Devices: %d
   Node: %s
 
-Open MPI will map the application by default (BYSLOT).
+PRRTE will map the application by default (BYSLOT).
 #
 [prrte-rmaps-mindist:device-not-found]
 The specified device type cannot be found on at least one node.
@@ -51,4 +51,4 @@ The specified device type cannot be found on at least one node.
   Device: %s
   Node: %s
 
-Open MPI will map the application by default (BYSLOT).
+PRRTE will map the application by default (BYSLOT).

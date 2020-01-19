@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,7 +25,7 @@
  * @file
  *
  * The prrte_list_t interface is used to provide a generic
- * doubly-linked list container for Open MPI.  It was inspired by (but
+ * doubly-linked list container for PRRTE.  It was inspired by (but
  * is slightly different than) the Stantard Template Library (STL)
  * std::list class.  One notable difference from std::list is that
  * when an prrte_list_t is destroyed, all of the prrte_list_item_t
@@ -103,7 +103,7 @@ PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_list_item_t);
 struct prrte_list_item_t
 {
     prrte_object_t super;
-    /**< Generic parent class for all Open MPI objects */
+    /**< Generic parent class for all PRRTE objects */
     volatile struct prrte_list_item_t * volatile prrte_list_next;
     /**< Pointer to next list item */
     volatile struct prrte_list_item_t * volatile prrte_list_prev;
@@ -152,7 +152,7 @@ typedef struct prrte_list_item_t prrte_list_item_t;
 struct prrte_list_t
 {
     prrte_object_t       super;
-    /**< Generic parent class for all Open MPI objects */
+    /**< Generic parent class for all PRRTE objects */
     prrte_list_item_t    prrte_list_sentinel;
     /**< Head and tail item of the list */
     volatile size_t     prrte_list_length;
@@ -468,7 +468,7 @@ static inline size_t prrte_list_get_size(prrte_list_t* list)
  * caller -- they are responsible for PRRTE_RELEASE()'ing it.
  *
  * If debugging is enabled (specifically, if --enable-debug was used
- * to configure Open MPI), this is an O(N) operation because it checks
+ * to configure PRRTE), this is an O(N) operation because it checks
  * to see if the item is actually in the list first.
  *
  * This is an inlined function in compilers that support inlining, so

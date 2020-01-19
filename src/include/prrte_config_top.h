@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -9,7 +9,7 @@
  *
  * This file is included at the top of prrte_config.h, and is
  * therefore a) before all the #define's that were output from
- * configure, and b) included in most/all files in Open MPI.
+ * configure, and b) included in most/all files in PRRTE.
  *
  * Since this file is *only* ever included by prrte_config.h, and
  * prrte_config.h already has #ifndef/#endif protection, there is no
@@ -23,7 +23,7 @@
 /* The only purpose of this file is to undef the PACKAGE_<foo> macros
    that are put in by autoconf/automake projects.  Specifically, if
    you include a .h file from another project that defines these
-   macros (e.g., gmp.h) and then include OMPI/PRRTE/PRRTE's config.h,
+   macros (e.g., gmp.h) and then include OMPI/PRRTE's config.h,
    you'll get a preprocessor conflict.  So put these undef's here to
    protect us from other package's PACKAGE_<foo> macros.
 

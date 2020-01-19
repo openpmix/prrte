@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -62,7 +62,13 @@ typedef int (*prrte_schizo_base_module_define_cli_fn_t)(prrte_cmd_line_t *cli);
  * this module is included in the base array of personalities, or is
  * automatically recognizable! */
 typedef int (*prrte_schizo_base_module_parse_cli_fn_t)(int argc, int start,
-                                                      char **argv);
+                                                      char **argv,
+                                                      char *personality,
+                                                      char ***target);
+
+/* parse the environment for proxy cmd line entries */
+typedef void (*prrte_schizo_base_module_parse_proxy_cli_fn_t)(prrte_cmd_line_t *cmd_line,
+                                                              char ***argv);
 
 /* parse the environment of the
  * tool to extract any personality-specific envars that need to be
@@ -71,6 +77,12 @@ typedef int (*prrte_schizo_base_module_parse_env_fn_t)(char *path,
                                                       prrte_cmd_line_t *cmd_line,
                                                       char **srcenv,
                                                       char ***dstenv);
+
+/* check if running as root is allowed in this environment */
+typedef int (*prrte_schizo_base_module_allow_run_as_root_fn_t)(prrte_cmd_line_t *cmd_line);
+
+/* wrap cmd line args */
+typedef void (*prrte_schizo_base_module_wrap_args_fn_t)(char **args);
 
 /* do whatever preparation work
  * is required to setup the app for execution. This is intended to be
@@ -111,7 +123,10 @@ typedef struct {
     prrte_schizo_base_module_init_fn_t                   init;
     prrte_schizo_base_module_define_cli_fn_t             define_cli;
     prrte_schizo_base_module_parse_cli_fn_t              parse_cli;
+    prrte_schizo_base_module_parse_proxy_cli_fn_t        parse_proxy_cli;
     prrte_schizo_base_module_parse_env_fn_t              parse_env;
+    prrte_schizo_base_module_allow_run_as_root_fn_t      allow_run_as_root;
+    prrte_schizo_base_module_wrap_args_fn_t              wrap_args;
     prrte_schizo_base_module_setup_app_fn_t              setup_app;
     prrte_schizo_base_module_setup_fork_fn_t             setup_fork;
     prrte_schizo_base_module_setup_child_fn_t            setup_child;

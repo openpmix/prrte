@@ -2,7 +2,7 @@
  * Copyright (c) 2011      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  *
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -13,7 +13,7 @@
  * @file
  *
  * The prrte_tree_t interface is used to provide a generic
- * tree list container for Open MPI.  It was inspired by the prrte_list_t
+ * tree list container for PRRTE.  It was inspired by the prrte_list_t
  * interface but instead of organizing items in a doubly-linked list
  * fashion, we order them in a finite tree structure.
  *
@@ -93,7 +93,7 @@ PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_tree_item_t);
  */
 typedef struct prrte_tree_item_t
 {
-    /** Generic parent class for all Open MPI objects */
+    /** Generic parent class for all PRRTE objects */
     prrte_object_t super;
     /** Pointer to the tree this item belongs to */
     struct prrte_tree_t *prrte_tree_container;
@@ -183,7 +183,7 @@ typedef void *(*prrte_tree_get_key_fn_t)(prrte_tree_item_t *item);
  */
 typedef struct prrte_tree_t
 {
-    /** Generic parent class for all Open MPI objects */
+    /** Generic parent class for all PRRTE objects */
     prrte_object_t       super;
     /** Guard item of the tree that child points to root */
     prrte_tree_item_t    prrte_tree_sentinel;

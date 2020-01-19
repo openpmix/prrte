@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2006-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,8 +50,8 @@ struct prrte_install_dirs_t {
        ompi{data,lib,includedir}, which is always set to
        {datadir,libdir,includedir}/openmpi. This will keep us from
        having help files in prefix/share/open-rte when building
-       without Open MPI, but in prefix/share/openmpi when building
-       with Open MPI.
+       without PRRTE, but in prefix/share/openmpi when building
+       with PRRTE.
 
        Note that these field names match macros set by configure that
        are used in Makefile.am files.  E.g., project help files are

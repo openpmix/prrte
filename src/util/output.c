@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
@@ -996,7 +996,7 @@ static int output(int output_id, const char *format, va_list arglist)
                     char *out = buffer;
                     memset(buffer, 0, BUFSIZ);
                     snprintf(buffer, BUFSIZ - 1,
-                             "[WARNING: %d lines lost because the Open MPI process session directory did\n not exist when prrte_output() was invoked]\n",
+                             "[WARNING: %d lines lost because the PRRTE process session directory did\n not exist when prrte_output() was invoked]\n",
                              ldi->ldi_file_num_lines_lost);
                    write(ldi->ldi_fd, buffer, (int)strlen(buffer));
                     ldi->ldi_file_num_lines_lost = 0;

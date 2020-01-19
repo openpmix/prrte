@@ -13,7 +13,7 @@
 # Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2011      Los Alamos National Security, LLC.
 #                         All rights reserved.
-# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -31,9 +31,9 @@ slots that were requested by the application:
 Either request fewer slots for your application, or make more slots
 available for use.
 
-A "slot" is the Open MPI term for an allocatable unit where we can
+A "slot" is the PRRTE term for an allocatable unit where we can
 launch a process.  The number of slots available are defined by the
-environment in which Open MPI processes are run:
+environment in which PRRTE processes are run:
 
   1. Hostfile, via "slots=N" clauses (N defaults to number of
      processor cores if not provided)
@@ -41,9 +41,9 @@ environment in which Open MPI processes are run:
      hostname (N defaults to 1 if not provided)
   3. Resource manager (e.g., SLURM, PBS/Torque, LSF, etc.)
   4. If none of a hostfile, the --host command line parameter, or an
-     RM is present, Open MPI defaults to the number of processor cores
+     RM is present, PRRTE defaults to the number of processor cores
 
-In all the above cases, if you want Open MPI to default to the number
+In all the above cases, if you want PRRTE to default to the number
 of hardware threads instead of the number of processor cores, use the
 --use-hwthread-cpus option.
 
@@ -182,7 +182,7 @@ support binding processes to cpus.
 
 Node: %s
 
-Open MPI uses the "hwloc" library to perform process and memory
+PRRTE uses the "hwloc" library to perform process and memory
 binding. This error message means that hwloc has indicated that
 processor binding support is not available on this machine.
 
@@ -192,8 +192,8 @@ the OS does not expose this functionality).
 On Linux, lack of the functionality can mean that you are on a
 platform where processor and memory affinity is not supported in Linux
 itself, or that hwloc was built without NUMA and/or processor affinity
-support. When building hwloc (which, depending on your Open MPI
-installation, may be embedded in Open MPI itself), it is important to
+support. When building hwloc (which, depending on your PRRTE
+installation, may be embedded in PRRTE itself), it is important to
 have the libnuma header and library files available. Different linux
 distributions package these files under different names; look for
 packages with the word "numa" in them. You may also need a developer
@@ -213,7 +213,7 @@ support binding memory to the process location.
 
   Node:  %s
 
-Open MPI uses the "hwloc" library to perform process and memory
+PRRTE uses the "hwloc" library to perform process and memory
 binding. This error message means that hwloc has indicated that
 processor binding support is not available on this machine.
 
@@ -223,8 +223,8 @@ the OS does not expose this functionality).
 On Linux, lack of the functionality can mean that you are on a
 platform where processor and memory affinity is not supported in Linux
 itself, or that hwloc was built without NUMA and/or processor affinity
-support. When building hwloc (which, depending on your Open MPI
-installation, may be embedded in Open MPI itself), it is important to
+support. When building hwloc (which, depending on your PRRTE
+installation, may be embedded in PRRTE itself), it is important to
 have the libnuma header and library files available. Different linux
 distributions package these files under different names; look for
 packages with the word "numa" in them. You may also need a developer
@@ -247,7 +247,7 @@ support binding memory to the process location.
 
   Node:  %s
 
-Open MPI uses the "hwloc" library to perform process and memory
+PRRTE uses the "hwloc" library to perform process and memory
 binding. This error message means that hwloc has indicated that
 processor binding support is not available on this machine.
 
@@ -257,8 +257,8 @@ the OS does not expose this functionality).
 On Linux, lack of the functionality can mean that you are on a
 platform where processor and memory affinity is not supported in Linux
 itself, or that hwloc was built without NUMA and/or processor affinity
-support. When building hwloc (which, depending on your Open MPI
-installation, may be embedded in Open MPI itself), it is important to
+support. When building hwloc (which, depending on your PRRTE
+installation, may be embedded in PRRTE itself), it is important to
 have the libnuma header and library files available. Different linux
 distributions package these files under different names; look for
 packages with the word "numa" in them. You may also need a developer
@@ -271,7 +271,7 @@ platform. If the OS/platform does actually support processor / memory
 affinity, then you should contact the hwloc maintainers:
 https://github.com/open-mpi/hwloc.
 
-The provided memory binding policy requires that Open MPI abort the
+The provided memory binding policy requires that PRRTE abort the
 job at this time.
 #
 [rmaps:no-bindable-objects]
@@ -328,7 +328,7 @@ been deprecated and replaced as follows:
     Deprecated:  %s
     Replacement: %s
 
-The deprecated forms *will* disappear in a future version of Open MPI.
+The deprecated forms *will* disappear in a future version of PRRTE.
 Please update to the new syntax.
 #
 [mismatch-binding]

@@ -43,7 +43,6 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/prted/prted_submit.h"
 #include "src/util/name_fns.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
@@ -51,22 +50,287 @@
 
 #include "src/mca/schizo/base/base.h"
 
+static int define_cli(prrte_cmd_line_t *cli);
+static int parse_cli(int argc, int start, char **argv,
+                     char *personality, char ***target);
+static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
+                            char ***argv);
 static int parse_env(char *path,
                      prrte_cmd_line_t *cmd_line,
                      char **srcenv,
                      char ***dstenv);
-static int setup_fork(prrte_job_t *jdata,
-                      prrte_app_context_t *context);
-static int setup_child(prrte_job_t *jobdat,
-                       prrte_proc_t *child,
-                       prrte_app_context_t *app,
-                       char ***env);
+static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 
 prrte_schizo_base_module_t prrte_schizo_ompi_module = {
+    .define_cli = define_cli,
+    .parse_cli = parse_cli,
+    .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
-    .setup_fork = setup_fork,
-    .setup_child = setup_child
+    .allow_run_as_root = allow_run_as_root
 };
+
+static char *frameworks[] = {
+    "allocator",
+    "backtrace",
+    "btl",
+    "compress",
+    "crs",
+    "dl",
+    "event",
+    "hwloc",
+    "if",
+    "installdirs",
+    "memchecker",
+    "memcpy",
+    "memory",
+    "mpool",
+    "patcher",
+    "pmix",
+    "pstat",
+    "rcache",
+    "reachable",
+    "shmem",
+    "timer",
+    "bml",
+    "coll",
+    "crcp",
+    "fbtl",
+    "fcoll",
+    "fs",
+    "hook",
+    "io",
+    "mtl",
+    "op",
+    "osc",
+    "pml",
+    "sharedfp",
+    "topo",
+    "vprotocol"
+};
+
+
+/* Cmd-line options common to PRRTE master/daemons/tools */
+static prrte_cmd_line_init_t cmd_line_init[] = {
+
+    /* setup MCA parameters */
+    { '\0', "omca", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Pass context-specific OMPI MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "gomca", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Pass global OMPI MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "am", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Aggregate OMPI MCA parameter set file list",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "tune", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Profile options file list for OMPI applications",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    /* Debug options */
+    { '\0', "debug-daemons", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Debug daemons",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { 'd', "debug-devel", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Enable debugging of PRRTE",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "debug-daemons-file", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Enable debugging of any PRRTE daemons used by this application, storing output in files",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "leave-session-attached", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Do not discard stdout/stderr of remote PRTE daemons",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0',  "test-suicide", 1, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Suicide instead of clean abort after delay",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+
+
+    /* DVM-specific options */
+    { '\0', "prefix", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Prefix to be used to look for PRRTE executables",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "noprefix", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Disable automatic --prefix behavior",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "daemonize", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Daemonize the DVM daemons into the background",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "set-sid", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Direct the DVM daemons to separate from the current session",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    /* Specify the launch agent to be used */
+    { '\0', "launch-agent", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Name of daemon executable used to start processes on remote nodes (default: prted)",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    /* maximum size of VM - typically used to subdivide an allocation */
+    { '\0', "max-vm-size", 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Number of daemons to start",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    /* uri of PMIx publish/lookup server, or at least where to get it */
+    { '\0', "ompi-server", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Specify the URI of the publish/lookup server, or the name of the file (specified as file:filename) that contains that info",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    /* fwd mpirun port */
+    { '\0', "fwd-mpirun-port", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Forward mpirun port to compute node daemons so all will use it",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    /* maximum size of VM - typically used to subdivide an allocation */
+    { '\0', "max-vm-size", 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Maximum size of VM",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+
+
+    /* End of list */
+    { '\0', NULL, 0, PRRTE_CMD_LINE_TYPE_NULL, NULL }
+};
+
+static int define_cli(prrte_cmd_line_t *cli)
+{
+    int rc, i;
+    bool takeus = false;
+
+    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                        "%s schizo:ompi: define_cli",
+                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+
+    /* protect against bozo error */
+    if (NULL == cli) {
+        return PRRTE_ERR_BAD_PARAM;
+    }
+
+    /* if they gave us a list of personalities,
+     * see if we are included */
+    if (NULL != prrte_schizo_base.personalities) {
+        for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
+            if (0 == strcmp(prrte_schizo_base.personalities[i], "ompi")) {
+                takeus = true;
+                break;
+            }
+        }
+        if (!takeus) {
+            return PRRTE_ERR_TAKE_NEXT_OPTION;
+        }
+    }
+
+    rc = prrte_cmd_line_add(cli, cmd_line_init);
+    if (PRRTE_SUCCESS != rc){
+        return rc;
+    }
+
+    /* see if we were given a location where we can get
+     * the list of OMPI frameworks */
+
+    return PRRTE_SUCCESS;
+}
+
+static int parse_cli(int argc, int start, char **argv,
+                     char *personality, char ***target)
+{
+    int i, j, k;
+    bool ignore;
+    char *no_dups[] = {
+        "grpcomm",
+        "odls",
+        "rml",
+        "routed",
+        NULL
+    };
+    bool takeus = false;
+    char *ptr, *param, *p1, *p2;
+
+    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                        "%s schizo:ompi: parse_cli",
+                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+
+    /* if they gave us a list of personalities,
+     * see if we are included */
+    if (NULL != prrte_schizo_base.personalities) {
+        for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
+            if (0 == strcmp(prrte_schizo_base.personalities[i], "ompi")) {
+                takeus = true;
+                break;
+            }
+        }
+        if (!takeus) {
+            return PRRTE_ERR_TAKE_NEXT_OPTION;
+        }
+    }
+
+    for (i = 0; i < (argc-start); ++i) {
+        if (0 == strcmp("--mca", argv[i]) ||
+            0 == strcmp("--gmca", argv[i])) {
+            /* strip any quotes around the args */
+            if ('\"' == argv[i+1][0]) {
+                p1 = &argv[i+1][1];
+            } else {
+                p1 = argv[i+1];
+            }
+            if ('\"' == p1[strlen(p1)- 1]) {
+                p1[strlen(p1)-1] = '\0';
+            }
+            if ('\"' == argv[i+2][0]) {
+                p2 = &argv[i+2][1];
+            } else {
+                p2 = argv[i+2];
+            }
+            if ('\"' == p2[strlen(p2)- 1]) {
+                p1[strlen(p2)-1] = '\0';
+            }
+            /* this is a generic MCA designation, so see if the parameter it
+             * refers to belongs to one of our frameworks */
+            if (0 == strncmp("opal", p1, strlen("opal"))) {
+                /* this is a base (non-framework) parameter - we need to
+                 * convert it to the PRRTE equivalent */
+                ptr = strchr(p1, '_');
+                ++ptr;  // step over the '_'
+                if (NULL == target) {
+                    prrte_asprintf(&param, "PRRTE_MCA_prrte_%s", ptr);
+                    prrte_setenv(param, p2, true, &environ);
+                } else {
+                    prrte_asprintf(&param, "prrte_%s", ptr);
+                    prrte_argv_append_nosize(target, param);
+                }
+                free(param);
+                /* and also push it as an OMPI param in case
+                 * it has to apply over there as well */
+                prrte_asprintf(&param, "OMPI_MCA_%s", p1);
+                prrte_setenv(param, p2, true, &environ);
+                free(param);
+            } else if (0 == strncmp("orte", p1, strlen("orte"))) {
+                /* this is a base (non-framework) parameter - we need to
+                 * convert it to the PRRTE equivalent */
+                ptr = strchr(p1, '_');
+                ++ptr;  // step over the '_'
+                if (NULL == target) {
+                    prrte_asprintf(&param, "PRRTE_MCA_prrte_%s", ptr);
+                    prrte_setenv(param, p2, true, &environ);
+                } else {
+                    prrte_asprintf(&param, "prrte_%s", ptr);
+                    prrte_argv_append_nosize(target, param);
+                }
+                free(param);
+            } else if (0 == strncmp("ompi", p1, strlen("ompi"))) {
+                /* just push it into the environment - we will pick it up later */
+                ptr = strchr(p1, '_');
+                ++ptr;  // step over the '_'
+                prrte_asprintf(&param, "OMPI_MCA_prrte_%s", ptr);
+                prrte_setenv(param, p2, true, &environ);
+                free(param);
+             } else if (NULL != frameworks) {
+                for (j=0; NULL != frameworks[j]; j++) {
+                    if (0 == strncmp(p1, frameworks[j], strlen(frameworks[j]))) {
+                        /* push them into the environment, we will pick
+                         * them up later */
+                        prrte_asprintf(&param, "OMPI_MCA_%s", p1);
+                        prrte_setenv(param, p2, true, &environ);
+                        free(param);
+                    }
+                }
+            }
+            i += 2;
+        }
+    }
+    return PRRTE_SUCCESS;
+}
 
 static int parse_env(char *path,
                      prrte_cmd_line_t *cmd_line,
@@ -79,13 +343,15 @@ static int parse_env(char *path,
     char *env_set_flag;
     char **vars;
     bool takeus = false;
+    prrte_value_t *pval;
 
     prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
                         "%s schizo:ompi: parse_env",
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
 
+    /* if they gave us a list of personalities,
+     * see if we are included */
     if (NULL != prrte_schizo_base.personalities) {
-        /* see if we are included */
         for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
             if (0 == strcmp(prrte_schizo_base.personalities[i], "ompi")) {
                 takeus = true;
@@ -142,8 +408,8 @@ static int parse_env(char *path,
         }
         j = prrte_cmd_line_get_ninsts(cmd_line, "x");
         for (i = 0; i < j; ++i) {
-            param = prrte_cmd_line_get_param(cmd_line, "x", i, 0);
-
+            pval = prrte_cmd_line_get_param(cmd_line, "x", i, 0);
+            param = strdup(pval->data.string);
             if (NULL != (value = strchr(param, '='))) {
                 /* terminate the name of the param */
                 *value = '\0';
@@ -164,6 +430,7 @@ static int parse_env(char *path,
                     prrte_output(0, "Warning: could not find environment variable \"%s\"\n", param);
                 }
             }
+            free(param);
         }
     } else if (NULL != env_set_flag) {
         /* if mca_base_env_list was set, check if some of env vars were set via -x from a conf file.
@@ -206,544 +473,33 @@ static int parse_env(char *path,
     return PRRTE_SUCCESS;
 }
 
-static int setup_fork(prrte_job_t *jdata,
-                      prrte_app_context_t *app)
+static int allow_run_as_root(prrte_cmd_line_t *cmd_line)
 {
-    int i;
-    char *param, *p2, *saveptr;
-    bool oversubscribed;
-    prrte_node_t *node;
-    char **envcpy, **nps, **firstranks;
-    char *npstring, *firstrankstring;
-    char *num_app_ctx;
-    bool takeus = false;
-    bool exists;
-    prrte_app_context_t* tmp_app;
-    prrte_attribute_t *attr;
+    /* we always run last */
+    char *r1, *r2;
 
-    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
-                        "%s schizo:ompi: setup_fork",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-
-    /* if no personality was specified, then nothing to do */
-    if (NULL == jdata->personality) {
-        return PRRTE_ERR_TAKE_NEXT_OPTION;
+    if (prrte_cmd_line_is_taken(cmd_line, "allow_run_as_root")) {
+        return PRRTE_SUCCESS;
     }
 
-    if (NULL != prrte_schizo_base.personalities) {
-    /* see if we are included */
-        for (i=0; NULL != jdata->personality[i]; i++) {
-            if (0 == strcmp(jdata->personality[i], "ompi")) {
-                takeus = true;
-                break;
-            }
-        }
-        if (!takeus) {
-            return PRRTE_ERR_TAKE_NEXT_OPTION;
+    if (NULL != (r1 = getenv("OMPI_ALLOW_RUN_AS_ROOT")) &&
+        NULL != (r2 = getenv("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM"))) {
+        if (0 == strcmp(r1, "1") && 0 == strcmp(r2, "1")) {
+            return PRRTE_SUCCESS;
         }
     }
 
-    /* see if the mapper thinks we are oversubscribed */
-    oversubscribed = false;
-    if (NULL == (node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, PRRTE_PROC_MY_NAME->vpid))) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
-    }
-    if (PRRTE_FLAG_TEST(node, PRRTE_NODE_FLAG_OVERSUBSCRIBED)) {
-        oversubscribed = true;
-    }
-
-    /* setup base environment: copy the current environ and merge
-       in the app context environ */
-    if (NULL != app->env) {
-        /* manually free original context->env to avoid a memory leak */
-        char **tmp = app->env;
-        envcpy = prrte_environ_merge(prrte_launch_environ, app->env);
-        if (NULL != tmp) {
-            prrte_argv_free(tmp);
-        }
-    } else {
-        envcpy = prrte_argv_copy(prrte_launch_environ);
-    }
-    app->env = envcpy;
-
-    /* special case handling for --prefix: this is somewhat icky,
-       but at least some users do this.  :-\ It is possible that
-       when using --prefix, the user will also "-x PATH" and/or
-       "-x LD_LIBRARY_PATH", which would therefore clobber the
-       work that was done in the prior pls to ensure that we have
-       the prefix at the beginning of the PATH and
-       LD_LIBRARY_PATH.  So examine the context->env and see if we
-       find PATH or LD_LIBRARY_PATH.  If found, that means the
-       prior work was clobbered, and we need to re-prefix those
-       variables. */
-    param = NULL;
-    prrte_get_attribute(&app->attributes, PRRTE_APP_PREFIX_DIR, (void**)&param, PRRTE_STRING);
-    /* grab the parameter from the first app context because the current context does not have a prefix assigned */
-    if (NULL == param) {
-        tmp_app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, 0);
-        assert (NULL != tmp_app);
-        prrte_get_attribute(&tmp_app->attributes, PRRTE_APP_PREFIX_DIR, (void**)&param, PRRTE_STRING);
-    }
-    for (i = 0; NULL != param && NULL != app->env && NULL != app->env[i]; ++i) {
-        char *newenv;
-
-        /* Reset PATH */
-        if (0 == strncmp("PATH=", app->env[i], 5)) {
-            prrte_asprintf(&newenv, "%s/bin:%s", param, app->env[i] + 5);
-            prrte_setenv("PATH", newenv, true, &app->env);
-            free(newenv);
-        }
-
-        /* Reset LD_LIBRARY_PATH */
-        else if (0 == strncmp("LD_LIBRARY_PATH=", app->env[i], 16)) {
-            prrte_asprintf(&newenv, "%s/lib:%s", param, app->env[i] + 16);
-            prrte_setenv("LD_LIBRARY_PATH", newenv, true, &app->env);
-            free(newenv);
-        }
-    }
-    if (NULL != param) {
-        free(param);
-    }
-
-    /* pass my contact info to the local proc so we can talk */
-    prrte_setenv("OMPI_MCA_prrte_local_daemon_uri", prrte_process_info.my_daemon_uri, true, &app->env);
-
-    /* pass the hnp's contact info to the local proc in case it
-     * needs it
-     */
-    if (NULL != prrte_process_info.my_hnp_uri) {
-        prrte_setenv("OMPI_MCA_prrte_hnp_uri", prrte_process_info.my_hnp_uri, true, &app->env);
-    }
-
-    /* setup yield schedule */
-    if (oversubscribed) {
-        prrte_setenv("OMPI_MCA_mpi_oversubscribe", "1", true, &app->env);
-    } else {
-        prrte_setenv("OMPI_MCA_mpi_oversubscribe", "0", true, &app->env);
-    }
-
-    /* set the app_context number into the environment */
-    prrte_asprintf(&param, "%ld", (long)app->idx);
-    prrte_setenv("OMPI_MCA_prrte_app_num", param, true, &app->env);
-    free(param);
-
-    /* although the total_slots_alloc is the universe size, users
-     * would appreciate being given a public environmental variable
-     * that also represents this value - something MPI specific - so
-     * do that here. Also required by the ompi_attributes code!
-     *
-     * AND YES - THIS BREAKS THE ABSTRACTION BARRIER TO SOME EXTENT.
-     * We know - just live with it
-     */
-    prrte_asprintf(&param, "%ld", (long)jdata->total_slots_alloc);
-    prrte_setenv("OMPI_UNIVERSE_SIZE", param, true, &app->env);
-    free(param);
-
-    /* pass the number of nodes involved in this job */
-    prrte_asprintf(&param, "%ld", (long)(jdata->map->num_nodes));
-    prrte_setenv("OMPI_MCA_prrte_num_nodes", param, true, &app->env);
-    free(param);
-
-    /* pass a param telling the child what type and model of cpu we are on,
-     * if we know it. If hwloc has the value, use what it knows. Otherwise,
-     * see if we were explicitly given it and use that value.
-     */
-    hwloc_obj_t obj;
-    char *htmp;
-    if (NULL != prrte_hwloc_topology) {
-        obj = hwloc_get_root_obj(prrte_hwloc_topology);
-        if (NULL != (htmp = (char*)hwloc_obj_get_info_by_name(obj, "CPUType")) ||
-            NULL != (htmp = prrte_local_cpu_type)) {
-            prrte_setenv("OMPI_MCA_prrte_cpu_type", htmp, true, &app->env);
-        }
-        if (NULL != (htmp = (char*)hwloc_obj_get_info_by_name(obj, "CPUModel")) ||
-            NULL != (htmp = prrte_local_cpu_model)) {
-            prrte_setenv("OMPI_MCA_prrte_cpu_model", htmp, true, &app->env);
-        }
-    } else {
-        if (NULL != prrte_local_cpu_type) {
-            prrte_setenv("OMPI_MCA_prrte_cpu_type", prrte_local_cpu_type, true, &app->env);
-        }
-        if (NULL != prrte_local_cpu_model) {
-            prrte_setenv("OMPI_MCA_prrte_cpu_model", prrte_local_cpu_model, true, &app->env);
-        }
-    }
-
-    /* Set an info MCA param that tells the launched processes that
-     * any binding policy was applied by us (e.g., so that
-     * MPI_INIT doesn't try to bind itself)
-     */
-    if (PRRTE_BIND_TO_NONE != PRRTE_GET_BINDING_POLICY(jdata->map->binding)) {
-        prrte_setenv("OMPI_MCA_prrte_bound_at_launch", "1", true, &app->env);
-    }
-
-    /* tell the ESS to avoid the singleton component - but don't override
-     * anything that may have been provided elsewhere
-     */
-    prrte_setenv("OMPI_MCA_ess", "^singleton", false, &app->env);
-
-    /* ensure that the spawned process ignores direct launch components,
-     * but do not overrride anything we were given */
-    prrte_setenv("OMPI_MCA_pmix", "^s1,s2,cray", false, &app->env);
-
-    /* since we want to pass the name as separate components, make sure
-     * that the "name" environmental variable is cleared!
-     */
-    prrte_unsetenv("OMPI_MCA_prrte_ess_name", &app->env);
-
-    prrte_asprintf(&param, "%ld", (long)jdata->num_procs);
-    prrte_setenv("OMPI_MCA_prrte_ess_num_procs", param, true, &app->env);
-
-    /* although the num_procs is the comm_world size, users
-     * would appreciate being given a public environmental variable
-     * that also represents this value - something MPI specific - so
-     * do that here.
-     *
-     * AND YES - THIS BREAKS THE ABSTRACTION BARRIER TO SOME EXTENT.
-     * We know - just live with it
-     */
-    prrte_setenv("OMPI_COMM_WORLD_SIZE", param, true, &app->env);
-    free(param);
-
-    /* users would appreciate being given a public environmental variable
-     * that also represents this value - something MPI specific - so
-     * do that here.
-     *
-     * AND YES - THIS BREAKS THE ABSTRACTION BARRIER TO SOME EXTENT.
-     * We know - just live with it
-     */
-    prrte_asprintf(&param, "%ld", (long)jdata->num_local_procs);
-    prrte_setenv("OMPI_COMM_WORLD_LOCAL_SIZE", param, true, &app->env);
-    free(param);
-
-    /* forcibly set the local tmpdir base and top session dir to match ours */
-    prrte_setenv("OMPI_MCA_prrte_tmpdir_base", prrte_process_info.tmpdir_base, true, &app->env);
-    /* TODO: should we use PMIx key to pass this data? */
-    prrte_setenv("OMPI_MCA_prrte_top_session_dir", prrte_process_info.top_session_dir, true, &app->env);
-    prrte_setenv("OMPI_MCA_prrte_jobfam_session_dir", prrte_process_info.jobfam_session_dir, true, &app->env);
-
-    /* MPI-3 requires we provide some further info to the procs,
-     * so we pass them as envars to avoid introducing further
-     * PRRTE calls in the MPI layer
-     */
-    prrte_asprintf(&num_app_ctx, "%lu", (unsigned long)jdata->num_apps);
-
-    /* build some common envars we need to pass for MPI-3 compatibility */
-    nps = NULL;
-    firstranks = NULL;
-    for (i=0; i < jdata->apps->size; i++) {
-        if (NULL == (tmp_app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, i))) {
-            continue;
-        }
-        prrte_argv_append_nosize(&nps, PRRTE_VPID_PRINT(tmp_app->num_procs));
-        prrte_argv_append_nosize(&firstranks, PRRTE_VPID_PRINT(tmp_app->first_rank));
-    }
-    npstring = prrte_argv_join(nps, ' ');
-    firstrankstring = prrte_argv_join(firstranks, ' ');
-    prrte_argv_free(nps);
-    prrte_argv_free(firstranks);
-
-    /* add the MPI-3 envars */
-    prrte_setenv("OMPI_NUM_APP_CTX", num_app_ctx, true, &app->env);
-    prrte_setenv("OMPI_FIRST_RANKS", firstrankstring, true, &app->env);
-    prrte_setenv("OMPI_APP_CTX_NUM_PROCS", npstring, true, &app->env);
-    free(num_app_ctx);
-    free(firstrankstring);
-    free(npstring);
-
-    /* now process any envar attributes - we begin with the job-level
-     * ones as the app-specific ones can override them. We have to
-     * process them in the order they were given to ensure we wind
-     * up in the desired final state */
-    PRRTE_LIST_FOREACH(attr, &jdata->attributes, prrte_attribute_t) {
-        if (PRRTE_JOB_SET_ENVAR == attr->key) {
-            prrte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
-        } else if (PRRTE_JOB_ADD_ENVAR == attr->key) {
-            prrte_setenv(attr->data.envar.envar, attr->data.envar.value, false, &app->env);
-        } else if (PRRTE_JOB_UNSET_ENVAR == attr->key) {
-            prrte_unsetenv(attr->data.string, &app->env);
-        } else if (PRRTE_JOB_PREPEND_ENVAR == attr->key) {
-            /* see if the envar already exists */
-            exists = false;
-            for (i=0; NULL != app->env[i]; i++) {
-                saveptr = strchr(app->env[i], '=');   // cannot be NULL
-                *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.envar.envar)) {
-                    /* we have the var - prepend it */
-                    param = saveptr;
-                    ++param;  // move past where the '=' sign was
-                    prrte_asprintf(&p2, "%s%c%s", attr->data.envar.value,
-                                   attr->data.envar.separator, param);
-                    *saveptr = '=';  // restore the current envar setting
-                    prrte_setenv(attr->data.envar.envar, p2, true, &app->env);
-                    free(p2);
-                    exists = true;
-                    break;
-                } else {
-                    *saveptr = '=';  // restore the current envar setting
-                }
-            }
-            if (!exists) {
-                /* just insert it */
-                prrte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
-            }
-        } else if (PRRTE_JOB_APPEND_ENVAR == attr->key) {
-            /* see if the envar already exists */
-            exists = false;
-            for (i=0; NULL != app->env[i]; i++) {
-                saveptr = strchr(app->env[i], '=');   // cannot be NULL
-                *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.envar.envar)) {
-                    /* we have the var - prepend it */
-                    param = saveptr;
-                    ++param;  // move past where the '=' sign was
-                    prrte_asprintf(&p2, "%s%c%s", param, attr->data.envar.separator,
-                                   attr->data.envar.value);
-                    *saveptr = '=';  // restore the current envar setting
-                    prrte_setenv(attr->data.envar.envar, p2, true, &app->env);
-                    free(p2);
-                    exists = true;
-                    break;
-                } else {
-                    *saveptr = '=';  // restore the current envar setting
-                }
-            }
-            if (!exists) {
-                /* just insert it */
-                prrte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
-            }
-        }
-    }
-
-    /* now do the same thing for any app-level attributes */
-    PRRTE_LIST_FOREACH(attr, &app->attributes, prrte_attribute_t) {
-        if (PRRTE_APP_SET_ENVAR == attr->key) {
-            prrte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
-        } else if (PRRTE_APP_ADD_ENVAR == attr->key) {
-            prrte_setenv(attr->data.envar.envar, attr->data.envar.value, false, &app->env);
-        } else if (PRRTE_APP_UNSET_ENVAR == attr->key) {
-            prrte_unsetenv(attr->data.string, &app->env);
-        } else if (PRRTE_APP_PREPEND_ENVAR == attr->key) {
-            /* see if the envar already exists */
-            exists = false;
-            for (i=0; NULL != app->env[i]; i++) {
-                saveptr = strchr(app->env[i], '=');   // cannot be NULL
-                *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.envar.envar)) {
-                    /* we have the var - prepend it */
-                    param = saveptr;
-                    ++param;  // move past where the '=' sign was
-                    prrte_asprintf(&p2, "%s%c%s", attr->data.envar.value,
-                                   attr->data.envar.separator, param);
-                    *saveptr = '=';  // restore the current envar setting
-                    prrte_setenv(attr->data.envar.envar, p2, true, &app->env);
-                    free(p2);
-                    exists = true;
-                    break;
-                } else {
-                    *saveptr = '=';  // restore the current envar setting
-                }
-            }
-            if (!exists) {
-                /* just insert it */
-                prrte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
-            }
-        } else if (PRRTE_APP_APPEND_ENVAR == attr->key) {
-            /* see if the envar already exists */
-            exists = false;
-            for (i=0; NULL != app->env[i]; i++) {
-                saveptr = strchr(app->env[i], '=');   // cannot be NULL
-                *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.envar.envar)) {
-                    /* we have the var - prepend it */
-                    param = saveptr;
-                    ++param;  // move past where the '=' sign was
-                    prrte_asprintf(&p2, "%s%c%s", param, attr->data.envar.separator,
-                                   attr->data.envar.value);
-                    *saveptr = '=';  // restore the current envar setting
-                    prrte_setenv(attr->data.envar.envar, p2, true, &app->env);
-                    free(p2);
-                    exists = true;
-                    break;
-                } else {
-                    *saveptr = '=';  // restore the current envar setting
-                }
-            }
-            if (!exists) {
-                /* just insert it */
-                prrte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
-            }
-        }
-    }
-
-    return PRRTE_SUCCESS;
+    return PRRTE_ERR_TAKE_NEXT_OPTION;
 }
 
-
-static int setup_child(prrte_job_t *jdata,
-                       prrte_proc_t *child,
-                       prrte_app_context_t *app,
-                       char ***env)
+static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
+                            char ***argv)
 {
-    char *param, *value;
-    int rc, i;
-    int32_t nrestarts=0, *nrptr;
-    bool takeus = false;
+    prrte_value_t *pval;
 
-    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
-                        "%s schizo:ompi: setup_child",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-
-    /* if no personality was specified, then nothing to do */
-    if (NULL == jdata->personality) {
-        return PRRTE_ERR_TAKE_NEXT_OPTION;
+    if (NULL != (pval = prrte_cmd_line_get_param(cmd_line, "orte_tmpdir_base", 0, 0))) {
+        prrte_argv_append_nosize(argv, "--prtemca");
+        prrte_argv_append_nosize(argv, "prrte_tmpdir_base");
+        prrte_argv_append_nosize(argv, pval->data.string);
     }
-
-    if (NULL != prrte_schizo_base.personalities) {
-        /* see if we are included */
-        for (i=0; NULL != jdata->personality[i]; i++) {
-            if (0 == strcmp(jdata->personality[i], "ompi")) {
-                takeus = true;
-                break;
-            }
-        }
-        if (!takeus) {
-            return PRRTE_ERR_TAKE_NEXT_OPTION;
-        }
-    }
-
-    /* setup the jobid */
-    if (PRRTE_SUCCESS != (rc = prrte_util_convert_jobid_to_string(&value, child->name.jobid))) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
-    prrte_setenv("OMPI_MCA_ess_base_jobid", value, true, env);
-    free(value);
-
-    /* setup the vpid */
-    if (PRRTE_SUCCESS != (rc = prrte_util_convert_vpid_to_string(&value, child->name.vpid))) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
-    prrte_setenv("OMPI_MCA_ess_base_vpid", value, true, env);
-
-    /* although the vpid IS the process' rank within the job, users
-     * would appreciate being given a public environmental variable
-     * that also represents this value - something MPI specific - so
-     * do that here.
-     *
-     * AND YES - THIS BREAKS THE ABSTRACTION BARRIER TO SOME EXTENT.
-     * We know - just live with it
-     */
-    prrte_setenv("OMPI_COMM_WORLD_RANK", value, true, env);
-    free(value);  /* done with this now */
-
-    /* users would appreciate being given a public environmental variable
-     * that also represents the local rank value - something MPI specific - so
-     * do that here.
-     *
-     * AND YES - THIS BREAKS THE ABSTRACTION BARRIER TO SOME EXTENT.
-     * We know - just live with it
-     */
-    if (PRRTE_LOCAL_RANK_INVALID == child->local_rank) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_VALUE_OUT_OF_BOUNDS);
-        rc = PRRTE_ERR_VALUE_OUT_OF_BOUNDS;
-        return rc;
-    }
-    prrte_asprintf(&value, "%lu", (unsigned long) child->local_rank);
-    prrte_setenv("OMPI_COMM_WORLD_LOCAL_RANK", value, true, env);
-    free(value);
-
-    /* users would appreciate being given a public environmental variable
-     * that also represents the node rank value - something MPI specific - so
-     * do that here.
-     *
-     * AND YES - THIS BREAKS THE ABSTRACTION BARRIER TO SOME EXTENT.
-     * We know - just live with it
-     */
-    if (PRRTE_NODE_RANK_INVALID == child->node_rank) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_VALUE_OUT_OF_BOUNDS);
-        rc = PRRTE_ERR_VALUE_OUT_OF_BOUNDS;
-        return rc;
-    }
-    prrte_asprintf(&value, "%lu", (unsigned long) child->node_rank);
-    prrte_setenv("OMPI_COMM_WORLD_NODE_RANK", value, true, env);
-    /* set an mca param for it too */
-    prrte_setenv("OMPI_MCA_prrte_ess_node_rank", value, true, env);
-    free(value);
-
-    /* provide the identifier for the PMIx connection - the
-     * PMIx connection is made prior to setting the process
-     * name itself. Although in most cases the ID and the
-     * process name are the same, it isn't necessarily
-     * required */
-    prrte_util_convert_process_name_to_string(&value, &child->name);
-    prrte_setenv("PMIX_ID", value, true, env);
-    free(value);
-
-    nrptr = &nrestarts;
-    if (prrte_get_attribute(&child->attributes, PRRTE_PROC_NRESTARTS, (void**)&nrptr, PRRTE_INT32)) {
-        /* pass the number of restarts for this proc - will be zero for
-         * an initial start, but procs would like to know if they are being
-         * restarted so they can take appropriate action
-         */
-        prrte_asprintf(&value, "%d", nrestarts);
-        prrte_setenv("OMPI_MCA_prrte_num_restarts", value, true, env);
-        free(value);
-    }
-
-    /* if the proc should not barrier in prrte_init, tell it */
-    if (prrte_get_attribute(&child->attributes, PRRTE_PROC_NOBARRIER, NULL, PRRTE_BOOL)
-        || 0 < nrestarts) {
-        prrte_setenv("OMPI_MCA_prrte_do_not_barrier", "1", true, env);
-    }
-
-    /* if the proc isn't going to forward IO, then we need to flag that
-     * it has "completed" iof termination as otherwise it will never fire
-     */
-    if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_FORWARD_OUTPUT)) {
-        PRRTE_FLAG_SET(child, PRRTE_PROC_FLAG_IOF_COMPLETE);
-    }
-
-    /* pass an envar so the proc can find any files it had prepositioned */
-    param = prrte_process_info.proc_session_dir;
-    prrte_setenv("OMPI_FILE_LOCATION", param, true, env);
-
-    /* if the user wanted the cwd to be the proc's session dir, then
-     * switch to that location now
-     */
-    if (prrte_get_attribute(&app->attributes, PRRTE_APP_SSNDIR_CWD, NULL, PRRTE_BOOL)) {
-        /* create the session dir - may not exist */
-        if (PRRTE_SUCCESS != (rc = prrte_os_dirpath_create(param, S_IRWXU))) {
-            PRRTE_ERROR_LOG(rc);
-            /* doesn't exist with correct permissions, and/or we can't
-             * create it - either way, we are done
-             */
-            return rc;
-        }
-        /* change to it */
-        if (0 != chdir(param)) {
-            return PRRTE_ERROR;
-        }
-        /* It seems that chdir doesn't
-         * adjust the $PWD enviro variable when it changes the directory. This
-         * can cause a user to get a different response when doing getcwd vs
-         * looking at the enviro variable. To keep this consistent, we explicitly
-         * ensure that the PWD enviro variable matches the CWD we moved to.
-         *
-         * NOTE: if a user's program does a chdir(), then $PWD will once
-         * again not match getcwd! This is beyond our control - we are only
-         * ensuring they start out matching.
-         */
-        prrte_setenv("PWD", param, true, env);
-        /* update the initial wdir value too */
-        prrte_setenv("OMPI_MCA_initial_wdir", param, true, env);
-    } else if (NULL != app->cwd) {
-        /* change to it */
-        if (0 != chdir(app->cwd)) {
-            return PRRTE_ERROR;
-        }
-    }
-    return PRRTE_SUCCESS;
 }

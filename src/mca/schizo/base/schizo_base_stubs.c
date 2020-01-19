@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,14 +36,15 @@
     return PRRTE_SUCCESS;
 }
 
-int prrte_schizo_base_parse_cli(int argc, int start, char **argv)
+int prrte_schizo_base_parse_cli(int argc, int start, char **argv,
+                                char *personality, char ***target)
 {
     int rc;
     prrte_schizo_base_active_module_t *mod;
 
     PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
         if (NULL != mod->module->parse_cli) {
-            rc = mod->module->parse_cli(argc, start, argv);
+            rc = mod->module->parse_cli(argc, start, argv, personality, target);
             if (PRRTE_SUCCESS != rc && PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
                 PRRTE_ERROR_LOG(rc);
                 return rc;
@@ -51,6 +52,18 @@ int prrte_schizo_base_parse_cli(int argc, int start, char **argv)
         }
     }
     return PRRTE_SUCCESS;
+}
+
+void prrte_schizo_base_parse_proxy_cli(prrte_cmd_line_t *cmd_line,
+                                       char ***argv)
+{
+    prrte_schizo_base_active_module_t *mod;
+
+    PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
+        if (NULL != mod->module->parse_proxy_cli) {
+            mod->module->parse_proxy_cli(cmd_line, argv);
+        }
+    }
 }
 
 int prrte_schizo_base_parse_env(char *path,
@@ -71,6 +84,52 @@ int prrte_schizo_base_parse_env(char *path,
         }
     }
     return PRRTE_SUCCESS;
+}
+
+int prrte_schizo_base_allow_run_as_root(prrte_cmd_line_t *cmd_line)
+{
+    int rc;
+    prrte_schizo_base_active_module_t *mod;
+
+    PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
+        if (NULL != mod->module->allow_run_as_root) {
+            rc = mod->module->allow_run_as_root(cmd_line);
+            if (PRRTE_SUCCESS == rc) {
+                return rc;
+            }
+        }
+    }
+
+    /* show_help is not yet available, so print an error manually */
+    fprintf(stderr, "--------------------------------------------------------------------------\n");
+    if (prrte_cmd_line_is_taken(cmd_line, "help")) {
+        fprintf(stderr, "%s cannot provide the help message when run as root.\n\n", prrte_tool_basename);
+    } else {
+        fprintf(stderr, "%s has detected an attempt to run as root.\n\n", prrte_tool_basename);
+    }
+
+    fprintf(stderr, "Running as root is *strongly* discouraged as any mistake (e.g., in\n");
+    fprintf(stderr, "defining TMPDIR) or bug can result in catastrophic damage to the OS\n");
+    fprintf(stderr, "file system, leaving your system in an unusable state.\n\n");
+
+    fprintf(stderr, "We strongly suggest that you run %s as a non-root user.\n\n", prrte_tool_basename);
+
+    fprintf(stderr, "You can override this protection by adding the --allow-run-as-root\n");
+    fprintf(stderr, "option to your command line.  However, we reiterate our strong advice\n");
+    fprintf(stderr, "against doing so - please do so at your own risk.\n");
+    fprintf(stderr, "--------------------------------------------------------------------------\n");
+    exit(1);
+}
+
+void prrte_schizo_base_wrap_args(char **args)
+{
+    prrte_schizo_base_active_module_t *mod;
+
+    PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
+        if (NULL != mod->module->wrap_args) {
+            mod->module->wrap_args(args);
+        }
+    }
 }
 
 int prrte_schizo_base_setup_app(prrte_app_context_t *app)

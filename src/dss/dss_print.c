@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
@@ -842,10 +842,10 @@ int prrte_dss_print_name(char **output, char *prefix, prrte_process_name_t *name
     *output = NULL;
 
     if (NULL == name) {
-        prrte_asprintf(output, "%sData type: ORTE_PROCESS_NAME\tData Value: NULL",
+        prrte_asprintf(output, "%sData type: PRRTE_PROCESS_NAME\tData Value: NULL",
                  (NULL == prefix ? " " : prefix));
     } else {
-        prrte_asprintf(output, "%sData type: ORTE_PROCESS_NAME\tData Value: [%d,%d]",
+        prrte_asprintf(output, "%sData type: PRRTE_PROCESS_NAME\tData Value: [%d,%d]",
                  (NULL == prefix ? " " : prefix), name->jobid, name->vpid);
     }
 

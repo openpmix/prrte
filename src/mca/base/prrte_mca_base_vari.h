@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,7 +29,7 @@
  *
  * This is the private declarations for the MCA variable system.
  * This file is internal to the MCA variable system and should not
- * need to be used by any other elements in Open MPI except the
+ * need to be used by any other elements in PRRTE except the
  * special case of the ompi_info command.
  *
  * All the rest of the doxygen documentation in this file is marked as

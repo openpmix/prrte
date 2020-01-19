@@ -13,7 +13,7 @@
  * Copyright (c) 2009-2010 Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.
  *                         All rights reserved
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
@@ -115,7 +115,7 @@ int prrte_register_params(void)
 
         prrte_signal_string = string;
         ret = prrte_mca_base_var_register ("prrte", "prrte", NULL, "signal",
-                                     "Comma-delimited list of integer signal numbers to Open MPI to attempt to intercept.  Upon receipt of the intercepted signal, Open MPI will display a stack trace and abort.  Open MPI will *not* replace signals if handlers are already installed by the time MPI_INIT is invoked.  Optionally append \":complain\" to any signal number in the comma-delimited list to make Open MPI complain if it detects another signal handler (and therefore does not insert its own).",
+                                     "Comma-delimited list of integer signal numbers to PRRTE to attempt to intercept.  Upon receipt of the intercepted signal, PRRTE will display a stack trace and abort.  PRRTE will *not* replace signals if handlers are already installed by the time MPI_INIT is invoked.  Optionally append \":complain\" to any signal number in the comma-delimited list to make PRRTE complain if it detects another signal handler (and therefore does not insert its own).",
                                      PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRRTE_MCA_BASE_VAR_FLAG_SETTABLE,
                                      PRRTE_INFO_LVL_3, PRRTE_MCA_BASE_VAR_SCOPE_LOCAL,
                                      &prrte_signal_string);

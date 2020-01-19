@@ -19,7 +19,7 @@
 # Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
-# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
@@ -51,7 +51,7 @@ AC_LANG([C])
 
 AC_INIT([project_name_long],
         [m4_normalize(esyscmd([config/prrte_get_version.sh VERSION --tarball]))],
-        [https://github.com/pmix/prrte/], [project_name_short])
+        [https://github.com/openpmix/prrte/], [project_name_short])
 
 AC_PREREQ(2.60)
 AC_CONFIG_AUX_DIR(config)

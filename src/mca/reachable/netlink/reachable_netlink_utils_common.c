@@ -51,7 +51,7 @@
 
 #include "libnl_utils.h"
 
-/* Adapt this copied code for Open MPI */
+/* Adapt this copied code for PRRTE */
 #include "src/util/output.h"
 
 

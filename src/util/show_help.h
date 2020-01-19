@@ -13,7 +13,7 @@
  * Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +23,7 @@
 /**
  * @file
  *
- * The "show help" subsystem (SHS) in Open MPI is intended to help the
+ * The "show help" subsystem (SHS) in PRRTE is intended to help the
  * developer convey meaningful information to the user (read longer
  * than is convenient in a single printf), particularly when errors
  * occur.  The SHS allows the storage of arbitrary-length help
@@ -78,7 +78,7 @@
  *
  * It is expected that help messages will be grouped by filename;
  * similar messages should be in a single file.  For example, an MCA
- * component may install its own helpfile in Open MPI's $pkgdatadir,
+ * component may install its own helpfile in PRRTE's $pkgdatadir,
  * and therefore the component can invoke prrte_show_help() to display
  * its own help messages.
  *

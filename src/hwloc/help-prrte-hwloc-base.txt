@@ -1,17 +1,17 @@
 # -*- text -*-
 #
 # Copyright (c) 2011-2014 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
-# This is the US/English help file for Open MPI's hwloc base support
+# This is the US/English help file for PRRTE's hwloc base support
 #
 [mbind failure]
-Open MPI failed to bind internal memory to a specific NUMA node.  This
+PRRTE failed to bind internal memory to a specific NUMA node.  This
 message will only be reported at most once per process.
 
   Local host: %s
@@ -49,11 +49,11 @@ been deprecated and replaced as follows:
     Deprecated:  %s
     Replacement: %s
 
-The deprecated forms *will* disappear in a future version of Open MPI.
+The deprecated forms *will* disappear in a future version of PRRTE.
 Please update to the new syntax.
 #
 [obj-idx-failed]
-Open MPI failed to find a cache of a specified type.  This is a highly
+PRRTE failed to find a cache of a specified type.  This is a highly
 unusual error; it may indicate a system configuration error.  This
 additional information may be of help:
 
