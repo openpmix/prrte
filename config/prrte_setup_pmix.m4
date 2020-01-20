@@ -13,7 +13,7 @@
 # Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2011-2014 Los Alamos National Security, LLC. All rights
 #                         reserved.
-# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -48,7 +48,7 @@ AC_DEFUN([PRRTE_CHECK_PMIX],[
         AS_IF([test "$with_pmix_header" = "yes"],
               [PRRTE_PMIX_HEADER="<pmix.h>"
                prrte_pmix_header_given=0],
-              [PRRTE_PMIX_HEADER="$with_pmix_header"
+              [PRRTE_PMIX_HEADER="\"$with_pmix_header\""
                prrte_pmix_header_given=1])
         pmix_ext_install_dir="external header"
 

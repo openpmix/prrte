@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
-# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
@@ -38,8 +38,8 @@ AC_DEFUN([PRRTE_LIBEVENT_CONFIG],[
         AS_IF([test "$with_libevent_header" = "yes"],
               [PRRTE_EVENT_HEADER="<event.h>"
                PRRTE_EVENT2_THREAD_HEADER="<event2/thread.h>"],
-              [PRRTE_EVENT_HEADER="$with_libevent_header"
-               PRRTE_EVENT2_THREAD_HEADER="$with_libevent_header"])
+              [PRRTE_EVENT_HEADER="\"$with_libevent_header\""
+               PRRTE_EVENT2_THREAD_HEADER="\"$with_libevent_header\""])
         prrte_libevent_source="external header"
         prrte_libevent_support=1
 

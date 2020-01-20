@@ -634,13 +634,13 @@ int prun(int argc, char *argv[])
     prrte_tool_basename = prrte_basename(argv[0]);
     if (0 != strcmp(prrte_tool_basename, "prun")) {
         proxyrun = true;
-        /* see if we were given a path to the proxy */
-        ptr = prrte_dirname(argv[0]);
-        if (NULL == ptr) {
-            fprintf(stderr, "Could not parse the given cmd line\n");
-            exit(1);
-        }
-        if (0 != strcmp(ptr, argv[0])) {
+        if (NULL != strchr(argv[0], '/')) {
+            /* see if we were given a path to the proxy */
+            ptr = prrte_dirname(argv[0]);
+            if (NULL == ptr) {
+                fprintf(stderr, "Could not parse the given cmd line\n");
+                exit(1);
+            }
             /* they gave us a path, so prefix the "prte" cmd with it */
             if ('/' == ptr[strlen(ptr)-1]) {
                 prrte_asprintf(&param, "%sprte", ptr);
@@ -1413,7 +1413,6 @@ int prun(int argc, char *argv[])
         PRRTE_PMIX_DESTRUCT_LOCK(&lock);
         flag = true;
         PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
-        fprintf(stderr, "TERMINATING DVM...");
         PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
         PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
 #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
@@ -1429,8 +1428,6 @@ int prun(int argc, char *argv[])
         /* wait for connection to depart */
         PRRTE_PMIX_WAIT_THREAD(&rellock);
         PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
-        /* wait for the connection to go away */
-        fprintf(stderr, "DONE\n");
     }
 
     /* cleanup and leave */

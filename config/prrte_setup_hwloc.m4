@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
-# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -32,7 +32,7 @@ AC_DEFUN([PRRTE_HWLOC_CONFIG],[
     if test "x$with_hwloc_header" != "x"; then
         AS_IF([test "$with_hwloc_header" = "yes"],
               [PRRTE_HWLOC_HEADER="<hwloc.h>"],
-              [PRRTE_HWLOC_HEADER="$with_hwloc_header"
+              [PRRTE_HWLOC_HEADER="\"$with_hwloc_header\""
                prrte_hwloc_header_given=1])
         prrte_hwloc_support=1
         prrte_hwloc_source=embedded

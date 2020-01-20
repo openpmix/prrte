@@ -173,10 +173,6 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "fwd-mpirun-port", 0, PRRTE_CMD_LINE_TYPE_BOOL,
       "Forward mpirun port to compute node daemons so all will use it",
       PRRTE_CMD_LINE_OTYPE_DVM },
-    /* maximum size of VM - typically used to subdivide an allocation */
-    { '\0', "max-vm-size", 1, PRRTE_CMD_LINE_TYPE_INT,
-      "Maximum size of VM",
-      PRRTE_CMD_LINE_OTYPE_DVM },
 
 
     /* End of list */
@@ -315,7 +311,7 @@ static int parse_cli(int argc, int start, char **argv,
                 prrte_asprintf(&param, "OMPI_MCA_prrte_%s", ptr);
                 prrte_setenv(param, p2, true, &environ);
                 free(param);
-             } else if (NULL != frameworks) {
+             } else {
                 for (j=0; NULL != frameworks[j]; j++) {
                     if (0 == strncmp(p1, frameworks[j], strlen(frameworks[j]))) {
                         /* push them into the environment, we will pick
