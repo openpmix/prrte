@@ -699,6 +699,16 @@ int prun(int argc, char *argv[])
        return rc;
     }
 
+    /* now let the schizo components take a pass at it to get the MCA params */
+    if (PRRTE_SUCCESS != (rc = prrte_schizo.parse_cli(argc, 0, argv, NULL, NULL))) {
+        if (PRRTE_ERR_SILENT != rc) {
+            fprintf(stderr, "%s: command line error (%s)\n", argv[0],
+                    prrte_strerror(rc));
+        }
+         PRRTE_ERROR_LOG(rc);
+       return rc;
+    }
+
     if (prrte_cmd_line_is_taken(prrte_cmd_line, "verbose")) {
         verbose = true;
     }
@@ -939,7 +949,7 @@ int prun(int argc, char *argv[])
     /* now initialize PMIx - we have to indicate we are a launcher so that we
      * will provide rendezvous points for tools to connect to us */
     if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
-        PMIX_ERROR_LOG(ret);
+        PRRTE_ERROR_LOG(ret);
         prrte_progress_thread_finalize(NULL);
         return ret;
     }

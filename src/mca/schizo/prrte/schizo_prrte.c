@@ -71,7 +71,6 @@ prrte_schizo_base_module_t prrte_schizo_prrte_module = {
     .wrap_args = wrap_args
 };
 
-static char **frameworks = NULL;
 
 /* Cmd-line options common to PRRTE master/daemons/tools */
 static prrte_cmd_line_init_t cmd_line_init[] = {
@@ -104,16 +103,16 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
 
 
     /* setup MCA parameters */
-    { '\0', "mca", 1, PRRTE_CMD_LINE_TYPE_STRING,
+    { '\0', "mca", 2, PRRTE_CMD_LINE_TYPE_STRING,
       "Pass context-specific MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "gmca", 1, PRRTE_CMD_LINE_TYPE_STRING,
+    { '\0', "gmca", 2, PRRTE_CMD_LINE_TYPE_STRING,
       "Pass global MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "prtemca", 1, PRRTE_CMD_LINE_TYPE_STRING,
+    { '\0', "prtemca", 2, PRRTE_CMD_LINE_TYPE_STRING,
       "Pass context-specific PRRTE MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "gprtemca", 1, PRRTE_CMD_LINE_TYPE_STRING,
+    { '\0', "gprtemca", 2, PRRTE_CMD_LINE_TYPE_STRING,
       "Pass global PRRTE MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
     { '\0', "prteam", 1, PRRTE_CMD_LINE_TYPE_STRING,
@@ -149,14 +148,35 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { '\0', NULL, 0, PRRTE_CMD_LINE_TYPE_NULL, NULL }
 };
 
+static char *frameworks[] = {
+    "backtrace",
+    "compress",
+    "dl",
+    "errmgr",
+    "ess",
+    "filem",
+    "grpcomm",
+    "if",
+    "installdirs",
+    "iof",
+    "odls",
+    "oob",
+    "plm",
+    "pstat",
+    "ras",
+    "reachable",
+    "rmaps",
+    "rml",
+    "routed",
+    "rtc",
+    "schizo",
+    "state"
+};
+
+
 static int define_cli(prrte_cmd_line_t *cli)
 {
     int rc;
-    char *line = NULL;
-    size_t linecap = 0;
-    ssize_t linelen;
-    char *p, *p2;
-    FILE *fp;
 
     prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
                         "%s schizo:prrte: define_cli",
@@ -171,25 +191,6 @@ static int define_cli(prrte_cmd_line_t *cli)
     rc = prrte_cmd_line_add(cli, cmd_line_init);
     if (PRRTE_SUCCESS != rc){
         return rc;
-    }
-
-    /* create a list of our frameworks for MCA param purposes */
-    fp = fopen("../../../include/frameworks.h", "r");
-    if (NULL != fp) {
-        while (0 < (linelen = getline(&line, &linecap, fp))) {
-            /* if the line doesn't contain '&', ignore it */
-            if (NULL == (p = strchr(line, '&'))) {
-                continue;
-            }
-            /* line will start with "&prrte_" and then the framework name */
-            p = strchr(line, '_');
-            ++p;
-            p2 = strchr(p, '_');
-            *p2 = '\0';
-            prrte_output(0, "ADDING FRAMEWORK %s", p);
-            prrte_argv_append_nosize(&frameworks, p);
-            free(line);
-        }
     }
 
     return PRRTE_SUCCESS;
@@ -250,7 +251,7 @@ static int parse_cli(int argc, int start, char **argv,
             if (0 == strcmp("--prtemca", argv[i]) ||
                 0 == strncmp("prrte", p1, strlen("prrte"))) {
                 ignore = false;
-            } else if (NULL != frameworks) {
+            } else {
                 for (j=0; NULL != frameworks[j]; j++) {
                     if (0 == strncmp(p1, frameworks[j], strlen(frameworks[j]))) {
                         ignore = false;
@@ -264,7 +265,6 @@ static int parse_cli(int argc, int start, char **argv,
             /* see if this is already present so we at least can
              * avoid growing the cmd line with duplicates
              */
-            ignore = false;
             for (j=0; NULL != target && NULL != *target[j]; j++) {
                 if (0 == strcmp(p1, *target[j])) {
                     /* already here - if the value is the same,
@@ -434,7 +434,7 @@ static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
     char **hostfiles = NULL;
     char **hosts = NULL;
     char *ptr;
-
+    char *param, *value;
 
     /* check for hostfile and/or dash-host options */
     if (0 < (i = prrte_cmd_line_get_ninsts(cmd_line, "hostfile"))) {
@@ -463,5 +463,25 @@ static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
         ptr = prrte_argv_join(hosts, ',');
         prrte_argv_append_nosize(argv, ptr);
         free(ptr);
+    }
+    /* harvest all the MCA params in the environ */
+    for (i = 0; NULL != environ[i]; ++i) {
+        if (0 == strncmp("PRRTE_MCA", environ[i], strlen("PRRTE_MCA"))) {
+            /* check for duplicate in app->env - this
+             * would have been placed there by the
+             * cmd line processor. By convention, we
+             * always let the cmd line override the
+             * environment
+             */
+            param = strdup(environ[i]);
+            ptr = &param[strlen("PRRTE_MCA_")];
+            value = strchr(param, '=');
+            *value = '\0';
+            value++;
+            prrte_argv_append_nosize(argv, "--prtemca");
+            prrte_argv_append_nosize(argv, ptr);
+            prrte_argv_append_nosize(argv, value);
+            free(param);
+        }
     }
 }

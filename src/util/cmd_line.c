@@ -401,7 +401,7 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
                     /* If we run out of parameters, error, unless its a help request
                        which has no arguments */
                     if (i >= cmd->lcl_argc) {
-                    /* If this is a help or version request, can have no arguments */
+                        /* If this is a help or version request, can have no arguments */
                         if (NULL != option->clo_long_name &&
                             (0 == strcmp(option->clo_long_name, "help") ||
                              0 == strcmp(option->clo_long_name, "version"))) {

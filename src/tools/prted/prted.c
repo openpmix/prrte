@@ -304,6 +304,15 @@ int main(int argc, char *argv[])
        return ret;
     }
 
+    /* now let the schizo components take a pass at it to get the MCA params */
+    if (PRRTE_SUCCESS != (ret = prrte_schizo.parse_cli(argc, 0, argv, NULL, NULL))) {
+        if (PRRTE_ERR_SILENT != ret) {
+            fprintf(stderr, "%s: command line error (%s)\n", argv[0],
+                    prrte_strerror(ret));
+        }
+       return ret;
+    }
+
     /* see if print version is requested. Do this before
      * check for help so that --version --help works as
      * one might expect. */
