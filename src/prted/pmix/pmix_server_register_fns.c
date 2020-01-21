@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
@@ -82,6 +82,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     size_t nmsize;
     pmix_server_pset_t *pset;
     prrte_value_t *val;
+    uint32_t ui32;
 
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
                         "%s register nspace for %s",
@@ -472,6 +473,14 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
             kv = PRRTE_NEW(prrte_info_item_t);
             PMIX_INFO_LOAD(&kv->info, PMIX_NODEID, &pptr->node->index, PMIX_UINT32);
             prrte_list_append(pmap, &kv->super);
+
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+            /* reincarnation number */
+            ui32 = 0;  // we are starting this proc for the first time
+            kv = PRRTE_NEW(prrte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_REINCARNATION, &ui32, PMIX_UINT32);
+            prrte_list_append(pmap, &kv->super);
+#endif
 
             if (map->num_nodes < prrte_hostname_cutoff) {
                 kv = PRRTE_NEW(prrte_info_item_t);

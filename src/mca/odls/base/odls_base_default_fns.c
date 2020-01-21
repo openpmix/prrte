@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
@@ -2054,6 +2054,9 @@ int prrte_odls_base_default_restart_proc(prrte_proc_t *child,
         return PRRTE_ERR_NOT_FOUND;
     }
 
+    /* CHECK THE NUMBER OF TIMES THIS CHILD HAS BEEN RESTARTED
+     * AGAINST MAX_RESTARTS */
+
     child->state = PRRTE_PROC_STATE_FAILED_TO_START;
     child->exit_code = 0;
     PRRTE_FLAG_UNSET(child, PRRTE_PROC_FLAG_WAITPID);
@@ -2079,6 +2082,8 @@ int prrte_odls_base_default_restart_proc(prrte_proc_t *child,
         }
         goto CLEANUP;
     }
+
+    /* NEED TO UPDATE THE REINCARNATION NUMBER IN PMIX */
 
     /* dispatch this child to the next available launch thread */
     cd = PRRTE_NEW(prrte_odls_spawn_caddy_t);
