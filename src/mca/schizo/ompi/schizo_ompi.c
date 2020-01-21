@@ -70,6 +70,7 @@ prrte_schizo_base_module_t prrte_schizo_ompi_module = {
 };
 
 static char *frameworks[] = {
+    /* OPAL frameworks */
     "allocator",
     "backtrace",
     "btl",
@@ -91,6 +92,7 @@ static char *frameworks[] = {
     "reachable",
     "shmem",
     "timer",
+    /* OMPI frameworks */
     "bml",
     "coll",
     "crcp",
@@ -105,7 +107,12 @@ static char *frameworks[] = {
     "pml",
     "sharedfp",
     "topo",
-    "vprotocol"
+    "vprotocol",
+    /* OSHMEM frameworks */
+    "memheap",
+    "scoll",
+    "spml",
+    "sshmem"
 };
 
 
@@ -113,10 +120,10 @@ static char *frameworks[] = {
 static prrte_cmd_line_init_t cmd_line_init[] = {
 
     /* setup MCA parameters */
-    { '\0', "omca", 1, PRRTE_CMD_LINE_TYPE_STRING,
+    { '\0', "omca", 2, PRRTE_CMD_LINE_TYPE_STRING,
       "Pass context-specific OMPI MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "gomca", 1, PRRTE_CMD_LINE_TYPE_STRING,
+    { '\0', "gomca", 2, PRRTE_CMD_LINE_TYPE_STRING,
       "Pass global OMPI MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
     { '\0', "am", 1, PRRTE_CMD_LINE_TYPE_STRING,
@@ -221,15 +228,7 @@ static int define_cli(prrte_cmd_line_t *cli)
 static int parse_cli(int argc, int start, char **argv,
                      char *personality, char ***target)
 {
-    int i, j, k;
-    bool ignore;
-    char *no_dups[] = {
-        "grpcomm",
-        "odls",
-        "rml",
-        "routed",
-        NULL
-    };
+    int i, j;
     bool takeus = false;
     char *ptr, *param, *p1, *p2;
 
@@ -306,7 +305,7 @@ static int parse_cli(int argc, int start, char **argv,
                 free(param);
             } else if (0 == strncmp("ompi", p1, strlen("ompi"))) {
                 /* just push it into the environment - we will pick it up later */
-                ptr = strchr(p1, '_');
+               ptr = strchr(p1, '_');
                 ++ptr;  // step over the '_'
                 prrte_asprintf(&param, "OMPI_MCA_prrte_%s", ptr);
                 prrte_setenv(param, p2, true, &environ);
