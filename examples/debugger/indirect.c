@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -476,7 +476,7 @@ int main(int argc, char **argv)
     /* provide a few job-level directives */
     darray.type = PMIX_INFO;
     darray.size = 4;
-    PMIX_INFO_CREATE(darray.array, 3);
+    PMIX_INFO_CREATE(darray.array, darray.size);
     iptr = (pmix_info_t*)darray.array;
     PMIX_ENVAR_LOAD(&envar, "FOOBAR", "1", ':');
     PMIX_INFO_LOAD(&iptr[0], PMIX_SET_ENVAR, &envar, PMIX_ENVAR);
