@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
@@ -436,6 +436,7 @@ PRRTE_EXPORT pmix_proc_state_t prrte_pmix_convert_state(int state);
 PRRTE_EXPORT int prrte_pmix_convert_pstate(pmix_proc_state_t);
 PRRTE_EXPORT pmix_status_t prrte_pmix_convert_rc(int rc);
 PRRTE_EXPORT int prrte_pmix_convert_status(pmix_status_t status);
+PRRTE_EXPORT pmix_status_t prrte_pmix_convert_job_state_to_error(int state);
 
 #define PRRTE_PMIX_CONVERT_JOBID(n, j) \
     (void)prrte_snprintf_jobid((n), PMIX_MAX_NSLEN, (j))
