@@ -17,6 +17,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -926,7 +927,9 @@ int prun(int argc, char *argv[])
      * reach a "safe" place where the termination event can
      * be created
      */
-    pipe(term_pipe);
+    if (0 != (rc = pipe(term_pipe))) {
+        exit(1);
+    }
     /* setup an event to attempt normal termination on signal */
     myevbase = prrte_progress_thread_init(NULL);
     prrte_event_set(myevbase, &term_handler, term_pipe[0], PRRTE_EV_READ, clean_abort, NULL);
@@ -1062,7 +1065,9 @@ int prun(int argc, char *argv[])
          * the user will have seen */
         if (!prrte_path_is_absolute(param)) {
             char cwd[PRRTE_PATH_MAX];
-            getcwd(cwd, sizeof(cwd));
+            if (NULL == getcwd(cwd, sizeof(cwd))) {
+                return PRRTE_ERR_FATAL;
+            }
             ptr = prrte_os_path(false, cwd, param, NULL);
         } else {
             ptr = strdup(param);
@@ -1080,7 +1085,9 @@ int prun(int argc, char *argv[])
          * the user will have seen */
         if (!prrte_path_is_absolute(ptr)) {
             char cwd[PRRTE_PATH_MAX];
-            getcwd(cwd, sizeof(cwd));
+            if (NULL == getcwd(cwd, sizeof(cwd))) {
+                return PRRTE_ERR_FATAL;
+            }
             param = prrte_os_path(false, cwd, ptr, NULL);
         } else {
             param = strdup(ptr);
@@ -2021,10 +2028,14 @@ static void abort_signal_callback(int fd)
         if ((current.tv_sec - last.tv_sec) < 5) {
             exit(1);
         }
-        write(1, (void*)msg, strlen(msg));
+        if (-1 == write(1, (void*)msg, strlen(msg))) {
+            exit(1);
+        }
     }
     /* save the time */
     last.tv_sec = current.tv_sec;
     /* tell the event lib to attempt to abnormally terminate */
-    write(term_pipe[1], &foo, 1);
+    if (-1 == write(term_pipe[1], &foo, 1)) {
+        exit(1);
+    }
 }
