@@ -20,6 +20,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -970,7 +971,9 @@ static int output(int output_id, const char *format, va_list arglist)
 
         /* stdout output */
         if (ldi->ldi_stdout) {
-            write(fileno(stdout), out, (int)strlen(out));
+            if (-1 == write(fileno(stdout), out, (int)strlen(out))) {
+                return PRRTE_ERR_FATAL;
+            }
             fflush(stdout);
         }
 
@@ -998,7 +1001,9 @@ static int output(int output_id, const char *format, va_list arglist)
                     snprintf(buffer, BUFSIZ - 1,
                              "[WARNING: %d lines lost because the PRRTE process session directory did\n not exist when prrte_output() was invoked]\n",
                              ldi->ldi_file_num_lines_lost);
-                   write(ldi->ldi_fd, buffer, (int)strlen(buffer));
+                    if (-1 == write(ldi->ldi_fd, buffer, (int)strlen(buffer))) {
+                        return PRRTE_ERR_FATAL;
+                    }
                     ldi->ldi_file_num_lines_lost = 0;
                     if (out != buffer) {
                         free(out);
@@ -1006,7 +1011,9 @@ static int output(int output_id, const char *format, va_list arglist)
                 }
             }
             if (ldi->ldi_fd != -1) {
-                write(ldi->ldi_fd, out, (int)strlen(out));
+                if (-1 == write(ldi->ldi_fd, out, (int)strlen(out))) {
+                    return PRRTE_ERR_FATAL;
+                }
             }
         }
         prrte_mutex_unlock(&mutex);
