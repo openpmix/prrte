@@ -9,7 +9,7 @@
  * Copyright (c) 2011      Oracle and/or all its affiliates.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -184,7 +184,7 @@ static void job_errors(int fd, short args, void *cbdata)
      * we only inform the submitter of the problem, but do NOT terminate
      * the DVM itself */
 
-    rc = jobstate;
+    rc = prrte_pmix_convert_job_state_to_error(jobstate);
     answer = PRRTE_NEW(prrte_buffer_t);
     if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &rc, 1, PRRTE_INT32))) {
         PRRTE_ERROR_LOG(ret);

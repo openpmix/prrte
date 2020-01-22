@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
@@ -64,26 +64,28 @@ void pmix_server_launch_resp(int status, prrte_process_name_t* sender,
     prrte_job_t *jdata;
     char nspace[PMIX_MAX_NSLEN+1];
     pmix_proc_t proc;
-    pmix_status_t xrc;
 
-    /* unpack the status */
+    /* unpack the status - this is already a PMIx value */
     cnt = 1;
     if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &ret, &cnt, PRRTE_INT32))) {
         PRRTE_ERROR_LOG(rc);
-        return;
+        ret = prrte_pmix_convert_rc(rc);
     }
 
     /* unpack the jobid */
     cnt = 1;
     if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &jobid, &cnt, PRRTE_JOBID))) {
         PRRTE_ERROR_LOG(rc);
-        return;
+        ret = prrte_pmix_convert_rc(rc);
     }
+    /* we let the above errors fall thru in the vain hope that the room number can
+     * be successfully unpacked, thus allowing us to respond to the requestor */
 
     /* unpack our tracking room number */
     cnt = 1;
     if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &room, &cnt, PRRTE_INT))) {
         PRRTE_ERROR_LOG(rc);
+        /* we are hosed */
         return;
     }
 
@@ -100,7 +102,6 @@ void pmix_server_launch_resp(int status, prrte_process_name_t* sender,
         PRRTE_PMIX_CONVERT_JOBID(nspace, jobid);
         req->spcbfunc(ret, nspace, req->cbdata);
     } else if (NULL != req->toolcbfunc) {
-        xrc = prrte_pmix_convert_rc(ret);
         /* if success, then add to our job info */
         if (PRRTE_SUCCESS == ret) {
             jdata = PRRTE_NEW(prrte_job_t);
@@ -110,7 +111,7 @@ void pmix_server_launch_resp(int status, prrte_process_name_t* sender,
             prrte_pmix_server_tool_conn_complete(jdata, req);
             PRRTE_PMIX_CONVERT_NAME(&proc, &req->target);
         }
-        req->toolcbfunc(xrc, &proc, req->cbdata);
+        req->toolcbfunc(ret, &proc, req->cbdata);
     }
     /* cleanup */
     PRRTE_RELEASE(req);
@@ -123,6 +124,7 @@ static void spawn(int sd, short args, void *cbdata)
     prrte_buffer_t *buf;
     prrte_plm_cmd_flag_t command;
     char nspace[PMIX_MAX_NSLEN+1];
+    pmix_status_t prc;
 
     PRRTE_ACQUIRE_OBJECT(req);
 
@@ -169,8 +171,9 @@ static void spawn(int sd, short args, void *cbdata)
   callback:
     /* this section gets executed solely upon an error */
     if (NULL != req->spcbfunc) {
+        prc = prrte_pmix_convert_rc(rc);
         PRRTE_PMIX_CONVERT_JOBID(nspace, PRRTE_JOBID_INVALID);
-        req->spcbfunc(rc, nspace, req->cbdata);
+        req->spcbfunc(prc, nspace, req->cbdata);
     }
     PRRTE_RELEASE(req);
 }
@@ -572,8 +575,10 @@ static void interim(int sd, short args, void *cbdata)
   complete:
     if (NULL != cd->spcbfunc) {
         pmix_proc_t pproc;
+        pmix_status_t prc;
         PRRTE_PMIX_CONVERT_JOBID(pproc.nspace, PRRTE_JOBID_INVALID);
-        cd->spcbfunc(rc, pproc.nspace, cd->cbdata);
+        prc = prrte_pmix_convert_rc(rc);
+        cd->spcbfunc(prc, pproc.nspace, cd->cbdata);
     }
     PRRTE_RELEASE(cd);
 }

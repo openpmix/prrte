@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies, Inc.
@@ -36,6 +36,25 @@
 pmix_status_t prrte_pmix_convert_rc(int rc)
 {
     switch (rc) {
+    case PRRTE_ERR_FAILED_TO_START:
+        return PMIX_ERR_JOB_FAILED_TO_START;
+
+    case PRRTE_ERR_HEARTBEAT_ALERT:
+    case PRRTE_ERR_FILE_ALERT:
+    case PRRTE_ERR_HEARTBEAT_LOST:
+    case PRRTE_ERR_SENSOR_LIMIT_EXCEEDED:
+        return PMIX_ERR_JOB_SENSOR_BOUND_EXCEEDED;
+
+    case PRRTE_ERR_NO_EXE_SPECIFIED:
+    case PRRTE_ERR_NO_APP_SPECIFIED:
+        return PMIX_ERR_JOB_NO_EXE_SPECIFIED;
+
+    case PRRTE_ERR_FAILED_TO_MAP:
+        return PMIX_ERR_JOB_FAILED_TO_MAP;
+
+    case PRRTE_ERR_JOB_CANCELLED:
+        return PMIX_ERR_JOB_CANCELLED;
+
     case PRRTE_ERR_DEBUGGER_RELEASE:
         return PMIX_ERR_DEBUGGER_RELEASE;
 
@@ -113,7 +132,7 @@ pmix_status_t prrte_pmix_convert_rc(int rc)
     case PRRTE_SUCCESS:
         return PMIX_SUCCESS;
     default:
-        return rc;
+        return PMIX_ERROR;
     }
 }
 
@@ -296,6 +315,49 @@ int prrte_pmix_convert_pstate(pmix_proc_state_t state)
             return 63;
         default:
             return 0;  // undef
+    }
+}
+
+pmix_status_t prrte_pmix_convert_job_state_to_error(int state)
+{
+    switch(state) {
+        case PRRTE_JOB_STATE_ALLOC_FAILED:
+            return PMIX_ERR_JOB_ALLOC_FAILED;
+
+        case PRRTE_JOB_STATE_MAP_FAILED:
+            return PMIX_ERR_JOB_FAILED_TO_MAP;
+
+        case PRRTE_JOB_STATE_NEVER_LAUNCHED:
+            return PMIX_ERR_JOB_NEVER_LAUNCHED;
+
+        case PRRTE_JOB_STATE_FAILED_TO_LAUNCH:
+            return PMIX_ERR_JOB_FAILED_TO_LAUNCH;
+
+        case PRRTE_JOB_STATE_FAILED_TO_START:
+            return PMIX_ERR_JOB_FAILED_TO_START;
+
+        case PRRTE_JOB_STATE_CANNOT_LAUNCH:
+            return PMIX_ERR_JOB_CANNOT_LAUNCH;
+
+        case PRRTE_JOB_STATE_TERMINATED:
+            return PMIX_ERR_JOB_TERMINATED;
+
+        case PRRTE_JOB_STATE_KILLED_BY_CMD:
+            return PMIX_ERR_JOB_CANCELLED;
+
+        case PRRTE_JOB_STATE_ABORTED:
+        case PRRTE_JOB_STATE_CALLED_ABORT:
+        case PRRTE_JOB_STATE_SILENT_ABORT:
+            return PMIX_ERR_JOB_ABORTED;
+
+        case PRRTE_JOB_STATE_ABORTED_BY_SIG:
+            return PMIX_ERR_JOB_ABORTED_BY_SIG;
+
+        case PRRTE_JOB_STATE_ABORTED_WO_SYNC:
+            return PMIX_ERR_JOB_TERM_WO_SYNC;
+
+        default:
+            return PMIX_ERROR;
     }
 }
 
