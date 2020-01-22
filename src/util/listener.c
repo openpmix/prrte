@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -219,7 +220,9 @@ void prrte_stop_listening(void)
 
     listen_thread_active = false;
     /* tell the thread to exit */
-    write(stop_thread[1], &i, sizeof(int));
+    if (-1 == write(stop_thread[1], &i, sizeof(int))) {
+        return;
+    }
     prrte_thread_join(&listen_thread, NULL);
     PRRTE_DESTRUCT(&listen_thread);
     PRRTE_LIST_DESTRUCT(&mylisteners);

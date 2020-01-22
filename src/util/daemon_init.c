@@ -12,6 +12,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -58,7 +59,9 @@ int prrte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
 #endif
 
     if (NULL != working_dir) {
-        chdir(working_dir);  /* change working directory */
+        if (-1 == chdir(working_dir)) {  /* change working directory */
+            return PRRTE_ERR_FATAL;
+	}
     }
 
     /* connect input to /dev/null */

@@ -14,6 +14,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -132,8 +133,9 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     ret = snprintf(print_buffer, sizeof(print_buffer),
                    HOSTFORMAT "*** Process received signal ***\n",
                    prrte_process_info.nodename, getpid());
-    write(prrte_stacktrace_output_fileno, print_buffer, ret);
-
+    if (-1 == write(prrte_stacktrace_output_fileno, print_buffer, ret)) {
+        return;
+    }
 
     memset (print_buffer, 0, sizeof (print_buffer));
 
@@ -382,14 +384,18 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     }
 
     /* write out the signal information generated above */
-    write(prrte_stacktrace_output_fileno, print_buffer, sizeof(print_buffer)-size);
+    if (-1 == write(prrte_stacktrace_output_fileno, print_buffer, sizeof(print_buffer)-size)) {
+        return;
+    }
 
     /* print out the stack trace */
     snprintf(print_buffer, sizeof(print_buffer), HOSTFORMAT,
              prrte_process_info.nodename, getpid());
     ret = prrte_backtrace_print(NULL, print_buffer, 2);
     if (PRRTE_SUCCESS != ret) {
-        write(prrte_stacktrace_output_fileno, unable_to_print_msg, strlen(unable_to_print_msg));
+        if (-1 == write(prrte_stacktrace_output_fileno, unable_to_print_msg, strlen(unable_to_print_msg))) {
+            return;
+        }
     }
 
     /* write out the footer information */
@@ -398,9 +404,13 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
                    HOSTFORMAT "*** End of error message ***\n",
                    prrte_process_info.nodename, getpid());
     if (ret > 0) {
-        write(prrte_stacktrace_output_fileno, print_buffer, ret);
+        if (-1 == write(prrte_stacktrace_output_fileno, print_buffer, ret)) {
+            return;
+        }
     } else {
-        write(prrte_stacktrace_output_fileno, unable_to_print_msg, strlen(unable_to_print_msg));
+        if (-1 == write(prrte_stacktrace_output_fileno, unable_to_print_msg, strlen(unable_to_print_msg))) {
+            return;
+	}
     }
 
     if( fileno(stdout) != prrte_stacktrace_output_fileno &&
