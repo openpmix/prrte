@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2016-2020 IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1454,39 +1454,39 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
 
     /* check for debug flags */
     if (prrte_debug_flag) {
-        prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
         prrte_argv_append(argc, argv, "prrte_debug");
         prrte_argv_append(argc, argv, "1");
     }
     if (prrte_debug_daemons_flag) {
-        prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
         prrte_argv_append(argc, argv, "prrte_debug_daemons");
         prrte_argv_append(argc, argv, "1");
     }
     if (prrte_debug_daemons_file_flag) {
-        prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
         prrte_argv_append(argc, argv, "prrte_debug_daemons_file");
         prrte_argv_append(argc, argv, "1");
     }
     if (prrte_leave_session_attached) {
-        prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
         prrte_argv_append(argc, argv, "prrte_leave_session_attached");
         prrte_argv_append(argc, argv, "1");
     }
 
     if (prrte_hwloc_report_bindings) {
-        prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
         prrte_argv_append(argc, argv, "prrte_report_bindings");
         prrte_argv_append(argc, argv, "1");
     }
 
     if (prrte_map_stddiag_to_stderr) {
-        prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
         prrte_argv_append(argc, argv, "prrte_map_stddiag_to_stderr");
         prrte_argv_append(argc, argv, "1");
     }
     else if (prrte_map_stddiag_to_stdout) {
-        prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
         prrte_argv_append(argc, argv, "prrte_map_stddiag_to_stdout");
         prrte_argv_append(argc, argv, "1");
     }
@@ -1498,13 +1498,13 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
 
     /* tell the orted what ESS component to use */
     if (NULL != ess) {
-        prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
         prrte_argv_append(argc, argv, "ess");
         prrte_argv_append(argc, argv, ess);
     }
 
     /* pass the daemon jobid */
-    prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+    prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
     prrte_argv_append(argc, argv, "ess_base_jobid");
     if (PRRTE_SUCCESS != (rc = prrte_util_convert_jobid_to_string(&param, PRRTE_PROC_MY_NAME->jobid))) {
         PRRTE_ERROR_LOG(rc);
@@ -1515,7 +1515,7 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
 
     /* setup to pass the vpid */
     if (NULL != proc_vpid_index) {
-        prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
         prrte_argv_append(argc, argv, "ess_base_vpid");
         *proc_vpid_index = *argc;
         prrte_argv_append(argc, argv, "<template>");
@@ -1528,20 +1528,20 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
     } else {
         num_procs = prrte_process_info.num_procs;
     }
-    prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+    prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
     prrte_argv_append(argc, argv, "ess_base_num_procs");
     prrte_asprintf(&param, "%lu", num_procs);
     prrte_argv_append(argc, argv, param);
     free(param);
 
     /* pass the HNP uri */
-    prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+    prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
     prrte_argv_append(argc, argv, "prrte_hnp_uri");
     prrte_argv_append(argc, argv, prrte_process_info.my_hnp_uri);
 
     /* if --xterm was specified, pass that along */
     if (NULL != prrte_xterm) {
-        prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+        prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
         prrte_argv_append(argc, argv, "prrte_xterm");
         prrte_argv_append(argc, argv, prrte_xterm);
     }
@@ -1586,7 +1586,7 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
             /* Could also use the short version '-tune'
              * but being verbose has some value
              */
-            prrte_argv_append(argc, argv, "-mca");
+            prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
             prrte_argv_append(argc, argv, "mca_base_envar_file_prefix");
             prrte_argv_append(argc, argv, tmp_value[0]);
         }
@@ -1598,7 +1598,7 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
             /* Could also use the short version '-am'
              * but being verbose has some value
              */
-            prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+            prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
             prrte_argv_append(argc, argv, "mca_base_param_file_prefix");
             prrte_argv_append(argc, argv, tmp_value2[0]);
             prrte_show_help("help-plm-base.txt", "deprecated-amca", true);
@@ -1619,13 +1619,13 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
                 return rc;
             }
             if( NULL != tmp_value && NULL != tmp_value[0] ) {
-                prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+                prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
                 prrte_argv_append(argc, argv, "mca_base_param_file_path");
                 prrte_argv_append(argc, argv, tmp_value[0]);
             }
 
             /* Add the 'path' param */
-            prrte_argv_append(argc, argv, "-"PRRTE_MCA_CMD_LINE_ID);
+            prrte_argv_append(argc, argv, "--"PRRTE_MCA_CMD_LINE_ID);
             prrte_argv_append(argc, argv, "mca_base_param_file_path_force");
 
             tmp_value = NULL;
