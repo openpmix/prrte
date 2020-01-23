@@ -1767,12 +1767,12 @@ static int create_app(int argc, char* argv[],
             return PRRTE_ERR_FATAL;
         }
     }
-    if (NULL == pvalue) {
-        prrte_output(0, "NO NP");
-        return PRRTE_ERR_FATAL;
+    if (NULL != pvalue) {
+        /* we don't require that the user provide --np or -n because
+         * the cmd line might stipulate a mapping policy that computes
+         * the number of procs - e.g., a map-by ppr option */
+        app->app.maxprocs = pvalue->data.integer;
     }
-
-    app->app.maxprocs = pvalue->data.integer;
 
     /* see if we need to preload the binary to
      * find the app - don't do this for java apps, however, as we
