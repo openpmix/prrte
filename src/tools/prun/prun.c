@@ -952,9 +952,8 @@ int prun(int argc, char *argv[])
     /* now initialize PMIx - we have to indicate we are a launcher so that we
      * will provide rendezvous points for tools to connect to us */
     if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
-        PRRTE_ERROR_LOG(ret);
-        prrte_progress_thread_finalize(NULL);
-        return ret;
+        fprintf(stderr, "%s failed to initialize, likely due to no DVM being available\n", prrte_tool_basename);
+        exit(1);
     }
     PMIX_INFO_FREE(iptr, ninfo);
 
