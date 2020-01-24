@@ -284,8 +284,8 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
     /* Export environment variables; potentially used multiple times,
        so it does not make sense to set into a variable */
-    { 'x', NULL, 1, PRRTE_CMD_LINE_TYPE_NULL,
-      "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the environment variable foo and takes its value from the current environment; \"-x foo=bar\" exports the environment variable name foo and sets its value to \"bar\" in the started processes)",
+    { 'x', NULL, 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the environment variable foo and takes its value from the current environment; \"-x foo=bar\" exports the environment variable name foo and sets its value to \"bar\" in the started processes; \"-x foo*\" exports all current environmental variables starting with \"foo\")",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
     { '\0', "wdir", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Set the working directory of the started processes",
@@ -1553,13 +1553,14 @@ static int create_app(int argc, char* argv[],
                       bool *made_app, char ***app_env)
 {
     char cwd[PRRTE_PATH_MAX];
-    int i, j, count, rc;
-    char *param, *value;
+    int i, j, k, count, rc;
+    char *param, *value, *ptr;
     prrte_pmix_app_t *app = NULL;
     bool found = false;
     char *appname = NULL;
     prrte_ds_info_t *val;
     prrte_value_t *pvalue;
+    size_t len;
 
     *made_app = false;
 
@@ -1628,14 +1629,36 @@ static int create_app(int argc, char* argv[],
                 /* save it for any comm_spawn'd apps */
                 prrte_setenv(param, value, true, &prrte_forwarded_envars);
             } else {
-                value = getenv(param);
-                if (NULL != value) {
-                    /* overwrite any prior entry */
-                    prrte_setenv(param, value, true, &app->app.env);
-                    /* save it for any comm_spawn'd apps */
-                    prrte_setenv(param, value, true, &prrte_forwarded_envars);
+                /* check for a '*' wildcard at the end of the value */
+                if ('*' == param[strlen(param)-1]) {
+                    /* search the local environment for all params
+                     * that start with the string up to the '*' */
+                    param[strlen(param)-1] = '\0';
+                    len = strlen(param);
+                    for (k=0; NULL != environ[k]; k++) {
+                        if (0 == strncmp(environ[k], param, len)) {
+                            value = strdup(environ[k]);
+                            /* find the '=' sign */
+                            ptr = strchr(value, '=');
+                            *ptr = '\0';
+                            ++ptr;
+                            /* overwrite any prior entry */
+                            prrte_setenv(value, ptr, true, &app->app.env);
+                            /* save it for any comm_spawn'd apps */
+                            prrte_setenv(value, ptr, true, &prrte_forwarded_envars);
+                            free(value);
+                        }
+                    }
                 } else {
-                    prrte_output(0, "Warning: could not find environment variable \"%s\"\n", param);
+                    value = getenv(param);
+                    if (NULL != value) {
+                        /* overwrite any prior entry */
+                        prrte_setenv(param, value, true, &app->app.env);
+                        /* save it for any comm_spawn'd apps */
+                        prrte_setenv(param, value, true, &prrte_forwarded_envars);
+                    } else {
+                        prrte_output(0, "Warning: could not find environment variable \"%s\"\n", param);
+                    }
                 }
             }
         }
