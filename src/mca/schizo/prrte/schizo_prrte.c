@@ -199,15 +199,8 @@ static int define_cli(prrte_cmd_line_t *cli)
 static int parse_cli(int argc, int start, char **argv,
                      char *personality, char ***target)
 {
-    int i, j, k;
+    int i, j;
     bool ignore;
-    char *no_dups[] = {
-        "grpcomm",
-        "odls",
-        "rml",
-        "routed",
-        NULL
-    };
     char *p1, *p2, *param;
 
     prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
@@ -221,9 +214,42 @@ static int parse_cli(int argc, int start, char **argv,
 
     for (i = 0; i < (argc-start); ++i) {
         ignore = true;
-        if (0 == strcmp("--mca", argv[i]) ||
-            0 == strcmp("--gmca", argv[i]) ||
-            0 == strcmp("--prtemca", argv[i])) {
+        if (0 == strcmp("--prtemca", argv[i])) {
+            if (NULL == argv[i+1] || NULL == argv[i+2]) {
+                /* this is an error */
+                return PRRTE_ERR_FATAL;
+            }
+            /* strip any quotes around the args */
+            if ('\"' == argv[i+1][0]) {
+                p1 = &argv[i+1][1];
+            } else {
+                p1 = argv[i+1];
+            }
+            if ('\"' == p1[strlen(p1)- 1]) {
+                p1[strlen(p1)-1] = '\0';
+            }
+            if ('\"' == argv[i+2][0]) {
+                p2 = &argv[i+2][1];
+            } else {
+                p2 = argv[i+2];
+            }
+            if ('\"' == p2[strlen(p2)- 1]) {
+                p1[strlen(p2)-1] = '\0';
+            }
+            if (NULL == target) {
+                /* push it into our environment */
+                asprintf(&param, "PRRTE_MCA_%s", p1);
+                prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                     "%s schizo:prrte:parse_cli pushing %s into environment",
+                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param);
+                prrte_setenv(param, p2, true, &environ);
+            } else {
+                prrte_argv_append_nosize(target, argv[i]);
+                prrte_argv_append_nosize(target, p1);
+                prrte_argv_append_nosize(target, p2);
+            }
+        } else if (0 == strcmp("--mca", argv[i]) ||
+                   0 == strcmp("--gmca", argv[i])) {
             if (NULL == argv[i+1] || NULL == argv[i+2]) {
                 /* this is an error */
                 return PRRTE_ERR_FATAL;
@@ -259,49 +285,13 @@ static int parse_cli(int argc, int start, char **argv,
                     }
                 }
             }
-            if (ignore) {
-                continue;
-            }
-            /* see if this is already present so we at least can
-             * avoid growing the cmd line with duplicates
-             */
-            for (j=0; NULL != target && NULL != *target[j]; j++) {
-                if (0 == strcmp(p1, *target[j])) {
-                    /* already here - if the value is the same,
-                     * we can quitely ignore the fact that they
-                     * provide it more than once. However, some
-                     * frameworks are known to have problems if the
-                     * value is different. We don't have a good way
-                     * to know this, but we at least make a crude
-                     * attempt here to protect ourselves.
-                     */
-                    if (0 == strcmp(p2, *target[j+1])) {
-                        /* values are the same */
-                        ignore = true;
-                        break;
-                    } else {
-                        /* values are different - see if this is a problem */
-                        for (k=0; NULL != no_dups[k]; k++) {
-                            if (0 == strcmp(no_dups[k], p1)) {
-                                /* print help message
-                                 * and abort as we cannot know which one is correct
-                                 */
-                                prrte_show_help("help-prrterun.txt", "prrterun:conflicting-params",
-                                               true, prrte_tool_basename, p1,
-                                               p2, *target[j+1]);
-                                return PRRTE_ERR_BAD_PARAM;
-                            }
-                        }
-                        /* this passed muster - just ignore it */
-                        ignore = true;
-                        break;
-                    }
-                }
-            }
             if (!ignore) {
                 if (NULL == target) {
                     /* push it into our environment */
                     asprintf(&param, "PRRTE_MCA_%s", p1);
+                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                         "%s schizo:prrte:parse_cli pushing %s into environment",
+                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param);
                     prrte_setenv(param, p2, true, &environ);
                 } else {
                     prrte_argv_append_nosize(target, argv[i]);
@@ -419,6 +409,10 @@ static void wrap_args(char **args)
                 return;
             }
             i += 2;
+            /* if the argument already has quotes, then leave it alone */
+            if ('\"' == args[i][0]) {
+                continue;
+            }
             prrte_asprintf(&tstr, "\"%s\"", args[i]);
             free(args[i]);
             args[i] = tstr;
