@@ -1073,11 +1073,9 @@ void prrte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     }
     /* find the jobdat for this job */
     if (NULL == (jobdat = prrte_get_job_data_object(job))) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        /* not much we can do here - we are just hosed, so
-         * report that to the error manager
-         */
-        PRRTE_ACTIVATE_JOB_STATE(NULL, PRRTE_JOB_STATE_FAILED_TO_LAUNCH);
+        /* not much we can do here - the most likely explanation
+         * is that a job that didn't involve us already completed
+         * and was removed. This isn't an error so just move along */
         goto ERROR_OUT;
     }
 
