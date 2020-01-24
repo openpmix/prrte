@@ -269,7 +269,7 @@ static int parse_cli(int argc, int start, char **argv,
                 p2 = argv[i+2];
             }
             if ('\"' == p2[strlen(p2)- 1]) {
-                p1[strlen(p2)-1] = '\0';
+                p2[strlen(p2)-1] = '\0';
             }
             prrte_asprintf(&param, "OMPI_MCA_%s", p1);
             prrte_setenv(param, p2, true, &environ);
@@ -291,7 +291,7 @@ static int parse_cli(int argc, int start, char **argv,
                 p2 = argv[i+2];
             }
             if ('\"' == p2[strlen(p2)- 1]) {
-                p1[strlen(p2)-1] = '\0';
+                p2[strlen(p2)-1] = '\0';
             }
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
