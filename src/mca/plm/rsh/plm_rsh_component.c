@@ -16,7 +16,7 @@
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights
  *                         reserved.
  * Copyright (c) 2009-2018 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2011-2019 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2011-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -372,6 +372,10 @@ char **prrte_plm_rsh_search(const char* agent_list, const char *path)
     char **tokens, *tmp;
     char cwd[PRRTE_PATH_MAX];
 
+    if (NULL == agent_list && NULL == prrte_plm_rsh_component.agent) {
+        return NULL;
+    }
+
     if (NULL == path) {
         getcwd(cwd, PRRTE_PATH_MAX);
     } else {
@@ -421,6 +425,14 @@ static int rsh_launch_agent_lookup(const char *agent_list, char *path)
 {
     char *bname;
     int i;
+
+    if (NULL == agent_list && NULL == prrte_plm_rsh_component.agent) {
+        PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
+                             "%s plm:rsh_lookup on agent (null) path %s - No agent specified.",
+                              PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                             (NULL == path) ? "NULL" : path));
+        return PRRTE_ERR_NOT_FOUND;
+    }
 
     PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
                          "%s plm:rsh_lookup on agent %s path %s",

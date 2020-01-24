@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -113,7 +114,9 @@ void prrte_errmgr_base_abort(int error_code, char *fmt, ...)
     /* if I am a daemon or the HNP... */
     if (PRRTE_PROC_IS_MASTER || PRRTE_PROC_IS_DAEMON) {
         /* whack my local procs */
-        prrte_odls.kill_local_procs(NULL);
+        if( NULL != prrte_odls.kill_local_procs ) {
+            prrte_odls.kill_local_procs(NULL);
+        }
         /* whack any session directories */
         prrte_session_dir_cleanup(PRRTE_JOBID_WILDCARD);
     }
