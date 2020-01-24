@@ -251,8 +251,31 @@ static int parse_cli(int argc, int start, char **argv,
     }
 
     for (i = 0; i < (argc-start); ++i) {
-        if (0 == strcmp("--mca", argv[i]) ||
-            0 == strcmp("--gmca", argv[i])) {
+        if (0 == strcmp("--omca", argv[i]) ||
+            0 == strcmp("--gomca", argv[i])) {
+            /* this is an OMPI mca param */
+            /* strip any quotes around the args */
+            if ('\"' == argv[i+1][0]) {
+                p1 = &argv[i+1][1];
+            } else {
+                p1 = argv[i+1];
+            }
+            if ('\"' == p1[strlen(p1)- 1]) {
+                p1[strlen(p1)-1] = '\0';
+            }
+            if ('\"' == argv[i+2][0]) {
+                p2 = &argv[i+2][1];
+            } else {
+                p2 = argv[i+2];
+            }
+            if ('\"' == p2[strlen(p2)- 1]) {
+                p1[strlen(p2)-1] = '\0';
+            }
+            prrte_asprintf(&param, "OMPI_MCA_%s", p1);
+            prrte_setenv(param, p2, true, &environ);
+            free(param);
+        } else if (0 == strcmp("--mca", argv[i]) ||
+                   0 == strcmp("--gmca", argv[i])) {
             /* strip any quotes around the args */
             if ('\"' == argv[i+1][0]) {
                 p1 = &argv[i+1][1];
@@ -272,7 +295,7 @@ static int parse_cli(int argc, int start, char **argv,
             }
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
-            if (0 == strncmp("opal", p1, strlen("opal"))) {
+            if (0 == strncmp("opal_", p1, strlen("opal_"))) {
                 /* this is a base (non-framework) parameter - we need to
                  * convert it to the PRRTE equivalent */
                 ptr = strchr(p1, '_');
@@ -290,7 +313,7 @@ static int parse_cli(int argc, int start, char **argv,
                 prrte_asprintf(&param, "OMPI_MCA_%s", p1);
                 prrte_setenv(param, p2, true, &environ);
                 free(param);
-            } else if (0 == strncmp("orte", p1, strlen("orte"))) {
+            } else if (0 == strncmp("orte_", p1, strlen("orte_"))) {
                 /* this is a base (non-framework) parameter - we need to
                  * convert it to the PRRTE equivalent */
                 ptr = strchr(p1, '_');
@@ -303,9 +326,9 @@ static int parse_cli(int argc, int start, char **argv,
                     prrte_argv_append_nosize(target, param);
                 }
                 free(param);
-            } else if (0 == strncmp("ompi", p1, strlen("ompi"))) {
+            } else if (0 == strncmp("ompi_", p1, strlen("ompi_"))) {
                 /* just push it into the environment - we will pick it up later */
-               ptr = strchr(p1, '_');
+                ptr = strchr(p1, '_');
                 ++ptr;  // step over the '_'
                 prrte_asprintf(&param, "OMPI_MCA_prrte_%s", ptr);
                 prrte_setenv(param, p2, true, &environ);
