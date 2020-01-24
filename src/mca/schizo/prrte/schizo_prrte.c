@@ -234,7 +234,7 @@ static int parse_cli(int argc, int start, char **argv,
                 p2 = argv[i+2];
             }
             if ('\"' == p2[strlen(p2)- 1]) {
-                p1[strlen(p2)-1] = '\0';
+                p2[strlen(p2)-1] = '\0';
             }
             if (NULL == target) {
                 /* push it into our environment */
@@ -269,7 +269,7 @@ static int parse_cli(int argc, int start, char **argv,
                 p2 = argv[i+2];
             }
             if ('\"' == p2[strlen(p2)- 1]) {
-                p1[strlen(p2)-1] = '\0';
+                p2[strlen(p2)-1] = '\0';
             }
 
             /* this is a generic MCA designation, so see if the parameter it
