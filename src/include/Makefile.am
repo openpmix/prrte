@@ -27,8 +27,10 @@ headers = prrte_config.h \
 		  prefetch.h \
 		  prrte_config_top.h \
 		  prrte_config_bottom.h \
+		  prrte_portable_platform.h \
 		  prrte_stdint.h \
 		  prrte_stdatomic.h \
+		  prrte_socket_errno.h \
 		  align.h
 
 nodist_headers = \
