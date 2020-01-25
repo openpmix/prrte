@@ -40,6 +40,7 @@ $(nodist_man_MANS): $(am__dirstamp) $(top_builddir)/src/include/prrte_config.h
 libprrteutilhostfile_la_SOURCES = \
 	hostfile_lex.h \
         hostfile_lex.l \
+        hostfile.h \
         hostfile.c
 
 maintainer-clean-local:
