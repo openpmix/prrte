@@ -1882,7 +1882,8 @@ int prrte_odls_base_default_kill_local_procs(prrte_pointer_array_t *procs,
             /* check for everything complete - this will remove
              * the child object from our local list
              */
-            if (PRRTE_FLAG_TEST(child, PRRTE_PROC_FLAG_IOF_COMPLETE) &&
+            if (!prrte_finalizing &&
+                PRRTE_FLAG_TEST(child, PRRTE_PROC_FLAG_IOF_COMPLETE) &&
                 PRRTE_FLAG_TEST(child, PRRTE_PROC_FLAG_WAITPID)) {
                 PRRTE_ACTIVATE_PROC_STATE(&child->name, child->state);
             }
@@ -1948,7 +1949,8 @@ int prrte_odls_base_default_kill_local_procs(prrte_pointer_array_t *procs,
             /* check for everything complete - this will remove
              * the child object from our local list
              */
-            if (PRRTE_FLAG_TEST(cd->child, PRRTE_PROC_FLAG_IOF_COMPLETE) &&
+            if (!prrte_finalizing &&
+                PRRTE_FLAG_TEST(cd->child, PRRTE_PROC_FLAG_IOF_COMPLETE) &&
                 PRRTE_FLAG_TEST(cd->child, PRRTE_PROC_FLAG_WAITPID)) {
                 PRRTE_ACTIVATE_PROC_STATE(&cd->child->name, cd->child->state);
             }

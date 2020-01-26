@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
@@ -521,79 +521,108 @@ void pmix_server_finalize(void)
     prrte_pmix_server_globals.initialized = false;
 }
 
-static void send_error(int status, prrte_process_name_t *idreq,
+static void send_error(int status, pmix_proc_t *idreq,
                        prrte_process_name_t *remote, int remote_room)
 {
     prrte_buffer_t *reply;
-    int rc;
+    pmix_status_t prc, pstatus;
+    pmix_data_buffer_t pbuf;
+    char *data=NULL;
+    int32_t sz=0;
+    pmix_proc_t myproc;
 
-    reply = PRRTE_NEW(prrte_buffer_t);
+    PRRTE_PMIX_CONVERT_NAME(&myproc, PRRTE_PROC_MY_NAME);
+
     /* pack the status */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(reply, &status, 1, PRRTE_INT))) {
-        PRRTE_ERROR_LOG(rc);
+    pstatus = prrte_pmix_convert_rc(status);
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &pstatus, 1, PMIX_STATUS))) {
+        PMIX_ERROR_LOG(prc);
         goto error;
     }
     /* pack the id of the requested proc */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(reply, idreq, 1, PRRTE_NAME))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, idreq, 1, PMIX_PROC))) {
+        PMIX_ERROR_LOG(prc);
         goto error;
     }
 
     /* pack the remote daemon's request room number */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(reply, &remote_room, 1, PRRTE_INT))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &remote_room, 1, PMIX_INT))) {
+        PMIX_ERROR_LOG(prc);
         goto error;
     }
 
     /* send the response */
+    reply = PRRTE_NEW(prrte_buffer_t);
+    PMIX_DATA_BUFFER_UNLOAD(&pbuf, data, sz);
+    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+    prrte_dss.load(reply, data, sz);
     prrte_rml.send_buffer_nb(remote, reply,
                             PRRTE_RML_TAG_DIRECT_MODEX_RESP,
                             prrte_rml_send_callback, NULL);
-    return;
+
 error:
-    PRRTE_RELEASE(reply);
+    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
     return;
 }
 
 static void _mdxresp(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
-    int rc;
     prrte_buffer_t *reply;
+    pmix_status_t prc;
+    pmix_data_buffer_t pbuf;
+    char *data;
+    size_t sz;
+    pmix_proc_t myproc;
 
     PRRTE_ACQUIRE_OBJECT(req);
 
     /* check us out of the hotel */
     prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, req->room_num);
 
-    reply = PRRTE_NEW(prrte_buffer_t);
-    /* return the status */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(reply, &req->status, 1, PRRTE_INT))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_RELEASE(reply);
-        goto done;
+    /* pack the status */
+    PRRTE_PMIX_CONVERT_NAME(&myproc, PRRTE_PROC_MY_NAME);
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->pstatus, 1, PMIX_STATUS))) {
+        PMIX_ERROR_LOG(prc);
+        goto error;
     }
     /* pack the id of the requested proc */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(reply, &req->target, 1, PRRTE_NAME))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_RELEASE(reply);
-        goto done;
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->tproc, 1, PMIX_PROC))) {
+        PMIX_ERROR_LOG(prc);
+        goto error;
     }
+
     /* pack the remote daemon's request room number */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(reply, &req->remote_room_num, 1, PRRTE_INT))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_RELEASE(reply);
-        goto done;
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->remote_room_num, 1, PMIX_INT))) {
+        PMIX_ERROR_LOG(prc);
+        goto error;
     }
-    /* return any provided data */
-    prrte_dss.copy_payload(reply, &req->msg);
+    if (PMIX_SUCCESS == req->pstatus) {
+        /* return any provided data */
+        if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->sz, 1, PMIX_SIZE))) {
+            PMIX_ERROR_LOG(prc);
+            goto error;
+        }
+        if (0 < req->sz) {
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, req->data, req->sz, PMIX_BYTE))) {
+                PMIX_ERROR_LOG(prc);
+                goto error;
+            }
+            free(req->data);
+        }
+    }
 
     /* send the response */
+    reply = PRRTE_NEW(prrte_buffer_t);
+    PMIX_DATA_BUFFER_UNLOAD(&pbuf, data, sz);
+    prrte_dss.load(reply, data, sz);
     prrte_rml.send_buffer_nb(&req->proxy, reply,
                             PRRTE_RML_TAG_DIRECT_MODEX_RESP,
                             prrte_rml_send_callback, NULL);
 
-  done:
+  error:
     PRRTE_RELEASE(req);
     return;
 }
@@ -605,18 +634,17 @@ static void modex_resp(pmix_status_t status,
                        void *cbdata)
 {
     pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
-    prrte_buffer_t xfer;
 
     PRRTE_ACQUIRE_OBJECT(req);
 
-    req->status = status;
-    /* we need to preserve the data as the caller
-     * will free it upon our return */
-    PRRTE_CONSTRUCT(&xfer, prrte_buffer_t);
-    prrte_dss.load(&xfer, (void*)data, sz);
-    prrte_dss.copy_payload(&req->msg, &xfer);
-    xfer.base_ptr = NULL; // protect the incoming data
-    PRRTE_DESTRUCT(&xfer);
+    req->pstatus = status;
+    if (PMIX_SUCCESS == status && NULL != data) {
+        /* we need to preserve the data as the caller
+         * will free it upon our return */
+        req->data = (char*)malloc(sz);
+        memcpy(req->data, data, sz);
+        req->sz = sz;
+    }
     prrte_event_set(prrte_event_base, &(req->ev),
                    -1, PRRTE_EV_WRITE, _mdxresp, req);
     prrte_event_set_priority(&(req->ev), PRRTE_MSG_PRI);
@@ -629,32 +657,62 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
 {
     int rc, room_num;
     int32_t cnt;
-    prrte_process_name_t idreq;
     prrte_process_name_t name;
     prrte_job_t *jdata;
     prrte_proc_t *proc;
     pmix_server_req_t *req;
     pmix_proc_t pproc;
+    pmix_proc_t myproc;
+    pmix_status_t prc;
+    pmix_info_t *info=NULL;
+    size_t ninfo;
+    pmix_data_buffer_t pbuf;
+    char *data;
+    size_t sz;
 
-    /* unpack the id of the proc whose data is being requested */
+    PRRTE_PMIX_CONVERT_NAME(&myproc, PRRTE_PROC_MY_NAME);
+    prrte_dss.unload(buffer, (void**)&data, &cnt);
+    sz = cnt;
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+    PMIX_DATA_BUFFER_LOAD(&pbuf, data, sz);
+
     cnt = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &idreq, &cnt, PRRTE_NAME))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&myproc, &pbuf, &pproc, &cnt, PMIX_PROC))) {
+        PMIX_ERROR_LOG(prc);
+        prrte_dss.load(buffer, data, sz);
         return;
     }
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
-                        "%s dmdx:recv request from proc %s for proc %s",
+                        "%s dmdx:recv request from proc %s for proc %s:%u",
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                         PRRTE_NAME_PRINT(sender),
-                        PRRTE_NAME_PRINT(&idreq));
+                        pproc.nspace, pproc.rank);
     /* and the remote daemon's tracking room number */
     cnt = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &room_num, &cnt, PRRTE_INT))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&myproc, &pbuf, &room_num, &cnt, PMIX_INT))) {
+        PMIX_ERROR_LOG(prc);
+        prrte_dss.load(buffer, data, sz);
         return;
     }
+    cnt = 1;
+    if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&myproc, &pbuf, &ninfo, &cnt, PMIX_SIZE))) {
+        PMIX_ERROR_LOG(prc);
+        prrte_dss.load(buffer, data, sz);
+        return;
+    }
+    if (0 < ninfo) {
+        PMIX_INFO_CREATE(info, ninfo);
+        cnt = ninfo;
+        if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&myproc, &pbuf, info, &cnt, PMIX_INFO))) {
+            PMIX_ERROR_LOG(prc);
+            prrte_dss.load(buffer, data, sz);
+            return;
+        }
+    }
+    prrte_dss.load(buffer, data, sz);  // restore the buffer as we are done with it
+
     /* is this proc one of mine? */
-    memcpy((char*)&name, (char*)&idreq, sizeof(prrte_process_name_t));
+    PRRTE_PMIX_CONVERT_PROCT(rc, &name, &pproc);
     if (NULL == (jdata = prrte_get_job_data_object(name.jobid))) {
         /* not having the jdata means that we haven't unpacked the
          * the launch message for this job yet - this is a race
@@ -663,7 +721,9 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
         req = PRRTE_NEW(pmix_server_req_t);
         prrte_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
         req->proxy = *sender;
-        req->target = idreq;
+        memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
+        req->info = info;
+        req->ninfo = ninfo;
         req->remote_room_num = room_num;
         /* adjust the timeout to reflect the size of the job as it can take some
          * amount of time to start the job */
@@ -671,18 +731,18 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
         if (PRRTE_SUCCESS != (rc = prrte_hotel_checkin(&prrte_pmix_server_globals.reqs, req, &req->room_num))) {
             prrte_show_help("help-orted.txt", "noroom", true, req->operation, prrte_pmix_server_globals.num_rooms);
             PRRTE_RELEASE(req);
-            send_error(rc, &idreq, sender, room_num);
+            send_error(rc, &pproc, sender, room_num);
         }
         return;
     }
     if (NULL == (proc = (prrte_proc_t*)prrte_pointer_array_get_item(jdata->procs, name.vpid))) {
         /* this is truly an error, so notify the sender */
-        send_error(PRRTE_ERR_NOT_FOUND, &idreq, sender, room_num);
+        send_error(PRRTE_ERR_NOT_FOUND, &pproc, sender, room_num);
         return;
     }
     if (!PRRTE_FLAG_TEST(proc, PRRTE_PROC_FLAG_LOCAL)) {
         /* send back an error - they obviously have made a mistake */
-        send_error(PRRTE_ERR_NOT_FOUND, &idreq, sender, room_num);
+        send_error(PRRTE_ERR_NOT_FOUND, &pproc, sender, room_num);
         return;
     }
     /* track the request since the call down to the PMIx server
@@ -690,7 +750,9 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
     req = PRRTE_NEW(pmix_server_req_t);
     prrte_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
     req->proxy = *sender;
-    req->target = idreq;
+    memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
+    req->info = info;
+    req->ninfo = ninfo;
     req->remote_room_num = room_num;
     /* adjust the timeout to reflect the size of the job as it can take some
      * amount of time to start the job */
@@ -698,17 +760,16 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
     if (PRRTE_SUCCESS != (rc = prrte_hotel_checkin(&prrte_pmix_server_globals.reqs, req, &req->room_num))) {
         prrte_show_help("help-orted.txt", "noroom", true, req->operation, prrte_pmix_server_globals.num_rooms);
         PRRTE_RELEASE(req);
-        send_error(rc, &idreq, sender, room_num);
+        send_error(rc, &pproc, sender, room_num);
         return;
     }
 
     /* ask our local pmix server for the data */
-    PRRTE_PMIX_CONVERT_NAME(&pproc, &idreq);
-    if (PRRTE_SUCCESS != (rc = PMIx_server_dmodex_request(&pproc, modex_resp, req))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PMIX_SUCCESS != (prc = PMIx_server_dmodex_request(&pproc, modex_resp, req))) {
+        PMIX_ERROR_LOG(prc);
         prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, req->room_num);
         PRRTE_RELEASE(req);
-        send_error(rc, &idreq, sender, room_num);
+        send_error(rc, &pproc, sender, room_num);
         return;
     }
     return;
@@ -722,6 +783,7 @@ typedef struct {
 static void dccon(datacaddy_t *p)
 {
     p->data = NULL;
+    p->ndata = 0;
 }
 static void dcdes(datacaddy_t *p)
 {
@@ -730,8 +792,8 @@ static void dcdes(datacaddy_t *p)
     }
 }
 static PRRTE_CLASS_INSTANCE(datacaddy_t,
-                          prrte_object_t,
-                          dccon, dcdes);
+                            prrte_object_t,
+                            dccon, dcdes);
 
 static void relcbfunc(void *relcbdata)
 {
@@ -744,44 +806,76 @@ static void pmix_server_dmdx_resp(int status, prrte_process_name_t* sender,
                                   prrte_buffer_t *buffer,
                                   prrte_rml_tag_t tg, void *cbdata)
 {
-    int rc, ret, room_num, rnum;
+    int room_num, rnum;
     int32_t cnt;
-    prrte_process_name_t target;
     pmix_server_req_t *req;
     datacaddy_t *d;
+    pmix_proc_t myproc, pproc;
+    pmix_data_buffer_t pbuf;
+    char *data;
+    size_t sz, psz;
+    pmix_status_t prc, pret;
 
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
                         "%s dmdx:recv response from proc %s",
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                         PRRTE_NAME_PRINT(sender));
 
+    prrte_dss.unload(buffer, (void**)&data, &cnt);
+    sz = cnt;
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+    PMIX_DATA_BUFFER_LOAD(&pbuf, data, sz);
+    PRRTE_PMIX_CONVERT_NAME(&myproc, PRRTE_PROC_MY_NAME);
+    d = PRRTE_NEW(datacaddy_t);
+
     /* unpack the status */
-    cnt = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &ret, &cnt, PRRTE_INT))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&myproc, &pbuf, &pret, &cnt, PMIX_STATUS))) {
+        PMIX_ERROR_LOG(prc);
+        prrte_dss.load(buffer, data, sz);
+        PRRTE_RELEASE(d);
         return;
     }
 
     /* unpack the id of the target whose info we just received */
     cnt = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &target, &cnt, PRRTE_NAME))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&myproc, &pbuf, &pproc, &cnt, PMIX_PROC))) {
+        PMIX_ERROR_LOG(prc);
+        prrte_dss.load(buffer, data, sz);
+        PRRTE_RELEASE(d);
         return;
     }
 
     /* unpack our tracking room number */
     cnt = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &room_num, &cnt, PRRTE_INT))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&myproc, &pbuf, &room_num, &cnt, PMIX_INT))) {
+        PMIX_ERROR_LOG(prc);
+        prrte_dss.load(buffer, data, sz);
+        PRRTE_RELEASE(d);
         return;
     }
 
     /* unload the remainder of the buffer */
-    d = PRRTE_NEW(datacaddy_t);
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unload(buffer, (void**)&d->data, &d->ndata))) {
-        PRRTE_ERROR_LOG(rc);
-        return;
+    if (PMIX_SUCCESS == pret) {
+        cnt = 1;
+        if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&myproc, &pbuf, &psz, &cnt, PMIX_SIZE))) {
+            PMIX_ERROR_LOG(prc);
+            prrte_dss.load(buffer, data, sz);
+            PRRTE_RELEASE(d);
+            return;
+        }
+        if (0 < psz) {
+            d->ndata = psz;
+            d->data = (char*)malloc(psz);
+            cnt = psz;
+            if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&myproc, &pbuf, d->data, &cnt, PMIX_BYTE))) {
+                PMIX_ERROR_LOG(prc);
+                prrte_dss.load(buffer, data, sz);
+                PRRTE_RELEASE(d);
+                return;
+            }
+        }
     }
+    prrte_dss.load(buffer, data, sz);
 
     /* check the request out of the tracking hotel */
     prrte_hotel_checkout_and_return_occupant(&prrte_pmix_server_globals.reqs, room_num, (void**)&req);
@@ -789,7 +883,7 @@ static void pmix_server_dmdx_resp(int status, prrte_process_name_t* sender,
     if (NULL != req) {
         if (NULL != req->mdxcbfunc) {
             PRRTE_RETAIN(d);
-            req->mdxcbfunc(ret, d->data, d->ndata, req->cbdata, relcbfunc, d);
+            req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
         }
         PRRTE_RELEASE(req);
     }
@@ -800,11 +894,10 @@ static void pmix_server_dmdx_resp(int status, prrte_process_name_t* sender,
         if (NULL == req) {
             continue;
         }
-        if (req->target.jobid == target.jobid &&
-            req->target.vpid == target.vpid) {
+        if (PMIX_CHECK_PROCID(&req->tproc, &pproc)) {
             if (NULL != req->mdxcbfunc) {
                 PRRTE_RETAIN(d);
-                req->mdxcbfunc(ret, d->data, d->ndata, req->cbdata, relcbfunc, d);
+                req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
             }
             prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, rnum);
             PRRTE_RELEASE(req);
@@ -908,6 +1001,8 @@ static void rqcon(pmix_server_req_t *p)
     p->pid = 0;
     p->info = NULL;
     p->ninfo = 0;
+    p->data = NULL;
+    p->sz = 0;
     p->range = PMIX_RANGE_SESSION;
     p->proxy = *PRRTE_NAME_INVALID;
     p->target = *PRRTE_NAME_INVALID;
