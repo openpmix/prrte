@@ -18,6 +18,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1386,7 +1387,6 @@ int prun(int argc, char *argv[])
     if (NULL != rellock.msg) {
         fprintf(stderr, "%s\n", rellock.msg);
     }
-    PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
 
     /* if we lost connection to the server, then we are done */
     if (PMIX_ERR_LOST_CONNECTION_TO_SERVER == rc ||
@@ -1399,6 +1399,7 @@ int prun(int argc, char *argv[])
     PMIx_Deregister_event_handler(evid, opcbfunc, &lock);
     PRRTE_PMIX_WAIT_THREAD(&lock);
     PRRTE_PMIX_DESTRUCT_LOCK(&lock);
+    PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* close the push of our stdin */
