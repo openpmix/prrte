@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2012-2016 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, LLC. All rights reserved
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,7 +25,7 @@ static void local_eviction_callback(int fd, short flags, void *arg)
         (prrte_hotel_room_eviction_callback_arg_t*) arg;
     void *occupant = eargs->hotel->rooms[eargs->room_num].occupant;
 
-    /* Remove the occurpant from the room.
+    /* Remove the occupant from the room.
 
        Do not change this logic without also changing the same logic
        in prrte_hotel_checkout() and
@@ -60,8 +60,8 @@ int prrte_hotel_init(prrte_hotel_t *h, int num_rooms,
 
     h->num_rooms = num_rooms;
     h->evbase = evbase;
-    h->eviction_timeout.tv_usec = eviction_timeout % 1000000;
-    h->eviction_timeout.tv_sec = eviction_timeout / 1000000;
+    h->eviction_timeout.tv_usec = 0;
+    h->eviction_timeout.tv_sec = eviction_timeout;
     h->evict_callback_fn = evict_callback_fn;
     h->rooms = (prrte_hotel_room_t*)malloc(num_rooms * sizeof(prrte_hotel_room_t));
     if (NULL != evict_callback_fn) {

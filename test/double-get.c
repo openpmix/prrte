@@ -4,6 +4,9 @@
 
 static pmix_proc_t allproc = {};
 static pmix_proc_t myproc = {};
+static bool wait = false;
+static bool refresh = false;
+static bool timeout = false;
 
 #define ERR(msg, ...)							\
     do {								\
@@ -42,7 +45,7 @@ int pmi_set_string(const char *key, void *data, size_t size)
     return 0;
 }
 
-int pmi_get_string(uint32_t peer_rank, const char *key, bool refresh, void **data_out, size_t *data_size_out)
+int pmi_get_string(uint32_t peer_rank, const char *key, void **data_out, size_t *data_size_out)
 {
     int rc;
     pmix_proc_t proc;
@@ -50,8 +53,13 @@ int pmi_get_string(uint32_t peer_rank, const char *key, bool refresh, void **dat
     pmix_info_t info;
 
     PMIX_LOAD_PROCID(&proc, myproc.nspace, peer_rank);
-    PMIX_INFO_LOAD(&info, PMIX_GET_REFRESH_CACHE, &refresh, PMIX_BOOL);
-    if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, key, &info, 1, &pvalue))) {
+    if (refresh) {
+        PMIX_INFO_LOAD(&info, PMIX_GET_REFRESH_CACHE, &refresh, PMIX_BOOL);
+        rc = PMIx_Get(&proc, key, &info, 1, &pvalue);
+    } else {
+        rc = PMIx_Get(&proc, key, NULL, 0, &pvalue);
+    }
+    if (PMIX_SUCCESS != rc) {
         ERR("Client ns %s rank %d: PMIx_Get on rank %u %s: %s\n", myproc.nspace, myproc.rank, peer_rank, key, PMIx_Error_string(rc));
     }
     if(pvalue->type != PMIX_BYTE_OBJECT){
@@ -98,11 +106,38 @@ int main(int argc, char *argv[])
     int rc;
     pmix_value_t *pvalue;
 
+    /* check the args */
+    if (1 < argc) {
+        if (2 < argc || 0 == strncmp(argv[1], "-h", 2) || 0 == strncmp(argv[1], "--h", 3)) {
+            fprintf(stderr, "Usage:\n");
+            fprintf(stderr, "\t--wait       Test PMIX_GET_WAIT_FOR_KEY\n");
+            fprintf(stderr, "\t--refresh    Test PMIX_GET_REFRESH_CACHE\n");
+            fprintf(stderr, "\t--timeout    Test PMIX_GET_WAIT_FOR_KEY, but timeout\n");
+            exit(0);
+        }
+        if (0 == strncmp(argv[1], "--w", 3)) {
+            wait = true;
+        } else if (0 == strncmp(argv[1], "--r", 3)) {
+            refresh = true;
+        } else if (0 == strncmp(argv[1], "--t", 3)) {
+            timeout = true;
+        } else {
+            fprintf(stderr, "Invalid cmd line option: %s\n", argv[1]);
+            fprintf(stderr, "Usage:\n");
+            fprintf(stderr, "\t--wait       Test PMIX_GET_WAIT_FOR_KEY\n");
+            fprintf(stderr, "\t--refresh    Test PMIX_GET_REFRESH_CACHE\n");
+            fprintf(stderr, "\t--timeout    Test PMIX_GET_WAIT_FOR_KEY, but timeout\n");
+            exit(1);
+        }
+    }
+
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
-	ERR("PMIx_Init failed");
+	   ERR("PMIx_Init failed");
         exit(1);
     }
-    if(myproc.rank == 0) printf("PMIx initialized\n");
+    if (myproc.rank == 0) {
+        printf("PMIx initialized\n");
+    }
 
     /* job-related info is found in our nspace, assigned to the
      * wildcard rank as it doesn't relate to a specific rank. Setup
@@ -122,13 +157,29 @@ int main(int argc, char *argv[])
     pmi_set_string("test-key-1", data, 256);
     pmix_exchange(true);
 
+    if (1 == myproc.rank) {
+        if (timeout) {
+            sleep(10);
+        } else if (wait) {
+            sleep(2);
+        }
+    }
+
     sprintf(data, "SECOND TIME rank %d", myproc.rank);
-    pmi_set_string("test-key-2", data, 256);
+    if (0 == myproc.rank) {
+        pmi_set_string("test-key-2", data, 256);
+    } else {
+        pmi_set_string("test-key-3", data, 256);
+    }
 
     /* An explicit Fence has to be called again to read the `test-key-2` */
     // pmix_exchange(false);
 
-    pmi_get_string((myproc.rank+1)%2, "test-key-2", true, (void**)&data_out, &size_out);
+    if (0 == myproc.rank) {
+        pmi_get_string(1, "test-key-3", (void**)&data_out, &size_out);
+    } else {
+        pmi_get_string(0, "test-key-2", (void**)&data_out, &size_out);
+    }
     printf("%d: obtained data \"%s\"\n", myproc.rank, data_out);
 
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
