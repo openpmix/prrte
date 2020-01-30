@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2012-2016 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, LLC. All rights reserved
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -137,7 +137,7 @@ PRRTE_CLASS_DECLARATION(prrte_hotel_t);
  * @param num_rooms The total number of rooms in the hotel (IN)
  * @param evbase Pointer to event base used for eviction timeout
  * @param eviction_timeout Max length of a stay at the hotel before
- * the eviction callback is invoked (in microseconds)
+ * the eviction callback is invoked (in seconds)
  * @param eviction_event_priority Event lib priority for the eviction timeout
  * @param evict_callback_fn Callback function invoked if an occupant
  * does not check out before the eviction_timeout.
@@ -287,7 +287,6 @@ static inline void prrte_hotel_checkout_and_return_occupant(prrte_hotel_t *hotel
     /* If there's an occupant in the room, check them out */
     room = &(hotel->rooms[room_num]);
     if (PRRTE_LIKELY(NULL != room->occupant)) {
-        prrte_output (10, "checking out occupant %p from room num %d", room->occupant, room_num);
         /* Do not change this logic without also changing the same
            logic in prrte_hotel_checkout() and
            prrte_hotel.c:local_eviction_callback(). */

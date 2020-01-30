@@ -28,7 +28,6 @@
 
 #include "prrte_config.h"
 #include "types.h"
-#include "types.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -49,6 +48,7 @@
 #include "src/runtime/prrte_globals.h"
 
 #include "src/mca/schizo/base/base.h"
+#include "schizo_ompi.h"
 
 static int define_cli(prrte_cmd_line_t *cli);
 static int parse_cli(int argc, int start, char **argv,

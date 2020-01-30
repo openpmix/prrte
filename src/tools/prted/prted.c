@@ -282,6 +282,8 @@ int main(int argc, char *argv[])
         return ret;
     }
     /* scan for personalities */
+    prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "prrte", false);
+    prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "pmix", false);
     for (i=0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
             prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, argv[i+1], false);

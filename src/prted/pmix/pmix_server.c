@@ -143,6 +143,14 @@ static prrte_regattr_input_t prrte_attributes[] = {
 };
 #endif
 
+static void send_error(int status, pmix_proc_t *idreq,
+                       prrte_process_name_t *remote, int remote_room);
+static void _mdxresp(int sd, short args, void *cbdata);
+static void modex_resp(pmix_status_t status,
+                       char *data, size_t sz,
+                       void *cbdata);
+
+
 void pmix_server_register_params(void)
 {
     /* register a verbosity */
@@ -211,6 +219,11 @@ static void eviction_cbfunc(struct prrte_hotel_t *hotel,
     pmix_server_req_t *req = (pmix_server_req_t*)occupant;
     bool timeout = false;
     int rc=PRRTE_ERR_TIMEOUT;
+    pmix_value_t *pval = NULL;
+    pmix_status_t prc;
+
+    prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                         "EVICTION FROM ROOM %d", room_num);
 
     /* decrement the request timeout */
     req->timeout -= prrte_pmix_server_globals.timeout;
@@ -221,17 +234,50 @@ static void eviction_cbfunc(struct prrte_hotel_t *hotel,
         }
     }
     if (!timeout) {
+        /* see if this is a dmdx request waiting for a key to arrive */
+        if (NULL != req->key) {
+            prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                                 "%s server:evict timeout - checking for key %s from proc %s:%u",
+                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), req->key, req->tproc.nspace, req->tproc.rank);
+
+            /* see if the key has arrived */
+            if (PMIX_SUCCESS == PMIx_Get(&req->tproc, req->key, req->info, req->ninfo, &pval)) {
+                prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                                     "%s server:evict key %s found - retrieving payload",
+                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), req->key);
+                /* it has - ask our local pmix server for the data */
+                PMIX_VALUE_RELEASE(pval);
+                /* check us back into hotel so the modex_resp function can safely remove us */
+                prrte_hotel_checkin(&prrte_pmix_server_globals.reqs, req, &req->room_num);
+                if (PMIX_SUCCESS != (prc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req))) {
+                    PMIX_ERROR_LOG(prc);
+                    send_error(rc, &req->tproc, &req->proxy, req->remote_room_num);
+                    prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, req->room_num);
+                    PRRTE_RELEASE(req);
+                }
+                return;
+            }
+            /* if not, then we continue to wait */
+            prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                                 "%s server:evict key %s not found - returning to hotel",
+                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), req->key);
+        }
         /* not done yet - check us back in */
         if (PRRTE_SUCCESS == (rc = prrte_hotel_checkin(&prrte_pmix_server_globals.reqs, req, &req->room_num))) {
+            prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                                 "%s server:evict checked back in to room %d",
+                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), req->room_num);
             return;
         }
-        PRRTE_ERROR_LOG(rc);
         /* fall thru and return an error so the caller doesn't hang */
     } else {
         prrte_show_help("help-orted.txt", "timedout", true, req->operation);
     }
+
     /* don't let the caller hang */
-    if (NULL != req->opcbfunc) {
+    if (req->wait_for_key) {
+        send_error(rc, &req->tproc, &req->proxy, req->remote_room_num);
+    } else if (NULL != req->opcbfunc) {
         req->opcbfunc(PMIX_ERR_TIMEOUT, req->cbdata);
     } else if (NULL != req->mdxcbfunc) {
         req->mdxcbfunc(PMIX_ERR_TIMEOUT, NULL, 0, req->cbdata, NULL, NULL);
@@ -281,7 +327,7 @@ int pmix_server_init(void)
     }
     if (PRRTE_SUCCESS != (rc = prrte_hotel_init(&prrte_pmix_server_globals.reqs,
                                               prrte_pmix_server_globals.num_rooms,
-                                              prrte_event_base, prrte_pmix_server_globals.timeout*1000000,
+                                              prrte_event_base, prrte_pmix_server_globals.timeout,
                                               PRRTE_ERROR_PRI, eviction_cbfunc))) {
         PRRTE_ERROR_LOG(rc);
         return rc;
@@ -578,6 +624,11 @@ static void _mdxresp(int sd, short args, void *cbdata)
 
     PRRTE_ACQUIRE_OBJECT(req);
 
+    prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                         "%s XMITTING DATA FOR PROC %s:%u",
+                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                         req->tproc.nspace, req->tproc.rank);
+
     /* check us out of the hotel */
     prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, req->room_num);
 
@@ -667,8 +718,9 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
     pmix_info_t *info=NULL;
     size_t ninfo;
     pmix_data_buffer_t pbuf;
-    char *data;
+    char *data, *key=NULL;
     size_t sz;
+    pmix_value_t *pval = NULL;
 
     PRRTE_PMIX_CONVERT_NAME(&myproc, PRRTE_PROC_MY_NAME);
     prrte_dss.unload(buffer, (void**)&data, &cnt);
@@ -711,6 +763,17 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
     }
     prrte_dss.load(buffer, data, sz);  // restore the buffer as we are done with it
 
+    /* see if they want us to await a particular key before sending
+     * the response */
+    if (NULL != info) {
+        for (sz=0; sz < ninfo; sz++) {
+            if (PMIX_CHECK_KEY(&info[sz], PMIX_REQUIRED_KEY)) {
+                key = info[sz].value.data.string;
+                break;
+            }
+        }
+    }
+
     /* is this proc one of mine? */
     PRRTE_PMIX_CONVERT_PROCT(rc, &name, &pproc);
     if (NULL == (jdata = prrte_get_job_data_object(name.jobid))) {
@@ -718,12 +781,18 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
          * the launch message for this job yet - this is a race
          * condition, so just log the request and we will fill
          * it later */
+        prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                             "%s dmdx:recv request no job - checking into hotel",
+                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
         req = PRRTE_NEW(pmix_server_req_t);
         prrte_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
         req->proxy = *sender;
         memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
         req->info = info;
         req->ninfo = ninfo;
+        if (NULL != key) {
+            req->key = strdup(key);
+        }
         req->remote_room_num = room_num;
         /* adjust the timeout to reflect the size of the job as it can take some
          * amount of time to start the job */
@@ -745,6 +814,48 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
         send_error(PRRTE_ERR_NOT_FOUND, &pproc, sender, room_num);
         return;
     }
+
+    if (NULL != key) {
+        prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                             "%s dmdx:recv checking for key %s",
+                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), key);
+        /* see if we have it */
+        if (PMIX_SUCCESS != PMIx_Get(&pproc, key, info, ninfo, &pval)) {
+            prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                                 "%s dmdx:recv key %s not found - checking into hotel",
+                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), key);
+            /* we don't - wait for awhile */
+            req = PRRTE_NEW(pmix_server_req_t);
+            prrte_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
+            req->proxy = *sender;
+            memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
+            req->info = info;
+            req->ninfo = ninfo;
+            req->key = strdup(key);
+            req->remote_room_num = room_num;
+            /* adjust the timeout to reflect the size of the job as it can take some
+             * amount of time to start the job */
+            PRRTE_ADJUST_TIMEOUT(req);
+            /* we no longer need the info */
+            PMIX_INFO_FREE(info, ninfo);
+            /* check us into the hotel */
+            if (PRRTE_SUCCESS != (rc = prrte_hotel_checkin(&prrte_pmix_server_globals.reqs, req, &req->room_num))) {
+                prrte_show_help("help-orted.txt", "noroom", true, req->operation, prrte_pmix_server_globals.num_rooms);
+                PRRTE_RELEASE(req);
+                send_error(rc, &pproc, sender, room_num);
+            }
+                prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                                     "%s:%d CHECKING REQ FOR KEY %s TO %d REMOTE ROOM %d",
+                                     __FILE__, __LINE__, req->key, req->room_num, req->remote_room_num);
+            return;
+        }
+        /* we do already have it, so go get the payload */
+        PMIX_VALUE_RELEASE(pval);
+        prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                             "%s dmdx:recv key %s found - retrieving payload",
+                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), key);
+    }
+
     /* track the request since the call down to the PMIx server
      * is asynchronous */
     req = PRRTE_NEW(pmix_server_req_t);
@@ -886,6 +997,9 @@ static void pmix_server_dmdx_resp(int status, prrte_process_name_t* sender,
             req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
         }
         PRRTE_RELEASE(req);
+    } else {
+        prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                             "REQ WAS NULL IN ROOM %d", room_num);
     }
 
     /* now see if anyone else was waiting for data from this target */
@@ -994,8 +1108,10 @@ static void rqcon(pmix_server_req_t *p)
 {
     p->operation = NULL;
     p->cmdline = NULL;
+    p->key = NULL;
     p->flag = true;
     p->launcher = false;
+    p->wait_for_key = false;
     p->uid = 0;
     p->gid = 0;
     p->pid = 0;
@@ -1024,6 +1140,9 @@ static void rqdes(pmix_server_req_t *p)
     }
     if (NULL != p->cmdline) {
         free(p->cmdline);
+    }
+    if (NULL != p->key) {
+        free(p->key);
     }
     if (NULL != p->jdata) {
         PRRTE_RELEASE(p->jdata);

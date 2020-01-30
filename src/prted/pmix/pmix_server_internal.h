@@ -53,13 +53,25 @@
 
 BEGIN_C_DECLS
 
-#define PRRTED_PMIX_MIN_DMX_TIMEOUT      10
-#define PRRTE_ADJUST_TIMEOUT(a)                                      \
-    do {                                                            \
-        (a)->timeout = (2 * prrte_process_info.num_daemons) / 1000;  \
-        if ((a)->timeout < PRRTED_PMIX_MIN_DMX_TIMEOUT) {            \
-            (a)->timeout = PRRTED_PMIX_MIN_DMX_TIMEOUT;              \
-        }                                                           \
+#define PRRTED_PMIX_MIN_DMX_TIMEOUT      120
+#define PRRTE_ADJUST_TIMEOUT(a)                                         \
+    do {                                                                \
+        size_t _n;                                                      \
+        bool _set = false;                                              \
+        if (NULL != (a)->info) {                                        \
+            for (_n=0; _n < (a)->ninfo; _n++) {                         \
+                if (PMIX_CHECK_KEY(&(a)->info[_n], PMIX_TIMEOUT)) {     \
+                    (a)->timeout = (a)->info[_n].value.data.integer;    \
+                    _set = true;                                        \
+                }                                                       \
+            }                                                           \
+        }                                                               \
+        if (!_set) {                                                    \
+            (a)->timeout = (2 * prrte_process_info.num_daemons) / 10;   \
+            if ((a)->timeout < PRRTED_PMIX_MIN_DMX_TIMEOUT) {           \
+                (a)->timeout = PRRTED_PMIX_MIN_DMX_TIMEOUT;             \
+            }                                                           \
+        }                                                               \
     } while(0)
 
 /* object for tracking requests so we can
@@ -69,6 +81,7 @@ BEGIN_C_DECLS
     prrte_event_t ev;
     char *operation;
     char *cmdline;
+    char *key;
     int status;
     pmix_status_t pstatus;
     int timeout;
@@ -76,6 +89,7 @@ BEGIN_C_DECLS
     int remote_room_num;
     bool flag;
     bool launcher;
+    bool wait_for_key;
     uid_t uid;
     gid_t gid;
     pid_t pid;

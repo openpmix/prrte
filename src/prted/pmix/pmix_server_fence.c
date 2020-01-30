@@ -131,6 +131,65 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
     return PMIX_SUCCESS;
 }
 
+static void modex_resp(pmix_status_t status,
+                       char *data, size_t sz,
+                       void *cbdata)
+{
+    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prrte_buffer_t *reply;
+    pmix_status_t prc;
+    pmix_data_buffer_t pbuf;
+    char *pdata;
+    size_t psz;
+    pmix_proc_t myproc;
+
+    PRRTE_ACQUIRE_OBJECT(req);
+
+    /* pack the status */
+    PRRTE_PMIX_CONVERT_NAME(&myproc, PRRTE_PROC_MY_NAME);
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &status, 1, PMIX_STATUS))) {
+        PMIX_ERROR_LOG(prc);
+        goto error;
+    }
+    /* pack the id of the requested proc */
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->tproc, 1, PMIX_PROC))) {
+        PMIX_ERROR_LOG(prc);
+        goto error;
+    }
+
+    /* pack the remote daemon's request room number */
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->remote_room_num, 1, PMIX_INT))) {
+        PMIX_ERROR_LOG(prc);
+        goto error;
+    }
+    if (PMIX_SUCCESS == status) {
+        /* return any provided data */
+        if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &sz, 1, PMIX_SIZE))) {
+            PMIX_ERROR_LOG(prc);
+            goto error;
+        }
+        if (0 < sz) {
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, data, sz, PMIX_BYTE))) {
+                PMIX_ERROR_LOG(prc);
+                goto error;
+            }
+        }
+    }
+
+    /* send the response */
+    reply = PRRTE_NEW(prrte_buffer_t);
+    PMIX_DATA_BUFFER_UNLOAD(&pbuf, pdata, psz);
+    prrte_dss.load(reply, pdata, psz);
+    prrte_rml.send_buffer_nb(&req->proxy, reply,
+                            PRRTE_RML_TAG_DIRECT_MODEX_RESP,
+                            prrte_rml_send_callback, NULL);
+
+  error:
+    PRRTE_RELEASE(req);
+    return;
+}
+
 static void dmodex_req(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
@@ -147,6 +206,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     pmix_status_t prc;
     bool refresh_cache = false;
     size_t n;
+    pmix_value_t *pval;
 
     PRRTE_ACQUIRE_OBJECT(rq);
 
@@ -167,16 +227,18 @@ static void dmodex_req(int sd, short args, void *cbdata)
         for (n=0; n < req->ninfo; n++) {
             if (PMIX_CHECK_KEY(&req->info[n], PMIX_GET_REFRESH_CACHE)) {
                 refresh_cache = PMIX_INFO_TRUE(&req->info[n]);
-                break;
+            } else if (PMIX_CHECK_KEY(&req->info[n], PMIX_REQUIRED_KEY)) {
+                req->key = strdup(req->info[n].value.data.string);
             }
         }
     }
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
-                         "%s DMODX REQ REFRESH %s",
+                         "%s DMODX REQ REFRESH %s REQUIRED KEY %s",
                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         refresh_cache ? "TRUE" : "FALSE");
+                         refresh_cache ? "TRUE" : "FALSE",
+                         (NULL == req->key) ? "NULL" : req->key);
 
-    if (!refresh_cache) {
+    if (!refresh_cache && NULL != req->key) {
         /* a race condition exists here because of the thread-shift - it is
          * possible that data for the specified proc arrived while we were
          * waiting to be serviced. In that case, the tracker that would have
@@ -184,10 +246,14 @@ static void dmodex_req(int sd, short args, void *cbdata)
          * and we would therefore think that we had to request it again.
          * So do a quick check to ensure we don't already have the desired
          * data */
-        PRRTE_MODEX_RECV_STRING(rc, "modex", &prtenm, &data, &sz);
-        if (PRRTE_SUCCESS == rc) {
-            req->mdxcbfunc(rc, data, sz, req->cbdata, relcb, data);
-            PRRTE_RELEASE(req);
+        if (PMIX_SUCCESS == PMIx_Get(&req->tproc, req->key, req->info, req->ninfo, &pval)) {
+            PMIX_VALUE_RELEASE(pval);
+            /* we have it - just to be safe, get the blob and return it */
+            if (PMIX_SUCCESS != (prc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req))) {
+                PMIX_ERROR_LOG(prc);
+                req->mdxcbfunc(prc, NULL, 0, req->cbdata, NULL, NULL);
+                PRRTE_RELEASE(req);
+            }
             return;
         }
     }
@@ -227,6 +293,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
             prrte_show_help("help-orted.txt", "noroom", true, req->operation, prrte_pmix_server_globals.num_rooms);
             /* can't just return as that would cause the requestor
              * to hang, so instead execute the callback */
+            prc = prrte_pmix_convert_rc(rc);
             goto callback;
         }
         return;
@@ -238,6 +305,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     if (PRRTE_VPID_WILDCARD == prtenm.vpid) {
         rc = prrte_pmix_server_register_nspace(jdata);
         if (PRRTE_SUCCESS != rc) {
+            prc = prrte_pmix_convert_rc(rc);
             goto callback;
         }
         /* let the server know that the data is now available */
@@ -253,6 +321,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
         /* if we find the job, but not the process, then that is an error */
         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         rc = PRRTE_ERR_NOT_FOUND;
+        prc = prrte_pmix_convert_rc(rc);
         goto callback;
     }
 
@@ -262,6 +331,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
          * must be an error */
         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         rc = PRRTE_ERR_NOT_FOUND;
+        prc = prrte_pmix_convert_rc(rc);
         goto callback;
     }
     /* point the request to the daemon that is hosting the
@@ -272,9 +342,13 @@ static void dmodex_req(int sd, short args, void *cbdata)
      * to callback upon completion */
     if (PRRTE_SUCCESS != (rc = prrte_hotel_checkin(&prrte_pmix_server_globals.reqs, req, &req->room_num))) {
         prrte_show_help("help-orted.txt", "noroom", true, req->operation, prrte_pmix_server_globals.num_rooms);
+        prc = prrte_pmix_convert_rc(rc);
         goto callback;
     }
-
+    prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                        "%s:%d MY REQ ROOM IS %d FOR KEY %s",
+                        __FILE__, __LINE__, req->room_num,
+                        (NULL == req->key) ? "NULL" : req->key);
     /* if we are the host daemon, then this is a local request, so
      * just wait for the data to come in */
     if (PRRTE_PROC_MY_NAME->vpid == dmn->name.vpid) {
@@ -330,7 +404,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
   callback:
     /* this section gets executed solely upon an error */
     if (NULL != req->mdxcbfunc) {
-        req->mdxcbfunc(rc, NULL, 0, req->cbdata, NULL, NULL);
+        req->mdxcbfunc(prc, NULL, 0, req->cbdata, NULL, NULL);
     }
     PRRTE_RELEASE(req);
 }
