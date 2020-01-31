@@ -90,7 +90,6 @@ BEGIN_C_DECLS
     int remote_room_num;
     bool flag;
     bool launcher;
-    bool wait_for_key;
     uid_t uid;
     gid_t gid;
     pid_t pid;

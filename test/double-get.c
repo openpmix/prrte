@@ -4,7 +4,7 @@
 
 static pmix_proc_t allproc = {};
 static pmix_proc_t myproc = {};
-static bool wait = false;
+static bool mywait = false;
 static bool refresh = false;
 static bool timeout = false;
 
@@ -27,7 +27,7 @@ int pmi_set_string(const char *key, void *data, size_t size)
     value.type = PMIX_BYTE_OBJECT;
     value.data.bo.bytes = data;
     value.data.bo.size  = size;
-    if (PMIX_SUCCESS != (rc = PMIx_Put(PMIX_REMOTE, key, &value))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Put(PMIX_GLOBAL, key, &value))) {
         ERR("Client ns %s rank %d: PMIx_Put failed: %s\n", myproc.nspace, myproc.rank, PMIx_Error_string(rc));
     }
 
@@ -56,6 +56,12 @@ int pmi_get_string(uint32_t peer_rank, const char *key, void **data_out, size_t 
     if (refresh) {
         PMIX_INFO_LOAD(&info, PMIX_GET_REFRESH_CACHE, &refresh, PMIX_BOOL);
         rc = PMIx_Get(&proc, key, &info, 1, &pvalue);
+        PMIX_INFO_DESTRUCT(&info);
+    } else if (timeout) {
+        rc = 2;
+        PMIX_INFO_LOAD(&info, PMIX_TIMEOUT, &rc, PMIX_INT);
+        rc = PMIx_Get(&proc, key, &info, 1, &pvalue);
+        PMIX_INFO_DESTRUCT(&info);
     } else {
         rc = PMIx_Get(&proc, key, NULL, 0, &pvalue);
     }
@@ -116,7 +122,7 @@ int main(int argc, char *argv[])
             exit(0);
         }
         if (0 == strncmp(argv[1], "--w", 3)) {
-            wait = true;
+            mywait = true;
         } else if (0 == strncmp(argv[1], "--r", 3)) {
             refresh = true;
         } else if (0 == strncmp(argv[1], "--t", 3)) {
@@ -160,7 +166,7 @@ int main(int argc, char *argv[])
     if (1 == myproc.rank) {
         if (timeout) {
             sleep(10);
-        } else if (wait) {
+        } else if (mywait) {
             sleep(2);
         }
     }
@@ -171,9 +177,6 @@ int main(int argc, char *argv[])
     } else {
         pmi_set_string("test-key-3", data, 256);
     }
-
-    /* An explicit Fence has to be called again to read the `test-key-2` */
-    // pmix_exchange(false);
 
     if (0 == myproc.rank) {
         pmi_get_string(1, "test-key-3", (void**)&data_out, &size_out);
