@@ -18,6 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -52,6 +53,8 @@
 #include "src/mca/plm/base/plm_private.h"
 
 #include "pmix_server_internal.h"
+
+static void pmix_server_stdin_push(int sd, short args, void *cbdata);
 
 static void _client_conn(int sd, short args, void *cbdata)
 {
@@ -1203,23 +1206,68 @@ pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
     return PMIX_ERR_NOT_SUPPORTED;
 }
 
+static void pmix_server_stdin_push(int sd, short args, void *cbdata)
+{
+    prrte_pmix_server_op_caddy_t *cd = (prrte_pmix_server_op_caddy_t*)cbdata;
+    prrte_process_name_t dst;
+    pmix_byte_object_t *bo = (pmix_byte_object_t*)cd->server_object;
+    size_t n;
+    int rc;
+
+
+    for (n=0; n < cd->nprocs; n++) {
+        PRRTE_PMIX_CONVERT_PROCT(rc, &dst, &cd->procs[n]);
+
+        PRRTE_OUTPUT_VERBOSE((1, prrte_debug_output,
+                              "%s pmix_server_stdin_push to dest %s: size %zu",
+                              PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                              PRRTE_NAME_PRINT(&dst),
+                              bo->size));
+        prrte_iof.push_stdin(&dst, (uint8_t*)bo->bytes, bo->size);
+    }
+
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+    if (NULL == bo->bytes || 0 == bo->size) {
+        cd->cbfunc(PMIX_ERR_IOF_COMPLETE, cd->cbdata);
+    }
+    else {
+        cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
+    }
+#else
+    cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
+#endif
+
+    PMIX_BYTE_OBJECT_FREE(bo, 1);
+    PMIX_PROC_FREE(cd->procs, cd->nprocs);
+    PRRTE_RELEASE(cd);
+}
+
 pmix_status_t pmix_server_stdin_fn(const pmix_proc_t *source,
                                    const pmix_proc_t targets[], size_t ntargets,
                                    const pmix_info_t directives[], size_t ndirs,
                                    const pmix_byte_object_t *bo,
                                    pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
-    prrte_process_name_t dst;
-    int rc;
+    pmix_byte_object_t *bo_cpy = NULL;
+    pmix_proc_t *targets_cpy = NULL;
+    size_t n;
 
-    PRRTE_PMIX_CONVERT_PROCT(rc, &dst, &targets[0]);
-    prrte_iof.push_stdin(&dst, (uint8_t*)bo->bytes, bo->size);
+    // We need to copy the object and the targets since we are shifting them
+    // so they would go out of scope after we return from this function.
+    PMIX_BYTE_OBJECT_CREATE(bo_cpy, 1);
+    bo_cpy->bytes = pmix_malloc(bo->size * sizeof(char));
+    memcpy(bo_cpy->bytes, bo->bytes, bo->size);
+    bo_cpy->size = bo->size;
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
-    if (NULL == bo->bytes || 0 == bo->size) {
-        return PMIX_ERR_IOF_COMPLETE;
+    PMIX_PROC_CREATE(targets_cpy, ntargets);
+    for( n = 0; n < ntargets; ++n ) {
+        PMIX_PROC_LOAD(&targets_cpy[n], targets[n].nspace, targets[n].rank);
     }
-#endif
 
-    return PMIX_OPERATION_SUCCEEDED;
+    // Note: We are ignoring the directives / ndirs at the moment
+    PRRTE_IO_OP(targets_cpy, ntargets, bo_cpy, pmix_server_stdin_push, cbfunc, cbdata);
+
+    // Do not send PMIX_OPERATION_SUCCEEDED since the op hasn't completed yet.
+    // We will send it back when we are done by calling the cbfunc.
+    return PMIX_SUCCESS;
 }

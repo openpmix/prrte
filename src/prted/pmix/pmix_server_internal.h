@@ -17,6 +17,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -156,6 +157,22 @@ typedef struct {
     void *cbdata;
 } prrte_pmix_mdx_caddy_t;
 PRRTE_CLASS_DECLARATION(prrte_pmix_mdx_caddy_t);
+
+#define PRRTE_IO_OP(t, nt, b, fn, cfn, cbd)                     \
+    do {                                                        \
+        prrte_pmix_server_op_caddy_t *_cd;                      \
+        _cd = PRRTE_NEW(prrte_pmix_server_op_caddy_t);          \
+        _cd->procs = (t);                                       \
+        _cd->nprocs = (nt);                                     \
+        _cd->server_object = (void*)(b);                        \
+        _cd->cbfunc = (cfn);                                    \
+        _cd->cbdata = (cbd);                                    \
+        prrte_event_set(prrte_event_base, &(_cd->ev), -1,       \
+                        PRRTE_EV_WRITE, (fn), _cd);             \
+        prrte_event_set_priority(&(_cd->ev), PRRTE_MSG_PRI);    \
+        PRRTE_POST_OBJECT(_cd);                                 \
+        prrte_event_active(&(_cd->ev), PRRTE_EV_WRITE, 1);      \
+    } while(0);
 
 #define PRRTE_DMX_REQ(p, i, ni, cf, ocf, ocd)                 \
     do {                                                      \
