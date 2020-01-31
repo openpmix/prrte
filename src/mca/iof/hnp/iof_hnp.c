@@ -17,6 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -244,9 +245,10 @@ static int push_stdin(const prrte_process_name_t* dst_name,
     }
 
     PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
-                         "%s iof:hnp pushing stdin for process %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         PRRTE_NAME_PRINT(dst_name)));
+                          "%s iof:hnp pushing stdin for process %s (size %zu)",
+                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                          PRRTE_NAME_PRINT(dst_name),
+                          sz));
 
     /* do we already have this process in our list? */
     proct = NULL;
@@ -371,6 +373,11 @@ static int hnp_close(const prrte_process_name_t* peer,
 {
     prrte_iof_proc_t* proct;
     prrte_ns_cmp_bitmask_t mask = PRRTE_NS_CMP_ALL;
+
+    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+                          "%s iof:hnp closing connection to process %s",
+                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                          PRRTE_NAME_PRINT(peer)));
 
     PRRTE_LIST_FOREACH(proct, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
         if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, peer)) {
