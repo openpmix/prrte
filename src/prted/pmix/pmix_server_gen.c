@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
@@ -352,6 +352,8 @@ void pmix_server_notify(int status, prrte_process_name_t* sender,
     pmix_data_range_t range = PMIX_RANGE_SESSION;
     pmix_status_t code, ret;
     size_t ninfo;
+    prrte_jobid_t jobid;
+    prrte_job_t *jdata;
 
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
                         "%s PRRTE Notification received from %s",
@@ -442,6 +444,12 @@ void pmix_server_notify(int status, prrte_process_name_t* sender,
             PMIX_INFO_FREE(cd->info, cd->ninfo);
         }
         PRRTE_RELEASE(cd);
+    }
+
+    if (PMIX_ERR_JOB_TERMINATED == code) {
+        PRRTE_PMIX_CONVERT_NSPACE(rc, &jobid, source.nspace);
+        jdata = prrte_get_job_data_object(jobid);
+        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_TERMINATED);
     }
 }
 

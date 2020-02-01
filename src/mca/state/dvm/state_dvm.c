@@ -19,6 +19,7 @@
 
 #include "src/util/output.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/prted/pmix/pmix_server.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/filem/filem.h"
@@ -454,6 +455,11 @@ static void check_complete(int fd, short args, void *cbdata)
         jdata->state = PRRTE_JOB_STATE_TERMINATED;
     }
 
+    /* cleanup any pending server ops */
+    PRRTE_PMIX_CONVERT_JOBID(pname.nspace, jdata->jobid);
+    pname.rank = PMIX_RANK_WILDCARD;
+    prrte_pmix_server_clear(&pname);
+
     /* cleanup the procs as these are gone */
     for (i=0; i < prrte_local_children->size; i++) {
         if (NULL == (proc = (prrte_proc_t*)prrte_pointer_array_get_item(prrte_local_children, i))) {
@@ -473,7 +479,6 @@ static void check_complete(int fd, short args, void *cbdata)
     }
 
     /* tell the PMIx subsystem the job is complete */
-    PRRTE_PMIX_CONVERT_JOBID(pname.nspace, jdata->jobid);
     PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
     PMIx_server_deregister_nspace(pname.nspace, opcbfunc, &lock);
     PRRTE_PMIX_WAIT_THREAD(&lock);

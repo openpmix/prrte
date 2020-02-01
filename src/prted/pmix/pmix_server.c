@@ -229,9 +229,9 @@ static void eviction_cbfunc(struct prrte_hotel_t *hotel,
     req->timeout -= prrte_pmix_server_globals.timeout;
     if (req->timeout > 0) {
         req->timeout -= prrte_pmix_server_globals.timeout;
-        if (0 >= req->timeout) {
-            timeout = true;
-        }
+    }
+    if (0 >= req->timeout) {
+        timeout = true;
     }
     if (!timeout) {
         /* see if this is a dmdx request waiting for a key to arrive */
@@ -275,7 +275,7 @@ static void eviction_cbfunc(struct prrte_hotel_t *hotel,
     }
 
     /* don't let the caller hang */
-    if (req->wait_for_key) {
+    if (0 <= req->remote_room_num) {
         send_error(rc, &req->tproc, &req->proxy, req->remote_room_num);
     } else if (NULL != req->opcbfunc) {
         req->opcbfunc(PMIX_ERR_TIMEOUT, req->cbdata);
@@ -289,6 +289,22 @@ static void eviction_cbfunc(struct prrte_hotel_t *hotel,
     PRRTE_RELEASE(req);
 }
 
+/* NOTE: this function must be called from within an event! */
+void prrte_pmix_server_clear(pmix_proc_t *pname)
+{
+    int n;
+    pmix_server_req_t *req;
+
+    for (n=0; n < prrte_pmix_server_globals.reqs.num_rooms; n++) {
+        prrte_hotel_knock(&prrte_pmix_server_globals.reqs, n, (void**)&req);
+        if (NULL != req) {
+            if (PMIX_CHECK_PROCID(&req->tproc, pname)) {
+                prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, n);
+                PRRTE_RELEASE(req);
+            }
+        }
+    }
+}
 /*
  * Initialize global variables used w/in the server.
  */
@@ -1111,7 +1127,7 @@ static void rqcon(pmix_server_req_t *p)
     p->key = NULL;
     p->flag = true;
     p->launcher = false;
-    p->wait_for_key = false;
+    p->remote_room_num = -1;
     p->uid = 0;
     p->gid = 0;
     p->pid = 0;

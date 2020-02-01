@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,6 +25,9 @@
 
 #include "prrte_config.h"
 
+#include "src/pmix/pmix-internal.h"
+#include "src/runtime/prrte_globals.h"
+
 BEGIN_C_DECLS
 
 PRRTE_EXPORT int pmix_server_init(void);
@@ -34,6 +37,9 @@ PRRTE_EXPORT void pmix_server_register_params(void);
 
 
 PRRTE_EXPORT int prrte_pmix_server_register_nspace(prrte_job_t *jdata);
+
+PRRTE_EXPORT void prrte_pmix_server_clear(pmix_proc_t *pname);
+
 
 END_C_DECLS
 

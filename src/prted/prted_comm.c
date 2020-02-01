@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2009      Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -54,6 +54,7 @@
 #include "src/dss/dss.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/mca/compress/compress.h"
+#include "src/prted/pmix/pmix_server.h"
 
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
@@ -611,6 +612,10 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
         PMIx_server_deregister_nspace(pname.nspace, _notify_release, &lk);
         PRRTE_PMIX_WAIT_THREAD(&lk);
         PRRTE_PMIX_DESTRUCT_LOCK(&lk);
+
+        /* cleanup any pending server ops */
+        pname.rank = PMIX_RANK_WILDCARD;
+        prrte_pmix_server_clear(&pname);
 
         PRRTE_RELEASE(jdata);
         break;
