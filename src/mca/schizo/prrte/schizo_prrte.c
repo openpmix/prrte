@@ -55,10 +55,10 @@ static int parse_cli(int argc, int start, char **argv,
                      char *personality, char ***target);
 static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
                             char ***argv);
-static int parse_env(char *path,
-                     prrte_cmd_line_t *cmd_line,
+static int parse_env(prrte_cmd_line_t *cmd_line,
                      char **srcenv,
-                     char ***dstenv);
+                     char ***dstenv,
+                     bool cmdline);
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 static void wrap_args(char **args);
 
@@ -305,10 +305,10 @@ static int parse_cli(int argc, int start, char **argv,
     return PRRTE_SUCCESS;
 }
 
-static int parse_env(char *path,
-                     prrte_cmd_line_t *cmd_line,
+static int parse_env(prrte_cmd_line_t *cmd_line,
                      char **srcenv,
-                     char ***dstenv)
+                     char ***dstenv,
+                     bool cmdline)
 {
     int i, j;
     char *param, *p1;
@@ -327,29 +327,37 @@ static int parse_env(char *path,
              * always let the cmd line override the
              * environment
              */
-            param = srcenv[i] + strlen("PRRTE_MCA_");
-            p1 = strdup(param);
-            value = strchr(p1, '=');
+            param = strdup(srcenv[i]);
+            p1 = param + strlen("PRRTE_MCA_");
+            value = strchr(param, '=');
             *value = '\0';
             value++;
-            if (NULL == dstenv) {
-                if (environ != srcenv) {
-                    /* push it into our environment */
-                    asprintf(&param, "PRRTE_MCA_%s", p1);
-                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
-                                         "%s schizo:prrte:parse_env pushing %s into environment",
-                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param);
-                    prrte_setenv(param, value, true, &environ);
-                }
-            } else {
+            if (cmdline) {
+                prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                     "%s schizo:prrte:parse_env adding %s %s to cmd line",
+                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), p1, value);
                 prrte_argv_append_nosize(dstenv, "--prtemca");
                 prrte_argv_append_nosize(dstenv, p1);
                 prrte_argv_append_nosize(dstenv, value);
+            } else {
+                if (environ != srcenv) {
+                    /* push it into our environment */
+                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                         "%s schizo:prrte:parse_env pushing %s=%s into my environment",
+                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param, value);
+                    prrte_setenv(param, value, true, &environ);
+                }
+                if (NULL != dstenv) {
+                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                         "%s schizo:prrte:parse_env pushing %s=%s into dest environment",
+                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param, value);
+                    prrte_setenv(param, value, true, dstenv);
+                }
             }
         }
     }
 
-    if (NULL == cmd_line) {
+    if (NULL == cmd_line || NULL == dstenv) {
         /* we are done */
         return PRRTE_SUCCESS;
     }

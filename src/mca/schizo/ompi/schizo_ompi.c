@@ -55,10 +55,10 @@ static int parse_cli(int argc, int start, char **argv,
                      char *personality, char ***target);
 static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
                             char ***argv);
-static int parse_env(char *path,
-                     prrte_cmd_line_t *cmd_line,
+static int parse_env(prrte_cmd_line_t *cmd_line,
                      char **srcenv,
-                     char ***dstenv);
+                     char ***dstenv,
+                     bool cmdline);
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 
 prrte_schizo_base_module_t prrte_schizo_ompi_module = {
@@ -350,10 +350,10 @@ static int parse_cli(int argc, int start, char **argv,
     return PRRTE_SUCCESS;
 }
 
-static int parse_env(char *path,
-                     prrte_cmd_line_t *cmd_line,
+static int parse_env(prrte_cmd_line_t *cmd_line,
                      char **srcenv,
-                     char ***dstenv)
+                     char ***dstenv,
+                     bool cmdline)
 {
     int i, j;
     char *param;
@@ -476,16 +476,6 @@ static int parse_env(char *path,
             prrte_show_help("help-prrterun.txt", "prrterun:conflict-env-set", false);
             return PRRTE_ERR_FATAL;
         }
-    }
-
-    /* If the user specified --path, store it in the user's app
-       environment via the OMPI_exec_path variable. */
-    if (NULL != path) {
-        prrte_asprintf(&value, "OMPI_exec_path=%s", path);
-        prrte_argv_append_nosize(dstenv, value);
-        /* save it for any comm_spawn'd apps */
-        prrte_argv_append_nosize(&prrte_forwarded_envars, value);
-        free(value);
     }
 
     return PRRTE_SUCCESS;

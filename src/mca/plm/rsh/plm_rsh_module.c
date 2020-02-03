@@ -642,7 +642,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
         /* now check our local environment for MCA params - add them
          * only if they aren't already present
          */
-        if (PRRTE_SUCCESS != (rc = prrte_schizo.parse_env(NULL, NULL, environ, &argv))) {
+        if (PRRTE_SUCCESS != (rc = prrte_schizo.parse_env(NULL, environ, &argv, true))) {
             prrte_argv_free(argv);
             return rc;
         }

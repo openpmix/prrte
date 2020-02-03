@@ -66,17 +66,17 @@ void prrte_schizo_base_parse_proxy_cli(prrte_cmd_line_t *cmd_line,
     }
 }
 
-int prrte_schizo_base_parse_env(char *path,
-                               prrte_cmd_line_t *cmd_line,
-                               char **srcenv,
-                               char ***dstenv)
+int prrte_schizo_base_parse_env(prrte_cmd_line_t *cmd_line,
+                                char **srcenv,
+                                char ***dstenv,
+                                bool cmdline)
 {
     int rc;
     prrte_schizo_base_active_module_t *mod;
 
     PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
         if (NULL != mod->module->parse_env) {
-            rc = mod->module->parse_env(path, cmd_line, srcenv, dstenv);
+            rc = mod->module->parse_env(cmd_line, srcenv, dstenv, cmdline);
             if (PRRTE_SUCCESS != rc && PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
                 PRRTE_ERROR_LOG(rc);
                 return rc;
