@@ -625,6 +625,8 @@ int prun(int argc, char *argv[])
     uint32_t ui32;
     pid_t pid;
 
+    putenv("PRRTE_MCA_schizo_base_verbose=100");
+
     /* init the globals */
     PRRTE_CONSTRUCT(&job_info, prrte_list_t);
     PRRTE_CONSTRUCT(&apps, prrte_list_t);
