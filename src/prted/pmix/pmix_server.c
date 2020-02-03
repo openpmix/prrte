@@ -271,7 +271,7 @@ static void eviction_cbfunc(struct prrte_hotel_t *hotel,
         }
         /* fall thru and return an error so the caller doesn't hang */
     } else {
-        prrte_show_help("help-orted.txt", "timedout", true, req->operation);
+        prrte_show_help("help-prted.txt", "timedout", true, req->operation);
     }
 
     /* don't let the caller hang */

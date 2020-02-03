@@ -73,10 +73,10 @@ typedef void (*prrte_schizo_base_module_parse_proxy_cli_fn_t)(prrte_cmd_line_t *
 /* parse the environment of the
  * tool to extract any personality-specific envars that need to be
  * forward to the app's environment upon execution */
-typedef int (*prrte_schizo_base_module_parse_env_fn_t)(char *path,
-                                                      prrte_cmd_line_t *cmd_line,
-                                                      char **srcenv,
-                                                      char ***dstenv);
+typedef int (*prrte_schizo_base_module_parse_env_fn_t)(prrte_cmd_line_t *cmd_line,
+                                                       char **srcenv,
+                                                       char ***dstenv,
+                                                       bool cmdline);
 
 /* check if running as root is allowed in this environment */
 typedef int (*prrte_schizo_base_module_allow_run_as_root_fn_t)(prrte_cmd_line_t *cmd_line);

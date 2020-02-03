@@ -55,10 +55,10 @@ static int parse_cli(int argc, int start, char **argv,
                      char *personality, char ***target);
 static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
                             char ***argv);
-static int parse_env(char *path,
-                     prrte_cmd_line_t *cmd_line,
+static int parse_env(prrte_cmd_line_t *cmd_line,
                      char **srcenv,
-                     char ***dstenv);
+                     char ***dstenv,
+                     bool cmdline);
 static void wrap_args(char **args);
 
 prrte_schizo_base_module_t prrte_schizo_pmix_module = {
@@ -238,10 +238,10 @@ static int parse_cli(int argc, int start, char **argv,
     return PRRTE_SUCCESS;
 }
 
-static int parse_env(char *path,
-                     prrte_cmd_line_t *cmd_line,
+static int parse_env(prrte_cmd_line_t *cmd_line,
                      char **srcenv,
-                     char ***dstenv)
+                     char ***dstenv,
+                     bool cmdline)
 {
     int i;
     char *param, *p1;
@@ -259,24 +259,32 @@ static int parse_env(char *path,
              * always let the cmd line override the
              * environment
              */
-            param = srcenv[i] + strlen("PMIX_MCA_");
-            p1 = strdup(param);
-            value = strchr(p1, '=');
+            param = strdup(srcenv[i]);
+            p1 = param + strlen("PMIX_MCA_");
+            value = strchr(param, '=');
             *value = '\0';
             value++;
-            if (NULL == dstenv) {
-                if (environ != srcenv) {
-                    /* push it into our environment */
-                    asprintf(&param, "PMIX_MCA_%s", p1);
-                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
-                                         "%s schizo:pmix:parse_env pushing %s into environment",
-                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param);
-                    prrte_setenv(param, value, true, &environ);
-                }
-            } else {
+            if (cmdline) {
+                prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                     "%s schizo:pmix:parse_env adding %s %s to cmd line",
+                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), p1, value);
                 prrte_argv_append_nosize(dstenv, "--pmixmca");
                 prrte_argv_append_nosize(dstenv, p1);
                 prrte_argv_append_nosize(dstenv, value);
+            } else {
+                if (environ != srcenv) {
+                    /* push it into our environment */
+                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                         "%s schizo:pmix:parse_env pushing %s=%s into my environment",
+                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param, value);
+                    prrte_setenv(param, value, true, &environ);
+                }
+                if (NULL != dstenv) {
+                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                         "%s schizo:pmix:parse_env pushing %s=%s into dest environment",
+                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param, value);
+                    prrte_setenv(param, value, true, dstenv);
+                }
             }
         }
     }
