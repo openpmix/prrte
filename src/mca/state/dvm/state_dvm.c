@@ -17,7 +17,10 @@
 #endif  /* HAVE_UNISTD_H */
 #include <string.h>
 
+#include "src/util/nidmap.h"
 #include "src/util/output.h"
+#include "src/util/os_dirpath.h"
+#include "src/util/proc_info.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
 
@@ -32,8 +35,6 @@
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/base/rml_contact.h"
 #include "src/mca/routed/routed.h"
-#include "src/util/nidmap.h"
-#include "src/util/session_dir.h"
 #include "src/threads/threads.h"
 #include "src/runtime/prrte_quit.h"
 #include "src/runtime/prrte_wait.h"
@@ -418,6 +419,7 @@ static void check_complete(int fd, short args, void *cbdata)
     prrte_byte_object_t bo, *boptr;
     pmix_status_t ret;
     prrte_pointer_array_t procs;
+    char *tmp;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -594,6 +596,16 @@ static void check_complete(int fd, short args, void *cbdata)
             }
         }
         PRRTE_DESTRUCT(&procs);
+    }
+
+    /* remove the session directory tree */
+    if (0 > prrte_asprintf(&tmp, "%s/%d", prrte_process_info.jobfam_session_dir, PRRTE_LOCAL_JOBID(jdata->jobid))) {
+        PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+    } else {
+        if (PRRTE_SUCCESS != (rc = prrte_os_dirpath_destroy(tmp, true, NULL))) {
+            PRRTE_ERROR_LOG(rc);
+        }
+        free(tmp);
     }
 
     if (jdata->state != PRRTE_JOB_STATE_NOTIFIED) {
