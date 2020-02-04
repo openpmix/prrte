@@ -39,6 +39,7 @@
 #include "types.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"
+#include "src/util/os_dirpath.h"
 #include "src/util/error.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
@@ -327,6 +328,10 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
         PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
         return PRRTE_ERR_OUT_OF_RESOURCE;
     }
+    if (PRRTE_SUCCESS != (rc = prrte_os_dirpath_create(prrte_process_info.jobfam_session_dir, S_IRWXU))) {
+        PRRTE_ERROR_LOG(rc);
+        return rc;
+    }
     kv = PRRTE_NEW(prrte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_NSDIR, tmp, PMIX_STRING);
     free(tmp);
@@ -427,6 +432,10 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
                                        PRRTE_LOCAL_JOBID(jdata->jobid), pptr->name.vpid)) {
                     PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
                     return PRRTE_ERR_OUT_OF_RESOURCE;
+                }
+                if (PRRTE_SUCCESS != (rc = prrte_os_dirpath_create(tmp, S_IRWXU))) {
+                    PRRTE_ERROR_LOG(rc);
+                    return rc;
                 }
                 kv = PRRTE_NEW(prrte_info_item_t);
                 PMIX_INFO_LOAD(&kv->info, PMIX_PROCDIR, tmp, PMIX_STRING);

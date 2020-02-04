@@ -49,6 +49,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/pstat/pstat.h"
 #include "src/util/output.h"
+#include "src/util/os_dirpath.h"
 #include "src/util/prrte_environ.h"
 #include "src/util/path.h"
 #include "src/dss/dss.h"
@@ -616,7 +617,16 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
         /* cleanup any pending server ops */
         pname.rank = PMIX_RANK_WILDCARD;
         prrte_pmix_server_clear(&pname);
-
+        /* remove the session directory tree */
+        if (0 > prrte_asprintf(&cmd_str, "%s/%d", prrte_process_info.jobfam_session_dir, PRRTE_LOCAL_JOBID(jdata->jobid))) {
+            ret = PRRTE_ERR_OUT_OF_RESOURCE;
+            goto CLEANUP;
+        }
+        if (PRRTE_SUCCESS != (ret = prrte_os_dirpath_destroy(cmd_str, true, NULL))) {
+            PRRTE_ERROR_LOG(ret);
+        }
+        free(cmd_str);
+        cmd_str = NULL;
         PRRTE_RELEASE(jdata);
         break;
 
