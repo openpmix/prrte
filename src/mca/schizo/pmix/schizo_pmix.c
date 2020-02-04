@@ -103,7 +103,8 @@ static char *frameworks[] = {
     "psensor",
     "pshmem",
     "psquash",
-    "ptl"
+    "ptl",
+    NULL,
 };
 
 
