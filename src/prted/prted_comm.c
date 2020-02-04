@@ -622,9 +622,7 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
             ret = PRRTE_ERR_OUT_OF_RESOURCE;
             goto CLEANUP;
         }
-        if (PRRTE_SUCCESS != (ret = prrte_os_dirpath_destroy(cmd_str, true, NULL))) {
-            PRRTE_ERROR_LOG(ret);
-        }
+        prrte_os_dirpath_destroy(cmd_str, true, NULL);
         free(cmd_str);
         cmd_str = NULL;
         PRRTE_RELEASE(jdata);

@@ -602,9 +602,7 @@ static void check_complete(int fd, short args, void *cbdata)
     if (0 > prrte_asprintf(&tmp, "%s/%d", prrte_process_info.jobfam_session_dir, PRRTE_LOCAL_JOBID(jdata->jobid))) {
         PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
     } else {
-        if (PRRTE_SUCCESS != (rc = prrte_os_dirpath_destroy(tmp, true, NULL))) {
-            PRRTE_ERROR_LOG(rc);
-        }
+        prrte_os_dirpath_destroy(tmp, true, NULL);
         free(tmp);
     }
 
