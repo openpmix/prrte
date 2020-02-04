@@ -170,7 +170,8 @@ static char *frameworks[] = {
     "routed",
     "rtc",
     "schizo",
-    "state"
+    "state",
+    NULL,
 };
 
 

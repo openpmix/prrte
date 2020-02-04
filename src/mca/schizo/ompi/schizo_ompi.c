@@ -112,7 +112,8 @@ static char *frameworks[] = {
     "memheap",
     "scoll",
     "spml",
-    "sshmem"
+    "sshmem",
+    NULL,
 };
 
 
