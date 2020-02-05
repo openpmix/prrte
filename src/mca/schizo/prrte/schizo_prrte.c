@@ -245,7 +245,7 @@ static int parse_cli(int argc, int start, char **argv,
                                      PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param);
                 prrte_setenv(param, p2, true, &environ);
             } else {
-                prrte_argv_append_nosize(target, argv[i]);
+                prrte_argv_append_nosize(target, "--prtemca");
                 prrte_argv_append_nosize(target, p1);
                 prrte_argv_append_nosize(target, p2);
             }
@@ -275,9 +275,34 @@ static int parse_cli(int argc, int start, char **argv,
 
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
-            if (0 == strcmp("--prtemca", argv[i]) ||
-                0 == strncmp("prrte", p1, strlen("prrte"))) {
+            if (0 == strncmp("prrte", p1, strlen("prrte"))) {
                 ignore = false;
+            } else if (0 == strcmp(p1, "mca_base_env_list")) {
+                if (NULL == target) {
+                    /* push it into our environment */
+                    asprintf(&param, "PRRTE_MCA_%s", p1);
+                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                         "%s schizo:prrte:parse_cli pushing %s into environment",
+                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param);
+                    prrte_setenv(param, p2, true, &environ);
+                } else {
+                    prrte_argv_append_nosize(target, "--prtmca");
+                    prrte_argv_append_nosize(target, p1);
+                    prrte_argv_append_nosize(target, p2);
+                }
+            } else if (0 == strcmp(p1, "mca_base_env_list_delimiter")) {
+                if (NULL == target) {
+                    /* push it into our environment */
+                    asprintf(&param, "PRRTE_MCA_%s", p1);
+                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                         "%s schizo:prrte:parse_cli pushing %s into environment",
+                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param);
+                    prrte_setenv(param, p2, true, &environ);
+                } else {
+                    prrte_argv_append_nosize(target, "--prtmca");
+                    prrte_argv_append_nosize(target, p1);
+                    prrte_argv_append_nosize(target, p2);
+                }
             } else {
                 for (j=0; NULL != frameworks[j]; j++) {
                     if (0 == strncmp(p1, frameworks[j], strlen(frameworks[j]))) {
