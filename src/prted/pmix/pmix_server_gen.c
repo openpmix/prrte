@@ -1041,7 +1041,7 @@ static void group_release(int status, prrte_buffer_t *buf, void *cbdata)
 {
     prrte_pmix_mdx_caddy_t *cd = (prrte_pmix_mdx_caddy_t*)cbdata;
     int32_t cnt;
-    int rc;
+    int rc=PRRTE_SUCCESS;
     pmix_status_t ret;
     size_t cid, n;
     pmix_byte_object_t bo;
