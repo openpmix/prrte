@@ -275,6 +275,30 @@ static int parse_cli(int argc, int start, char **argv,
             prrte_asprintf(&param, "OMPI_MCA_%s", p1);
             prrte_setenv(param, p2, true, &environ);
             free(param);
+        } else if (0 == strcmp("--am", argv[i])) {
+            /* this is an OMPI mca param */
+            /* strip any quotes around the args */
+            if ('\"' == argv[i+1][0]) {
+                p1 = &argv[i+1][1];
+            } else {
+                p1 = argv[i+1];
+            }
+            if ('\"' == p1[strlen(p1)- 1]) {
+                p1[strlen(p1)-1] = '\0';
+            }
+            prrte_setenv("PRRTE_MCA_mca_base_param_file_prefix", p1, true, &environ);
+        } else if (0 == strcmp("--tune", argv[i])) {
+            /* this is an OMPI mca param */
+            /* strip any quotes around the args */
+            if ('\"' == argv[i+1][0]) {
+                p1 = &argv[i+1][1];
+            } else {
+                p1 = argv[i+1];
+            }
+            if ('\"' == p1[strlen(p1)- 1]) {
+                p1[strlen(p1)-1] = '\0';
+            }
+            prrte_setenv("PRRTE_MCA_mca_base_envar_file_prefix", p1, true, &environ);
         } else if (0 == strcmp("--mca", argv[i]) ||
                    0 == strcmp("--gmca", argv[i])) {
             /* strip any quotes around the args */
@@ -348,6 +372,9 @@ static int parse_cli(int argc, int start, char **argv,
             i += 2;
         }
     }
+
+    /* ensure we pickup any "tune" or "am" options */
+    prrte_mca_base_var_cache_files(false);
     return PRRTE_SUCCESS;
 }
 
