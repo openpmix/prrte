@@ -121,13 +121,6 @@ PRRTE_EXPORT int prrte_mca_base_var_group_get_internal (const int group_index, p
 /**
  * \internal
  *
- * Parse a parameter file.
- */
-PRRTE_EXPORT int prrte_mca_base_parse_paramfile(const char *paramfile, prrte_list_t *list);
-
-/**
- * \internal
- *
  * Add a variable to a group
  */
 PRRTE_EXPORT int prrte_mca_base_var_group_add_var (const int group_index, const int param_index);
@@ -147,13 +140,6 @@ PRRTE_EXPORT int prrte_mca_base_var_group_add_enum (const int group_index, const
 PRRTE_EXPORT int prrte_mca_base_var_generate_full_name4 (const char *project, const char *framework,
                                                     const char *component, const char *variable,
                                                     char **full_name);
-
-/**
- * \internal
- *
- * Call save_value callback for generated internal mca parameter storing env variables
- */
-PRRTE_EXPORT int prrte_mca_base_internal_env_store(void);
 
 /**
  * \internal

@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +39,7 @@ extern int prrte_util_keyval_parse_lineno;
  * The buffers must not be free()ed and contents may be overwritten
  * immediately after the callback returns.
  */
-typedef void (*prrte_keyval_parse_fn_t)(const char *key, const char *value);
+typedef void (*prrte_keyval_parse_fn_t)(const char *key, const char *value, char ***dstenv);
 
 /**
  * Parse \c filename, made up of key = value pairs.
@@ -49,14 +49,12 @@ typedef void (*prrte_keyval_parse_fn_t)(const char *key, const char *value);
  * called exactly once.  In a multithreaded context, calls to
  * prrte_util_keyval_parse() will serialize multiple calls.
  */
-PRRTE_EXPORT int prrte_util_keyval_parse(const char *filename,
+PRRTE_EXPORT int prrte_util_keyval_parse(const char *filename, char ***dstenv,
                                          prrte_keyval_parse_fn_t callback);
 
 PRRTE_EXPORT int prrte_util_keyval_parse_init(void);
 
 PRRTE_EXPORT void prrte_util_keyval_parse_finalize (void);
-
-PRRTE_EXPORT int prrte_util_keyval_save_internal_envars(prrte_keyval_parse_fn_t callback);
 
 END_C_DECLS
 

@@ -35,8 +35,9 @@
 #include <ctype.h>
 
 #include "src/util/argv.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/keyval_parse.h"
 #include "src/util/os_dirpath.h"
+#include "src/util/prrte_environ.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -51,8 +52,6 @@
 #include "schizo_ompi.h"
 
 static int define_cli(prrte_cmd_line_t *cli);
-static int parse_cli(int argc, int start, char **argv,
-                     char *personality, char ***target);
 static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
                             char ***argv);
 static int parse_env(prrte_cmd_line_t *cmd_line,
@@ -63,7 +62,6 @@ static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 
 prrte_schizo_base_module_t prrte_schizo_ompi_module = {
     .define_cli = define_cli,
-    .parse_cli = parse_cli,
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
     .allow_run_as_root = allow_run_as_root
@@ -226,156 +224,119 @@ static int define_cli(prrte_cmd_line_t *cli)
     return PRRTE_SUCCESS;
 }
 
-static int parse_cli(int argc, int start, char **argv,
-                     char *personality, char ***target)
+static char *strip_quotes(char *p)
 {
-    int i, j;
-    bool takeus = false;
-    char *ptr, *param, *p1, *p2;
+    char *pout;
 
-    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
-                        "%s schizo:ompi: parse_cli",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+    /* strip any quotes around the args */
+    if ('\"' == p[0]) {
+        pout = strdup(&p[1]);
+    } else {
+        pout = strdup(p);
+    }
+    if ('\"' == pout[strlen(pout)- 1]) {
+        pout[strlen(pout)-1] = '\0';
+    }
+    return pout;
 
-    /* if they gave us a list of personalities,
-     * see if we are included */
-    if (NULL != prrte_schizo_base.personalities) {
-        for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
-            if (0 == strcmp(prrte_schizo_base.personalities[i], "ompi")) {
-                takeus = true;
+}
+
+static void process_env_list(char *env_list, char ***argv, char sep)
+{
+    char** tokens;
+    char *ptr, *value;
+
+    tokens = prrte_argv_split(env_list, (int)sep);
+    if (NULL == tokens) {
+        return;
+    }
+
+    for (int i = 0 ; NULL != tokens[i] ; ++i) {
+        if (NULL == (ptr = strchr(tokens[i], '='))) {
+            value = getenv(tokens[i]);
+            if (NULL == value) {
+                prrte_show_help("help-prrte-mca-var.txt", "incorrect-env-list-param",
+                               true, tokens[i], env_list);
+                break;
+            }
+
+            /* duplicate the value to silence tainted string coverity issue */
+            value = strdup (value);
+            if (NULL == value) {
+                /* out of memory */
+                break;
+            }
+
+            if (NULL != (ptr = strchr(value, '='))) {
+                *ptr = '\0';
+                prrte_setenv(value, ptr + 1, true, argv);
+            } else {
+                prrte_setenv(tokens[i], value, true, argv);
+            }
+
+            free (value);
+        } else {
+            *ptr = '\0';
+            prrte_setenv(tokens[i], ptr + 1, true, argv);
+            /* NTH: don't bother resetting ptr to = since the string will not be used again */
+        }
+    }
+
+    prrte_argv_free(tokens);
+}
+
+static void save_value(const char *name, const char *value, char ***dstenv)
+{
+    prrte_setenv(name, value, true, dstenv);
+}
+
+static void process_env_files(char *filename, char ***dstenv, char sep)
+{
+    char **tmp = prrte_argv_split(filename, sep);
+    int i, count;
+
+    if (NULL == tmp) {
+        return;
+    }
+
+    count = prrte_argv_count(tmp);
+
+    /* Iterate through all the files passed in -- read them in reverse
+       order so that we preserve unix/shell path-like semantics (i.e.,
+       the entries farthest to the left get precedence) */
+
+    for (i = count - 1; i >= 0; --i) {
+        prrte_util_keyval_parse(tmp[i], dstenv, save_value);
+    }
+
+    prrte_argv_free(tmp);
+}
+
+static void process_generic(char *p1, char *p2, char ***dstenv)
+{
+    int j;
+    char *param;
+
+    /* this is a generic MCA designation, so see if the parameter it
+     * refers to belongs to a project base or one of our frameworks */
+    if (0 == strncmp("opal_", p1, strlen("opal_")) ||
+        0 == strncmp("orte_", p1, strlen("orte_")) ||
+        0 == strncmp("ompi_", p1, strlen("ompi_"))) {
+        prrte_asprintf(&param, "OMPI_MCA_%s", p1);
+        prrte_setenv(param, p2, true, dstenv);
+        free(param);
+    } else if (0 == strcmp(p1, "mca_base_env_list")) {
+        process_env_list(p2, dstenv, ';');
+    } else {
+        for (j=0; NULL != frameworks[j]; j++) {
+            if (0 == strncmp(p1, frameworks[j], strlen(frameworks[j]))) {
+                prrte_asprintf(&param, "OMPI_MCA_%s", p1);
+                prrte_setenv(param, p2, true, dstenv);
+                free(param);
                 break;
             }
         }
-        if (!takeus) {
-            return PRRTE_ERR_TAKE_NEXT_OPTION;
-        }
     }
-
-    for (i = 0; i < (argc-start); ++i) {
-        if (0 == strcmp("--omca", argv[i]) ||
-            0 == strcmp("--gomca", argv[i])) {
-            /* this is an OMPI mca param */
-            /* strip any quotes around the args */
-            if ('\"' == argv[i+1][0]) {
-                p1 = &argv[i+1][1];
-            } else {
-                p1 = argv[i+1];
-            }
-            if ('\"' == p1[strlen(p1)- 1]) {
-                p1[strlen(p1)-1] = '\0';
-            }
-            if ('\"' == argv[i+2][0]) {
-                p2 = &argv[i+2][1];
-            } else {
-                p2 = argv[i+2];
-            }
-            if ('\"' == p2[strlen(p2)- 1]) {
-                p2[strlen(p2)-1] = '\0';
-            }
-            prrte_asprintf(&param, "OMPI_MCA_%s", p1);
-            prrte_setenv(param, p2, true, &environ);
-            free(param);
-        } else if (0 == strcmp("--am", argv[i])) {
-            /* this is an OMPI mca param */
-            /* strip any quotes around the args */
-            if ('\"' == argv[i+1][0]) {
-                p1 = &argv[i+1][1];
-            } else {
-                p1 = argv[i+1];
-            }
-            if ('\"' == p1[strlen(p1)- 1]) {
-                p1[strlen(p1)-1] = '\0';
-            }
-            prrte_setenv("PRRTE_MCA_mca_base_param_file_prefix", p1, true, &environ);
-        } else if (0 == strcmp("--tune", argv[i])) {
-            /* this is an OMPI mca param */
-            /* strip any quotes around the args */
-            if ('\"' == argv[i+1][0]) {
-                p1 = &argv[i+1][1];
-            } else {
-                p1 = argv[i+1];
-            }
-            if ('\"' == p1[strlen(p1)- 1]) {
-                p1[strlen(p1)-1] = '\0';
-            }
-            prrte_setenv("PRRTE_MCA_mca_base_envar_file_prefix", p1, true, &environ);
-        } else if (0 == strcmp("--mca", argv[i]) ||
-                   0 == strcmp("--gmca", argv[i])) {
-            /* strip any quotes around the args */
-            if ('\"' == argv[i+1][0]) {
-                p1 = &argv[i+1][1];
-            } else {
-                p1 = argv[i+1];
-            }
-            if ('\"' == p1[strlen(p1)- 1]) {
-                p1[strlen(p1)-1] = '\0';
-            }
-            if ('\"' == argv[i+2][0]) {
-                p2 = &argv[i+2][1];
-            } else {
-                p2 = argv[i+2];
-            }
-            if ('\"' == p2[strlen(p2)- 1]) {
-                p2[strlen(p2)-1] = '\0';
-            }
-            /* this is a generic MCA designation, so see if the parameter it
-             * refers to belongs to one of our frameworks */
-            if (0 == strncmp("opal_", p1, strlen("opal_"))) {
-                /* this is a base (non-framework) parameter - we need to
-                 * convert it to the PRRTE equivalent */
-                ptr = strchr(p1, '_');
-                ++ptr;  // step over the '_'
-                if (NULL == target) {
-                    prrte_asprintf(&param, "PRRTE_MCA_prrte_%s", ptr);
-                    prrte_setenv(param, p2, true, &environ);
-                } else {
-                    prrte_asprintf(&param, "prrte_%s", ptr);
-                    prrte_argv_append_nosize(target, param);
-                }
-                free(param);
-                /* and also push it as an OMPI param in case
-                 * it has to apply over there as well */
-                prrte_asprintf(&param, "OMPI_MCA_%s", p1);
-                prrte_setenv(param, p2, true, &environ);
-                free(param);
-            } else if (0 == strncmp("orte_", p1, strlen("orte_"))) {
-                /* this is a base (non-framework) parameter - we need to
-                 * convert it to the PRRTE equivalent */
-                ptr = strchr(p1, '_');
-                ++ptr;  // step over the '_'
-                if (NULL == target) {
-                    prrte_asprintf(&param, "PRRTE_MCA_prrte_%s", ptr);
-                    prrte_setenv(param, p2, true, &environ);
-                } else {
-                    prrte_asprintf(&param, "prrte_%s", ptr);
-                    prrte_argv_append_nosize(target, param);
-                }
-                free(param);
-            } else if (0 == strncmp("ompi_", p1, strlen("ompi_"))) {
-                /* just push it into the environment - we will pick it up later */
-                ptr = strchr(p1, '_');
-                ++ptr;  // step over the '_'
-                prrte_asprintf(&param, "OMPI_MCA_prrte_%s", ptr);
-                prrte_setenv(param, p2, true, &environ);
-                free(param);
-             } else {
-                for (j=0; NULL != frameworks[j]; j++) {
-                    if (0 == strncmp(p1, frameworks[j], strlen(frameworks[j]))) {
-                        /* push them into the environment, we will pick
-                         * them up later */
-                        prrte_asprintf(&param, "OMPI_MCA_%s", p1);
-                        prrte_setenv(param, p2, true, &environ);
-                        free(param);
-                    }
-                }
-            }
-            i += 2;
-        }
-    }
-
-    /* ensure we pickup any "tune" or "am" options */
-    prrte_mca_base_var_cache_files(false);
-    return PRRTE_SUCCESS;
 }
 
 static int parse_env(prrte_cmd_line_t *cmd_line,
@@ -383,17 +344,22 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      char ***dstenv,
                      bool cmdline)
 {
-    int i, j;
-    char *param;
+    int i, j, k, ninst, len;
+    char *param, *p1, *p2;
     char *value;
     char *env_set_flag;
-    char **vars;
     bool takeus = false;
     prrte_value_t *pval;
 
     prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
                         "%s schizo:ompi: parse_env",
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+
+    /* if they are filling out a cmd line, then we don't
+     * have anything to contribute */
+    if (cmdline) {
+        return PRRTE_ERR_TAKE_NEXT_OPTION;
+    }
 
     /* if they gave us a list of personalities,
      * see if we are included */
@@ -409,102 +375,137 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
         }
     }
 
-    for (i = 0; NULL != srcenv[i]; ++i) {
-        if (0 == strncmp("OMPI_", srcenv[i], 5)) {
-            /* check for duplicate in app->env - this
-             * would have been placed there by the
-             * cmd line processor. By convention, we
-             * always let the cmd line override the
-             * environment
-             */
-            param = strdup(srcenv[i]);
-            value = strchr(param, '=');
-            *value = '\0';
-            value++;
-            prrte_setenv(param, value, false, dstenv);
+    /* Begin by examining the environment as the cmd line trumps all */
+    env_set_flag = getenv("OMPI_MCA_mca_base_env_list");
+    if (NULL != env_set_flag) {
+        process_env_list(env_set_flag, dstenv, ';');
+    }
+
+    if (prrte_cmd_line_is_taken(cmd_line, "omca")) {
+        ninst = prrte_cmd_line_get_ninsts(cmd_line, "omca");
+        for (i=0; i < ninst; i++) {
+            /* get the name of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "omca", i, 1);
+            p1 = strip_quotes(pval->data.string);
+            /* get the value of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "omca", i, 2);
+            p2 = strip_quotes(pval->data.string);
+            /* construct the MCA param value and add it to the dstenv */
+            prrte_asprintf(&param, "OMPI_MCA_%s", p1);
+            prrte_setenv(param, p2, true, dstenv);
             free(param);
+            free(p1);
+            free(p2);
         }
     }
 
-    /* set necessary env variables for external usage from tune conf file*/
-    int set_from_file = 0;
-    vars = NULL;
-    if (PRRTE_SUCCESS == prrte_mca_base_var_process_env_list_from_file(&vars) &&
-            NULL != vars) {
-        for (i=0; NULL != vars[i]; i++) {
-            value = strchr(vars[i], '=');
-            /* terminate the name of the param */
-            *value = '\0';
-            /* step over the equals */
-            value++;
-            /* overwrite any prior entry */
-            prrte_setenv(vars[i], value, true, dstenv);
-            /* save it for any comm_spawn'd apps */
-            prrte_setenv(vars[i], value, true, &prrte_forwarded_envars);
+    if (prrte_cmd_line_is_taken(cmd_line, "gomca")) {
+        ninst = prrte_cmd_line_get_ninsts(cmd_line, "gomca");
+        for (i=0; i < ninst; i++) {
+            /* get the name of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "gomca", i, 1);
+            p1 = strip_quotes(pval->data.string);
+            /* get the value of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "gomca", i, 2);
+            p2 = strip_quotes(pval->data.string);
+            /* construct the MCA param value and add it to the dstenv */
+            prrte_asprintf(&param, "OMPI_MCA_%s", p1);
+            prrte_setenv(param, p2, true, dstenv);
+            free(param);
+            free(p1);
+            free(p2);
         }
-        set_from_file = 1;
-        prrte_argv_free(vars);
     }
-    /* Did the user request to export any environment variables on the cmd line? */
-    env_set_flag = getenv("OMPI_MCA_mca_base_env_list");
-    if (prrte_cmd_line_is_taken(cmd_line, "x")) {
-        if (NULL != env_set_flag) {
-            prrte_show_help("help-prrterun.txt", "prrterun:conflict-env-set", false);
-            return PRRTE_ERR_FATAL;
+
+    if (prrte_cmd_line_is_taken(cmd_line, "mca")) {
+        ninst = prrte_cmd_line_get_ninsts(cmd_line, "mca");
+        for (i=0; i < ninst; i++) {
+            /* get the name of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "mca", i, 0);
+            p1 = strip_quotes(pval->data.string);
+            /* get the value of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "mca", i, 1);
+            p2 = strip_quotes(pval->data.string);
+            /* process it */
+            process_generic(p1, p2, dstenv);
         }
+    }
+
+    if (prrte_cmd_line_is_taken(cmd_line, "gmca")) {
+        ninst = prrte_cmd_line_get_ninsts(cmd_line, "gmca");
+        for (i=0; i < ninst; i++) {
+            /* get the name of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "gmca", i, 0);
+            p1 = strip_quotes(pval->data.string);
+            /* get the value of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "gmca", i, 1);
+            p2 = strip_quotes(pval->data.string);
+            /* process it */
+            process_generic(p1, p2, dstenv);
+        }
+    }
+
+    /* ensure we pickup any "tune" or "am" options */
+    if (prrte_cmd_line_is_taken(cmd_line, "am")) {
+        pval = prrte_cmd_line_get_param(cmd_line, "am", 0, 0);
+        p1 = strip_quotes(pval->data.string);
+        process_env_files(p1, dstenv, ',');
+        free(p1);
+    }
+    if (prrte_cmd_line_is_taken(cmd_line, "tune")) {
+        pval = prrte_cmd_line_get_param(cmd_line, "tune", 0, 0);
+        p1 = strip_quotes(pval->data.string);
+        process_env_files(p1, dstenv, ',');
+        free(p1);
+    }
+
+    /* Did the user request to export any environment variables on the cmd line? */
+    if (prrte_cmd_line_is_taken(cmd_line, "x")) {
         j = prrte_cmd_line_get_ninsts(cmd_line, "x");
         for (i = 0; i < j; ++i) {
             pval = prrte_cmd_line_get_param(cmd_line, "x", i, 0);
-            param = strdup(pval->data.string);
-            if (NULL != (value = strchr(param, '='))) {
+            p1 = strip_quotes(pval->data.string);
+
+            if (NULL != (value = strchr(p1, '='))) {
                 /* terminate the name of the param */
                 *value = '\0';
                 /* step over the equals */
                 value++;
                 /* overwrite any prior entry */
-                prrte_setenv(param, value, true, dstenv);
-                /* save it for any comm_spawn'd apps */
-                prrte_setenv(param, value, true, &prrte_forwarded_envars);
+                prrte_setenv(p1, value, true, dstenv);
             } else {
-                value = getenv(param);
-                if (NULL != value) {
-                    /* overwrite any prior entry */
-                    prrte_setenv(param, value, true, dstenv);
-                    /* save it for any comm_spawn'd apps */
-                    prrte_setenv(param, value, true, &prrte_forwarded_envars);
+                /* check for a '*' wildcard at the end of the value */
+                if ('*' == p1[strlen(p1)-1]) {
+                    /* search the local environment for all params
+                     * that start with the string up to the '*' */
+                    p1[strlen(p1)-1] = '\0';
+                    len = strlen(p1);
+                    for (k=0; NULL != environ[k]; k++) {
+                        if (0 == strncmp(environ[k], p1, len)) {
+                            value = strdup(environ[k]);
+                            /* find the '=' sign */
+                            p2 = strchr(value, '=');
+                            *p2 = '\0';
+                            ++p2;
+                            /* overwrite any prior entry */
+                            prrte_setenv(value, p2, true, dstenv);
+                            free(value);
+                        }
+                    }
                 } else {
-                    prrte_output(0, "Warning: could not find environment variable \"%s\"\n", param);
+                    value = getenv(p1);
+                    if (NULL != value) {
+                        /* overwrite any prior entry */
+                        prrte_setenv(p1, value, true, dstenv);
+                    } else {
+                        prrte_output(0, "Warning: could not find environment variable \"%s\"\n", p1);
+                    }
                 }
             }
-            free(param);
-        }
-    } else if (NULL != env_set_flag) {
-        /* if mca_base_env_list was set, check if some of env vars were set via -x from a conf file.
-         * If this is the case, error out.
-         */
-        if (!set_from_file) {
-            /* set necessary env variables for external usage */
-            vars = NULL;
-            if (PRRTE_SUCCESS == prrte_mca_base_var_process_env_list(env_set_flag, &vars) &&
-                    NULL != vars) {
-                for (i=0; NULL != vars[i]; i++) {
-                    value = strchr(vars[i], '=');
-                    /* terminate the name of the param */
-                    *value = '\0';
-                    /* step over the equals */
-                    value++;
-                    /* overwrite any prior entry */
-                    prrte_setenv(vars[i], value, true, dstenv);
-                    /* save it for any comm_spawn'd apps */
-                    prrte_setenv(vars[i], value, true, &prrte_forwarded_envars);
-                }
-                prrte_argv_free(vars);
-            }
-        } else {
-            prrte_show_help("help-prrterun.txt", "prrterun:conflict-env-set", false);
-            return PRRTE_ERR_FATAL;
+            free(p1);
         }
     }
+
 
     return PRRTE_SUCCESS;
 }
@@ -533,6 +534,8 @@ static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
 {
     prrte_value_t *pval;
 
+    /* we need to convert some legacy ORTE cmd line options to their
+     * PRRTE equivalent when launching as a proxy for mpirun */
     if (NULL != (pval = prrte_cmd_line_get_param(cmd_line, "orte_tmpdir_base", 0, 0))) {
         prrte_argv_append_nosize(argv, "--prtemca");
         prrte_argv_append_nosize(argv, "prrte_tmpdir_base");

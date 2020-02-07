@@ -246,7 +246,7 @@ expand_flags(char **argv)
 
 
 static void
-data_callback(const char *key, const char *value)
+data_callback(const char *key, const char *value, char ***dstenv)
 {
     /* handle case where text file does not contain any special
        compiler options field */
@@ -331,7 +331,7 @@ data_init(const char *appname)
              prrte_install_dirs.prrtedatadir, PRRTE_PATH_SEP, appname);
     if (NULL == datafile) return PRRTE_ERR_TEMP_OUT_OF_RESOURCE;
 
-    ret = prrte_util_keyval_parse(datafile, data_callback);
+    ret = prrte_util_keyval_parse(datafile, NULL, data_callback);
     if( PRRTE_SUCCESS != ret ) {
         fprintf(stderr, "Cannot open configuration file %s\n", datafile );
     }

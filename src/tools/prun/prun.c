@@ -1558,14 +1558,13 @@ static int create_app(int argc, char* argv[],
                       bool *made_app, char ***app_env)
 {
     char cwd[PRRTE_PATH_MAX];
-    int i, j, k, count, rc;
-    char *param, *value, *ptr;
+    int i, j, count, rc;
+    char *param, *value;
     prrte_pmix_app_t *app = NULL;
     bool found = false;
     char *appname = NULL;
     prrte_ds_info_t *val;
     prrte_value_t *pvalue;
-    size_t len;
 
     *made_app = false;
 
@@ -1592,111 +1591,7 @@ static int create_app(int argc, char* argv[],
         goto cleanup;
     }
 
-    /* set necessary env variables for external usage from tune conf file */
-    int set_from_file = 0;
-    char **vars = NULL;
-    if (PRRTE_SUCCESS == prrte_mca_base_var_process_env_list_from_file(&vars) &&
-            NULL != vars) {
-        for (i=0; NULL != vars[i]; i++) {
-            value = strchr(vars[i], '=');
-            /* terminate the name of the param */
-            *value = '\0';
-            /* step over the equals */
-            value++;
-            /* overwrite any prior entry */
-            prrte_setenv(vars[i], value, true, &app->app.env);
-            /* save it for any comm_spawn'd apps */
-            prrte_setenv(vars[i], value, true, &prrte_forwarded_envars);
-        }
-        set_from_file = 1;
-        prrte_argv_free(vars);
-    }
-    /* Did the user request to export any environment variables on the cmd line? */
-    char *env_set_flag;
-    env_set_flag = getenv("PRRTE_MCA_mca_base_env_list");
-    if (prrte_cmd_line_is_taken(prrte_cmd_line, "x")) {
-        if (NULL != env_set_flag) {
-            prrte_show_help("help-prrterun.txt", "prrterun:conflict-env-set", false);
-            return PRRTE_ERR_FATAL;
-        }
-        j = prrte_cmd_line_get_ninsts(prrte_cmd_line, "x");
-        for (i = 0; i < j; ++i) {
-            pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "x", i, 0);
-            param = pvalue->data.string;
-
-            if (NULL != (value = strchr(param, '='))) {
-                /* terminate the name of the param */
-                *value = '\0';
-                /* step over the equals */
-                value++;
-                /* overwrite any prior entry */
-                prrte_setenv(param, value, true, &app->app.env);
-                /* save it for any comm_spawn'd apps */
-                prrte_setenv(param, value, true, &prrte_forwarded_envars);
-            } else {
-                /* check for a '*' wildcard at the end of the value */
-                if ('*' == param[strlen(param)-1]) {
-                    /* search the local environment for all params
-                     * that start with the string up to the '*' */
-                    param[strlen(param)-1] = '\0';
-                    len = strlen(param);
-                    for (k=0; NULL != environ[k]; k++) {
-                        if (0 == strncmp(environ[k], param, len)) {
-                            value = strdup(environ[k]);
-                            /* find the '=' sign */
-                            ptr = strchr(value, '=');
-                            *ptr = '\0';
-                            ++ptr;
-                            /* overwrite any prior entry */
-                            prrte_setenv(value, ptr, true, &app->app.env);
-                            /* save it for any comm_spawn'd apps */
-                            prrte_setenv(value, ptr, true, &prrte_forwarded_envars);
-                            free(value);
-                        }
-                    }
-                } else {
-                    value = getenv(param);
-                    if (NULL != value) {
-                        /* overwrite any prior entry */
-                        prrte_setenv(param, value, true, &app->app.env);
-                        /* save it for any comm_spawn'd apps */
-                        prrte_setenv(param, value, true, &prrte_forwarded_envars);
-                    } else {
-                        prrte_output(0, "Warning: could not find environment variable \"%s\"\n", param);
-                    }
-                }
-            }
-        }
-    } else if (NULL != env_set_flag) {
-        /* if mca_base_env_list was set, check if some of env vars were set via -x from a conf file.
-         * If this is the case, error out.
-         */
-        if (!set_from_file) {
-            /* set necessary env variables for external usage */
-            vars = NULL;
-            if (PRRTE_SUCCESS == prrte_mca_base_var_process_env_list(env_set_flag, &vars) &&
-                    NULL != vars) {
-                for (i=0; NULL != vars[i]; i++) {
-                    value = strchr(vars[i], '=');
-                    /* terminate the name of the param */
-                    *value = '\0';
-                    /* step over the equals */
-                    value++;
-                    /* overwrite any prior entry */
-                    prrte_setenv(vars[i], value, true, &app->app.env);
-                    /* save it for any comm_spawn'd apps */
-                    prrte_setenv(vars[i], value, true, &prrte_forwarded_envars);
-                }
-                prrte_argv_free(vars);
-            }
-        } else {
-            prrte_show_help("help-prrterun.txt", "prrterun:conflict-env-set", false);
-            return PRRTE_ERR_FATAL;
-        }
-    }
-
     /* Did the user request a specific wdir? */
-
     if (NULL != (pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "wdir", 0, 0))) {
         param = pvalue->data.string;
         /* if this is a relative path, convert it to an absolute path */
