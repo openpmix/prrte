@@ -241,7 +241,7 @@ static char *strip_quotes(char *p)
 
 }
 
-static void process_env_list(char *env_list, char ***argv, char sep)
+static void process_env_list(const char *env_list, char ***argv, char sep)
 {
     char** tokens;
     char *ptr, *value;
@@ -287,7 +287,16 @@ static void process_env_list(char *env_list, char ***argv, char sep)
 
 static void save_value(const char *name, const char *value, char ***dstenv)
 {
-    prrte_setenv(name, value, true, dstenv);
+    char *param;
+
+    prrte_output(0, "SAVE VALUE %s %s", name, value);
+    if (0 == strcmp(name, "mca_base_env_list")) {
+        process_env_list(value, dstenv, ';');
+    } else {
+        prrte_asprintf(&param, "OMPI_MCA_%s", name);
+        prrte_setenv(param, value, true, dstenv);
+        free(param);
+    }
 }
 
 static void process_env_files(char *filename, char ***dstenv, char sep)
@@ -306,6 +315,7 @@ static void process_env_files(char *filename, char ***dstenv, char sep)
        the entries farthest to the left get precedence) */
 
     for (i = count - 1; i >= 0; --i) {
+        prrte_output(0, "PARSING FILE %s", tmp[i]);
         prrte_util_keyval_parse(tmp[i], dstenv, save_value);
     }
 
