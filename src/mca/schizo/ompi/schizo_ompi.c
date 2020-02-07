@@ -299,10 +299,43 @@ static void process_envar(const char *p, char ***dstenv)
     free(p1);
 }
 
+static int process_token(char *token, char ***argv)
+{
+    char *ptr, *value;
+
+    if (NULL == (ptr = strchr(token, '='))) {
+        value = getenv(token);
+        if (NULL == value) {
+            return PRRTE_ERR_NOT_FOUND;
+        }
+
+        /* duplicate the value to silence tainted string coverity issue */
+        value = strdup (value);
+        if (NULL == value) {
+            /* out of memory */
+            return PRRTE_ERR_OUT_OF_RESOURCE;
+        }
+
+        if (NULL != (ptr = strchr(value, '='))) {
+            *ptr = '\0';
+            prrte_setenv(value, ptr + 1, true, argv);
+        } else {
+            prrte_setenv(token, value, true, argv);
+        }
+
+        free (value);
+    } else {
+        *ptr = '\0';
+        prrte_setenv(token, ptr + 1, true, argv);
+        /* NTH: don't bother resetting ptr to = since the string will not be used again */
+    }
+    return PRRTE_SUCCESS;
+}
+
 static void process_env_list(const char *env_list, char ***argv, char sep)
 {
     char** tokens;
-    char *ptr, *value;
+    int rc;
 
     tokens = prrte_argv_split(env_list, (int)sep);
     if (NULL == tokens) {
@@ -310,33 +343,11 @@ static void process_env_list(const char *env_list, char ***argv, char sep)
     }
 
     for (int i = 0 ; NULL != tokens[i] ; ++i) {
-        if (NULL == (ptr = strchr(tokens[i], '='))) {
-            value = getenv(tokens[i]);
-            if (NULL == value) {
-                prrte_show_help("help-schizo-base.txt", "incorrect-env-list-param",
-                               true, tokens[i], env_list);
-                break;
-            }
-
-            /* duplicate the value to silence tainted string coverity issue */
-            value = strdup (value);
-            if (NULL == value) {
-                /* out of memory */
-                break;
-            }
-
-            if (NULL != (ptr = strchr(value, '='))) {
-                *ptr = '\0';
-                prrte_setenv(value, ptr + 1, true, argv);
-            } else {
-                prrte_setenv(tokens[i], value, true, argv);
-            }
-
-            free (value);
-        } else {
-            *ptr = '\0';
-            prrte_setenv(tokens[i], ptr + 1, true, argv);
-            /* NTH: don't bother resetting ptr to = since the string will not be used again */
+        rc = process_token(tokens[i], argv);
+        if (PRRTE_SUCCESS != rc) {
+            prrte_show_help("help-schizo-base.txt", "incorrect-env-list-param",
+                           true, tokens[i], env_list);
+            break;
         }
     }
 
@@ -398,7 +409,7 @@ static void process_tune_files(char *filename, char ***dstenv, char sep)
 {
     FILE *fp;
     char **tmp, **opts, *line, *param, *p1, *p2;
-    int i, count, n;
+    int i, count, n, rc;
 
     tmp = prrte_argv_split(filename, sep);
     if (NULL == tmp) {
@@ -467,6 +478,21 @@ static void process_tune_files(char *filename, char ***dstenv, char sep)
                     free(p1);
                     free(p2);
                     n += 2;  // skip over the MCA option
+                } else if (0 == strncmp(opts[n], "mca_base_env_list", strlen("mca_base_env_list"))) {
+                    /* find the equal sign */
+                    p1 = strchr(opts[n], '=');
+                    if (NULL == p1) {
+                        prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                        break;
+                    }
+                    ++p1;
+                    process_env_list(p1, dstenv, ';');
+                } else {
+                    rc = process_token(opts[n], dstenv);
+                    if (PRRTE_SUCCESS != rc) {
+                        prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                        break;
+                    }
                 }
             }
             free(line);
