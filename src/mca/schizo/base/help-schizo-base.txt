@@ -1,0 +1,39 @@
+# -*- text -*-
+#
+# Copyright (c) 2020      Intel, Inc.  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+#
+[missing-param-file]
+Unable to locate the variable file:
+   %s
+#
+[bad-param-line]
+Parsing error in variable file:
+
+  FILE:  %s
+  LINE:  %s
+
+Please correct and try again.
+#
+[incorrect-env-list-param]
+WARNING: The format of "mca_base_env_list" parameter is a delimited list of VAR=VAL or
+VAR instances. By default, the delimiter is a semicolon: VAR1=VAL1;VAR2;VAR3=VAL3;...
+You can set other via "mca_base_env_list_delimiter" parameter. If the delimiter is a
+semicolon, the value of "mca_base_env_list" variable should be quoted to not interfere
+with SHELL command line parsing. In the case where a value is not assigned to variable
+VAR, the value will be taken from the current environment.
+The following environment variable was not found in the environment:
+  Variable:             %s
+  MCA variable value:   %s
+#
+[env-not-found]
+An environmental variable was requested to be forwarded, but was not found:
+
+  Variable:  %s
+
+This may result in unexpected behavior.
