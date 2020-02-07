@@ -813,7 +813,7 @@ prrte_value_t *prrte_cmd_line_get_param(prrte_cmd_line_t *cmd,
                                         const char *opt,
                                         int inst, int idx)
 {
-    int num_found;
+    int num_found, ninst;
     prrte_cmd_line_param_t *param;
     prrte_cmd_line_option_t *option;
     prrte_cmd_line_init_t e;
@@ -825,7 +825,6 @@ prrte_value_t *prrte_cmd_line_get_param(prrte_cmd_line_t *cmd,
     /* Find the corresponding option.  If we find it, look through all
        the parsed params and see if we have any matches. */
 
-    num_found = 0;
     memset(&e, 0, sizeof(prrte_cmd_line_init_t));
     if (1 < strlen(opt)) {
         e.ocl_cmd_long_name = opt;
@@ -834,17 +833,22 @@ prrte_value_t *prrte_cmd_line_get_param(prrte_cmd_line_t *cmd,
     }
     option = find_option(cmd, &e);
     if (NULL != option) {
+        ninst = 0;
         /* scan thru the found params */
         PRRTE_LIST_FOREACH(param, &cmd->lcl_params, prrte_cmd_line_param_t) {
             if (param->clp_option == option) {
-                /* scan thru the found values for this option */
-                PRRTE_LIST_FOREACH(val, &param->clp_values, prrte_value_t) {
-                    if (num_found == inst) {
-                        prrte_mutex_unlock(&cmd->lcl_mutex);
-                        return val;
+                if (ninst == inst) {
+                    /* scan thru the found values for this option */
+                    num_found = 0;
+                    PRRTE_LIST_FOREACH(val, &param->clp_values, prrte_value_t) {
+                        if (num_found == idx) {
+                            prrte_mutex_unlock(&cmd->lcl_mutex);
+                            return val;
+                        }
+                        ++num_found;
                     }
-                    ++num_found;
                 }
+                ++ninst;
             }
         }
     }

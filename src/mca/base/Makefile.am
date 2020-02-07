@@ -55,7 +55,6 @@ libprrte_mca_base_la_SOURCES = \
         prrte_mca_base_var.c \
 	prrte_mca_base_var_enum.c \
         prrte_mca_base_var_group.c \
-        prrte_mca_base_parse_paramfile.c \
 	prrte_mca_base_components_register.c \
 	prrte_mca_base_framework.c
 

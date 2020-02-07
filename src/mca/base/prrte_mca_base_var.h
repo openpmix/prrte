@@ -735,18 +735,6 @@ PRRTE_EXPORT int prrte_mca_base_var_dump(int vari, char ***out, prrte_mca_base_v
 #define PRRTE_MCA_COMPILETIME_VER "print_compiletime_version"
 #define PRRTE_MCA_RUNTIME_VER "print_runtime_version"
 
-/*
- * Parse a provided list of envars and add their local value, or
- * their assigned value, to the provided argv
- */
-PRRTE_EXPORT int prrte_mca_base_var_process_env_list(char *list, char ***argv);
-PRRTE_EXPORT int prrte_mca_base_var_process_env_list_from_file(char ***argv);
-
-/*
- * Initialize any file-based params
- */
-PRRTE_EXPORT int prrte_mca_base_var_cache_files(bool rel_path_search);
-
 
 extern char *prrte_mca_base_env_list;
 #define PRRTE_MCA_BASE_ENV_LIST_SEP_DEFAULT ";"

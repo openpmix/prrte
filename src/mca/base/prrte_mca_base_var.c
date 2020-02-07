@@ -13,7 +13,7 @@
  * Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012-2018 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
@@ -60,16 +60,10 @@
 static prrte_pointer_array_t prrte_mca_base_vars;
 static const char *prrte_mca_prefix = PRRTE_MCA_PREFIX;
 static char *home = NULL;
-static char *cwd  = NULL;
 bool prrte_mca_base_var_initialized = false;
-static char * force_agg_path = NULL;
-static char *prrte_mca_base_var_files = NULL;
 static char *prrte_mca_base_envar_files = NULL;
 static char **prrte_mca_base_var_file_list = NULL;
 static char *prrte_mca_base_var_override_file = NULL;
-static char *prrte_mca_base_var_file_prefix = NULL;
-static char *prrte_mca_base_envar_file_prefix = NULL;
-static char *prrte_mca_base_param_file_path = NULL;
 char *prrte_mca_base_env_list = NULL;
 char *prrte_mca_base_env_list_sep = PRRTE_MCA_BASE_ENV_LIST_SEP_DEFAULT;
 char *prrte_mca_base_env_list_internal = NULL;
@@ -141,8 +135,6 @@ static const char *prrte_info_lvl_strings[] = {
 /*
  * local functions
  */
-static int fixup_files(char **file_list, char * path, bool rel_path_search, char sep);
-static int read_files (char *file_list, prrte_list_t *file_values, char sep);
 static int var_set_initial (prrte_mca_base_var_t *var, prrte_mca_base_var_t *original);
 static int var_get (int vari, prrte_mca_base_var_t **var_out, bool original);
 static int var_value_string (prrte_mca_base_var_t *var, char **value_string);
@@ -288,249 +280,6 @@ int prrte_mca_base_var_init(void)
 
         prrte_mca_base_var_initialized = true;
 
-    }
-
-    return PRRTE_SUCCESS;
-}
-
-static void process_env_list(char *env_list, char ***argv, char sep)
-{
-    char** tokens;
-    char *ptr, *value;
-
-    tokens = prrte_argv_split(env_list, (int)sep);
-    if (NULL == tokens) {
-        return;
-    }
-
-    for (int i = 0 ; NULL != tokens[i] ; ++i) {
-        if (NULL == (ptr = strchr(tokens[i], '='))) {
-            value = getenv(tokens[i]);
-            if (NULL == value) {
-                prrte_show_help("help-prrte-mca-var.txt", "incorrect-env-list-param",
-                               true, tokens[i], env_list);
-                break;
-            }
-
-            /* duplicate the value to silence tainted string coverity issue */
-            value = strdup (value);
-            if (NULL == value) {
-                /* out of memory */
-                break;
-            }
-
-            if (NULL != (ptr = strchr(value, '='))) {
-                *ptr = '\0';
-                prrte_setenv(value, ptr + 1, true, argv);
-            } else {
-                prrte_setenv(tokens[i], value, true, argv);
-            }
-
-            free (value);
-        } else {
-            *ptr = '\0';
-            prrte_setenv(tokens[i], ptr + 1, true, argv);
-            /* NTH: don't bother resetting ptr to = since the string will not be used again */
-        }
-    }
-
-    prrte_argv_free(tokens);
-}
-
-int prrte_mca_base_var_process_env_list(char *list, char ***argv)
-{
-    char sep;
-    sep = ';';
-    if (NULL != prrte_mca_base_env_list_sep) {
-        if (1 == strlen(prrte_mca_base_env_list_sep)) {
-            sep = prrte_mca_base_env_list_sep[0];
-        } else {
-            prrte_show_help("help-prrte-mca-var.txt", "incorrect-env-list-sep",
-                    true, prrte_mca_base_env_list_sep);
-            return PRRTE_SUCCESS;
-        }
-    }
-    if (NULL != list) {
-        process_env_list(list, argv, sep);
-    } else if (NULL != prrte_mca_base_env_list) {
-        process_env_list(prrte_mca_base_env_list, argv, sep);
-    }
-
-    return PRRTE_SUCCESS;
-}
-
-int prrte_mca_base_var_process_env_list_from_file(char ***argv)
-{
-    if (NULL != prrte_mca_base_env_list_internal) {
-        process_env_list(prrte_mca_base_env_list_internal, argv, ';');
-    }
-    return PRRTE_SUCCESS;
-}
-
-static void resolve_relative_paths(char **file_prefix, char *file_path, bool rel_path_search, char **files, char sep)
-{
-    char *tmp_str;
-    /*
-     * Resolve all relative paths.
-     * the file list returned will contain only absolute paths
-     */
-    if( PRRTE_SUCCESS != fixup_files(file_prefix, file_path, rel_path_search, sep) ) {
-#if 0
-        /* JJH We need to die! */
-        abort();
-#else
-        ;
-#endif
-    }
-    else {
-        /* Prepend the files to the search list */
-        prrte_asprintf(&tmp_str, "%s%c%s", *file_prefix, sep, *files);
-        free (*files);
-        *files = tmp_str;
-    }
-}
-
-int prrte_mca_base_var_cache_files(bool rel_path_search)
-{
-    char *tmp;
-    int ret;
-
-    /* We may need this later */
-    home = (char*)prrte_home_directory();
-
-    if (NULL == cwd) {
-        cwd = (char *) malloc(sizeof(char) * MAXPATHLEN);
-        if( NULL == (cwd = getcwd(cwd, MAXPATHLEN) )) {
-            prrte_output(0, "Error: Unable to get the current working directory\n");
-            cwd = strdup(".");
-        }
-    }
-
-#if PRRTE_WANT_HOME_CONFIG_FILES
-    prrte_asprintf(&prrte_mca_base_var_files, "%s"PRRTE_PATH_SEP".prrte" PRRTE_PATH_SEP
-             "mca-params.conf%c%s" PRRTE_PATH_SEP "prrte-mca-params.conf",
-             home, ',', prrte_install_dirs.sysconfdir);
-#else
-    prrte_asprintf(&prrte_mca_base_var_files, "%s" PRRTE_PATH_SEP "prrte-mca-params.conf",
-             prrte_install_dirs.sysconfdir);
-#endif
-
-    /* Initialize a parameter that says where MCA param files can be found.
-       We may change this value so set the scope to MCA_BASE_VAR_SCOPE_READONLY */
-    tmp = prrte_mca_base_var_files;
-    ret = prrte_mca_base_var_register ("prrte", "mca", "base", "param_files", "Path for MCA "
-                                 "configuration files containing variable values",
-                                 PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_2,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_mca_base_var_files);
-    free (tmp);
-    if (0 > ret) {
-        return ret;
-    }
-
-    prrte_mca_base_envar_files = strdup(prrte_mca_base_var_files);
-
-    ret = prrte_asprintf(&prrte_mca_base_var_override_file, "%s" PRRTE_PATH_SEP "prrte-mca-params-override.conf",
-                   prrte_install_dirs.sysconfdir);
-    if (0 > ret) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    tmp = prrte_mca_base_var_override_file;
-    ret = prrte_mca_base_var_register ("prrte", "mca", "base", "override_param_file",
-                                 "Variables set in this file will override any value set in"
-                                 "the environment or another configuration file",
-                                 PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY,
-                                 PRRTE_INFO_LVL_2, PRRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
-                                 &prrte_mca_base_var_override_file);
-    free (tmp);
-    if (0 > ret) {
-        return ret;
-    }
-
-    /* Disable reading MCA parameter files. */
-    if (0 == strcmp (prrte_mca_base_var_files, "none")) {
-        return PRRTE_SUCCESS;
-    }
-
-    prrte_mca_base_var_suppress_override_warning = false;
-    ret = prrte_mca_base_var_register ("prrte", "mca", "base", "suppress_override_warning",
-                                 "Suppress warnings when attempting to set an overridden value (default: false)",
-                                 PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, PRRTE_INFO_LVL_2,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prrte_mca_base_var_suppress_override_warning);
-    if (0 > ret) {
-        return ret;
-    }
-
-    /* Aggregate MCA parameter files
-     * A prefix search path to look up aggregate MCA parameter file
-     * requests that do not specify an absolute path
-     */
-    prrte_mca_base_var_file_prefix = NULL;
-    ret = prrte_mca_base_var_register ("prrte", "mca", "base", "param_file_prefix",
-                                 "Aggregate MCA parameter file sets",
-                                 PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_3,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_mca_base_var_file_prefix);
-    if (0 > ret) {
-        return ret;
-    }
-
-    prrte_mca_base_envar_file_prefix = NULL;
-    ret = prrte_mca_base_var_register ("prrte", "mca", "base", "envar_file_prefix",
-                                 "Aggregate MCA parameter file set for env variables",
-                                 PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_3,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_mca_base_envar_file_prefix);
-    if (0 > ret) {
-        return ret;
-    }
-
-    ret = prrte_asprintf(&prrte_mca_base_param_file_path, "%s" PRRTE_PATH_SEP "prrte-amca-param-sets%c%s",
-                   prrte_install_dirs.prrtedatadir, PRRTE_ENV_SEP, cwd);
-    if (0 > ret) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    tmp = prrte_mca_base_param_file_path;
-    ret = prrte_mca_base_var_register ("prrte", "mca", "base", "param_file_path",
-                                 "Aggregate MCA parameter Search path",
-                                 PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_3,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_mca_base_param_file_path);
-    free (tmp);
-    if (0 > ret) {
-        return ret;
-    }
-
-    force_agg_path = NULL;
-    ret = prrte_mca_base_var_register ("prrte", "mca", "base", "param_file_path_force",
-                                 "Forced Aggregate MCA parameter Search path",
-                                 PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_3,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &force_agg_path);
-    if (0 > ret) {
-        return ret;
-    }
-
-    if (NULL != force_agg_path) {
-        if (NULL != prrte_mca_base_param_file_path) {
-            char *tmp_str = prrte_mca_base_param_file_path;
-
-            prrte_asprintf(&prrte_mca_base_param_file_path, "%s%c%s", force_agg_path, PRRTE_ENV_SEP, tmp_str);
-            free(tmp_str);
-        } else {
-            prrte_mca_base_param_file_path = strdup(force_agg_path);
-        }
-    }
-
-    if (NULL != prrte_mca_base_var_file_prefix) {
-       resolve_relative_paths(&prrte_mca_base_var_file_prefix, prrte_mca_base_param_file_path, rel_path_search, &prrte_mca_base_var_files, PRRTE_ENV_SEP);
-    }
-    read_files (prrte_mca_base_var_files, &prrte_mca_base_var_file_values, ',');
-
-    if (NULL != prrte_mca_base_envar_file_prefix) {
-       resolve_relative_paths(&prrte_mca_base_envar_file_prefix, prrte_mca_base_param_file_path, rel_path_search, &prrte_mca_base_envar_files, ',');
-    }
-    read_files (prrte_mca_base_envar_files, &prrte_mca_base_envar_file_values, ',');
-
-    if (0 == access(prrte_mca_base_var_override_file, F_OK)) {
-        read_files (prrte_mca_base_var_override_file, &prrte_mca_base_var_override_values, PRRTE_ENV_SEP);
     }
 
     return PRRTE_SUCCESS;
@@ -1131,11 +880,6 @@ void prrte_mca_base_var_finalize (void)
         }
         PRRTE_DESTRUCT(&prrte_mca_base_var_override_values);
 
-        if( NULL != cwd ) {
-            free(cwd);
-            cwd = NULL;
-        }
-
         prrte_mca_base_var_initialized = false;
         prrte_mca_base_var_count = 0;
 
@@ -1153,110 +897,6 @@ void prrte_mca_base_var_finalize (void)
     }
 }
 
-
-/*************************************************************************/
-static int fixup_files(char **file_list, char * path, bool rel_path_search, char sep) {
-    int exit_status = PRRTE_SUCCESS;
-    char **files = NULL;
-    char **search_path = NULL;
-    char * tmp_file = NULL;
-    char **argv = NULL;
-    char *rel_path;
-    int mode = R_OK; /* The file exists, and we can read it */
-    int count, i, argc = 0;
-
-    search_path = prrte_argv_split(path, PRRTE_ENV_SEP);
-    files = prrte_argv_split(*file_list, sep);
-    count = prrte_argv_count(files);
-
-    rel_path = force_agg_path ? force_agg_path : cwd;
-
-    /* Read in reverse order, so we can preserve the original ordering */
-    for (i = 0 ; i < count; ++i) {
-        char *msg_path = path;
-        if (prrte_path_is_absolute(files[i])) {
-            /* Absolute paths preserved */
-            tmp_file = prrte_path_access(files[i], NULL, mode);
-        } else if (!rel_path_search && NULL != strchr(files[i], PRRTE_PATH_SEP[0])) {
-            /* Resolve all relative paths:
-             *  - If filename contains a "/" (e.g., "./foo" or "foo/bar")
-             *    - look for it relative to cwd
-             *    - if exists, use it
-             *    - ow warn/error
-             */
-            msg_path = rel_path;
-            tmp_file = prrte_path_access(files[i], rel_path, mode);
-        } else {
-            /* Resolve all relative paths:
-             * - Use path resolution
-             *    - if found and readable, use it
-             *    - otherwise, warn/error
-             */
-            tmp_file = prrte_path_find (files[i], search_path, mode, NULL);
-        }
-
-        if (NULL == tmp_file) {
-            prrte_show_help("help-prrte-mca-var.txt", "missing-param-file",
-                           true, getpid(), files[i], msg_path);
-            exit_status = PRRTE_ERROR;
-            break;
-        }
-
-        prrte_argv_append(&argc, &argv, tmp_file);
-
-        free(tmp_file);
-        tmp_file = NULL;
-    }
-
-    if (PRRTE_SUCCESS == exit_status) {
-        free(*file_list);
-        *file_list = prrte_argv_join(argv, sep);
-    }
-
-    if( NULL != files ) {
-        prrte_argv_free(files);
-        files = NULL;
-    }
-
-    if( NULL != argv ) {
-        prrte_argv_free(argv);
-        argv = NULL;
-    }
-
-    if( NULL != search_path ) {
-        prrte_argv_free(search_path);
-        search_path = NULL;
-    }
-
-    return exit_status;
-}
-
-static int read_files(char *file_list, prrte_list_t *file_values, char sep)
-{
-    char **tmp = prrte_argv_split(file_list, sep);
-    int i, count;
-
-    if (!tmp) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    count = prrte_argv_count(tmp);
-
-    /* Iterate through all the files passed in -- read them in reverse
-       order so that we preserve unix/shell path-like semantics (i.e.,
-       the entries farthest to the left get precedence) */
-
-    for (i = count - 1; i >= 0; --i) {
-        char *file_name = append_filename_to_list (tmp[i]);
-        prrte_mca_base_parse_paramfile(file_name, file_values);
-    }
-
-    prrte_argv_free (tmp);
-
-    prrte_mca_base_internal_env_store();
-
-    return PRRTE_SUCCESS;
-}
 
 /******************************************************************************/
 static int register_variable (const char *project_name, const char *framework_name,

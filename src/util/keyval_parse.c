@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,15 +36,17 @@
 
 int prrte_util_keyval_parse_lineno = 0;
 
-static const char *keyval_filename;
-static prrte_keyval_parse_fn_t keyval_callback;
 static char *key_buffer = NULL;
 static size_t key_buffer_len = 0;
 static prrte_mutex_t keyval_mutex;
 
-static int parse_line(void);
-static int parse_line_new(prrte_keyval_parse_state_t first_val);
-static void parse_error(int num);
+static int parse_line(const char *filename, char ***dstenv,
+                      prrte_keyval_parse_fn_t callback);
+static int parse_line_new(const char *filename,
+                          prrte_keyval_parse_state_t first_val,
+                          char ***dstenv,
+                          prrte_keyval_parse_fn_t callback);
+static void parse_error(int num, const char *filename);
 
 static char *env_str = NULL;
 static int envsize = 1024;
@@ -66,7 +68,7 @@ int prrte_util_keyval_parse_init(void)
 }
 
 int
-prrte_util_keyval_parse(const char *filename,
+prrte_util_keyval_parse(const char *filename, char ***dstenv,
                        prrte_keyval_parse_fn_t callback)
 {
     int val;
@@ -74,11 +76,8 @@ prrte_util_keyval_parse(const char *filename,
 
     prrte_mutex_lock(&keyval_mutex);
 
-    keyval_filename = filename;
-    keyval_callback = callback;
-
     /* Open the prrte */
-    prrte_util_keyval_yyin = fopen(keyval_filename, "r");
+    prrte_util_keyval_yyin = fopen(filename, "r");
     if (NULL == prrte_util_keyval_yyin) {
         ret = PRRTE_ERR_NOT_FOUND;
         goto cleanup;
@@ -100,18 +99,18 @@ prrte_util_keyval_parse(const char *filename,
             break;
 
         case PRRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD:
-            parse_line();
+            parse_line(filename, dstenv, callback);
             break;
 
         case PRRTE_UTIL_KEYVAL_PARSE_MCAVAR:
         case PRRTE_UTIL_KEYVAL_PARSE_ENVVAR:
         case PRRTE_UTIL_KEYVAL_PARSE_ENVEQL:
-            parse_line_new(val);
+            parse_line_new(filename, val, dstenv, callback);
             break;
 
         default:
             /* anything else is an error */
-            parse_error(1);
+            parse_error(1, filename);
             break;
         }
     }
@@ -125,7 +124,8 @@ cleanup:
 
 
 
-static int parse_line(void)
+static int parse_line(const char *filename, char ***dstenv,
+                      prrte_keyval_parse_fn_t callback)
 {
     int val;
 
@@ -151,7 +151,7 @@ static int parse_line(void)
 
     val = prrte_util_keyval_yylex();
     if (prrte_util_keyval_parse_done || PRRTE_UTIL_KEYVAL_PARSE_EQUAL != val) {
-        parse_error(2);
+        parse_error(2, filename);
         return PRRTE_ERROR;
     }
 
@@ -160,7 +160,7 @@ static int parse_line(void)
     val = prrte_util_keyval_yylex();
     if (PRRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD == val ||
         PRRTE_UTIL_KEYVAL_PARSE_VALUE == val) {
-        keyval_callback(key_buffer, prrte_util_keyval_yytext);
+        callback(key_buffer, prrte_util_keyval_yytext, dstenv);
 
         /* Now we need to see the newline */
 
@@ -175,31 +175,21 @@ static int parse_line(void)
 
     else if (PRRTE_UTIL_KEYVAL_PARSE_DONE == val ||
              PRRTE_UTIL_KEYVAL_PARSE_NEWLINE == val) {
-        keyval_callback(key_buffer, NULL);
+        callback(key_buffer, NULL, dstenv);
         return PRRTE_SUCCESS;
     }
 
     /* Nope -- we got something unexpected.  Bonk! */
-    parse_error(3);
+    parse_error(3, filename);
     return PRRTE_ERROR;
 }
 
 
-static void parse_error(int num)
+static void parse_error(int num, const char *filename)
 {
     /* JMS need better error/warning message here */
     prrte_output(0, "keyval parser: error %d reading file %s at line %d:\n  %s\n",
-                num, keyval_filename, prrte_util_keyval_yynewlines, prrte_util_keyval_yytext);
-}
-
-int prrte_util_keyval_save_internal_envars(prrte_keyval_parse_fn_t callback)
-{
-    if (NULL != env_str && 0 < strlen(env_str)) {
-        callback("mca_base_env_list_internal", env_str);
-        free(env_str);
-        env_str = NULL;
-    }
-    return PRRTE_SUCCESS;
+                num, filename, prrte_util_keyval_yynewlines, prrte_util_keyval_yytext);
 }
 
 static void trim_name(char *buffer, const char* prefix, const char* suffix)
@@ -312,7 +302,10 @@ static int add_to_env_str(char *var, char *val)
     return PRRTE_SUCCESS;
 }
 
-static int parse_line_new(prrte_keyval_parse_state_t first_val)
+static int parse_line_new(const char *filename,
+                          prrte_keyval_parse_state_t first_val,
+                          char ***dstenv,
+                          prrte_keyval_parse_fn_t callback)
 {
     prrte_keyval_parse_state_t val;
     char *tmp;
@@ -337,11 +330,11 @@ static int parse_line_new(prrte_keyval_parse_state_t first_val)
                         trim_name (tmp, "\'", "\'");
                         trim_name (tmp, "\"", "\"");
                     }
-                    keyval_callback(key_buffer, tmp);
+                    callback(key_buffer, tmp, dstenv);
                     free(tmp);
                 }
             } else {
-                parse_error(4);
+                parse_error(4, filename);
                 return PRRTE_ERROR;
             }
         } else if (PRRTE_UTIL_KEYVAL_PARSE_ENVEQL == val) {
@@ -352,7 +345,7 @@ static int parse_line_new(prrte_keyval_parse_state_t first_val)
             if (PRRTE_UTIL_KEYVAL_PARSE_VALUE == val) {
                 add_to_env_str(key_buffer, prrte_util_keyval_yytext);
             } else {
-                parse_error(5);
+                parse_error(5, filename);
                 return PRRTE_ERROR;
             }
         } else if (PRRTE_UTIL_KEYVAL_PARSE_ENVVAR == val) {
@@ -361,7 +354,7 @@ static int parse_line_new(prrte_keyval_parse_state_t first_val)
             add_to_env_str(key_buffer, NULL);
         } else {
             /* we got something unexpected.  Bonk! */
-            parse_error(6);
+            parse_error(6, filename);
             return PRRTE_ERROR;
         }
 
