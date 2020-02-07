@@ -241,6 +241,64 @@ static char *strip_quotes(char *p)
 
 }
 
+static void process_envar(const char *p, char ***dstenv)
+{
+    char *value, **tmp;
+    char *p1, *p2;
+    size_t len;
+    int k;
+    bool found;
+
+    p1 = strdup(p);
+    if (NULL != (value = strchr(p1, '='))) {
+        /* terminate the name of the param */
+        *value = '\0';
+        /* step over the equals */
+        value++;
+        /* overwrite any prior entry */
+        prrte_setenv(p1, value, true, dstenv);
+    } else {
+        /* check for a '*' wildcard at the end of the value */
+        if ('*' == p1[strlen(p1)-1]) {
+            /* search the local environment for all params
+             * that start with the string up to the '*' */
+            p1[strlen(p1)-1] = '\0';
+            len = strlen(p1);
+            for (k=0; NULL != environ[k]; k++) {
+                if (0 == strncmp(environ[k], p1, len)) {
+                    value = strdup(environ[k]);
+                    /* find the '=' sign */
+                    p2 = strchr(value, '=');
+                    *p2 = '\0';
+                    ++p2;
+                    /* overwrite any prior entry */
+                    prrte_setenv(value, p2, true, dstenv);
+                    free(value);
+                }
+            }
+        } else {
+            value = getenv(p1);
+            if (NULL != value) {
+                /* overwrite any prior entry */
+                prrte_setenv(p1, value, true, dstenv);
+            } else {
+                /* see if it is already in the dstenv */
+                tmp = *dstenv;
+                found = false;
+                for (k=0; NULL != tmp[k]; k++) {
+                    if (0 == strncmp(p1, tmp[k], strlen(p1))) {
+                        found = true;
+                    }
+                }
+                if (!found) {
+                    prrte_show_help("help-schizo-base.txt", "env-not-found", true, p1);
+                }
+            }
+        }
+    }
+    free(p1);
+}
+
 static void process_env_list(const char *env_list, char ***argv, char sep)
 {
     char** tokens;
@@ -255,7 +313,7 @@ static void process_env_list(const char *env_list, char ***argv, char sep)
         if (NULL == (ptr = strchr(tokens[i], '='))) {
             value = getenv(tokens[i]);
             if (NULL == value) {
-                prrte_show_help("help-prrte-mca-var.txt", "incorrect-env-list-param",
+                prrte_show_help("help-schizo-base.txt", "incorrect-env-list-param",
                                true, tokens[i], env_list);
                 break;
             }
@@ -289,7 +347,6 @@ static void save_value(const char *name, const char *value, char ***dstenv)
 {
     char *param;
 
-    prrte_output(0, "SAVE VALUE %s %s", name, value);
     if (0 == strcmp(name, "mca_base_env_list")) {
         process_env_list(value, dstenv, ';');
     } else {
@@ -315,8 +372,106 @@ static void process_env_files(char *filename, char ***dstenv, char sep)
        the entries farthest to the left get precedence) */
 
     for (i = count - 1; i >= 0; --i) {
-        prrte_output(0, "PARSING FILE %s", tmp[i]);
         prrte_util_keyval_parse(tmp[i], dstenv, save_value);
+    }
+
+    prrte_argv_free(tmp);
+}
+
+static char *schizo_getline(FILE *fp)
+{
+    char *ret, *buff;
+    char input[2048];
+
+    memset(input, 0, 2048);
+    ret = fgets(input, 2048, fp);
+    if (NULL != ret) {
+       input[strlen(input)-1] = '\0';  /* remove newline */
+       buff = strdup(input);
+       return buff;
+    }
+
+    return NULL;
+}
+
+static void process_tune_files(char *filename, char ***dstenv, char sep)
+{
+    FILE *fp;
+    char **tmp, **opts, *line, *param, *p1, *p2;
+    int i, count, n;
+
+    tmp = prrte_argv_split(filename, sep);
+    if (NULL == tmp) {
+        return;
+    }
+
+    count = prrte_argv_count(tmp);
+
+    /* Iterate through all the files passed in -- read them in reverse
+       order so that we preserve unix/shell path-like semantics (i.e.,
+       the entries farthest to the left get precedence) */
+
+    for (i = count - 1; i >= 0; --i) {
+        fp = fopen(tmp[i], "r");
+        if (NULL == fp) {
+            prrte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);
+            continue;
+        }
+        while (NULL != (line = schizo_getline(fp))) {
+            opts = prrte_argv_split(line, ' ');
+            if (NULL == opts) {
+                prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                free(line);
+                break;
+            }
+            for (n=0; NULL != opts[n]; n++) {
+                if (0 == strcmp(opts[n], "-x")) {
+                    /* the next value must be the envar */
+                    if (NULL == opts[n+1]) {
+                        prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                        break;
+                    }
+                    p1 = strip_quotes(opts[n+1]);
+                    /* some idiot decided to allow spaces around an "=" sign, which is
+                     * a violation of the Posix cmd line syntax. Rather than fighting
+                     * the battle to correct their error, try to accommodate it here */
+                    if (NULL != opts[n+2] && 0 == strcmp(opts[n+2], "=")) {
+                        if (NULL == opts[n+3]) {
+                            prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                            break;
+                        }
+                        p2 = strip_quotes(opts[n+3]);
+                        prrte_asprintf(&param, "%s=%s", p1, p2);
+                        free(p1);
+                        free(p2);
+                        p1 = param;
+                        ++n;  // need an extra step
+                    }
+                    process_envar(p1, dstenv);
+                    free(p1);
+                    ++n;  // skip over the envar option
+                } else if (0 == strcmp(opts[n], "--mca")) {
+                    if (NULL == opts[n+1] || NULL == opts[n+2]) {
+                        prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                        break;
+                    }
+                    p1 = strip_quotes(opts[n+1]);
+                    p2 = strip_quotes(opts[n+2]);
+                    if (0 == strcmp(p1, "mca_base_env_list")) {
+                        /* next option must be the list of envars */
+                        process_env_list(p2, dstenv, ';');
+                    } else {
+                        /* treat it as an arbitrary MCA param */
+                        prrte_asprintf(&param, "OMPI_MCA_%s=%s", p1, p2);
+                    }
+                    free(p1);
+                    free(p2);
+                    n += 2;  // skip over the MCA option
+                }
+            }
+            free(line);
+        }
+        fclose(fp);
     }
 
     prrte_argv_free(tmp);
@@ -354,9 +509,8 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      char ***dstenv,
                      bool cmdline)
 {
-    int i, j, k, ninst, len;
+    int i, j, ninst;
     char *param, *p1, *p2;
-    char *value;
     char *env_set_flag;
     bool takeus = false;
     prrte_value_t *pval;
@@ -462,10 +616,13 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
         process_env_files(p1, dstenv, ',');
         free(p1);
     }
+    /* a "tune" file contains a set of arbitrary command line
+     * options - we only recognize those pertaining to OMPI.
+     * This includes --mca and -x directives. All else are ignored */
     if (prrte_cmd_line_is_taken(cmd_line, "tune")) {
         pval = prrte_cmd_line_get_param(cmd_line, "tune", 0, 0);
         p1 = strip_quotes(pval->data.string);
-        process_env_files(p1, dstenv, ',');
+        process_tune_files(p1, dstenv, ',');
         free(p1);
     }
 
@@ -475,43 +632,7 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             pval = prrte_cmd_line_get_param(cmd_line, "x", i, 0);
             p1 = strip_quotes(pval->data.string);
-
-            if (NULL != (value = strchr(p1, '='))) {
-                /* terminate the name of the param */
-                *value = '\0';
-                /* step over the equals */
-                value++;
-                /* overwrite any prior entry */
-                prrte_setenv(p1, value, true, dstenv);
-            } else {
-                /* check for a '*' wildcard at the end of the value */
-                if ('*' == p1[strlen(p1)-1]) {
-                    /* search the local environment for all params
-                     * that start with the string up to the '*' */
-                    p1[strlen(p1)-1] = '\0';
-                    len = strlen(p1);
-                    for (k=0; NULL != environ[k]; k++) {
-                        if (0 == strncmp(environ[k], p1, len)) {
-                            value = strdup(environ[k]);
-                            /* find the '=' sign */
-                            p2 = strchr(value, '=');
-                            *p2 = '\0';
-                            ++p2;
-                            /* overwrite any prior entry */
-                            prrte_setenv(value, p2, true, dstenv);
-                            free(value);
-                        }
-                    }
-                } else {
-                    value = getenv(p1);
-                    if (NULL != value) {
-                        /* overwrite any prior entry */
-                        prrte_setenv(p1, value, true, dstenv);
-                    } else {
-                        prrte_output(0, "Warning: could not find environment variable \"%s\"\n", p1);
-                    }
-                }
-            }
+            process_envar(p1, dstenv);
             free(p1);
         }
     }
