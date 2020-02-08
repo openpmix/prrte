@@ -15,7 +15,7 @@
  * Copyright (c) 2010      IBM Corporation.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Rutgers, The State University of New Jersey.
  *                         All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
@@ -109,6 +109,9 @@
 #include <dirent.h>
 #endif
 #include <ctype.h>
+#ifdef HAVE_SYS_PTRACE_H
+#include <sys/ptrace.h>
+#endif
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/hwloc/hwloc-internal.h"
@@ -371,6 +374,7 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
     set_handler_default(SIGHUP);
     set_handler_default(SIGPIPE);
     set_handler_default(SIGCHLD);
+    set_handler_default(SIGTRAP);
 
     /* Unblock all signals, for many of the same reasons that we
        set the default handlers, above.  This is noticable on
@@ -385,13 +389,29 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
             send_error_show_help(write_fd, 1,
                                  "help-prrterun.txt",
                                  "prrterun:wdir-not-found",
-                                 "orted",
+                                 "prted",
                                  cd->wdir,
                                  prrte_process_info.nodename,
                                  (NULL == cd->child) ? 0 : cd->child->app_rank);
             /* Does not return */
         }
     }
+
+#if PRRTE_HAVE_STOP_ON_EXEC
+    if (prrte_get_attribute(&cd->jdata->attributes, PRRTE_JOB_STOP_ON_EXEC, NULL, PRRTE_BOOL)) {
+        errno = 0;
+        i = ptrace(PRRTE_TRACEME, 0, 0, 0);
+        if  (0 != errno) {
+            send_error_show_help(write_fd, 1,
+                                 "help-prrterun.txt",
+                                 "prrterun:stop-on-exec",
+                                 "prted",
+                                 strerror(errno),
+                                 prrte_process_info.nodename,
+                                 (NULL == cd->child) ? 0 : cd->child->app_rank);
+          }
+    }
+#endif
 
     /* Exec the new executable */
     execve(cd->cmd, cd->argv, cd->env);
@@ -416,7 +436,7 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
 
 static int do_parent(prrte_odls_spawn_caddy_t *cd, int read_fd)
 {
-    int rc;
+    int rc, status;
     prrte_odls_pipe_err_msg_t msg;
     char file[PRRTE_ODLS_MAX_FILE_LEN + 1], topic[PRRTE_ODLS_MAX_TOPIC_LEN + 1], *str = NULL;
 
@@ -427,6 +447,36 @@ static int do_parent(prrte_odls_spawn_caddy_t *cd, int read_fd)
     if( !prrte_iof_base.redirect_app_stderr_to_stdout ) {
         close(cd->opts.p_stderr[1]);
     }
+
+#if PRRTE_HAVE_STOP_ON_EXEC
+    if (prrte_get_attribute(&cd->jdata->attributes, PRRTE_JOB_STOP_ON_EXEC, NULL, PRRTE_BOOL)) {
+        rc = waitpid(cd->child->pid, &status, WUNTRACED);
+        if (-1 == rc) {
+            /* doomed */
+            return PRRTE_ERR_FAILED_TO_START;
+        }
+        /* tell the child to stop */
+        if (WIFSTOPPED(status)) {
+            rc = kill(cd->child->pid, SIGSTOP);
+            if (-1 == rc) {
+                /* doomed */
+                return PRRTE_ERR_FAILED_TO_START;
+            }
+            errno = 0;
+            ptrace(PTRACE_DETACH, cd->child->pid, 0, (void*)SIGSTOP);
+            if (0 != errno) {
+                /* couldn't detach */
+                return PRRTE_ERR_FAILED_TO_START;
+            }
+        }
+        if (NULL != cd->child) {
+            cd->child->state = PRRTE_PROC_STATE_RUNNING;
+            PRRTE_FLAG_SET(cd->child, PRRTE_PROC_FLAG_ALIVE);
+        }
+        close(read_fd);
+        return PRRTE_SUCCESS;
+    }
+#endif
 
     /* Block reading a message from the pipe */
     while (1) {

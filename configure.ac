@@ -986,6 +986,15 @@ prrte_show_title "Symbol visibility feature"
 
 PRRTE_CHECK_VISIBILITY
 
+##################################
+# STOP-ON-EXEC
+##################################
+# Check ptrace support for stop-on-exec
+
+prrte_show_title "Ptrace stop-on-exec support"
+
+PRRTE_CHECK_PTRACE
+
 ############################################################################
 # Final top-level PRTE configuration
 ############################################################################

@@ -262,11 +262,14 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
 
 
     /* User-level debugger arguments */
-    { '\0', "debug", 1, PRRTE_CMD_LINE_TYPE_BOOL,
+    { '\0', "debug", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Invoke the indicated user-level debugger (provide a comma-delimited list of debuggers to search for)",
       PRRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "output-proctable", 1, PRRTE_CMD_LINE_TYPE_BOOL,
+    { '\0', "output-proctable", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Print the complete proctable to stdout [-], stderr [+], or a file [anything else] after launch",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "stop-on-exec", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "If supported, stop each process at start of execution",
       PRRTE_CMD_LINE_OTYPE_DEBUG },
 
 
@@ -1180,6 +1183,15 @@ int prun(int argc, char *argv[])
         PMIX_INFO_CREATE(ds->info, 1);
         flag = true;
         PMIX_INFO_LOAD(ds->info, PMIX_JOB_CONTINUOUS, &flag, PMIX_BOOL);
+        prrte_list_append(&job_info, &ds->super);
+    }
+
+    /* if stop-on-exec was specified */
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "stop-on-exec")) {
+        ds = PRRTE_NEW(prrte_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        flag = true;
+        PMIX_INFO_LOAD(ds->info, PMIX_DEBUG_STOP_ON_EXEC, &flag, PMIX_BOOL);
         prrte_list_append(&job_info, &ds->super);
     }
 
