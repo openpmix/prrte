@@ -55,57 +55,18 @@
  */
 #define MAX_WIDTH 110
 
-/*
- * Description of a command line option
- */
-typedef struct prrte_cmd_line_option_t {
-    prrte_list_item_t super;
-
-    char clo_short_name;
-    char *clo_long_name;
-
-    int clo_num_params;
-    char *clo_description;
-
-    prrte_cmd_line_type_t clo_type;
-    prrte_cmd_line_otype_t clo_otype;
-
-} prrte_cmd_line_option_t;
 static void option_constructor(prrte_cmd_line_option_t *cmd);
 static void option_destructor(prrte_cmd_line_option_t *cmd);
 
 PRRTE_CLASS_INSTANCE(prrte_cmd_line_option_t,
-                   prrte_list_item_t,
-                   option_constructor, option_destructor);
+                     prrte_list_item_t,
+                     option_constructor, option_destructor);
 
-/*
- * An option that was used in the argv that was parsed
- */
-typedef struct prrte_cmd_line_param_t {
-    prrte_list_item_t super;
-
-    /* Note that clp_arg points to storage "owned" by someone else; it
-       has the original option string by reference, not by value.
-       Hence, it should not be free()'ed. */
-
-    char *clp_arg;
-
-    /* Pointer to the existing option.  This is also by reference; it
-       should not be free()ed. */
-
-    prrte_cmd_line_option_t *clp_option;
-
-    /* This is a list of all the parameters of this option.
-       It is owned by this parameter, and should be freed when this
-       param_t is freed. */
-
-    prrte_list_t clp_values;
-} prrte_cmd_line_param_t;
 static void param_constructor(prrte_cmd_line_param_t *cmd);
 static void param_destructor(prrte_cmd_line_param_t *cmd);
 PRRTE_CLASS_INSTANCE(prrte_cmd_line_param_t,
-                   prrte_list_item_t,
-                   param_constructor, param_destructor);
+                     prrte_list_item_t,
+                     param_constructor, param_destructor);
 
 /*
  * Instantiate the prrte_cmd_line_t class
@@ -113,9 +74,9 @@ PRRTE_CLASS_INSTANCE(prrte_cmd_line_param_t,
 static void cmd_line_constructor(prrte_cmd_line_t *cmd);
 static void cmd_line_destructor(prrte_cmd_line_t *cmd);
 PRRTE_CLASS_INSTANCE(prrte_cmd_line_t,
-                   prrte_object_t,
-                   cmd_line_constructor,
-                   cmd_line_destructor);
+                     prrte_object_t,
+                     cmd_line_constructor,
+                     cmd_line_destructor);
 
 /*
  * Private variables

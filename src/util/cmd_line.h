@@ -126,32 +126,6 @@
 #define PRRTE_CMD_OPTIONS_MAX  15
 
 BEGIN_C_DECLS
-/**
- * Main top-level handle.  This interface should not be used by users!
- */
-typedef struct prrte_cmd_line_t {
-    /** Make this an OBJ handle */
-    prrte_object_t super;
-
-    /** Thread safety */
-    prrte_recursive_mutex_t lcl_mutex;
-
-    /** List of prrte_cmd_line_option_t's (defined internally) */
-    prrte_list_t lcl_options[PRRTE_CMD_OPTIONS_MAX];
-
-    /** Duplicate of argc from opal_cmd_line_parse() */
-    int lcl_argc;
-    /** Duplicate of argv from opal_cmd_line_parse() */
-    char **lcl_argv;
-
-    /** Parsed output; list of ompi_cmd_line_param_t's (defined internally) */
-    prrte_list_t lcl_params;
-
-    /** List of tail (unprocessed) arguments */
-    int lcl_tail_argc;
-    /** List of tail (unprocessed) arguments */
-    char **lcl_tail_argv;
-} prrte_cmd_line_t;
 
 /**
  * Data types supported by the parser
@@ -187,6 +161,77 @@ typedef enum prrte_cmd_line_otype_t {
     PRRTE_CMD_LINE_OTYPE_NULL
 } prrte_cmd_line_otype_t;
 
+
+/**
+ * Main top-level handle.  This interface should not be used by users!
+ */
+typedef struct prrte_cmd_line_t {
+    /** Make this an OBJ handle */
+    prrte_object_t super;
+
+    /** Thread safety */
+    prrte_recursive_mutex_t lcl_mutex;
+
+    /** List of prrte_cmd_line_option_t's (defined internally) */
+    prrte_list_t lcl_options[PRRTE_CMD_OPTIONS_MAX];
+
+    /** Duplicate of argc from opal_cmd_line_parse() */
+    int lcl_argc;
+    /** Duplicate of argv from opal_cmd_line_parse() */
+    char **lcl_argv;
+
+    /** Parsed output; list of ompi_cmd_line_param_t's (defined internally) */
+    prrte_list_t lcl_params;
+
+    /** List of tail (unprocessed) arguments */
+    int lcl_tail_argc;
+    /** List of tail (unprocessed) arguments */
+    char **lcl_tail_argv;
+} prrte_cmd_line_t;
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_cmd_line_t);
+
+/*
+ * Description of a command line option
+ */
+typedef struct prrte_cmd_line_option_t {
+    prrte_list_item_t super;
+
+    char clo_short_name;
+    char *clo_long_name;
+
+    int clo_num_params;
+    char *clo_description;
+
+    prrte_cmd_line_type_t clo_type;
+    prrte_cmd_line_otype_t clo_otype;
+
+} prrte_cmd_line_option_t;
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_cmd_line_option_t);
+
+/*
+ * An option that was used in the argv that was parsed
+ */
+typedef struct prrte_cmd_line_param_t {
+    prrte_list_item_t super;
+
+    /* Note that clp_arg points to storage "owned" by someone else; it
+       has the original option string by reference, not by value.
+       Hence, it should not be free()'ed. */
+
+    char *clp_arg;
+
+    /* Pointer to the existing option.  This is also by reference; it
+       should not be free()ed. */
+
+    prrte_cmd_line_option_t *clp_option;
+
+    /* This is a list of all the parameters of this option.
+       It is owned by this parameter, and should be freed when this
+       param_t is freed. */
+
+    prrte_list_t clp_values;
+} prrte_cmd_line_param_t;
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_cmd_line_param_t);
 
 /**
  * Datatype used to construct a command line handle; see
@@ -231,7 +276,6 @@ typedef struct prrte_cmd_line_init_t {
  * destructor for prrte_cmd_line_t handles will free all memory
  * associated with the handle.
  */
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_cmd_line_t);
 
 /**
  * Make a command line handle from a table of initializers.

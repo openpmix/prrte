@@ -535,11 +535,13 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      char ***dstenv,
                      bool cmdline)
 {
-    int i, j, ninst;
+    int i;
     char *param, *p1, *p2;
     char *env_set_flag;
     bool takeus = false;
     prrte_value_t *pval;
+    prrte_cmd_line_param_t *cparm;
+    prrte_cmd_line_option_t *option;
 
     prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
                         "%s schizo:ompi: parse_env",
@@ -571,14 +573,31 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
         process_env_list(env_set_flag, dstenv, ';');
     }
 
-    if (prrte_cmd_line_is_taken(cmd_line, "omca")) {
-        ninst = prrte_cmd_line_get_ninsts(cmd_line, "omca");
-        for (i=0; i < ninst; i++) {
-            /* get the name of the param */
-            pval = prrte_cmd_line_get_param(cmd_line, "omca", i, 1);
+    prrte_mutex_lock(&cmd_line->lcl_mutex);
+
+    PRRTE_LIST_FOREACH(cparm, &cmd_line->lcl_params, prrte_cmd_line_param_t) {
+        option = cparm->clp_option;
+
+        if ('x' == option->clo_short_name) {
+            pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
             p1 = strip_quotes(pval->data.string);
-            /* get the value of the param */
-            pval = prrte_cmd_line_get_param(cmd_line, "omca", i, 2);
+            /* process it */
+            process_token(p1, dstenv);
+            free(p1);
+            continue;
+        }
+
+        if (NULL == option->clo_long_name) {
+            continue;
+        }
+
+        if (0 == strcmp(option->clo_long_name, "omca") ||
+            0 == strcmp(option->clo_long_name, "gomca")) {
+            /* the first value on the list is the name of the param */
+            pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
+            p1 = strip_quotes(pval->data.string);
+            /* next value on the list is the value */
+            pval = (prrte_value_t*)prrte_list_get_next(&pval->super);
             p2 = strip_quotes(pval->data.string);
             /* construct the MCA param value and add it to the dstenv */
             prrte_asprintf(&param, "OMPI_MCA_%s", p1);
@@ -587,83 +606,41 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
             free(p1);
             free(p2);
         }
-    }
 
-    if (prrte_cmd_line_is_taken(cmd_line, "gomca")) {
-        ninst = prrte_cmd_line_get_ninsts(cmd_line, "gomca");
-        for (i=0; i < ninst; i++) {
-            /* get the name of the param */
-            pval = prrte_cmd_line_get_param(cmd_line, "gomca", i, 1);
+        if (0 == strcmp(option->clo_long_name, "mca") ||
+            0 == strcmp(option->clo_long_name, "gmca")) {
+            /* the first value on the list is the name of the param */
+            pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
             p1 = strip_quotes(pval->data.string);
-            /* get the value of the param */
-            pval = prrte_cmd_line_get_param(cmd_line, "gomca", i, 2);
+            /* next value on the list is the value */
+            pval = (prrte_value_t*)prrte_list_get_next(&pval->super);
             p2 = strip_quotes(pval->data.string);
-            /* construct the MCA param value and add it to the dstenv */
-            prrte_asprintf(&param, "OMPI_MCA_%s", p1);
-            prrte_setenv(param, p2, true, dstenv);
-            free(param);
+            /* process it */
+            process_generic(p1, p2, dstenv);
             free(p1);
             free(p2);
         }
-    }
 
-    if (prrte_cmd_line_is_taken(cmd_line, "mca")) {
-        ninst = prrte_cmd_line_get_ninsts(cmd_line, "mca");
-        for (i=0; i < ninst; i++) {
-            /* get the name of the param */
-            pval = prrte_cmd_line_get_param(cmd_line, "mca", i, 0);
+        if (0 == strcmp(option->clo_long_name, "am")) {
+            /* the first value on the list is the name of the file */
+            pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
             p1 = strip_quotes(pval->data.string);
-            /* get the value of the param */
-            pval = prrte_cmd_line_get_param(cmd_line, "mca", i, 1);
-            p2 = strip_quotes(pval->data.string);
             /* process it */
-            process_generic(p1, p2, dstenv);
+            process_env_files(p1, dstenv, ',');
+            free(p1);
         }
-    }
 
-    if (prrte_cmd_line_is_taken(cmd_line, "gmca")) {
-        ninst = prrte_cmd_line_get_ninsts(cmd_line, "gmca");
-        for (i=0; i < ninst; i++) {
-            /* get the name of the param */
-            pval = prrte_cmd_line_get_param(cmd_line, "gmca", i, 0);
+        if (0 == strcmp(option->clo_long_name, "tune")) {
+            /* the first value on the list is the name of the file */
+            pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
             p1 = strip_quotes(pval->data.string);
-            /* get the value of the param */
-            pval = prrte_cmd_line_get_param(cmd_line, "gmca", i, 1);
-            p2 = strip_quotes(pval->data.string);
             /* process it */
-            process_generic(p1, p2, dstenv);
-        }
-    }
-
-    /* ensure we pickup any "tune" or "am" options */
-    if (prrte_cmd_line_is_taken(cmd_line, "am")) {
-        pval = prrte_cmd_line_get_param(cmd_line, "am", 0, 0);
-        p1 = strip_quotes(pval->data.string);
-        process_env_files(p1, dstenv, ',');
-        free(p1);
-    }
-    /* a "tune" file contains a set of arbitrary command line
-     * options - we only recognize those pertaining to OMPI.
-     * This includes --mca and -x directives. All else are ignored */
-    if (prrte_cmd_line_is_taken(cmd_line, "tune")) {
-        pval = prrte_cmd_line_get_param(cmd_line, "tune", 0, 0);
-        p1 = strip_quotes(pval->data.string);
-        process_tune_files(p1, dstenv, ',');
-        free(p1);
-    }
-
-    /* Did the user request to export any environment variables on the cmd line? */
-    if (prrte_cmd_line_is_taken(cmd_line, "x")) {
-        j = prrte_cmd_line_get_ninsts(cmd_line, "x");
-        for (i = 0; i < j; ++i) {
-            pval = prrte_cmd_line_get_param(cmd_line, "x", i, 0);
-            p1 = strip_quotes(pval->data.string);
-            process_envar(p1, dstenv);
+            process_tune_files(p1, dstenv, ',');
             free(p1);
         }
     }
 
-
+    prrte_mutex_unlock(&cmd_line->lcl_mutex);
     return PRRTE_SUCCESS;
 }
 
