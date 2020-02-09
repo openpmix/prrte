@@ -1444,9 +1444,6 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
                                           int *proc_vpid_index)
 {
     char *param = NULL;
-    const char **tmp_value, **tmp_value2;
-    int loc_id;
-    char *tmp_force = NULL;
     int i, j, cnt, rc;
     prrte_job_t *jdata;
     unsigned long num_procs;
@@ -1544,116 +1541,6 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
         prrte_argv_append(argc, argv, "--prtemca");
         prrte_argv_append(argc, argv, "prrte_xterm");
         prrte_argv_append(argc, argv, prrte_xterm);
-    }
-
-    loc_id = prrte_mca_base_var_find("prrte", "mca", "base", "param_files");
-    if (loc_id < 0) {
-        rc = PRRTE_ERR_NOT_FOUND;
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
-    tmp_value = NULL;
-    rc = prrte_mca_base_var_get_value(loc_id, &tmp_value, NULL, NULL);
-    if (PRRTE_SUCCESS != rc) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
-    if (NULL != tmp_value && NULL != tmp_value[0]) {
-        rc = strcmp(tmp_value[0], "none");
-    } else {
-        rc = 1;
-    }
-
-    if (0 != rc) {
-        /*
-         * Pass along the Aggregate MCA Parameter Sets
-         */
-        /* Add the 'prefix' param */
-        tmp_value = NULL;
-
-        loc_id = prrte_mca_base_var_find("prrte", "mca", "base", "envar_file_prefix");
-        if (loc_id < 0) {
-            rc = PRRTE_ERR_NOT_FOUND;
-            PRRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        rc = prrte_mca_base_var_get_value(loc_id, &tmp_value, NULL, NULL);
-        if (PRRTE_SUCCESS != rc) {
-            PRRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        if( NULL != tmp_value && NULL != tmp_value[0] ) {
-            /* Could also use the short version '-tune'
-             * but being verbose has some value
-             */
-            prrte_argv_append(argc, argv, "--prtemca");
-            prrte_argv_append(argc, argv, "mca_base_envar_file_prefix");
-            prrte_argv_append(argc, argv, tmp_value[0]);
-        }
-
-        tmp_value2 = NULL;
-        loc_id = prrte_mca_base_var_find("prrte", "mca", "base", "param_file_prefix");
-        prrte_mca_base_var_get_value(loc_id, &tmp_value2, NULL, NULL);
-        if( NULL != tmp_value2 && NULL != tmp_value2[0] ) {
-            /* Could also use the short version '-am'
-             * but being verbose has some value
-             */
-            prrte_argv_append(argc, argv, "--prtemca");
-            prrte_argv_append(argc, argv, "mca_base_param_file_prefix");
-            prrte_argv_append(argc, argv, tmp_value2[0]);
-            prrte_show_help("help-plm-base.txt", "deprecated-amca", true);
-        }
-
-        if ((NULL != tmp_value && NULL != tmp_value[0])
-            || (NULL != tmp_value2 && NULL != tmp_value2[0])) {
-            /* Add the 'path' param */
-            tmp_value = NULL;
-            loc_id = prrte_mca_base_var_find("prrte", "mca", "base", "param_file_path");
-            if (loc_id < 0) {
-                PRRTE_ERROR_LOG(rc);
-                return rc;
-            }
-            rc = prrte_mca_base_var_get_value(loc_id, &tmp_value, NULL, NULL);
-            if (PRRTE_SUCCESS != rc) {
-                PRRTE_ERROR_LOG(rc);
-                return rc;
-            }
-            if( NULL != tmp_value && NULL != tmp_value[0] ) {
-                prrte_argv_append(argc, argv, "--prtemca");
-                prrte_argv_append(argc, argv, "mca_base_param_file_path");
-                prrte_argv_append(argc, argv, tmp_value[0]);
-            }
-
-            /* Add the 'path' param */
-            prrte_argv_append(argc, argv, "--prtemca");
-            prrte_argv_append(argc, argv, "mca_base_param_file_path_force");
-
-            tmp_value = NULL;
-            loc_id = prrte_mca_base_var_find("prrte", "mca", "base", "param_file_path_force");
-            if (loc_id < 0) {
-                rc = PRRTE_ERR_NOT_FOUND;
-                PRRTE_ERROR_LOG(rc);
-                return rc;
-            }
-            rc = prrte_mca_base_var_get_value(loc_id, &tmp_value, NULL, NULL);
-            if (PRRTE_SUCCESS != rc) {
-                PRRTE_ERROR_LOG(rc);
-                return rc;
-            }
-            if( NULL == tmp_value || NULL == tmp_value[0] ) {
-                /* Get the current working directory */
-                tmp_force = (char *) malloc(sizeof(char) * PRRTE_PATH_MAX);
-                if (NULL == getcwd(tmp_force, PRRTE_PATH_MAX)) {
-                    free(tmp_force);
-                    tmp_force = strdup("");
-                }
-
-                prrte_argv_append(argc, argv, tmp_force);
-                free(tmp_force);
-            } else {
-                prrte_argv_append(argc, argv, tmp_value[0]);
-            }
-        }
     }
 
     /* pass along any cmd line MCA params provided to mpirun,

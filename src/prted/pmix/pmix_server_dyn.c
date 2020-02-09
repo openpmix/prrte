@@ -129,6 +129,7 @@ static void spawn(int sd, short args, void *cbdata)
     PRRTE_ACQUIRE_OBJECT(req);
 
     /* add this request to our tracker hotel */
+    PRRTE_ADJUST_TIMEOUT(req);
     if (PRRTE_SUCCESS != (rc = prrte_hotel_checkin(&prrte_pmix_server_globals.reqs, req, &req->room_num))) {
         prrte_show_help("help-orted.txt", "noroom", true, req->operation, prrte_pmix_server_globals.num_rooms);
         goto callback;
