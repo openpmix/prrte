@@ -1108,16 +1108,84 @@ int prrte_hwloc_base_cpu_list_parse(const char *slot_str,
     return PRRTE_SUCCESS;
 }
 
+static void prrte_hwloc_base_get_relative_locality_by_depth(hwloc_topology_t topo, unsigned d,
+                                                            hwloc_cpuset_t loc1, hwloc_cpuset_t loc2,
+                                                            prrte_hwloc_locality_t *locality, bool *shared)
+{
+    unsigned width, w;
+    hwloc_obj_t obj;
+    int sect1, sect2;
+
+    /* get the width of the topology at this depth */
+    width = hwloc_get_nbobjs_by_depth(topo, d);
+
+    /* scan all objects at this depth to see if
+     * our locations overlap with them
+     */
+    for (w=0; w < width; w++) {
+        /* get the object at this depth/index */
+        obj = hwloc_get_obj_by_depth(topo, d, w);
+        /* see if our locations intersect with the cpuset for this obj */
+        sect1 = hwloc_bitmap_intersects(obj->cpuset, loc1);
+        sect2 = hwloc_bitmap_intersects(obj->cpuset, loc2);
+        /* if both intersect, then we share this level */
+        if (sect1 && sect2) {
+            *shared = true;
+            switch(obj->type) {
+            case HWLOC_OBJ_NODE:
+                *locality |= PRRTE_PROC_ON_NUMA;
+                break;
+            case HWLOC_OBJ_SOCKET:
+                *locality |= PRRTE_PROC_ON_SOCKET;
+                break;
+#if HWLOC_API_VERSION < 0x20000
+            case HWLOC_OBJ_CACHE:
+                if (3 == obj->attr->cache.depth) {
+                    *locality |= PRRTE_PROC_ON_L3CACHE;
+                } else if (2 == obj->attr->cache.depth) {
+                    *locality |= PRRTE_PROC_ON_L2CACHE;
+                } else {
+                    *locality |= PRRTE_PROC_ON_L1CACHE;
+                }
+                break;
+#else
+            case HWLOC_OBJ_L3CACHE:
+                *locality |= PRRTE_PROC_ON_L3CACHE;
+                break;
+            case HWLOC_OBJ_L2CACHE:
+                *locality |= PRRTE_PROC_ON_L2CACHE;
+                break;
+            case HWLOC_OBJ_L1CACHE:
+                *locality |= PRRTE_PROC_ON_L1CACHE;
+                break;
+#endif
+            case HWLOC_OBJ_CORE:
+                *locality |= PRRTE_PROC_ON_CORE;
+                break;
+            case HWLOC_OBJ_PU:
+                *locality |= PRRTE_PROC_ON_HWTHREAD;
+                break;
+            default:
+                /* just ignore it */
+                break;
+            }
+            break;
+        }
+        /* otherwise, we don't share this
+         * object - but we still might share another object
+         * on this level, so we have to keep searching
+         */
+    }
+}
+
 prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t topo,
                                                             char *cpuset1, char *cpuset2)
 {
     prrte_hwloc_locality_t locality;
-    hwloc_obj_t obj;
-    unsigned depth, d, width, w;
+    hwloc_cpuset_t loc1, loc2;
+    unsigned depth, d;
     bool shared;
     hwloc_obj_type_t type;
-    int sect1, sect2;
-    hwloc_cpuset_t loc1, loc2;
 
     /* start with what we know - they share a node on a cluster
      * NOTE: we may alter that latter part as hwloc's ability to
@@ -1158,66 +1226,8 @@ prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t t
             HWLOC_OBJ_PU != type) {
             continue;
         }
-        /* get the width of the topology at this depth */
-        width = hwloc_get_nbobjs_by_depth(topo, d);
+        prrte_hwloc_base_get_relative_locality_by_depth(topo, d, loc1, loc2, &locality, &shared);
 
-        /* scan all objects at this depth to see if
-         * our locations overlap with them
-         */
-        for (w=0; w < width; w++) {
-            /* get the object at this depth/index */
-            obj = hwloc_get_obj_by_depth(topo, d, w);
-            /* see if our locations intersect with the cpuset for this obj */
-            sect1 = hwloc_bitmap_intersects(obj->cpuset, loc1);
-            sect2 = hwloc_bitmap_intersects(obj->cpuset, loc2);
-            /* if both intersect, then we share this level */
-            if (sect1 && sect2) {
-                shared = true;
-                switch(obj->type) {
-                case HWLOC_OBJ_NODE:
-                    locality |= PRRTE_PROC_ON_NUMA;
-                    break;
-                case HWLOC_OBJ_SOCKET:
-                    locality |= PRRTE_PROC_ON_SOCKET;
-                    break;
-#if HWLOC_API_VERSION < 0x20000
-                case HWLOC_OBJ_CACHE:
-                    if (3 == obj->attr->cache.depth) {
-                        locality |= PRRTE_PROC_ON_L3CACHE;
-                    } else if (2 == obj->attr->cache.depth) {
-                        locality |= PRRTE_PROC_ON_L2CACHE;
-                    } else {
-                        locality |= PRRTE_PROC_ON_L1CACHE;
-                    }
-                    break;
-#else
-                case HWLOC_OBJ_L3CACHE:
-                    locality |= PRRTE_PROC_ON_L3CACHE;
-                    break;
-                case HWLOC_OBJ_L2CACHE:
-                    locality |= PRRTE_PROC_ON_L2CACHE;
-                    break;
-                case HWLOC_OBJ_L1CACHE:
-                    locality |= PRRTE_PROC_ON_L1CACHE;
-                    break;
-#endif
-                case HWLOC_OBJ_CORE:
-                    locality |= PRRTE_PROC_ON_CORE;
-                    break;
-                case HWLOC_OBJ_PU:
-                    locality |= PRRTE_PROC_ON_HWTHREAD;
-                    break;
-                default:
-                    /* just ignore it */
-                    break;
-                }
-                break;
-            }
-            /* otherwise, we don't share this
-             * object - but we still might share another object
-             * on this level, so we have to keep searching
-             */
-        }
         /* if we spanned the entire width without finding
          * a point of intersection, then no need to go
          * deeper
@@ -1226,6 +1236,10 @@ prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t t
             break;
         }
     }
+
+#if HWLOC_API_VERSION >= 0x20000
+    prrte_hwloc_base_get_relative_locality_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE, loc1, loc2, &locality, &shared);
+#endif
 
     prrte_output_verbose(5, prrte_hwloc_base_output,
                         "locality: %s",
@@ -2177,12 +2191,40 @@ char* prrte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
     return sig;
 }
 
+static int prrte_hwloc_base_get_locality_string_by_depth(hwloc_topology_t topo,
+                                                         int d,
+                                                         hwloc_cpuset_t cpuset,
+                                                         hwloc_cpuset_t result)
+{
+    hwloc_obj_t obj;
+    unsigned width, w;
+
+    /* get the width of the topology at this depth */
+    width = hwloc_get_nbobjs_by_depth(topo, d);
+    if (0 == width) {
+        return -1;
+    }
+
+    /* scan all objects at this depth to see if
+     * the location overlaps with them
+     */
+    for (w=0; w < width; w++) {
+        /* get the object at this depth/index */
+        obj = hwloc_get_obj_by_depth(topo, d, w);
+        /* see if the location intersects with it */
+        if (hwloc_bitmap_intersects(obj->cpuset, cpuset)) {
+            hwloc_bitmap_set(result, w);
+        }
+    }
+
+    return 0;
+}
+
 char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
                                           char *bitmap)
 {
-    hwloc_obj_t obj;
     char *locality=NULL, *tmp, *t2;
-    unsigned depth, d, width, w;
+    unsigned depth, d;
     hwloc_cpuset_t cpuset, result;
     hwloc_obj_type_t type;
 
@@ -2225,28 +2267,15 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
             continue;
         }
 
-        /* get the width of the topology at this depth */
-        width = hwloc_get_nbobjs_by_depth(topo, d);
-        if (0 == width) {
+        if (prrte_hwloc_base_get_locality_string_by_depth(topo, d, cpuset, result) < 0) {
             continue;
         }
 
-        /* scan all objects at this depth to see if
-         * the location overlaps with them
-         */
-        for (w=0; w < width; w++) {
-            /* get the object at this depth/index */
-            obj = hwloc_get_obj_by_depth(topo, d, w);
-            /* see if the location intersects with it */
-            if (hwloc_bitmap_intersects(obj->cpuset, cpuset)) {
-                hwloc_bitmap_set(result, w);
-            }
-        }
         /* it should be impossible, but allow for the possibility
          * that we came up empty at this depth */
         if (!hwloc_bitmap_iszero(result)) {
             hwloc_bitmap_list_asprintf(&tmp, result);
-            switch(obj->type) {
+            switch(type) {
                 case HWLOC_OBJ_NODE:
                     prrte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
@@ -2263,14 +2292,16 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
                     break;
 #if HWLOC_API_VERSION < 0x20000
                 case HWLOC_OBJ_CACHE:
-                    if (3 == obj->attr->cache.depth) {
+                {
+                    unsigned cachedepth = hwloc_get_obj_by_depth(topo, d, 0)->attr->cache.depth;
+                    if (3 == cachedepth) {
                         prrte_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
                         if (NULL != locality) {
                             free(locality);
                         }
                         locality = t2;
                         break;
-                    } else if (2 == obj->attr->cache.depth) {
+                    } else if (2 == cachedepth) {
                         prrte_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
                         if (NULL != locality) {
                             free(locality);
@@ -2285,6 +2316,7 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
                         locality = t2;
                         break;
                     }
+                }
                     break;
 #else
                 case HWLOC_OBJ_L3CACHE:
@@ -2331,6 +2363,24 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
         }
         hwloc_bitmap_zero(result);
     }
+
+#if HWLOC_API_VERSION >= 0x20000
+    if (prrte_hwloc_base_get_locality_string_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE, cpuset, result) == 0) {
+        /* it should be impossible, but allow for the possibility
+         * that we came up empty at this depth */
+        if (!hwloc_bitmap_iszero(result)) {
+            hwloc_bitmap_list_asprintf(&tmp, result);
+            prrte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
+            if (NULL != locality) {
+                free(locality);
+            }
+            locality = t2;
+            free(tmp);
+        }
+        hwloc_bitmap_zero(result);
+    }
+#endif
+
     hwloc_bitmap_free(result);
     hwloc_bitmap_free(cpuset);
 
