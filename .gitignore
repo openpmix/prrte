@@ -121,6 +121,8 @@ examples/debugger/daemon
 examples/debugger/hello
 
 test/double-get
+test/get-nofence
+test/ptrace_spawn_stopped
 
 src/sys/powerpc/atomic-32.s
 src/sys/powerpc/atomic-64.s
