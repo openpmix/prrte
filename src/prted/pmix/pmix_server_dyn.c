@@ -458,9 +458,19 @@ static void interim(int sd, short args, void *cbdata)
 
         /***   STOP ON EXEC FOR DEBUGGER   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_ON_EXEC)) {
-            /* we don't know how to do this */
+#if PRRTE_HAVE_STOP_ON_EXEC
+            flag = PMIX_INFO_TRUE(info);
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_STOP_ON_EXEC,
+                               PRRTE_ATTR_GLOBAL, &flag, PRRTE_BOOL);
+#else
+            /* we cannot support the request */
             rc = PRRTE_ERR_NOT_SUPPORTED;
             goto complete;
+#endif
+
+        /***   STOP IN INIT  AND WAIT AT SOME PROGRAMMATIC POINT FOR DEBUGGER   ***/
+        /***   ALLOW TO FALL INTO THE JOB-LEVEL CACHE AS THEY ARE INCLUDED IN   ***/
+        /***   THE INITIAL JOB-INFO DELIVERED TO PROCS                          ***/
 
         /***   TAG STDOUT   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_TAG_OUTPUT)) {
@@ -577,9 +587,11 @@ static void interim(int sd, short args, void *cbdata)
     if (NULL != cd->spcbfunc) {
         pmix_proc_t pproc;
         pmix_status_t prc;
+        pmix_nspace_t nspace;
         PRRTE_PMIX_CONVERT_JOBID(pproc.nspace, PRRTE_JOBID_INVALID);
+        PMIX_LOAD_NSPACE(nspace, NULL);
         prc = prrte_pmix_convert_rc(rc);
-        cd->spcbfunc(prc, pproc.nspace, cd->cbdata);
+        cd->spcbfunc(prc, nspace, cd->cbdata);
     }
     PRRTE_RELEASE(cd);
 }

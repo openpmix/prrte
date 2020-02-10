@@ -692,3 +692,10 @@ Conflicting requests for timeout were given:
 
 Only one method should be provided, or else they must agree. Please
 correct and retry.
+#
+[prrterun:stop-on-exec]
+%s was unable to stop the executable at first instruction:
+
+  Error:     %s
+  Nodename:  %s
+  Rank:      %lu

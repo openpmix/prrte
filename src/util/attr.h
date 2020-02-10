@@ -156,7 +156,7 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_INFO_CACHE             (PRRTE_JOB_START_KEY + 52)    // prrte_list_t - list of prrte_value_t to be included in job_info
 #define PRRTE_JOB_FULLY_DESCRIBED        (PRRTE_JOB_START_KEY + 53)    // bool - job is fully described in launch msg
 #define PRRTE_JOB_SILENT_TERMINATION     (PRRTE_JOB_START_KEY + 54)    // bool - do not generate an event notification when job
-                                                                     //        normally terminates
+                                                                       //        normally terminates
 #define PRRTE_JOB_SET_ENVAR              (PRRTE_JOB_START_KEY + 55)    // prrte_envar_t - set the given envar to the specified value
 #define PRRTE_JOB_UNSET_ENVAR            (PRRTE_JOB_START_KEY + 56)    // string - name of envar to unset, if present
 #define PRRTE_JOB_PREPEND_ENVAR          (PRRTE_JOB_START_KEY + 57)    // prrte_envar_t - prepend the specified value to the given envar
@@ -164,6 +164,7 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_ADD_ENVAR              (PRRTE_JOB_START_KEY + 59)    // prrte_envar_t - add envar, do not override pre-existing one
 #define PRRTE_JOB_APP_SETUP_DATA         (PRRTE_JOB_START_KEY + 60)    // prrte_byte_object_t - blob containing app setup data
 #define PRRTE_JOB_OUTPUT_TO_DIRECTORY    (PRRTE_JOB_START_KEY + 61)    // string - path of directory to which stdout/err is to be directed
+#define PRRTE_JOB_STOP_ON_EXEC           (PRRTE_JOB_START_KEY + 62)    // bool - stop procs on first instruction for debugger attach
 
 #define PRRTE_JOB_MAX_KEY   300
 

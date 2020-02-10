@@ -1705,12 +1705,12 @@ void prrte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
          * the termination code to exit status translation the
          * same way
          */
+        PRRTE_OUTPUT_VERBOSE((5, prrte_odls_base_framework.framework_output,
+                             "%s odls:waitpid_fired child process %s terminated with signal %s",
+                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                             PRRTE_NAME_PRINT(&proc->name), strsignal(WTERMSIG(proc->exit_code))));
         proc->exit_code = WTERMSIG(proc->exit_code) + 128;
 
-        PRRTE_OUTPUT_VERBOSE((5, prrte_odls_base_framework.framework_output,
-                             "%s odls:waitpid_fired child process %s terminated with signal",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                             PRRTE_NAME_PRINT(&proc->name) ));
         /* Do not decrement the number of local procs here. That is handled in the errmgr */
     }
 
