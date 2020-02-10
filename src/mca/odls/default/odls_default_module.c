@@ -449,10 +449,14 @@ static int do_parent(prrte_odls_spawn_caddy_t *cd, int read_fd)
     }
 
 #if PRRTE_HAVE_STOP_ON_EXEC
-    if (prrte_get_attribute(&cd->jdata->attributes, PRRTE_JOB_STOP_ON_EXEC, NULL, PRRTE_BOOL)) {
+    if (NULL != cd->child &&
+        prrte_get_attribute(&cd->jdata->attributes, PRRTE_JOB_STOP_ON_EXEC, NULL, PRRTE_BOOL)) {
         rc = waitpid(cd->child->pid, &status, WUNTRACED);
         if (-1 == rc) {
             /* doomed */
+            cd->child->state = PRRTE_PROC_STATE_FAILED_TO_START;
+            PRRTE_FLAG_UNSET(cd->child, PRRTE_PROC_FLAG_ALIVE);
+            close(read_fd);
             return PRRTE_ERR_FAILED_TO_START;
         }
         /* tell the child to stop */
@@ -460,19 +464,29 @@ static int do_parent(prrte_odls_spawn_caddy_t *cd, int read_fd)
             rc = kill(cd->child->pid, SIGSTOP);
             if (-1 == rc) {
                 /* doomed */
+                cd->child->state = PRRTE_PROC_STATE_FAILED_TO_START;
+                PRRTE_FLAG_UNSET(cd->child, PRRTE_PROC_FLAG_ALIVE);
+                close(read_fd);
                 return PRRTE_ERR_FAILED_TO_START;
             }
             errno = 0;
             ptrace(PTRACE_DETACH, cd->child->pid, 0, (void*)SIGSTOP);
             if (0 != errno) {
                 /* couldn't detach */
+                cd->child->state = PRRTE_PROC_STATE_FAILED_TO_START;
+                PRRTE_FLAG_UNSET(cd->child, PRRTE_PROC_FLAG_ALIVE);
+            close(read_fd);
                 return PRRTE_ERR_FAILED_TO_START;
             }
+        } else {
+            /* we are doomed */
+            cd->child->state = PRRTE_PROC_STATE_FAILED_TO_START;
+            PRRTE_FLAG_UNSET(cd->child, PRRTE_PROC_FLAG_ALIVE);
+            close(read_fd);
+            return PRRTE_ERR_FAILED_TO_START;
         }
-        if (NULL != cd->child) {
-            cd->child->state = PRRTE_PROC_STATE_RUNNING;
-            PRRTE_FLAG_SET(cd->child, PRRTE_PROC_FLAG_ALIVE);
-        }
+        cd->child->state = PRRTE_PROC_STATE_RUNNING;
+        PRRTE_FLAG_SET(cd->child, PRRTE_PROC_FLAG_ALIVE);
         close(read_fd);
         return PRRTE_SUCCESS;
     }
