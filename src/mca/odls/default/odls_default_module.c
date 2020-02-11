@@ -470,7 +470,7 @@ static int do_parent(prrte_odls_spawn_caddy_t *cd, int read_fd)
                 return PRRTE_ERR_FAILED_TO_START;
             }
             errno = 0;
-            ptrace(PTRACE_DETACH, cd->child->pid, 0, (void*)SIGSTOP);
+            ptrace(PRRTE_DETACH, cd->child->pid, 0, (void*)SIGSTOP);
             if (0 != errno) {
                 /* couldn't detach */
                 cd->child->state = PRRTE_PROC_STATE_FAILED_TO_START;
