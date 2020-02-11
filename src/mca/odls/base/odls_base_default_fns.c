@@ -896,11 +896,23 @@ void prrte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     prrte_proc_state_t state;
     pmix_proc_t pproc;
     pmix_status_t ret;
+    char *ptr;
 
     PRRTE_ACQUIRE_OBJECT(cd);
 
     /* thread-protect common values */
-    cd->env = prrte_argv_copy(app->env);
+    cd->env = prrte_argv_copy(prrte_launch_environ);
+    if (NULL != app->env) {
+        for (i=0; NULL != app->env[i]; i++) {
+            /* find the '=' sign */
+            ptr = strchr(app->env[i], '=');
+            *ptr = '\0';
+            ++ptr;
+            prrte_setenv(app->env[i], ptr, true, &cd->env);
+            --ptr;
+            *ptr = '=';
+        }
+    }
 
     /* ensure we clear any prior info regarding state or exit status in
      * case this is a restart
