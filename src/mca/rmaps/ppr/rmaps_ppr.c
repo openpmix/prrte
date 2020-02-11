@@ -386,7 +386,7 @@ static int ppr_mapper(prrte_job_t *jdata)
         if (PRRTE_VPID_MAX != total_procs && nprocs_mapped < total_procs) {
             /* couldn't map them all */
             prrte_show_help("help-prrte-rmaps-ppr.txt", "ppr-too-many-procs",
-                           true, app->app, app->num_procs, total_procs, jdata->map->ppr);
+                           true, app->app, app->num_procs, nprocs_mapped, total_procs, jdata->map->ppr);
             rc = PRRTE_ERR_SILENT;
             goto error;
         }
