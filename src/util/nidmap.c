@@ -394,6 +394,13 @@ int prrte_util_decode_nidmap(prrte_buffer_t *buf)
         nd->name = strdup(names[n]);
         nd->index = n;
         prrte_pointer_array_set_item(prrte_node_pool, n, nd);
+        /* see if this is our node */
+        if (prrte_check_host_is_local(names[n])) {
+            /* add our aliases as an attribute - will include all the interface aliases captured in prrte_init */
+            raw = prrte_argv_join(prrte_process_info.aliases, ',');
+            prrte_set_attribute(&nd->attributes, PRRTE_NODE_ALIAS, PRRTE_ATTR_LOCAL, raw, PRRTE_STRING);
+            free(raw);
+        }
         /* set the topology - always default to homogeneous
          * as that is the most common scenario */
         nd->topology = t;

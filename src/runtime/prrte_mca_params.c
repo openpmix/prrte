@@ -523,14 +523,6 @@ int prrte_register_params(void)
         prrte_default_dash_host = NULL;
     }
 
-    /* whether or not to retain aliases of hostnames */
-    prrte_retain_aliases = false;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "retain_aliases",
-                                  "Whether or not to keep aliases for host names [default: no]",
-                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prrte_retain_aliases);
-
     prrte_hostname_cutoff = 1000;
     (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "hostname_cutoff",
                                   "Pass hostnames to all procs when #nodes is less than cutoff [default:1000]",
@@ -541,7 +533,7 @@ int prrte_register_params(void)
     /* which alias to use in MPIR_proctab */
     prrte_use_hostname_alias = 1;
     (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "hostname_alias_index",
-                                  "If hostname aliases are being retained, which one to use for the debugger proc table [default: 1st alias]",
+                                  "Which alias to use for the debugger proc table [default: 1st alias]",
                                   PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                   PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                   &prrte_use_hostname_alias);

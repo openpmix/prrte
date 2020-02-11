@@ -131,7 +131,7 @@ static int rte_init(int argc, char **argv)
     prrte_node_t *node;
     prrte_proc_t *proc;
     prrte_app_context_t *app;
-    char **aliases, *aptr;
+    char *aptr;
     char *coprocessors, **sns;
     uint32_t h;
     int idx;
@@ -450,19 +450,10 @@ static int rte_init(int argc, char **argv)
     node->daemon = proc;
     PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_DAEMON_LAUNCHED);
     node->state = PRRTE_NODE_STATE_UP;
-    /* if we are to retain aliases, get ours */
-    if (prrte_retain_aliases) {
-        aliases = NULL;
-        prrte_ifgetaliases(&aliases);
-        if (0 < prrte_argv_count(aliases)) {
-            /* add our own local name to it */
-            prrte_argv_append_nosize(&aliases, prrte_process_info.nodename);
-            aptr = prrte_argv_join(aliases, ',');
-            prrte_set_attribute(&node->attributes, PRRTE_NODE_ALIAS, PRRTE_ATTR_LOCAL, aptr, PRRTE_STRING);
-            free(aptr);
-        }
-        prrte_argv_free(aliases);
-    }
+    /* get our aliases - will include all the interface aliases captured in prrte_init */
+    aptr = prrte_argv_join(prrte_process_info.aliases, ',');
+    prrte_set_attribute(&node->attributes, PRRTE_NODE_ALIAS, PRRTE_ATTR_LOCAL, aptr, PRRTE_STRING);
+    free(aptr);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRRTE_JOB_STATE_RUNNING;
