@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      UT-Battelle, LLC. All rights reserved.
@@ -378,7 +378,6 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
          * map the job. anything else is a true error.
          */
         if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
-            PRRTE_ERROR_LOG(rc);
             jdata->exit_code = rc;
             PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
