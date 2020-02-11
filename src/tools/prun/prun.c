@@ -1339,7 +1339,17 @@ int prun(int argc, char *argv[])
         ++n;
     }
 
+    if (verbose) {
+        prrte_output(0, "Calling PMIx_Spawn");
+    }
+
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, nspace);
+    if( PRRTE_SUCCESS != ret ) {
+        prrte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
+        rc = ret;
+        goto DONE;
+    }
+
     PRRTE_PMIX_CONVERT_NSPACE(rc, &myjobid, nspace);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
