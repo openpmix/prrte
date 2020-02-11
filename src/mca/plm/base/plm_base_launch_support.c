@@ -954,6 +954,8 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
     prrte_daemon_cmd_flag_t cmd;
     char *myendian;
     pmix_proc_t pproc;
+    char *alias, **atmp=NULL;
+    uint8_t naliases, ni;
 
     /* get the daemon job, if necessary */
     if (NULL == jdatorted) {
@@ -1074,41 +1076,37 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
         /* mark the daemon as launched */
         PRRTE_FLAG_SET(daemon->node, PRRTE_NODE_FLAG_DAEMON_LAUNCHED);
 
-        if (prrte_retain_aliases) {
-            char *alias, **atmp=NULL;
-            uint8_t naliases, ni;
-            /* first, store the nodename itself as an alias. We do
-             * this in case the nodename isn't the same as what we
-             * were given by the allocation. For example, a hostfile
-             * might contain an IP address instead of the value returned
-             * by gethostname, yet the daemon will have returned the latter
-             * and apps may refer to the host by that name
-             */
-            prrte_argv_append_nosize(&atmp, nodename);
-            /* unpack and store the provided aliases */
+        /* first, store the nodename itself as an alias. We do
+         * this in case the nodename isn't the same as what we
+         * were given by the allocation. For example, a hostfile
+         * might contain an IP address instead of the value returned
+         * by gethostname, yet the daemon will have returned the latter
+         * and apps may refer to the host by that name
+         */
+        prrte_argv_append_nosize(&atmp, nodename);
+        /* unpack and store the provided aliases */
+        idx = 1;
+        if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &naliases, &idx, PRRTE_UINT8))) {
+            PRRTE_ERROR_LOG(rc);
+            prted_failed_launch = true;
+            goto CLEANUP;
+        }
+        for (ni=0; ni < naliases; ni++) {
             idx = 1;
-            if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &naliases, &idx, PRRTE_UINT8))) {
+            if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &alias, &idx, PRRTE_STRING))) {
                 PRRTE_ERROR_LOG(rc);
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
-            for (ni=0; ni < naliases; ni++) {
-                idx = 1;
-                if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &alias, &idx, PRRTE_STRING))) {
-                    PRRTE_ERROR_LOG(rc);
-                    prted_failed_launch = true;
-                    goto CLEANUP;
-                }
-                prrte_argv_append_nosize(&atmp, alias);
-                free(alias);
-            }
-            if (0 < naliases) {
-                alias = prrte_argv_join(atmp, ',');
-                prrte_set_attribute(&daemon->node->attributes, PRRTE_NODE_ALIAS, PRRTE_ATTR_LOCAL, alias, PRRTE_STRING);
-                free(alias);
-            }
-            prrte_argv_free(atmp);
+            prrte_argv_append_nosize(&atmp, alias);
+            free(alias);
         }
+        if (0 < naliases) {
+            alias = prrte_argv_join(atmp, ',');
+            prrte_set_attribute(&daemon->node->attributes, PRRTE_NODE_ALIAS, PRRTE_ATTR_LOCAL, alias, PRRTE_STRING);
+            free(alias);
+        }
+        prrte_argv_free(atmp);
 
         /* unpack the topology signature for that node */
         idx=1;

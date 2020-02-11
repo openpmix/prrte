@@ -59,8 +59,7 @@ int prrte_util_dash_host_compute_slots(prrte_node_t *node, char *hosts)
         } else {
             cptr = NULL;
         }
-        if (0 == strcmp(specs[n], node->name) ||
-            (prrte_check_host_is_local(node->name) && prrte_check_host_is_local(specs[n]))) {
+        if (prrte_node_match(node, specs[n])) {
             if (NULL != cptr) {
                 if ('*' == *cptr || 0 == strcmp(cptr, "auto")) {
                     slots += node->slots - node->slots_inuse;

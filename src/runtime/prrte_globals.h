@@ -432,6 +432,9 @@ PRRTE_EXPORT char* prrte_get_proc_hostname(prrte_process_name_t *proc);
 /* get the node rank of a proc */
 PRRTE_EXPORT prrte_node_rank_t prrte_get_proc_node_rank(prrte_process_name_t *proc);
 
+/* check to see if two nodes match */
+PRRTE_EXPORT bool prrte_node_match(prrte_node_t *n1, char *name);
+
 /* global variables used by RTE - instanced in prrte_globals.c */
 PRRTE_EXPORT extern bool prrte_debug_daemons_flag;
 PRRTE_EXPORT extern bool prrte_debug_daemons_file_flag;
@@ -452,7 +455,6 @@ PRRTE_EXPORT extern char *prrte_oob_static_ports;
 PRRTE_EXPORT extern bool prrte_keep_fqdn_hostnames;
 PRRTE_EXPORT extern bool prrte_have_fqdn_allocation;
 PRRTE_EXPORT extern bool prrte_show_resolved_nodenames;
-PRRTE_EXPORT extern bool prrte_retain_aliases;
 PRRTE_EXPORT extern int prrte_use_hostname_alias;
 PRRTE_EXPORT extern int prrte_hostname_cutoff;
 

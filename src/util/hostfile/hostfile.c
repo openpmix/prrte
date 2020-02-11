@@ -12,7 +12,7 @@
  * Copyright (c) 2007      Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -213,13 +213,8 @@ static int hostfile_parse_line(int token, prrte_list_t* updates,
         }
 
         /* this is not a node to be excluded, so we need to process it and
-         * add it to the "include" list. See if this host is actually us.
+         * add it to the "include" list.
          */
-        if (prrte_check_host_is_local(node_name)) {
-            /* Nodename has been allocated, that is for sure */
-            free (node_name);
-            node_name = strdup(prrte_process_info.nodename);
-        }
 
         PRRTE_OUTPUT_VERBOSE((3, prrte_ras_base_framework.framework_output,
                              "%s hostfile: node %s is being included - keep all is %s",
@@ -754,7 +749,7 @@ int prrte_util_filter_hostfile_nodes(prrte_list_t *nodes,
                      item1 != prrte_list_get_end(nodes);
                      item1 = prrte_list_get_next(nodes)) {
                     node_from_list = (prrte_node_t*)item1;
-                    if (0 == strcmp(node_from_list->name, node_from_pool->name)) {
+                    if (prrte_node_match(node_from_pool, node_from_list->name)) {
                         if (remove) {
                             /* match - remove item from list */
                             prrte_list_remove_item(nodes, item1);

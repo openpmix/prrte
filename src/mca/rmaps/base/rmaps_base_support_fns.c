@@ -12,7 +12,7 @@
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -210,7 +210,12 @@ int prrte_rmaps_base_get_target_nodes(prrte_list_t *allocated_nodes, prrte_std_c
             return PRRTE_ERR_SILENT;
         }
         /* find the nodes in our node array and assemble them
-         * in list order as that is what the user specified
+         * in list order as that is what the user specified. Note
+         * that the prrte_node_t objects on the nodes list are not
+         * fully filled in - they only contain the user-provided
+         * name of the node as a temp object. Thus, we cannot just
+         * check to see if the node pointer matches that of a node
+         * in the node_pool.
          */
         PRRTE_LIST_FOREACH_SAFE(nptr, next, &nodes, prrte_node_t) {
             for (i=0; i < prrte_node_pool->size; i++) {
@@ -219,12 +224,6 @@ int prrte_rmaps_base_get_target_nodes(prrte_list_t *allocated_nodes, prrte_std_c
                 }
                 /* ignore nodes that are non-usable */
                 if (PRRTE_FLAG_TEST(node, PRRTE_NODE_NON_USABLE)) {
-                    continue;
-                }
-                if (0 != strcmp(node->name, nptr->name)) {
-                    PRRTE_OUTPUT_VERBOSE((10, prrte_rmaps_base_framework.framework_output,
-                                         "NODE %s DOESNT MATCH NODE %s",
-                                         node->name, nptr->name));
                     continue;
                 }
                 /* ignore nodes that are marked as do-not-use for this mapping */
@@ -252,6 +251,12 @@ int prrte_rmaps_base_get_target_nodes(prrte_list_t *allocated_nodes, prrte_std_c
                 if (NULL == node->daemon && !novm) {
                     PRRTE_OUTPUT_VERBOSE((10, prrte_rmaps_base_framework.framework_output,
                                          "NODE %s HAS NO DAEMON", node->name));
+                    continue;
+                }
+                if (!prrte_node_match(node, nptr->name)) {
+                    PRRTE_OUTPUT_VERBOSE((10, prrte_rmaps_base_framework.framework_output,
+                                         "NODE %s DOESNT MATCH NODE %s",
+                                         node->name, nptr->name));
                     continue;
                 }
                 /* retain a copy for our use in case the item gets

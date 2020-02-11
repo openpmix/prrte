@@ -657,23 +657,34 @@ int main(int argc, char *argv[])
     /* include our node name */
     prrte_dss.pack(buffer, &prrte_process_info.nodename, 1, PRRTE_STRING);
 
-    /* if requested, include any non-loopback aliases for this node */
-    if (prrte_retain_aliases) {
+    /* include any non-loopback aliases for this node */
+    {
         uint8_t naliases, ni;
+        char **nonlocal = NULL;
+        int n;
 
-        naliases = prrte_argv_count(prrte_process_info.aliases);
+        for (n=0; NULL != prrte_process_info.aliases[n]; n++) {
+            if (0 != strcmp(prrte_process_info.aliases[n], "localhost") &&
+                0 != strcmp(prrte_process_info.aliases[n], prrte_process_info.nodename)) {
+                prrte_argv_append_nosize(&nonlocal, prrte_process_info.aliases[n]);
+            }
+        }
+        naliases = prrte_argv_count(nonlocal);
         if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &naliases, 1, PRRTE_UINT8))) {
             PRRTE_ERROR_LOG(ret);
             PRRTE_RELEASE(buffer);
+            prrte_argv_free(nonlocal);
             goto DONE;
         }
         for (ni=0; ni < naliases; ni++) {
-            if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &prrte_process_info.aliases[ni], 1, PRRTE_STRING))) {
+            if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &nonlocal[ni], 1, PRRTE_STRING))) {
                 PRRTE_ERROR_LOG(ret);
                 PRRTE_RELEASE(buffer);
+                prrte_argv_free(nonlocal);
                 goto DONE;
             }
         }
+        prrte_argv_free(nonlocal);
     }
 
     /* always send back our topology signature - this is a small string

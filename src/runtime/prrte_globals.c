@@ -13,7 +13,7 @@
  * Copyright (c) 2009-2010 Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
@@ -80,7 +80,6 @@ char *prrte_oob_static_ports = NULL;
 bool prrte_keep_fqdn_hostnames = false;
 bool prrte_have_fqdn_allocation = false;
 bool prrte_show_resolved_nodenames = false;
-bool prrte_retain_aliases = false;
 int prrte_use_hostname_alias = -1;
 int prrte_hostname_cutoff = 1000;
 
@@ -466,6 +465,46 @@ prrte_node_rank_t prrte_get_proc_node_rank(prrte_process_name_t *proc)
         return PRRTE_NODE_RANK_INVALID;
     }
     return proct->node_rank;
+}
+
+bool prrte_node_match(prrte_node_t *n1, char *name)
+{
+    char **n2names = NULL;
+    char *n2alias = NULL;
+    int i, m;
+    prrte_node_t *node;
+
+    /* first need to find the node object for this name */
+    for (i=0; i < prrte_node_pool->size; i++) {
+        if (NULL == (node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, i))) {
+            continue;
+        }
+        if (0 == strcmp(node->name, name)) {
+            return true;
+        }
+        if (prrte_get_attribute(&node->attributes, PRRTE_NODE_ALIAS, (void**)&n2alias, PRRTE_STRING)) {
+            n2names = prrte_argv_split(n2alias, ',');
+            free(n2alias);
+        }
+        if (NULL == n2names) {
+            PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+            return false;
+        }
+        /* no choice but an exhaustive search - fortunately, these lists are short! */
+        for (m=0; NULL != n2names[m]; m++) {
+            if (0 == strcmp(name, n2names[m])) {
+                prrte_argv_free(n2names);
+                if (n1 == node) {
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+        }
+        prrte_argv_free(n2names);
+    }
+
+    return false;
 }
 
 /*
