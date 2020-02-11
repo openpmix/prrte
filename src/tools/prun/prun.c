@@ -153,7 +153,7 @@ static pmix_proc_t myproc;
 static bool forcibly_die=false;
 static prrte_event_t term_handler;
 static int term_pipe[2];
-static prrte_atomic_lock_t prun_abort_inprogress_lock = {0};
+static prrte_atomic_lock_t prun_abort_inprogress_lock = PRRTE_ATOMIC_LOCK_INIT;
 static prrte_event_base_t *myevbase = NULL;
 static bool proxyrun = false;
 static bool verbose = false;
