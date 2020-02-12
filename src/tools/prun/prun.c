@@ -158,6 +158,7 @@ static prrte_event_base_t *myevbase = NULL;
 static bool proxyrun = false;
 static bool verbose = false;
 static prrte_cmd_line_t *prrte_cmd_line = NULL;
+static bool want_prefix_by_default = (bool) PRRTE_WANT_PRRTE_PREFIX_BY_DEFAULT;
 
 /* prun-specific options */
 static prrte_cmd_line_init_t cmd_line_init[] = {
@@ -605,7 +606,7 @@ static void launchhandler(size_t evhdlr_registration_id,
 int prun(int argc, char *argv[])
 {
     int rc=1, i;
-    char *param, *ptr;
+    char *param, *ptr, *tpath;
     prrte_pmix_lock_t lock, rellock;
     prrte_list_t apps;
     prrte_pmix_app_t *app;
@@ -639,25 +640,7 @@ int prun(int argc, char *argv[])
     prrte_tool_basename = prrte_basename(argv[0]);
     if (0 != strcmp(prrte_tool_basename, "prun")) {
         proxyrun = true;
-        if (NULL != strchr(argv[0], '/')) {
-            /* see if we were given a path to the proxy */
-            ptr = prrte_dirname(argv[0]);
-            if (NULL == ptr) {
-                fprintf(stderr, "Could not parse the given cmd line\n");
-                exit(1);
-            }
-            /* they gave us a path, so prefix the "prte" cmd with it */
-            if ('/' == ptr[strlen(ptr)-1]) {
-                prrte_asprintf(&param, "%sprte", ptr);
-            } else {
-                prrte_asprintf(&param, "%s/prte", ptr);
-            }
-            prrte_argv_append_nosize(&prteargs, param);
-            free(ptr);
-            free(param);
-        } else {
-            prrte_argv_append_nosize(&prteargs, "prte");
-        }
+        prrte_argv_append_nosize(&prteargs, "prte");
     }
 
     /* setup our cmd line */
@@ -734,7 +717,7 @@ int prun(int argc, char *argv[])
     if (prrte_cmd_line_is_taken(prrte_cmd_line, "help")) {
         char *str, *args = NULL;
         args = prrte_cmd_line_get_usage_msg(prrte_cmd_line, false);
-        str = prrte_show_help_string("help-prrterun.txt", "prrterun:usage", false,
+        str = prrte_show_help_string("help-prun.txt", "prun:usage", false,
                                     prrte_tool_basename, "PRRTE", PRRTE_VERSION,
                                     prrte_tool_basename, args,
                                     PACKAGE_BUGREPORT);
@@ -754,6 +737,90 @@ int prun(int argc, char *argv[])
      */
     if (0 == geteuid()) {
         prrte_schizo.allow_run_as_root(prrte_cmd_line);  // will exit us if not allowed
+    }
+
+    if (proxyrun) {
+        /* see if they gave us an absolute path */
+        tpath = NULL;
+        param = NULL;
+        if ('/' == argv[0][0]) {
+            char* tmp_basename = NULL;
+            /* If they specified an absolute path, strip off the
+               /bin/<exec_name>" and leave just the prefix */
+            tpath = prrte_dirname(argv[0]);
+            /* Quick sanity check to ensure we got
+               something/bin/<exec_name> and that the installation
+               tree is at least more or less what we expect it to
+               be */
+            tmp_basename = prrte_basename(tpath);
+            if (0 == strcmp("bin", tmp_basename)) {
+                char* tmp = tpath;
+                tpath = prrte_dirname(tmp);
+                free(tmp);
+            } else {
+                free(tpath);
+                tpath = NULL;
+            }
+            free(tmp_basename);
+        }
+
+        /* see if they told us a prefix to use */
+        if (prrte_cmd_line_is_taken(prrte_cmd_line, "prefix") &&
+            NULL != tpath) {
+            char *tmp_basename;
+            /* if they don't match, then that merits a warning */
+            pval = prrte_cmd_line_get_param(prrte_cmd_line, "prefix", 0, 0);
+            param = strdup(pval->data.string);
+            /* ensure we strip any trailing '/' */
+            if (0 == strcmp(PRRTE_PATH_SEP, &(param[strlen(param)-1]))) {
+                param[strlen(param)-1] = '\0';
+            }
+            tmp_basename = strdup(tpath);
+            if (0 == strcmp(PRRTE_PATH_SEP, &(tmp_basename[strlen(tmp_basename)-1]))) {
+                tmp_basename[strlen(tmp_basename)-1] = '\0';
+            }
+            if (0 != strcmp(param, tmp_basename)) {
+                prrte_show_help("help-prun.txt", "prun:double-prefix",
+                               true, prrte_basename, prrte_basename,
+                               param, tmp_basename, prrte_basename);
+            }
+            /* use the prefix over the path-to-mpirun so that
+             * people can specify the backend prefix as different
+             * from the local one
+             */
+            free(tpath);
+            tpath = NULL;
+            free(tmp_basename);
+        } else if (NULL != tpath) {
+            param = strdup(tpath);
+            free(tpath);
+        } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "prefix")){
+            /* must be --prefix alone */
+            pval = prrte_cmd_line_get_param(prrte_cmd_line, "prefix", 0, 0);
+            param = strdup(pval->data.string);
+        } else if (want_prefix_by_default) {
+            /* --enable-prrte-prefix-default was given to prun */
+            param = strdup(prrte_install_dirs.prefix);
+        }
+
+        if (NULL != param) {
+            size_t param_len;
+            /* "Parse" the param, aka remove superfluous path_sep. */
+            param_len = strlen(param);
+            while (0 == strcmp (PRRTE_PATH_SEP, &(param[param_len-1]))) {
+                param[param_len-1] = '\0';
+                param_len--;
+                if (0 == param_len) {
+                    prrte_show_help("help-prun.txt", "prun:empty-prefix",
+                                    true, prrte_basename, prrte_basename);
+                    free(param);
+                    return PRRTE_ERR_FATAL;
+                }
+            }
+            prrte_argv_append_nosize(&prteargs, "--prefix");
+            prrte_argv_append_nosize(&prteargs, param);
+            free(param);
+        }
     }
 
     if (!prrte_cmd_line_is_taken(prrte_cmd_line, "terminate")) {
@@ -1557,7 +1624,7 @@ static int parse_locals(prrte_list_t *jdata, int argc, char* argv[])
  * This function takes a "char ***app_env" parameter to handle the
  * specific case:
  *
- *   prrterun --mca foo bar -app appfile
+ *   prun --mca foo bar -app appfile
  *
  * That is, we'll need to keep foo=bar, but the presence of the app
  * file will cause an invocation of parse_appfile(), which will cause
@@ -1568,7 +1635,7 @@ static int parse_locals(prrte_list_t *jdata, int argc, char* argv[])
  *
  * This is really just a special case -- when we have a simple case like:
  *
- *   prrterun --mca foo bar -np 4 hostname
+ *   prun --mca foo bar -np 4 hostname
  *
  * Then the upper-level function (parse_locals()) calls create_app()
  * with a NULL value for app_env, meaning that there is no "base"
@@ -1607,7 +1674,7 @@ static int create_app(int argc, char* argv[],
 
     /* See if we have anything left */
     if (0 == count) {
-        prrte_show_help("help-prrterun.txt", "prrterun:executable-not-specified",
+        prrte_show_help("help-prun.txt", "prun:executable-not-specified",
                        true, "prun", "prun");
         rc = PRRTE_ERR_NOT_FOUND;
         goto cleanup;
@@ -1622,7 +1689,7 @@ static int create_app(int argc, char* argv[],
         } else {
             /* get the cwd */
             if (PRRTE_SUCCESS != (rc = prrte_getcwd(cwd, sizeof(cwd)))) {
-                prrte_show_help("help-prrterun.txt", "prrterun:init-failure",
+                prrte_show_help("help-prun.txt", "prun:init-failure",
                                true, "get the cwd", rc);
                 goto cleanup;
             }
@@ -1636,7 +1703,7 @@ static int create_app(int argc, char* argv[],
         prrte_list_append(&app->info, &val->super);
     } else {
         if (PRRTE_SUCCESS != (rc = prrte_getcwd(cwd, sizeof(cwd)))) {
-            prrte_show_help("help-prrterun.txt", "prrterun:init-failure",
+            prrte_show_help("help-prun.txt", "prun:init-failure",
                            true, "get the cwd", rc);
             goto cleanup;
         }
@@ -1660,7 +1727,7 @@ static int create_app(int argc, char* argv[],
     found = false;
     if (0 < (j = prrte_cmd_line_get_ninsts(prrte_cmd_line, "hostfile"))) {
         if (1 < j) {
-            prrte_show_help("help-prrterun.txt", "prrterun:multiple-hostfiles",
+            prrte_show_help("help-prun.txt", "prun:multiple-hostfiles",
                            true, "prun", NULL);
             return PRRTE_ERR_FATAL;
         } else {
@@ -1674,7 +1741,7 @@ static int create_app(int argc, char* argv[],
     }
     if (0 < (j = prrte_cmd_line_get_ninsts(prrte_cmd_line, "machinefile"))) {
         if (1 < j || found) {
-            prrte_show_help("help-prrterun.txt", "prrterun:multiple-hostfiles",
+            prrte_show_help("help-prun.txt", "prun:multiple-hostfiles",
                            true, "prun", NULL);
             return PRRTE_ERR_FATAL;
         } else {
@@ -1705,7 +1772,7 @@ static int create_app(int argc, char* argv[],
     if (NULL != (pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "np", 0, 0)) ||
         NULL != (pvalue = prrte_cmd_line_get_param(prrte_cmd_line, "n", 0, 0))) {
         if (0 > pvalue->data.integer) {
-            prrte_show_help("help-prrterun.txt", "prrterun:negative-nprocs",
+            prrte_show_help("help-prun.txt", "prun:negative-nprocs",
                            true, "prun", app->app.argv[0],
                            pvalue->data.integer, NULL);
             return PRRTE_ERR_FATAL;
@@ -1744,12 +1811,12 @@ static int create_app(int argc, char* argv[],
 
     /* Do not try to find argv[0] here -- the starter is responsible
        for that because it may not be relevant to try to find it on
-       the node where prrterun is executing.  So just strdup() argv[0]
+       the node where prun is executing.  So just strdup() argv[0]
        into app. */
 
     app->app.cmd = strdup(app->app.argv[0]);
     if (NULL == app->app.cmd) {
-        prrte_show_help("help-prrterun.txt", "prrterun:call-failed",
+        prrte_show_help("help-prun.txt", "prun:call-failed",
                        true, "prun", "library", "strdup returned NULL", errno);
         rc = PRRTE_ERR_NOT_FOUND;
         goto cleanup;

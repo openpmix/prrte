@@ -13,7 +13,7 @@ dnl
 
 AC_DEFUN([PRRTE_CHECK_PTRACE],[
 
-    PRRTE_VAR_SCOPE_PUSH(prrte_have_ptrace_traceme prrte_have_ptrace_detach prrte_have_ptrace_header prrte_have_ptrace prrte_want_stop_on_exec prrte_traceme_cmd prrte_detach_cmd)
+    PRRTE_VAR_SCOPE_PUSH(prrte_have_ptrace_traceme prrte_have_ptrace_detach prrte_have_ptrace_header prrte_have_ptrace prrte_want_stop_on_exec prrte_traceme_cmd prrte_detach_cmd prrte_ptrace_linux_sig)
 
     prrte_have_ptrace_traceme=no
     prrte_have_ptrace_detach=no
@@ -80,6 +80,23 @@ AC_DEFUN([PRRTE_CHECK_PTRACE],[
                                    [AC_MSG_RESULT(no)
                                     prrte_have_ptrace_detach=no])
                      ])
+
+        AC_MSG_CHECKING([Linux ptrace function signature])
+        AC_LANG_PUSH(C)
+        AC_COMPILE_IFELSE(
+            [AC_LANG_PROGRAM(
+                [[#include "sys/ptrace.h"]],
+                [[long (*ptr)(enum __ptrace_request request, pid_t pid, void *addr, void *data);]
+                 [ptr = ptrace;]])
+            ],[
+                AC_MSG_RESULT([yes])
+                prrte_ptrace_linux_sig=1
+            ],[
+                AC_MSG_RESULT([no])
+                prrte_ptrace_linux_sig=0
+            ])
+        AC_LANG_POP(C)
+
     fi
 
     AC_MSG_CHECKING(ptrace stop-on-exec will be supported)
@@ -89,6 +106,7 @@ AC_DEFUN([PRRTE_CHECK_PTRACE],[
           [AC_MSG_RESULT(no)
            prrte_want_stop_on_exec=0])
 
+    AC_DEFINE_UNQUOTED([PRRTE_HAVE_LINUX_PTRACE], [$prrte_ptrace_linux_sig], [Does ptrace have the Linux signature])
     AC_DEFINE_UNQUOTED([PRRTE_HAVE_STOP_ON_EXEC], [$prrte_want_stop_on_exec], [Whether or not we have stop-on-exec support])
     AC_DEFINE_UNQUOTED([PRRTE_TRACEME], [$prrte_traceme_cmd], [Command for declaring that process expects to be traced by parent])
     AC_DEFINE_UNQUOTED([PRRTE_DETACH], [$prrte_detach_cmd], [Command to detach from process being traced])

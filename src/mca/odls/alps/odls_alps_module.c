@@ -15,7 +15,7 @@
  * Copyright (c) 2010      IBM Corporation.  All rights reserved.
  * Copyright (c) 2011-2014 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Rutgers, The State University of New Jersey.
  *                         All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
@@ -361,7 +361,7 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
 
     if (NULL != cd->child) {
         /* setup stdout/stderr so that any error messages that we
-           may print out will get displayed back at prrterun.
+           may print out will get displayed back at prun.
 
            NOTE: Definitely do this AFTER we check contexts so
            that any error message from those two functions doesn't
@@ -369,7 +369,7 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
            THEN a user who gives us a bad executable name or
            working directory would get N error messages, where
            N=num_procs. This would be very annoying for large
-           jobs, so instead we set things up so that prrterun
+           jobs, so instead we set things up so that prun
            always outputs a nice, single message indicating what
            happened
         */
@@ -435,8 +435,8 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
     if (NULL != cd->wdir) {
         if (0 != chdir(cd->wdir)) {
             send_error_show_help(write_fd, 1,
-                                 "help-prrterun.txt",
-                                 "prrterun:wdir-not-found",
+                                 "help-prun.txt",
+                                 "prun:wdir-not-found",
                                  "orted",
                                  cd->wdir,
                                  prrte_process_info.nodename,

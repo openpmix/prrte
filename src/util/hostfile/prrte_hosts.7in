@@ -193,5 +193,5 @@ for manual manipulation of scripts and/or command lines.
 .\" **************************
 .
 .SH SEE ALSO
-  prrterun(1)
+  prun(1)
 .

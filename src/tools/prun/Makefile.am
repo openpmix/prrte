@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2008-2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
@@ -35,7 +35,7 @@ nodist_man_MANS = $(man_pages)
 # therefore the release date or version may have changed)
 $(nodist_man_MANS): $(top_builddir)/src/include/prrte_config.h
 
-dist_prrtedata_DATA = help-prrterun.txt
+dist_prrtedata_DATA = help-prun.txt
 
 prun_SOURCES = \
         main.c \

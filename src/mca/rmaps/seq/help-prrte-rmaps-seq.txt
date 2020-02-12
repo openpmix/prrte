@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2018      Cisco Systems, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -18,7 +18,7 @@
 #
 # $HEADER$
 #
-# This is the US/English general help file for Open RTE's prrterun.
+# This is the US/English general help file for PRRTE's prun.
 #
 [prrte-rmaps-seq:resource-not-found]
 The specified hostfile contained a node (%s) that is not in your

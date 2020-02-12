@@ -3,7 +3,7 @@
 # Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2013      Los Alamos National Security, LLC.
 #                         All rights reserved.
-# Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -24,7 +24,7 @@ Unfortunately, hwloc support is required for this action.
 Please reconfigure OMPI for hwloc if binding to specified
 cpus is desired.
 [no-rankfile]
-Open RTE was unable to open the rankfile:
+PRRTE was unable to open the rankfile:
     %s
 Check to make sure the path and filename are correct.
 
@@ -43,7 +43,7 @@ Examples of proper syntax include:
     rank 3=host3 slot=0:1;1:0-2
 #
 [parse_error_string]
-Open RTE detected a parse error in the rankfile (%s)
+PRRTE detected a parse error in the rankfile (%s)
 It occured on line number %d on token %d:
     %s
 Examples of proper syntax include:
@@ -53,7 +53,7 @@ Examples of proper syntax include:
     rank 3=host3 slot=0:1;1:0-2
 #
 [parse_error_int]
-Open RTE detected a parse error in the rankfile (%s)
+PRRTE detected a parse error in the rankfile (%s)
 It occured on line number %d on token %d:
     %d
 Examples of proper syntax include:
@@ -63,7 +63,7 @@ Examples of proper syntax include:
     rank 3=host3 slot=0:1;1:0-2
 #
 [parse_error]
-Open RTE detected a parse error in the rankfile (%s)
+PRRTE detected a parse error in the rankfile (%s)
 It occured on line number %d on token %d. Examples of
 proper syntax include:
     rank 1=host1 slot=1:0,1

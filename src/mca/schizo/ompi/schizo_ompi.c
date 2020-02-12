@@ -151,26 +151,6 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
 
 
     /* DVM-specific options */
-    { '\0', "prefix", 1, PRRTE_CMD_LINE_TYPE_STRING,
-      "Prefix to be used to look for PRRTE executables",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "noprefix", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Disable automatic --prefix behavior",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "daemonize", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Daemonize the DVM daemons into the background",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "set-sid", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Direct the DVM daemons to separate from the current session",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    /* Specify the launch agent to be used */
-    { '\0', "launch-agent", 1, PRRTE_CMD_LINE_TYPE_STRING,
-      "Name of daemon executable used to start processes on remote nodes (default: prted)",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    /* maximum size of VM - typically used to subdivide an allocation */
-    { '\0', "max-vm-size", 1, PRRTE_CMD_LINE_TYPE_INT,
-      "Number of daemons to start",
-      PRRTE_CMD_LINE_OTYPE_DVM },
     /* uri of PMIx publish/lookup server, or at least where to get it */
     { '\0', "ompi-server", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Specify the URI of the publish/lookup server, or the name of the file (specified as file:filename) that contains that info",

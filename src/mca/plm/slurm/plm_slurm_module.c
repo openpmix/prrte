@@ -153,7 +153,7 @@ static int plm_slurm_init(void)
 }
 
 /* When working in this function, ALWAYS jump to "cleanup" if
- * you encounter an error so that prrterun will be woken up and
+ * you encounter an error so that prun will be woken up and
  * the job can cleanly terminate
  */
 static int plm_slurm_launch_job(prrte_job_t *jdata)
@@ -553,7 +553,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata){
      the OS (e.g., couldn't find the orted binary). Somebody is welcome
      to sort out all the options and pretty-print a better error message. For
      now, though, the only thing that really matters is that
-     srun failed. Report the error and make sure that prrterun
+     srun failed. Report the error and make sure that prun
      wakes up - otherwise, do nothing!
 
      Unfortunately, the pid returned here is the srun pid, not the pid of
@@ -694,7 +694,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char **env,
             }
         }
 
-        /* get the srun process out of prrterun's process group so that
+        /* get the srun process out of prun's process group so that
            signals sent from the shell (like those resulting from
            cntl-c) don't get sent to srun */
         setpgid(0, 0);

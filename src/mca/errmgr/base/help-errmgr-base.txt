@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2018      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
@@ -38,7 +38,7 @@ This usually is caused by:
 
 * not finding the required libraries and/or binaries on
   one or more nodes. Please check your PATH and LD_LIBRARY_PATH
-  settings, or configure OMPI with --enable-prrterun-prefix-by-default
+  settings, or configure OMPI with --enable-prun-prefix-by-default
 
 * lack of authority to execute on one or more specified nodes.
   Please verify your allocation and authorities.

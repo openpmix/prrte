@@ -186,7 +186,7 @@ bool prrte_execute_quiet = false;
 bool prrte_report_silent_errors = false;
 bool prrte_hwloc_shmem_available = false;
 
-/* See comment in src/tools/prrterun/debuggers.c about this MCA
+/* See comment in src/tools/prun/debuggers.c about this MCA
    param */
 bool prrte_in_parallel_debugger = false;
 

@@ -150,7 +150,7 @@ static int plm_alps_init(void)
 
 
 /* When working in this function, ALWAYS jump to "cleanup" if
- * you encounter an error so that prrterun will be woken up and
+ * you encounter an error so that prun will be woken up and
  * the job can cleanly terminate
  */
 static int plm_alps_launch_job(prrte_job_t *jdata)
@@ -537,7 +537,7 @@ static void alps_wait_cb(int sd, short args, void *cbdata) {
        the OS (e.g., couldn't find the orted binary). Somebody is welcome
        to sort out all the options and pretty-print a better error message. For
        now, though, the only thing that really matters is that
-       alps failed. Report the error and make sure that prrterun
+       alps failed. Report the error and make sure that prun
        wakes up - otherwise, do nothing!
     */
     jdata = prrte_get_job_data_object(PRRTE_PROC_MY_NAME->jobid);
@@ -649,7 +649,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env,
             close(fd);
         }
 
-        /* get the alps process out of prrterun's process group so that
+        /* get the alps process out of prun's process group so that
            signals sent from the shell (like those resulting from
            cntl-c) don't get sent to alps */
         setpgid(0, 0);

@@ -12,7 +12,7 @@
  * Copyright (c) 2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,7 +21,7 @@
  */
 /** @file:
  *
- * The Open RTE Resource MAPping Subsystem (RMAPS)
+ * The PRRTE Resource MAPping Subsystem (RMAPS)
  *
  * The resource mapping subsystem is responsible for mapping processes
  * to specific nodes/cpus within a given job. In many systems, this

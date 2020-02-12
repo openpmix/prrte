@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +23,7 @@
  */
 /** @file:
  *
- * The Open RTE Resource Allocation Subsystem (RAS)
+ * The PRRTE Resource Allocation Subsystem (RAS)
  *
  * The resource allocation subsystem is responsible for determining
  * what (if any) resources have been allocated to the specified job

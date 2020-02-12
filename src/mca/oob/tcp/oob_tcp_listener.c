@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -244,7 +244,7 @@ static int create_listen(void)
 
     /* loop across all the specified ports, establishing a socket
      * for each one - note that application procs will ONLY have
-     * one socket, but that prrterun and daemons will have multiple
+     * one socket, but that prun and daemons will have multiple
      * sockets to support more flexible wireup protocols
      */
     for (i=0; i < prrte_argv_count(ports); i++) {
@@ -456,7 +456,7 @@ static int create_listen6(void)
 
     /* loop across all the specified ports, establishing a socket
      * for each one - note that application procs will ONLY have
-     * one socket, but that prrterun and daemons will have multiple
+     * one socket, but that prun and daemons will have multiple
      * sockets to support more flexible wireup protocols
      */
     for (i=0; i < prrte_argv_count(ports); i++) {

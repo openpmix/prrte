@@ -20,7 +20,7 @@
 #
 # $HEADER$
 #
-# This is the US/English general help file for Open RTE's prrterun.
+# This is the US/English general help file for PRRTE's prun.
 #
 [prrte-rmaps-base:alloc-error]
 There are not enough slots available in the system to satisfy the %d

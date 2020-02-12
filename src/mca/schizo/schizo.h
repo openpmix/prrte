@@ -11,7 +11,7 @@
  */
 /** @file:
  *
- * The Open RTE Personality Framework (schizo)
+ * The PRRTE Personality Framework (schizo)
  *
  * Multi-select framework so that multiple personalities can be
  * simultaneously supported
@@ -86,7 +86,7 @@ typedef void (*prrte_schizo_base_module_wrap_args_fn_t)(char **args);
 
 /* do whatever preparation work
  * is required to setup the app for execution. This is intended to be
- * used by prrterun and other launcher tools to, for example, change
+ * used by prun and other launcher tools to, for example, change
  * an executable's relative-path to an absolute-path, or add a command
  * required for starting a particular kind of application (e.g., adding
  * "java" to start a Java application) */

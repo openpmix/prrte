@@ -15,7 +15,7 @@
  * Copyright (c) 2007-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -111,32 +111,32 @@ static char* print_aborted_job(prrte_job_t *job,
             /* say nothing - it was already reported */
             break;
         case PRRTE_ERR_SYS_LIMITS_PIPES:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:sys-limit-pipe", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:sys-limit-pipe", true,
                                            prrte_tool_basename, node->name,
                                            (unsigned long)proc->name.vpid);
             break;
         case PRRTE_ERR_PIPE_SETUP_FAILURE:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:pipe-setup-failure", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:pipe-setup-failure", true,
                                            prrte_tool_basename, node->name,
                                            (unsigned long)proc->name.vpid);
             break;
         case PRRTE_ERR_SYS_LIMITS_CHILDREN:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:sys-limit-children", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:sys-limit-children", true,
                                            prrte_tool_basename, node->name,
                                            (unsigned long)proc->name.vpid);
             break;
         case PRRTE_ERR_FAILED_GET_TERM_ATTRS:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:failed-term-attrs", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:failed-term-attrs", true,
                                            prrte_tool_basename, node->name,
                                            (unsigned long)proc->name.vpid);
             break;
         case PRRTE_ERR_WDIR_NOT_FOUND:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:wdir-not-found", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:wdir-not-found", true,
                                            prrte_tool_basename, approc->cwd,
                                            node->name, (unsigned long)proc->name.vpid);
             break;
         case PRRTE_ERR_EXE_NOT_FOUND:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:exe-not-found", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:exe-not-found", true,
                                            prrte_tool_basename,
                                            (unsigned long)proc->name.vpid,
                                            prrte_tool_basename,
@@ -145,102 +145,102 @@ static char* print_aborted_job(prrte_job_t *job,
                                            approc->app);
             break;
         case PRRTE_ERR_EXE_NOT_ACCESSIBLE:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:exe-not-accessible", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:exe-not-accessible", true,
                                            prrte_tool_basename, approc->app, node->name,
                                            (unsigned long)proc->name.vpid);
             break;
         case PRRTE_ERR_MULTIPLE_AFFINITIES:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:multiple-paffinity-schemes", true, NULL);
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:multiple-paffinity-schemes", true, NULL);
             break;
         case PRRTE_ERR_TOPO_SLOT_LIST_NOT_SUPPORTED:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:topo-not-supported",
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:topo-not-supported",
                                            true, prrte_process_info.nodename, "rankfile containing a slot_list of ",
                                            NULL, approc->app);
             break;
         case PRRTE_ERR_INVALID_NODE_RANK:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:invalid-node-rank", true);
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:invalid-node-rank", true);
             break;
         case PRRTE_ERR_INVALID_LOCAL_RANK:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:invalid-local-rank", true);
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:invalid-local-rank", true);
             break;
         case PRRTE_ERR_NOT_ENOUGH_CORES:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:not-enough-resources", true,
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:not-enough-resources", true,
                                            "sockets", node->name,
                                            "bind-to-core", approc->app);
             break;
         case PRRTE_ERR_TOPO_CORE_NOT_SUPPORTED:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:topo-not-supported",
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:topo-not-supported",
                                            true, node->name, "bind-to-core", "",
                                            approc->app);
             break;
         case PRRTE_ERR_INVALID_PHYS_CPU:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:invalid-phys-cpu", true);
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:invalid-phys-cpu", true);
             break;
         case PRRTE_ERR_NOT_ENOUGH_SOCKETS:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:not-enough-resources", true,
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:not-enough-resources", true,
                                            "sockets", node->name,
                                            "bind-to-socket", approc->app);
             break;
         case PRRTE_ERR_TOPO_SOCKET_NOT_SUPPORTED:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:topo-not-supported",
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:topo-not-supported",
                                            true, node->name, "bind-to-socket", "",
                                            approc->app);
             break;
         case PRRTE_ERR_MODULE_NOT_FOUND:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:paffinity-missing-module",
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:paffinity-missing-module",
                                            true, node->name);
             break;
         case PRRTE_ERR_SLOT_LIST_RANGE:
-            output = prrte_show_help_string("help-prrterun.txt",
-                                           "prrterun:invalid-slot-list-range",
+            output = prrte_show_help_string("help-prun.txt",
+                                           "prun:invalid-slot-list-range",
                                            true, node->name, NULL);
             break;
         case PRRTE_ERR_PIPE_READ_FAILURE:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:pipe-read-failure", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:pipe-read-failure", true,
                                            prrte_tool_basename, node->name, (unsigned long)proc->name.vpid);
             break;
         case PRRTE_ERR_SOCKET_NOT_AVAILABLE:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-socket-not-avail", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:proc-socket-not-avail", true,
                                            prrte_tool_basename, PRRTE_ERROR_NAME(proc->exit_code), node->name,
                                            (unsigned long)proc->name.vpid);
             break;
 
         default:
             if (0 != proc->exit_code) {
-                output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-failed-to-start", true,
+                output = prrte_show_help_string("help-prun.txt", "prun:proc-failed-to-start", true,
                                                prrte_tool_basename, proc->exit_code, PRRTE_ERROR_NAME(proc->exit_code),
                                                node->name, (unsigned long)proc->name.vpid);
             } else {
-                output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-failed-to-start-no-status", true,
+                output = prrte_show_help_string("help-prun.txt", "prun:proc-failed-to-start-no-status", true,
                                                prrte_tool_basename, node->name);
             }
         }
         return output;
     } else if (PRRTE_PROC_STATE_ABORTED == proc->state) {
-        output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-ordered-abort", true,
+        output = prrte_show_help_string("help-prun.txt", "prun:proc-ordered-abort", true,
                                        prrte_tool_basename, (unsigned long)proc->name.vpid, (unsigned long)proc->pid,
                                        node->name, prrte_tool_basename);
         return output;
     } else if (PRRTE_PROC_STATE_ABORTED_BY_SIG == job->state) {  /* aborted by signal */
 #ifdef HAVE_STRSIGNAL
         if (NULL != strsignal(WTERMSIG(proc->exit_code))) {
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-aborted-strsignal", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:proc-aborted-strsignal", true,
                                            prrte_tool_basename, (unsigned long)proc->name.vpid, (unsigned long)proc->pid,
                                            node->name, WTERMSIG(proc->exit_code),
                                            strsignal(WTERMSIG(proc->exit_code)));
         } else {
 #endif
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-aborted", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:proc-aborted", true,
                                            prrte_tool_basename, (unsigned long)proc->name.vpid, (unsigned long)proc->pid,
                                            node->name, WTERMSIG(proc->exit_code));
 #ifdef HAVE_STRSIGNAL
@@ -248,36 +248,36 @@ static char* print_aborted_job(prrte_job_t *job,
 #endif
         return output;
     } else if (PRRTE_PROC_STATE_TERM_WO_SYNC == proc->state) { /* proc exited w/o finalize */
-        output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-exit-no-sync", true,
+        output = prrte_show_help_string("help-prun.txt", "prun:proc-exit-no-sync", true,
                                        prrte_tool_basename, (unsigned long)proc->name.vpid, (unsigned long)proc->pid,
                                        node->name, prrte_tool_basename, prrte_tool_basename);
         return output;
     } else if (PRRTE_PROC_STATE_COMM_FAILED == proc->state) {
-        output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-comm-failed", true,
+        output = prrte_show_help_string("help-prun.txt", "prun:proc-comm-failed", true,
                                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                                        PRRTE_NAME_PRINT(&proc->name), node->name);
         return output;
     } else if (PRRTE_PROC_STATE_SENSOR_BOUND_EXCEEDED == proc->state) {
         switch (proc->exit_code) {
         case PRRTE_ERR_MEM_LIMIT_EXCEEDED:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-mem-exceeded", true,
+            output = prrte_show_help_string("help-prun.txt", "prun:proc-mem-exceeded", true,
                                            PRRTE_NAME_PRINT(&proc->name), node->name);
             break;
         case PRRTE_ERR_PROC_STALLED:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-stalled", true);
+            output = prrte_show_help_string("help-prun.txt", "prun:proc-stalled", true);
             break;
 
         default:
-            output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-sensor-exceeded", true);
+            output = prrte_show_help_string("help-prun.txt", "prun:proc-sensor-exceeded", true);
         }
         return output;
     } else if (PRRTE_PROC_STATE_HEARTBEAT_FAILED == proc->state) {
-        output = prrte_show_help_string("help-prrterun.txt", "prrterun:proc-heartbeat-failed", true,
+        output = prrte_show_help_string("help-prun.txt", "prun:proc-heartbeat-failed", true,
                                        prrte_tool_basename, PRRTE_NAME_PRINT(&proc->name), node->name);
         return output;
     } else if (prrte_abort_non_zero_exit &&
                PRRTE_PROC_STATE_TERM_NON_ZERO == proc->state) {
-        output = prrte_show_help_string("help-prrterun.txt", "prrterun:non-zero-exit", true,
+        output = prrte_show_help_string("help-prun.txt", "prun:non-zero-exit", true,
                                        prrte_tool_basename, PRRTE_NAME_PRINT(&proc->name), proc->exit_code);
         return output;
     }

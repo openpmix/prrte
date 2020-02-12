@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
@@ -72,7 +72,7 @@ static int init_server(void)
             filename = strchr(prrte_data_server_uri, ':');
             if (NULL == filename) {
                 /* filename is not correctly formatted */
-                prrte_show_help("help-prrterun.txt", "prrterun:ompi-server-filename-bad", true,
+                prrte_show_help("help-prun.txt", "prun:ompi-server-filename-bad", true,
                                prrte_tool_basename, prrte_data_server_uri);
                 return PRRTE_ERR_BAD_PARAM;
             }
@@ -80,7 +80,7 @@ static int init_server(void)
 
             if (0 >= strlen(filename)) {
                 /* they forgot to give us the name! */
-                prrte_show_help("help-prrterun.txt", "prrterun:ompi-server-filename-missing", true,
+                prrte_show_help("help-prun.txt", "prun:ompi-server-filename-missing", true,
                                prrte_tool_basename, prrte_data_server_uri);
                 return PRRTE_ERR_BAD_PARAM;
             }
@@ -88,14 +88,14 @@ static int init_server(void)
             /* open the file and extract the uri */
             fp = fopen(filename, "r");
             if (NULL == fp) { /* can't find or read file! */
-                prrte_show_help("help-prrterun.txt", "prrterun:ompi-server-filename-access", true,
+                prrte_show_help("help-prun.txt", "prun:ompi-server-filename-access", true,
                                prrte_tool_basename, prrte_data_server_uri);
                 return PRRTE_ERR_BAD_PARAM;
             }
             if (NULL == fgets(input, 1024, fp)) {
                 /* something malformed about file */
                 fclose(fp);
-                prrte_show_help("help-prrterun.txt", "prrterun:ompi-server-file-bad", true,
+                prrte_show_help("help-prun.txt", "prun:ompi-server-file-bad", true,
                                prrte_tool_basename, prrte_data_server_uri,
                                prrte_tool_basename);
                 return PRRTE_ERR_BAD_PARAM;
@@ -135,7 +135,7 @@ static int init_server(void)
                 /* try it one more time */
                 if (PRRTE_SUCCESS != (rc = prrte_rml.ping(server, &timeout))) {
                     /* okay give up */
-                    prrte_show_help("help-prrterun.txt", "prrterun:server-not-found", true,
+                    prrte_show_help("help-prun.txt", "prun:server-not-found", true,
                                    prrte_tool_basename, server,
                                    (long)prrte_pmix_server_globals.timeout,
                                    PRRTE_ERROR_NAME(rc));

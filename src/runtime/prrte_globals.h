@@ -91,7 +91,7 @@ PRRTE_EXPORT extern prrte_process_name_t prrte_name_invalid;  /** instantiated i
 /* define a special name that point to my parent (aka the process that spawned me) */
 #define PRRTE_PROC_MY_PARENT     (&prrte_process_info.my_parent)
 
-/* define a special name that belongs to prrterun */
+/* define a special name that belongs to prun */
 #define PRRTE_PROC_MY_HNP        (&prrte_process_info.my_hnp)
 
 /* define the name of my daemon */

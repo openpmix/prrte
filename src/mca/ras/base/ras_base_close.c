@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,7 +42,7 @@ int prrte_ras_base_finalize(void)
 int prrte_ras_base_close(void)
 {
     /* Close all remaining available components (may be one if this is a
-       Open RTE program, or [possibly] multiple if this is ompi_info) */
+       PRRTE program, or [possibly] multiple if this is ompi_info) */
 
     mca_base_components_close(prrte_ras_base_framework.framework_output,
                               &prrte_ras_base.ras_opened, NULL);

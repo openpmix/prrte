@@ -14,7 +14,7 @@
  * Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -24,7 +24,7 @@
  */
 /** @file:
  *
- * The Open RTE Error and Recovery Manager (ErrMgr)
+ * The PRRTE Error and Recovery Manager (ErrMgr)
  *
  * This framework is the logically central clearing house for process/daemon
  * state updates. In particular when a process fails and another process detects
