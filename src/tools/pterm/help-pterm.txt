@@ -25,7 +25,7 @@
 %s (%s) %s
 
 Usage: %s [OPTION]...
-Submit job to the PMIx Reference RTE
+Terminate an instance of the PMIx Reference RTE (PRRTE)
 
 %s
 

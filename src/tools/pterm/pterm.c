@@ -111,6 +111,13 @@ static prrte_cmd_line_t *prrte_cmd_line = NULL;
 
 /* prun-specific options */
 static prrte_cmd_line_init_t cmd_line_init[] = {
+    /* Various "obvious" generalized options */
+    { 'h', "help", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "This help message", PRRTE_CMD_LINE_OTYPE_GENERAL },
+    { 'V', "version", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Print version and exit", PRRTE_CMD_LINE_OTYPE_GENERAL },
+    { 'v', "verbose", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Be verbose", PRRTE_CMD_LINE_OTYPE_GENERAL },
 
     /* look first for a system server */
     { '\0', "system-server-first", 0, PRRTE_CMD_LINE_TYPE_BOOL,
@@ -266,23 +273,6 @@ int main(int argc, char *argv[])
         return rc;
     }
 
-    /* open the SCHIZO framework */
-    if (PRRTE_SUCCESS != (rc = prrte_mca_base_framework_open(&prrte_schizo_base_framework, 0))) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    if (PRRTE_SUCCESS != (rc = prrte_schizo_base_select())) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    /* setup the rest of the cmd line only once */
-    if (PRRTE_SUCCESS != (rc = prrte_schizo.define_cli(prrte_cmd_line))) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
     /* parse the result to get values - this will not include MCA params */
     if (PRRTE_SUCCESS != (rc = prrte_cmd_line_parse(prrte_cmd_line,
                                                     true, false, argc, argv)) ) {
@@ -312,7 +302,7 @@ int main(int argc, char *argv[])
     if (prrte_cmd_line_is_taken(prrte_cmd_line, "help")) {
         char *str, *args = NULL;
         args = prrte_cmd_line_get_usage_msg(prrte_cmd_line, false);
-        str = prrte_show_help_string("help-prun.txt", "prun:usage", false,
+        str = prrte_show_help_string("help-pterm.txt", "usage", false,
                                     prrte_tool_basename, "PRRTE", PRRTE_VERSION,
                                     prrte_tool_basename, args,
                                     PACKAGE_BUGREPORT);
@@ -324,14 +314,6 @@ int main(int argc, char *argv[])
 
         /* If someone asks for help, that should be all we do */
         exit(0);
-    }
-
-    /* check if we are running as root - if we are, then only allow
-     * us to proceed if the allow-run-as-root flag was given. Otherwise,
-     * exit with a giant warning flag
-     */
-    if (0 == geteuid()) {
-        prrte_schizo.allow_run_as_root(prrte_cmd_line);  // will exit us if not allowed
     }
 
     /* setup options */
