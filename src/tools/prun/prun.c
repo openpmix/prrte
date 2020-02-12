@@ -640,7 +640,6 @@ int prun(int argc, char *argv[])
     prrte_tool_basename = prrte_basename(argv[0]);
     if (0 != strcmp(prrte_tool_basename, "prun")) {
         proxyrun = true;
-        prrte_argv_append_nosize(&prteargs, "prte");
     }
 
     /* setup our cmd line */
@@ -740,29 +739,15 @@ int prun(int argc, char *argv[])
     }
 
     if (proxyrun) {
-        /* see if they gave us an absolute path */
-        tpath = NULL;
-        param = NULL;
-        if ('/' == argv[0][0]) {
-            char* tmp_basename = NULL;
-            /* If they specified an absolute path, strip off the
-               /bin/<exec_name>" and leave just the prefix */
-            tpath = prrte_dirname(argv[0]);
-            /* Quick sanity check to ensure we got
-               something/bin/<exec_name> and that the installation
-               tree is at least more or less what we expect it to
-               be */
-            tmp_basename = prrte_basename(tpath);
-            if (0 == strcmp("bin", tmp_basename)) {
-                char* tmp = tpath;
-                tpath = prrte_dirname(tmp);
-                free(tmp);
-            } else {
-                free(tpath);
-                tpath = NULL;
-            }
-            free(tmp_basename);
+        /* get the absolute path of our command */
+        param = prrte_find_absolute_path(argv[0]);
+        if (NULL == param) {
+            fprintf(stderr, "%s was unable to determine the absolute path for its command\n", prrte_tool_basename);
+            exit(1);
         }
+        tpath = prrte_dirname(param);
+        free(param);
+        param = NULL;
 
         /* see if they told us a prefix to use */
         if (prrte_cmd_line_is_taken(prrte_cmd_line, "prefix") &&
@@ -784,7 +769,7 @@ int prun(int argc, char *argv[])
                                true, prrte_basename, prrte_basename,
                                param, tmp_basename, prrte_basename);
             }
-            /* use the prefix over the path-to-mpirun so that
+            /* use the prefix over the path-to-argv[0] so that
              * people can specify the backend prefix as different
              * from the local one
              */
@@ -817,9 +802,10 @@ int prun(int argc, char *argv[])
                     return PRRTE_ERR_FATAL;
                 }
             }
-            prrte_argv_append_nosize(&prteargs, "--prefix");
-            prrte_argv_append_nosize(&prteargs, param);
+            prrte_asprintf(&tpath, "%s/prte", param);
+            prrte_argv_append_nosize(&prteargs, tpath);
             free(param);
+            free(tpath);
         }
     }
 
@@ -844,6 +830,9 @@ int prun(int argc, char *argv[])
             prrte_argv_append_nosize(&prteargs, "&");
             prrte_schizo.wrap_args(prteargs);
             param = prrte_argv_join(prteargs, ' ');
+            if (verbose) {
+                fprintf(stderr, "PRTE cmd line: %s\n", param);
+            }
             fp = popen(param, "r");
             if (NULL == fp) {
                 fprintf(stderr, "Error executing prte\n");
