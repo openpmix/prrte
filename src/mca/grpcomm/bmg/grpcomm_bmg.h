@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016-2018 The University of Tennessee and The University
+ * Copyright (c) 2016-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
@@ -14,9 +14,10 @@
 #ifndef GRPCOMM_BMG_H
 #define GRPCOMM_BMG_H
 
-#include "orte_config.h"
+#include "prrte_config.h"
 
-#include "orte/mca/grpcomm/grpcomm.h"
+
+#include "src/mca/grpcomm/grpcomm.h"
 
 BEGIN_C_DECLS
 
@@ -24,8 +25,8 @@ BEGIN_C_DECLS
  * Grpcomm interfaces
  */
 
-ORTE_MODULE_DECLSPEC extern orte_grpcomm_base_component_t mca_grpcomm_bmg_component;
-extern orte_grpcomm_base_module_t orte_grpcomm_bmg_module;
+PRRTE_MODULE_EXPORT extern prrte_grpcomm_base_component_t prrte_grpcomm_bmg_component;
+extern prrte_grpcomm_base_module_t prrte_grpcomm_bmg_module;
 
 END_C_DECLS
 

@@ -62,6 +62,7 @@
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/errmgr/base/errmgr_private.h"
 
+#include "src/mca/propagate/propagate.h"
 #include "errmgr_dvm.h"
 
 static int init(void);
@@ -84,6 +85,130 @@ prte_errmgr_base_module_t prte_errmgr_dvm_module = {
  */
 static void job_errors(int fd, short args, void *cbdata);
 static void proc_errors(int fd, short args, void *cbdata);
+
+static int pack_state_for_proc(prrte_buffer_t *alert, prrte_proc_t *child)
+{
+    int rc;
+
+    /* pack the child's vpid */
+    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &(child->name.vpid), 1, PRRTE_VPID))) {
+        PRRTE_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pck the pid */
+    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &child->pid, 1, PRRTE_PID))) {
+        PRRTE_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack its state */
+    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &child->state, 1, PRRTE_PROC_STATE))) {
+        PRRTE_ERROR_LOG(rc);
+        return rc;
+    }
+    /* pack its exit code */
+    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &child->exit_code, 1, PRRTE_EXIT_CODE))) {
+        PRRTE_ERROR_LOG(rc);
+        return rc;
+    }
+
+    return PRRTE_SUCCESS;
+}
+
+static void register_cbfunc(int status, size_t errhndler, void *cbdata)
+{
+    prrte_propagate.register_cb();
+    PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
+                "errmgr:dvm:event register cbfunc with status %d ", status));
+}
+
+static void error_notify_cbfunc(size_t evhdlr_registration_id,
+        pmix_status_t status,
+        const pmix_proc_t *psource,
+        pmix_info_t info[], size_t ninfo,
+        pmix_info_t *results, size_t nresults,
+        pmix_event_notification_cbfunc_fn_t cbfunc,
+        void *cbdata)
+{
+    prrte_process_name_t proc, source;
+    proc.jobid = PRRTE_JOBID_INVALID;
+    proc.vpid = PRRTE_VPID_INVALID;
+
+    int rc;
+    prrte_proc_t *temp_orte_proc;
+    prrte_buffer_t *alert;
+    prrte_job_t *jdata;
+    prrte_plm_cmd_flag_t cmd;
+    size_t n;
+    PRRTE_PMIX_CONVERT_PROCT(rc, &source, psource);
+    if (NULL != info) {
+        for (n=0; n < ninfo; n++) {
+            if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
+                PRRTE_PMIX_CONVERT_PROCT(rc, &proc, info[n].value.data.proc);
+
+                if( prrte_get_proc_daemon_vpid(&proc) != PRRTE_PROC_MY_NAME->vpid){
+                    return;
+                }
+                PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
+                            "%s errmgr: dvm: error proc %s with key-value %s notified from %s",
+                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), PRRTE_NAME_PRINT(&proc),
+                            info[n].key, PRRTE_NAME_PRINT(&source)));
+
+                if (NULL == (jdata = prrte_get_job_data_object(proc.jobid))) {
+                    /* must already be complete */
+                    PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
+                                "%s errmgr:dvm:error_notify_callback NULL jdata - ignoring error",
+                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                }
+                temp_orte_proc= (prrte_proc_t*)prrte_pointer_array_get_item(jdata->procs, proc.vpid);
+
+                alert = PRRTE_NEW(prrte_buffer_t);
+                /* pack update state command */
+                cmd = PRRTE_PLM_UPDATE_PROC_STATE;
+                if (PRRTE_SUCCESS != (prrte_dss.pack(alert, &cmd, 1, PRRTE_PLM_CMD))) {
+                    PRRTE_ERROR_LOG(rc);
+                    return;
+                }
+
+                /* pack jobid */
+                if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &proc.jobid, 1, PRRTE_JOBID))) {
+                    PRRTE_ERROR_LOG(rc);
+                    return;
+                }
+
+                /* proc state now is PRRTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this; code is 128+9 */
+                temp_orte_proc->state = PRRTE_PROC_STATE_ABORTED_BY_SIG;
+                /* now pack the child's info */
+                if (PRRTE_SUCCESS != (rc = pack_state_for_proc(alert, temp_orte_proc))) {
+                    PRRTE_ERROR_LOG(rc);
+                    return;
+                }
+
+                /* send this process's info to hnp */
+                if (0 > (rc = prrte_rml.send_buffer_nb(
+                                PRRTE_PROC_MY_HNP, alert,
+                                PRRTE_RML_TAG_PLM,
+                                prrte_rml_send_callback, NULL))) {
+                    PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
+                                "%s errmgr:dvm: send to hnp failed",
+                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                    PRRTE_ERROR_LOG(rc);
+                    PRRTE_RELEASE(alert);
+                }
+                if (PRRTE_FLAG_TEST(temp_orte_proc, PRRTE_PROC_FLAG_IOF_COMPLETE) &&
+                        PRRTE_FLAG_TEST(temp_orte_proc, PRRTE_PROC_FLAG_WAITPID) &&
+                        !PRRTE_FLAG_TEST(temp_orte_proc, PRRTE_PROC_FLAG_RECORDED)) {
+                    PRRTE_ACTIVATE_PROC_STATE(&proc, PRRTE_PROC_STATE_TERMINATED);
+                }
+
+                prrte_propagate.prp(&source.jobid, &source, &proc, PRRTE_ERR_PROC_ABORTED);
+                break;
+            }
+        }
+    }
+    if (NULL != cbfunc) {
+        cbfunc(PRRTE_SUCCESS, NULL, 0, NULL, NULL, cbdata);
+    }
+}
 
 static int init(void)
 {

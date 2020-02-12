@@ -53,6 +53,9 @@ prte_grpcomm_base_t prte_grpcomm_base = {{{0}}};
 prte_grpcomm_API_module_t prte_grpcomm = {
     prte_grpcomm_API_xcast,
     prte_grpcomm_API_allgather
+    prrte_grpcomm_API_rbcast,
+    prrte_grpcomm_API_register_cb,
+    NULL
 };
 
 static bool recv_issued = false;

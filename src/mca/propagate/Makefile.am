@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017 The University of Tennessee and The University
+# Copyright (c) 2017-2020 The University of Tennessee and The University
 #                         of Tennessee Research Foundation.  All rights
 #                         reserved.
 # $COPYRIGHT$
@@ -20,8 +20,8 @@ libmca_propagate_la_SOURCES += $(headers)
 
 # Conditionally install the header files
 if WANT_INSTALL_HEADERS
-ortedir = $(orteincludedir)/$(subdir)
-nobase_orte_HEADERS = $(headers)
+prrtedir = $(prrteincludedir)/$(subdir)
+nobase_prrte_HEADERS = $(headers)
 endif
 
 include base/Makefile.am

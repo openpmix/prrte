@@ -138,6 +138,58 @@ int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig,
     return rc;
 }
 
+int prrte_grpcomm_API_rbcast(prrte_grpcomm_signature_t *sig,
+                           prrte_rml_tag_t tag,
+                           prrte_buffer_t *msg)
+{
+    int rc = PRRTE_ERROR;
+    prrte_buffer_t *buf;
+    prrte_grpcomm_base_active_t *active;
+
+    PRRTE_OUTPUT_VERBOSE((1, prrte_grpcomm_base_framework.framework_output,
+                         "%s grpcomm:base:rbcast sending %u bytes to tag %ld",
+                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                         (NULL == msg) ? 0 : (unsigned int)msg->bytes_used, (long)tag));
+
+    /* this function does not access any framework-global data, and
+     * so it does not require us to push it into the event library */
+
+    /* prep the output buffer */
+    buf = PRRTE_NEW(prrte_buffer_t);
+
+    /* setup the payload */
+    if (PRRTE_SUCCESS != (rc = pack_xcast(sig, buf, msg, tag))) {
+        PRRTE_ERROR_LOG(rc);
+        PRRTE_RELEASE(buf);
+        return rc;
+    }
+    /* cycle thru the actives and see who can send it */
+    PRRTE_LIST_FOREACH(active, &prrte_grpcomm_base.actives, prrte_grpcomm_base_active_t) {
+        if (NULL != active->module->rbcast) {
+            if (PRRTE_SUCCESS == (rc = active->module->rbcast(buf))) {
+                break;
+            }
+        }
+    }
+
+    return rc;
+}
+
+int prrte_grpcomm_API_register_cb(prrte_grpcomm_rbcast_cb_t callback)
+{
+    int rc = PRRTE_ERROR;
+    prrte_grpcomm_base_active_t *active;
+
+    PRRTE_LIST_FOREACH(active, &prrte_grpcomm_base.actives, prrte_grpcomm_base_active_t) {
+        if (NULL != active->module->register_cb) {
+            if (PRRTE_ERROR != (rc = active->module->register_cb(callback))) {
+                break;
+            }
+        }
+    }
+    return rc;
+}
+
 static void allgather_stub(int fd, short args, void *cbdata)
 {
     prte_grpcomm_caddy_t *cd = (prte_grpcomm_caddy_t*)cbdata;

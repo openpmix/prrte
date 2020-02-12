@@ -18,14 +18,14 @@
 #ifndef MCA_ERRMGR_DETECTOR_EXPORT_H
 #define MCA_ERRMGR_DETECTOR_EXPORT_H
 
-#include "orte_config.h"
+#include "prrte_config.h"
 
-#include "orte/mca/errmgr/errmgr.h"
+#include "src/mca/errmgr/errmgr.h"
 
 BEGIN_C_DECLS
 
 typedef struct {
-    opal_event_t fd_event; /* to trigger timeouts with opal_events */
+    prrte_event_t fd_event; /* to trigger timeouts with prrte_events */
     int hb_observing;      /* the deamon vpid of the process we observe */
     int hb_observer;       /* the daemon vpid of the process that observes us */
     double hb_rstamp;      /* the date of the last hb reception */
@@ -34,27 +34,27 @@ typedef struct {
     double hb_sstamp;      /* the date at which the last hb emission was done */
     int failed_node_count; /* the number of failed nodes in the ring */
     int *daemons_state;    /* a list of failed daemons' vpid */
-} orte_errmgr_detector_t;
-static orte_errmgr_detector_t orte_errmgr_world_detector;
+} prrte_errmgr_detector_t;
+static prrte_errmgr_detector_t prrte_errmgr_world_detector;
 
 /*
  * Local Component structures
  */
 
-ORTE_MODULE_DECLSPEC extern orte_errmgr_base_component_t mca_errmgr_detector_component;
+PRRTE_MODULE_EXPORT extern prrte_errmgr_base_component_t prrte_errmgr_detector_component;
 
-ORTE_DECLSPEC extern orte_errmgr_base_module_t orte_errmgr_detector_module;
+PRRTE_EXPORT extern prrte_errmgr_base_module_t prrte_errmgr_detector_module;
 
 /*
  * Propagator functions
  */
-int orte_errmgr_failure_propagate(orte_jobid_t *job, orte_process_name_t *daemon, orte_proc_state_t state);
-int orte_errmgr_failure_propagate_recv(opal_buffer_t* buffer);
-int orte_errmgr_init_failure_propagate(void);
-int orte_errmgr_finalize_failure_propagate(void);
-bool errmgr_get_daemon_status(orte_process_name_t daemon);
-void errmgr_set_daemon_status(orte_process_name_t daemon);
-extern int orte_errmgr_enable_detector(bool flag);
+int prrte_errmgr_failure_propagate(prrte_jobid_t *job, prrte_process_name_t *daemon, prrte_proc_state_t state);
+int prrte_errmgr_failure_propagate_recv(prrte_buffer_t* buffer);
+int prrte_errmgr_init_failure_propagate(void);
+int prrte_errmgr_finalize_failure_propagate(void);
+bool errmgr_get_daemon_status(prrte_process_name_t daemon);
+void errmgr_set_daemon_status(prrte_process_name_t daemon);
+extern int prrte_errmgr_enable_detector(bool flag);
 END_C_DECLS
 
 #endif /* MCA_ERRMGR_DETECTOR_EXPORT_H */

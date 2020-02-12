@@ -37,6 +37,8 @@
 #include <unistd.h>
 #endif
 
+#include "src/mca/propagate/base/base.h"
+
 #include "src/include/hash_string.h"
 #include "src/class/prte_hash_table.h"
 #include "src/class/prte_list.h"
@@ -231,6 +233,12 @@ static int rte_init(int argc, char **argv)
     /* open the errmgr */
     if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_errmgr_base_framework, 0))) {
         error = "prte_errmgr_base_open";
+        goto error;
+    }
+
+    /* open the propagator */
+    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_propagate_base_framework, 0))) {
+        error = "prrte_propagate_base_open";
         goto error;
     }
 
@@ -637,6 +645,9 @@ static int rte_finalize(void)
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
     prte_errmgr.finalize();
+    (void) prrte_mca_base_framework_close(&prrte_propagate_base_framework);
+    /* cleanup the pstat stuff */
+    (void) prrte_mca_base_framework_close(&prrte_pstat_base_framework);
 
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {

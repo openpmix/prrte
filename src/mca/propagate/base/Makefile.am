@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2018      The University of Tennessee and The University
+# Copyright (c) 2017-2020      The University of Tennessee and The University
 #                              of Tennessee Research Foundation.  All rights
 #                              reserved.
 # $COPYRIGHT$
@@ -14,4 +14,4 @@ headers += \
 
 libmca_propagate_la_SOURCES += \
         base/propagate_base_select.c \
-        base/propagate_base_frame.c 
+        base/propagate_base_frame.c

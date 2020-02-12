@@ -1,6 +1,7 @@
 #
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2016      Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 The University of Tennessee and The University
+#                         of Tennessee Research Foundation.  All rights
+#                         reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -16,7 +17,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_orte_propagate_prperror_DSO
+if MCA_BUILD_prrte_propagate_prperror_DSO
 component_noinst =
 component_install = mca_propagate_prperror.la
 else
@@ -24,10 +25,11 @@ component_noinst = libmca_propagate_prperror.la
 component_install =
 endif
 
-mcacomponentdir = $(ortelibdir)
+mcacomponentdir = $(prrtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_propagate_prperror_la_SOURCES = $(sources)
 mca_propagate_prperror_la_LDFLAGS = -module -avoid-version
+mca_propagate_prperror_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_propagate_prperror_la_SOURCES =$(sources)
