@@ -6,14 +6,14 @@
 # Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2014      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
-# This is the US/English general help file for Open RTE's ODLS Framework
+# This is the US/English general help file for PRRTE's ODLS Framework
 #
 [prrte-odls-base:could-not-kill]
 WARNING: A process refused to die despite all the efforts!

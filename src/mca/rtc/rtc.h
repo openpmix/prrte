@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -11,7 +11,7 @@
  */
 /** @file:
  *
- * The Open RTE Run-Time Control Framework (RTC)
+ * The PRRTE Run-Time Control Framework (RTC)
  *
  */
 

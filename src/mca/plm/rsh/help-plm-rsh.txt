@@ -17,7 +17,7 @@
 #
 # $HEADER$
 #
-# This is the US/English general help file for Open RTE's prrterun.
+# This is the US/English general help file for PRRTE's prun.
 #
 [agent-not-found]
 The value of the MCA parameter "plm_rsh_agent" was set to a path

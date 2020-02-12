@@ -249,7 +249,7 @@ int prrte_register_params(void)
     }
 
     /* get a clean output channel too - need to do this here because
-     * we use it below, and prrterun and some other tools call this
+     * we use it below, and prun and some other tools call this
      * function prior to calling prrte_init
      */
     PRRTE_CONSTRUCT(&lds, prrte_output_stream_t);
@@ -283,7 +283,7 @@ int prrte_register_params(void)
 
     prrte_local_tmpdir_base = NULL;
     (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "local_tmpdir_base",
-                                  "Base of the session directory tree to be used by prrterun/mpirun",
+                                  "Base of the session directory tree to be used by prun/mpirun",
                                   PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                   PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_ALL_EQ,
                                   &prrte_local_tmpdir_base);
@@ -317,15 +317,15 @@ int prrte_register_params(void)
         }
         prrte_process_info.tmpdir_base = strdup (prrte_tmpdir_base);
     } else if (PRRTE_PROC_IS_MASTER && NULL != prrte_local_tmpdir_base) {
-        /* prrterun will pickup the value for its own use */
+        /* prun will pickup the value for its own use */
         if (NULL != prrte_process_info.tmpdir_base) {
             free(prrte_process_info.tmpdir_base);
         }
         prrte_process_info.tmpdir_base = strdup (prrte_local_tmpdir_base);
     } else if (PRRTE_PROC_IS_DAEMON && NULL != prrte_remote_tmpdir_base) {
-        /* prrterun will pickup the value and forward it along, but must not
+        /* prun will pickup the value and forward it along, but must not
          * use it in its own work. So only a daemon needs to get it, and the
-         * daemon will pass it down to its application procs. Note that prrterun
+         * daemon will pass it down to its application procs. Note that prun
          * will pass -its- value to any procs local to it
          */
         if (NULL != prrte_process_info.tmpdir_base) {

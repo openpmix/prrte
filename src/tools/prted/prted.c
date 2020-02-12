@@ -139,12 +139,6 @@ static prrte_cmd_line_t *prrte_cmd_line = NULL;
  */
 prrte_cmd_line_init_t prrte_cmd_line_opts[] = {
     /* DVM-specific options */
-    { '\0', "daemonize", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Daemonize the DVM daemons into the background",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "set-sid", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Direct the DVM daemons to separate from the current session",
-      PRRTE_CMD_LINE_OTYPE_DVM },
     /* uri of PMIx publish/lookup server, or at least where to get it */
     { '\0', "prrte-server", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Specify the URI of the publish/lookup server, or the name of the file (specified as file:filename) that contains that info",
@@ -329,7 +323,7 @@ int main(int argc, char *argv[])
     if (prrte_cmd_line_is_taken(prrte_cmd_line, "help")) {
         char *str, *args = NULL;
         args = prrte_cmd_line_get_usage_msg(prrte_cmd_line, false);
-        str = prrte_show_help_string("help-prrterun.txt", "prrterun:usage", false,
+        str = prrte_show_help_string("help-prun.txt", "prun:usage", false,
                                     prrte_tool_basename, "PRRTE", PRRTE_VERSION,
                                     prrte_tool_basename, args,
                                     PACKAGE_BUGREPORT);

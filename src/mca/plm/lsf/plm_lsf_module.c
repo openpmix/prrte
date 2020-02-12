@@ -140,7 +140,7 @@ int plm_lsf_init(void)
 }
 
 /* When working in this function, ALWAYS jump to "cleanup" if
- * you encounter an error so that prrterun will be woken up and
+ * you encounter an error so that prun will be woken up and
  * the job can cleanly terminate
  */
 static int plm_lsf_launch_job(prrte_job_t *jdata)
@@ -343,7 +343,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* exec the daemon(s). Do NOT wait for lsb_launch to complete as
      * it only completes when the processes it starts - in this case,
      * the orteds - complete. We need to go ahead and return so
-     * prrterun can do the rest of its stuff. Instead, we'll catch any
+     * prun can do the rest of its stuff. Instead, we'll catch any
      * failures and deal with them elsewhere
      */
     if ( (rc = lsb_launch(nodelist_argv, argv, LSF_DJOB_REPLACE_ENV | LSF_DJOB_NOWAIT, env)) < 0) {

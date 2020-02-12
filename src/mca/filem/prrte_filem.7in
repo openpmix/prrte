@@ -13,7 +13,7 @@
 .\" **************************
 .SH NAME
 .
-PRRTE_FILEM \- Open RTE MCA File Management (FileM) Framework: Overview of Open RTE's
+PRRTE_FILEM \- PRRTE MCA File Management (FileM) Framework: Overview of PRRTE's
 FileM framework, and selected modules.  #PACKAGE_NAME# #PACKAGE_VERSION#
 .
 .\" **************************
@@ -30,7 +30,7 @@ the transport of checkpoint files, preloading user binaries, and preloading of u
 .\" **********************************
 .SH AVAILABLE COMPONENTS
 .PP
-Open RTE currently ships with one FileM component: \fIrsh\fR.
+PRRTE currently ships with one FileM component: \fIrsh\fR.
 .
 .PP
 The following MCA parameters apply to all components:

@@ -365,7 +365,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
        node, or b) use some new/to-be-defined options that
        explicitly allow setting the bindir/libdir on the remote
        node.  We decided to implement these options (e.g.,
-       --remote-bindir and --remote-libdir) to prrterun when it
+       --remote-bindir and --remote-libdir) to prun when it
        actually becomes a problem for someone (vs. a hypothetical
        situation).
 
@@ -778,8 +778,8 @@ static int remote_spawn(void)
     /* if we hit any errors, tell the HNP it was us */
     target.vpid = PRRTE_PROC_MY_NAME->vpid;
 
-    /* check to see if enable-prrterun-prefix-by-default was given - if
-     * this is being done by a singleton, then prrterun will not be there
+    /* check to see if enable-prun-prefix-by-default was given - if
+     * this is being done by a singleton, then prun will not be there
      * to put the prefix in the app. So make sure we check to find it */
     if ((bool)PRRTE_WANT_PRRTE_PREFIX_BY_DEFAULT) {
         prefix = strdup(prrte_install_dirs.prefix);
@@ -1096,7 +1096,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * really are handling the prefix dir option incorrectly. It currently
      * is associated with an app_context, yet it really refers to the
      * location where PRRTE is installed on a NODE. Fixing
-     * this right now would involve significant change to prrterun as well
+     * this right now would involve significant change to prun as well
      * as elsewhere, so we will intentionally leave this incorrect at this
      * point. The error, however, is identical to that seen in all prior
      * releases of PRRTE, so our behavior is no worse than before.
@@ -1110,8 +1110,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     app = (prrte_app_context_t*)prrte_pointer_array_get_item(state->jdata->apps, 0);
     if (!prrte_get_attribute(&app->attributes, PRRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PRRTE_STRING)) {
-        /* check to see if enable-prrterun-prefix-by-default was given - if
-         * this is being done by a singleton, then prrterun will not be there
+        /* check to see if enable-prun-prefix-by-default was given - if
+         * this is being done by a singleton, then prun will not be there
          * to put the prefix in the app. So make sure we check to find it */
         if ((bool)PRRTE_WANT_PRRTE_PREFIX_BY_DEFAULT) {
             prefix_dir = strdup(prrte_install_dirs.prefix);

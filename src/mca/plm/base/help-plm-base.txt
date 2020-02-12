@@ -20,7 +20,7 @@
 [no-available-pls]
 No available launching agents were found.
 
-This is an unusual error; it means that Open RTE was unable to find
+This is an unusual error; it means that PRRTE was unable to find
 any mechanism to launch proceses, and therefore is unable to start the
 process(es) required by your application.
 #

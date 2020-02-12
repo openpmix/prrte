@@ -1709,11 +1709,11 @@ void prrte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
          */
         state = PRRTE_PROC_STATE_ABORTED_BY_SIG;
         /* If a process was killed by a signal, then make the
-         * exit code of prrterun be "signo + 128" so that "prog"
-         * and "prrterun prog" will both yield the same exit code.
+         * exit code of prun be "signo + 128" so that "prog"
+         * and "prun prog" will both yield the same exit code.
          *
          * This is actually what the shell does for you when
-         * a process dies by signal, so this makes prrterun treat
+         * a process dies by signal, so this makes prun treat
          * the termination code to exit status translation the
          * same way
          */

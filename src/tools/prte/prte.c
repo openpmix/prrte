@@ -102,26 +102,7 @@ static bool want_prefix_by_default = (bool) PRRTE_WANT_PRRTE_PREFIX_BY_DEFAULT;
 /* prte-specific command line options */
 static prrte_cmd_line_init_t cmd_line_init[] = {
     /* DVM-specific options */
-    { '\0', "prefix", 1, PRRTE_CMD_LINE_TYPE_STRING,
-      "Prefix to be used to look for PRRTE executables",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "noprefix", 0, PRRTE_CMD_LINE_TYPE_STRING,
-      "Disable automatic --prefix behavior",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "daemonize", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Daemonize the DVM daemons into the background",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "set-sid", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Direct the DVM daemons to separate from the current session",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    /* Specify the launch agent to be used */
-    { '\0', "launch-agent", 1, PRRTE_CMD_LINE_TYPE_STRING,
-      "Name of daemon executable used to start processes on remote nodes (default: prted)",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    /* maximum size of VM - typically used to subdivide an allocation */
-    { '\0', "max-vm-size", 1, PRRTE_CMD_LINE_TYPE_INT,
-      "Number of daemons to start",
-      PRRTE_CMD_LINE_OTYPE_DVM },
+
     /* uri of PMIx publish/lookup server, or at least where to get it */
     { '\0', "prrte-server", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Specify the URI of the publish/lookup server, or the name of the file (specified as file:filename) that contains that info",
@@ -282,7 +263,7 @@ int main(int argc, char *argv[])
         char *str, *args = NULL;
         char *project_name = "PMIx Reference RTE";
         args = prrte_cmd_line_get_usage_msg(&cmd_line, false);
-        str = prrte_show_help_string("help-prrterun.txt", "prrterun:usage", false,
+        str = prrte_show_help_string("help-prun.txt", "prun:usage", false,
                                     prrte_tool_basename, project_name, PRRTE_VERSION,
                                     prrte_tool_basename, args,
                                     PACKAGE_BUGREPORT);
@@ -319,7 +300,7 @@ int main(int argc, char *argv[])
      * done so that we can pass it to any local procs we
      * spawn - otherwise, those local procs won't see any
      * non-MCA envars were set in the enviro prior to calling
-     * prrterun
+     * prun
      */
     prrte_launch_environ = prrte_argv_copy(environ);
 
@@ -354,13 +335,13 @@ int main(int argc, char *argv[])
 
      /* get the daemon job object - was created by ess/hnp component */
     if (NULL == (jdata = prrte_get_job_data_object(PRRTE_PROC_MY_NAME->jobid))) {
-        prrte_show_help("help-prrterun.txt", "bad-job-object", true,
+        prrte_show_help("help-prun.txt", "bad-job-object", true,
                        prrte_tool_basename);
         exit(0);
     }
     /* also should have created a daemon "app" */
     if (NULL == (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, 0))) {
-        prrte_show_help("help-prrterun.txt", "bad-app-object", true,
+        prrte_show_help("help-prun.txt", "bad-app-object", true,
                        prrte_tool_basename);
         exit(0);
     }
@@ -370,7 +351,7 @@ int main(int argc, char *argv[])
         if (NULL != pval) {
             param = strdup("pval->data.string");
         } else {
-            /* --enable-prrterun-prefix-default was given to prrterun */
+            /* --enable-prun-prefix-default was given to prun */
             param = strdup(prrte_install_dirs.prefix);
         }
         /* "Parse" the param, aka remove superfluous path_sep. */
@@ -379,7 +360,7 @@ int main(int argc, char *argv[])
             param[param_len-1] = '\0';
             param_len--;
             if (0 == param_len) {
-                prrte_show_help("help-prrterun.txt", "prrterun:empty-prefix",
+                prrte_show_help("help-prun.txt", "prun:empty-prefix",
                                true, prrte_tool_basename, prrte_tool_basename);
                 return PRRTE_ERR_FATAL;
             }
@@ -394,7 +375,7 @@ int main(int argc, char *argv[])
      */
     if (0 < (j = prrte_cmd_line_get_ninsts(&cmd_line, "hostfile"))) {
         if(1 < j) {
-            prrte_show_help("help-prrterun.txt", "prrterun:multiple-hostfiles",
+            prrte_show_help("help-prun.txt", "prun:multiple-hostfiles",
                            true, prrte_tool_basename, NULL);
             return PRRTE_ERR_FATAL;
         } else {
@@ -404,7 +385,7 @@ int main(int argc, char *argv[])
     }
     if (0 < (j = prrte_cmd_line_get_ninsts(&cmd_line, "machinefile"))) {
         if(1 < j || prrte_get_attribute(&app->attributes, PRRTE_APP_HOSTFILE, NULL, PRRTE_STRING)) {
-            prrte_show_help("help-prrterun.txt", "prrterun:multiple-hostfiles",
+            prrte_show_help("help-prun.txt", "prun:multiple-hostfiles",
                            true, prrte_tool_basename, NULL);
             return PRRTE_ERR_FATAL;
         } else {

@@ -163,7 +163,7 @@ static int plm_tm_launch_job(prrte_job_t *jdata)
 }
 
 /* When working in this function, ALWAYS jump to "cleanup" if
- * you encounter an error so that prrterun will be woken up and
+ * you encounter an error so that prun will be woken up and
  * the job can cleanly terminate
  */
 static void launch_daemons(int fd, short args, void *cbdata)

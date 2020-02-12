@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2008-2010 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -111,8 +111,8 @@ int prrte_util_check_context_app(prrte_app_context_t *context, char **env)
     char *tmp;
 
     /* If the app is a naked filename, we need to do a path search for
-        it.  prrterun will send in whatever the user specified (e.g.,
-        "prrterun -np 2 uptime"), so in some cases, we need to search
+        it.  prun will send in whatever the user specified (e.g.,
+        "prun -np 2 uptime"), so in some cases, we need to search
         the path to verify that we can find it.  Here's the
         possibilities:
 

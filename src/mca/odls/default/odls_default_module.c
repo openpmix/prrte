@@ -313,7 +313,7 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
 
     if (NULL != cd->child) {
         /* setup stdout/stderr so that any error messages that we
-           may print out will get displayed back at prrterun.
+           may print out will get displayed back at prun.
 
            NOTE: Definitely do this AFTER we check contexts so
            that any error message from those two functions doesn't
@@ -321,7 +321,7 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
            THEN a user who gives us a bad executable name or
            working directory would get N error messages, where
            N=num_procs. This would be very annoying for large
-           jobs, so instead we set things up so that prrterun
+           jobs, so instead we set things up so that prun
            always outputs a nice, single message indicating what
            happened
         */
@@ -387,8 +387,8 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
     if (NULL != cd->wdir) {
         if (0 != chdir(cd->wdir)) {
             send_error_show_help(write_fd, 1,
-                                 "help-prrterun.txt",
-                                 "prrterun:wdir-not-found",
+                                 "help-prun.txt",
+                                 "prun:wdir-not-found",
                                  "prted",
                                  cd->wdir,
                                  prrte_process_info.nodename,
@@ -403,8 +403,8 @@ static int do_child(prrte_odls_spawn_caddy_t *cd, int write_fd)
         i = ptrace(PRRTE_TRACEME, 0, 0, 0);
         if  (0 != errno) {
             send_error_show_help(write_fd, 1,
-                                 "help-prrterun.txt",
-                                 "prrterun:stop-on-exec",
+                                 "help-prun.txt",
+                                 "prun:stop-on-exec",
                                  "prted",
                                  strerror(errno),
                                  prrte_process_info.nodename,
@@ -470,7 +470,11 @@ static int do_parent(prrte_odls_spawn_caddy_t *cd, int read_fd)
                 return PRRTE_ERR_FAILED_TO_START;
             }
             errno = 0;
+#if PRRTE_HAVE_LINUX_PTRACE
             ptrace(PRRTE_DETACH, cd->child->pid, 0, (void*)SIGSTOP);
+#else
+            ptrace(PRRTE_DETACH, cd->child->pid, 0, SIGSTOP);
+#endif
             if (0 != errno) {
                 /* couldn't detach */
                 cd->child->state = PRRTE_PROC_STATE_FAILED_TO_START;

@@ -21,20 +21,20 @@
 #
 [prted:usage]
 Usage: %s [OPTION]...
-Start an Open RTE Daemon
+Start an PRRTE Daemon
 
 %s
 [prted:environ]
-Open RTE Daemon was unable to set
+PRRTE Daemon was unable to set
  %s = %s
 in the environment. Returned value %d instead of PRRTE_SUCCESS.
 [prted:init-failure]
-Open RTE was unable to initialize properly.  The error occured while
+PRRTE was unable to initialize properly.  The error occured while
 attempting to %s.  Returned value %d instead of PRRTE_SUCCESS.
 
 #
 [prted:cannot-bind]
-A request was made to bind the Open RTE daemons to
+A request was made to bind the PRRTE daemons to
 a core that does not exist on this node:
 
   node:  %s

@@ -100,6 +100,26 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "personality", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Comma-separated list of programming model, languages, and containers being used (default=\"prrte\")",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "prefix", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Prefix to be used to look for PRRTE executables",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "noprefix", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Disable automatic --prefix behavior",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "daemonize", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Daemonize the DVM daemons into the background",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "set-sid", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Direct the DVM daemons to separate from the current session",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    /* Specify the launch agent to be used */
+    { '\0', "launch-agent", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Name of daemon executable used to start processes on remote nodes (default: prted)",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    /* maximum size of VM - typically used to subdivide an allocation */
+    { '\0', "max-vm-size", 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Number of daemons to start",
+      PRRTE_CMD_LINE_OTYPE_DVM },
 
 
     /* setup MCA parameters */
@@ -422,6 +442,24 @@ static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
         ptr = prrte_argv_join(hosts, ',');
         prrte_argv_append_nosize(argv, ptr);
         free(ptr);
+    }
+    if (0 < (i = prrte_cmd_line_get_ninsts(cmd_line, "daemonize"))) {
+        prrte_argv_append_nosize(argv, "--daemonize");
+    }
+    if (0 < (i = prrte_cmd_line_get_ninsts(cmd_line, "set-sid"))) {
+        prrte_argv_append_nosize(argv, "--set-sid");
+    }
+    if (0 < (i = prrte_cmd_line_get_ninsts(cmd_line, "launch-agent"))) {
+        prrte_argv_append_nosize(argv, "--launch-agent");
+        pval = prrte_cmd_line_get_param(cmd_line, "launch-agent", 0, 0);
+        prrte_argv_append_nosize(argv, pval->data.string);
+    }
+    if (0 < (i = prrte_cmd_line_get_ninsts(cmd_line, "max-vm-size"))) {
+        prrte_argv_append_nosize(argv, "--max-vm-size");
+        pval = prrte_cmd_line_get_param(cmd_line, "max-vm-size", 0, 0);
+        prrte_asprintf(&value, "%d", pval->data.integer);
+        prrte_argv_append_nosize(argv, value);
+        free(value);
     }
     /* harvest all the MCA params in the environ */
     for (i = 0; NULL != environ[i]; ++i) {

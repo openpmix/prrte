@@ -168,7 +168,7 @@ Random notes from Jeff:
   *assume* that they are all unpublished when the job completes.
 
   Putting this info in the app context (for example) might jive with a
-  more capable prrterun that allows flexible stdin/stdout/stderr
+  more capable prun that allows flexible stdin/stdout/stderr
   mapping (think: mpirun --screen ...).  mpirun makes the decision
   about how to wire up stdin/stdout/stderr and includes it in the app
   context (or whatever).  This is given to the svc who then creates
