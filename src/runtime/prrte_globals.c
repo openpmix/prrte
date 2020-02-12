@@ -471,39 +471,79 @@ bool prrte_node_match(prrte_node_t *n1, char *name)
 {
     char **n2names = NULL;
     char *n2alias = NULL;
+    char **n1names = NULL;
+    char *n1alias = NULL;
     int i, m;
-    prrte_node_t *node;
+    prrte_node_t *nptr;
 
-    /* first need to find the node object for this name */
+    /* start with the simple check */
+    if (0 == strcmp(n1->name, name)) {
+        return true;
+    }
+
+    /* get the aliases for n1 and check those against "name" */
+    if (prrte_get_attribute(&n1->attributes, PRRTE_NODE_ALIAS, (void**)&n1alias, PRRTE_STRING)) {
+        n1names = prrte_argv_split(n1alias, ',');
+        free(n1alias);
+    }
+    if (NULL != n1names) {
+        for (i=0; NULL != n1names[i]; i++) {
+            if (0 == strcmp(name, n1names[i])) {
+                prrte_argv_free(n1names);
+                return true;
+            }
+        }
+    }
+
+    /* "name" itself might be an alias, so find the node object for this name */
     for (i=0; i < prrte_node_pool->size; i++) {
-        if (NULL == (node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, i))) {
+        if (NULL == (nptr = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, i))) {
             continue;
         }
-        if (0 == strcmp(node->name, name)) {
-            return true;
-        }
-        if (prrte_get_attribute(&node->attributes, PRRTE_NODE_ALIAS, (void**)&n2alias, PRRTE_STRING)) {
+        if (prrte_get_attribute(&nptr->attributes, PRRTE_NODE_ALIAS, (void**)&n2alias, PRRTE_STRING)) {
             n2names = prrte_argv_split(n2alias, ',');
             free(n2alias);
         }
         if (NULL == n2names) {
-            PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-            return false;
+            continue;
         }
         /* no choice but an exhaustive search - fortunately, these lists are short! */
         for (m=0; NULL != n2names[m]; m++) {
             if (0 == strcmp(name, n2names[m])) {
-                prrte_argv_free(n2names);
-                if (n1 == node) {
-                    return true;
-                } else {
-                    return false;
-                }
+                /* this is the node! */
+                goto complete;
             }
         }
         prrte_argv_free(n2names);
     }
+    return false;
 
+  complete:
+    /* only get here is we found the node for "name" */
+    if (NULL == n1names) {
+        for (m=0; NULL != n2names[m]; m++) {
+            if (0 == strcmp(n1->name, n2names[m])) {
+                prrte_argv_free(n2names);
+                return true;
+            }
+        }
+    } else {
+        for (i=0; NULL != n1names[i]; i++) {
+            for (m=0; NULL != n2names[m]; m++) {
+                if (0 == strcmp(n1->name, n2names[m])) {
+                    prrte_argv_free(n1names);
+                    prrte_argv_free(n2names);
+                    return true;
+                }
+            }
+        }
+    }
+    if (NULL != n1names) {
+        prrte_argv_free(n1names);
+    }
+    if (NULL != n2names) {
+        prrte_argv_free(n2names);
+    }
     return false;
 }
 
