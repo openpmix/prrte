@@ -285,6 +285,8 @@ src/tools/prte/prte.1
 src/tools/pcc/pcc
 src/tools/pcc/pcc.1
 src/tools/pcc/pcc-wrapper-data.txt
+src/tools/pterm/pterm
+src/tools/pterm/pterm.1
 
 src/util/hostfile/hostfile_lex.c
 src/util/keyval/keyval_lex.c

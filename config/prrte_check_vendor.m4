@@ -11,7 +11,7 @@ dnl                         University of Stuttgart.  All rights reserved.
 dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
-dnl Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2015      Cisco Systems, Inc.  All rights reserved.
 dnl Copyright (c) 2015      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
@@ -85,13 +85,19 @@ AC_DEFUN([_PRRTE_CHECK_COMPILER_VENDOR], [
     prrte_check_compiler_vendor_result="unknown"
 
     # GNU is probably the most common, so check that one as soon as
-    # possible.  Intel pretends to be GNU, so need to check Intel
-    # before checking for GNU.
+    # possible.  Intel and PGI18 pretend to be GNU, so need to check Intel
+    # and PGI before checking for GNU.
+
 
     # Intel
     AS_IF([test "$prrte_check_compiler_vendor_result" = "unknown"],
           [PRRTE_IF_IFELSE([defined(__INTEL_COMPILER) || defined(__ICC)],
                [prrte_check_compiler_vendor_result="intel"])])
+
+    # Portland Group
+    AS_IF([test "$prrte_check_compiler_vendor_result" = "unknown"],
+          [PRRTE_IFDEF_IFELSE([__PGI],
+               [prrte_check_compiler_vendor_result="portland group"])])
 
     # Fujitsu
     AS_IF([test "$prrte_check_compiler_vendor_result" = "unknown"],
@@ -211,11 +217,6 @@ AC_DEFUN([_PRRTE_CHECK_COMPILER_VENDOR], [
     AS_IF([test "$prrte_check_compiler_vendor_result" = "unknown"],
           [PRRTE_IFDEF_IFELSE([__POCC__],
                [prrte_check_compiler_vendor_result="pelles"])])
-
-    # Portland Group
-    AS_IF([test "$prrte_check_compiler_vendor_result" = "unknown"],
-          [PRRTE_IFDEF_IFELSE([__PGI],
-               [prrte_check_compiler_vendor_result="portland group"])])
 
     # SAS/C
     AS_IF([test "$prrte_check_compiler_vendor_result" = "unknown"],

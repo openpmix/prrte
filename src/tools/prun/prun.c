@@ -1411,7 +1411,7 @@ int prun(int argc, char *argv[])
     }
 
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, nspace);
-    if( PRRTE_SUCCESS != ret ) {
+    if (PRRTE_SUCCESS != ret) {
         prrte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
         rc = ret;
         goto DONE;
@@ -1524,20 +1524,25 @@ int prun(int argc, char *argv[])
         flag = true;
         PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
         PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
+        rc = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
+        if (PMIX_SUCCESS == rc) {
 #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-        /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
-         * being called when the server successes. The callback might be eventually
-         * called though then the connection to the server closes with
-         * status PMIX_ERR_COMM_FAILURE */
-        poll(NULL, 0, 1000);
-        infocb(PMIX_SUCCESS, NULL, 0, (void *)&lock, NULL, NULL);
+            /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
+             * being called when the server successes. The callback might be eventually
+             * called though then the connection to the server closes with
+             * status PMIX_ERR_COMM_FAILURE */
+            poll(NULL, 0, 1000);
+            infocb(PMIX_SUCCESS, NULL, 0, (void *)&lock, NULL, NULL);
 #endif
-        PRRTE_PMIX_WAIT_THREAD(&lock);
-        PRRTE_PMIX_DESTRUCT_LOCK(&lock);
-        /* wait for connection to depart */
-        PRRTE_PMIX_WAIT_THREAD(&rellock);
-        PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
+            PRRTE_PMIX_WAIT_THREAD(&lock);
+            PRRTE_PMIX_DESTRUCT_LOCK(&lock);
+            /* wait for connection to depart */
+            PRRTE_PMIX_WAIT_THREAD(&rellock);
+            PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
+        } else {
+            PRRTE_PMIX_DESTRUCT_LOCK(&lock);
+            PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
+        }
     }
 
     /* cleanup and leave */
