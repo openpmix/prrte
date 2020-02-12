@@ -17,6 +17,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -349,7 +350,7 @@ int main(int argc, char *argv[])
     /* Did the user specify a prefix, or want prefix by default? */
     if (NULL != (pval = prrte_cmd_line_get_param(&cmd_line, "prefix", 0, 0)) || want_prefix_by_default) {
         if (NULL != pval) {
-            param = strdup("pval->data.string");
+            param = strdup(pval->data.string);
         } else {
             /* --enable-prun-prefix-default was given to prun */
             param = strdup(prrte_install_dirs.prefix);
