@@ -587,15 +587,64 @@ void prrte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     PRRTE_RELEASE(caddy);
 }
 
+int prrte_plm_base_spawn_reponse(int32_t status, prrte_job_t *jdata)
+{
+    int ret;
+    prrte_buffer_t *answer;
+    int room, *rmptr;
+
+    /* if the response has already been sent, don't do it again */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_SPAWN_NOTIFIED, NULL, PRRTE_BOOL)) {
+        return PRRTE_SUCCESS;
+    }
+
+    /* prep the response to the spawn requestor */
+    answer = PRRTE_NEW(prrte_buffer_t);
+    /* pack the status */
+    if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &status, 1, PRRTE_INT32))) {
+        PRRTE_ERROR_LOG(ret);
+        PRRTE_RELEASE(answer);
+        return ret;
+    }
+    /* pack the jobid */
+    if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &jdata->jobid, 1, PRRTE_JOBID))) {
+        PRRTE_ERROR_LOG(ret);
+        PRRTE_RELEASE(answer);
+        return ret;
+    }
+    /* pack the room number */
+    rmptr = &room;
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_ROOM_NUM, (void**)&rmptr, PRRTE_INT)) {
+        if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &room, 1, PRRTE_INT))) {
+            PRRTE_ERROR_LOG(ret);
+            PRRTE_RELEASE(answer);
+            return ret;
+        }
+    }
+    PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
+                         "%s plm:base:launch sending dyn release of job %s to %s",
+                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                         PRRTE_JOBID_PRINT(jdata->jobid),
+                         PRRTE_NAME_PRINT(&jdata->originator)));
+    if (0 > (ret = prrte_rml.send_buffer_nb(&jdata->originator, answer,
+                                           PRRTE_RML_TAG_LAUNCH_RESP,
+                                           prrte_rml_send_callback, NULL))) {
+        PRRTE_ERROR_LOG(ret);
+        PRRTE_RELEASE(answer);
+        return ret;
+    }
+
+    /* mark that we sent it */
+    prrte_set_attribute(&jdata->attributes, PRRTE_JOB_SPAWN_NOTIFIED, PRRTE_ATTR_LOCAL, NULL, PRRTE_BOOL);
+    return PRRTE_SUCCESS;
+}
+
 void prrte_plm_base_post_launch(int fd, short args, void *cbdata)
 {
     int32_t rc;
     prrte_job_t *jdata;
     prrte_state_caddy_t *caddy = (prrte_state_caddy_t*)cbdata;
     prrte_timer_t *timer=NULL;
-    int ret;
-    prrte_buffer_t *answer;
-    int room, *rmptr;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
 
@@ -614,65 +663,19 @@ void prrte_plm_base_post_launch(int fd, short args, void *cbdata)
     }
 
     if (PRRTE_JOB_STATE_RUNNING != caddy->job_state) {
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
+        /* error mgr handles this */
         PRRTE_RELEASE(caddy);
         return;
     }
     /* update job state */
     caddy->jdata->state = caddy->job_state;
 
-    /* if this isn't a dynamic spawn, just cleanup */
-    if (PRRTE_JOBID_INVALID == jdata->originator.jobid) {
-        PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
-                             "%s plm:base:launch job %s is not a dynamic spawn",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                             PRRTE_JOBID_PRINT(jdata->jobid)));
-        goto cleanup;
+    /* notify the spawn requestor */
+    rc = prrte_plm_base_spawn_reponse(PRRTE_SUCCESS, jdata);
+    if (PRRTE_SUCCESS != rc) {
+        PRRTE_ERROR_LOG(rc);
     }
 
-    /* prep the response */
-    rc = PRRTE_SUCCESS;
-    answer = PRRTE_NEW(prrte_buffer_t);
-    /* pack the status */
-    if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &rc, 1, PRRTE_INT32))) {
-        PRRTE_ERROR_LOG(ret);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRRTE_RELEASE(caddy);
-        return;
-    }
-    /* pack the jobid */
-    if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &jdata->jobid, 1, PRRTE_JOBID))) {
-        PRRTE_ERROR_LOG(ret);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRRTE_RELEASE(caddy);
-        return;
-    }
-    /* pack the room number */
-    rmptr = &room;
-    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_ROOM_NUM, (void**)&rmptr, PRRTE_INT)) {
-        if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &room, 1, PRRTE_INT))) {
-            PRRTE_ERROR_LOG(ret);
-            PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-            PRRTE_RELEASE(caddy);
-            return;
-        }
-    }
-    PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
-                         "%s plm:base:launch sending dyn release of job %s to %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         PRRTE_JOBID_PRINT(jdata->jobid),
-                         PRRTE_NAME_PRINT(&jdata->originator)));
-    if (0 > (ret = prrte_rml.send_buffer_nb(&jdata->originator, answer,
-                                           PRRTE_RML_TAG_LAUNCH_RESP,
-                                           prrte_rml_send_callback, NULL))) {
-        PRRTE_ERROR_LOG(ret);
-        PRRTE_RELEASE(answer);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRRTE_RELEASE(caddy);
-        return;
-    }
-
-  cleanup:
     /* cleanup */
     PRRTE_RELEASE(caddy);
 }

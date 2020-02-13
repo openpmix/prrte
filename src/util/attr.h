@@ -165,6 +165,7 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_APP_SETUP_DATA         (PRRTE_JOB_START_KEY + 60)    // prrte_byte_object_t - blob containing app setup data
 #define PRRTE_JOB_OUTPUT_TO_DIRECTORY    (PRRTE_JOB_START_KEY + 61)    // string - path of directory to which stdout/err is to be directed
 #define PRRTE_JOB_STOP_ON_EXEC           (PRRTE_JOB_START_KEY + 62)    // bool - stop procs on first instruction for debugger attach
+#define PRRTE_JOB_SPAWN_NOTIFIED         (PRRTE_JOB_START_KEY + 63)    // bool - process requesting a spawn operation has been notified of result
 
 #define PRRTE_JOB_MAX_KEY   300
 

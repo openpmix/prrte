@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -94,6 +94,7 @@ PRRTE_EXPORT void prrte_plm_base_reset_job(prrte_job_t *jdata);
 PRRTE_EXPORT int prrte_plm_base_setup_prted_cmd(int *argc, char ***argv);
 PRRTE_EXPORT void prrte_plm_base_check_all_complete(int fd, short args, void *cbdata);
 PRRTE_EXPORT int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata);
+PRRTE_EXPORT int prrte_plm_base_spawn_reponse(int32_t status, prrte_job_t *jdata);
 
 /**
  * Utilities for plm components that use proxy daemons

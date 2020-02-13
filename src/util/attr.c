@@ -390,7 +390,8 @@ const char *prrte_attr_key_to_str(prrte_attribute_key_t key)
             return "PRRTE_JOB_OUTPUT_TO_DIRECTORY";
         case PRRTE_JOB_STOP_ON_EXEC:
             return "JOB_STOP_ON_EXEC";
-
+        case PRRTE_JOB_SPAWN_NOTIFIED:
+            return "JOB_SPAWN_NOTIFIED";
 
         case PRRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
