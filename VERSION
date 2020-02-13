@@ -85,5 +85,5 @@ libprrte_so_version=2:0:0
 # well.  Yuck; this somewhat breaks the
 # components-don't-affect-the-build-system abstraction.
 
-libprrtemca_common_alps_so_version=2:0:0
+libprrte_common_alps_so_version=2:0:0
 
