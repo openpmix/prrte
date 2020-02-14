@@ -35,7 +35,7 @@ endif
 libmca_common_alps_la_SOURCES = $(headers) $(sources)
 libmca_common_alps_la_CPPFLAGS = $(common_alps_CPPFLAGS)
 libmca_common_alps_la_LDFLAGS =  \
-        -version-info $(libmca_prrte_common_alps_so_version) \
+        -version-info $(libprrte_common_alps_so_version) \
         $(common_alps_LDFLAGS)
 libmca_common_alps_la_LIBADD = $(common_alps_LIBS)
 libmca_common_alps_noinst_la_SOURCES = $(headers) $(sources)
