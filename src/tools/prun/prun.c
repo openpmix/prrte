@@ -739,20 +739,43 @@ int prun(int argc, char *argv[])
     }
 
     if (proxyrun) {
-        /* get the absolute path of our command */
-        param = prrte_find_absolute_path(argv[0]);
-        if (NULL == param) {
-            fprintf(stderr, "%s was unable to determine the absolute path for its command\n", prrte_tool_basename);
-            exit(1);
+        tpath = NULL;
+        char *tmp_basename;
+        if ('/' == argv[0][0] ) {
+            tpath = prrte_dirname(argv[0]);
         }
-        tpath = prrte_dirname(param);
-        free(param);
-        param = NULL;
+        else if( !prrte_cmd_line_is_taken(prrte_cmd_line, "prefix") ) {
+            /* get the absolute path of our command for relative paths */
+            param = prrte_find_absolute_path(argv[0]);
+            if (NULL == param) {
+                fprintf(stderr, "%s was unable to determine the absolute path for its command\n", prrte_tool_basename);
+                exit(1);
+            }
+            tpath = prrte_dirname(param);
+            free(param);
+            param = NULL;
+        }
+
+        if( NULL != tpath ) {
+            /* Quick sanity check to ensure we got
+               something/bin/<exec_name> and that the installation
+               tree is at least more or less what we expect it to
+               be */
+            tmp_basename = prrte_basename(tpath);
+            if (0 == strcmp("bin", tmp_basename)) {
+                char* tmp = tpath;
+                tpath = prrte_dirname(tmp);
+                free(tmp);
+            } else {
+                free(tpath);
+                tpath = NULL;
+            }
+            free(tmp_basename);
+        }
 
         /* see if they told us a prefix to use */
         if (prrte_cmd_line_is_taken(prrte_cmd_line, "prefix") &&
             NULL != tpath) {
-            char *tmp_basename;
             /* if they don't match, then that merits a warning */
             pval = prrte_cmd_line_get_param(prrte_cmd_line, "prefix", 0, 0);
             param = strdup(pval->data.string);
@@ -766,8 +789,8 @@ int prun(int argc, char *argv[])
             }
             if (0 != strcmp(param, tmp_basename)) {
                 prrte_show_help("help-prun.txt", "prun:double-prefix",
-                               true, prrte_basename, prrte_basename,
-                               param, tmp_basename, prrte_basename);
+                                true, prrte_tool_basename, prrte_tool_basename,
+                                param, tmp_basename, prrte_tool_basename);
             }
             /* use the prefix over the path-to-argv[0] so that
              * people can specify the backend prefix as different
@@ -797,12 +820,12 @@ int prun(int argc, char *argv[])
                 param_len--;
                 if (0 == param_len) {
                     prrte_show_help("help-prun.txt", "prun:empty-prefix",
-                                    true, prrte_basename, prrte_basename);
+                                    true, prrte_tool_basename, prrte_tool_basename);
                     free(param);
                     return PRRTE_ERR_FATAL;
                 }
             }
-            prrte_asprintf(&tpath, "%s/prte", param);
+            prrte_asprintf(&tpath, "%s/bin/prte", param);
             prrte_argv_append_nosize(&prteargs, tpath);
             free(param);
             free(tpath);
