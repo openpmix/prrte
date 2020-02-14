@@ -779,6 +779,7 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
     }
     prrte_dss.load(buffer, data, sz);  // restore the buffer as we are done with it
 
+#if PMIX_VERSION_MAJOR >=4
     /* see if they want us to await a particular key before sending
      * the response */
     if (NULL != info) {
@@ -789,6 +790,7 @@ static void pmix_server_dmdx_recv(int status, prrte_process_name_t* sender,
             }
         }
     }
+#endif
 
     /* is this proc one of mine? */
     PRRTE_PMIX_CONVERT_PROCT(rc, &name, &pproc);

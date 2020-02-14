@@ -436,8 +436,6 @@ static void defhandler(size_t evhdlr_registration_id,
 {
     prrte_pmix_lock_t *lock = NULL;
     size_t n;
-    pmix_proc_t target;
-    pmix_info_t directive;
 
     if (verbose) {
         prrte_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
@@ -445,6 +443,9 @@ static void defhandler(size_t evhdlr_registration_id,
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     if (PMIX_ERR_IOF_FAILURE == status) {
+        pmix_proc_t target;
+        pmix_info_t directive;
+
         /* tell PRRTE to terminate our job */
         PRRTE_PMIX_CONVERT_JOBID(target.nspace, myjobid);
         target.rank = PMIX_RANK_WILDCARD;
@@ -478,8 +479,9 @@ static void defhandler(size_t evhdlr_registration_id,
         /* release the lock */
         PRRTE_PMIX_WAKEUP_THREAD(lock);
     }
-
+#if PMIX_NUMERIC_VERSION >= 0x00040000
   progress:
+#endif
     /* we _always_ have to execute the evhandler callback or
      * else the event progress engine will hang */
     if (NULL != cbfunc) {
@@ -621,7 +623,9 @@ int prun(int argc, char *argv[])
     size_t napps;
     char nspace[PMIX_MAX_NSLEN+1];
     mylock_t mylock;
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     bool notify_launch = false;
+#endif
     char **prteargs = NULL;
     FILE *fp;
     char buf[2048];
@@ -1160,6 +1164,7 @@ int prun(int argc, char *argv[])
         free(ptr);
         prrte_list_append(&job_info, &ds->super);
     } else if (NULL != ptr) {
+#if PMIX_NUMERIC_VERSION >= 0x00040000
         /* if we were asked to output to a directory, pass it along. */
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
@@ -1178,6 +1183,7 @@ int prun(int argc, char *argv[])
         }
         PMIX_INFO_LOAD(ds->info, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
         free(param);
+#endif
     }
     /* if we were asked to merge stderr to stdout, mark it so */
     if (prrte_cmd_line_is_taken(prrte_cmd_line, "merge-stderr-to-stdout")) {

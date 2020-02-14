@@ -205,7 +205,6 @@ static void dmodex_req(int sd, short args, void *cbdata)
     pmix_proc_t myproc;
     pmix_status_t prc;
     bool refresh_cache = false;
-    size_t n;
     pmix_value_t *pval;
 
     PRRTE_ACQUIRE_OBJECT(rq);
@@ -222,8 +221,10 @@ static void dmodex_req(int sd, short args, void *cbdata)
         return;
     }
 
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* check if they want us to refresh the cache */
     if (NULL != req->info) {
+        size_t n;
         for (n=0; n < req->ninfo; n++) {
             if (PMIX_CHECK_KEY(&req->info[n], PMIX_GET_REFRESH_CACHE)) {
                 refresh_cache = PMIX_INFO_TRUE(&req->info[n]);
@@ -232,6 +233,8 @@ static void dmodex_req(int sd, short args, void *cbdata)
             }
         }
     }
+#endif
+
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
                          "%s DMODX REQ REFRESH %s REQUIRED KEY %s",
                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
