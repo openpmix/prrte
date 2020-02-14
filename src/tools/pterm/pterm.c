@@ -103,7 +103,7 @@ static pmix_proc_t myproc;
 static bool forcibly_die=false;
 static prrte_event_t term_handler;
 static int term_pipe[2];
-static prrte_atomic_lock_t prun_abort_inprogress_lock = {0};
+static prrte_atomic_lock_t prun_abort_inprogress_lock = PRRTE_ATOMIC_LOCK_INIT;
 static prrte_event_base_t *myevbase = NULL;
 static bool proxyrun = false;
 static bool verbose = false;
@@ -490,16 +490,6 @@ static void clean_abort(int fd, short flags, void *arg)
         /* reset the event */
         prrte_event_add(&term_handler, NULL);
         return;
-    }
-
-    /* tell PRRTE to terminate our job */
-    PRRTE_PMIX_CONVERT_JOBID(target.nspace, myjobid);
-    target.rank = PMIX_RANK_WILDCARD;
-    PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
-    if (PMIX_SUCCESS != PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL)) {
-        PMIx_tool_finalize();
-        /* exit with a non-zero status */
-        exit(1);
     }
 }
 
