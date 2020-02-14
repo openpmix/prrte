@@ -473,15 +473,11 @@ int main(int argc, char *argv[])
 
 static void clean_abort(int fd, short flags, void *arg)
 {
-    pmix_proc_t target;
-    pmix_info_t directive;
-
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
      */
     if (prrte_atomic_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
         if (forcibly_die) {
-            PMIx_tool_finalize();
             /* exit with a non-zero status */
             exit(1);
         }
@@ -489,6 +485,7 @@ static void clean_abort(int fd, short flags, void *arg)
         forcibly_die = true;
         /* reset the event */
         prrte_event_add(&term_handler, NULL);
+        PMIx_tool_finalize();
         return;
     }
 }

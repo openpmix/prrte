@@ -36,9 +36,8 @@
 pmix_status_t prrte_pmix_convert_rc(int rc)
 {
     switch (rc) {
-    case PRRTE_ERR_FAILED_TO_START:
-        return PMIX_ERR_JOB_FAILED_TO_START;
 
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     case PRRTE_ERR_HEARTBEAT_ALERT:
     case PRRTE_ERR_FILE_ALERT:
     case PRRTE_ERR_HEARTBEAT_LOST:
@@ -54,6 +53,7 @@ pmix_status_t prrte_pmix_convert_rc(int rc)
 
     case PRRTE_ERR_JOB_CANCELLED:
         return PMIX_ERR_JOB_CANCELLED;
+#endif
 
     case PRRTE_ERR_DEBUGGER_RELEASE:
         return PMIX_ERR_DEBUGGER_RELEASE;
@@ -131,6 +131,7 @@ pmix_status_t prrte_pmix_convert_rc(int rc)
         return PMIX_ERROR;
     case PRRTE_SUCCESS:
         return PMIX_SUCCESS;
+
     default:
         return PMIX_ERROR;
     }
@@ -321,6 +322,8 @@ int prrte_pmix_convert_pstate(pmix_proc_state_t state)
 pmix_status_t prrte_pmix_convert_job_state_to_error(int state)
 {
     switch(state) {
+
+#if PMIX_NUMERIC_VERSION >= 0x00040000
         case PRRTE_JOB_STATE_ALLOC_FAILED:
             return PMIX_ERR_JOB_ALLOC_FAILED;
 
@@ -339,9 +342,6 @@ pmix_status_t prrte_pmix_convert_job_state_to_error(int state)
         case PRRTE_JOB_STATE_CANNOT_LAUNCH:
             return PMIX_ERR_JOB_CANNOT_LAUNCH;
 
-        case PRRTE_JOB_STATE_TERMINATED:
-            return PMIX_ERR_JOB_TERMINATED;
-
         case PRRTE_JOB_STATE_KILLED_BY_CMD:
             return PMIX_ERR_JOB_CANCELLED;
 
@@ -355,6 +355,10 @@ pmix_status_t prrte_pmix_convert_job_state_to_error(int state)
 
         case PRRTE_JOB_STATE_ABORTED_WO_SYNC:
             return PMIX_ERR_JOB_TERM_WO_SYNC;
+#endif
+
+        case PRRTE_JOB_STATE_TERMINATED:
+            return PMIX_ERR_JOB_TERMINATED;
 
         default:
             return PMIX_ERROR;
