@@ -16,6 +16,8 @@
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,6 +28,7 @@
 #include "prrte_config.h"
 
 #include "src/mca/base/base.h"
+#include "src/mca/base/prrte_mca_base_var.h"
 #include "src/util/output.h"
 #include "constants.h"
 #include "src/util/proc_info.h"
@@ -153,25 +156,25 @@ ras_alps_register(void)
     param_priority = 75;
     (void) prrte_mca_base_component_var_register (&prrte_ras_alps_component.base_version,
                                                   "priority", "Priority of the alps ras component",
-                                                  MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                                  PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                                   PRRTE_INFO_LVL_9,
-                                                  MCA_BASE_VAR_SCOPE_READONLY,
+                                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                                   &param_priority);
 
     ras_alps_read_attempts = 10;
     (void) prrte_mca_base_component_var_register (&prrte_ras_alps_component.base_version,
                                                   "appinfo_read_attempts",
                                                   "Maximum number of attempts to read ALPS "
-                                                  "appinfo file", MCA_BASE_VAR_TYPE_INT,
+                                                  "appinfo file", PRRTE_MCA_BASE_VAR_TYPE_INT,
                                                   NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                                  MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_read_attempts);
+                                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_read_attempts);
 
     ras_alps_apstat_cmd = "apstat";         /* by default apstat is in a user's path on a Cray XE/XC if
                                                alps is the site's job launcher  */
     (void) prrte_mca_base_component_var_register (&prrte_ras_alps_component.base_version,
                                                   "apstat_cmd", "Location of the apstat command",
-                                                  MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_6,
-                                                  MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_apstat_cmd);
+                                                  PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_6,
+                                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_apstat_cmd);
 
     return PRRTE_SUCCESS;
 }
