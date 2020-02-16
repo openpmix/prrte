@@ -21,7 +21,7 @@
 prrte_config_files = @PRRTE_DEFAULT_MCA_PARAM_CONF@
 prrte_file_from_platform = @PRRTE_PARAM_FROM_PLATFORM@
 
-EXTRA_DIST = $(prrte_config_files)
+EXTRA_DIST = $(prrte_config_files) prrte-default-hostfile
 
 # Steal a little trickery from a generated Makefile to only install
 # files if they do not already exist at the target.  Be sure to read
