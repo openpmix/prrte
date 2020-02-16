@@ -27,8 +27,7 @@
 # SLURM or PBS / Torque).
 #
 # If you are primarily interested in running PRRTE on one node, you
-# should *not* simply list "localhost" in here (contrary to prior MPI
-# implementations, such as LAM/MPI).  A localhost-only node list is
+# should *not* simply list "localhost" in here.  A localhost-only node list is
 # created by the RAS component named "localhost" if no other RAS
 # components were able to find any hosts to run on (this behavior can
 # be disabled by excluding the localhost RAS component by specifying
