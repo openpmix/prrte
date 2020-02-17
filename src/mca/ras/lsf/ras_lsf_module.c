@@ -34,6 +34,7 @@
 #include "src/util/net.h"
 #include "src/hwloc/hwloc-internal.h"
 
+#include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prrte_globals.h"

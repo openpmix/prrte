@@ -36,6 +36,7 @@
 #include "src/util/printf.h"
 #include "src/mca/mca.h"
 
+#include "src/mca/base/prrte_mca_base_framework.h"
 #include "src/runtime/prrte_globals.h"
 
 #include "src/mca/rmaps/rmaps.h"
