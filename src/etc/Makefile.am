@@ -57,7 +57,7 @@ install-data-local:
             echo "***   $(DESTDIR)$(sysconfdir)/$$file"; \
             echo "******************************* WARNING ************************************"; \
         else \
-            $(INSTALL_DATA) prrte-default-hostfile $(DESTDIR)$(sysconfdir)/; \
+            $(INSTALL_DATA) $(srcdir)/prrte-default-hostfile $(DESTDIR)$(sysconfdir)/; \
         fi;
 
 
