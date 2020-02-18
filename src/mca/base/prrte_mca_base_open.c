@@ -17,7 +17,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -84,7 +84,12 @@ int prrte_mca_base_open(void)
     /* define the system and user default paths */
 #if PRRTE_WANT_HOME_CONFIG_FILES
     prrte_mca_base_system_default_path = strdup(prrte_install_dirs.prrtelibdir);
-    prrte_asprintf(&prrte_mca_base_user_default_path, "%s"PRRTE_PATH_SEP".prrte"PRRTE_PATH_SEP"components", prrte_home_directory());
+    value = (char*)prrte_home_directory();
+    if (NULL == value) {
+         prrte_output(0, "Error: Unable to get the user home directory\n");
+        return PRRTE_ERROR;
+    }
+    prrte_asprintf(&prrte_mca_base_user_default_path, "%s"PRRTE_PATH_SEP".prrte"PRRTE_PATH_SEP"components", value);
 #else
     prrte_asprintf(&prrte_mca_base_system_default_path, "%s", prrte_install_dirs.prrtelibdir);
 #endif
