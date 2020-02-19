@@ -16,7 +16,7 @@
  *                         reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -178,8 +178,6 @@ enum {
 #include "src/sys/ia32/atomic.h"
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_IA64
 #include "src/sys/ia64/atomic.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_MIPS
-#include "src/sys/mips/atomic.h"
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC32
 #include "src/sys/powerpc/atomic.h"
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC64

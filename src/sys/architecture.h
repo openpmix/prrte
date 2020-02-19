@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2011      Sandia National Laboratories. All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017      Research Organization for Information Science
@@ -39,7 +39,6 @@
 #define PRRTE_SPARC          0060
 #define PRRTE_SPARCV9_32     0061
 #define PRRTE_SPARCV9_64     0062
-#define PRRTE_MIPS           0070
 #define PRRTE_ARM            0100
 #define PRRTE_ARM64          0101
 #define PRRTE_S390           0110
