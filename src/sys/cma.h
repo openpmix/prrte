@@ -4,7 +4,7 @@
  *                         reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  */
 
@@ -65,23 +65,6 @@
 #define __NR_process_vm_readv 270
 #define __NR_process_vm_writev 271
 
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_MIPS
-
-#if _MIPS_SIM == _MIPS_SIM_ABI64
-
-#define __NR_process_vm_readv 5304
-#define __NR_process_vm_writev 5305
-
-#elif _MIPS_SIM == _MIPS_SIM_NABI32
-
-#define __NR_process_vm_readv 6309
-#define __NR_process_vm_writev 6310
-
-#else
-
-#error "Unsupported MIPS architecture for process_vm_readv and process_vm_writev syscalls"
-
-#endif
 
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_S390
 
