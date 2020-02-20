@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -75,8 +75,15 @@ int prrte_plm_base_set_hnp_name(void)
 /*
  * Create a jobid
  */
+static bool reuse = false;
+
 int prrte_plm_base_create_jobid(prrte_job_t *jdata)
 {
+    int16_t i;
+    prrte_jobid_t pjid;
+    prrte_job_t *ptr;
+    bool found;
+
     if (PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_RESTART)) {
         /* this job is being restarted - do not assign it
          * a new jobid
@@ -84,15 +91,32 @@ int prrte_plm_base_create_jobid(prrte_job_t *jdata)
         return PRRTE_SUCCESS;
     }
 
-    if (UINT16_MAX == prrte_plm_globals.next_jobid) {
-        /* if we get here, then no local jobids are available */
-        PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
-        jdata->jobid = PRRTE_JOBID_INVALID;
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+    if (reuse) {
+        /* find the first unused jobid */
+        found = false;
+        for (i=1; i < INT16_MAX; i++) {
+            ptr = NULL;
+            pjid = PRRTE_CONSTRUCT_LOCAL_JOBID(PRRTE_PROC_MY_NAME->jobid, i);
+            prrte_hash_table_get_value_uint32(prrte_job_data, pjid, (void**)&ptr);
+            if (NULL == ptr) {
+                prrte_plm_globals.next_jobid = i;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            /* we have run out of jobids! */
+            prrte_output(0, "Whoa! What are you doing starting that many jobs concurrently? We are out of jobids!");
+            return PRRTE_ERR_OUT_OF_RESOURCE;
+        }
     }
 
     /* take the next jobid */
     jdata->jobid =  PRRTE_CONSTRUCT_LOCAL_JOBID(PRRTE_PROC_MY_NAME->jobid, prrte_plm_globals.next_jobid);
     prrte_plm_globals.next_jobid++;
+    if (INT16_MAX == prrte_plm_globals.next_jobid) {
+        reuse = true;
+    }
+
     return PRRTE_SUCCESS;
 }
