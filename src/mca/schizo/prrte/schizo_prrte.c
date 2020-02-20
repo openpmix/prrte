@@ -372,6 +372,9 @@ static int setup_fork(prrte_job_t *jdata,
     char *param, *p2, *saveptr;
     int i;
 
+    /* flag that we started this job */
+    prrte_setenv("PRRTE_LAUNCHED", "1", true, &app->env);
+
     /* now process any envar attributes - we begin with the job-level
      * ones as the app-specific ones can override them. We have to
      * process them in the order they were given to ensure we wind
