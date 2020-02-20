@@ -29,14 +29,14 @@
    whatever the actual value of the shell variable is. */
 #define EXPAND_STRING(name) EXPAND_STRING2(name, name)
 
-#define EXPAND_STRING2(ompiname, fieldname)                             \
+#define EXPAND_STRING2(prtename, fieldname)                             \
     do {                                                                \
         if (NULL != (start_pos = strstr(retval, "${" #fieldname "}"))) { \
             tmp = retval;                                               \
             *start_pos = '\0';                                          \
             end_pos = start_pos + strlen("${" #fieldname "}");          \
             prrte_asprintf(&retval, "%s%s%s", tmp,                            \
-                     prrte_install_dirs.ompiname + destdir_offset,       \
+                     prrte_install_dirs.prtename + destdir_offset,       \
                      end_pos);                                          \
             free(tmp);                                                  \
             changed = true;                                             \
@@ -45,7 +45,7 @@
             *start_pos = '\0';                                          \
             end_pos = start_pos + strlen("@{" #fieldname "}");          \
             prrte_asprintf(&retval, "%s%s%s", tmp,                            \
-                     prrte_install_dirs.ompiname + destdir_offset,       \
+                     prrte_install_dirs.prtename + destdir_offset,       \
                      end_pos);                                          \
             free(tmp);                                                  \
             changed = true;                                             \
