@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
     int rc, i, j;
     ssize_t param_len;
     prrte_cmd_line_t cmd_line;
-    char *param;
+    char *param, *tpath;
     prrte_job_t *jdata=NULL;
     prrte_app_context_t *app;
     prrte_value_t *pval;
@@ -368,6 +368,32 @@ int main(int argc, char *argv[])
         }
         prrte_set_attribute(&app->attributes, PRRTE_APP_PREFIX_DIR, PRRTE_ATTR_GLOBAL, param, PRRTE_STRING);
         free(param);
+    } else {
+        /* Check if called with fully-qualified path to prte.
+           (Note: Put this second so can override with --prefix (above). */
+        tpath = NULL;
+        if ('/' == argv[0][0] ) {
+            char *tmp_basename = NULL;
+            tpath = prrte_dirname(argv[0]);
+
+            if( NULL != tpath ) {
+                /* Quick sanity check to ensure we got
+                   something/bin/<exec_name> and that the installation
+                   tree is at least more or less what we expect it to
+                   be */
+                tmp_basename = prrte_basename(tpath);
+                if (0 == strcmp("bin", tmp_basename)) {
+                    char* tmp = tpath;
+                    tpath = prrte_dirname(tmp);
+                    free(tmp);
+                } else {
+                    free(tpath);
+                    tpath = NULL;
+                }
+                free(tmp_basename);
+            }
+            prrte_set_attribute(&app->attributes, PRRTE_APP_PREFIX_DIR, PRRTE_ATTR_GLOBAL, tpath, PRRTE_STRING);
+        }
     }
 
     /* Did the user specify a hostfile. Need to check for both
