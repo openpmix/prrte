@@ -17,6 +17,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -496,7 +497,8 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
          * them */
         i = prrte_hash_table_get_first_key_uint32(prrte_job_data, &u32, (void **)&jdata, &nptr);
         while (PRRTE_SUCCESS == i) {
-            if (PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL) &&
+            if (NULL != jdata &&
+                PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL) &&
                 0 < prrte_list_get_size(&jdata->children)) {
                 pmix_info_t info[3];
                 bool flag;

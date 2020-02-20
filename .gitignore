@@ -130,7 +130,7 @@ src/sys/powerpc/atomic-32-64.s
 
 src/mca/base/mca_base_parse_paramfile_lex.c
 
-src/mca/installdirs/config/install_dirs.h
+src/mca/prteinstalldirs/config/install_dirs.h
 
 src/include/prrte_config.h
 src/include/prrte_config.h.in
