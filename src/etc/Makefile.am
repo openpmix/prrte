@@ -75,4 +75,10 @@ uninstall-local:
 	      rm -f "$(DESTDIR)$(sysconfdir)/$$file" ; \
 	    fi ; \
 	  fi ; \
-	done
+	done \
+	if test -f "$(DESTDIR)$(sysconfdir)/prrte-default-hostfile"; then \
+		if diff "$(DESTDIR)$(sysconfdir)/prrte-default-hostfile" "$(srcdir)/prrte-default-hostfile" > /dev/null 2>&1 ; then \
+	      echo "rm -f $(DESTDIR)$(sysconfdir)/prrte-default-hostfile" ; \
+	      rm -f "$(DESTDIR)$(sysconfdir)/prrte-default-hostfile" ; \
+	    fi ; \
+	fi ;
