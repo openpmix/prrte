@@ -52,7 +52,7 @@
 #endif
 
 #include "src/mca/base/base.h"
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"
 #include "src/util/prrte_environ.h"

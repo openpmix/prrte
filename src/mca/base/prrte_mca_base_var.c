@@ -41,7 +41,7 @@
 #include <errno.h>
 
 #include "src/include/prrte_stdint.h"
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/os_path.h"
 #include "src/util/path.h"
 #include "src/util/show_help.h"
@@ -1305,7 +1305,8 @@ static int var_set_from_env (prrte_mca_base_var_t *var, prrte_mca_base_var_t *or
     if (NULL != source_env) {
         if (0 == strncasecmp (source_env, "file:", 5)) {
             original->mbv_source_file = append_filename_to_list(source_env + 5);
-            if (0 == strcmp (var->mbv_source_file, prrte_mca_base_var_override_file)) {
+            if (NULL != prrte_mca_base_var_override_file &&
+                0 == strcmp (var->mbv_source_file, prrte_mca_base_var_override_file)) {
                 original->mbv_source = PRRTE_MCA_BASE_VAR_SOURCE_OVERRIDE;
             } else {
                 original->mbv_source = PRRTE_MCA_BASE_VAR_SOURCE_FILE;

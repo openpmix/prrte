@@ -74,7 +74,7 @@
 #include "src/dss/dss.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/compress/compress.h"
+#include "src/mca/prtecompress/prtecompress.h"
 
 #include "src/util/show_help.h"
 #include "src/util/proc_info.h"

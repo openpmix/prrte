@@ -37,7 +37,7 @@
 #endif
 
 #include "src/runtime/runtime.h"
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
 #include "src/util/proc_info.h"

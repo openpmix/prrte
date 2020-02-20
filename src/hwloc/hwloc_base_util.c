@@ -1447,7 +1447,7 @@ static char *bitmap2rangestr(int bitmap)
     size_t i;
     int range_start, range_end;
     bool first, isset;
-    char tmp[BUFSIZ];
+    char tmp[BUFSIZ-1];
     const int stmp = sizeof(tmp) - 1;
     static char ret[BUFSIZ];
 
@@ -1715,7 +1715,7 @@ static hwloc_obj_type_t first_type_under_a_numa(hwloc_topology_t topo)
 
     p = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PU, 0);
 #if HWLOC_API_VERSION >= 0x20000
-    hwloc_obj_type_t type;
+    hwloc_obj_type_t type = HWLOC_OBJ_MACHINE;
 
     /* climb the ladder */
     while (NULL != p && 0 == p->memory_arity) {

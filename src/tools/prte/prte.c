@@ -58,7 +58,7 @@
 #endif
 
 #include "src/event/event-internal.h"
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/base/base.h"
 
 #include "src/util/argv.h"

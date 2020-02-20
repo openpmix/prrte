@@ -63,7 +63,7 @@
 #endif
 
 #include "src/event/event-internal.h"
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/mca/base/base.h"
 #include "src/util/argv.h"
@@ -1477,8 +1477,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_HDLR_NAME, "JOB_TERMINATION_EVENT", PMIX_STRING);
     /* specify we only want to be notified when our
      * job terminates */
-    (void)strncpy(pname.nspace, nspace, PMIX_MAX_NSLEN);
-    pname.rank = PMIX_RANK_WILDCARD;
+    PMIX_LOAD_PROCID(&pname, nspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
     /* request that they return our lock object */
     PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);

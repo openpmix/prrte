@@ -54,7 +54,7 @@
 #include "src/util/path.h"
 #include "src/dss/dss.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/compress/compress.h"
+#include "src/mca/prtecompress/prtecompress.h"
 #include "src/prted/pmix/pmix_server.h"
 
 #include "src/util/proc_info.h"

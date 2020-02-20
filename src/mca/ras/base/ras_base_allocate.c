@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -35,7 +35,7 @@
 #include "src/util/printf.h"
 #include "src/dss/dss.h"
 #include "src/util/argv.h"
-#include "src/mca/if/if.h"
+#include "src/mca/prteif/prteif.h"
 #include "src/pmix/pmix-internal.h"
 
 #include "src/util/show_help.h"

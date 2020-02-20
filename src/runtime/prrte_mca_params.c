@@ -35,7 +35,7 @@
 #include <stdio.h>
 
 #include "src/mca/base/prrte_mca_base_var.h"
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/output.h"
 #include "src/util/argv.h"
 #include "src/util/printf.h"

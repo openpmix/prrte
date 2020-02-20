@@ -40,7 +40,7 @@
 #include <errno.h>
 #include <signal.h>
 
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/class/prrte_object.h"
 #include "src/class/prrte_pointer_array.h"
 #include "src/util/cmd_line.h"
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
     }
 
     /* initialize install dirs code */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_installdirs_base_framework, 0))) {
+    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_prteinstalldirs_base_framework, 0))) {
         fprintf(stderr, "prrte_installdirs_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRRTE_SUCCESS)\n",
                 __FILE__, __LINE__, ret);
         return ret;

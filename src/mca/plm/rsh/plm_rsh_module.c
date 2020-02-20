@@ -64,7 +64,7 @@
 #include <pwd.h>
 #endif
 
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/output.h"
 #include "src/mca/base/base.h"
 #include "src/event/event-internal.h"

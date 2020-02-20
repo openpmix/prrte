@@ -44,7 +44,7 @@
 #include "src/dss/dss.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/compress/compress.h"
+#include "src/mca/prtecompress/prtecompress.h"
 
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/nidmap.h"
