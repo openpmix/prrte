@@ -756,8 +756,6 @@ int prun(int argc, char *argv[])
                 exit(1);
             }
             tpath = prrte_dirname(param);
-            free(param);
-            param = NULL;
         }
 
         if( NULL != tpath ) {
@@ -831,10 +829,11 @@ int prun(int argc, char *argv[])
             }
             prrte_asprintf(&tpath, "%s/bin/prte", param);
             prrte_argv_append_nosize(&prteargs, tpath);
-            free(param);
             free(tpath);
         }
     }
+
+    /* Keep stashed results of prefix search in 'param' for proxyrun below */
 
     if (!prrte_cmd_line_is_taken(prrte_cmd_line, "terminate")) {
         /* they want to run an application, so let's parse
@@ -854,6 +853,18 @@ int prun(int argc, char *argv[])
 
         if (proxyrun) {
             prrte_schizo.parse_proxy_cli(prrte_cmd_line, &prteargs);
+
+            /* Use stashed 'param' from above searching to allow
+             * passing of the "prefix" info down to prte argv */
+            if (NULL != param) {
+                prrte_asprintf(&tpath, "--prefix %s", param);
+                prrte_argv_append_nosize(&prteargs, tpath);
+                free(param);
+                free(tpath);
+                param = NULL;
+                tpath = NULL;
+            }
+
             prrte_argv_append_nosize(&prteargs, "&");
             prrte_schizo.wrap_args(prteargs);
             param = prrte_argv_join(prteargs, ' ');
@@ -877,6 +888,11 @@ int prun(int argc, char *argv[])
                 }
             }
         }
+    }
+
+    if (NULL != param) {
+        free(param);
+        param = NULL;
     }
 
     /* setup options */
