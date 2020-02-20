@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -56,7 +56,7 @@
 
 #include "prrte_stdint.h"
 #include "types.h"
-#include "src/mca/backtrace/backtrace.h"
+#include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/util/output.h"
 #include "src/util/net.h"
 #include "src/util/error.h"

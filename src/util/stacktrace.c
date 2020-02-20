@@ -13,7 +13,7 @@
  * Copyright (c) 2008-2009 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * $COPYRIGHT$
  *
@@ -46,7 +46,7 @@
 #include <signal.h>
 
 #include "src/util/stacktrace.h"
-#include "src/mca/backtrace/backtrace.h"
+#include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "constants.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"

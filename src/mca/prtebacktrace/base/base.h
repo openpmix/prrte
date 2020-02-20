@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2006 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,7 +25,7 @@
 
 #include "src/mca/base/prrte_mca_base_framework.h"
 
-#include "src/mca/backtrace/backtrace.h"
+#include "src/mca/prtebacktrace/prtebacktrace.h"
 
 /*
  * Global functions for MCA overall backtrace open and close
@@ -33,7 +33,7 @@
 
 BEGIN_C_DECLS
 
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_backtrace_base_framework;
+PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_prtebacktrace_base_framework;
 
 END_C_DECLS
 #endif /* PRRTE_BASE_BACKTRACE_H */

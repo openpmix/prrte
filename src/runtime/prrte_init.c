@@ -53,7 +53,7 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "src/threads/threads.h"
 
-#include "src/mca/backtrace/base/base.h"
+#include "src/mca/prtebacktrace/base/base.h"
 #include "src/mca/prtecompress/base/base.h"
 #include "src/mca/base/base.h"
 #include "src/mca/ess/base/base.h"
@@ -214,7 +214,7 @@ int prrte_init_util(void)
     /* open hwloc */
     prrte_hwloc_base_open();
 
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_backtrace_base_framework, 0))) {
+    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_prtebacktrace_base_framework, 0))) {
         error = "prrte_backtrace_base_open";
         goto error;
     }

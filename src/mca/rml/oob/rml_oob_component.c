@@ -13,7 +13,7 @@
  * Copyright (c) 2007-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -36,7 +36,7 @@
 #include "src/mca/base/base.h"
 #include "src/util/output.h"
 #include "src/util/argv.h"
-#include "src/mca/backtrace/backtrace.h"
+#include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/event/event-internal.h"
 
 #include "src/mca/rml/base/base.h"

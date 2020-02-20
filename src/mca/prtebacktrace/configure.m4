@@ -10,7 +10,7 @@ dnl Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
 dnl                         University of Stuttgart.  All rights reserved.
 dnl Copyright (c) 2004-2006 The Regents of the University of California.
 dnl                         All rights reserved.
-dnl Copyright (c) 2019      Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -19,4 +19,4 @@ dnl $HEADER$
 dnl
 
 dnl we only want one :)
-m4_define(MCA_prrte_backtrace_CONFIGURE_MODE, STOP_AT_FIRST)
+m4_define(MCA_prrte_prtebacktrace_CONFIGURE_MODE, STOP_AT_FIRST)

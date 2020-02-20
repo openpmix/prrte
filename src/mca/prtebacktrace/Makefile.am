@@ -9,7 +9,8 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2010 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -17,8 +18,21 @@
 # $HEADER$
 #
 
-noinst_LTLIBRARIES = libmca_backtrace_printstack.la
+# main library setup
+noinst_LTLIBRARIES = libmca_prtebacktrace.la
+libmca_prtebacktrace_la_SOURCES =
 
-libmca_backtrace_printstack_la_SOURCES = \
-    backtrace_printstack.c \
-    backtrace_printstack_component.c
+# local files
+headers = prtebacktrace.h
+libmca_prtebacktrace_la_SOURCES += $(headers)
+
+# Conditionally install the header files
+if WANT_INSTALL_HEADERS
+prrtedir = $(prrteincludedir)/$(subdir)
+nobase_prrte_HEADERS = $(headers)
+endif
+
+include base/Makefile.am
+
+distclean-local:
+	rm -f base/static-components.h
