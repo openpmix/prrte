@@ -43,7 +43,7 @@
 #endif  /* HAVE_SYS_WAIT_H */
 #include <string.h>
 
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/include/constants.h"
 #include "src/runtime/runtime.h"
 #include "src/util/argv.h"

@@ -39,7 +39,7 @@
 #include "src/mca/base/base.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
 #include "src/util/show_help.h"
 #include "src/util/proc_info.h"

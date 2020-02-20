@@ -5,7 +5,7 @@
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC. All
  *                         rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -24,7 +24,7 @@
 #include "src/dss/dss.h"
 #include "src/class/prrte_list.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/compress/compress.h"
+#include "src/mca/prtecompress/prtecompress.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rml/base/base.h"

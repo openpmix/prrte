@@ -203,7 +203,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     int32_t sz=0;
     pmix_data_buffer_t pbuf;
     pmix_proc_t myproc;
-    pmix_status_t prc;
+    pmix_status_t prc = PMIX_ERROR;
     bool refresh_cache = false;
     pmix_value_t *pval;
 
@@ -280,6 +280,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
                 prrte_show_help("help-orted.txt", "noroom", true, req->operation, prrte_pmix_server_globals.num_rooms);
                 /* can't just return as that would cause the requestor
                  * to hang, so instead execute the callback */
+                prc = prrte_pmix_convert_rc(rc);
                 goto callback;
             }
             return;
@@ -400,6 +401,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
         PRRTE_ERROR_LOG(rc);
         prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, req->room_num);
         PRRTE_RELEASE(buf);
+        prc = prrte_pmix_convert_rc(rc);
         goto callback;
     }
     return;

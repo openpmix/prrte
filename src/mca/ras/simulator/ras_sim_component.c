@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -26,7 +26,7 @@
 #include "constants.h"
 
 #include "src/mca/base/base.h"
-#include "src/mca/if/if.h"
+#include "src/mca/prteif/prteif.h"
 
 #include "src/util/name_fns.h"
 #include "src/runtime/prrte_globals.h"

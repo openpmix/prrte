@@ -16,7 +16,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +46,7 @@
 #include <netdb.h>
 #endif
 
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/prrte_environ.h"
 #include "src/util/proc_info.h"
 #include "src/util/output.h"
@@ -57,7 +57,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/base/prrte_mca_base_component_repository.h"
 #include "constants.h"
-#include "src/mca/dl/base/base.h"
+#include "src/mca/prtedl/base/base.h"
 
 #if PRRTE_HAVE_DL_SUPPORT
 /*

@@ -40,7 +40,7 @@
 #endif
 
 #include "src/include/version.h"
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/class/prrte_value_array.h"
 #include "src/class/prrte_pointer_array.h"
 #include "src/util/printf.h"

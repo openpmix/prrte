@@ -20,7 +20,7 @@
 #include <ctype.h>
 
 #include "src/dss/dss.h"
-#include "src/mca/compress/compress.h"
+#include "src/mca/prtecompress/prtecompress.h"
 #include "src/util/argv.h"
 
 #include "src/mca/errmgr/errmgr.h"

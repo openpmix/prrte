@@ -56,7 +56,7 @@
 #include <errno.h>
 #include <tm.h>
 
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/event/event-internal.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"

@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2016 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -33,7 +33,7 @@
 
 #include "src/dss/dss.h"
 
-#include "src/mca/compress/compress.h"
+#include "src/mca/prtecompress/prtecompress.h"
 #include "src/util/proc_info.h"
 #include "src/util/error_strings.h"
 #include "src/mca/errmgr/errmgr.h"

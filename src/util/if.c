@@ -72,7 +72,7 @@
 #include "src/util/string_copy.h"
 #include "constants.h"
 
-#include "src/mca/if/base/base.h"
+#include "src/mca/prteif/base/base.h"
 
 #ifdef HAVE_STRUCT_SOCKADDR_IN
 

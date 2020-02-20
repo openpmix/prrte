@@ -33,7 +33,7 @@
 #include <errno.h>
 
 #include "src/runtime/prrte_globals.h"
-#include "src/mca/installdirs/installdirs.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/iof/iof.h"
 #include "src/mca/rml/rml.h"
 #include "src/util/show_help.h"

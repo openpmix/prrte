@@ -498,7 +498,7 @@ char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
     size_t i, len;
     size_t j;
     char **argv;
-    char *ret, temp[MAX_WIDTH * 2], line[MAX_WIDTH * 2];
+    char *ret, temp[MAX_WIDTH * 2 - 1], line[MAX_WIDTH * 2];
     char *start, *desc, *ptr;
     prrte_list_item_t *item;
     prrte_cmd_line_option_t *option, **sorted;

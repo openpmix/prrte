@@ -54,15 +54,15 @@
 #include "src/threads/threads.h"
 
 #include "src/mca/backtrace/base/base.h"
-#include "src/mca/compress/base/base.h"
+#include "src/mca/prtecompress/base/base.h"
 #include "src/mca/base/base.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/filem/base/base.h"
 #include "src/mca/grpcomm/base/base.h"
-#include "src/mca/if/base/base.h"
-#include "src/mca/installdirs/base/base.h"
+#include "src/mca/prteif/base/base.h"
+#include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/oob/base/base.h"
@@ -130,8 +130,8 @@ int prrte_init_util(void)
     prrte_output_init();
 
     /* initialize install dirs code */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_installdirs_base_framework, 0))) {
-        fprintf(stderr, "prrte_installdirs_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRRTE_SUCCESS)\n",
+    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_prteinstalldirs_base_framework, 0))) {
+        fprintf(stderr, "prrte_prteinstalldirs_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRRTE_SUCCESS)\n",
                 __FILE__, __LINE__, ret);
         return ret;
     }
@@ -203,8 +203,8 @@ int prrte_init_util(void)
     }
 
     /* initialize if framework */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_if_base_framework, 0))) {
-        fprintf(stderr, "prrte_if_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRRTE_SUCCESS)\n",
+    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_prteif_base_framework, 0))) {
+        fprintf(stderr, "prrte_prteif_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRRTE_SUCCESS)\n",
                 __FILE__, __LINE__, ret);
         return ret;
     }
