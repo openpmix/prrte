@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,7 +24,7 @@
 #include <ucontext.h>
 
 #include "constants.h"
-#include "src/mca/backtrace/backtrace.h"
+#include "src/mca/prtebacktrace/prtebacktrace.h"
 
 int
 prrte_backtrace_print(FILE *file, char *prefix, int strip)

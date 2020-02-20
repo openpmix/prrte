@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2013      Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -24,14 +24,14 @@
 
 #include "prrte_config.h"
 
-#include "src/mca/backtrace/base/base.h"
+#include "src/mca/prtebacktrace/base/base.h"
 
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
  * component's public prrte_mca_base_component_t struct.
  */
-#include "src/mca/backtrace/base/static-components.h"
+#include "src/mca/prtebacktrace/base/static-components.h"
 
 
 /*
@@ -39,5 +39,5 @@
  */
 
 /* Uses default register/open/close functions */
-PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, backtrace, NULL, NULL, NULL, NULL,
-			   					 prrte_backtrace_base_static_components, 0);
+PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, prtebacktrace, NULL, NULL, NULL, NULL,
+			   					 prrte_prtebacktrace_base_static_components, 0);

@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -17,8 +17,8 @@
 # $HEADER$
 #
 
-noinst_LTLIBRARIES = libmca_backtrace_none.la
+noinst_LTLIBRARIES = libmca_prtebacktrace_none.la
 
-libmca_backtrace_none_la_SOURCES = \
+libmca_prtebacktrace_none_la_SOURCES = \
     backtrace_none.c \
     backtrace_none_component.c
