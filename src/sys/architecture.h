@@ -41,8 +41,6 @@
 #define PRRTE_SPARCV9_64     0062
 #define PRRTE_ARM            0100
 #define PRRTE_ARM64          0101
-#define PRRTE_S390           0110
-#define PRRTE_S390X          0111
 #define PRRTE_BUILTIN_SYNC   0200
 #define PRRTE_BUILTIN_GCC    0202
 #define PRRTE_BUILTIN_NO     0203

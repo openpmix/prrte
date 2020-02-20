@@ -66,16 +66,6 @@
 #define __NR_process_vm_writev 271
 
 
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_S390
-
-#define __NR_process_vm_readv	340
-#define __NR_process_vm_writev	341
-
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_S390X
-
-#define __NR_process_vm_readv	340
-#define __NR_process_vm_writev	341
-
 #else
 #error "Unsupported architecture for process_vm_readv and process_vm_writev syscalls"
 #endif
