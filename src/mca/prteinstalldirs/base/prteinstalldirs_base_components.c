@@ -120,23 +120,23 @@ prrte_prteinstalldirs_base_open(prrte_mca_base_open_flag_t flags)
         prrte_install_dirs_expand_setup(prrte_install_dirs.prrteincludedir);
 
 #if 0
-    fprintf(stderr, "prefix:         %s\n", prrte_install_dirs.prefix);
-    fprintf(stderr, "exec_prefix:    %s\n", prrte_install_dirs.exec_prefix);
-    fprintf(stderr, "bindir:         %s\n", prrte_install_dirs.bindir);
-    fprintf(stderr, "sbindir:        %s\n", prrte_install_dirs.sbindir);
-    fprintf(stderr, "libexecdir:     %s\n", prrte_install_dirs.libexecdir);
-    fprintf(stderr, "datarootdir:    %s\n", prrte_install_dirs.datarootdir);
-    fprintf(stderr, "datadir:        %s\n", prrte_install_dirs.datadir);
-    fprintf(stderr, "sysconfdir:     %s\n", prrte_install_dirs.sysconfdir);
-    fprintf(stderr, "sharedstatedir: %s\n", prrte_install_dirs.sharedstatedir);
-    fprintf(stderr, "localstatedir:  %s\n", prrte_install_dirs.localstatedir);
-    fprintf(stderr, "libdir:         %s\n", prrte_install_dirs.libdir);
-    fprintf(stderr, "includedir:     %s\n", prrte_install_dirs.includedir);
-    fprintf(stderr, "infodir:        %s\n", prrte_install_dirs.infodir);
-    fprintf(stderr, "mandir:         %s\n", prrte_install_dirs.mandir);
-    fprintf(stderr, "pkgdatadir:     %s\n", prrte_install_dirs.pkgdatadir);
-    fprintf(stderr, "pkglibdir:      %s\n", prrte_install_dirs.pkglibdir);
-    fprintf(stderr, "pkgincludedir:  %s\n", prrte_install_dirs.pkgincludedir);
+    fprintf(stderr, "prefix:           %s\n", prrte_install_dirs.prefix);
+    fprintf(stderr, "exec_prefix:      %s\n", prrte_install_dirs.exec_prefix);
+    fprintf(stderr, "bindir:           %s\n", prrte_install_dirs.bindir);
+    fprintf(stderr, "sbindir:          %s\n", prrte_install_dirs.sbindir);
+    fprintf(stderr, "libexecdir:       %s\n", prrte_install_dirs.libexecdir);
+    fprintf(stderr, "datarootdir:      %s\n", prrte_install_dirs.datarootdir);
+    fprintf(stderr, "datadir:          %s\n", prrte_install_dirs.datadir);
+    fprintf(stderr, "sysconfdir:       %s\n", prrte_install_dirs.sysconfdir);
+    fprintf(stderr, "sharedstatedir:   %s\n", prrte_install_dirs.sharedstatedir);
+    fprintf(stderr, "localstatedir:    %s\n", prrte_install_dirs.localstatedir);
+    fprintf(stderr, "libdir:           %s\n", prrte_install_dirs.libdir);
+    fprintf(stderr, "includedir:       %s\n", prrte_install_dirs.includedir);
+    fprintf(stderr, "infodir:          %s\n", prrte_install_dirs.infodir);
+    fprintf(stderr, "mandir:           %s\n", prrte_install_dirs.mandir);
+    fprintf(stderr, "prrtedatadir:     %s\n", prrte_install_dirs.prrtedatadir);
+    fprintf(stderr, "prrtelibdir:      %s\n", prrte_install_dirs.prrtelibdir);
+    fprintf(stderr, "prrteincludedir:  %s\n", prrte_install_dirs.prrteincludedir);
 #endif
 
     /* NTH: Is it ok not to close the components? If not we can add a flag
