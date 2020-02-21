@@ -2,6 +2,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -626,8 +627,10 @@ static void cleanup_job(int sd, short args, void *cbdata)
     PRRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
 
-    /* remove this object from the job array */
-    prrte_hash_table_set_value_uint32(prrte_job_data, jdata->jobid, NULL);
+    /* decrement reference for job object
+     * This will remove this object from the job array on eventual destruction
+     */
+    PRRTE_RELEASE(jdata);
 
     PRRTE_RELEASE(caddy);
 }
@@ -814,4 +817,9 @@ static void dvm_notify(int sd, short args, void *cbdata)
     PRRTE_RELEASE(reply);
     PRRTE_RELEASE(sig);
     PRRTE_RELEASE(caddy);
+
+    // We are done with our use of job data and have notified the other daemons
+    if (notify) {
+        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_NOTIFIED);
+    }
 }

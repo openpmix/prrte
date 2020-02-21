@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -96,12 +97,17 @@ int prrte_plm_base_create_jobid(prrte_job_t *jdata)
         found = false;
         for (i=1; i < INT16_MAX; i++) {
             ptr = NULL;
-            pjid = PRRTE_CONSTRUCT_LOCAL_JOBID(PRRTE_PROC_MY_NAME->jobid, i);
+            pjid = PRRTE_CONSTRUCT_LOCAL_JOBID(PRRTE_PROC_MY_NAME->jobid, prrte_plm_globals.next_jobid);
             prrte_hash_table_get_value_uint32(prrte_job_data, pjid, (void**)&ptr);
             if (NULL == ptr) {
-                prrte_plm_globals.next_jobid = i;
                 found = true;
                 break;
+            }
+
+            if (INT16_MAX == prrte_plm_globals.next_jobid) {
+                prrte_plm_globals.next_jobid = 1;
+            } else {
+                prrte_plm_globals.next_jobid++;
             }
         }
         if (!found) {
@@ -116,6 +122,7 @@ int prrte_plm_base_create_jobid(prrte_job_t *jdata)
     prrte_plm_globals.next_jobid++;
     if (INT16_MAX == prrte_plm_globals.next_jobid) {
         reuse = true;
+        prrte_plm_globals.next_jobid = 1;
     }
 
     return PRRTE_SUCCESS;
