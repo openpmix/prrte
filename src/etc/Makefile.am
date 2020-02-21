@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2008      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -75,8 +75,8 @@ uninstall-local:
 	      rm -f "$(DESTDIR)$(sysconfdir)/$$file" ; \
 	    fi ; \
 	  fi ; \
-	done \
-	if test -f "$(DESTDIR)$(sysconfdir)/prrte-default-hostfile"; then \
+	done
+	@ if test -f "$(DESTDIR)$(sysconfdir)/prrte-default-hostfile"; then \
 		if diff "$(DESTDIR)$(sysconfdir)/prrte-default-hostfile" "$(srcdir)/prrte-default-hostfile" > /dev/null 2>&1 ; then \
 	      echo "rm -f $(DESTDIR)$(sysconfdir)/prrte-default-hostfile" ; \
 	      rm -f "$(DESTDIR)$(sysconfdir)/prrte-default-hostfile" ; \
