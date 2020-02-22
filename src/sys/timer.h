@@ -13,7 +13,7 @@
  * Copyright (c) 2016      Broadcom Limited. All rights reserved.
  * Copyright (c) 2016-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -79,18 +79,10 @@ BEGIN_C_DECLS
 #include "src/sys/arm64/timer.h"
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_IA32
 #include "src/sys/ia32/timer.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_IA64
-#include "src/sys/ia64/timer.h"
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC32
 #include "src/sys/powerpc/timer.h"
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC64
 #include "src/sys/powerpc/timer.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_SPARCV9_32
-#include "src/sys/sparcv9/timer.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_SPARCV9_64
-#include "src/sys/sparcv9/timer.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_MIPS
-#include "src/sys/mips/timer.h"
 #endif
 
 #ifndef DOXYGEN

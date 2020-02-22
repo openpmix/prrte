@@ -44,9 +44,6 @@
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_IA32
 #define __NR_process_vm_readv 347
 #define __NR_process_vm_writev 348
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_IA64
-#define __NR_process_vm_readv 1332
-#define __NR_process_vm_writev 1333
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC32
 #define __NR_process_vm_readv 351
 #define __NR_process_vm_writev 352

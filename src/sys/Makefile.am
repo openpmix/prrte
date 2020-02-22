@@ -15,7 +15,7 @@
 #                         reserved.
 # Copyright (c) 2017      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -38,6 +38,4 @@ include sys/arm/Makefile.am
 include sys/arm64/Makefile.am
 include sys/ia32/Makefile.am
 include sys/powerpc/Makefile.am
-include sys/sparcv9/Makefile.am
-include sys/sync_builtin/Makefile.am
 include sys/gcc_builtin/Makefile.am
