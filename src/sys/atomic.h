@@ -176,18 +176,10 @@ enum {
 #include "src/sys/arm64/atomic.h"
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_IA32
 #include "src/sys/ia32/atomic.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_IA64
-#include "src/sys/ia64/atomic.h"
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC32
 #include "src/sys/powerpc/atomic.h"
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC64
 #include "src/sys/powerpc/atomic.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_SPARC
-#include "src/sys/sparc/atomic.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_SPARCV9_32
-#include "src/sys/sparcv9/atomic.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_SPARCV9_64
-#include "src/sys/sparcv9/atomic.h"
 #endif
 
 #ifndef DOXYGEN
