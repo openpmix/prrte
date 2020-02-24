@@ -41,6 +41,7 @@ prrte_schizo_base_module_t prrte_schizo = {
     .parse_cli = prrte_schizo_base_parse_cli,
     .parse_proxy_cli = prrte_schizo_base_parse_proxy_cli,
     .parse_env = prrte_schizo_base_parse_env,
+    .detect_proxy = prrte_schizo_base_detect_proxy,
     .allow_run_as_root = prrte_schizo_base_allow_run_as_root,
     .wrap_args = prrte_schizo_base_wrap_args,
     .setup_app = prrte_schizo_base_setup_app,

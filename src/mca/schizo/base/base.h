@@ -73,6 +73,7 @@ PRRTE_EXPORT int prrte_schizo_base_parse_env(prrte_cmd_line_t *cmd_line,
                                              char **srcenv,
                                              char ***dstenv,
                                              bool cmdline);
+PRRTE_EXPORT int prrte_schizo_base_detect_proxy(char **argv, char **rfile);
 PRRTE_EXPORT int prrte_schizo_base_allow_run_as_root(prrte_cmd_line_t *cmd_line);
 PRRTE_EXPORT void prrte_schizo_base_wrap_args(char **args);
 PRRTE_EXPORT int prrte_schizo_base_setup_app(prrte_app_context_t *app);

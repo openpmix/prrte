@@ -58,12 +58,14 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      char **srcenv,
                      char ***dstenv,
                      bool cmdline);
+static int detect_proxy(char **argv, char **rfile);
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 
 prrte_schizo_base_module_t prrte_schizo_ompi_module = {
     .define_cli = define_cli,
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
+    .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root
 };
 
@@ -622,6 +624,32 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
 
     prrte_mutex_unlock(&cmd_line->lcl_mutex);
     return PRRTE_SUCCESS;
+}
+
+static int detect_proxy(char **argv, char **rfile)
+{
+    int i;
+    pid_t mypid;
+
+    mypid = getpid();
+    /* if they set a personality of "ompi", then they meant us */
+    for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
+        if (NULL != strcasestr(prrte_schizo_base.personalities[i], "ompi")) {
+            /* create a rendezvous file */
+            prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
+            return PRRTE_SUCCESS;
+        }
+    }
+    /* otherwise, if the basename of the cmd was "mpirun" or "mpiexec",
+     * we default to us */
+    if (0 == strcasecmp(prrte_tool_basename, "mpirun") ||
+        0 == strcasecmp(prrte_tool_basename, "mpiexec")) {
+        /* create a rendezvous file */
+        prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
+        return PRRTE_SUCCESS;
+    }
+
+    return PRRTE_ERR_TAKE_NEXT_OPTION;
 }
 
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line)

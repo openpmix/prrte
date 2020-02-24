@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies Ltd.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -27,11 +27,25 @@
 
 #include "schizo_slurm.h"
 
+static int detect_proxy(char **argv, char **rfile);
 static int get_remaining_time(uint32_t *timeleft);
 
 prrte_schizo_base_module_t prrte_schizo_slurm_module = {
+    .detect_proxy = detect_proxy,
     .get_remaining_time = get_remaining_time
 };
+
+static int detect_proxy(char **argv, char **rfile)
+{
+    char *jid;
+
+    /* if we are active, then we must be inside a Slurm
+     * allocation - set the rendezvous file accordingly */
+    jid = getenv("SLURM_JOBID");
+    prrte_asprintf(rfile, "%s.rndz.%s", prrte_tool_basename, jid);
+
+    return PRRTE_SUCCESS;
+}
 
 static int get_remaining_time(uint32_t *timeleft)
 {

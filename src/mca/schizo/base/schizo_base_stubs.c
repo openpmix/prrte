@@ -86,6 +86,26 @@ int prrte_schizo_base_parse_env(prrte_cmd_line_t *cmd_line,
     return PRRTE_SUCCESS;
 }
 
+int prrte_schizo_base_detect_proxy(char **argv, char **rfile)
+{
+    int rc;
+    prrte_schizo_base_active_module_t *mod;
+
+    PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
+        if (NULL != mod->module->detect_proxy) {
+            rc = mod->module->detect_proxy(argv, rfile);
+            if (PRRTE_SUCCESS == rc) {
+                return rc;
+            }
+            if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                PRRTE_ERROR_LOG(rc);
+                return rc;
+            }
+        }
+    }
+    return PRRTE_ERR_TAKE_NEXT_OPTION;
+}
+
 int prrte_schizo_base_allow_run_as_root(prrte_cmd_line_t *cmd_line)
 {
     int rc;
