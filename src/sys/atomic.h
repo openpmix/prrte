@@ -164,8 +164,6 @@ enum {
  *********************************************************************/
 #if defined(DOXYGEN)
 /* don't include system-level gorp when generating doxygen files */
-#elif PRRTE_ASSEMBLY_BUILTIN == PRRTE_BUILTIN_SYNC
-#include "src/sys/sync_builtin/atomic.h"
 #elif PRRTE_ASSEMBLY_BUILTIN == PRRTE_BUILTIN_GCC
 #include "src/sys/gcc_builtin/atomic.h"
 #elif PRRTE_ASSEMBLY_ARCH == PRRTE_X86_64

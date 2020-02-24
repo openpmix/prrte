@@ -628,10 +628,10 @@ int prun(int argc, char *argv[])
 #endif
     char **prteargs = NULL;
     FILE *fp;
-    char buf[2048];
     prrte_value_t *pval;
     uint32_t ui32;
     pid_t pid;
+    char *rfile = NULL;
 
     /* init the globals */
     PRRTE_CONSTRUCT(&job_info, prrte_list_t);
@@ -663,16 +663,41 @@ int prun(int argc, char *argv[])
         PRRTE_ERROR_LOG(rc);
         return rc;
     }
-    /* scan for personalities */
+    /* setup our common personalities */
     prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "prrte", false);
     prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "pmix", false);
+    /* add anything they specified */
     for (i=0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
-            prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, argv[i+1], false);
+            char **tmp;
+            tmp = prrte_argv_split(argv[i+1], ',');
+            for (m=0; NULL != tmp[m]; m++) {
+                prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, tmp[m], false);
+            }
+            prrte_argv_free(tmp);
         }
     }
-    if (proxyrun) {
-        prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi", false);
+
+    /* detect if we are running as a proxy and setup the rendezvous file */
+    if (PRRTE_SUCCESS != (rc = prrte_schizo.detect_proxy(argv, &rfile))) {
+        if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
+            PRRTE_ERROR_LOG(rc);
+            return rc;
+        }
+    }
+    if (PRRTE_SUCCESS == rc) {
+        proxyrun = true;
+    }
+    /* if they gave us a proxy file, override anything we created */
+    if (NULL != (param = getenv("PMIX_LAUNCHER_RENDEZVOUS_FILE"))) {
+        if (NULL != rfile) {
+            free(rfile);
+        }
+        rfile = strdup(param);
+    }
+    if (NULL != rfile) {
+        /* set the file in our environment so our PMIx connection will use it */
+        prrte_setenv("PMIX_LAUNCHER_RENDEZVOUS_FILE", rfile, true, &environ);
     }
 
     /* setup the rest of the cmd line only once */
@@ -742,100 +767,6 @@ int prun(int argc, char *argv[])
         prrte_schizo.allow_run_as_root(prrte_cmd_line);  // will exit us if not allowed
     }
 
-    if (proxyrun) {
-        tpath = NULL;
-        char *tmp_basename;
-        if ('/' == argv[0][0] ) {
-            tpath = prrte_dirname(argv[0]);
-        }
-        else if( !prrte_cmd_line_is_taken(prrte_cmd_line, "prefix") ) {
-            /* get the absolute path of our command for relative paths */
-            param = prrte_find_absolute_path(argv[0]);
-            if (NULL == param) {
-                fprintf(stderr, "%s was unable to determine the absolute path for its command\n", prrte_tool_basename);
-                exit(1);
-            }
-            tpath = prrte_dirname(param);
-            free(param);
-            param = NULL;
-        }
-
-        if( NULL != tpath ) {
-            /* Quick sanity check to ensure we got
-               something/bin/<exec_name> and that the installation
-               tree is at least more or less what we expect it to
-               be */
-            tmp_basename = prrte_basename(tpath);
-            if (0 == strcmp("bin", tmp_basename)) {
-                char* tmp = tpath;
-                tpath = prrte_dirname(tmp);
-                free(tmp);
-            } else {
-                free(tpath);
-                tpath = NULL;
-            }
-            free(tmp_basename);
-        }
-
-        /* see if they told us a prefix to use */
-        if (prrte_cmd_line_is_taken(prrte_cmd_line, "prefix") &&
-            NULL != tpath) {
-            /* if they don't match, then that merits a warning */
-            pval = prrte_cmd_line_get_param(prrte_cmd_line, "prefix", 0, 0);
-            param = strdup(pval->data.string);
-            /* ensure we strip any trailing '/' */
-            if (0 == strcmp(PRRTE_PATH_SEP, &(param[strlen(param)-1]))) {
-                param[strlen(param)-1] = '\0';
-            }
-            tmp_basename = strdup(tpath);
-            if (0 == strcmp(PRRTE_PATH_SEP, &(tmp_basename[strlen(tmp_basename)-1]))) {
-                tmp_basename[strlen(tmp_basename)-1] = '\0';
-            }
-            if (0 != strcmp(param, tmp_basename)) {
-                prrte_show_help("help-prun.txt", "prun:double-prefix",
-                                true, prrte_tool_basename, prrte_tool_basename,
-                                param, tmp_basename, prrte_tool_basename);
-            }
-            /* use the prefix over the path-to-argv[0] so that
-             * people can specify the backend prefix as different
-             * from the local one
-             */
-            free(tpath);
-            tpath = NULL;
-            free(tmp_basename);
-        } else if (NULL != tpath) {
-            param = strdup(tpath);
-            free(tpath);
-        } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "prefix")){
-            /* must be --prefix alone */
-            pval = prrte_cmd_line_get_param(prrte_cmd_line, "prefix", 0, 0);
-            param = strdup(pval->data.string);
-        } else if (want_prefix_by_default) {
-            /* --enable-prrte-prefix-default was given to prun */
-            param = strdup(prrte_install_dirs.prefix);
-        }
-
-        if (NULL != param) {
-            size_t param_len;
-            /* "Parse" the param, aka remove superfluous path_sep. */
-            param_len = strlen(param);
-            while (0 == strcmp (PRRTE_PATH_SEP, &(param[param_len-1]))) {
-                param[param_len-1] = '\0';
-                param_len--;
-                if (0 == param_len) {
-                    prrte_show_help("help-prun.txt", "prun:empty-prefix",
-                                    true, prrte_tool_basename, prrte_tool_basename);
-                    free(param);
-                    return PRRTE_ERR_FATAL;
-                }
-            }
-            prrte_asprintf(&tpath, "%s/bin/prte", param);
-            prrte_argv_append_nosize(&prteargs, tpath);
-            free(param);
-            free(tpath);
-        }
-    }
-
     if (!prrte_cmd_line_is_taken(prrte_cmd_line, "terminate")) {
         /* they want to run an application, so let's parse
          * the cmd line to get it */
@@ -853,8 +784,100 @@ int prun(int argc, char *argv[])
         }
 
         if (proxyrun) {
+            tpath = NULL;
+            char *tmp_basename;
+            if ('/' == argv[0][0] ) {
+                tpath = prrte_dirname(argv[0]);
+            }
+            else if( !prrte_cmd_line_is_taken(prrte_cmd_line, "prefix") ) {
+                /* get the absolute path of our command for relative paths */
+                param = prrte_find_absolute_path(argv[0]);
+                if (NULL == param) {
+                    fprintf(stderr, "%s was unable to determine the absolute path for its command\n", prrte_tool_basename);
+                    exit(1);
+                }
+                tpath = prrte_dirname(param);
+                free(param);
+                param = NULL;
+            }
+
+            if( NULL != tpath ) {
+                /* Quick sanity check to ensure we got
+                   something/bin/<exec_name> and that the installation
+                   tree is at least more or less what we expect it to
+                   be */
+                tmp_basename = prrte_basename(tpath);
+                if (0 == strcmp("bin", tmp_basename)) {
+                    char* tmp = tpath;
+                    tpath = prrte_dirname(tmp);
+                    free(tmp);
+                } else {
+                    free(tpath);
+                    tpath = NULL;
+                }
+                free(tmp_basename);
+            }
+
+            /* see if they told us a prefix to use */
+            if (prrte_cmd_line_is_taken(prrte_cmd_line, "prefix") &&
+                NULL != tpath) {
+                /* if they don't match, then that merits a warning */
+                pval = prrte_cmd_line_get_param(prrte_cmd_line, "prefix", 0, 0);
+                param = strdup(pval->data.string);
+                /* ensure we strip any trailing '/' */
+                if (0 == strcmp(PRRTE_PATH_SEP, &(param[strlen(param)-1]))) {
+                    param[strlen(param)-1] = '\0';
+                }
+                tmp_basename = strdup(tpath);
+                if (0 == strcmp(PRRTE_PATH_SEP, &(tmp_basename[strlen(tmp_basename)-1]))) {
+                    tmp_basename[strlen(tmp_basename)-1] = '\0';
+                }
+                if (0 != strcmp(param, tmp_basename)) {
+                    prrte_show_help("help-prun.txt", "prun:double-prefix",
+                                    true, prrte_tool_basename, prrte_tool_basename,
+                                    param, tmp_basename, prrte_tool_basename);
+                }
+                /* use the prefix over the path-to-argv[0] so that
+                 * people can specify the backend prefix as different
+                 * from the local one
+                 */
+                free(tpath);
+                tpath = NULL;
+                free(tmp_basename);
+            } else if (NULL != tpath) {
+                param = strdup(tpath);
+                free(tpath);
+            } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "prefix")){
+                /* must be --prefix alone */
+                pval = prrte_cmd_line_get_param(prrte_cmd_line, "prefix", 0, 0);
+                param = strdup(pval->data.string);
+            } else if (want_prefix_by_default) {
+                /* --enable-prrte-prefix-default was given to prun */
+                param = strdup(prrte_install_dirs.prefix);
+            }
+
+            if (NULL != param) {
+                size_t param_len;
+                /* "Parse" the param, aka remove superfluous path_sep. */
+                param_len = strlen(param);
+                while (0 == strcmp (PRRTE_PATH_SEP, &(param[param_len-1]))) {
+                    param[param_len-1] = '\0';
+                    param_len--;
+                    if (0 == param_len) {
+                        prrte_show_help("help-prun.txt", "prun:empty-prefix",
+                                        true, prrte_tool_basename, prrte_tool_basename);
+                        free(param);
+                        return PRRTE_ERR_FATAL;
+                    }
+                }
+                prrte_asprintf(&tpath, "%s/bin/prte", param);
+                prrte_argv_append_nosize(&prteargs, tpath);
+                free(param);
+                free(tpath);
+            }
+
             prrte_schizo.parse_proxy_cli(prrte_cmd_line, &prteargs);
-            prrte_argv_append_nosize(&prteargs, "&");
+            prrte_argv_append_unique_nosize(&prteargs, "--daemonize", true);
             prrte_schizo.wrap_args(prteargs);
             param = prrte_argv_join(prteargs, ' ');
             if (verbose) {
@@ -865,16 +888,10 @@ int prun(int argc, char *argv[])
                 fprintf(stderr, "Error executing prte\n");
                 exit(1);
             }
-            i = 0;
-            while (fgets(buf, 2048, fp) != NULL) {
-                if (NULL != strstr(buf, "ready")) {
-                    break;
-                }
-                ++i;
-                if (i > 6500000) {
-                    fprintf(stderr, "prte failed to start\n");
-                    exit(1);
-                }
+            rc = pclose(fp);  // returns when prte daemonizes
+            if (0 != rc) {
+                fprintf(stderr, "Error on prte startup: %d\n", rc);
+                exit(1);
             }
         }
     }
@@ -981,16 +998,6 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LOAD(ds->info, PMIX_EVENT_SILENT_TERMINATION, &flag, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
     }
-
-#ifdef PMIX_LAUNCHER_RENDEZVOUS_FILE
-    /* check for request to drop a rendezvous file */
-    if (NULL != (param = getenv("PMIX_LAUNCHER_RENDEZVOUS_FILE"))) {
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_LAUNCHER_RENDEZVOUS_FILE, param, PMIX_STRING);
-        prrte_list_append(&tinfo, &ds->super);
-    }
-#endif
 
     /* convert to array of info */
     ninfo = prrte_list_get_size(&tinfo);

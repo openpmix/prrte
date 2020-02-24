@@ -12,7 +12,7 @@
  * Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -173,42 +173,17 @@ static int _setup_jobfam_session_dir(prrte_process_name_t *proc)
     /* construct the top_session_dir if we need */
     if (NULL == prrte_process_info.jobfam_session_dir) {
         if (PRRTE_SUCCESS != (rc = prrte_setup_top_session_dir())) {
+            PRRTE_ERROR_LOG(rc);
             return rc;
         }
 
-        if (PRRTE_PROC_IS_MASTER) {
-            if (0 > prrte_asprintf(&prrte_process_info.jobfam_session_dir,
-                             "%s/dvm", prrte_process_info.top_session_dir)) {
-                rc = PRRTE_ERR_OUT_OF_RESOURCE;
-                goto exit;
-            }
-        } else if (PRRTE_PROC_IS_MASTER) {
-            if (0 > prrte_asprintf(&prrte_process_info.jobfam_session_dir,
-                             "%s/pid.%lu", prrte_process_info.top_session_dir,
-                             (unsigned long)prrte_process_info.pid)) {
-                rc = PRRTE_ERR_OUT_OF_RESOURCE;
-                goto exit;
-            }
-        } else {
-            /* we were not given one, so define it */
-            if (NULL == proc || (PRRTE_JOBID_INVALID == proc->jobid)) {
-                if (0 > prrte_asprintf(&prrte_process_info.jobfam_session_dir,
-                                 "%s/jobfam", prrte_process_info.top_session_dir) ) {
-                    rc = PRRTE_ERR_OUT_OF_RESOURCE;
-                    goto exit;
-                }
-            } else {
-                if (0 > prrte_asprintf(&prrte_process_info.jobfam_session_dir,
-                                 "%s/jf.%d", prrte_process_info.top_session_dir,
-                                 PRRTE_JOB_FAMILY(proc->jobid))) {
-                    prrte_process_info.jobfam_session_dir = NULL;
-                    rc = PRRTE_ERR_OUT_OF_RESOURCE;
-                    goto exit;
-                }
-            }
+        if (0 > prrte_asprintf(&prrte_process_info.jobfam_session_dir,
+                         "%s/dvm.%lu", prrte_process_info.top_session_dir,
+                         (unsigned long)prrte_process_info.pid)) {
+            rc = PRRTE_ERR_OUT_OF_RESOURCE;
         }
     }
-exit:
+
     if( PRRTE_SUCCESS != rc ){
         PRRTE_ERROR_LOG(rc);
     }

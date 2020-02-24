@@ -45,7 +45,7 @@ prrte_schizo_base_component_t prrte_schizo_prrte_component = {
 static int component_query(prrte_mca_base_module_t **module, int *priority)
 {
     *module = (prrte_mca_base_module_t*)&prrte_schizo_prrte_module;
-    *priority = 15;
+    *priority = 5;
     return PRRTE_SUCCESS;
 }
 
