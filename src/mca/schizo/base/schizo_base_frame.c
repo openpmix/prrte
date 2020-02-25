@@ -39,6 +39,7 @@ prrte_schizo_base_t prrte_schizo_base = {{{0}}};
 prrte_schizo_base_module_t prrte_schizo = {
     .define_cli = prrte_schizo_base_define_cli,
     .parse_cli = prrte_schizo_base_parse_cli,
+    .parse_deprecated_cli = prrte_schizo_base_parse_deprecated_cli,
     .parse_proxy_cli = prrte_schizo_base_parse_proxy_cli,
     .parse_env = prrte_schizo_base_parse_env,
     .detect_proxy = prrte_schizo_base_detect_proxy,

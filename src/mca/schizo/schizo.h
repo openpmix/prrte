@@ -66,6 +66,8 @@ typedef int (*prrte_schizo_base_module_parse_cli_fn_t)(int argc, int start,
                                                       char *personality,
                                                       char ***target);
 
+typedef void (*prrte_schizo_base_module_parse_deprecated_cli_fn_t)(int *argc, char ***argv);
+
 /* detect if we are running as a proxy
  * Check the environment to determine what, if any, host we are running
  * under. Check the argv to see if we are running as a proxy for some
@@ -131,6 +133,7 @@ typedef struct {
     prrte_schizo_base_module_init_fn_t                   init;
     prrte_schizo_base_module_define_cli_fn_t             define_cli;
     prrte_schizo_base_module_parse_cli_fn_t              parse_cli;
+    prrte_schizo_base_module_parse_deprecated_cli_fn_t   parse_deprecated_cli;
     prrte_schizo_base_module_parse_proxy_cli_fn_t        parse_proxy_cli;
     prrte_schizo_base_module_parse_env_fn_t              parse_env;
     prrte_schizo_base_detect_proxy_fn_t                  detect_proxy;
