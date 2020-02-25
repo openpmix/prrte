@@ -632,6 +632,8 @@ int prun(int argc, char *argv[])
     uint32_t ui32;
     pid_t pid;
     char *rfile = NULL;
+    char **pargv;
+    int pargc;
 
     /* init the globals */
     PRRTE_CONSTRUCT(&job_info, prrte_list_t);
@@ -642,9 +644,8 @@ int prun(int argc, char *argv[])
     prrte_init_util();
 
     prrte_tool_basename = prrte_basename(argv[0]);
-    if (0 != strcmp(prrte_tool_basename, "prun")) {
-        proxyrun = true;
-    }
+    pargc = argc;
+    pargv = prrte_argv_copy(argv);
 
     /* setup our cmd line */
     prrte_cmd_line = PRRTE_NEW(prrte_cmd_line_t);
@@ -679,7 +680,7 @@ int prun(int argc, char *argv[])
     }
 
     /* detect if we are running as a proxy and setup the rendezvous file */
-    if (PRRTE_SUCCESS != (rc = prrte_schizo.detect_proxy(argv, &rfile))) {
+    if (PRRTE_SUCCESS != (rc = prrte_schizo.detect_proxy(pargv, &rfile))) {
         if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
             PRRTE_ERROR_LOG(rc);
             return rc;
@@ -706,21 +707,26 @@ int prun(int argc, char *argv[])
         return rc;
     }
 
+    /* handle deprecated options */
+    prrte_schizo.parse_deprecated_cli(&pargc, &pargv);
+
     /* parse the result to get values - this will not include MCA params */
     if (PRRTE_SUCCESS != (rc = prrte_cmd_line_parse(prrte_cmd_line,
-                                                    true, false, argc, argv)) ) {
+                                                    true, false, pargc, pargv)) ) {
         if (PRRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n", argv[0],
+            fprintf(stderr, "%s: command line error (%s)\n",
+                    prrte_tool_basename,
                     prrte_strerror(rc));
         }
          PRRTE_ERROR_LOG(rc);
        return rc;
     }
 
-    /* now let the schizo components take a pass at it to get the MCA params */
-    if (PRRTE_SUCCESS != (rc = prrte_schizo.parse_cli(argc, 0, argv, NULL, NULL))) {
+    /* let the schizo components take a pass at it to get the MCA params */
+    if (PRRTE_SUCCESS != (rc = prrte_schizo.parse_cli(pargc, 0, pargv, NULL, NULL))) {
         if (PRRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n", argv[0],
+            fprintf(stderr, "%s: command line error (%s)\n",
+                    prrte_tool_basename,
                     prrte_strerror(rc));
         }
          PRRTE_ERROR_LOG(rc);
@@ -771,7 +777,7 @@ int prun(int argc, char *argv[])
         /* they want to run an application, so let's parse
          * the cmd line to get it */
 
-        if (PRRTE_SUCCESS != (rc = parse_locals(&apps, argc, argv))) {
+        if (PRRTE_SUCCESS != (rc = parse_locals(&apps, pargc, pargv))) {
             PRRTE_ERROR_LOG(rc);
             PRRTE_LIST_DESTRUCT(&apps);
             goto DONE;
@@ -787,11 +793,11 @@ int prun(int argc, char *argv[])
             tpath = NULL;
             char *tmp_basename;
             if ('/' == argv[0][0] ) {
-                tpath = prrte_dirname(argv[0]);
+                tpath = prrte_dirname(pargv[0]);
             }
             else if( !prrte_cmd_line_is_taken(prrte_cmd_line, "prefix") ) {
                 /* get the absolute path of our command for relative paths */
-                param = prrte_find_absolute_path(argv[0]);
+                param = prrte_find_absolute_path(pargv[0]);
                 if (NULL == param) {
                     fprintf(stderr, "%s was unable to determine the absolute path for its command\n", prrte_tool_basename);
                     exit(1);

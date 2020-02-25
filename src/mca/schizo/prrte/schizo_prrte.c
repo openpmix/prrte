@@ -61,6 +61,7 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      bool cmdline);
 static int setup_fork(prrte_job_t *jdata,
                       prrte_app_context_t *context);
+static int detect_proxy(char **argv, char **rfile);
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 static void wrap_args(char **args);
 
@@ -70,6 +71,7 @@ prrte_schizo_base_module_t prrte_schizo_prrte_module = {
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
     .setup_fork = setup_fork,
+    .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root,
     .wrap_args = wrap_args
 };
@@ -501,6 +503,22 @@ static int setup_fork(prrte_job_t *jdata,
     }
 
     return PRRTE_SUCCESS;
+}
+
+static int detect_proxy(char **argv, char **rfile)
+{
+    pid_t mypid;
+
+    mypid = getpid();
+    /* if the basename isn't prun, and nobody before us recognized
+     * it, then we need to treat it as a proxy */
+    if (0 != strcasecmp(prrte_tool_basename, "prun")) {
+        /* create a rendezvous file */
+        prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
+        return PRRTE_SUCCESS;
+    }
+
+    return PRRTE_ERR_TAKE_NEXT_OPTION;
 }
 
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line)

@@ -52,6 +52,7 @@
 #include "schizo_ompi.h"
 
 static int define_cli(prrte_cmd_line_t *cli);
+static void parse_deprecated_cli(int *argc, char ***argv);
 static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
                             char ***argv);
 static int parse_env(prrte_cmd_line_t *cmd_line,
@@ -63,6 +64,7 @@ static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 
 prrte_schizo_base_module_t prrte_schizo_ompi_module = {
     .define_cli = define_cli,
+    .parse_deprecated_cli = parse_deprecated_cli,
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
     .detect_proxy = detect_proxy,
@@ -204,6 +206,45 @@ static int define_cli(prrte_cmd_line_t *cli)
      * the list of OMPI frameworks */
 
     return PRRTE_SUCCESS;
+}
+
+static void parse_deprecated_cli(int *argc, char ***argv)
+{
+    int i, j, pargc;
+    bool found;
+    char **pargs, *p2;
+
+    pargs = *argv;
+    pargc = *argc;
+    /* check for deprecated cmd line options */
+    for (i=0; NULL != pargs[i]; i++) {
+        if (0 == strcmp(pargs[i], "--oversubscribe")) {
+            /* did they give the map-by option? */
+            found = false;
+            for (j=0; NULL != pargs[j]; j++) {
+                if (0 == strcmp(pargs[j], "--map-by")) {
+                    /* add the oversubscription modifier to this value */
+                    if (NULL == strchr(pargs[j+1], ':')) {
+                        prrte_asprintf(&p2, "%s:OVERSUBSCRIBE", pargs[j+1]);
+                    } else {
+                        prrte_asprintf(&p2, "%s,OVERSUBSCRIBE", pargs[j+1]);
+                    }
+                    free(pargs[j+1]);
+                    pargs[j+1] = p2;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                /* add the map-by option */
+                free(pargs[i]);
+                pargs[i] = strdup("--map-by");
+                prrte_argv_insert_element(argv, i+1, ":OVERSUBSCRIBE");
+                ++pargc;
+            }
+        }
+    }
+    *argc = pargc;
 }
 
 static char *strip_quotes(char *p)
@@ -587,9 +628,7 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
             free(param);
             free(p1);
             free(p2);
-        }
-
-        if (0 == strcmp(option->clo_long_name, "mca") ||
+        } else if (0 == strcmp(option->clo_long_name, "mca") ||
             0 == strcmp(option->clo_long_name, "gmca")) {
             /* the first value on the list is the name of the param */
             pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
@@ -601,18 +640,14 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
             process_generic(p1, p2, dstenv);
             free(p1);
             free(p2);
-        }
-
-        if (0 == strcmp(option->clo_long_name, "am")) {
+        } else if (0 == strcmp(option->clo_long_name, "am")) {
             /* the first value on the list is the name of the file */
             pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
             p1 = strip_quotes(pval->data.string);
             /* process it */
             process_env_files(p1, dstenv, ',');
             free(p1);
-        }
-
-        if (0 == strcmp(option->clo_long_name, "tune")) {
+        } else if (0 == strcmp(option->clo_long_name, "tune")) {
             /* the first value on the list is the name of the file */
             pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
             p1 = strip_quotes(pval->data.string);
@@ -628,19 +663,10 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
 
 static int detect_proxy(char **argv, char **rfile)
 {
-    int i;
     pid_t mypid;
 
     mypid = getpid();
-    /* if they set a personality of "ompi", then they meant us */
-    for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
-        if (NULL != strcasestr(prrte_schizo_base.personalities[i], "ompi")) {
-            /* create a rendezvous file */
-            prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
-            return PRRTE_SUCCESS;
-        }
-    }
-    /* otherwise, if the basename of the cmd was "mpirun" or "mpiexec",
+    /* if the basename of the cmd was "mpirun" or "mpiexec",
      * we default to us */
     if (0 == strcasecmp(prrte_tool_basename, "mpirun") ||
         0 == strcasecmp(prrte_tool_basename, "mpiexec")) {

@@ -54,6 +54,17 @@ int prrte_schizo_base_parse_cli(int argc, int start, char **argv,
     return PRRTE_SUCCESS;
 }
 
+void prrte_schizo_base_parse_deprecated_cli(int *argc, char ***argv)
+{
+    prrte_schizo_base_active_module_t *mod;
+
+    PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
+        if (NULL != mod->module->parse_deprecated_cli) {
+            mod->module->parse_deprecated_cli(argc, argv);
+        }
+    }
+}
+
 void prrte_schizo_base_parse_proxy_cli(prrte_cmd_line_t *cmd_line,
                                        char ***argv)
 {
