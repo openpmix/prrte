@@ -16,7 +16,7 @@
 #                         reserved.
 # Copyright (c) 2016      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
+# Copyright (c) 2016-2020 IBM Corporation. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -70,6 +70,7 @@ headers = \
         os_dirpath.h \
         os_path.h \
         output.h \
+        parse_entry.h \
         parse_options.h \
         path.h \
         printf.h \
@@ -115,6 +116,7 @@ libprrteutil_la_SOURCES = \
         os_dirpath.c \
         os_path.c \
         output.c \
+        parse_entry.c \
         parse_options.c \
         path.c \
         printf.c \
