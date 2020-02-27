@@ -532,13 +532,15 @@ static void evhandler(size_t evhdlr_registration_id,
                         PRRTE_JOBID_PRINT(jobid), jobstatus);
         }
     }
-    /* save the status */
-    lock->status = jobstatus;
-    if (NULL != msg) {
-        lock->msg = strdup(msg);
+    if (NULL != lock) {
+        /* save the status */
+        lock->status = jobstatus;
+        if (NULL != msg) {
+            lock->msg = strdup(msg);
+        }
+        /* release the lock */
+        PRRTE_PMIX_WAKEUP_THREAD(lock);
     }
-    /* release the lock */
-    PRRTE_PMIX_WAKEUP_THREAD(lock);
 
     /* we _always_ have to execute the evhandler callback or
      * else the event progress engine will hang */

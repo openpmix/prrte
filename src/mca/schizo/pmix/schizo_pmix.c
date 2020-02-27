@@ -336,6 +336,11 @@ static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
             param = strdup(environ[i]);
             ptr = &param[strlen("PMIX_MCA_")];
             value = strchr(param, '=');
+            if (NULL == value) {
+                /* should never happen */
+                free(param);
+                continue;
+            }
             *value = '\0';
             value++;
             prrte_argv_append_nosize(argv, "--pmixmca");

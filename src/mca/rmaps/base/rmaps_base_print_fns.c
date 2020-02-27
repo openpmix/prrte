@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -160,13 +160,13 @@ char* prrte_rmaps_base_print_mapping(prrte_mapping_policy_t mapping)
         map = "MINDIST";
         break;
     default:
-        if (PRRTE_MAPPING_PPR & PRRTE_GET_MAPPING_DIRECTIVE(mapping)) {
+        if (PRRTE_MAPPING_PPR == PRRTE_GET_MAPPING_POLICY(mapping)) {
             map = "PPR";
         } else {
             map = "UNKNOWN";
         }
     }
-    if (0 != strcmp(map, "PPR") && (PRRTE_MAPPING_PPR & PRRTE_GET_MAPPING_DIRECTIVE(mapping))) {
+    if (0 != strcmp(map, "PPR") && (PRRTE_MAPPING_PPR == PRRTE_GET_MAPPING_POLICY(mapping))) {
         prrte_asprintf(&mymap, "%s[PPR]:", map);
     } else {
         prrte_asprintf(&mymap, "%s:", map);

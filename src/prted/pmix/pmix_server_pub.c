@@ -530,7 +530,7 @@ void pmix_server_keyval_client(int status, prrte_process_name_t* sender,
     pmix_server_req_t *req=NULL;
     prrte_byte_object_t *boptr;
     pmix_data_buffer_t pbkt;
-    pmix_status_t ret, rt = PMIX_SUCCESS;
+    pmix_status_t ret = PMIX_SUCCESS, rt = PMIX_SUCCESS;
     pmix_proc_t psender;
     pmix_info_t info;
     pmix_pdata_t *pdata = NULL;

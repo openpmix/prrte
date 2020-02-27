@@ -3,7 +3,7 @@
  * Copyright (c) 2009 Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  *
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -149,7 +149,11 @@ bool prrte_fd_is_blkdev(int fd)
 
 const char *prrte_fd_get_peer_name(int fd)
 {
-    char *str;
+#if PRRTE_ENABLE_IPV6
+    char str[INET6_ADDRSTRLEN];
+#else
+    char str[INET_ADDRSTRLEN];
+#endif
     const char *ret = NULL;
     struct sockaddr sa;
     socklen_t slt = (socklen_t) sizeof(sa);
@@ -160,36 +164,22 @@ const char *prrte_fd_get_peer_name(int fd)
         return ret;
     }
 
-    size_t len = INET_ADDRSTRLEN;
-#if PRRTE_ENABLE_IPV6
-    len = INET6_ADDRSTRLEN;
-#endif
-    str = calloc(1, len);
-    if (NULL == str) {
-        return NULL;
-    }
-
     if (sa.sa_family == AF_INET) {
         struct sockaddr_in *si;
         si = (struct sockaddr_in*) &sa;
         ret = inet_ntop(AF_INET, &(si->sin_addr), str, INET_ADDRSTRLEN);
-        if (NULL == ret) {
-            free(str);
-        }
     }
 #if PRRTE_ENABLE_IPV6
     else if (sa.sa_family == AF_INET6) {
         struct sockaddr_in6 *si6;
         si6 = (struct sockaddr_in6*) &sa;
         ret = inet_ntop(AF_INET6, &(si6->sin6_addr), str, INET6_ADDRSTRLEN);
-        if (NULL == ret) {
-            free(str);
-        }
     }
 #endif
     else {
         // This string is guaranteed to be <= INET_ADDRSTRLEN
-        prrte_string_copy(str, "Unknown", len);
+        memset(str, 0, sizeof(str));
+        prrte_string_copy(str, "Unknown", sizeof(str)-1);
         ret = str;
     }
 
@@ -210,14 +200,14 @@ void prrte_close_open_file_descriptors(int protected_fd)
         goto slow;
     }
 
-    /* grab the fd of the opendir above so we don't close in the 
+    /* grab the fd of the opendir above so we don't close in the
      * middle of the scan. */
     int dir_scan_fd = dirfd(dir);
     if(dir_scan_fd < 0 ) {
         goto slow;
     }
 
-    
+
     while (NULL != (files = readdir(dir))) {
         if (!isdigit(files->d_name[0])) {
             continue;

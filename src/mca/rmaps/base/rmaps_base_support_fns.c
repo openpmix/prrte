@@ -417,7 +417,6 @@ int prrte_rmaps_base_get_target_nodes(prrte_list_t *allocated_nodes, prrte_std_c
     if (PRRTE_MAPPING_DEBUGGER & PRRTE_GET_MAPPING_DIRECTIVE(policy)) {
         num_slots = prrte_list_get_size(allocated_nodes);    // tell the mapper there is one slot/node for debuggers
     } else {
-        item  = prrte_list_get_first(allocated_nodes);
         PRRTE_LIST_FOREACH_SAFE(node, next, allocated_nodes, prrte_node_t) {
             /* if the hnp was not allocated, or flagged not to be used,
              * then remove it here */

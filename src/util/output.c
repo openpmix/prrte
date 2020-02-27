@@ -972,6 +972,7 @@ static int output(int output_id, const char *format, va_list arglist)
         /* stdout output */
         if (ldi->ldi_stdout) {
             if (-1 == write(fileno(stdout), out, (int)strlen(out))) {
+                prrte_mutex_unlock(&mutex);
                 return PRRTE_ERR_FATAL;
             }
             fflush(stdout);
@@ -1002,6 +1003,7 @@ static int output(int output_id, const char *format, va_list arglist)
                              "[WARNING: %d lines lost because the PRRTE process session directory did\n not exist when prrte_output() was invoked]\n",
                              ldi->ldi_file_num_lines_lost);
                     if (-1 == write(ldi->ldi_fd, buffer, (int)strlen(buffer))) {
+                        prrte_mutex_unlock(&mutex);
                         return PRRTE_ERR_FATAL;
                     }
                     ldi->ldi_file_num_lines_lost = 0;
@@ -1012,6 +1014,7 @@ static int output(int output_id, const char *format, va_list arglist)
             }
             if (ldi->ldi_fd != -1) {
                 if (-1 == write(ldi->ldi_fd, out, (int)strlen(out))) {
+                    prrte_mutex_unlock(&mutex);
                     return PRRTE_ERR_FATAL;
                 }
             }
