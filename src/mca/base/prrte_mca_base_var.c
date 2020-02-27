@@ -226,7 +226,7 @@ static char *append_filename_to_list(const char *filename)
 {
     int i, count;
 
-    (void) prrte_argv_append_unique_nosize(&prrte_mca_base_var_file_list, filename, false);
+    (void) prrte_argv_append_unique_nosize(&prrte_mca_base_var_file_list, filename);
 
     count = prrte_argv_count(prrte_mca_base_var_file_list);
 

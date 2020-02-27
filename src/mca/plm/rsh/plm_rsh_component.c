@@ -457,7 +457,7 @@ static int rsh_launch_agent_lookup(const char *agent_list, char *path)
     if (0 == strcmp(bname, "ssh")) {
         /* if xterm option was given, add '-X', ensuring we don't do it twice */
         if (NULL != prrte_xterm) {
-            prrte_argv_append_unique_nosize(&prrte_plm_rsh_component.agent_argv, "-X", false);
+            prrte_argv_append_unique_nosize(&prrte_plm_rsh_component.agent_argv, "-X");
         } else if (0 >= prrte_output_get_verbosity(prrte_plm_base_framework.framework_output)) {
             /* if debug was not specified, and the user didn't explicitly
              * specify X11 forwarding/non-forwarding, add "-x" if it

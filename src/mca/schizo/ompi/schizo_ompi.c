@@ -672,6 +672,8 @@ static int detect_proxy(char **argv, char **rfile)
         0 == strcasecmp(prrte_tool_basename, "mpiexec")) {
         /* create a rendezvous file */
         prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
+        /* add us to the personalities */
+        prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi");
         return PRRTE_SUCCESS;
     }
 
