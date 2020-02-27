@@ -12,7 +12,7 @@
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -89,7 +89,6 @@ int prrte_finalize(void)
     free (prrte_process_info.nodename);
     prrte_process_info.nodename = NULL;
 
+    PRRTE_RELEASE(prrte_cache);
     return PRRTE_SUCCESS;
-
-    return rc;
 }

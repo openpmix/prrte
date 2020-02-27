@@ -72,9 +72,12 @@ typedef void (*prrte_schizo_base_module_parse_deprecated_cli_fn_t)(int *argc, ch
  * Check the environment to determine what, if any, host we are running
  * under. Check the argv to see if we are running as a proxy for some
  * other command and to see which environment we are proxying. Return
- * a unique rendezvous file to use for prun to connect to prte.
+ * a unique rendezvous file to use for prun to connect to prte
  */
 typedef int (*prrte_schizo_base_detect_proxy_fn_t)(char **argv, char **rndfile);
+
+/* define a (hopefully) unique session directory we can use */
+typedef int (*prrte_schizo_base_define_session_dir_fn_t)(char **tmpdir);
 
 /* parse the environment for proxy cmd line entries */
 typedef void (*prrte_schizo_base_module_parse_proxy_cli_fn_t)(prrte_cmd_line_t *cmd_line,
@@ -137,6 +140,7 @@ typedef struct {
     prrte_schizo_base_module_parse_proxy_cli_fn_t        parse_proxy_cli;
     prrte_schizo_base_module_parse_env_fn_t              parse_env;
     prrte_schizo_base_detect_proxy_fn_t                  detect_proxy;
+    prrte_schizo_base_define_session_dir_fn_t            define_session_dir;
     prrte_schizo_base_module_allow_run_as_root_fn_t      allow_run_as_root;
     prrte_schizo_base_module_wrap_args_fn_t              wrap_args;
     prrte_schizo_base_module_setup_app_fn_t              setup_app;

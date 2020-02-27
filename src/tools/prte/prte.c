@@ -87,7 +87,6 @@
 #include "src/mca/rml/base/rml_contact.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
-#include "src/mca/state/base/base.h"
 
 #include "src/runtime/runtime.h"
 #include "src/runtime/prrte_globals.h"
@@ -115,6 +114,10 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "system-server", 0, PRRTE_CMD_LINE_TYPE_BOOL,
       "Act as system server",
       PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "no-ready-msg", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Do not output a \"DVM READY\" message",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+
 
 
     /* Debug options */
@@ -276,6 +279,10 @@ int main(int argc, char *argv[])
 
         /* If someone asks for help, that should be all we do */
         exit(0);
+    }
+
+     if (prrte_cmd_line_is_taken(&cmd_line, "no-ready-msg")) {
+        prrte_state_base_ready_msg = false;
     }
 
     if (prrte_cmd_line_is_taken(&cmd_line, "system-server")) {

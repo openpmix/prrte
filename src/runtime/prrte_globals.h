@@ -446,6 +446,8 @@ PRRTE_EXPORT extern bool prrte_coprocessors_detected;
 PRRTE_EXPORT extern prrte_hash_table_t *prrte_coprocessors;
 PRRTE_EXPORT extern char *prrte_topo_signature;
 PRRTE_EXPORT extern char *prrte_data_server_uri;
+PRRTE_EXPORT extern bool prrte_dvm_ready;
+PRRTE_EXPORT extern prrte_pointer_array_t *prrte_cache;
 
 /* PRRTE OOB port flags */
 PRRTE_EXPORT extern bool prrte_static_ports;
