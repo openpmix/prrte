@@ -502,11 +502,7 @@ int prrte_attr_load(prrte_attribute_t *kv,
         if (NULL != kv->data.string) {
             free(kv->data.string);
         }
-        if (NULL != data) {
-            kv->data.string = strdup( (const char *) data);
-        } else {
-            kv->data.string = NULL;
-        }
+        kv->data.string = strdup( (const char *) data);
         break;
     case PRRTE_SIZE:
         kv->data.size = *(size_t*)(data);

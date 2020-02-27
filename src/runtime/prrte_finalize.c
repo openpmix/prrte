@@ -68,6 +68,9 @@ int prrte_finalize(void)
      * be ignored if no listeners were registered */
     prrte_stop_listening();
 
+    /* release the cache */
+    PRRTE_RELEASE(prrte_cache);
+
     /* call the finalize function for this environment */
     if (PRRTE_SUCCESS != (rc = prrte_ess.finalize())) {
         return rc;
@@ -89,6 +92,5 @@ int prrte_finalize(void)
     free (prrte_process_info.nodename);
     prrte_process_info.nodename = NULL;
 
-    PRRTE_RELEASE(prrte_cache);
     return PRRTE_SUCCESS;
 }
