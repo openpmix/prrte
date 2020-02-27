@@ -517,6 +517,7 @@ bool prrte_node_match(prrte_node_t *n1, char *name)
             }
         }
         prrte_argv_free(n2names);
+        n2names = NULL;
     }
     return false;
 
