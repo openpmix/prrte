@@ -375,7 +375,9 @@ static void vm_ready(int fd, short args, void *cbdata)
         }
         /* notify that the vm is ready */
         if (0 > prrte_state_base_parent_fd) {
-            fprintf(stdout, "DVM ready\n"); fflush(stdout);
+            if (prrte_state_base_ready_msg) {
+                fprintf(stdout, "DVM ready\n"); fflush(stdout);
+            }
         } else {
             char ok = 'K';
             write(prrte_state_base_parent_fd, &ok, 1);

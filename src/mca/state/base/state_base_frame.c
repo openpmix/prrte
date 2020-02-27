@@ -4,7 +4,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,6 +44,7 @@
 prrte_state_base_module_t prrte_state = {0};
 bool prrte_state_base_run_fdcheck = false;
 int prrte_state_base_parent_fd = -1;
+bool prrte_state_base_ready_msg = true;
 
 static int prrte_state_base_register(prrte_mca_base_register_flag_t flags)
 {

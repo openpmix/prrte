@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -40,6 +40,7 @@ PRRTE_EXPORT void prrte_state_base_print_job_state_machine(void);
 PRRTE_EXPORT void prrte_state_base_print_proc_state_machine(void);
 
 PRRTE_EXPORT extern int prrte_state_base_parent_fd;
+PRRTE_EXPORT extern bool prrte_state_base_ready_msg;
 
 END_C_DECLS
 

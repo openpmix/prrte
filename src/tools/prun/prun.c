@@ -978,6 +978,7 @@ int prun(int argc, char *argv[])
         free(param);
         prrte_argv_append_nosize(&papps->argv, "prte");
         prrte_schizo.parse_proxy_cli(prrte_cmd_line, &papps->argv);
+        prrte_argv_append_nosize(&papps->argv, "--no-ready-msg");
         papps->maxprocs = 1;
 
         /* copy our environment */

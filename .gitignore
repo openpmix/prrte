@@ -51,6 +51,9 @@ autom4te.cache
 config.log
 config.status
 configure
+configure.log.*
+make.log.*
+make.install.log.*
 libtool
 doxygen
 bin
