@@ -3,6 +3,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -711,6 +712,15 @@ void prrte_state_base_track_procs(int fd, short argc, void *cbdata)
             PRRTE_ACTIVATE_PROC_STATE(proc, PRRTE_PROC_STATE_TERMINATED);
         }
     } else if (PRRTE_PROC_STATE_TERMINATED == state) {
+        if (pdata->state == state) {
+            prrte_output_verbose(5, prrte_state_base_framework.framework_output,
+                                 "%s state:base:track_procs proc %s already in state %s. Skip transition.",
+                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                                 PRRTE_NAME_PRINT(proc),
+                                 prrte_proc_state_to_str(state));
+            goto cleanup;
+        }
+
         /* update the proc state */
         PRRTE_FLAG_UNSET(pdata, PRRTE_PROC_FLAG_ALIVE);
         if (pdata->state < PRRTE_PROC_STATE_TERMINATED) {

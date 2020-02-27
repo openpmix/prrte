@@ -2,6 +2,7 @@
  * Copyright (c) 2011-2017 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -207,8 +208,13 @@ static void track_jobs(int fd, short argc, void *cbdata)
                     PRRTE_RELEASE(alert);
                     goto cleanup;
                 }
-                /* if this proc failed to start, then send that info */
-                if (PRRTE_PROC_STATE_UNTERMINATED < child->state) {
+                /* If this proc failed to start, then send that info.
+                 * However if it normally terminated then do not send the info.
+                 * Instead report it as running here, and the child waitpid
+                 * function will send back the normal terminated state when the
+                 * the job is complete.
+                 */
+                if (PRRTE_PROC_STATE_TERMINATED < child->state) {
                     if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &child->state, 1, PRRTE_PROC_STATE))) {
                         PRRTE_ERROR_LOG(rc);
                         PRRTE_RELEASE(alert);
