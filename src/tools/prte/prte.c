@@ -292,7 +292,7 @@ int main(int argc, char *argv[])
         prrte_setenv("PMIX_MCA_ptl_tcp_remote_connections", "1", true, &environ);
     }
     /* don't aggregate help messages as that will apply job-to-job */
-    prrte_setenv("PRRTE_MCA_prrte_base_help_aggregate", 0, true, &environ);
+    prrte_setenv("PRRTE_MCA_prrte_base_help_aggregate", "0", true, &environ);
 
     /* Setup MCA params */
     prrte_register_params();

@@ -433,7 +433,7 @@ static int tcp_peer_send_connect_ack(prrte_oob_tcp_peer_t* peer)
     offset += sizeof(hdr);
     memcpy(msg + offset, &ack_flag, sizeof(ack_flag));
     offset += sizeof(ack_flag);
-    memcpy(msg + offset, prrte_version_string, strlen(prrte_version_string));
+    memcpy(msg + offset, prrte_version_string, strlen(prrte_version_string) + 1);
     offset += strlen(prrte_version_string)+1;
 
     /* send it */

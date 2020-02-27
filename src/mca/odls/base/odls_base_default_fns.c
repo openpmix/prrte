@@ -904,13 +904,16 @@ void prrte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     cd->env = prrte_argv_copy(prrte_launch_environ);
     if (NULL != app->env) {
         for (i=0; NULL != app->env[i]; i++) {
-            /* find the '=' sign */
-            ptr = strchr(app->env[i], '=');
+            /* find the '=' sign.
+             * strdup the env string to a tmp variable,
+             * since it is shared among apps.
+             */
+            char *tmp = strdup(app->env[i]);
+            ptr = strchr(tmp, '=');
             *ptr = '\0';
             ++ptr;
-            prrte_setenv(app->env[i], ptr, true, &cd->env);
-            --ptr;
-            *ptr = '=';
+            prrte_setenv(tmp, ptr, true, &cd->env);
+            free(tmp);
         }
     }
 
