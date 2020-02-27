@@ -100,6 +100,7 @@ prrte_process_name_t prrte_name_wildcard = {PRRTE_JOBID_WILDCARD, PRRTE_VPID_WIL
 
 prrte_process_name_t prrte_name_invalid = {PRRTE_JOBID_INVALID, PRRTE_VPID_INVALID};
 
+static bool util_initialized = false;
 
 #if PRRTE_CC_USE_PRAGMA_IDENT
 #pragma ident PRRTE_IDENT_STRING
@@ -113,12 +114,10 @@ int prrte_init_util(void)
     int ret;
     char *error = NULL;
 
-    if (0 < prrte_initialized) {
-        /* track number of times we have been called */
-        prrte_initialized++;
+    if (util_initialized) {
         return PRRTE_SUCCESS;
     }
-    prrte_initialized++;
+    util_initialized = true;
 
     /* set the nodename right away so anyone who needs it has it */
     prrte_setup_hostname();
@@ -236,7 +235,19 @@ int prrte_init(int* pargc, char*** pargv, prrte_proc_type_t flags)
     int ret;
     char *error = NULL;
 
-   /*
+    if (0 < prrte_initialized) {
+        /* track number of times we have been called */
+        prrte_initialized++;
+        return PRRTE_SUCCESS;
+    }
+    prrte_initialized++;
+
+    ret = prrte_init_util();
+    if (PRRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    /*
      * Initialize the event library
      */
     if (PRRTE_SUCCESS != (ret = prrte_event_base_open())) {
@@ -304,6 +315,10 @@ int prrte_init(int* pargc, char*** pargv, prrte_proc_type_t flags)
         error = "prrte_ess_init";
         goto error;
     }
+
+    /* initialize the cache */
+    prrte_cache = PRRTE_NEW(prrte_pointer_array_t);
+    prrte_pointer_array_init(prrte_cache, 1, INT_MAX, 1);
 
     /* start listening - will be ignored if no listeners
      * were registered */

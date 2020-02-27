@@ -247,7 +247,7 @@ static void init_complete(int sd, short args, void *cbdata)
 static void vm_ready(int fd, short args, void *cbdata)
 {
     prrte_state_caddy_t *caddy = (prrte_state_caddy_t*)cbdata;
-    int rc;
+    int rc, i;
     prrte_buffer_t *buf;
     prrte_daemon_cmd_flag_t command = PRRTE_DAEMON_PASS_NODE_INFO_CMD;
     prrte_grpcomm_signature_t *sig;
@@ -268,6 +268,7 @@ static void vm_ready(int fd, short args, void *cbdata)
 
     /* if this is my job, then we are done */
     if (PRRTE_PROC_MY_NAME->jobid == caddy->jdata->jobid) {
+        prrte_dvm_ready = true;
         /* if there is only one daemon in the job, then there
          * is just a little bit to do */
         if (1 < prrte_process_info.num_procs) {
@@ -380,6 +381,14 @@ static void vm_ready(int fd, short args, void *cbdata)
             write(prrte_state_base_parent_fd, &ok, 1);
             close(prrte_state_base_parent_fd);
             prrte_state_base_parent_fd = -1;
+        }
+
+        for (i=0; i < prrte_cache->size; i++) {
+            jptr = (prrte_job_t*)prrte_pointer_array_get_item(prrte_cache, i);
+            if (NULL != jptr) {
+                prrte_pointer_array_set_item(prrte_cache, i, NULL);
+                prrte_plm.spawn(jptr);
+            }
         }
 
         /* progress the job */

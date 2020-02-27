@@ -43,6 +43,7 @@ prrte_schizo_base_module_t prrte_schizo = {
     .parse_proxy_cli = prrte_schizo_base_parse_proxy_cli,
     .parse_env = prrte_schizo_base_parse_env,
     .detect_proxy = prrte_schizo_base_detect_proxy,
+    .define_session_dir = prrte_schizo_base_define_session_dir,
     .allow_run_as_root = prrte_schizo_base_allow_run_as_root,
     .wrap_args = prrte_schizo_base_wrap_args,
     .setup_app = prrte_schizo_base_setup_app,
@@ -64,6 +65,15 @@ static int prrte_schizo_base_register(prrte_mca_base_register_flag_t flags)
                                 PRRTE_INFO_LVL_9,
                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &personalities);
+
+    /* test proxy launch */
+    prrte_schizo_base.test_proxy_launch = false;
+    prrte_mca_base_var_register("prrte", "schizo", "base", "test_proxy_launch",
+                                "Test proxy launches",
+                                PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                PRRTE_INFO_LVL_9,
+                                PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                &prrte_schizo_base.test_proxy_launch);
     return PRRTE_SUCCESS;
 }
 

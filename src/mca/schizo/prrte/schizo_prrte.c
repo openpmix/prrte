@@ -62,6 +62,7 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
 static int setup_fork(prrte_job_t *jdata,
                       prrte_app_context_t *context);
 static int detect_proxy(char **argv, char **rfile);
+static int define_session_dir(char **tmpdir);
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 static void wrap_args(char **args);
 
@@ -72,6 +73,7 @@ prrte_schizo_base_module_t prrte_schizo_prrte_module = {
     .parse_env = parse_env,
     .setup_fork = setup_fork,
     .detect_proxy = detect_proxy,
+    .define_session_dir = define_session_dir,
     .allow_run_as_root = allow_run_as_root,
     .wrap_args = wrap_args
 };
@@ -512,13 +514,31 @@ static int detect_proxy(char **argv, char **rfile)
     mypid = getpid();
     /* if the basename isn't prun, and nobody before us recognized
      * it, then we need to treat it as a proxy */
-    if (0 != strcasecmp(prrte_tool_basename, "prun")) {
+    if (prrte_schizo_base.test_proxy_launch ||
+        0 != strcasecmp(prrte_tool_basename, "prun")) {
         /* create a rendezvous file */
         prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
         return PRRTE_SUCCESS;
     }
 
     return PRRTE_ERR_TAKE_NEXT_OPTION;
+}
+
+static int define_session_dir(char **tmpdir)
+{
+    int uid;
+    pid_t mypid;
+
+    /* setup a session directory based on our userid and pid */
+    uid = geteuid();
+    mypid = getpid();
+
+    prrte_asprintf(tmpdir, "%s/%s.session.%lu.%lu",
+                   prrte_tmp_directory(), prrte_tool_basename,
+                   (unsigned long)uid,
+                   (unsigned long)mypid);
+
+    return PRRTE_SUCCESS;
 }
 
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line)

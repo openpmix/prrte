@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -295,6 +295,11 @@ void prrte_plm_base_recv(int status, prrte_process_name_t* sender,
             }
             /* provide the parent's last object */
             jdata->bkmark_obj = parent->bkmark_obj;
+        }
+
+        if (!prrte_dvm_ready) {
+            prrte_pointer_array_add(prrte_cache, jdata);
+            return;
         }
 
         /* launch it */

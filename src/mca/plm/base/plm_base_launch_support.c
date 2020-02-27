@@ -917,7 +917,7 @@ void prrte_plm_base_daemon_topology(int status, prrte_process_name_t* sender,
              */
             rc = prrte_hash_table_get_first_key_uint32(prrte_job_data, &key, (void **)&jdata, &nptr);
             while (PRRTE_SUCCESS == rc) {
-                if (PRRTE_PROC_MY_NAME->jobid != jdata->jobid) {
+                if (PRRTE_PROC_MY_NAME->jobid != jdata->jobid && !PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL)) {
                     dvm = false;
                     if (PRRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
                         PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_DAEMONS_REPORTED);
@@ -1342,7 +1342,7 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
                  */
                 rc = prrte_hash_table_get_first_key_uint32(prrte_job_data, &key, (void **)&jdata, &nptr);
                 while (PRRTE_SUCCESS == rc) {
-                    if (PRRTE_PROC_MY_NAME->jobid == jdata->jobid) {
+                    if (PRRTE_PROC_MY_NAME->jobid == jdata->jobid || PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL)) {
                         goto next;
                     }
                     dvm = false;
