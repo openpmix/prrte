@@ -14,7 +14,7 @@
  * Copyright (c) 2007      Voltaire. All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, LLC. All rights reserved.
  *
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -104,16 +104,15 @@ PRRTE_EXPORT int prrte_argv_prepend_nosize(char ***argv, const char *arg);
  *
  * @param argv Pointer to an argv array.
  * @param str Pointer to the string to append.
- * @param bool Whether or not to overwrite a matching value if found
  *
  * @retval PRRTE_SUCCESS On success
  * @retval PRRTE_ERROR On failure
  *
  * This function is identical to the prrte_argv_append_nosize() function
  * except that it only appends the provided argument if it does not already
- * exist in the provided array, or overwrites it if it is.
+ * exist in the provided array.
  */
-PRRTE_EXPORT  int prrte_argv_append_unique_nosize(char ***argv, const char *arg, bool overwrite);
+PRRTE_EXPORT  int prrte_argv_append_unique_nosize(char ***argv, const char *arg);
 
 /**
    * Free a NULL-terminated argv array.

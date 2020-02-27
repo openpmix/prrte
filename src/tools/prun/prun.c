@@ -666,15 +666,15 @@ int prun(int argc, char *argv[])
         return rc;
     }
     /* setup our common personalities */
-    prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "prrte", false);
-    prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "pmix", false);
+    prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "prrte");
+    prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "pmix");
     /* add anything they specified */
     for (i=0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
             char **tmp;
             tmp = prrte_argv_split(argv[i+1], ',');
             for (m=0; NULL != tmp[m]; m++) {
-                prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, tmp[m], false);
+                prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, tmp[m]);
             }
             prrte_argv_free(tmp);
         }

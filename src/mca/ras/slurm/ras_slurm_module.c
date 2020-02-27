@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2017 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -1165,7 +1165,7 @@ static char* get_node_list(prrte_app_context_t *app)
     dash_host = prrte_argv_split(dh, ',');
     free(dh);
     for (j=0; NULL != dash_host[j]; j++) {
-        prrte_argv_append_unique_nosize(&total_host, dash_host[j], false);
+        prrte_argv_append_unique_nosize(&total_host, dash_host[j]);
     }
     prrte_argv_free(dash_host);
     if (NULL == total_host) {

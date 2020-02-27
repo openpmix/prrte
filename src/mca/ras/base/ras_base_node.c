@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2017 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -155,13 +155,13 @@ int prrte_ras_base_node_insert(prrte_list_t* nodes, prrte_job_t *jdata)
                         free(ptr);
                     }
                     /* add to list of aliases for this node - only add if unique */
-                    prrte_argv_append_unique_nosize(&alias, node->name, false);
+                    prrte_argv_append_unique_nosize(&alias, node->name);
                 }
                 if (prrte_get_attribute(&node->attributes, PRRTE_NODE_ALIAS, (void**)&ptr, PRRTE_STRING)) {
                     nalias = prrte_argv_split(ptr, ',');
                     /* now copy over any aliases that are unique */
                     for (i=0; NULL != nalias[i]; i++) {
-                        prrte_argv_append_unique_nosize(&alias, nalias[i], false);
+                        prrte_argv_append_unique_nosize(&alias, nalias[i]);
                     }
                     prrte_argv_free(nalias);
                 }

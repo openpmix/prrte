@@ -14,7 +14,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -124,7 +124,7 @@ int prrte_argv_prepend_nosize(char ***argv, const char *arg)
     return PRRTE_SUCCESS;
 }
 
-int prrte_argv_append_unique_nosize(char ***argv, const char *arg, bool overwrite)
+int prrte_argv_append_unique_nosize(char ***argv, const char *arg)
 {
     int i;
 
@@ -138,11 +138,7 @@ int prrte_argv_append_unique_nosize(char ***argv, const char *arg, bool overwrit
     /* see if this arg is already present in the array */
     for (i=0; NULL != (*argv)[i]; i++) {
         if (0 == strcmp(arg, (*argv)[i])) {
-            /* already exists - are we authorized to overwrite? */
-            if (overwrite) {
-                free((*argv)[i]);
-                (*argv)[i] = strdup(arg);
-            }
+            /* already exists */
             return PRRTE_SUCCESS;
         }
     }
