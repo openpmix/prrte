@@ -213,6 +213,21 @@ static void parse_deprecated_cli(int *argc, char ***argv)
     int i, j, pargc;
     bool found;
     char **pargs, *p2;
+    bool takeus = false;
+
+    /* if they gave us a list of personalities,
+     * see if we are included */
+    if (NULL != prrte_schizo_base.personalities) {
+        for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
+            if (0 == strcmp(prrte_schizo_base.personalities[i], "ompi")) {
+                takeus = true;
+                break;
+            }
+        }
+        if (!takeus) {
+            return;
+        }
+    }
 
     pargs = *argv;
     pargc = *argc;

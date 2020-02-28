@@ -43,7 +43,7 @@ WARNING: Multi-character cmd line options must be prefixed with double dashes,
 not a single dash:
 
   Deprecated option:   %s
-  Corrected option:    %s
+  Corrected option:   %s
 
 We have updated this for you and will proceed. However, this will be treated
 as an error in a future release. Please update your cmd line.
