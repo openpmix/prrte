@@ -17,7 +17,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2018      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2018-2020 IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -52,7 +52,7 @@
 #include "schizo_ompi.h"
 
 static int define_cli(prrte_cmd_line_t *cli);
-static void parse_deprecated_cli(int *argc, char ***argv);
+static int parse_deprecated_cli(int *argc, char ***argv);
 static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
                             char ***argv);
 static int parse_env(prrte_cmd_line_t *cmd_line,
@@ -208,11 +208,11 @@ static int define_cli(prrte_cmd_line_t *cli)
     return PRRTE_SUCCESS;
 }
 
-static void parse_deprecated_cli(int *argc, char ***argv)
+static int parse_deprecated_cli(int *argc, char ***argv)
 {
     int i, j, pargc;
     bool found;
-    char **pargs, *p2;
+    char **pargs, *p2, *help_str, *prefix, *old_arg;
     bool takeus = false;
 
     /* if they gave us a list of personalities,
@@ -225,7 +225,7 @@ static void parse_deprecated_cli(int *argc, char ***argv)
             }
         }
         if (!takeus) {
-            return;
+            return PRRTE_ERR_TAKE_NEXT_OPTION;
         }
     }
 
@@ -247,33 +247,306 @@ static void parse_deprecated_cli(int *argc, char ***argv)
                             p2, pargs[i]);
             free(p2);
         }
-        if (0 == strcmp(pargs[i], "--oversubscribe")) {
+
+        /* --nolocal -> --map-by :nolocal */
+        if (0 == strcmp(pargs[i], "--nolocal")) {
+            prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
+                            pargs[i], "Missing option - work to do");
+            return PRRTE_ERR_BAD_PARAM;
+        }
+        /* --oversubscribe -> --map-by :OVERSUBSCRIBE
+         * --nooversubscribe -> --map-by :NOOVERSUBSCRIBE
+         *   If the user specified both of these, then we need to make sure
+         *   they get pushed down to the mapper so it can fail. We could just ignore
+         *   the nooversubscribe since it is default, but then we would not catch
+         *   this user error case.
+         */
+        else if (0 == strcmp(pargs[i], "--oversubscribe") ||
+                 0 == strcmp(pargs[i], "--nooversubscribe") ) {
+            if (0 == strcmp(pargs[i], "--nooversubscribe")) {
+                prrte_show_help("help-schizo-base.txt", "deprecated-inform", true,
+                                pargs[i], "This is the default behavior so does not need to be specified");
+                prefix = strdup("no");
+            } else {
+                prefix = strdup("");
+            }
             /* did they give the map-by option? */
             found = false;
             for (j=0; NULL != pargs[j]; j++) {
                 if (0 == strcmp(pargs[j], "--map-by")) {
                     /* add the oversubscription modifier to this value */
                     if (NULL == strchr(pargs[j+1], ':')) {
-                        prrte_asprintf(&p2, "%s:OVERSUBSCRIBE", pargs[j+1]);
+                        prrte_asprintf(&p2, "%s:%sOVERSUBSCRIBE", pargs[j+1], prefix);
                     } else {
-                        prrte_asprintf(&p2, "%s,OVERSUBSCRIBE", pargs[j+1]);
+                        prrte_asprintf(&p2, "%s,%sOVERSUBSCRIBE", pargs[j+1], prefix);
                     }
                     free(pargs[j+1]);
                     pargs[j+1] = p2;
+                    prrte_asprintf(&help_str, "--map-by %s", p2);
+                    prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                                    pargs[i], help_str);
+                    free(help_str);
                     found = true;
+                    // Shift down, and look at this token again in the next cycle
+                    prrte_argv_delete(&pargc, argv, i, 1);
+                    i--;
+                    pargs = *argv;
                     break;
                 }
             }
             if (!found) {
                 /* add the map-by option */
+                old_arg = strdup(pargs[i]);
                 free(pargs[i]);
                 pargs[i] = strdup("--map-by");
-                prrte_argv_insert_element(argv, i+1, ":OVERSUBSCRIBE");
+                if (strlen(prefix) > 0) {
+                    prrte_argv_insert_element(argv, i+1, ":NOOVERSUBSCRIBE");
+                } else {
+                    prrte_argv_insert_element(argv, i+1, ":OVERSUBSCRIBE");
+                }
+                pargs = *argv;
+                prrte_asprintf(&help_str, "%s %s", pargs[i], (*argv)[i+1]);
+                prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                                old_arg, help_str);
+                free(help_str);
+                free(old_arg);
                 ++pargc;
             }
+            free(prefix);
+        }
+        /* --use-hwthread-cpus -> --bind-to hwthread */
+        else if (0 == strcmp(pargs[i], "--use-hwthread-cpus")) {
+            for (j=0; NULL != pargs[j]; j++) {
+                if (0 == strcmp(pargs[j], "--bind-to")) {
+                    if (NULL != pargs[j+1]) {
+                        prrte_asprintf(&help_str, "Conflicting option \"%s %s\"", pargs[j], pargs[j+1]);
+                    } else {
+                        prrte_asprintf(&help_str, "Conflicting option \"%s\"", pargs[j]);
+                    }
+                    prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
+                                    pargs[i], help_str);
+                    free(help_str);
+                    return PRRTE_ERR_BAD_PARAM;
+                }
+            }
+            old_arg = strdup(pargs[i]);
+            free(pargs[i]);
+            pargs[i] = strdup("--bind-to");
+            prrte_argv_insert_element(argv, i+1, "hwthread");
+            pargs = *argv;
+            prrte_asprintf(&help_str, "%s %s", pargs[i], (*argv)[i+1]);
+            prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                            old_arg, help_str);
+            free(help_str);
+            free(old_arg);
+            ++pargc;
+        }
+        /* --cpu-set and --cpu-list -> --map-by pr-list:X
+         * - Needs to be implemented
+         */
+        else if (0 == strcmp(pargs[i], "--cpu-set") ||
+                 0 == strcmp(pargs[i], "--cpu-list") ) {
+            prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
+                            pargs[i], "Not converted yet - work to do");
+            return PRRTE_ERR_BAD_PARAM;
+        }
+        /* --bind-to-core and --bind-to-socket -> --bind-to X */
+        else if (0 == strcmp(pargs[i], "--bind-to-core") ||
+                 0 == strcmp(pargs[i], "--bind-to-socket") ) {
+            for (j=0; NULL != pargs[j]; j++) {
+                if (0 == strcmp(pargs[j], "--bind-to")) {
+                    if (NULL != pargs[j+1]) {
+                        prrte_asprintf(&help_str, "Conflicting option \"%s %s\"", pargs[j], pargs[j+1]);
+                    } else {
+                        prrte_asprintf(&help_str, "Conflicting option \"%s\"", pargs[j]);
+                    }
+                    prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
+                                    pargs[i], help_str);
+                    free(help_str);
+                    return PRRTE_ERR_BAD_PARAM;
+                }
+            }
+            old_arg = strdup(pargs[i]);
+            if (0 == strcmp(pargs[i], "--bind-to-core")) {
+                free(pargs[i]);
+                pargs[i] = strdup("--bind-to");
+                prrte_argv_insert_element(argv, i+1, "core");
+            } else {
+                free(pargs[i]);
+                pargs[i] = strdup("--bind-to");
+                prrte_argv_insert_element(argv, i+1, "socket");
+            }
+            pargs = *argv;
+            prrte_asprintf(&help_str, "%s %s", pargs[i], (*argv)[i+1]);
+            prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                            old_arg, help_str);
+            free(help_str);
+            free(old_arg);
+            ++pargc;
+        }
+        /* --bynode, --bycore, and --byslot -> "--map-by X --rank-by X" */
+        else if (0 == strcmp(pargs[i], "--bynode") ||
+                 0 == strcmp(pargs[i], "--bycore") ||
+                 0 == strcmp(pargs[i], "--byslot") ) {
+            /* did they give the map-by or rank-by option? */
+            for (j=0; NULL != pargs[j]; j++) {
+                if (0 == strcmp(pargs[j], "--bind-to") ||
+                    0 == strcmp(pargs[j], "--rank-by") ) {
+                    if (NULL != pargs[j+1]) {
+                        prrte_asprintf(&help_str, "Conflicting option \"%s %s\"", pargs[j], pargs[j+1]);
+                    } else {
+                        prrte_asprintf(&help_str, "Conflicting option \"%s\"", pargs[j]);
+                    }
+                    prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
+                                    pargs[i], help_str);
+                    free(help_str);
+                    return PRRTE_ERR_BAD_PARAM;
+                }
+            }
+            /* add the bind-to and rank-by options */
+            old_arg = strdup(pargs[i]);
+            if (0 == strcmp(pargs[i], "--bynode")) {
+                free(pargs[i]);
+                pargs[i] = strdup("--map-by");
+                prrte_argv_insert_element(argv, i+1, "node");
+                prrte_argv_insert_element(argv, i+2, "--rank-by");
+                prrte_argv_insert_element(argv, i+3, "node");
+            } else if (0 == strcmp(pargs[i], "--bycore")) {
+                free(pargs[i]);
+                pargs[i] = strdup("--map-by");
+                prrte_argv_insert_element(argv, i+1, "core");
+                prrte_argv_insert_element(argv, i+2, "--rank-by");
+                prrte_argv_insert_element(argv, i+3, "core");
+            } else if (0 == strcmp(pargs[i], "--byslot")) {
+                free(pargs[i]);
+                pargs[i] = strdup("--map-by");
+                prrte_argv_insert_element(argv, i+1, "slot");
+                prrte_argv_insert_element(argv, i+2, "--rank-by");
+                prrte_argv_insert_element(argv, i+3, "slot");
+            }
+            pargs = *argv;
+            prrte_asprintf(&help_str, "%s %s %s %s",
+                           pargs[i], (*argv)[i+1],
+                           (*argv)[i+2], (*argv)[i+3]);
+            prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                            old_arg, help_str);
+            free(help_str);
+            free(old_arg);
+            pargc += 3;
+        }
+        /* --cpus-per-proc/rank X -> --map-by :pe=X */
+        else if (0 == strcmp(pargs[i], "--cpus-per-proc") ||
+                 0 == strcmp(pargs[i], "--cpus-per-rank") ) {
+            /* did they give the map-by option? */
+            found = false;
+            for (j=0; NULL != pargs[j]; j++) {
+                if (0 == strcmp(pargs[j], "--map-by")) {
+                    /* add the oversubscription modifier to this value */
+                    if (NULL == strchr(pargs[j+1], ':')) {
+                        prrte_asprintf(&p2, "%s:pe=%s", pargs[j+1], pargs[i+1]);
+                    } else {
+                        prrte_asprintf(&p2, "%s,pe=%s", pargs[j+1], pargs[i+1]);
+                    }
+                    free(pargs[j+1]);
+                    pargs[j+1] = p2;
+                    prrte_asprintf(&help_str, "--map-by %s", p2);
+                    prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                                    pargs[i], help_str);
+                    free(help_str);
+                    found = true;
+                    // Shift down, and look at this token again in the next cycle
+                    prrte_argv_delete(&pargc, argv, i, 2);
+                    i--;
+                    pargs = *argv;
+                    break;
+                }
+            }
+            if (!found) {
+                /* add the map-by option */
+                old_arg = strdup(pargs[i]);
+                free(pargs[i]);
+                pargs[i] = strdup("--map-by");
+                prrte_asprintf(&p2, ":pe=%s", pargs[i+1]);
+                free(pargs[i+1]);
+                pargs[i+1] = strdup(p2);
+                free(p2);
+                prrte_asprintf(&help_str, "%s %s", pargs[i], (*argv)[i+1]);
+                prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                                old_arg, help_str);
+                free(help_str);
+                free(old_arg);
+            }
+        }
+        /* --npernode X and --npersocket X -> --map-by ppr:X:node/socket */
+        else if (0 == strcmp(pargs[i], "--npernode") ||
+                 0 == strcmp(pargs[i], "--pernode")  ||
+                 0 == strcmp(pargs[i], "--npersocket") ) {
+            for (j=0; NULL != pargs[j]; j++) {
+                if (0 == strcmp(pargs[j], "--map-by")) {
+                    if (NULL != pargs[j+1]) {
+                        prrte_asprintf(&help_str, "Conflicting option \"%s %s\"", pargs[j], pargs[j+1]);
+                    } else {
+                        prrte_asprintf(&help_str, "Conflicting option \"%s\"", pargs[j]);
+                    }
+                    prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
+                                    pargs[i], help_str);
+                    free(help_str);
+                    return PRRTE_ERR_BAD_PARAM;
+                }
+            }
+            old_arg = strdup(pargs[i]);
+            if (0 == strcmp(pargs[i], "--npersocket")) {
+                free(pargs[i]);
+                pargs[i] = strdup("--map-by");
+                prrte_asprintf(&p2, "ppr:%s:socket", pargs[i+1]);
+                free(pargs[i+1]);
+                pargs[i+1] = strdup(p2);
+            } else {
+                free(pargs[i]);
+                pargs[i] = strdup("--map-by");
+                prrte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
+                free(pargs[i+1]);
+                pargs[i+1] = strdup(p2);
+            }
+            free(p2);
+            prrte_asprintf(&help_str, "%s %s", pargs[i], (*argv)[i+1]);
+            prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                            old_arg, help_str);
+            free(help_str);
+            free(old_arg);
+        }
+        /* --ppr X -> --map-by ppr:X */
+        else if (0 == strcmp(pargs[i], "--ppr")) {
+            for (j=0; NULL != pargs[j]; j++) {
+                if (0 == strcmp(pargs[j], "--map-by")) {
+                    if (NULL != pargs[j+1]) {
+                        prrte_asprintf(&help_str, "Conflicting option \"%s %s\"", pargs[j], pargs[j+1]);
+                    } else {
+                        prrte_asprintf(&help_str, "Conflicting option \"%s\"", pargs[j]);
+                    }
+                    prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
+                                    pargs[i], help_str);
+                    free(help_str);
+                    return PRRTE_ERR_BAD_PARAM;
+                }
+            }
+            old_arg = strdup(pargs[i]);
+            free(pargs[i]);
+            pargs[i] = strdup("--map-by");
+            prrte_asprintf(&p2, "ppr:%s", pargs[i+1]);
+            free(pargs[i+1]);
+            pargs[i+1] = strdup(p2);
+            free(p2);
+            prrte_asprintf(&help_str, "%s %s", pargs[i], (*argv)[i+1]);
+            prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                            old_arg, help_str);
+            free(help_str);
+            free(old_arg);
         }
     }
     *argc = pargc;
+
+    return PRRTE_SUCCESS;
 }
 
 static char *strip_quotes(char *p)

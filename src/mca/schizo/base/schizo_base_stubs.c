@@ -1,6 +1,7 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -54,15 +55,21 @@ int prrte_schizo_base_parse_cli(int argc, int start, char **argv,
     return PRRTE_SUCCESS;
 }
 
-void prrte_schizo_base_parse_deprecated_cli(int *argc, char ***argv)
+int prrte_schizo_base_parse_deprecated_cli(int *argc, char ***argv)
 {
+    int rc;
     prrte_schizo_base_active_module_t *mod;
 
     PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
         if (NULL != mod->module->parse_deprecated_cli) {
-            mod->module->parse_deprecated_cli(argc, argv);
+            rc = mod->module->parse_deprecated_cli(argc, argv);
+            if (PRRTE_SUCCESS != rc && PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                PRRTE_ERROR_LOG(rc);
+                return rc;
+            }
         }
     }
+    return PRRTE_SUCCESS;
 }
 
 void prrte_schizo_base_parse_proxy_cli(prrte_cmd_line_t *cmd_line,

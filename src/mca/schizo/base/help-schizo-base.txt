@@ -1,6 +1,7 @@
 # -*- text -*-
 #
 # Copyright (c) 2020      Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -39,11 +40,35 @@ An environmental variable was requested to be forwarded, but was not found:
 This may result in unexpected behavior.
 #
 [single-dash-error]
-WARNING: Multi-character cmd line options must be prefixed with double dashes,
-not a single dash:
+WARNING: All multi-character command line options must be prefixed with double
+dashes, not a single dash:
 
   Deprecated option:   %s
-  Corrected option:   %s
+  Corrected option:    %s
 
 We have updated this for you and will proceed. However, this will be treated
-as an error in a future release. Please update your cmd line.
+as an error in a future release. Please update your command line.
+#
+[deprecated-converted]
+WARNING: A deprecated command line option was used.
+
+  Deprecated option:   %s
+  Corrected option:    %s
+
+We have updated this for you and will proceed. However, this will be treated
+as an error in a future release. Please update your command line.
+#
+[deprecated-inform]
+WARNING: A deprecated command line option was used.
+
+  Deprecated option:   %s
+  Reason: %s
+#
+[deprecated-fail]
+WARNING: A deprecated command line option was used. It is unclear how to update
+this option. Please contact the community for how best to resolve this issue.
+
+  Deprecated option:   %s
+  Reason: %s
+
+We are not able to proceed. Please update your command line.

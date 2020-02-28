@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,7 +69,7 @@ PRRTE_CLASS_DECLARATION(prrte_schizo_base_active_module_t);
 PRRTE_EXPORT int prrte_schizo_base_define_cli(prrte_cmd_line_t *cli);
 PRRTE_EXPORT int prrte_schizo_base_parse_cli(int argc, int start, char **argv,
                                              char *personality, char ***target);
-PRRTE_EXPORT void prrte_schizo_base_parse_deprecated_cli(int *argc, char ***argv);
+PRRTE_EXPORT int prrte_schizo_base_parse_deprecated_cli(int *argc, char ***argv);
 
 PRRTE_EXPORT void prrte_schizo_base_parse_proxy_cli(prrte_cmd_line_t *cmd_line,
                                                     char ***argv);
