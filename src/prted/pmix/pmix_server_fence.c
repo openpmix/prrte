@@ -251,6 +251,20 @@ static void dmodex_req(int sd, short args, void *cbdata)
          * data */
         if (PMIX_SUCCESS == PMIx_Get(&req->tproc, req->key, req->info, req->ninfo, &pval)) {
             PMIX_VALUE_RELEASE(pval);
+            /* mark that the result is to return to us */
+            req->proxy = *PRRTE_PROC_MY_NAME;
+            /* save the request in the hotel until the
+             * data is returned */
+            if (PRRTE_SUCCESS != (rc = prrte_hotel_checkin(&prrte_pmix_server_globals.reqs, req, &req->room_num))) {
+                prrte_show_help("help-orted.txt", "noroom", true, req->operation, prrte_pmix_server_globals.num_rooms);
+                /* can't just return as that would cause the requestor
+                 * to hang, so instead execute the callback */
+                prc = prrte_pmix_convert_rc(rc);
+                goto callback;
+            }
+            /* set the "remote" room number to our own */
+            req->remote_room_num = req->room_num;
+            PRRTE_RETAIN(req);
             /* we have it - just to be safe, get the blob and return it */
             if (PMIX_SUCCESS != (prc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req))) {
                 PMIX_ERROR_LOG(prc);
@@ -340,8 +354,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     }
     /* point the request to the daemon that is hosting the
      * target process */
-    req->proxy.vpid = dmn->name.vpid;
-
+    req->proxy = dmn->name;
     /* track the request so we know the function and cbdata
      * to callback upon completion */
     if (PRRTE_SUCCESS != (rc = prrte_hotel_checkin(&prrte_pmix_server_globals.reqs, req, &req->room_num))) {
