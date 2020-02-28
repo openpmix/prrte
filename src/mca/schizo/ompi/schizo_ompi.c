@@ -218,6 +218,20 @@ static void parse_deprecated_cli(int *argc, char ***argv)
     pargc = *argc;
     /* check for deprecated cmd line options */
     for (i=0; NULL != pargs[i]; i++) {
+        /* check for option */
+        if ('-' != pargs[i][0]) {
+            continue;
+        }
+        /* check for single-dash errors */
+        if ('-' != pargs[i][1] && 2 < strlen(pargs[i])) {
+            /* we know this is incorrect */
+            p2 = strdup(pargs[i]);
+            free(pargs[i]);
+            prrte_asprintf(&pargs[i], "-%s", p2);
+            prrte_show_help("help-schizo-base.txt", "single-dash-error", true,
+                            p2, pargs[i]);
+            free(p2);
+        }
         if (0 == strcmp(pargs[i], "--oversubscribe")) {
             /* did they give the map-by option? */
             found = false;

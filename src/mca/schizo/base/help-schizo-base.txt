@@ -37,3 +37,13 @@ An environmental variable was requested to be forwarded, but was not found:
   Variable:  %s
 
 This may result in unexpected behavior.
+#
+[single-dash-error]
+WARNING: Multi-character cmd line options must be prefixed with double dashes,
+not a single dash:
+
+  Deprecated option:   %s
+  Corrected option:    %s
+
+We have updated this for you and will proceed. However, this will be treated
+as an error in a future release. Please update your cmd line.
