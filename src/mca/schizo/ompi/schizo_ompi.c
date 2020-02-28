@@ -213,11 +213,40 @@ static void parse_deprecated_cli(int *argc, char ***argv)
     int i, j, pargc;
     bool found;
     char **pargs, *p2;
+    bool takeus = false;
+
+    /* if they gave us a list of personalities,
+     * see if we are included */
+    if (NULL != prrte_schizo_base.personalities) {
+        for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
+            if (0 == strcmp(prrte_schizo_base.personalities[i], "ompi")) {
+                takeus = true;
+                break;
+            }
+        }
+        if (!takeus) {
+            return;
+        }
+    }
 
     pargs = *argv;
     pargc = *argc;
     /* check for deprecated cmd line options */
     for (i=0; NULL != pargs[i]; i++) {
+        /* check for option */
+        if ('-' != pargs[i][0]) {
+            continue;
+        }
+        /* check for single-dash errors */
+        if ('-' != pargs[i][1] && 2 < strlen(pargs[i])) {
+            /* we know this is incorrect */
+            p2 = strdup(pargs[i]);
+            free(pargs[i]);
+            prrte_asprintf(&pargs[i], "-%s", p2);
+            prrte_show_help("help-schizo-base.txt", "single-dash-error", true,
+                            p2, pargs[i]);
+            free(p2);
+        }
         if (0 == strcmp(pargs[i], "--oversubscribe")) {
             /* did they give the map-by option? */
             found = false;

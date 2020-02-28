@@ -715,7 +715,6 @@ int prun(int argc, char *argv[])
                     prrte_tool_basename,
                     prrte_strerror(rc));
         }
-         PRRTE_ERROR_LOG(rc);
        return rc;
     }
 

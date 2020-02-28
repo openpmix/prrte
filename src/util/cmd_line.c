@@ -90,10 +90,6 @@ static char special_empty_token[] = {
  */
 static int make_opt(prrte_cmd_line_t *cmd, prrte_cmd_line_init_t *e);
 static void free_parse_results(prrte_cmd_line_t *cmd);
-static int split_shorts(prrte_cmd_line_t *cmd,
-                        char *token, char **args,
-                        int *output_argc, char ***output_argv,
-                        int *num_args_used, bool ignore_unknown);
 static prrte_cmd_line_option_t *find_option(prrte_cmd_line_t *cmd,
                                             prrte_cmd_line_init_t *e) __prrte_attribute_nonnull__(1) __prrte_attribute_nonnull__(2);
 static prrte_value_t*  set_dest(prrte_cmd_line_option_t *option, char *sval);
@@ -199,15 +195,12 @@ int prrte_cmd_line_make_opt3(prrte_cmd_line_t *cmd, char short_name,
 int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
                          bool ignore_unknown_option, int argc, char **argv)
 {
-    int i, j, orig, ret;
+    int i, j, orig;
     prrte_cmd_line_option_t *option;
     prrte_cmd_line_param_t *param;
     bool is_unknown_option;
     bool is_unknown_token;
     bool is_option;
-    char **shortsv;
-    int shortsc;
-    int num_args_used;
     bool have_help_option = false;
     bool printed_error = false;
     bool help_without_arg = false;
@@ -287,46 +280,19 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
         /* It could be a short name.  Is it? */
 
         else {
-            memset(&e, 0, sizeof(prrte_cmd_line_init_t));
-            e.ocl_cmd_short_name = cmd->lcl_argv[i][1];
-            option = find_option(cmd, &e);
+            if (2 < strlen(cmd->lcl_argv[i])) {
+                is_unknown_option = true;
+            } else {
+                memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+                e.ocl_cmd_short_name = cmd->lcl_argv[i][1];
+                option = find_option(cmd, &e);
 
-            /* If we didn't find it, try to split it into shorts.  If
-               we find the short option, replace lcl_argv[i] and
-               insert the rest into lcl_argv starting after position
-               i.  If we don't find the short option, don't do
-               anything to lcl_argv so that it can fall through to the
-               error condition, below. */
-
-            if (NULL == option) {
-                shortsv = NULL;
-                shortsc = 0;
-                ret = split_shorts(cmd, cmd->lcl_argv[i] + 1,
-                                   &(cmd->lcl_argv[i + 1]),
-                                   &shortsc, &shortsv,
-                                   &num_args_used, ignore_unknown);
-                if (PRRTE_SUCCESS == ret) {
-                    memset(&e, 0, sizeof(prrte_cmd_line_init_t));
-                    e.ocl_cmd_short_name = shortsv[0][1];
-                    option = find_option(cmd, &e);
-
-                    if (NULL != option) {
-                        prrte_argv_delete(&cmd->lcl_argc,
-                                         &cmd->lcl_argv, i,
-                                         1 + num_args_used);
-                        prrte_argv_insert(&cmd->lcl_argv, i, shortsv);
-                        cmd->lcl_argc = prrte_argv_count(cmd->lcl_argv);
-                    } else {
-                        is_unknown_option = true;
-                    }
-                    prrte_argv_free(shortsv);
-                } else {
+                /* If we didn't find it, then it is an unknown option */
+                if (NULL == option) {
                     is_unknown_option = true;
+                } else {
+                    is_option = true;
                 }
-            }
-
-            if (NULL != option) {
-                is_option = true;
             }
         }
 
@@ -341,10 +307,8 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
                 ++i;
 
                 /* Pull down the following parameters that belong to
-                   this option.  If we run out of parameters, or find
-                   that any of them are the special_empty_param
-                   (inserted by split_shorts()), then print an error
-                   and return. */
+                   this option.  If we run out of parameters, then
+                   print an error and return. */
 
                 param = PRRTE_NEW(prrte_cmd_line_param_t);
                 if (NULL == param) {
@@ -997,81 +961,6 @@ static void free_parse_results(prrte_cmd_line_t *cmd)
     }
     cmd->lcl_tail_argv = NULL;
     cmd->lcl_tail_argc = 0;
-}
-
-
-/*
- * Traverse a token and split it into individual letter options (the
- * token has already been certified to not be a long name and not be a
- * short name).  Ensure to differentiate the resulting options from
- * "single dash" names.
- */
-static int split_shorts(prrte_cmd_line_t *cmd, char *token, char **args,
-                        int *output_argc, char ***output_argv,
-                        int *num_args_used, bool ignore_unknown)
-{
-    int i, j, len;
-    prrte_cmd_line_option_t *option;
-    char fake_token[3];
-    int num_args;
-    prrte_cmd_line_init_t e;
-
-    /* Setup that we didn't use any of the args */
-
-    num_args = prrte_argv_count(args);
-    *num_args_used = 0;
-
-    /* Traverse the token.  If it's empty (e.g., if someone passes a
-       "-" token, which, since the upper level calls this function as
-       (argv[i] + 1), will be empty by the time it gets down here),
-       just return that we didn't find a short option. */
-
-    len = (int)strlen(token);
-    if (0 == len) {
-        return PRRTE_ERR_BAD_PARAM;
-    }
-    fake_token[0] = '-';
-    fake_token[2] = '\0';
-    memset(&e, 0, sizeof(prrte_cmd_line_init_t));
-    for (i = 0; i < len; ++i) {
-        fake_token[1] = token[i];
-        e.ocl_cmd_short_name = token[i];
-        option = find_option(cmd, &e);
-
-        /* If we don't find the option, either return an error or pass
-           it through unmodified to the new argv */
-
-        if (NULL == option) {
-            if (!ignore_unknown) {
-                return PRRTE_ERR_BAD_PARAM;
-            } else {
-                prrte_argv_append(output_argc, output_argv, fake_token);
-            }
-        }
-
-        /* If we do find the option, copy it and all of its parameters
-           to the output args.  If we run out of paramters (i.e., no
-           more tokens in the original argv), that error will be
-           handled at a higher level) */
-
-        else {
-            prrte_argv_append(output_argc, output_argv, fake_token);
-            for (j = 0; j < option->clo_num_params; ++j) {
-                if (*num_args_used < num_args) {
-                    prrte_argv_append(output_argc, output_argv,
-                                     args[*num_args_used]);
-                    ++(*num_args_used);
-                } else {
-                    prrte_argv_append(output_argc, output_argv,
-                                     special_empty_token);
-                }
-            }
-        }
-    }
-
-    /* All done */
-
-    return PRRTE_SUCCESS;
 }
 
 
