@@ -3,6 +3,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -66,7 +67,7 @@ typedef int (*prrte_schizo_base_module_parse_cli_fn_t)(int argc, int start,
                                                       char *personality,
                                                       char ***target);
 
-typedef void (*prrte_schizo_base_module_parse_deprecated_cli_fn_t)(int *argc, char ***argv);
+typedef int (*prrte_schizo_base_module_parse_deprecated_cli_fn_t)(int *argc, char ***argv);
 
 /* detect if we are running as a proxy
  * Check the environment to determine what, if any, host we are running

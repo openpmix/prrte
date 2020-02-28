@@ -705,7 +705,10 @@ int prun(int argc, char *argv[])
     }
 
     /* handle deprecated options */
-    prrte_schizo.parse_deprecated_cli(&pargc, &pargv);
+    if (PRRTE_SUCCESS != (rc = prrte_schizo.parse_deprecated_cli(&pargc, &pargv))) {
+        PRRTE_ERROR_LOG(rc);
+        return rc;
+    }
 
     /* parse the result to get values - this will not include MCA params */
     if (PRRTE_SUCCESS != (rc = prrte_cmd_line_parse(prrte_cmd_line,
