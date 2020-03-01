@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2008-2014 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
@@ -19,7 +19,7 @@
 # $HEADER$
 #
 
-include $(top_srcdir)/Makefile.ompi-rules
+include $(top_srcdir)/Makefile.prrte-rules
 
 man_pages = prte.1
 EXTRA_DIST = $(man_pages:.1=.1in)
