@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
@@ -152,7 +152,7 @@ int prrte_hwloc_unpack(prrte_buffer_t *buffer, void *dest,
 
 int prrte_hwloc_copy(hwloc_topology_t *dest, hwloc_topology_t src, prrte_data_type_t type)
 {
-#ifdef HAVE_HWLOC_TOPOLOGY_DUP
+#if HAVE_HWLOC_TOPOLOGY_DUP
     /* use the hwloc dup function */
     return hwloc_topology_dup(dest, src);
 #else
