@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 #
-# Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -56,7 +56,7 @@ sub isTopDir {
     my ($d) = @_;
 
     # trunk
-    if (-f "$d/Makefile.ompi-rules") {
+    if (-f "$d/Makefile.prrte-rules") {
         return 1;
     }
 

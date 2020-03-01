@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2010-2014 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      Research Organization for Information Science
@@ -42,7 +42,7 @@ AM_CFLAGS = \
             -DPRRTE_WRAPPER_EXTRA_LDFLAGS="\"@PRRTE_WRAPPER_EXTRA_LDFLAGS@\"" \
             -DPRRTE_WRAPPER_EXTRA_LIBS="\"@PRRTE_WRAPPER_EXTRA_LIBS@\""
 
-include $(top_srcdir)/Makefile.ompi-rules
+include $(top_srcdir)/Makefile.prrte-rules
 
 man_pages = prte_info.1
 EXTRA_DIST = $(man_pages:.1=.1in)
