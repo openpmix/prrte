@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2011-2012 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -35,6 +35,7 @@
 #include <stdlib.h>
 
 #include "src/event/event-internal.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/util/show_help.h"
 #include "src/mca/mca.h"
@@ -131,23 +132,23 @@ static int env_set_name(void)
     prrte_jobid_t jobid;
     prrte_vpid_t vpid;
 
-    if (NULL == prrte_ess_base_jobid) {
+    if (NULL == prrte_ess_base_nspace) {
         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         return PRRTE_ERR_NOT_FOUND;
     }
-    if (PRRTE_SUCCESS != (rc = prrte_util_convert_string_to_jobid(&jobid, prrte_ess_base_jobid))) {
-        PRRTE_ERROR_LOG(rc);
-        return(rc);
+
+    PRRTE_PMIX_CONVERT_NSPACE(rc, &jobid, prrte_ess_base_nspace);
+    if (PRRTE_SUCCESS != rc) {
+        return rc;
     }
+    PMIX_LOAD_NSPACE(prrte_process_info.myproc.nspace, prrte_ess_base_nspace);
 
     if (NULL == prrte_ess_base_vpid) {
         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         return PRRTE_ERR_NOT_FOUND;
     }
-    if (PRRTE_SUCCESS != (rc = prrte_util_convert_string_to_vpid(&vpid, prrte_ess_base_vpid))) {
-        PRRTE_ERROR_LOG(rc);
-        return(rc);
-    }
+    vpid = strtoul(prrte_ess_base_vpid, NULL, 10);
+    prrte_process_info.myproc.rank = vpid;
 
     PRRTE_PROC_MY_NAME->jobid = jobid;
     PRRTE_PROC_MY_NAME->vpid = vpid;
@@ -155,11 +156,7 @@ static int env_set_name(void)
     PRRTE_OUTPUT_VERBOSE((1, prrte_ess_base_framework.framework_output,
                          "ess:env set name to %s", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
 
-    /* get the non-name common environmental variables */
-    if (PRRTE_SUCCESS != (rc = prrte_ess_env_get())) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
+    prrte_process_info.num_daemons = prrte_ess_base_num_procs;
 
     return PRRTE_SUCCESS;
 }

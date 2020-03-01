@@ -593,6 +593,12 @@ int prrte_plm_base_spawn_reponse(int32_t status, prrte_job_t *jdata)
     prrte_buffer_t *answer;
     int room, *rmptr;
 
+    /* if the requestor simply told us to terminate, they won't
+     * be waiting for a response */
+    if (PRRTE_JOBID_INVALID == jdata->originator.jobid) {
+        return PRRTE_SUCCESS;
+    }
+
     /* if the response has already been sent, don't do it again */
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_SPAWN_NOTIFIED, NULL, PRRTE_BOOL)) {
         return PRRTE_SUCCESS;
@@ -853,7 +859,7 @@ void prrte_plm_base_daemon_topology(int status, prrte_process_name_t* sender,
         /* init the hash table, if necessary */
         if (NULL == prrte_coprocessors) {
             prrte_coprocessors = PRRTE_NEW(prrte_hash_table_t);
-            prrte_hash_table_init(prrte_coprocessors, prrte_process_info.num_procs);
+            prrte_hash_table_init(prrte_coprocessors, prrte_process_info.num_daemons);
         }
         /* separate the serial numbers of the coprocessors
          * on this host
@@ -977,7 +983,6 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
 
     /* multiple daemons could be in this buffer, so unpack until we exhaust the data */
     idx = 1;
-    PRRTE_PMIX_CONVERT_NAME(&pproc, PRRTE_PROC_MY_NAME);
     while (PRRTE_SUCCESS == (rc = prrte_dss.unpack(buffer, &dname, &idx, PRRTE_NAME))) {
         char *nodename = NULL;
         pmix_status_t ret;
@@ -1017,7 +1022,7 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
             bptr->bytes = NULL;
             free(bptr);
             /* setup the daemon name */
-            pproc.rank = dname.vpid;
+            PMIX_LOAD_PROCID(&pproc, prrte_process_info.myproc.nspace, dname.vpid);
             /* unpack the number of info structs */
             idx = 1;
             ret = PMIx_Data_unpack(&pproc, &pbuf, &ninfo, &idx, PMIX_SIZE);
@@ -1445,7 +1450,7 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
                                           int *proc_vpid_index)
 {
     char *param = NULL;
-    int i, j, cnt, rc;
+    int i, j, cnt;
     prrte_job_t *jdata;
     unsigned long num_procs;
     bool ignore;
@@ -1501,14 +1506,10 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
         prrte_argv_append(argc, argv, ess);
     }
 
-    /* pass the daemon jobid */
+    /* pass the daemon nspace */
     prrte_argv_append(argc, argv, "--prtemca");
-    prrte_argv_append(argc, argv, "ess_base_jobid");
-    if (PRRTE_SUCCESS != (rc = prrte_util_convert_jobid_to_string(&param, PRRTE_PROC_MY_NAME->jobid))) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
-    prrte_argv_append(argc, argv, param);
+    prrte_argv_append(argc, argv, "ess_base_nspace");
+    prrte_argv_append(argc, argv, prrte_process_info.myproc.nspace);
     free(param);
 
     /* setup to pass the vpid */
@@ -1524,7 +1525,7 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
         jdata = prrte_get_job_data_object(PRRTE_PROC_MY_NAME->jobid);
         num_procs = jdata->num_procs;
     } else {
-        num_procs = prrte_process_info.num_procs;
+        num_procs = prrte_process_info.num_daemons;
     }
     prrte_argv_append(argc, argv, "--prtemca");
     prrte_argv_append(argc, argv, "ess_base_num_procs");
@@ -1548,43 +1549,41 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
      * being sure to "purge" any that would cause problems
      * on backend nodes and ignoring all duplicates
      */
-    if (PRRTE_PROC_IS_MASTER || PRRTE_PROC_IS_DAEMON) {
-        cnt = prrte_argv_count(prted_cmd_line);
-        for (i=0; i < cnt; i+=3) {
-            /* if the specified option is more than one word, we don't
-             * have a generic way of passing it as some environments ignore
-             * any quotes we add, while others don't - so we ignore any
-             * such options. In most cases, this won't be a problem as
-             * they typically only apply to things of interest to the HNP.
-             * Individual environments can add these back into the cmd line
-             * as they know if it can be supported
-             */
-            if (NULL != strchr(prted_cmd_line[i+2], ' ')) {
-                continue;
+    cnt = prrte_argv_count(prted_cmd_line);
+    for (i=0; i < cnt; i+=3) {
+        /* if the specified option is more than one word, we don't
+         * have a generic way of passing it as some environments ignore
+         * any quotes we add, while others don't - so we ignore any
+         * such options. In most cases, this won't be a problem as
+         * they typically only apply to things of interest to the HNP.
+         * Individual environments can add these back into the cmd line
+         * as they know if it can be supported
+         */
+        if (NULL != strchr(prted_cmd_line[i+2], ' ')) {
+            continue;
+        }
+        /* The daemon will attempt to open the PLM on the remote
+         * end. Only a few environments allow this, so the daemon
+         * only opens the PLM -if- it is specifically told to do
+         * so by giving it a specific PLM module. To ensure we avoid
+         * confusion, do not include any directives here
+         */
+        if (0 == strcmp(prted_cmd_line[i+1], "plm")) {
+            continue;
+        }
+        /* check for duplicate */
+        ignore = false;
+        for (j=0; j < *argc; j++) {
+            if (0 == strcmp((*argv)[j], prted_cmd_line[i+1])) {
+                ignore = true;
+                break;
             }
-            /* The daemon will attempt to open the PLM on the remote
-             * end. Only a few environments allow this, so the daemon
-             * only opens the PLM -if- it is specifically told to do
-             * so by giving it a specific PLM module. To ensure we avoid
-             * confusion, do not include any directives here
-             */
-            if (0 == strcmp(prted_cmd_line[i+1], "plm")) {
-                continue;
-            }
-            /* check for duplicate */
-            ignore = false;
-            for (j=0; j < *argc; j++) {
-                if (0 == strcmp((*argv)[j], prted_cmd_line[i+1])) {
-                    ignore = true;
-                    break;
-                }
-            }
-            if (!ignore) {
-                /* pass it along */
-                prrte_argv_append(argc, argv, prted_cmd_line[i]);
-                prrte_argv_append(argc, argv, prted_cmd_line[i+1]);
-                prrte_argv_append(argc, argv, prted_cmd_line[i+2]);
-            }
+        }
+        if (!ignore) {
+            /* pass it along */
+            prrte_argv_append(argc, argv, prted_cmd_line[i]);
+            prrte_argv_append(argc, argv, prted_cmd_line[i+1]);
+            prrte_argv_append(argc, argv, prted_cmd_line[i+2]);
         }
     }
 
@@ -2130,7 +2129,7 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
         }
     }
 
-    if (prrte_process_info.num_procs != daemons->num_procs) {
+    if (prrte_process_info.num_daemons != daemons->num_procs) {
         /* more daemons are being launched - update the routing tree to
          * ensure that the HNP knows how to route messages via
          * the daemon routing tree - this needs to be done
@@ -2138,11 +2137,7 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
          * hasn't unpacked its launch message prior to being
          * asked to communicate.
          */
-        prrte_process_info.num_procs = daemons->num_procs;
-
-        if (prrte_process_info.max_procs < prrte_process_info.num_procs) {
-            prrte_process_info.max_procs = prrte_process_info.num_procs;
-        }
+        prrte_process_info.num_daemons = daemons->num_procs;
 
         /* ensure all routing plans are up-to-date - we need this
          * so we know how to tree-spawn and/or xcast info */

@@ -271,7 +271,7 @@ static void vm_ready(int fd, short args, void *cbdata)
         prrte_dvm_ready = true;
         /* if there is only one daemon in the job, then there
          * is just a little bit to do */
-        if (1 < prrte_process_info.num_procs) {
+        if (1 < prrte_process_info.num_daemons) {
             /* send the daemon map to every daemon in this DVM - we
              * do this here so we don't have to do it for every
              * job we are going to launch */
@@ -291,7 +291,7 @@ static void vm_ready(int fd, short args, void *cbdata)
             /* get wireup info for daemons */
             jptr = prrte_get_job_data_object(PRRTE_PROC_MY_NAME->jobid);
             wireup = PRRTE_NEW(prrte_buffer_t);
-            PRRTE_PMIX_CONVERT_JOBID(pproc.nspace, PRRTE_PROC_MY_NAME->jobid);
+            PMIX_LOAD_NSPACE(pproc.nspace, jptr->nspace);
             for (v=0; v < jptr->procs->size; v++) {
                 if (NULL == (dmn = (prrte_proc_t*)prrte_pointer_array_get_item(jptr->procs, v))) {
                     continue;
@@ -470,7 +470,7 @@ static void check_complete(int fd, short args, void *cbdata)
     }
 
     /* cleanup any pending server ops */
-    PRRTE_PMIX_CONVERT_JOBID(pname.nspace, jdata->jobid);
+    PMIX_LOAD_NSPACE(pname.nspace, jdata->nspace);
     pname.rank = PMIX_RANK_WILDCARD;
     prrte_pmix_server_clear(&pname);
 
@@ -712,7 +712,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         /* provide the status */
         PMIX_INFO_LOAD(&info[1], PMIX_JOB_TERM_STATUS, &ret, PMIX_STATUS);
         /* tell the requestor which job or proc  */
-        PRRTE_PMIX_CONVERT_JOBID(pname.nspace, jdata->jobid);
+        PMIX_LOAD_NSPACE(pname.nspace, jdata->nspace);
         if (NULL != pptr) {
             PRRTE_PMIX_CONVERT_VPID(pname.rank, pptr->name.vpid);
         } else {
@@ -728,11 +728,10 @@ static void dvm_notify(int sd, short args, void *cbdata)
 
         /* pack the info for sending */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-        PRRTE_PMIX_CONVERT_NAME(&pname, PRRTE_PROC_MY_NAME);
 
         /* pack the status code */
         code = PMIX_ERR_JOB_TERMINATED;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &code, 1, PMIX_STATUS))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &code, 1, PMIX_STATUS))) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             return;
@@ -741,26 +740,26 @@ static void dvm_notify(int sd, short args, void *cbdata)
          * the pmix server to upcall the event back to me */
         pnotify.jobid = jdata->jobid;
         pnotify.vpid = 0;
-        PRRTE_PMIX_CONVERT_NAME(&psource, &pnotify);
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &psource, 1, PMIX_PROC))) {
+        PRRTE_PMIX_CONVERT_NAME(rc, &psource, &pnotify);
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &psource, 1, PMIX_PROC))) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             return;
         }
         /* pack the range */
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             return;
         }
         /* pack the number of infos */
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &ninfo, 1, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             return;
         }
         /* pack the infos themselves */
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, info, ninfo, PMIX_INFO))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, info, ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             return;

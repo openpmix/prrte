@@ -12,7 +12,7 @@
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -33,6 +33,7 @@
 #include "src/mca/errmgr/base/base.h"
 #include "src/util/name_fns.h"
 #include "src/runtime/prrte_globals.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/mca/ess/ess.h"
 #include "src/mca/ess/base/base.h"
@@ -124,26 +125,23 @@ static int alps_set_name(void)
     int rank;
     prrte_jobid_t jobid;
 
-    if (NULL == prrte_ess_base_jobid) {
+    if (NULL == prrte_ess_base_nspace) {
         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         return PRRTE_ERR_NOT_FOUND;
     }
-    if (PRRTE_SUCCESS != (rc = prrte_util_convert_string_to_jobid(&jobid, prrte_ess_base_jobid))) {
-        PRRTE_ERROR_LOG(rc);
+
+    PRRTE_PMIX_CONVERT_NSPACE(rc, &jobid, prrte_ess_base_nspace);
+    if (PRRTE_SUCCESS != rc) {
         return rc;
     }
+    PMIX_LOAD_NSPACE(prrte_process_info.myproc.nspace, prrte_ess_base_nspace);
+    PRRTE_PROC_MY_NAME->jobid = jobid;
 
     if (NULL == prrte_ess_base_vpid) {
         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         return PRRTE_ERR_NOT_FOUND;
     }
-    if (PRRTE_SUCCESS != (rc = prrte_util_convert_string_to_vpid(&starting_vpid,
-                                                               prrte_ess_base_vpid))) {
-        PRRTE_ERROR_LOG(rc);
-        return(rc);
-    }
-
-    PRRTE_PROC_MY_NAME->jobid = jobid;
+    starting_vpid = strtoul(prrte_ess_base_vpid, NULL, 10);
 
     if (PRRTE_SUCCESS != (rc = prrte_ess_alps_get_first_rank_on_node(&rank))) {
         PRRTE_ERROR_LOG(rc);
@@ -151,12 +149,10 @@ static int alps_set_name(void)
     }
 
     PRRTE_PROC_MY_NAME->vpid = (prrte_vpid_t)rank + starting_vpid;
+    prrte_process_info.myproc.rank = PRRTE_PROC_MY_NAME->vpid;
 
     /* get the num procs as provided in the cmd line param */
-    if (PRRTE_SUCCESS != (rc = prrte_ess_env_get())) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
+    prrte_process_info.num_daemons = prrte_ess_base_num_procs;
 
     return PRRTE_SUCCESS;
 }

@@ -820,9 +820,14 @@ static void recv_data(int fd, short args, void *cbdata)
 
     /* the first section contains the PRRTE jobid for this allocation */
     tpn = strchr(alloc[0], '=');
-    prrte_util_convert_string_to_jobid(&jobid, tpn+1);
+    PRRTE_PMIX_CONVERT_NSPACE(rc, &jobid, tpn+1);
+    if (PRRTE_SUCCESS != rc) {
+        PRRTE_ERROR_LOG(rc);
+        return;
+    }
     /* get the corresponding job object */
     jdata = prrte_get_job_data_object(jobid);
+    PMIX_LOAD_NSPACE(jdata->nspace, tpn+1);
     jtrk = NULL;
     /* find the associated tracking object */
     for (item = prrte_list_get_first(&jobs);
@@ -986,7 +991,7 @@ static void recv_data(int fd, short args, void *cbdata)
  */
 static int dyn_allocate(prrte_job_t *jdata)
 {
-    char *cmd_str, **cmd=NULL, *tmp, *jstring;
+    char *cmd_str, **cmd=NULL, *tmp;
     char *node_list;
     prrte_app_context_t *app;
     int i;
@@ -1016,11 +1021,9 @@ static int dyn_allocate(prrte_job_t *jdata)
     /* construct the cmd string */
     prrte_argv_append_nosize(&cmd, "allocate");
     /* add the jobid */
-    prrte_util_convert_jobid_to_string(&jstring, jdata->jobid);
-    prrte_asprintf(&tmp, "jobid=%s", jstring);
+    prrte_asprintf(&tmp, "jobid=%s", jdata->nspace);
     prrte_argv_append_nosize(&cmd, tmp);
     free(tmp);
-    free(jstring);
     /* if we want the allocation for all apps in one shot,
      * then tell slurm
      *

@@ -334,7 +334,7 @@ static int create_dmns(prrte_grpcomm_signature_t *sig,
     /* if NULL == procs, or the target jobid is our own,
      * then all daemons are participating */
     if (NULL == sig->signature || PRRTE_PROC_MY_NAME->jobid == sig->signature[0].jobid) {
-        *ndmns = prrte_process_info.num_procs;
+        *ndmns = prrte_process_info.num_daemons;
         *dmns = NULL;
         return PRRTE_SUCCESS;
     }

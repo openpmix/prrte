@@ -27,9 +27,10 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/util/proc_info.h"
+#include "src/util/printf.h"
 #include "src/util/name_fns.h"
 #include "src/runtime/prrte_globals.h"
-
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/plm/base/plm_private.h"
 
 /*
@@ -68,6 +69,9 @@ int prrte_plm_base_set_hnp_name(void)
     /* copy it to the HNP field */
     PRRTE_PROC_MY_HNP->jobid = PRRTE_PROC_MY_NAME->jobid;
     PRRTE_PROC_MY_HNP->vpid = PRRTE_PROC_MY_NAME->vpid;
+
+    /* set the nspace */
+    PRRTE_PMIX_CREATE_NSPACE(prrte_process_info.myproc.nspace, PRRTE_PROC_MY_NAME->jobid);
 
     /* done */
     return PRRTE_SUCCESS;
@@ -119,6 +123,7 @@ int prrte_plm_base_create_jobid(prrte_job_t *jdata)
 
     /* take the next jobid */
     jdata->jobid =  PRRTE_CONSTRUCT_LOCAL_JOBID(PRRTE_PROC_MY_NAME->jobid, prrte_plm_globals.next_jobid);
+    PRRTE_PMIX_CREATE_NSPACE(jdata->nspace, jdata->jobid);
     prrte_plm_globals.next_jobid++;
     if (INT16_MAX == prrte_plm_globals.next_jobid) {
         reuse = true;

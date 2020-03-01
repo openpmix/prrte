@@ -176,7 +176,6 @@ int prrte_odls_base_default_get_add_procs_data(prrte_buffer_t *buffer,
     uint32_t key;
     prrte_proc_t *proc;
     pmix_info_t *info;
-    pmix_proc_t pproc;
     pmix_status_t ret;
     prrte_node_t *node;
     int i, k;
@@ -196,9 +195,6 @@ int prrte_odls_base_default_get_add_procs_data(prrte_buffer_t *buffer,
     if (NULL == map) {
         return PRRTE_SUCCESS;
     }
-
-    /* setup the daemon job */
-    PRRTE_PMIX_CONVERT_JOBID(pproc.nspace, PRRTE_PROC_MY_NAME->jobid);
 
     /* we need to ensure that any new daemons get a complete
      * copy of all active jobs so the grpcomm collectives can
@@ -349,7 +345,6 @@ int prrte_odls_base_default_get_add_procs_data(prrte_buffer_t *buffer,
     /* construct the actual request - we just let them pick the
      * default transport for now. Someday, we will add to prun
      * the ability for transport specifications */
-    PRRTE_PMIX_CONVERT_JOBID(pproc.nspace, jdata->jobid);
     (void)strncpy(cd.info[2].key, PMIX_ALLOC_NETWORK, PMIX_MAX_KEYLEN);
     cd.info[2].value.type = PMIX_DATA_ARRAY;
 #if PMIX_NUMERIC_VERSION < 0x00020203
@@ -361,7 +356,7 @@ int prrte_odls_base_default_get_add_procs_data(prrte_buffer_t *buffer,
     PMIX_DATA_ARRAY_CREATE(cd.info[2].value.data.darray, 3, PMIX_INFO);
     info = (pmix_info_t*)cd.info[2].value.data.darray->array;
 #endif
-    asprintf(&tmp, "%s.net", pproc.nspace);
+    asprintf(&tmp, "%s.net", jdata->nspace);
     PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NETWORK_ID, tmp, PMIX_STRING);
     free(tmp);
     PMIX_INFO_LOAD(&info[1], PMIX_ALLOC_NETWORK_SEC_KEY, NULL, PMIX_BOOL);
@@ -372,7 +367,7 @@ int prrte_odls_base_default_get_add_procs_data(prrte_buffer_t *buffer,
     rc = PRRTE_SUCCESS;
     cd.jdata = jdata;
     PRRTE_PMIX_CONSTRUCT_LOCK(&cd.lock);
-    if (PMIX_SUCCESS != (ret = PMIx_server_setup_application(pproc.nspace, cd.info, cd.ninfo,
+    if (PMIX_SUCCESS != (ret = PMIx_server_setup_application(jdata->nspace, cd.info, cd.ninfo,
                                                              setup_cbfunc, &cd))) {
         prrte_output(0, "[%s:%d] PMIx_server_setup_application failed: %s", __FILE__, __LINE__, PMIx_Error_string(ret));
         rc = PRRTE_ERROR;
@@ -593,7 +588,11 @@ int prrte_odls_base_default_construct_child_list(prrte_buffer_t *buffer,
         bo->size = 0;
         free(bo);
         /* setup the daemon job */
-        PRRTE_PMIX_CONVERT_NAME(&pproc, PRRTE_PROC_MY_NAME);
+        PRRTE_PMIX_CONVERT_NAME(rc, &pproc, PRRTE_PROC_MY_NAME);
+        if (PRRTE_SUCCESS != rc) {
+            PRRTE_ERROR_LOG(rc);
+            goto REPORT_ERROR;
+        }
         /* unpack the number of info structs */
         cnt = 1;
         ret = PMIx_Data_unpack(&pproc, &pbuf, &ninfo, &cnt, PMIX_SIZE);
@@ -752,8 +751,7 @@ int prrte_odls_base_default_construct_child_list(prrte_buffer_t *buffer,
      * have to do so AFTER we register the nspace so the PMIx server
      * has the nspace info it needs */
     if (0 < ninfo) {
-        (void)prrte_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, jdata->jobid);
-        if (PMIX_SUCCESS != (ret = PMIx_server_setup_local_support(pproc.nspace, info, ninfo,
+        if (PMIX_SUCCESS != (ret = PMIx_server_setup_local_support(jdata->nspace, info, ninfo,
                                                                    ls_cbunc, &lock))) {
             PMIX_ERROR_LOG(ret);
             rc = PRRTE_ERROR;
@@ -924,8 +922,7 @@ void prrte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     PRRTE_FLAG_UNSET(child, PRRTE_PROC_FLAG_WAITPID);
 
     /* setup the pmix environment */
-    (void)prrte_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, child->name.jobid);
-    pproc.rank = child->name.vpid;
+    PMIX_LOAD_PROCID(&pproc, child->job->nspace, child->name.vpid);
     if (PMIX_SUCCESS != (ret = PMIx_server_setup_fork(&pproc, &cd->env))) {
         PMIX_ERROR_LOG(ret);
         rc = PRRTE_ERROR;

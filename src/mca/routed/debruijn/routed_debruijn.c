@@ -5,7 +5,7 @@
  * Copyright (c) 2004-2011 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -179,7 +179,7 @@ static inline unsigned int debruijn_next_hop (int target)
     next_hop = (int)((route >> (i - log_npeers)) & rank_mask);
 
     /* if the next hop does not exist route to the lowest proc with the same lower routing bits */
-    return (next_hop < prrte_process_info.num_procs) ? next_hop : (next_hop & (rank_mask >> log_npeers));
+    return (next_hop < prrte_process_info.num_daemons) ? next_hop : (next_hop & (rank_mask >> log_npeers));
 }
 
 static prrte_process_name_t get_route(prrte_process_name_t *target)
@@ -342,7 +342,7 @@ static void update_routing_plan(void)
         PRRTE_RELEASE(item);
     }
 
-    log_nranks = (int) ilog2 ((unsigned int)prrte_process_info.num_procs) ;
+    log_nranks = (int) ilog2 ((unsigned int)prrte_process_info.num_daemons) ;
     assert(log_nranks < 31);
 
     if (log_nranks < 3) {
@@ -368,7 +368,7 @@ static void update_routing_plan(void)
             int next = ((my_vpid << log_npeers) | i) & rank_mask;
 
             /* add a peer to the routing tree only if its vpid is smaller than this rank */
-            if (next > my_vpid && next < (int)prrte_process_info.num_procs) {
+            if (next > my_vpid && next < (int)prrte_process_info.num_daemons) {
                 child = PRRTE_NEW(prrte_routed_tree_t);
                 child->vpid = next;
                 prrte_list_append (&my_children, &child->super);

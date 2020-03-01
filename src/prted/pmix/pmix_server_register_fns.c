@@ -101,20 +101,19 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     kv->info.value.type = PMIX_PROC;
     /* have to stringify the jobid */
     PMIX_PROC_CREATE(kv->info.value.data.proc, 1);
-    PRRTE_PMIX_CONVERT_JOBID(kv->info.value.data.proc->nspace, PRRTE_PROC_MY_NAME->jobid);
+    PMIX_LOAD_NSPACE(kv->info.value.data.proc->nspace, prrte_process_info.myproc.nspace);
     prrte_list_append(info, &kv->super);
 
     kv = PRRTE_NEW(prrte_info_item_t);
-    PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_RANK, &PRRTE_PROC_MY_NAME->vpid, PMIX_PROC_RANK);
+    PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_RANK, &prrte_process_info.myproc.rank, PMIX_PROC_RANK);
     prrte_list_append(info, &kv->super);
 
     /* jobid */
     kv = PRRTE_NEW(prrte_info_item_t);
     PMIX_LOAD_KEY(kv->info.key, PMIX_JOBID);
     kv->info.value.type = PMIX_PROC;
-    /* have to stringify the jobid */
     PMIX_PROC_CREATE(kv->info.value.data.proc, 1);
-    PRRTE_PMIX_CONVERT_JOBID(kv->info.value.data.proc->nspace, jdata->jobid);
+    PMIX_LOAD_NSPACE(kv->info.value.data.proc->nspace, jdata->nspace);
     prrte_list_append(info, &kv->super);
 
     /* offset */
@@ -339,7 +338,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
 
     /* register any local clients */
     vpid = PRRTE_VPID_MAX;
-    PRRTE_PMIX_CONVERT_JOBID(pproc.nspace, jdata->jobid);
+    PMIX_LOAD_NSPACE(pproc.nspace, jdata->nspace);
     micro = NULL;
     PRRTE_CONSTRUCT(&local_procs, prrte_list_t);
     for (i=0; i < mynode->procs->size; i++) {
@@ -561,7 +560,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
         procs = (pmix_proc_t*)pinfo[0].value.data.darray->array;
         n = 0;
         PRRTE_LIST_FOREACH(nm, &local_procs, prrte_namelist_t) {
-            PRRTE_PMIX_CONVERT_JOBID(procs[n].nspace, nm->name.jobid);
+            PRRTE_PMIX_CONVERT_JOBID(rc, procs[n].nspace, nm->name.jobid);
             PRRTE_PMIX_CONVERT_VPID(procs[n].rank, nm->name.vpid);
             ++n;
         }
@@ -639,8 +638,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
 
         /* first pass the packed values with a key of the nspace */
         n=0;
-        PRRTE_PMIX_CONVERT_JOBID(pproc.nspace, PRRTE_PROC_MY_NAME->jobid);
-        PMIX_INFO_LOAD(&pinfo[n], pproc.nspace, &pbo, PMIX_BYTE_OBJECT);
+        PMIX_INFO_LOAD(&pinfo[n], prrte_process_info.myproc.nspace, &pbo, PMIX_BYTE_OBJECT);
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
         ++n;
 
@@ -658,9 +656,8 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
         ++n;
 
         /* now publish it */
-        PRRTE_PMIX_CONVERT_NAME(&pproc, PRRTE_PROC_MY_NAME);
         PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        if (PMIX_SUCCESS != (ret = pmix_server_publish_fn(&pproc, pinfo, ninfo, opcbfunc, &lock))) {
+        if (PMIX_SUCCESS != (ret = pmix_server_publish_fn(&prrte_process_info.myproc, pinfo, ninfo, opcbfunc, &lock))) {
             PMIX_ERROR_LOG(ret);
             rc = prrte_pmix_convert_status(ret);
             PMIX_INFO_FREE(pinfo, ninfo);

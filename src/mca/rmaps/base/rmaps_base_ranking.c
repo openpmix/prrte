@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -127,6 +127,8 @@ static int rank_span(prrte_job_t *jdata,
                                                 PRRTE_NAME_PRINT(&proc->name), num_ranked);
                             continue;
                         }
+                        /* tie proc to its job */
+                        proc->job = jdata;
                         /* ignore procs that are already assigned */
                         if (PRRTE_VPID_INVALID != proc->name.vpid) {
                             continue;
@@ -248,6 +250,8 @@ static int rank_fill(prrte_job_t *jdata,
                                             PRRTE_NAME_PRINT(&proc->name), num_ranked);
                         continue;
                     }
+                    /* tie proc to its job */
+                    proc->job = jdata;
                     /* ignore procs that are already assigned */
                     if (PRRTE_VPID_INVALID != proc->name.vpid) {
                         continue;
@@ -398,6 +402,8 @@ static int rank_by(prrte_job_t *jdata,
                                                 PRRTE_NAME_PRINT(&proc->name), num_ranked);
                             continue;
                         }
+                        /* tie proc to its job */
+                        proc->job = jdata;
                         /* ignore procs that are already ranked */
                         if (PRRTE_VPID_INVALID != proc->name.vpid) {
                             prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
@@ -626,6 +632,8 @@ int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata)
                         if (proc->name.jobid != jdata->jobid) {
                             continue;
                         }
+                        /* tie proc to its job */
+                        proc->job = jdata;
                         /* ignore procs from other apps */
                         if (proc->app_idx != app->idx) {
                             continue;
@@ -685,6 +693,8 @@ int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata)
                     if (proc->name.jobid != jdata->jobid) {
                         continue;
                     }
+                    /* tie proc to its job */
+                    proc->job = jdata;
                     /* ignore procs from other apps */
                     if (proc->app_idx != app->idx) {
                         continue;

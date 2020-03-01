@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2007-2011 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -40,6 +40,7 @@
 #include "src/util/proc_info.h"
 #include "src/runtime/prrte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/mca/ess/ess.h"
 #include "src/mca/ess/base/base.h"
@@ -113,36 +114,34 @@ static int lsf_set_name(void)
     prrte_jobid_t jobid;
     prrte_vpid_t vpid;
 
-    if (NULL ==prrte_ess_base_jobid) {
+    if (NULL == prrte_ess_base_nspace) {
         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         return PRRTE_ERR_NOT_FOUND;
     }
-    if (PRRTE_SUCCESS != (rc = prrte_util_convert_string_to_jobid(&jobid, prrte_ess_base_jobid))) {
-        PRRTE_ERROR_LOG(rc);
-        return(rc);
+
+    PRRTE_PMIX_CONVERT_NSPACE(rc, &jobid, prrte_ess_base_nspace);
+    if (PRRTE_SUCCESS != rc) {
+        return rc;
     }
+    PMIX_LOAD_NSPACE(prrte_process_info.myproc.nspace, prrte_ess_base_nspace);
     PRRTE_PROC_MY_NAME->jobid = jobid;
 
-    /* get the vpid from the nodeid */
     if (NULL == prrte_ess_base_vpid) {
         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         return PRRTE_ERR_NOT_FOUND;
     }
-    if (PRRTE_SUCCESS != (rc = prrte_util_convert_string_to_vpid(&vpid, prrte_ess_base_vpid))) {
-        PRRTE_ERROR_LOG(rc);
-        return(rc);
-    }
+    vpid = strtoul(prrte_ess_base_vpid, NULL, 10);
+
     lsf_nodeid = atoi(getenv("LSF_PM_TASKID"));
     prrte_output_verbose(1, prrte_ess_base_framework.framework_output,
                         "ess:lsf found LSF_PM_TASKID set to %d",
                         lsf_nodeid);
     PRRTE_PROC_MY_NAME->vpid = vpid + lsf_nodeid - 1;
+    prrte_process_info.myproc.rank = PRRTE_PROC_MY_NAME->vpid;
 
-    /* get the non-name common environmental variables */
-    if (PRRTE_SUCCESS != (rc = prrte_ess_env_get())) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
-    }
+    /* get the num procs as provided in the cmd line param */
+    prrte_process_info.num_daemons = prrte_ess_base_num_procs;
+
 
     return PRRTE_SUCCESS;
 }

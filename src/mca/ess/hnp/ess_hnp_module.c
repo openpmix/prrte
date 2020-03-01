@@ -257,18 +257,9 @@ static int rte_init(int argc, char **argv)
         }
         goto error;
     }
-    /* if we were spawned by a singleton, our jobid was given to us */
-    if (NULL != prrte_ess_base_jobid) {
-        if (PRRTE_SUCCESS != (ret = prrte_util_convert_string_to_jobid(&PRRTE_PROC_MY_NAME->jobid, prrte_ess_base_jobid))) {
-            error = "convert_string_to_jobid";
-            goto error;
-        }
-        PRRTE_PROC_MY_NAME->vpid = 0;
-    } else {
-        if (PRRTE_SUCCESS != (ret = prrte_plm.set_hnp_name())) {
-            error = "prrte_plm_set_hnp_name";
-            goto error;
-        }
+    if (PRRTE_SUCCESS != (ret = prrte_plm.set_hnp_name())) {
+        error = "prrte_plm_set_hnp_name";
+        goto error;
     }
 
     /* setup my session directory here as the OOB may need it */
@@ -368,36 +359,14 @@ static int rte_init(int argc, char **argv)
         error = "prrte_errmgr_base_select";
         goto error;
     }
-    /* setup the global job and node arrays */
-    prrte_job_data = PRRTE_NEW(prrte_hash_table_t);
-    if (PRRTE_SUCCESS != (ret = prrte_hash_table_init(prrte_job_data, 128))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "setup job array";
-        goto error;
-    }
-    prrte_node_pool = PRRTE_NEW(prrte_pointer_array_t);
-    if (PRRTE_SUCCESS != (ret = prrte_pointer_array_init(prrte_node_pool,
-                                                       PRRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                                       PRRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                                       PRRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "setup node array";
-        goto error;
-    }
-    prrte_node_topologies = PRRTE_NEW(prrte_pointer_array_t);
-    if (PRRTE_SUCCESS != (ret = prrte_pointer_array_init(prrte_node_topologies,
-                                                       PRRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                                       PRRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                                       PRRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "setup node topologies array";
-        goto error;
-    }
+
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
     jdata = PRRTE_NEW(prrte_job_t);
     jdata->jobid = PRRTE_PROC_MY_NAME->jobid;
+    PMIX_LOAD_NSPACE(jdata->nspace, prrte_process_info.myproc.nspace);
     prrte_hash_table_set_value_uint32(prrte_job_data, jdata->jobid, jdata);
+
     /* mark that the daemons have reported as we are the
      * only ones in the system right now, and we definitely
      * are running!
@@ -420,12 +389,14 @@ static int rte_init(int argc, char **argv)
     proc = PRRTE_NEW(prrte_proc_t);
     proc->name.jobid = PRRTE_PROC_MY_NAME->jobid;
     proc->name.vpid = PRRTE_PROC_MY_NAME->vpid;
+    proc->job = jdata;
+    proc->rank = proc->name.vpid;
     proc->pid = prrte_process_info.pid;
     prrte_oob_base_get_addr(&proc->rml_uri);
     prrte_process_info.my_hnp_uri = strdup(proc->rml_uri);
     /* store it in the local PMIx repo for later retrieval */
     PMIX_VALUE_LOAD(&pval, proc->rml_uri, PMIX_STRING);
-    PRRTE_PMIX_CONVERT_NAME(&pname, PRRTE_PROC_MY_NAME);
+    PMIX_LOAD_PROCID(&pname, jdata->nspace, proc->rank);
     if (PMIX_SUCCESS != (pret = PMIx_Store_internal(&pname, PMIX_PROC_URI, &pval))) {
         PMIX_ERROR_LOG(pret);
         ret = PRRTE_ERROR;
@@ -434,8 +405,6 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
     PMIX_VALUE_DESTRUCT(&pval);
-    /* we are also officially a daemon, so better update that field too */
-    prrte_process_info.my_daemon_uri = strdup(proc->rml_uri);
     proc->state = PRRTE_PROC_STATE_RUNNING;
     PRRTE_RETAIN(node);  /* keep accounting straight */
     proc->node = node;
@@ -518,7 +487,7 @@ static int rte_init(int argc, char **argv)
     /* init the hash table, if necessary */
     if (NULL == prrte_coprocessors) {
         prrte_coprocessors = PRRTE_NEW(prrte_hash_table_t);
-        prrte_hash_table_init(prrte_coprocessors, prrte_process_info.num_procs);
+        prrte_hash_table_init(prrte_coprocessors, prrte_process_info.num_daemons);
     }
     /* detect and add any coprocessors */
     coprocessors = prrte_hwloc_base_find_coprocessors(prrte_hwloc_topology);
@@ -633,8 +602,6 @@ static int rte_init(int argc, char **argv)
 static int rte_finalize(void)
 {
     char *contact_path;
-    prrte_job_t *jdata;
-    uint32_t key;
     prrte_ess_base_signal_t *sig;
     unsigned int i;
 
@@ -703,61 +670,6 @@ static int rte_finalize(void)
             fclose(prrte_xml_fp);
         }
     }
-
-    /* release the job hash table */
-    PRRTE_HASH_TABLE_FOREACH(key, uint32, jdata, prrte_job_data) {
-        if (NULL != jdata) {
-            PRRTE_RELEASE(jdata);
-        }
-    }
-    PRRTE_RELEASE(prrte_job_data);
-
-    if (prrte_do_not_launch) {
-        exit(0);
-    }
-
-{
-    prrte_pointer_array_t * array = prrte_node_topologies;
-    int i;
-    if( array->number_free != array->size ) {
-        prrte_mutex_lock(&array->lock);
-        array->lowest_free = 0;
-        array->number_free = array->size;
-        for(i=0; i<array->size; i++) {
-            if(NULL != array->addr[i]) {
-                prrte_topology_t * topo = (prrte_topology_t *)array->addr[i];
-                topo->topo = NULL;
-                PRRTE_RELEASE(topo);
-            }
-            array->addr[i] = NULL;
-        }
-        prrte_mutex_unlock(&array->lock);
-    }
-}
-    PRRTE_RELEASE(prrte_node_topologies);
-
-{
-    prrte_pointer_array_t * array = prrte_node_pool;
-    int i;
-    prrte_node_t* node = (prrte_node_t *)prrte_pointer_array_get_item(prrte_node_pool, 0);
-    assert(NULL != node);
-    PRRTE_RELEASE(node->daemon);
-    node->daemon = NULL;
-    if( array->number_free != array->size ) {
-        prrte_mutex_lock(&array->lock);
-        array->lowest_free = 0;
-        array->number_free = array->size;
-        for(i=0; i<array->size; i++) {
-            if(NULL != array->addr[i]) {
-                node= (prrte_node_t*)array->addr[i];
-                PRRTE_RELEASE(node);
-            }
-            array->addr[i] = NULL;
-        }
-        prrte_mutex_unlock(&array->lock);
-    }
-}
-    PRRTE_RELEASE(prrte_node_pool);
 
     free(prrte_topo_signature);
 

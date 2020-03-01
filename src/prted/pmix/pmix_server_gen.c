@@ -103,7 +103,7 @@ pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc, void* ser
     prrte_process_name_t name;
     int rc;
 
-    PRRTE_PMIX_CONVERT_PROCT(rc, &name, proc);
+    PRRTE_PMIX_CONVERT_PROCT(rc, &name, (pmix_proc_t*)proc);
     if (PRRTE_SUCCESS != rc) {
         return PMIX_ERR_BAD_PARAM;
     }
@@ -177,7 +177,7 @@ pmix_status_t pmix_server_client_finalized_fn(const pmix_proc_t *proc, void* ser
     prrte_process_name_t name;
     int rc;
 
-    PRRTE_PMIX_CONVERT_PROCT(rc, &name, proc);
+    PRRTE_PMIX_CONVERT_PROCT(rc, &name, (pmix_proc_t*)proc);
     if (PRRTE_SUCCESS != rc) {
         return PMIX_ERR_BAD_PARAM;
     }
@@ -240,7 +240,7 @@ pmix_status_t pmix_server_abort_fn(const pmix_proc_t *proc, void *server_object,
     prrte_process_name_t name;
     int rc;
 
-    PRRTE_PMIX_CONVERT_PROCT(rc, &name, proc);
+    PRRTE_PMIX_CONVERT_PROCT(rc, &name, (pmix_proc_t*)proc);
     if (PRRTE_SUCCESS != rc) {
         return PMIX_ERR_BAD_PARAM;
     }
@@ -346,7 +346,7 @@ void pmix_server_notify(int status, prrte_process_name_t* sender,
 {
     prrte_pmix_server_op_caddy_t *cd;
     int cnt, rc;
-    pmix_proc_t source, psender;
+    pmix_proc_t source;
     prrte_byte_object_t *boptr;
     pmix_data_buffer_t pbkt;
     pmix_data_range_t range = PMIX_RANGE_SESSION;
@@ -371,12 +371,9 @@ void pmix_server_notify(int status, prrte_process_name_t* sender,
     PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
     free(boptr);
 
-    /* convert the sender */
-    PRRTE_PMIX_CONVERT_NAME(&psender, sender);
-
     /* unpack the status code */
     cnt = 1;
-    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &code, &cnt, PMIX_STATUS))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&prrte_process_info.myproc, &pbkt, &code, &cnt, PMIX_STATUS))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return;
@@ -384,7 +381,7 @@ void pmix_server_notify(int status, prrte_process_name_t* sender,
 
     /* unpack the source */
     cnt = 1;
-    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &source, &cnt, PMIX_PROC))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&prrte_process_info.myproc, &pbkt, &source, &cnt, PMIX_PROC))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return;
@@ -392,7 +389,7 @@ void pmix_server_notify(int status, prrte_process_name_t* sender,
 
     /* unpack the range */
     cnt = 1;
-    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &range, &cnt, PMIX_DATA_RANGE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&prrte_process_info.myproc, &pbkt, &range, &cnt, PMIX_DATA_RANGE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return;
@@ -402,7 +399,7 @@ void pmix_server_notify(int status, prrte_process_name_t* sender,
 
     /* unpack the #infos that were provided */
     cnt = 1;
-    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &cd->ninfo, &cnt, PMIX_SIZE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&prrte_process_info.myproc, &pbkt, &cd->ninfo, &cnt, PMIX_SIZE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         PRRTE_RELEASE(cd);
@@ -416,7 +413,7 @@ void pmix_server_notify(int status, prrte_process_name_t* sender,
     if (0 < cd->ninfo) {
         /* unpack into it */
         cnt = cd->ninfo;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, cd->info, &cnt, PMIX_INFO))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&prrte_process_info.myproc, &pbkt, cd->info, &cnt, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             PMIX_INFO_FREE(cd->info, cd->ninfo);
@@ -465,7 +462,6 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
     prrte_byte_object_t *boptr, bo;
     pmix_byte_object_t pbo;
     pmix_data_buffer_t pbkt;
-    pmix_proc_t psender;
     pmix_status_t ret;
     size_t n;
 
@@ -486,35 +482,33 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
      * to all the daemons so it can be passed down to their local
      * procs */
     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-    /* convert the sender */
-    PRRTE_PMIX_CONVERT_NAME(&psender, PRRTE_PROC_MY_NAME);
 
     /* pack the status code */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, &code, 1, PMIX_STATUS))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &code, 1, PMIX_STATUS))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return ret;
     }
     /* pack the source */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, (pmix_proc_t*)source, 1, PMIX_PROC))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, (pmix_proc_t*)source, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return ret;
     }
     /* pack the range */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return ret;
     }
     /* pack the number of infos */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return ret;
     }
     if (0 < ninfo) {
-        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&psender, &pbkt, info, ninfo, PMIX_INFO))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, info, ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             return ret;
@@ -569,15 +563,13 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
 static void _toolconn(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *cd = (pmix_server_req_t*)cbdata;
-    prrte_job_t *jdata = NULL, *jptr;
-    int rc, i;
-    uint32_t u32;
+    prrte_job_t *jdata = NULL;
+    int rc;
     size_t n;
     pmix_proc_t pname;
     prrte_buffer_t *buf;
     prrte_plm_cmd_flag_t command = PRRTE_PLM_ALLOC_JOBID_CMD;
     pmix_status_t xrc;
-    void *nptr;
 
     PRRTE_ACQUIRE_OBJECT(cd);
 
@@ -650,13 +642,13 @@ static void _toolconn(int sd, short args, void *cbdata)
     if (PRRTE_JOBID_INVALID == cd->target.jobid ||
         PRRTE_VPID_INVALID == cd->target.vpid) {
        /* if we are the HNP, we can directly assign the jobid */
-        if (PRRTE_PROC_IS_MASTER || PRRTE_PROC_IS_MASTER) {
+        if (PRRTE_PROC_IS_MASTER) {
             jdata = PRRTE_NEW(prrte_job_t);
             rc = prrte_plm_base_create_jobid(jdata);
             if (PRRTE_SUCCESS != rc) {
                 PRRTE_RELEASE(jdata);
                 if (NULL != cd->toolcbfunc) {
-                    PRRTE_PMIX_CONVERT_NAME(&pname, &cd->target);
+                    PRRTE_PMIX_CONVERT_NAME(rc, &pname, &cd->target);
                     cd->toolcbfunc(PMIX_ERROR, &pname, cd->cbdata);
                 }
                 PRRTE_RELEASE(cd);
@@ -692,28 +684,21 @@ static void _toolconn(int sd, short args, void *cbdata)
     } else {
         /* we may have spawned this job, so check to see if we
          * already have a job object for it */
-        jdata = NULL;
-        i = prrte_hash_table_get_first_key_uint32(prrte_job_data, &u32, (void **)&jptr, &nptr);
-        while (PRRTE_SUCCESS == i) {
-            if (cd->target.jobid == jptr->jobid) {
-                jdata = jptr;
-                /* flag that this job is a tool */
-                PRRTE_FLAG_SET(jdata, PRRTE_JOB_FLAG_TOOL);
-                break;
-            }
-            i = prrte_hash_table_get_next_key_uint32(prrte_job_data, &u32, (void **)&jptr, nptr, &nptr);
-        }
+        jdata = prrte_get_job_data_object(cd->target.jobid);
         if (NULL == jdata) {
             jdata = PRRTE_NEW(prrte_job_t);
             jdata->jobid = cd->target.jobid;
+            PRRTE_PMIX_CONVERT_JOBID(rc, jdata->nspace, jdata->jobid);
             prrte_pmix_server_tool_conn_complete(jdata, cd);
+        } else {
+            PRRTE_FLAG_SET(jdata, PRRTE_JOB_FLAG_TOOL);
         }
     }
     rc = PRRTE_SUCCESS;
 
   callback:
     if (NULL != cd->toolcbfunc) {
-        PRRTE_PMIX_CONVERT_NAME(&pname, &cd->target);
+        PRRTE_PMIX_CONVERT_NAME(rc, &pname, &cd->target);
         xrc = prrte_pmix_convert_rc(rc);
         cd->toolcbfunc(xrc, &pname, cd->cbdata);
     }
@@ -866,7 +851,6 @@ void pmix_server_log_fn(const pmix_proc_t *client,
     int rc = PRRTE_SUCCESS;
     pmix_data_buffer_t pbuf;
     pmix_byte_object_t pbo;
-    pmix_proc_t psender;
     pmix_status_t ret;
 
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
@@ -884,7 +868,6 @@ void pmix_server_log_fn(const pmix_proc_t *client,
     }
 
     PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-    PRRTE_PMIX_CONVERT_NAME(&psender, PRRTE_PROC_MY_NAME);
     cnt = 0;
 
     for (n=0; n < ndata; n++) {
@@ -904,7 +887,7 @@ void pmix_server_log_fn(const pmix_proc_t *client,
             }
         } else {
             /* ship this to our HNP/MASTER for processing, even if that is us */
-            ret = PMIx_Data_pack(&psender, &pbuf, (pmix_info_t*)&data[n], 1, PMIX_INFO);
+            ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, (pmix_info_t*)&data[n], 1, PMIX_INFO);
             if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
             }
@@ -965,7 +948,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
             } else {
                 PRRTE_CONSTRUCT(&parray, prrte_pointer_array_t);
                 for (n=0; n < ntargets; n++) {
-                    PRRTE_PMIX_CONVERT_PROCT(rc, &name, &targets[n]);
+                    PRRTE_PMIX_CONVERT_PROCT(rc, &name, (pmix_proc_t*)&targets[n]);
                     if (PRRTE_SUCCESS != rc) {
                         PRRTE_ERROR_LOG(rc);
                         return PMIX_ERR_BAD_PARAM;
@@ -1175,7 +1158,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         cd->sig->signature = (prrte_process_name_t*)malloc(cd->sig->sz * sizeof(prrte_process_name_t));
         memset(cd->sig->signature, 0, cd->sig->sz * sizeof(prrte_process_name_t));
         for (i=0; i < nprocs; i++) {
-            PRRTE_PMIX_CONVERT_PROCT(rc, &cd->sig->signature[i], &procs[i]);
+            PRRTE_PMIX_CONVERT_PROCT(rc, &cd->sig->signature[i], (pmix_proc_t*)&procs[i]);
             if (PRRTE_SUCCESS != rc) {
                 PRRTE_ERROR_LOG(rc);
                 PRRTE_RELEASE(cd);

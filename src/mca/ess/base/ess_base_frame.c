@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -51,7 +51,7 @@ prrte_ess_base_module_t prrte_ess = {
 };
 int prrte_ess_base_std_buffering = -1;
 int prrte_ess_base_num_procs = -1;
-char *prrte_ess_base_jobid = NULL;
+char *prrte_ess_base_nspace = NULL;
 char *prrte_ess_base_vpid = NULL;
 prrte_list_t prrte_ess_base_signals = {{0}};
 
@@ -82,13 +82,13 @@ static int prrte_ess_base_register(prrte_mca_base_register_flag_t flags)
                                        PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_ess_base_std_buffering);
     PRRTE_RELEASE(new_enum);
 
-    prrte_ess_base_jobid = NULL;
-    ret = prrte_mca_base_var_register("prrte", "ess", "base", "jobid", "Process jobid",
+    prrte_ess_base_nspace = NULL;
+    ret = prrte_mca_base_var_register("prrte", "ess", "base", "nspace", "Process nspace",
                                       PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                       PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
                                       PRRTE_INFO_LVL_9,
-                                      PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_ess_base_jobid);
-    prrte_mca_base_var_register_synonym(ret, "prrte", "prrte", "ess", "jobid", 0);
+                                      PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_ess_base_nspace);
+    prrte_mca_base_var_register_synonym(ret, "prrte", "prrte", "ess", "nspace", 0);
 
     prrte_ess_base_vpid = NULL;
     ret = prrte_mca_base_var_register("prrte", "ess", "base", "vpid", "Process vpid",

@@ -15,7 +15,7 @@
  *                         reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
@@ -624,7 +624,10 @@ static int hnp_output(const prrte_process_name_t* peer,
     int ret;
 
     if (PRRTE_PROC_IS_MASTER) {
-        PRRTE_PMIX_CONVERT_NAME(&source, peer);
+        PRRTE_PMIX_CONVERT_NAME(ret, &source, peer);
+        if (PRRTE_SUCCESS != ret) {
+            PRRTE_ERROR_LOG(ret);
+        }
         pchan = 0;
         if (PRRTE_IOF_STDIN & source_tag) {
             pchan |= PMIX_FWD_STDIN_CHANNEL;

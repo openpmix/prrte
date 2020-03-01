@@ -447,8 +447,7 @@ static void defhandler(size_t evhdlr_registration_id,
         pmix_info_t directive;
 
         /* tell PRRTE to terminate our job */
-        PRRTE_PMIX_CONVERT_JOBID(target.nspace, myjobid);
-        target.rank = PMIX_RANK_WILDCARD;
+        PMIX_LOAD_PROCID(&target, prrte_process_info.myproc.nspace, PMIX_RANK_WILDCARD);
         PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
         if (PMIX_SUCCESS != PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL)) {
             PMIx_tool_finalize();
@@ -635,6 +634,7 @@ int prun(int argc, char *argv[])
     char *mytmpdir;
     char **pargv;
     int pargc;
+    pmix_rank_t zero;
 
     /* init the globals */
     PRRTE_CONSTRUCT(&job_info, prrte_list_t);
@@ -772,6 +772,12 @@ int prun(int argc, char *argv[])
         prrte_schizo.allow_run_as_root(prrte_cmd_line);  // will exit us if not allowed
     }
 
+    prrte_job_data = PRRTE_NEW(prrte_hash_table_t);
+    if (PRRTE_SUCCESS != (ret = prrte_hash_table_init(prrte_job_data, 128))) {
+        PRRTE_ERROR_LOG(ret);
+        return rc;
+    }
+
     /** setup callbacks for abort signals - from this point
      * forward, we need to abort in a manner that allows us
      * to cleanup. However, we cannot directly use libevent
@@ -821,14 +827,14 @@ int prun(int argc, char *argv[])
         /* we have to provide an nspace/rank for ourselves */
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        prrte_asprintf(&param, "prun.%lu", (unsigned long)getpid());
+        prrte_asprintf(&param, "%lu.%lu", (unsigned long)getpid(), (unsigned long)geteuid());
         PMIX_INFO_LOAD(ds->info, PMIX_TOOL_NSPACE, param, PMIX_STRING);
         free(param);
         prrte_list_append(&tinfo, &ds->super);
 
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        pmix_rank_t zero=0;
+        zero=0;
         PMIX_INFO_LOAD(ds->info, PMIX_TOOL_RANK, &zero, PMIX_PROC_RANK);
         prrte_list_append(&tinfo, &ds->super);
 
@@ -888,7 +894,6 @@ int prun(int argc, char *argv[])
             exit(1);
         }
         PMIX_INFO_FREE(iptr, ninfo);
-
         /* now setup the DVM "app" so we can PMIx_Spawn it - this will
          * simply fork/exec on our behalf */
         tpath = NULL;
@@ -1023,6 +1028,16 @@ int prun(int argc, char *argv[])
         PMIX_INFO_CREATE(ds->info, 1);
         rc = 0;
         PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_RETRY_DELAY, &rc, PMIX_INT32);
+        prrte_list_append(&tinfo, &ds->super);
+
+        ds = PRRTE_NEW(prrte_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_TOOL_NSPACE, myproc.nspace, PMIX_STRING);
+        prrte_list_append(&tinfo, &ds->super);
+
+        ds = PRRTE_NEW(prrte_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_TOOL_RANK, &myproc.rank, PMIX_PROC_RANK);
         prrte_list_append(&tinfo, &ds->super);
 
         /* convert to array of info */
@@ -1412,10 +1427,9 @@ int prun(int argc, char *argv[])
     /* pickup any relevant envars */
     flag = true;
     PMIX_INFO_LOAD(&info, PMIX_SETUP_APP_ENVARS, &flag, PMIX_BOOL);
-    PRRTE_PMIX_CONVERT_JOBID(pname.nspace, PRRTE_PROC_MY_NAME->jobid);
 
     PRRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
-    ret = PMIx_server_setup_application(pname.nspace, &info, 1, setupcbfunc, &mylock);
+    ret = PMIx_server_setup_application(prrte_process_info.myproc.nspace, &info, 1, setupcbfunc, &mylock);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PRRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
@@ -2167,8 +2181,7 @@ static void clean_abort(int fd, short flags, void *arg)
     }
 
     /* tell PRRTE to terminate our job */
-    PRRTE_PMIX_CONVERT_JOBID(target.nspace, myjobid);
-    target.rank = PMIX_RANK_WILDCARD;
+    PMIX_LOAD_PROCID(&target, prrte_process_info.myproc.nspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
     if (PMIX_SUCCESS != PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL)) {
         PMIx_tool_finalize();

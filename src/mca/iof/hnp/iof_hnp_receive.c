@@ -12,7 +12,7 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -271,7 +271,10 @@ void prrte_iof_hnp_recv(int status, prrte_process_name_t* sender,
                     pmix_iof_channel_t pchan;
                     prrte_pmix_lock_t lock;
                     pmix_status_t prc;
-                    PRRTE_PMIX_CONVERT_NAME(&source, &origin);
+                    PRRTE_PMIX_CONVERT_NAME(rc, &source, &origin);
+                    if (PRRTE_SUCCESS != rc) {
+                        PRRTE_ERROR_LOG(rc);
+                    }
                     pchan = 0;
                     if (PRRTE_IOF_STDIN & stream) {
                         pchan |= PMIX_FWD_STDIN_CHANNEL;

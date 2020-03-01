@@ -240,6 +240,7 @@ int main(int argc, char *argv[])
     pmix_byte_object_t pbo;
     prrte_byte_object_t bo, *boptr;
     prrte_process_name_t target;
+    char *myuri;
 
     char *umask_str = getenv("PRRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -478,18 +479,15 @@ int main(int argc, char *argv[])
     /* insert our contact info into our process_info struct so we
      * have it for later use and set the local daemon field to our name
      */
-    prrte_oob_base_get_addr(&prrte_process_info.my_daemon_uri);
-    if (NULL == prrte_process_info.my_daemon_uri) {
+    prrte_oob_base_get_addr(&myuri);
+    if (NULL == myuri) {
         /* no way to communicate */
         ret = PRRTE_ERROR;
         goto DONE;
     }
-    PRRTE_PROC_MY_DAEMON->jobid = PRRTE_PROC_MY_NAME->jobid;
-    PRRTE_PROC_MY_DAEMON->vpid = PRRTE_PROC_MY_NAME->vpid;
-    PMIX_VALUE_LOAD(&val, prrte_process_info.my_daemon_uri, PRRTE_STRING);
-    (void)prrte_snprintf_jobid(proc.nspace, PMIX_MAX_NSLEN, PRRTE_PROC_MY_NAME->jobid);
-    proc.rank = PRRTE_PROC_MY_NAME->vpid;
-    if (PMIX_SUCCESS != (prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
+    PMIX_VALUE_LOAD(&val, myuri, PRRTE_STRING);
+    free(myuri);
+    if (PMIX_SUCCESS != (prc = PMIx_Store_internal(&prrte_process_info.myproc, PMIX_PROC_URI, &val))) {
         PMIX_ERROR_LOG(prc);
         PMIX_VALUE_DESTRUCT(&val);
         ret = PRRTE_ERROR;
@@ -529,7 +527,8 @@ int main(int argc, char *argv[])
             goto DONE;
         }
         PMIX_VALUE_LOAD(&val, prrte_parent_uri, PRRTE_STRING);
-        PRRTE_PMIX_CONVERT_NAME(&proc, PRRTE_PROC_MY_PARENT);
+        PMIX_LOAD_NSPACE(proc.nspace, prrte_process_info.myproc.nspace);
+        proc.rank = PRRTE_PROC_MY_PARENT->vpid;
         if (PMIX_SUCCESS != (prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
             PMIX_ERROR_LOG(prc);
             PMIX_VALUE_DESTRUCT(&val);
@@ -608,11 +607,10 @@ int main(int argc, char *argv[])
         size_t ninfo;
         pmix_value_t *vptr;
 
-        PRRTE_PMIX_CONVERT_NAME(&proc, PRRTE_PROC_MY_NAME);
         boptr = &bo;
         bo.bytes = NULL;
         bo.size = 0;
-        if (PMIX_SUCCESS == PMIx_Get(&proc, NULL, NULL, 0, &vptr) && NULL != vptr) {
+        if (PMIX_SUCCESS == PMIx_Get(&prrte_process_info.myproc, NULL, NULL, 0, &vptr) && NULL != vptr) {
             /* the data is returned as a pmix_data_array_t */
             if (PMIX_DATA_ARRAY != vptr->type || NULL == vptr->data.darray ||
                 PMIX_INFO != vptr->data.darray->type || NULL == vptr->data.darray->array) {
@@ -624,13 +622,13 @@ int main(int argc, char *argv[])
             info = (pmix_info_t*)vptr->data.darray->array;
             ninfo = vptr->data.darray->size;
             PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&proc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
                 PMIX_ERROR_LOG(prc);
                 ret = PRRTE_ERROR;
                 PRRTE_RELEASE(buffer);
                 goto DONE;
             }
-            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&proc, &pbuf, info, ninfo, PMIX_INFO))) {
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, info, ninfo, PMIX_INFO))) {
                 PMIX_ERROR_LOG(prc);
                 ret = PRRTE_ERROR;
                 PRRTE_RELEASE(buffer);
@@ -944,7 +942,7 @@ static void rollup(int status, prrte_process_name_t* sender,
             goto report;
         }
         if (0 < flag) {
-            (void)prrte_snprintf_jobid(proc.nspace, PMIX_MAX_NSLEN, sender->jobid);
+            PMIX_LOAD_NSPACE(proc.nspace, prrte_process_info.myproc.nspace);
             proc.rank = sender->vpid;
             /* we have connection info */
             cnt = 1;

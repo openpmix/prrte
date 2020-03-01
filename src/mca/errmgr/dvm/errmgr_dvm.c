@@ -127,9 +127,7 @@ static void job_errors(int fd, short args, void *cbdata)
     prrte_state_caddy_t *caddy = (prrte_state_caddy_t*)cbdata;
     prrte_job_t *jdata;
     prrte_job_state_t jobstate;
-    prrte_buffer_t *answer;
-    int32_t rc, ret;
-    int room, *rmptr;
+    int32_t rc;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
 
@@ -184,48 +182,23 @@ static void job_errors(int fd, short args, void *cbdata)
      * we only inform the submitter of the problem, but do NOT terminate
      * the DVM itself */
 
-    rc = prrte_pmix_convert_job_state_to_error(jobstate);
-    answer = PRRTE_NEW(prrte_buffer_t);
-    if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &rc, 1, PRRTE_INT32))) {
-        PRRTE_ERROR_LOG(ret);
-        PRRTE_RELEASE(caddy);
-        return;
-    }
-    if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &jdata->jobid, 1, PRRTE_JOBID))) {
-        PRRTE_ERROR_LOG(ret);
-        PRRTE_RELEASE(caddy);
-        return;
-    }
-    /* pack the room number */
-    rmptr = &room;
-    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_ROOM_NUM, (void**)&rmptr, PRRTE_INT)) {
-        if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &room, 1, PRRTE_INT))) {
-            PRRTE_ERROR_LOG(ret);
-            PRRTE_RELEASE(caddy);
-            return;
-        }
-    }
     PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
                          "%s errmgr:dvm sending notification of job %s failure to %s",
                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                          PRRTE_JOBID_PRINT(jdata->jobid),
                          PRRTE_NAME_PRINT(&jdata->originator)));
-    if (0 > (ret = prrte_rml.send_buffer_nb(&jdata->originator, answer,
-                                           PRRTE_RML_TAG_LAUNCH_RESP,
-                                           prrte_rml_send_callback, NULL))) {
-        PRRTE_ERROR_LOG(ret);
-        PRRTE_RELEASE(answer);
-    }
-    /* ensure we terminate any processes left running in the DVM */
-    _terminate_job(jdata->jobid);
 
     /* all jobs were spawned by a requestor, so ensure that requestor
      * has been notified that the spawn completed - otherwise, a quick-failing
      * job might not generate a spawn response */
-    rc = prrte_plm_base_spawn_reponse(PRRTE_SUCCESS, jdata);
+    rc = prrte_pmix_convert_job_state_to_error(jobstate);
+    rc = prrte_plm_base_spawn_reponse(rc, jdata);
     if (PRRTE_SUCCESS != rc) {
         PRRTE_ERROR_LOG(rc);
     }
+
+    /* ensure we terminate any processes left running in the DVM */
+    _terminate_job(jdata->jobid);
 
     /* if the job never launched, then we need to let the
      * state machine know this job failed - it has no
@@ -301,7 +274,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         /* update the state */
         pptr->state = state;
         /* adjust our num_procs */
-        --prrte_process_info.num_procs;
+        --prrte_process_info.num_daemons;
         /* if we have ordered orteds to terminate or abort
          * is in progress, record it */
         if (prrte_prteds_term_ordered || prrte_abnormal_term_ordered) {
@@ -507,9 +480,6 @@ static void proc_errors(int fd, short args, void *cbdata)
                              PRRTE_NAME_PRINT(proc),
                              prrte_proc_state_to_str(state)));
         if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_ABORTED)) {
-            prrte_buffer_t *answer;
-            int id, *idptr, ret;
-
             if (PRRTE_PROC_STATE_FAILED_TO_START) {
                 jdata->state = PRRTE_JOB_STATE_FAILED_TO_START;
             } else {
@@ -527,43 +497,6 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* retain the object so it doesn't get free'd */
             PRRTE_RETAIN(pptr);
             PRRTE_FLAG_SET(jdata, PRRTE_JOB_FLAG_ABORTED);
-            /* send a notification to the requestor - indicate that this is a spawn response */
-            answer = PRRTE_NEW(prrte_buffer_t);
-            /* pack the return status */
-            if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &pptr->exit_code, 1, PRRTE_INT32))) {
-                PRRTE_ERROR_LOG(ret);
-                PRRTE_RELEASE(answer);
-                goto CLEANUP;
-            }
-            /* pack the jobid to be returned */
-            if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, &jdata->jobid, 1, PRRTE_JOBID))) {
-                PRRTE_ERROR_LOG(ret);
-                PRRTE_RELEASE(answer);
-                goto CLEANUP;
-            }
-            idptr = &id;
-            if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_ROOM_NUM, (void**)&idptr, PRRTE_INT)) {
-                /* pack the sender's index to the tracking object */
-                if (PRRTE_SUCCESS != (ret = prrte_dss.pack(answer, idptr, 1, PRRTE_INT))) {
-                    PRRTE_ERROR_LOG(ret);
-                    PRRTE_RELEASE(answer);
-                    goto CLEANUP;
-                }
-            }
-            if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_FIXED_DVM, NULL, PRRTE_BOOL)) {
-                /* we need to send the requestor more info about what happened */
-                prrte_dss.pack(answer, &jdata->state, 1, PRRTE_JOB_STATE_T);
-                prrte_dss.pack(answer, &pptr, 1, PRRTE_PROC);
-                prrte_dss.pack(answer, &pptr->node, 1, PRRTE_NODE);
-            }
-            /* return response */
-            if (0 > (ret = prrte_rml.send_buffer_nb(&jdata->originator, answer,
-                                                   PRRTE_RML_TAG_LAUNCH_RESP,
-                                                   prrte_rml_send_callback, NULL))) {
-                PRRTE_ERROR_LOG(ret);
-                PRRTE_RELEASE(answer);
-            }
-          CLEANUP:
             /* kill the job */
             _terminate_job(jdata->jobid);
         }
@@ -677,6 +610,11 @@ static void proc_errors(int fd, short args, void *cbdata)
         PRRTE_ACTIVATE_PROC_STATE(&pptr->name, PRRTE_PROC_STATE_WAITPID_FIRED);
     }
 
- cleanup:
+  cleanup:
+    rc = prrte_pmix_convert_proc_state_to_error(state);
+    rc = prrte_plm_base_spawn_reponse(rc, jdata);
+    if (PRRTE_SUCCESS != rc) {
+        PRRTE_ERROR_LOG(rc);
+    }
     PRRTE_RELEASE(caddy);
 }

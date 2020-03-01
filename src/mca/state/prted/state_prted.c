@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2011-2017 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -279,7 +279,6 @@ static void track_procs(int fd, short argc, void *cbdata)
     prrte_job_map_t *map;
     prrte_node_t *node;
     prrte_process_name_t target;
-    pmix_proc_t pname;
     prrte_pmix_lock_t lock;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
@@ -468,9 +467,8 @@ static void track_procs(int fd, short argc, void *cbdata)
             }
 
             /* tell the PMIx subsystem the job is complete */
-            PRRTE_PMIX_CONVERT_JOBID(pname.nspace, jdata->jobid);
             PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
-            PMIx_server_deregister_nspace(pname.nspace, opcbfunc, &lock);
+            PMIx_server_deregister_nspace(jdata->nspace, opcbfunc, &lock);
             PRRTE_PMIX_WAIT_THREAD(&lock);
             PRRTE_PMIX_DESTRUCT_LOCK(&lock);
 

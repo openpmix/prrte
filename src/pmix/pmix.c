@@ -28,10 +28,78 @@
 #include <unistd.h>
 #endif
 
+#include "src/class/prrte_hash_table.h"
 #include "src/threads/threads.h"
 #include "src/util/proc_info.h"
 #include "src/runtime/prrte_globals.h"
+#include "src/mca/plm/base/plm_private.h"
 #include "src/pmix/pmix-internal.h"
+
+int prrte_convert_jobid_to_nspace(pmix_nspace_t nspace, prrte_jobid_t jobid)
+{
+    prrte_job_t *jdata;
+
+    /* zero out the nspace */
+    PMIX_LOAD_NSPACE(nspace, NULL);
+
+    /* if the jobid is WILDCARD, make the nspace so */
+    if (PRRTE_JOBID_WILDCARD == jobid) {
+        PMIX_LOAD_NSPACE(nspace, "PRRTE_JOBID_WILDCARD");
+        return PRRTE_SUCCESS;
+    }
+    if (PRRTE_JOBID_INVALID == jobid) {
+        PMIX_LOAD_NSPACE(nspace, "PRRTE_JOBID_INVALID");
+        return PRRTE_SUCCESS;
+    }
+
+    jdata = prrte_get_job_data_object(jobid);
+    if (NULL != jdata) {
+        PMIX_LOAD_NSPACE(nspace, jdata->nspace);
+        return PRRTE_SUCCESS;
+    }
+
+    return PRRTE_ERR_NOT_FOUND;
+}
+
+
+int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace_t nspace)
+{
+    uint32_t key;
+    prrte_job_t *jdata;
+
+    /* set a default */
+    *jobid = PRRTE_JOBID_INVALID;
+
+    /* if the nspace is empty, there is nothing more to do */
+    if (0 == strlen(nspace)) {
+        return PRRTE_SUCCESS;
+    }
+    if (PMIX_CHECK_NSPACE(nspace, "PRRTE_JOBID_WILDCARD")) {
+        *jobid = PRRTE_JOBID_WILDCARD;
+        return PRRTE_SUCCESS;
+    }
+    if (PMIX_CHECK_NSPACE(nspace, "PRRTE_JOBID_INVALID")) {
+        *jobid = PRRTE_JOBID_INVALID;
+        return PRRTE_SUCCESS;
+    }
+
+    PRRTE_HASH_TABLE_FOREACH(key, uint32, jdata, prrte_job_data) {
+        if (NULL != jdata && PMIX_CHECK_NSPACE(nspace, jdata->nspace)) {
+            *jobid = jdata->jobid;
+            return PRRTE_SUCCESS;
+        }
+    }
+
+    /* if we get here, we don't know this nspace */
+    jdata = PRRTE_NEW(prrte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, nspace);  // ensure we do this first so create_jobid can use the nspace
+    jdata->jobid = strtoul(nspace, NULL, 10);
+    *jobid = jdata->jobid;
+    prrte_hash_table_set_value_uint32(prrte_job_data, jdata->jobid, jdata);
+
+    return PRRTE_SUCCESS;
+}
+
 
 pmix_status_t prrte_pmix_convert_rc(int rc)
 {
@@ -365,13 +433,22 @@ pmix_status_t prrte_pmix_convert_job_state_to_error(int state)
     }
 }
 
+pmix_status_t prrte_pmix_convert_proc_state_to_error(int state)
+{
+    switch(state) {
+        default:
+            return PMIX_ERROR;
+    }
+}
+
 void prrte_pmix_value_load(pmix_value_t *v,
-                          prrte_value_t *kv)
+                           prrte_value_t *kv)
 {
     prrte_list_t *list;
     prrte_value_t *val;
     pmix_info_t *info;
     size_t n;
+    int rc;
 
     switch(kv->type) {
         case PRRTE_UNDEF:
@@ -465,7 +542,10 @@ void prrte_pmix_value_load(pmix_value_t *v,
             v->type = PMIX_PROC;
             /* have to stringify the jobid */
             PMIX_PROC_CREATE(v->data.proc, 1);
-            PRRTE_PMIX_CONVERT_JOBID(v->data.proc->nspace, kv->data.name.jobid);
+            PRRTE_PMIX_CONVERT_JOBID(rc, v->data.proc->nspace, kv->data.name.jobid);
+            if (PRRTE_SUCCESS != rc) {
+                PRRTE_ERROR_LOG(rc);
+            }
             /* leave the rank as invalid */
             break;
         case PRRTE_VPID:
@@ -476,7 +556,7 @@ void prrte_pmix_value_load(pmix_value_t *v,
             v->type = PMIX_PROC;
             /* have to stringify the jobid */
             PMIX_PROC_CREATE(v->data.proc, 1);
-            PRRTE_PMIX_CONVERT_JOBID(v->data.proc->nspace, kv->data.name.jobid);
+            PRRTE_PMIX_CONVERT_JOBID(rc, v->data.proc->nspace, kv->data.name.jobid);
             PRRTE_PMIX_CONVERT_VPID(v->data.proc->rank, kv->data.name.vpid);
             break;
         case PRRTE_BYTE_OBJECT:
@@ -536,7 +616,10 @@ void prrte_pmix_value_load(pmix_value_t *v,
         case PRRTE_PROC_INFO:
             v->type = PMIX_PROC_INFO;
             PMIX_PROC_INFO_CREATE(v->data.pinfo, 1);
-            PRRTE_PMIX_CONVERT_JOBID(v->data.pinfo->proc.nspace, kv->data.pinfo.name.jobid);
+            PRRTE_PMIX_CONVERT_JOBID(rc, v->data.pinfo->proc.nspace, kv->data.pinfo.name.jobid);
+            if (PRRTE_SUCCESS != rc) {
+                PRRTE_ERROR_LOG(rc);
+            }
             PRRTE_PMIX_CONVERT_VPID(v->data.pinfo->proc.rank, kv->data.pinfo.name.vpid);
             if (NULL != kv->data.pinfo.hostname) {
                 v->data.pinfo->hostname = strdup(kv->data.pinfo.hostname);

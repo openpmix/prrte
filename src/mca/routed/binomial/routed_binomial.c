@@ -5,7 +5,7 @@
  * Copyright (c) 2007-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -172,8 +172,8 @@ static prrte_process_name_t get_route(prrte_process_name_t *target)
     }
 
     /* initialize */
-    daemon.jobid = PRRTE_PROC_MY_DAEMON->jobid;
-    daemon.vpid = PRRTE_PROC_MY_DAEMON->vpid;
+    daemon.jobid = PRRTE_PROC_MY_NAME->jobid;
+    daemon.vpid = PRRTE_PROC_MY_NAME->vpid;
 
     if (target->jobid == PRRTE_JOBID_INVALID ||
         target->vpid == PRRTE_VPID_INVALID) {
@@ -205,7 +205,6 @@ static prrte_process_name_t get_route(prrte_process_name_t *target)
     }
 
 
-    daemon.jobid = PRRTE_PROC_MY_NAME->jobid;
     /* find out what daemon hosts this proc */
     if (PRRTE_VPID_INVALID == (daemon.vpid = prrte_get_proc_daemon_vpid(target))) {
         /*PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);*/
@@ -427,7 +426,7 @@ static void update_routing_plan(void)
      * lie underneath their branch
      */
     PRRTE_PROC_MY_PARENT->vpid = binomial_tree(0, 0, PRRTE_PROC_MY_NAME->vpid,
-                                   prrte_process_info.max_procs,
+                                   prrte_process_info.num_daemons,
                                    &num_children, &my_children, NULL, true);
 
     if (0 < prrte_output_get_verbosity(prrte_routed_base_framework.framework_output)) {
@@ -437,7 +436,7 @@ static void update_routing_plan(void)
              item = prrte_list_get_next(item)) {
             child = (prrte_routed_tree_t*)item;
             prrte_output(0, "%s: \tchild %d", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), child->vpid);
-            for (j=0; j < (int)prrte_process_info.max_procs; j++) {
+            for (j=0; j < (int)prrte_process_info.num_daemons; j++) {
                 if (prrte_bitmap_is_set_bit(&child->relatives, j)) {
                     prrte_output(0, "%s: \t\trelation %d", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), j);
                 }

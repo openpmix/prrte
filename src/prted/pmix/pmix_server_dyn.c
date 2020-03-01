@@ -99,7 +99,7 @@ void pmix_server_launch_resp(int status, prrte_process_name_t* sender,
 
     /* execute the callback */
     if (NULL != req->spcbfunc) {
-        PRRTE_PMIX_CONVERT_JOBID(nspace, jobid);
+        PRRTE_PMIX_CONVERT_JOBID(rc, nspace, jobid);
         req->spcbfunc(ret, nspace, req->cbdata);
     } else if (NULL != req->toolcbfunc) {
         /* if success, then add to our job info */
@@ -109,7 +109,7 @@ void pmix_server_launch_resp(int status, prrte_process_name_t* sender,
             req->target.jobid = jobid;
             req->target.vpid = 0;
             prrte_pmix_server_tool_conn_complete(jdata, req);
-            PRRTE_PMIX_CONVERT_NAME(&proc, &req->target);
+            PRRTE_PMIX_CONVERT_NAME(ret, &proc, &req->target);
         }
         req->toolcbfunc(ret, &proc, req->cbdata);
     }
@@ -173,7 +173,7 @@ static void spawn(int sd, short args, void *cbdata)
     /* this section gets executed solely upon an error */
     if (NULL != req->spcbfunc) {
         prc = prrte_pmix_convert_rc(rc);
-        PRRTE_PMIX_CONVERT_JOBID(nspace, PRRTE_JOBID_INVALID);
+        PMIX_LOAD_NSPACE(nspace, NULL);
         req->spcbfunc(prc, nspace, req->cbdata);
     }
     PRRTE_RELEASE(req);
@@ -585,10 +585,8 @@ static void interim(int sd, short args, void *cbdata)
 
   complete:
     if (NULL != cd->spcbfunc) {
-        pmix_proc_t pproc;
         pmix_status_t prc;
         pmix_nspace_t nspace;
-        PRRTE_PMIX_CONVERT_JOBID(pproc.nspace, PRRTE_JOBID_INVALID);
         PMIX_LOAD_NSPACE(nspace, NULL);
         prc = prrte_pmix_convert_rc(rc);
         cd->spcbfunc(prc, nspace, cd->cbdata);
@@ -604,8 +602,13 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc,
     prrte_pmix_server_op_caddy_t *cd;
     int rc;
 
+    prrte_output_verbose(2, prrte_pmix_server_globals.output,
+                        "%s spawn upcalled from proc %s:%u",
+                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                        proc->nspace, proc->rank);
+
     cd = PRRTE_NEW(prrte_pmix_server_op_caddy_t);
-    PRRTE_PMIX_CONVERT_NSPACE(rc, &cd->proc.jobid, proc->nspace);
+    PRRTE_PMIX_CONVERT_NSPACE(rc, &cd->proc.jobid, (char*)proc->nspace);
     if (PRRTE_SUCCESS != rc) {
         PRRTE_ERROR_LOG(rc);
         return PMIX_ERR_BAD_PARAM;

@@ -12,7 +12,7 @@
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
@@ -187,6 +187,7 @@ char* prrte_util_print_jobids(const prrte_jobid_t job)
     } else if (PRRTE_JOBID_WILDCARD == job) {
         snprintf(ptr->buffers[ptr->cntr++], PRRTE_PRINT_NAME_ARGS_MAX_SIZE, "[WILDCARD]");
     } else {
+        /* find the job on our list */
         tmp1 = PRRTE_JOB_FAMILY((unsigned long)job);
         tmp2 = PRRTE_LOCAL_JOBID((unsigned long)job);
         snprintf(ptr->buffers[ptr->cntr++],
@@ -287,68 +288,6 @@ char* prrte_util_print_vpids(const prrte_vpid_t vpid)
 
 
 /***   STRING FUNCTIONS   ***/
-
-int prrte_snprintf_jobid(char *jobid_string, size_t size, const prrte_jobid_t jobid)
-{
-    int rc;
-
-    /* check for wildcard value - handle appropriately */
-    if (PRRTE_JOBID_WILDCARD == jobid) {
-        (void)prrte_string_copy(jobid_string, PRRTE_SCHEMA_WILDCARD_STRING, size);
-    } else {
-        rc = snprintf(jobid_string, size, "%ld", (long) jobid);
-        if (0 > rc) {
-            return PRRTE_ERROR;
-        }
-    }
-
-    return PRRTE_SUCCESS;
-}
-
-int prrte_util_convert_jobid_to_string(char **jobid_string, const prrte_jobid_t jobid)
-{
-    int rc;
-    char str[256];
-
-    rc = prrte_snprintf_jobid(str, 255, jobid);
-    if (0 > rc) {
-        *jobid_string = NULL;
-        return rc;
-    }
-    *jobid_string = strdup(str);
-    if (NULL == *jobid_string) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
-        return PRRTE_ERR_OUT_OF_RESOURCE;
-    }
-    return PRRTE_SUCCESS;
-}
-
-
-int prrte_util_convert_string_to_jobid(prrte_jobid_t *jobid, const char* jobidstring)
-{
-    if (NULL == jobidstring) {  /* got an error */
-        PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
-        *jobid = PRRTE_JOBID_INVALID;
-        return PRRTE_ERR_BAD_PARAM;
-    }
-
-    /** check for wildcard character - handle appropriately */
-    if (0 == strcmp(PRRTE_SCHEMA_WILDCARD_STRING, jobidstring)) {
-        *jobid = PRRTE_JOBID_WILDCARD;
-        return PRRTE_SUCCESS;
-    }
-
-    /* check for invalid value */
-    if (0 == strcmp(PRRTE_SCHEMA_INVALID_STRING, jobidstring)) {
-        *jobid = PRRTE_JOBID_INVALID;
-        return PRRTE_SUCCESS;
-    }
-
-    *jobid = strtoul(jobidstring, NULL, 10);
-
-    return PRRTE_SUCCESS;
-}
-
 int prrte_util_convert_vpid_to_string(char **vpid_string, const prrte_vpid_t vpid)
 {
     /* check for wildcard value - handle appropriately */
@@ -363,7 +302,7 @@ int prrte_util_convert_vpid_to_string(char **vpid_string, const prrte_vpid_t vpi
         return PRRTE_SUCCESS;
     }
 
-    if (0 > prrte_asprintf(vpid_string, "%ld", (long) vpid)) {
+    if (0 > prrte_asprintf(vpid_string, "%u", vpid)) {
         PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
         return PRRTE_ERR_OUT_OF_RESOURCE;
     }
@@ -392,7 +331,7 @@ int prrte_util_convert_string_to_vpid(prrte_vpid_t *vpid, const char* vpidstring
         return PRRTE_SUCCESS;
     }
 
-    *vpid = strtol(vpidstring, NULL, 10);
+    *vpid = strtoul(vpidstring, NULL, 10);
 
     return PRRTE_SUCCESS;
 }

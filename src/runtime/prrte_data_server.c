@@ -12,7 +12,7 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2016 Los Alamos National Security, LLC.
  *                         All rights reserved
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -256,7 +256,11 @@ void prrte_data_server(int status, prrte_process_name_t* sender,
     free(boptr);
 
     /* convert the sender */
-    PRRTE_PMIX_CONVERT_NAME(&psender, sender);
+    PRRTE_PMIX_CONVERT_NAME(rc, &psender, sender);
+    if (PRRTE_SUCCESS != rc) {
+        PRRTE_ERROR_LOG(rc);
+        goto SEND_ERROR;
+    }
 
     switch(command) {
     case PRRTE_PMIX_PUBLISH_CMD:
