@@ -2,7 +2,7 @@
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.
  *                         All rights reserved
  * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -229,7 +229,7 @@ static void recv_ack(int status, prrte_process_name_t* sender,
                 /* track number of respondents */
                 xfer->nrecvd++;
                 /* if all daemons have responded, then this is complete */
-                if (xfer->nrecvd == prrte_process_info.num_procs) {
+                if (xfer->nrecvd == prrte_process_info.num_daemons) {
                     PRRTE_OUTPUT_VERBOSE((1, prrte_filem_base_framework.framework_output,
                                          "%s filem:raw: xfer complete for file %s status %d",
                                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),

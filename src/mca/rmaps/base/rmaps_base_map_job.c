@@ -59,6 +59,7 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prrte_vpid_t nprocs;
     prrte_app_context_t *app;
     bool inherit = false;
+    prrte_process_name_t name, *nptr;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -71,15 +72,27 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     /* if this is a dynamic job launch and they didn't explicitly
      * request inheritance, then don't inherit the launch directives */
-    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_LAUNCH_PROXY, NULL, PRRTE_NAME)) {
-        inherit = prrte_rmaps_base.inherit;
-        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                            "mca:rmaps: dynamic job %s %s inherit launch directives",
-                            PRRTE_JOBID_PRINT(jdata->jobid),
-                            inherit ? "will" : "will not");
+    nptr = &name;
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PRRTE_NAME)) {
+        if (NULL != (parent = prrte_get_job_data_object(name.jobid)) &&
+            !PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
+            inherit = prrte_rmaps_base.inherit;
+            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                "mca:rmaps: dynamic job %s %s inherit launch directives - parent %s is %s",
+                                PRRTE_JOBID_PRINT(jdata->jobid),
+                                inherit ? "will" : "will not",
+                                PRRTE_JOBID_PRINT((parent->jobid)),
+                                (NULL == parent) ? "NULL" : ((PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL) ? "TOOL" : "NON-TOOL")));
+        } else {
+            inherit = true;
+        }
     } else {
         /* initial launch always takes on MCA params */
         inherit = true;
+    }
+
+    if (NULL == jdata->map) {
+        jdata->map = PRRTE_NEW(prrte_job_map_t);
     }
 
     if (inherit) {

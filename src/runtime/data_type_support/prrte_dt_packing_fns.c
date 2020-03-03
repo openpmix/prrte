@@ -12,7 +12,7 @@
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -71,6 +71,7 @@ int prrte_dt_pack_job(prrte_buffer_t *buffer, const void *src,
     prrte_attribute_t *kv;
     prrte_list_t *cache;
     prrte_value_t *val;
+    char *tmp;
 
     /* array of pointers to prrte_job_t objects - need to pack the objects a set of fields at a time */
     jobs = (prrte_job_t**) src;
@@ -82,6 +83,15 @@ int prrte_dt_pack_job(prrte_buffer_t *buffer, const void *src,
             PRRTE_ERROR_LOG(rc);
             return rc;
         }
+        /* pack the nspace */
+        tmp = strdup(jobs[i]->nspace);
+        if (PRRTE_SUCCESS != (rc = prrte_dss_pack_buffer(buffer,
+                        (void*)(&tmp), 1, PRRTE_STRING))) {
+            PRRTE_ERROR_LOG(rc);
+            free(tmp);
+            return rc;
+        }
+        free(tmp);
         /* pack the flags */
         if (PRRTE_SUCCESS != (rc = prrte_dss_pack_buffer(buffer,
                         (void*)(&(jobs[i]->flags)), 1, PRRTE_JOB_FLAGS_T))) {

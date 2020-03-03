@@ -6,7 +6,7 @@
  *                         reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -174,10 +174,6 @@ static prrte_process_name_t get_route(prrte_process_name_t *target)
         ret = target;
         goto found;
     }
-
-    /* initialize */
-    daemon.jobid = PRRTE_PROC_MY_DAEMON->jobid;
-    daemon.vpid = PRRTE_PROC_MY_DAEMON->vpid;
 
     if (target->jobid == PRRTE_JOBID_INVALID ||
         target->vpid == PRRTE_VPID_INVALID) {
@@ -358,7 +354,7 @@ static void radix_tree(int rank, int *num_children,
     /* our children start at our rank + num_in_level */
     peer = rank + NInLevel;
     for (i = 0; i < prrte_routed_radix_component.radix; i++) {
-        if (peer < (int)prrte_process_info.num_procs) {
+        if (peer < (int)prrte_process_info.num_daemons) {
             child = PRRTE_NEW(prrte_routed_tree_t);
             child->vpid = peer;
             if (NULL != children) {
@@ -366,7 +362,7 @@ static void radix_tree(int rank, int *num_children,
                 prrte_list_append(children, &child->super);
                 (*num_children)++;
                 /* setup the relatives bitmap */
-                prrte_bitmap_init(&child->relatives, prrte_process_info.num_procs);
+                prrte_bitmap_init(&child->relatives, prrte_process_info.num_daemons);
                 /* point to the relatives */
                 relations = &child->relatives;
             } else {
@@ -433,7 +429,7 @@ static void update_routing_plan(void)
              item = prrte_list_get_next(item)) {
             child = (prrte_routed_tree_t*)item;
             prrte_output(0, "%s: \tchild %d", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), child->vpid);
-            for (j=0; j < (int)prrte_process_info.num_procs; j++) {
+            for (j=0; j < (int)prrte_process_info.num_daemons; j++) {
                 if (prrte_bitmap_is_set_bit(&child->relatives, j)) {
                     prrte_output(0, "%s: \t\trelation %d", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), j);
                 }

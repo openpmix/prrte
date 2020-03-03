@@ -45,6 +45,8 @@
 int prrte_finalize(void)
 {
     int rc;
+    uint32_t key;
+    prrte_job_t *jdata;
 
     --prrte_initialized;
     if (0 != prrte_initialized) {
@@ -71,6 +73,60 @@ int prrte_finalize(void)
     /* release the cache */
     PRRTE_RELEASE(prrte_cache);
 
+    /* release the job hash table */
+    PRRTE_HASH_TABLE_FOREACH(key, uint32, jdata, prrte_job_data) {
+        if (NULL != jdata) {
+            PRRTE_RELEASE(jdata);
+        }
+    }
+    PRRTE_RELEASE(prrte_job_data);
+
+    if (prrte_do_not_launch) {
+        exit(0);
+    }
+
+{
+    prrte_pointer_array_t * array = prrte_node_topologies;
+    int i;
+    if( array->number_free != array->size ) {
+        prrte_mutex_lock(&array->lock);
+        array->lowest_free = 0;
+        array->number_free = array->size;
+        for(i=0; i<array->size; i++) {
+            if(NULL != array->addr[i]) {
+                prrte_topology_t * topo = (prrte_topology_t *)array->addr[i];
+                topo->topo = NULL;
+                PRRTE_RELEASE(topo);
+            }
+            array->addr[i] = NULL;
+        }
+        prrte_mutex_unlock(&array->lock);
+    }
+}
+    PRRTE_RELEASE(prrte_node_topologies);
+
+{
+    prrte_pointer_array_t * array = prrte_node_pool;
+    int i;
+    prrte_node_t* node = (prrte_node_t *)prrte_pointer_array_get_item(prrte_node_pool, 0);
+    assert(NULL != node);
+    PRRTE_RELEASE(node->daemon);
+    node->daemon = NULL;
+    if( array->number_free != array->size ) {
+        prrte_mutex_lock(&array->lock);
+        array->lowest_free = 0;
+        array->number_free = array->size;
+        for(i=0; i<array->size; i++) {
+            if(NULL != array->addr[i]) {
+                node= (prrte_node_t*)array->addr[i];
+                PRRTE_RELEASE(node);
+            }
+            array->addr[i] = NULL;
+        }
+        prrte_mutex_unlock(&array->lock);
+    }
+}
+    PRRTE_RELEASE(prrte_node_pool);
     /* call the finalize function for this environment */
     if (PRRTE_SUCCESS != (rc = prrte_ess.finalize())) {
         return rc;

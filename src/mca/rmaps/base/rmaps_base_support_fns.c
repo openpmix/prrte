@@ -513,8 +513,8 @@ int prrte_rmaps_base_get_target_nodes(prrte_list_t *allocated_nodes, prrte_std_c
 }
 
 prrte_proc_t* prrte_rmaps_base_setup_proc(prrte_job_t *jdata,
-                                        prrte_node_t *node,
-                                        prrte_app_idx_t idx)
+                                          prrte_node_t *node,
+                                          prrte_app_idx_t idx)
 {
     prrte_proc_t *proc;
     int rc;
@@ -522,6 +522,7 @@ prrte_proc_t* prrte_rmaps_base_setup_proc(prrte_job_t *jdata,
     proc = PRRTE_NEW(prrte_proc_t);
     /* set the jobid */
     proc->name.jobid = jdata->jobid;
+    proc->job = jdata;
     /* flag the proc as ready for launch */
     proc->state = PRRTE_PROC_STATE_INIT;
     proc->app_idx = idx;

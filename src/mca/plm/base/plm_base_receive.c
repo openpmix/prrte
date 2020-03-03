@@ -225,7 +225,8 @@ void prrte_plm_base_recv(int status, prrte_process_name_t* sender,
         }
 
         /* get the parent's job object */
-        if (NULL != (parent = prrte_get_job_data_object(name.jobid))) {
+        if (NULL != (parent = prrte_get_job_data_object(name.jobid)) &&
+            !PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
             /* if the prefix was set in the parent's job, we need to transfer
              * that prefix to the child's app_context so any further launch of
              * orteds can find the correct binary. There always has to be at
@@ -279,7 +280,7 @@ void prrte_plm_base_recv(int status, prrte_process_name_t* sender,
             goto ANSWER_LAUNCH;
         }
 
-        if (NULL != parent) {
+        if (NULL != parent && !PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
             if (NULL == parent->bookmark) {
                 /* find the sender's node in the job map */
                 if (NULL != (proc = (prrte_proc_t*)prrte_pointer_array_get_item(parent->procs, sender->vpid))) {
@@ -415,7 +416,7 @@ void prrte_plm_base_recv(int status, prrte_process_name_t* sender,
                 jdata->num_daemons_reported++;
                 if (prrte_report_launch_progress) {
                     if (0 == jdata->num_daemons_reported % 100 ||
-                        jdata->num_daemons_reported == prrte_process_info.num_procs) {
+                        jdata->num_daemons_reported == prrte_process_info.num_daemons) {
                         PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_REPORT_PROGRESS);
                     }
                 }

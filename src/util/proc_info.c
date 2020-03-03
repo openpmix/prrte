@@ -53,15 +53,11 @@ extern bool prrte_keep_fqdn_hostnames;
 
 PRRTE_EXPORT prrte_process_info_t prrte_process_info = {
     .my_name =                         PRRTE_NAME_INVALID,
-    .my_daemon =                       PRRTE_NAME_INVALID,
-    .my_daemon_uri =                   NULL,
+    .myproc =                          {{0}, 0},
     .my_hnp =                          PRRTE_NAME_INVALID,
     .my_hnp_uri =                      NULL,
     .my_parent =                       PRRTE_NAME_INVALID,
     .hnp_pid =                         0,
-    .app_num =                         0,
-    .num_procs =                       1,
-    .max_procs =                       1,
     .num_daemons =                     1,
     .num_nodes =                       1,
     .nodename =                        NULL,
@@ -70,9 +66,6 @@ PRRTE_EXPORT prrte_process_info_t prrte_process_info = {
     .proc_type =                       PRRTE_PROC_TYPE_NONE,
     .my_port =                         0,
     .num_restarts =                    0,
-    .my_node_rank =                    PRRTE_NODE_RANK_INVALID,
-    .my_local_rank =                   PRRTE_LOCAL_RANK_INVALID,
-    .num_local_peers =                 0,
     .tmpdir_base =                     NULL,
     .top_session_dir =                 NULL,
     .jobfam_session_dir =              NULL,
@@ -81,13 +74,10 @@ PRRTE_EXPORT prrte_process_info_t prrte_process_info = {
     .sock_stdin =                      NULL,
     .sock_stdout =                     NULL,
     .sock_stderr =                     NULL,
-    .cpuset =                          NULL,
-    .app_rank =                        -1,
-    .my_hostid =                       PRRTE_VPID_INVALID
+    .cpuset =                          NULL
 };
 
 static bool init=false;
-static int prrte_ess_node_rank;
 static char *prrte_strip_prefix;
 
 void prrte_setup_hostname(void)
@@ -212,37 +202,6 @@ int prrte_proc_info(void)
         }
     }
 
-    prrte_process_info.my_daemon_uri = NULL;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "local_daemon_uri",
-                                        "Daemon contact info",
-                                        PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                        PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                        PRRTE_INFO_LVL_9,
-                                        PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                        &prrte_process_info.my_daemon_uri);
-
-    if (NULL != prrte_process_info.my_daemon_uri) {
-        ptr = prrte_process_info.my_daemon_uri;
-        /* the uri value passed to us may have quote marks around it to protect
-         * the value if passed on the command line. We must remove those
-         * to have a correct uri string
-         */
-        if ('"' == ptr[0]) {
-            /* if the first char is a quote, then so will the last one be */
-            ptr[strlen(ptr)-1] = '\0';
-            memmove (ptr, ptr + 1, strlen (ptr) - 1);
-        }
-    }
-
-    prrte_process_info.app_num = 0;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "app_num",
-                                        "Index of the app_context that defines this proc",
-                                        PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                        PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                        PRRTE_INFO_LVL_9,
-                                        PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                        &prrte_process_info.app_num);
-
     /* get the process id */
     prrte_process_info.pid = getpid();
 
@@ -265,27 +224,6 @@ int prrte_proc_info(void)
                                         PRRTE_INFO_LVL_9,
                                         PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                         &prrte_process_info.num_restarts);
-
-    prrte_process_info.app_rank = 0;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "app_rank",
-                                        "Rank of this proc within its app_context",
-                                        PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                        PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                        PRRTE_INFO_LVL_9,
-                                        PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                        &prrte_process_info.app_rank);
-
-    /* get my node rank in case we are using static ports - this won't
-     * be present for daemons, so don't error out if we don't have it
-     */
-    prrte_ess_node_rank = PRRTE_NODE_RANK_INVALID;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "ess_node_rank", "Process node rank",
-                                        PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                        PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                        PRRTE_INFO_LVL_9,
-                                        PRRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
-                                        &prrte_ess_node_rank);
-    prrte_process_info.my_node_rank = (prrte_node_rank_t) prrte_ess_node_rank;
 
     return PRRTE_SUCCESS;
 }

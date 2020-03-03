@@ -47,6 +47,7 @@
 #include "src/threads/threads.h"
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/mca/plm/plm_types.h"
 #include "src/mca/rml/rml_types.h"
@@ -91,11 +92,8 @@ PRRTE_EXPORT extern prrte_process_name_t prrte_name_invalid;  /** instantiated i
 /* define a special name that point to my parent (aka the process that spawned me) */
 #define PRRTE_PROC_MY_PARENT     (&prrte_process_info.my_parent)
 
-/* define a special name that belongs to prun */
+/* define a special name that belongs to prte master */
 #define PRRTE_PROC_MY_HNP        (&prrte_process_info.my_hnp)
-
-/* define the name of my daemon */
-#define PRRTE_PROC_MY_DAEMON     (&prrte_process_info.my_daemon)
 
 PRRTE_EXPORT extern bool prrte_in_parallel_debugger;
 
@@ -302,6 +300,7 @@ typedef struct {
     char **personality;
     /* jobid for this job */
     prrte_jobid_t jobid;
+    pmix_nspace_t nspace;
     /* offset to the total number of procs so shared memory
      * components can potentially connect to any spawned jobs*/
     prrte_vpid_t offset;
@@ -362,6 +361,8 @@ struct prrte_proc_t {
     prrte_list_item_t super;
     /* process name */
     prrte_process_name_t name;
+    prrte_job_t *job;
+    pmix_rank_t rank;
     /* the vpid of my parent - the daemon vpid for an app
      * or the vpid of the parent in the routing tree of
      * a daemon */

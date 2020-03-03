@@ -12,7 +12,7 @@
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -118,9 +118,6 @@ typedef struct prrte_namelist_t prrte_namelist_t;
 
 PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_namelist_t);
 
-PRRTE_EXPORT int prrte_snprintf_jobid(char *jobid_string, size_t size, const prrte_jobid_t jobid);
-PRRTE_EXPORT int prrte_util_convert_jobid_to_string(char **jobid_string, const prrte_jobid_t jobid);
-PRRTE_EXPORT int prrte_util_convert_string_to_jobid(prrte_jobid_t *jobid, const char* jobidstring);
 PRRTE_EXPORT int prrte_util_convert_vpid_to_string(char **vpid_string, const prrte_vpid_t vpid);
 PRRTE_EXPORT int prrte_util_convert_string_to_vpid(prrte_vpid_t *vpid, const char* vpidstring);
 PRRTE_EXPORT int prrte_util_convert_string_to_process_name(prrte_process_name_t *name,

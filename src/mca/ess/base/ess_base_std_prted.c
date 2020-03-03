@@ -14,7 +14,7 @@
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -99,7 +99,6 @@ int prrte_ess_base_prted_setup(void)
     int ret = PRRTE_ERROR;
     int fd;
     char log_file[PATH_MAX];
-    char *jobidstring;
     char *error = NULL;
     prrte_job_t *jdata;
     prrte_proc_t *proc;
@@ -110,6 +109,7 @@ int prrte_ess_base_prted_setup(void)
     prrte_topology_t *t;
     prrte_ess_base_signal_t *sig;
     int idx;
+    pmix_nspace_t nspace;
 
     plm_in_use = false;
 
@@ -192,6 +192,8 @@ int prrte_ess_base_prted_setup(void)
     /* define the HNP name */
     PRRTE_PROC_MY_HNP->jobid = PRRTE_PROC_MY_NAME->jobid;
     PRRTE_PROC_MY_HNP->vpid = 0;
+    /* get my nspace */
+    PRRTE_PMIX_CREATE_NSPACE(nspace, PRRTE_PROC_MY_NAME->jobid);
 
     /* open and setup the state machine */
     if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_state_base_framework, 0))) {
@@ -264,16 +266,10 @@ int prrte_ess_base_prted_setup(void)
             /* if we are debugging to a file, then send stdout/stderr to
              * the prted log file
              */
-            /* get my jobid */
-            if (PRRTE_SUCCESS != (ret = prrte_util_convert_jobid_to_string(&jobidstring,
-                                                                         PRRTE_PROC_MY_NAME->jobid))) {
-                PRRTE_ERROR_LOG(ret);
-                error = "convert_jobid";
-                goto error;
-            }
+
             /* define a log file name in the session directory */
             snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log",
-                     jobidstring, prrte_process_info.nodename);
+                     nspace, prrte_process_info.nodename);
             log_path = prrte_os_path(false, prrte_process_info.top_session_dir,
                                     log_file, NULL);
 
@@ -292,35 +288,11 @@ int prrte_ess_base_prted_setup(void)
             }
         }
     }
-    /* setup the global job and node arrays */
-    prrte_job_data = PRRTE_NEW(prrte_hash_table_t);
-    if (PRRTE_SUCCESS != (ret = prrte_hash_table_init(prrte_job_data, 128))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "setup job array";
-        goto error;
-    }
-    prrte_node_pool = PRRTE_NEW(prrte_pointer_array_t);
-    if (PRRTE_SUCCESS != (ret = prrte_pointer_array_init(prrte_node_pool,
-                               PRRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                               PRRTE_GLOBAL_ARRAY_MAX_SIZE,
-                               PRRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "setup node array";
-        goto error;
-    }
-    prrte_node_topologies = PRRTE_NEW(prrte_pointer_array_t);
-    if (PRRTE_SUCCESS != (ret = prrte_pointer_array_init(prrte_node_topologies,
-                               PRRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                               PRRTE_GLOBAL_ARRAY_MAX_SIZE,
-                               PRRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "setup node topologies array";
-        goto error;
-    }
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
     jdata = PRRTE_NEW(prrte_job_t);
     jdata->jobid = PRRTE_PROC_MY_NAME->jobid;
+    PMIX_LOAD_NSPACE(jdata->nspace, nspace);
     prrte_hash_table_set_value_uint32(prrte_job_data, jdata->jobid, jdata);
     /* every job requires at least one app */
     app = PRRTE_NEW(prrte_app_context_t);
@@ -331,6 +303,8 @@ int prrte_ess_base_prted_setup(void)
     proc = PRRTE_NEW(prrte_proc_t);
     proc->name.jobid = PRRTE_PROC_MY_NAME->jobid;
     proc->name.vpid = PRRTE_PROC_MY_NAME->vpid;
+    proc->job = jdata;
+    proc->rank = proc->name.vpid;
     proc->pid = prrte_process_info.pid;
     proc->state = PRRTE_PROC_STATE_RUNNING;
     prrte_pointer_array_set_item(jdata->procs, proc->name.vpid, proc);
@@ -402,7 +376,12 @@ int prrte_ess_base_prted_setup(void)
          * if/when we attempt to send to it
          */
         PMIX_VALUE_LOAD(&val, prrte_process_info.my_hnp_uri, PRRTE_STRING);
-        PRRTE_PMIX_CONVERT_NAME(&proc, PRRTE_PROC_MY_HNP);
+        PRRTE_PMIX_CONVERT_NAME(ret, &proc, PRRTE_PROC_MY_HNP);
+        if (PRRTE_SUCCESS != ret) {
+            PRRTE_ERROR_LOG(ret);
+            error = "convert_name";
+            goto error;
+        }
         if (PMIX_SUCCESS != PMIx_Store_internal(&proc, PMIX_PROC_URI, &val)) {
             PMIX_VALUE_DESTRUCT(&val);
             error = "store HNP URI";
@@ -579,8 +558,7 @@ int prrte_ess_base_prted_finalize(void)
     prrte_session_dir_finalize(PRRTE_PROC_MY_NAME);
     /* ensure we scrub the session directory tree */
     prrte_session_dir_cleanup(PRRTE_JOBID_WILDCARD);
-    /* release the job hash table */
-    PRRTE_RELEASE(prrte_job_data);
+
     return PRRTE_SUCCESS;
 }
 

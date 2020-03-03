@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -54,7 +54,7 @@ PRRTE_EXPORT int prrte_ess_base_select(void);
 PRRTE_EXPORT extern int prrte_ess_base_std_buffering;
 
 PRRTE_EXPORT extern int prrte_ess_base_num_procs;
-PRRTE_EXPORT extern char *prrte_ess_base_jobid;
+PRRTE_EXPORT extern char *prrte_ess_base_nspace;
 PRRTE_EXPORT extern char *prrte_ess_base_vpid;
 PRRTE_EXPORT extern prrte_list_t prrte_ess_base_signals;
 

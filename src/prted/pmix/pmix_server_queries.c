@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
@@ -77,7 +77,7 @@ static void _query(int sd, short args, void *cbdata)
     size_t m, n, p;
     uint32_t key, nodeid;
     void *nptr;
-    char nspace[PMIX_MAX_NSLEN+1], **nspaces, *hostname, *uri;
+    char **nspaces, *hostname, *uri;
 #ifdef PMIX_QUERY_NAMESPACE_INFO
     char *cmdline;
 #endif
@@ -149,9 +149,7 @@ static void _query(int sd, short args, void *cbdata)
                     /* don't show the requestor's job or non-launcher tools */
                     if (PRRTE_PROC_MY_NAME->jobid != jdata->jobid &&
                         (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL) || PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_LAUNCHER))) {
-                        memset(nspace, 0, PMIX_MAX_NSLEN);
-                        PRRTE_PMIX_CONVERT_JOBID(nspace, jdata->jobid);
-                        prrte_argv_append_nosize(&nspaces, nspace);
+                        prrte_argv_append_nosize(&nspaces, jdata->nspace);
                     }
                     rc = prrte_hash_table_get_next_key_uint32(prrte_job_data, &key, (void **)&jdata, nptr, &nptr);
                 }
@@ -179,9 +177,7 @@ static void _query(int sd, short args, void *cbdata)
                         kv->info.value.data.darray = darray;
                         info = (pmix_info_t*)darray->array;
                         /* add the nspace name */
-                        memset(nspace, 0, PMIX_MAX_NSLEN);
-                        PRRTE_PMIX_CONVERT_JOBID(nspace, jdata->jobid);
-                        PMIX_INFO_LOAD(&info[0], PMIX_NSPACE, nspace, PMIX_STRING);
+                        PMIX_INFO_LOAD(&info[0], PMIX_NSPACE, jdata->nspace, PMIX_STRING);
                         /* add the cmd line */
                         app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, 0);
                         cmdline = prrte_argv_join(app->argv, ' ');
@@ -434,7 +430,7 @@ static void _query(int sd, short args, void *cbdata)
                     if (NULL == (proct = (prrte_proc_t*)prrte_pointer_array_get_item(jdata->procs, k))) {
                         continue;
                     }
-                    PRRTE_PMIX_CONVERT_NAME(&procinfo[p].proc, &proct->name);
+                    PRRTE_PMIX_CONVERT_NAME(rc, &procinfo[p].proc, &proct->name);
                     if (NULL != proct->node && NULL != proct->node->name) {
                         procinfo[p].hostname = strdup(proct->node->name);
                     }
@@ -473,7 +469,7 @@ static void _query(int sd, short args, void *cbdata)
                         continue;
                     }
                     if (PRRTE_FLAG_TEST(proct, PRRTE_PROC_FLAG_LOCAL)) {
-                        PRRTE_PMIX_CONVERT_NAME(&procinfo[p].proc, &proct->name);
+                        PRRTE_PMIX_CONVERT_NAME(rc, &procinfo[p].proc, &proct->name);
                         if (NULL != proct->node && NULL != proct->node->name) {
                             procinfo[p].hostname = strdup(proct->node->name);
                         }

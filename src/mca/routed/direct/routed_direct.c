@@ -4,7 +4,7 @@
  * Copyright (c) 2004-2011 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -127,9 +127,6 @@ static prrte_process_name_t get_route(prrte_process_name_t *target)
         goto found;
     }
 
-    /* initialize */
-    daemon.jobid = PRRTE_PROC_MY_DAEMON->jobid;
-    daemon.vpid = PRRTE_PROC_MY_DAEMON->vpid;
     if (PRRTE_EQUAL == prrte_util_compare_name_fields(PRRTE_NS_CMP_ALL, PRRTE_PROC_MY_HNP, target)) {
         PRRTE_OUTPUT_VERBOSE((2, prrte_routed_base_framework.framework_output,
                     "%s routing direct to the HNP",

@@ -100,7 +100,7 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
         cd->sig->signature = (prrte_process_name_t*)malloc(cd->sig->sz * sizeof(prrte_process_name_t));
         memset(cd->sig->signature, 0, cd->sig->sz * sizeof(prrte_process_name_t));
         for (i=0; i < nprocs; i++) {
-            PRRTE_PMIX_CONVERT_PROCT(rc, &cd->sig->signature[i], &procs[i]);
+            PRRTE_PMIX_CONVERT_PROCT(rc, &cd->sig->signature[i], (pmix_proc_t*)&procs[i]);
             if (PRRTE_SUCCESS != rc) {
                 PRRTE_ERROR_LOG(rc);
                 PRRTE_RELEASE(cd);
@@ -141,36 +141,34 @@ static void modex_resp(pmix_status_t status,
     pmix_data_buffer_t pbuf;
     char *pdata;
     size_t psz;
-    pmix_proc_t myproc;
 
     PRRTE_ACQUIRE_OBJECT(req);
 
     /* pack the status */
-    PRRTE_PMIX_CONVERT_NAME(&myproc, PRRTE_PROC_MY_NAME);
     PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &status, 1, PMIX_STATUS))) {
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, &status, 1, PMIX_STATUS))) {
         PMIX_ERROR_LOG(prc);
         goto error;
     }
     /* pack the id of the requested proc */
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->tproc, 1, PMIX_PROC))) {
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, &req->tproc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(prc);
         goto error;
     }
 
     /* pack the remote daemon's request room number */
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->remote_room_num, 1, PMIX_INT))) {
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, &req->remote_room_num, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
         goto error;
     }
     if (PMIX_SUCCESS == status) {
         /* return any provided data */
-        if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &sz, 1, PMIX_SIZE))) {
+        if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, &sz, 1, PMIX_SIZE))) {
             PMIX_ERROR_LOG(prc);
             goto error;
         }
         if (0 < sz) {
-            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, data, sz, PMIX_BYTE))) {
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, data, sz, PMIX_BYTE))) {
                 PMIX_ERROR_LOG(prc);
                 goto error;
             }
@@ -202,7 +200,6 @@ static void dmodex_req(int sd, short args, void *cbdata)
     char *data=NULL;
     int32_t sz=0;
     pmix_data_buffer_t pbuf;
-    pmix_proc_t myproc;
     pmix_status_t prc = PMIX_ERROR;
     bool refresh_cache = false;
     pmix_value_t *pval;
@@ -374,29 +371,28 @@ static void dmodex_req(int sd, short args, void *cbdata)
 
     /* construct a request message */
     PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-    PRRTE_PMIX_CONVERT_NAME(&myproc, PRRTE_PROC_MY_NAME);
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->tproc, 1, PMIX_PROC))) {
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, &req->tproc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(prc);
         prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
         goto callback;
     }
     /* include the request room number for quick retrieval */
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->room_num, 1, PMIX_INT))) {
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, &req->room_num, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
         prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
         goto callback;
     }
     /* add any qualifiers */
-    if (PRRTE_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, &req->ninfo, 1, PMIX_SIZE))) {
+    if (PRRTE_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, &req->ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(prc);
         prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
         goto callback;
     }
     if (0 < req->ninfo) {
-        if (PRRTE_SUCCESS != (prc = PMIx_Data_pack(&myproc, &pbuf, req->info, req->ninfo, PMIX_INFO))) {
+        if (PRRTE_SUCCESS != (prc = PMIx_Data_pack(&prrte_process_info.myproc, &pbuf, req->info, req->ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(prc);
             prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, req->room_num);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);

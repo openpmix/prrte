@@ -75,7 +75,7 @@ static int prrte_create_dir(char *directory);
 
 static bool prrte_dir_check_file(const char *root, const char *path);
 
-#define OMPI_PRINTF_FIX_STRING(a) ((NULL == a) ? "(null)" : a)
+#define PRRTE_PRINTF_FIX_STRING(a) ((NULL == a) ? "(null)" : a)
 
 /****************************
  * Funcationality
@@ -326,15 +326,15 @@ int prrte_session_dir(bool create, prrte_process_name_t *proc)
 
     if (prrte_debug_flag) {
         prrte_output(0, "procdir: %s",
-                    OMPI_PRINTF_FIX_STRING(prrte_process_info.proc_session_dir));
+                    PRRTE_PRINTF_FIX_STRING(prrte_process_info.proc_session_dir));
         prrte_output(0, "jobdir: %s",
-                    OMPI_PRINTF_FIX_STRING(prrte_process_info.job_session_dir));
+                    PRRTE_PRINTF_FIX_STRING(prrte_process_info.job_session_dir));
+        prrte_output(0, "job: %s",
+                    PRRTE_PRINTF_FIX_STRING(prrte_process_info.jobfam_session_dir));
         prrte_output(0, "top: %s",
-                    OMPI_PRINTF_FIX_STRING(prrte_process_info.jobfam_session_dir));
-        prrte_output(0, "top: %s",
-                    OMPI_PRINTF_FIX_STRING(prrte_process_info.top_session_dir));
+                    PRRTE_PRINTF_FIX_STRING(prrte_process_info.top_session_dir));
         prrte_output(0, "tmp: %s",
-                    OMPI_PRINTF_FIX_STRING(prrte_process_info.tmpdir_base));
+                    PRRTE_PRINTF_FIX_STRING(prrte_process_info.tmpdir_base));
     }
 
 cleanup:

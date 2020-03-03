@@ -281,6 +281,32 @@ int prrte_init(int* pargc, char*** pargv, prrte_proc_type_t flags)
     /* let the pmix server register params */
     pmix_server_register_params();
 
+    /* setup the global job and node arrays */
+    prrte_job_data = PRRTE_NEW(prrte_hash_table_t);
+    if (PRRTE_SUCCESS != (ret = prrte_hash_table_init(prrte_job_data, 128))) {
+        PRRTE_ERROR_LOG(ret);
+        error = "setup job array";
+        goto error;
+    }
+    prrte_node_pool = PRRTE_NEW(prrte_pointer_array_t);
+    if (PRRTE_SUCCESS != (ret = prrte_pointer_array_init(prrte_node_pool,
+                               PRRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                               PRRTE_GLOBAL_ARRAY_MAX_SIZE,
+                               PRRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
+        PRRTE_ERROR_LOG(ret);
+        error = "setup node array";
+        goto error;
+    }
+    prrte_node_topologies = PRRTE_NEW(prrte_pointer_array_t);
+    if (PRRTE_SUCCESS != (ret = prrte_pointer_array_init(prrte_node_topologies,
+                               PRRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                               PRRTE_GLOBAL_ARRAY_MAX_SIZE,
+                               PRRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
+        PRRTE_ERROR_LOG(ret);
+        error = "setup node topologies array";
+        goto error;
+    }
+
     /* open the SCHIZO framework as everyone needs it, and the
      * ess will use it to help select its component */
     if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_schizo_base_framework, 0))) {

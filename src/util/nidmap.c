@@ -432,15 +432,11 @@ int prrte_util_decode_nidmap(prrte_buffer_t *buf)
     }
 
     /* update num procs */
-    if (prrte_process_info.num_procs != daemons->num_procs) {
-        prrte_process_info.num_procs = daemons->num_procs;
+    if (prrte_process_info.num_daemons != daemons->num_procs) {
+        prrte_process_info.num_daemons = daemons->num_procs;
     }
     /* need to update the routing plan */
     prrte_routed.update_routing_plan();
-
-    if (prrte_process_info.max_procs < prrte_process_info.num_procs) {
-        prrte_process_info.max_procs = prrte_process_info.num_procs;
-    }
 
   cleanup:
     if (NULL != vp8) {

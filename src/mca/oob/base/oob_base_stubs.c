@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2012-2014 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -227,6 +227,7 @@ void prrte_oob_base_get_addr(char **uri)
     pmix_value_t val;
     pmix_proc_t proc;
     pmix_status_t rc;
+    prrte_job_t *jdata;
 
     /* start with our process name */
     if (PRRTE_SUCCESS != (rc = prrte_util_convert_process_name_to_string(&final, PRRTE_PROC_MY_NAME))) {
@@ -282,8 +283,8 @@ void prrte_oob_base_get_addr(char **uri)
 
     *uri = final;
     /* push this into our modex storage */
-    (void)prrte_snprintf_jobid(proc.nspace, PMIX_MAX_NSLEN, PRRTE_PROC_MY_NAME->jobid);
-    proc.rank = PRRTE_PROC_MY_NAME->vpid;
+    jdata = prrte_get_job_data_object(PRRTE_PROC_MY_NAME->jobid);
+    PMIX_LOAD_PROCID(&proc, jdata->nspace, PRRTE_PROC_MY_NAME->vpid);
     PMIX_VALUE_LOAD(&val, final, PMIX_STRING);
     if (PMIX_SUCCESS != (rc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
         PMIX_ERROR_LOG(rc);

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
@@ -435,7 +435,7 @@ void prrte_state_base_local_launch_complete(int fd, short argc, void *cbdata)
 
     if (prrte_report_launch_progress) {
         if (0 == jdata->num_daemons_reported % 100 ||
-            jdata->num_daemons_reported == prrte_process_info.num_procs) {
+            jdata->num_daemons_reported == prrte_process_info.num_daemons) {
             PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_REPORT_PROGRESS);
         }
     }
@@ -471,7 +471,7 @@ void prrte_state_base_report_progress(int fd, short argc, void *cbdata)
     jdata = caddy->jdata;
 
    prrte_output(prrte_clean_output, "App launch reported: %d (out of %d) daemons - %d (out of %d) procs",
-                (int)jdata->num_daemons_reported, (int)prrte_process_info.num_procs,
+                (int)jdata->num_daemons_reported, (int)prrte_process_info.num_daemons,
                 (int)jdata->num_launched, (int)jdata->num_procs);
     PRRTE_RELEASE(caddy);
 }
@@ -532,7 +532,7 @@ static void _send_notification(int status,
     pmix_byte_object_t pbo;
     pmix_info_t *info;
     size_t ninfo;
-    pmix_proc_t pname, psource;
+    pmix_proc_t psource;
     pmix_data_buffer_t pbkt;
     pmix_data_range_t range = PMIX_RANGE_CUSTOM;
     pmix_status_t code, ret;
@@ -546,23 +546,26 @@ static void _send_notification(int status,
 
     /* pack the info for sending */
     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-    PRRTE_PMIX_CONVERT_NAME(&pname, PRRTE_PROC_MY_NAME);
 
     /* pack the status code */
     code = prrte_pmix_convert_rc(status);
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &code, 1, PMIX_STATUS))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &code, 1, PMIX_STATUS))) {
         PMIX_ERROR_LOG(ret);
         return;
     }
     /* pack the source - it cannot be me as that will cause
      * the pmix server to upcall the event back to me */
-    PRRTE_PMIX_CONVERT_NAME(&psource, proc);
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &psource, 1, PMIX_PROC))) {
+    PRRTE_PMIX_CONVERT_NAME(rc, &psource, proc);
+    if (PRRTE_SUCCESS != rc) {
+        PRRTE_ERROR_LOG(rc);
+        return;
+    }
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &psource, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(ret);
         return;
     }
     /* pack the range */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
         PMIX_ERROR_LOG(ret);
         return;
     }
@@ -571,17 +574,21 @@ static void _send_notification(int status,
     ninfo = 2;
     PMIX_INFO_CREATE(info, ninfo);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_AFFECTED_PROC, &psource, PMIX_PROC);
-    PRRTE_PMIX_CONVERT_NAME(&psource, target);
+    PRRTE_PMIX_CONVERT_NAME(rc, &psource, target);
+    if (PRRTE_SUCCESS != rc) {
+        PRRTE_ERROR_LOG(rc);
+        return;
+    }
     PMIX_INFO_LOAD(&info[1], PMIX_EVENT_CUSTOM_RANGE, &psource, PMIX_PROC);
 
     /* pack the number of infos */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_FREE(info, ninfo);
         return;
     }
     /* pack the infos themselves */
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pname, &pbkt, info, ninfo, PMIX_INFO))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, info, ninfo, PMIX_INFO))) {
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_FREE(info, ninfo);
         return;
@@ -650,7 +657,7 @@ void prrte_state_base_track_procs(int fd, short argc, void *cbdata)
     prrte_proc_state_t state;
     prrte_job_t *jdata;
     prrte_proc_t *pdata;
-    int i;
+    int i, rc;
     prrte_process_name_t parent, target;
     prrte_pmix_lock_t lock;
 
@@ -729,8 +736,11 @@ void prrte_state_base_track_procs(int fd, short argc, void *cbdata)
         if (PRRTE_FLAG_TEST(pdata, PRRTE_PROC_FLAG_LOCAL)) {
             pmix_proc_t pproc;
             /* tell the PMIx subsystem to cleanup this client */
-            (void)prrte_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, proc->jobid);
-            pproc.rank = proc->vpid;
+            PRRTE_PMIX_CONVERT_NAME(rc, &pproc, proc);
+            if (PRRTE_SUCCESS != rc) {
+                PRRTE_ERROR_LOG(rc);
+                return;
+            }
             PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
             PMIx_server_deregister_client(&pproc, opcbfunc, &lock);
             PRRTE_PMIX_WAIT_THREAD(&lock);
@@ -808,7 +818,6 @@ void prrte_state_base_check_all_complete(int fd, short args, void *cbdata)
     int32_t i32, *i32ptr;
     uint32_t u32;
     void *nptr;
-    pmix_proc_t pproc;
     prrte_pmix_lock_t lock;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
@@ -840,9 +849,8 @@ void prrte_state_base_check_all_complete(int fd, short args, void *cbdata)
     }
 
     /* tell the PMIx server to release its data */
-    (void)prrte_snprintf_jobid(pproc.nspace, PMIX_MAX_NSLEN, jdata->jobid);
     PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    PMIx_server_deregister_nspace(pproc.nspace, opcbfunc, &lock);
+    PMIx_server_deregister_nspace(jdata->nspace, opcbfunc, &lock);
     PRRTE_PMIX_WAIT_THREAD(&lock);
     PRRTE_PMIX_DESTRUCT_LOCK(&lock);
 

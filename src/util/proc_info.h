@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
@@ -42,6 +42,7 @@
 
 #include "src/dss/dss_types.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
@@ -65,15 +66,11 @@ typedef uint8_t prrte_proc_type_t;
  */
 typedef struct prrte_process_info_t {
     prrte_process_name_t my_name;        /**< My official process name */
-    prrte_process_name_t my_daemon;      /**< Name of my local daemon */
-    char *my_daemon_uri;                /**< Contact info to local daemon */
+    pmix_proc_t myproc;
     prrte_process_name_t my_hnp;         /**< Name of my hnp */
     char *my_hnp_uri;                   /**< Contact info for my hnp */
     prrte_process_name_t my_parent;      /**< Name of my parent (or my HNP if no parent was specified) */
     pid_t hnp_pid;                      /**< hnp pid - used if singleton */
-    prrte_app_idx_t app_num;             /**< our index into the app_context array */
-    prrte_vpid_t num_procs;              /**< number of processes in this job */
-    prrte_vpid_t max_procs;              /**< Maximum number of processes ever in the job */
     prrte_vpid_t num_daemons;            /**< number of daemons in system */
     int num_nodes;                      /**< number of nodes in the job */
     char *nodename;                     /**< string name for this node */
@@ -82,9 +79,6 @@ typedef struct prrte_process_info_t {
     prrte_proc_type_t proc_type;         /**< Type of process */
     uint16_t my_port;                   /**< TCP port for out-of-band comm */
     int num_restarts;                   /**< number of times this proc has restarted */
-    prrte_node_rank_t my_node_rank;      /**< node rank */
-    prrte_local_rank_t my_local_rank;    /**< local rank */
-    int32_t num_local_peers;            /**< number of procs from my job that share my node with me */
     /* The session directory has the form
      * <prefix>/<openmpi-sessions-user>/<jobid>/<procid>, where the prefix
      * can either be provided by the user via the
@@ -102,8 +96,6 @@ typedef struct prrte_process_info_t {
     char *sock_stdout;                  /**< Path name to temp file for stdout. */
     char *sock_stderr;                  /**< Path name to temp file for stderr. */
     char *cpuset;                       /**< String-representation of bitmap where we are bound */
-    int app_rank;                        /**< rank within my app_context */
-    prrte_vpid_t my_hostid;               /** identifies the local host for a coprocessor */
 } prrte_process_info_t;
 
 

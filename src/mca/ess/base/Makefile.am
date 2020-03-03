@@ -10,7 +10,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
-# Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
@@ -28,6 +28,5 @@ headers += \
 libmca_ess_la_SOURCES += \
         base/ess_base_frame.c \
         base/ess_base_select.c \
-		base/ess_base_get.c \
 		base/ess_base_std_prted.c \
         base/ess_base_std_prolog.c

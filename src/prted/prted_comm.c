@@ -278,7 +278,6 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
                 goto CLEANUP;
             }
             if (0 < bo->size) {
-                PRRTE_PMIX_CONVERT_NAME(&pname, PRRTE_PROC_MY_NAME);
                 /* load it into a buffer */
                 PRRTE_CONSTRUCT(&wireup, prrte_buffer_t);
                 prrte_dss.load(&wireup, bo->bytes, bo->size);
@@ -294,7 +293,7 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
                     PMIX_DATA_BUFFER_LOAD(&pbkt, bo2->bytes, bo2->size);
                     /* unpack the number of info's provided */
                     cnt = 1;
-                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(&pname, &pbkt, &ninfo, &cnt, PMIX_SIZE))) {
+                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(&prrte_process_info.myproc, &pbkt, &ninfo, &cnt, PMIX_SIZE))) {
                         PMIX_ERROR_LOG(pstatus);
                         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         ret = PRRTE_ERR_UNPACK_FAILURE;
@@ -303,7 +302,7 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
                     /* unpack the infos */
                     PMIX_INFO_CREATE(info, ninfo);
                     cnt = ninfo;
-                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(&pname, &pbkt, info, &cnt, PMIX_INFO))) {
+                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(&prrte_process_info.myproc, &pbkt, info, &cnt, PMIX_INFO))) {
                         PMIX_ERROR_LOG(pstatus);
                         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         PMIX_INFO_FREE(info, ninfo);
@@ -312,7 +311,7 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
                     }
 
                     /* store them locally */
-                    PRRTE_PMIX_CONVERT_NAME(&pdmn, &dmn);
+                    PRRTE_PMIX_CONVERT_NAME(ret, &pdmn, &dmn);
                     for (n2=0; n2 < ninfo; n2++) {
                         pstatus = PMIx_Store_internal(&pdmn, info[n2].key, &info[n2].value);
                         if (PMIX_SUCCESS != pstatus) {
@@ -516,7 +515,7 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
                 /* provide the status */
                 PMIX_INFO_LOAD(&info[1], PMIX_JOB_TERM_STATUS, &xrc, PMIX_STATUS);
                 /* tell the requestor which job */
-                PRRTE_PMIX_CONVERT_JOBID(pname.nspace, jd->jobid);
+                PRRTE_PMIX_CONVERT_JOBID(ret, pname.nspace, jd->jobid);
                 pname.rank = PMIX_RANK_WILDCARD;
                 PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
                 PRRTE_PMIX_CONSTRUCT_LOCK(&lk);
@@ -568,7 +567,7 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
             goto CLEANUP;
         }
         /* convert the jobid */
-        PRRTE_PMIX_CONVERT_JOBID(pname.nspace, job);
+        PRRTE_PMIX_CONVERT_JOBID(ret, pname.nspace, job);
 
         /* release all resources (even those on other nodes) that we
          * assigned to this job */

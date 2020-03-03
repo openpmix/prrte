@@ -25,6 +25,7 @@
 #include "src/mca/mca.h"
 #include "src/event/event-internal.h"
 #include "src/dss/dss.h"
+#include "src/util/printf.h"
 #include "src/util/error.h"
 #include "src/util/name_fns.h"
 #include "src/include/hash_string.h"
@@ -182,11 +183,11 @@ typedef struct {
     } while(0)
 
 /*
- * Count the fash for the the external RM
+ * Count the hash for the the external RM
  */
 #define PRRTE_HASH_JOBID( str, hash ){               \
     PRRTE_HASH_STR( str, hash );                     \
-    hash &= ~(0x8000);                              \
+    hash &= ~(0x8000);                               \
 }
 
 /**
@@ -257,18 +258,22 @@ typedef struct {
  *     is to be returned
  * t - the expected data type
  */
-#define PRRTE_MODEX_RECV_VALUE_OPTIONAL(r, s, p, d, t)                                   \
+#define PRRTE_MODEX_RECV_VALUE_OPTIONAL(r, s, p, d, t)                                  \
     do {                                                                                \
         pmix_proc_t _proc;                                                              \
         pmix_value_t *_kv = NULL;                                                       \
         pmix_info_t _info;                                                              \
         size_t _sz;                                                                     \
-        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                               \
+        int _rc;                                                                        \
+        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                             \
                             "%s[%s:%d] MODEX RECV VALUE OPTIONAL FOR PROC %s KEY %s",   \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),                         \
+                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),                       \
                             __FILE__, __LINE__,                                         \
                             PRRTE_NAME_PRINT((p)), (s)));                               \
-        PRRTE_PMIX_CONVERT_NAME(&_proc, (p));                                            \
+        PRRTE_PMIX_CONVERT_NAME(_rc, &_proc, (p));                                      \
+        if (PRRTE_SUCCESS != _rc) {                                                     \
+            PRRTE_ERROR_LOG(_rc);                                                       \
+        }                                                                               \
         PMIX_INFO_LOAD(&_info, PMIX_OPTIONAL, NULL, PMIX_BOOL);                         \
         (r) = PMIx_Get(&(_proc), (s), &(_info), 1, &(_kv));                             \
         if (NULL == _kv) {                                                              \
@@ -298,18 +303,22 @@ typedef struct {
  *     is to be returned
  * t - the expected data type
  */
-#define PRRTE_MODEX_RECV_VALUE_IMMEDIATE(r, s, p, d, t)                                   \
-    do {                                                                                 \
+#define PRRTE_MODEX_RECV_VALUE_IMMEDIATE(r, s, p, d, t)                                 \
+    do {                                                                                \
         pmix_proc_t _proc;                                                              \
         pmix_value_t *_kv = NULL;                                                       \
         pmix_info_t _info;                                                              \
         size_t _sz;                                                                     \
-        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                               \
+        int _rc;                                                                        \
+        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                             \
                             "%s[%s:%d] MODEX RECV VALUE OPTIONAL FOR PROC %s KEY %s",   \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),                         \
+                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),                       \
                             __FILE__, __LINE__,                                         \
                             PRRTE_NAME_PRINT((p)), (s)));                               \
-        PRRTE_PMIX_CONVERT_NAME(&_proc, (p));                                            \
+        PRRTE_PMIX_CONVERT_NAME(_rc, &_proc, (p));                                      \
+        if (PRRTE_SUCCESS != _rc) {                                                     \
+            PRRTE_ERROR_LOG(_rc);                                                       \
+        }                                                                               \
         PMIX_INFO_LOAD(&_info, PMIX_IMMEDIATE, NULL, PMIX_BOOL);                        \
         (r) = PMIx_Get(&(_proc), (s), &(_info), 1, &(_kv));                             \
         if (NULL == _kv) {                                                              \
@@ -336,17 +345,21 @@ typedef struct {
  *     is to be returned
  * t - the expected data type
  */
-#define PRRTE_MODEX_RECV_VALUE(r, s, p, d, t)                                    \
+#define PRRTE_MODEX_RECV_VALUE(r, s, p, d, t)                                   \
     do {                                                                        \
         pmix_proc_t _proc;                                                      \
         pmix_value_t *_kv = NULL;                                               \
         size_t _sz;                                                             \
-        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                       \
+        int _rc;                                                                \
+        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                     \
                             "%s[%s:%d] MODEX RECV VALUE FOR PROC %s KEY %s",    \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),                 \
+                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),               \
                             __FILE__, __LINE__,                                 \
                             PRRTE_NAME_PRINT((p)), (s)));                       \
-        PRRTE_PMIX_CONVERT_NAME(&_proc, (p));                                   \
+        PRRTE_PMIX_CONVERT_NAME(_rc, &_proc, (p));                              \
+        if (PRRTE_SUCCESS != _rc) {                                             \
+            PRRTE_ERROR_LOG(_rc);                                               \
+        }                                                                       \
         (r) = PMIx_Get(&(_proc), (s), NULL, 0, &(_kv));                         \
         if (NULL == _kv) {                                                      \
             (r) = PMIX_ERR_NOT_FOUND;                                           \
@@ -373,18 +386,22 @@ typedef struct {
  * sz - pointer to a location wherein the number of bytes
  *     in the data object can be returned (size_t)
  */
-#define PRRTE_MODEX_RECV_STRING(r, s, p, d, sz)                                  \
+#define PRRTE_MODEX_RECV_STRING(r, s, p, d, sz)                                 \
     do {                                                                        \
         pmix_proc_t _proc;                                                      \
         pmix_value_t *_kv = NULL;                                               \
-        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                       \
+        int _rc;                                                                \
+        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                     \
                             "%s[%s:%d] MODEX RECV STRING FOR PROC %s KEY %s",   \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),                 \
+                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),               \
                             __FILE__, __LINE__,                                 \
                             PRRTE_NAME_PRINT((p)), (s)));                       \
         *(d) = NULL;                                                            \
         *(sz) = 0;                                                              \
-        PRRTE_PMIX_CONVERT_NAME(&_proc, (p));                                    \
+        PRRTE_PMIX_CONVERT_NAME(_rc, &_proc, (p));                              \
+        if (PRRTE_SUCCESS != _rc) {                                             \
+            PRRTE_ERROR_LOG(_rc);                                               \
+        }                                                                       \
         (r) = PMIx_Get(&(_proc), (s), NULL, 0, &(_kv));                         \
         if (NULL == _kv) {                                                      \
             (r) = PMIX_ERR_NOT_FOUND;                                           \
@@ -437,42 +454,60 @@ PRRTE_EXPORT int prrte_pmix_convert_pstate(pmix_proc_state_t);
 PRRTE_EXPORT pmix_status_t prrte_pmix_convert_rc(int rc);
 PRRTE_EXPORT int prrte_pmix_convert_status(pmix_status_t status);
 PRRTE_EXPORT pmix_status_t prrte_pmix_convert_job_state_to_error(int state);
+PRRTE_EXPORT pmix_status_t prrte_pmix_convert_proc_state_to_error(int state);
+PRRTE_EXPORT int prrte_convert_jobid_to_nspace(pmix_nspace_t nspace, prrte_jobid_t jobid);
+PRRTE_EXPORT int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace_t nspace);
 
-#define PRRTE_PMIX_CONVERT_JOBID(n, j) \
-    (void)prrte_snprintf_jobid((n), PMIX_MAX_NSLEN, (j))
-
-#define PRRTE_PMIX_CONVERT_VPID(r, v)        \
+#define PRRTE_PMIX_CREATE_NSPACE(n, j)      \
     do {                                    \
-        if (PRRTE_VPID_WILDCARD == (v)) {    \
-            (r) = PMIX_RANK_WILDCARD;       \
-        } else {                            \
-            (r) = (v);                      \
-        }                                   \
+        char *_tmp;                         \
+        prrte_asprintf(&_tmp, "%u", (j));   \
+        PMIX_LOAD_NSPACE((n), _tmp);        \
+        free(_tmp);                         \
     } while(0)
-#define PRRTE_PMIX_CONVERT_NAME(p, n)                        \
-    do {                                                    \
-        PRRTE_PMIX_CONVERT_JOBID((p)->nspace, (n)->jobid);   \
-        PRRTE_PMIX_CONVERT_VPID((p)->rank, (n)->vpid);       \
+
+#define PRRTE_PMIX_CONVERT_JOBID(r, n, j) \
+    (r) = prrte_convert_jobid_to_nspace((n), (j))
+
+#define PRRTE_PMIX_CONVERT_VPID(r, v)               \
+    do {                                            \
+        if (PRRTE_VPID_WILDCARD == (v)) {           \
+            (r) = PMIX_RANK_WILDCARD;               \
+        } else if (PRRTE_VPID_INVALID == (v)) {     \
+            (r) = PMIX_RANK_INVALID;                \
+        } else {                                    \
+            (r) = (v);                              \
+        }                                           \
+    } while(0)
+
+#define PRRTE_PMIX_CONVERT_NAME(r, p, n)                        \
+    do {                                                        \
+        PRRTE_PMIX_CONVERT_JOBID(r, (p)->nspace, (n)->jobid);   \
+        if (PRRTE_SUCCESS == (r)) {                             \
+            PRRTE_PMIX_CONVERT_VPID((p)->rank, (n)->vpid);      \
+        }                                                       \
     } while(0)
 
 
 #define PRRTE_PMIX_CONVERT_NSPACE(r, j, n)       \
-    (r) = prrte_util_convert_string_to_jobid((j), (n))
+    (r) = prrte_convert_nspace_to_jobid((j), (n))
 
-#define PRRTE_PMIX_CONVERT_RANK(v, r)        \
-    do {                                    \
-        if (PMIX_RANK_WILDCARD == (r)) {    \
-            (v) = PRRTE_VPID_WILDCARD;       \
-        } else {                            \
-            (v) = (r);                      \
-        }                                   \
+#define PRRTE_PMIX_CONVERT_RANK(v, r)           \
+    do {                                        \
+        if (PMIX_RANK_WILDCARD == (r)) {        \
+            (v) = PRRTE_VPID_WILDCARD;          \
+        } else if (PMIX_RANK_INVALID == (r)) {  \
+            (v) = PRRTE_VPID_INVALID;           \
+        } else {                                \
+            (v) = (r);                          \
+        }                                       \
     } while(0)
 
-#define PRRTE_PMIX_CONVERT_PROCT(r, n, p)                            \
+#define PRRTE_PMIX_CONVERT_PROCT(r, n, p)                           \
     do {                                                            \
-        PRRTE_PMIX_CONVERT_NSPACE((r), &(n)->jobid, (p)->nspace);    \
-        if (PRRTE_SUCCESS == (r)) {                                  \
-            PRRTE_PMIX_CONVERT_RANK((n)->vpid, (p)->rank);           \
+        PRRTE_PMIX_CONVERT_NSPACE((r), &(n)->jobid, (p)->nspace);   \
+        if (PRRTE_SUCCESS == (r)) {                                 \
+            PRRTE_PMIX_CONVERT_RANK((n)->vpid, (p)->rank);          \
         }                                                           \
     } while(0)
 

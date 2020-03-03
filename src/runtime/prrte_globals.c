@@ -620,6 +620,7 @@ static void prrte_job_construct(prrte_job_t* job)
     job->exit_code = 0;
     job->personality = NULL;
     job->jobid = PRRTE_JOBID_INVALID;
+    PMIX_LOAD_NSPACE(job->nspace, NULL);
     job->offset = 0;
     job->apps = PRRTE_NEW(prrte_pointer_array_t);
     prrte_pointer_array_init(job->apps,
@@ -801,6 +802,8 @@ PRRTE_CLASS_INSTANCE(prrte_node_t,
 static void prrte_proc_construct(prrte_proc_t* proc)
 {
     proc->name = *PRRTE_NAME_INVALID;
+    proc->job = NULL;
+    proc->rank = PMIX_RANK_INVALID;
     proc->pid = 0;
     proc->local_rank = PRRTE_LOCAL_RANK_INVALID;
     proc->node_rank = PRRTE_NODE_RANK_INVALID;

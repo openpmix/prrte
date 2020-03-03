@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,6 +28,7 @@
 #include "src/dss/dss.h"
 #include "src/dss/dss_internal.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/util/argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -87,6 +88,14 @@ int prrte_dt_unpack_job(prrte_buffer_t *buffer, void *dest,
             PRRTE_ERROR_LOG(rc);
             return rc;
         }
+        /* unpack the nspace */
+        n=1;
+        if (PRRTE_SUCCESS != (rc = prrte_dss_unpack_buffer(buffer, &tmp, &n, PRRTE_STRING))) {
+            PRRTE_ERROR_LOG(rc);
+            return rc;
+        }
+        PMIX_LOAD_NSPACE(jobs[i]->nspace, tmp);
+        free(tmp);
         /* unpack the flags */
         n = 1;
         if (PRRTE_SUCCESS != (rc = prrte_dss_unpack_buffer(buffer,

@@ -113,7 +113,7 @@ static int init_server(void)
             return rc;
         }
         /* setup our route to the server */
-        PRRTE_PMIX_CONVERT_NAME(&proc, &prrte_pmix_server_globals.server);
+        PRRTE_PMIX_CONVERT_NAME(rc, &proc, &prrte_pmix_server_globals.server);
         PMIX_VALUE_LOAD(&val, server, PMIX_STRING);
         if (PMIX_SUCCESS != (ret = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
             PMIX_ERROR_LOG(ret);
@@ -232,7 +232,6 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc,
     pmix_data_buffer_t pbkt;
     pmix_byte_object_t pbo;
     prrte_byte_object_t bo, *boptr;
-    pmix_proc_t psender;
     size_t n;
 
     prrte_output_verbose(1, prrte_pmix_server_globals.output,
@@ -264,24 +263,23 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc,
     /* setup a pmix_data_buffer_t to hold the message */
     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
     /* I will be sending it */
-    PRRTE_PMIX_CONVERT_NAME(&psender, PRRTE_PROC_MY_NAME);
 
     /* pack the name of the publisher */
-    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_proc_t*)proc, 1, PMIX_PROC))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, (pmix_proc_t*)proc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(rc);
         PRRTE_RELEASE(req);
         return rc;
     }
 
     /* pack the number of infos */
-    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
         PRRTE_RELEASE(req);
         return rc;
     }
 
     /* pack the infos */
-    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
         PMIX_ERROR_LOG(rc);
         PRRTE_RELEASE(req);
         return rc;
@@ -323,7 +321,6 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
     pmix_data_buffer_t pbkt;
     pmix_byte_object_t pbo;
     prrte_byte_object_t bo, *boptr;
-    pmix_proc_t psender;
     pmix_status_t rc;
 
     if (NULL == keys || 0 == prrte_argv_count(keys)) {
@@ -354,11 +351,9 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
 
     /* setup a pmix_data_buffer_t to hold the message */
     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-    /* I will be sending it */
-    PRRTE_PMIX_CONVERT_NAME(&psender, PRRTE_PROC_MY_NAME);
 
     /* pack the name of the requestor */
-    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_proc_t*)proc, 1, PMIX_PROC))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, (pmix_proc_t*)proc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(rc);
         PRRTE_RELEASE(req);
         return rc;
@@ -366,14 +361,14 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
 
     /* pack the number of keys */
     n = prrte_argv_count(keys);
-    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &n, 1, PMIX_SIZE))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &n, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
         PRRTE_RELEASE(req);
         return rc;
     }
     /* pack the keys */
     for (m=0; NULL != keys[m]; m++) {
-        if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &keys[m], 1, PMIX_STRING))) {
+        if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &keys[m], 1, PMIX_STRING))) {
             PMIX_ERROR_LOG(rc);
             PRRTE_RELEASE(req);
             return rc;
@@ -381,14 +376,14 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
     }
 
     /* pack the number of infos */
-    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
         PRRTE_RELEASE(req);
         return rc;
     }
 
     /* pack the infos */
-    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
         PMIX_ERROR_LOG(rc);
         PRRTE_RELEASE(req);
         return rc;
@@ -428,7 +423,6 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     pmix_data_buffer_t pbkt;
     pmix_byte_object_t pbo;
     prrte_byte_object_t bo, *boptr;
-    pmix_proc_t psender;
     size_t m, n;
     pmix_status_t rc;
 
@@ -456,11 +450,9 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
 
      /* setup a pmix_data_buffer_t to hold the message */
      PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-     /* I will be sending it */
-     PRRTE_PMIX_CONVERT_NAME(&psender, PRRTE_PROC_MY_NAME);
 
      /* pack the name of the requestor */
-     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_proc_t*)proc, 1, PMIX_PROC))) {
+     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, (pmix_proc_t*)proc, 1, PMIX_PROC))) {
          PMIX_ERROR_LOG(rc);
          PRRTE_RELEASE(req);
          return rc;
@@ -468,14 +460,14 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
 
      /* pack the number of keys */
      n = prrte_argv_count(keys);
-     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &n, 1, PMIX_SIZE))) {
+     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &n, 1, PMIX_SIZE))) {
          PMIX_ERROR_LOG(rc);
          PRRTE_RELEASE(req);
          return rc;
      }
      /* pack the keys */
      for (m=0; m < n; m++) {
-         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &keys[m], 1, PMIX_STRING))) {
+         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &keys[m], 1, PMIX_STRING))) {
              PMIX_ERROR_LOG(rc);
              PRRTE_RELEASE(req);
              return rc;
@@ -483,14 +475,14 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
      }
 
      /* pack the number of infos */
-     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, &ninfo, 1, PMIX_SIZE))) {
+     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, &ninfo, 1, PMIX_SIZE))) {
          PMIX_ERROR_LOG(rc);
          PRRTE_RELEASE(req);
          return rc;
      }
 
      /* pack the infos */
-     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&psender, &pbkt, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
+     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(&prrte_process_info.myproc, &pbkt, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
          PMIX_ERROR_LOG(rc);
          PRRTE_RELEASE(req);
          return rc;
@@ -531,7 +523,6 @@ void pmix_server_keyval_client(int status, prrte_process_name_t* sender,
     prrte_byte_object_t *boptr;
     pmix_data_buffer_t pbkt;
     pmix_status_t ret = PMIX_SUCCESS, rt = PMIX_SUCCESS;
-    pmix_proc_t psender;
     pmix_info_t info;
     pmix_pdata_t *pdata = NULL;
     size_t n, npdata = 0;
@@ -594,12 +585,9 @@ void pmix_server_keyval_client(int status, prrte_process_name_t* sender,
     boptr->bytes = NULL;
     free(boptr);
 
-    /* convert the sender */
-    PRRTE_PMIX_CONVERT_NAME(&psender, sender);
-
     /* unpack the number of data items */
     cnt = 1;
-    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &npdata, &cnt, PMIX_SIZE))) {
+    if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&prrte_process_info.myproc, &pbkt, &npdata, &cnt, PMIX_SIZE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         goto release;
@@ -610,13 +598,13 @@ void pmix_server_keyval_client(int status, prrte_process_name_t* sender,
         for (n=0; n < npdata; n++) {
             PMIX_INFO_CONSTRUCT(&info);
             cnt = 1;
-            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &pdata[n].proc, &cnt, PMIX_PROC))) {
+            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&prrte_process_info.myproc, &pbkt, &pdata[n].proc, &cnt, PMIX_PROC))) {
                 PMIX_ERROR_LOG(ret);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 goto release;
             }
             cnt = 1;
-            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&psender, &pbkt, &info, &cnt, PMIX_INFO))) {
+            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(&prrte_process_info.myproc, &pbkt, &info, &cnt, PMIX_INFO))) {
                 PMIX_ERROR_LOG(ret);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 goto release;
