@@ -476,8 +476,6 @@ PRRTE_EXPORT extern bool prrte_hnp_is_allocated;
 PRRTE_EXPORT extern bool prrte_allocation_required;
 PRRTE_EXPORT extern bool prrte_managed_allocation;
 PRRTE_EXPORT extern char *prrte_set_slots;
-PRRTE_EXPORT extern bool prrte_display_allocation;
-PRRTE_EXPORT extern bool prrte_display_devel_allocation;
 PRRTE_EXPORT extern bool prrte_soft_locations;
 PRRTE_EXPORT extern bool prrte_hnp_connected;
 PRRTE_EXPORT extern bool prrte_nidmap_communicated;

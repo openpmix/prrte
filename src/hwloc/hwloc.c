@@ -21,6 +21,7 @@
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
 #include "src/threads/tsd.h"
+#include "src/runtime/prrte_globals.h"
 
 #include "src/hwloc/hwloc-internal.h"
 
@@ -36,7 +37,6 @@ prrte_hwloc_base_map_t prrte_hwloc_base_map = PRRTE_HWLOC_BASE_MAP_NONE;
 prrte_hwloc_base_mbfa_t prrte_hwloc_base_mbfa = PRRTE_HWLOC_BASE_MBFA_WARN;
 prrte_binding_policy_t prrte_hwloc_binding_policy=0;
 char *prrte_hwloc_base_cpu_list=NULL;
-bool prrte_hwloc_report_bindings=false;
 hwloc_obj_type_t prrte_hwloc_levels[] = {
     HWLOC_OBJ_MACHINE,
     HWLOC_OBJ_NODE,
@@ -132,11 +132,6 @@ int prrte_hwloc_base_register(void)
                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, PRRTE_INFO_LVL_9,
                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_base_bind_to_socket);
 
-    prrte_hwloc_report_bindings = false;
-    (void) prrte_mca_base_var_register("prrte", "hwloc", "base", "report_bindings", "Report bindings to stderr",
-                                 PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_report_bindings);
-
     prrte_hwloc_base_cpu_list = NULL;
     varid = prrte_mca_base_var_register("prrte", "hwloc", "base", "cpu_list",
                                   "Comma-separated list of ranges specifying logical cpus to be used by these processes [default: none]",
@@ -172,8 +167,8 @@ int prrte_hwloc_base_open(void)
     }
     prrte_hwloc_base_inited = true;
 
-    if (PRRTE_SUCCESS != (rc = prrte_hwloc_base_set_binding_policy(&prrte_hwloc_binding_policy,
-                                                                 prrte_hwloc_base_binding_policy))) {
+    if (PRRTE_SUCCESS != (rc = prrte_hwloc_base_set_binding_policy(NULL, &prrte_hwloc_binding_policy,
+                                                                   prrte_hwloc_base_binding_policy))) {
         return rc;
     }
 
@@ -448,11 +443,13 @@ PRRTE_CLASS_INSTANCE(prrte_rmaps_numa_node_t,
         NULL,
         NULL);
 
-int prrte_hwloc_base_set_binding_policy(prrte_binding_policy_t *policy, char *spec)
+int prrte_hwloc_base_set_binding_policy(void *jdat,
+                                        prrte_binding_policy_t *policy, char *spec)
 {
     int i;
     prrte_binding_policy_t tmp;
     char **tmpvals, **quals;
+    prrte_job_t *jdata = (prrte_job_t*)jdat;
 
     /* set default */
     tmp = 0;
@@ -484,6 +481,9 @@ int prrte_hwloc_base_set_binding_policy(prrte_binding_policy_t *policy, char *sp
                     tmp |= PRRTE_BIND_ALLOW_OVERLOAD;
                 } else if (0 == strncasecmp(quals[i], "ordered", strlen(quals[i]))) {
                     tmp |= PRRTE_BIND_ORDERED;
+                } else if (0 == strncasecmp(quals[i], "REPORT", strlen(quals[i]))) {
+                    prrte_set_attribute(&jdata->attributes, PRRTE_JOB_REPORT_BINDINGS,
+                                        PRRTE_ATTR_GLOBAL, NULL, PRRTE_BOOL);
                 } else {
                     /* unknown option */
                     prrte_output(0, "Unknown qualifier to binding policy: %s", spec);

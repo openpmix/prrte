@@ -277,6 +277,14 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
             option = find_option(cmd, &e);
         }
 
+        /* Is it the special-cased "-np" name? */
+        else if (0 == strcmp(cmd->lcl_argv[i], "-np")) {
+            is_option = true;
+            memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+            e.ocl_cmd_long_name = &cmd->lcl_argv[i][1];
+            option = find_option(cmd, &e);
+        }
+
         /* It could be a short name.  Is it? */
 
         else {

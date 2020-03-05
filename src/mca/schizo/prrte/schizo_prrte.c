@@ -51,6 +51,7 @@
 #include "schizo_prrte.h"
 
 static int define_cli(prrte_cmd_line_t *cli);
+static int parse_deprecated_cli(int *argc, char ***argv);
 static int parse_cli(int argc, int start, char **argv,
                      char *personality, char ***target);
 static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
@@ -68,6 +69,7 @@ static void wrap_args(char **args);
 
 prrte_schizo_base_module_t prrte_schizo_prrte_module = {
     .define_cli = define_cli,
+    .parse_deprecated_cli = parse_deprecated_cli,
     .parse_cli = parse_cli,
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
@@ -313,6 +315,130 @@ static int parse_cli(int argc, int start, char **argv,
     return PRRTE_SUCCESS;
 }
 
+static int parse_deprecated_cli(int *argc, char ***argv)
+{
+    int i, rc, pargc;
+    char **pargs;
+
+    pargs = *argv;
+    pargc = *argc;
+    /* check for deprecated cmd line options */
+    for (i=0; NULL != pargs[i]; i++) {
+        /* check for option */
+        if ('-' != pargs[i][0]) {
+            continue;
+        }
+
+        /* --display-devel-map  ->  PRRTE_MCA_rmaps_base_display_devel_map */
+        if (0 == strcmp(pargs[i], "--display-devel-map")) {
+            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDEVEL");
+            if (PRRTE_SUCCESS != rc) {
+                return rc;
+            }
+            // look at this position again in the next cycle since
+            // the ith location was removed
+            i--;
+            pargs = *argv;
+            pargc = prrte_argv_count(pargs);
+            break;
+        }
+        /* --display-map  ->  PRRTE_MCA_rmaps_base_display_map */
+        else if (0 == strcmp(pargs[i], "--display-map")) {
+            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAY");
+            if (PRRTE_SUCCESS != rc) {
+                return rc;
+            }
+            // look at this position again in the next cycle since
+            // the ith location was removed
+            i--;
+            pargs = *argv;
+            pargc = prrte_argv_count(pargs);
+            break;
+        }
+        /* --display-topo  ->  PRRTE_MCA_rmaps_base_display_topo_with_map */
+        else if (0 == strcmp(pargs[i], "--display-topo")) {
+            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYTOPO");
+            if (PRRTE_SUCCESS != rc) {
+                return rc;
+            }
+            // look at this position again in the next cycle since
+            // the ith location was removed
+            i--;
+            pargs = *argv;
+            pargc = prrte_argv_count(pargs);
+            break;
+        }
+        /* --display-diffable-map  ->  PRRTE_MCA_rmaps_base_display_diffable_map */
+        else if (0 == strcmp(pargs[i], "--display-diff")) {
+            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDIFF");
+            if (PRRTE_SUCCESS != rc) {
+                return rc;
+            }
+            // look at this position again in the next cycle since
+            // the ith location was removed
+            i--;
+            pargs = *argv;
+            pargc = prrte_argv_count(pargs);
+            break;
+        }
+        /* --report-bindings  ->  PRRTE_MCA_hwloc_base_report_bindings */
+        else if (0 == strcmp(pargs[i], "--report-bindings")) {
+            rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", NULL, "REPORT");
+            if (PRRTE_SUCCESS != rc) {
+                return rc;
+            }
+            // look at this position again in the next cycle since
+            // the ith location was removed
+            i--;
+            pargs = *argv;
+            pargc = prrte_argv_count(pargs);
+            break;
+        }
+        /* --display-allocation  ->  PRRTE_MCA_prrte_display_alloc */
+        else if (0 == strcmp(pargs[i], "--display-allocation")) {
+            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYALLOC");
+            if (PRRTE_SUCCESS != rc) {
+                return rc;
+            }
+            // look at this position again in the next cycle since
+            // the ith location was removed
+            i--;
+            pargs = *argv;
+            pargc = prrte_argv_count(pargs);
+            break;
+        }
+        /* --do-not-launch  ->   */
+        else if (0 == strcmp(pargs[i], "--do-not-launch")) {
+            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DONOTLAUNCH");
+            if (PRRTE_SUCCESS != rc) {
+                return rc;
+            }
+            // look at this position again in the next cycle since
+            // the ith location was removed
+            i--;
+            pargs = *argv;
+            pargc = prrte_argv_count(pargs);
+            break;
+        }
+        /* --xml-output  ->   */
+        else if (0 == strcmp(pargs[i], "--xml-output")) {
+            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "XMLOUTPUT");
+            if (PRRTE_SUCCESS != rc) {
+                return rc;
+            }
+            // look at this position again in the next cycle since
+            // the ith location was removed
+            i--;
+            pargs = *argv;
+            pargc = prrte_argv_count(pargs);
+            break;
+        }
+    }
+    *argc = pargc;
+
+    return PRRTE_SUCCESS;
+}
+
 static int parse_env(prrte_cmd_line_t *cmd_line,
                      char **srcenv,
                      char ***dstenv,
@@ -514,14 +640,9 @@ static int detect_proxy(char **argv, char **rfile)
     mypid = getpid();
     /* if the basename isn't prun, and nobody before us recognized
      * it, then we need to treat it as a proxy */
-    if (prrte_schizo_base.test_proxy_launch ||
-        0 == strcmp(prrte_tool_basename, "mpirun") ||
-        0 == strcmp(prrte_tool_basename, "mpiexec") ||
-        0 == strcmp(prrte_tool_basename, "oshrun")) {
+    if (prrte_schizo_base.test_proxy_launch) {
         /* create a rendezvous file */
         prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
-        /* add "ompi" to the personalities */
-        prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi");
         return PRRTE_SUCCESS;
     }
 

@@ -30,6 +30,7 @@
 #include <string.h>
 
 #include "src/mca/mca.h"
+#include "src/util/argv.h"
 #include "src/util/output.h"
 #include "src/util/string_copy.h"
 #include "src/mca/base/base.h"
@@ -350,7 +351,7 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
      * undefined topologies to match our own so the mapper
      * can operate
      */
-    if (prrte_do_not_launch) {
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL)) {
         prrte_node_t *node;
         prrte_topology_t *t0;
         int i;
@@ -429,7 +430,10 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
     }
 
-    if (prrte_do_not_launch) {
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, NULL, PRRTE_BOOL)) {
         /* compute the ranks and add the proc objects
          * to the jdata->procs array */
         if (PRRTE_SUCCESS != (rc = prrte_rmaps_base_compute_vpids(jdata))) {
@@ -499,8 +503,10 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
     }
 
-    if (prrte_do_not_launch) {
-        /* display the devel map */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, NULL, PRRTE_BOOL)) {
+        /* display the map */
         prrte_rmaps_base_display_map(jdata);
     }
 
@@ -519,6 +525,14 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
     PRRTE_RELEASE(caddy);
 }
 
+static void prrte_print_map(char **output, prrte_job_t *jdata);
+static void prrte_print_node(char **output,
+                             prrte_job_t *jdata,
+                             prrte_node_t *src);
+static void prrte_print_proc(char **output,
+                             prrte_job_t *jdata,
+                             prrte_proc_t *src);
+
 void prrte_rmaps_base_display_map(prrte_job_t *jdata)
 {
     /* ignore daemon job */
@@ -532,7 +546,12 @@ void prrte_rmaps_base_display_map(prrte_job_t *jdata)
     prrte_proc_t *p0;
     char *p0bitmap, *procbitmap;
 
-    if (prrte_display_diffable_output) {
+    /* only have rank=0 output this */
+    if (0 != PRRTE_PROC_MY_NAME->vpid) {
+        return;
+    }
+
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, NULL, PRRTE_BOOL)) {
         /* intended solely to test mapping methods, this output
          * can become quite long when testing at scale. Rather
          * than enduring all the malloc/free's required to
@@ -553,6 +572,9 @@ void prrte_rmaps_base_display_map(prrte_job_t *jdata)
             cnt++;
             for (j=0; j < node->procs->size; j++) {
                 if (NULL == (proc = (prrte_proc_t*)prrte_pointer_array_get_item(node->procs, j))) {
+                    continue;
+                }
+                if (proc->job != jdata) {
                     continue;
                 }
                 memset(tmp1, 0, sizeof(tmp1));
@@ -587,6 +609,9 @@ void prrte_rmaps_base_display_map(prrte_job_t *jdata)
                 if (NULL == (proc = (prrte_proc_t*)prrte_pointer_array_get_item(node->procs, j))) {
                     continue;
                 }
+                if (proc->job != jdata) {
+                    continue;
+                }
                 procbitmap = NULL;
                 if (prrte_get_attribute(&proc->attributes, PRRTE_PROC_CPU_BITMAP, (void**)&procbitmap, PRRTE_STRING) &&
                     NULL != procbitmap) {
@@ -612,8 +637,8 @@ void prrte_rmaps_base_display_map(prrte_job_t *jdata)
         prrte_output(prrte_clean_output, " Data for JOB %s offset %s Total slots allocated %lu",
                     PRRTE_JOBID_PRINT(jdata->jobid), PRRTE_VPID_PRINT(jdata->offset),
                     (long unsigned)jdata->total_slots_alloc);
-        prrte_dss.print(&output, NULL, jdata->map, PRRTE_JOB_MAP);
-        if (prrte_xml_output) {
+        prrte_print_map(&output, jdata);
+        if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, NULL, PRRTE_BOOL)) {
             fprintf(prrte_xml_fp, "%s\n", output);
             fflush(prrte_xml_fp);
         } else {
@@ -621,4 +646,373 @@ void prrte_rmaps_base_display_map(prrte_job_t *jdata)
         }
         free(output);
     }
+}
+
+static void prrte_print_map(char **output, prrte_job_t *jdata)
+{
+    char *tmp=NULL, *tmp2, *tmp3;
+    int32_t i, j;
+    prrte_node_t *node;
+    prrte_proc_t *proc;
+    prrte_job_map_t *src = jdata->map;
+
+    /* set default result */
+    *output = NULL;
+
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, NULL, PRRTE_BOOL)) {
+        /* need to create the output in XML format */
+        prrte_asprintf(&tmp, "<map>\n");
+        /* loop through nodes */
+        for (i=0; i < src->nodes->size; i++) {
+            if (NULL == (node = (prrte_node_t*)prrte_pointer_array_get_item(src->nodes, i))) {
+                continue;
+            }
+            prrte_print_node(&tmp2, jdata, node);
+            prrte_asprintf(&tmp3, "%s%s", tmp, tmp2);
+            free(tmp2);
+            free(tmp);
+            tmp = tmp3;
+            /* for each node, loop through procs and print their rank */
+            for (j=0; j < node->procs->size; j++) {
+                if (NULL == (proc = (prrte_proc_t*)prrte_pointer_array_get_item(node->procs, j))) {
+                    continue;
+                }
+                if (proc->job != jdata) {
+                    continue;
+                }
+                prrte_print_proc(&tmp2, jdata, proc);
+                prrte_asprintf(&tmp3, "%s%s", tmp, tmp2);
+                free(tmp2);
+                free(tmp);
+                tmp = tmp3;
+            }
+            prrte_asprintf(&tmp3, "%s\t</host>\n", tmp);
+            free(tmp);
+            tmp = tmp3;
+        }
+        prrte_asprintf(&tmp2, "%s</map>\n", tmp);
+        free(tmp);
+        *output = tmp2;
+        return;
+
+    }
+
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL)) {
+        prrte_asprintf(&tmp, "\n========================   JOB MAP   ========================\n"
+                       "Mapper requested: %s  Last mapper: %s  Mapping policy: %s  Ranking policy: %s\n"
+                       "Binding policy: %s  Cpu set: %s  PPR: %s  Cpus-per-rank: %d",
+                       (NULL == src->req_mapper) ? "NULL" : src->req_mapper,
+                       (NULL == src->last_mapper) ? "NULL" : src->last_mapper,
+                       prrte_rmaps_base_print_mapping(src->mapping),
+                       prrte_rmaps_base_print_ranking(src->ranking),
+                       prrte_hwloc_base_print_binding(src->binding),
+                       (NULL == prrte_hwloc_base_cpu_list) ? "NULL" : prrte_hwloc_base_cpu_list,
+                       (NULL == src->ppr) ? "NULL" : src->ppr,
+                       (int)src->cpus_per_rank);
+
+        if (PRRTE_VPID_INVALID == src->daemon_vpid_start) {
+            prrte_asprintf(&tmp2, "%s\nNum new daemons: %ld\tNew daemon starting vpid INVALID\nNum nodes: %ld",
+                           tmp, (long)src->num_new_daemons, (long)src->num_nodes);
+        } else {
+            prrte_asprintf(&tmp2, "%s\nNum new daemons: %ld\tNew daemon starting vpid %ld\nNum nodes: %ld",
+                           tmp, (long)src->num_new_daemons, (long)src->daemon_vpid_start,
+                           (long)src->num_nodes);
+        }
+        free(tmp);
+        tmp = tmp2;
+    } else {
+        /* this is being printed for a user, so let's make it easier to see */
+        prrte_asprintf(&tmp, "\n========================   JOB MAP   ========================");
+    }
+
+
+    for (i=0; i < src->nodes->size; i++) {
+        if (NULL == (node = (prrte_node_t*)prrte_pointer_array_get_item(src->nodes, i))) {
+            continue;
+        }
+        prrte_print_node(&tmp2, jdata, node);
+        prrte_asprintf(&tmp3, "%s\n%s", tmp, tmp2);
+        free(tmp);
+        free(tmp2);
+        tmp = tmp3;
+    }
+
+    /* let's make it easier to see */
+    prrte_asprintf(&tmp2, "%s\n\n=============================================================\n", tmp);
+    free(tmp);
+    tmp = tmp2;
+
+    /* set the return */
+    *output = tmp;
+
+    return;
+}
+
+static void prrte_print_node(char **output,
+                             prrte_job_t *jdata,
+                             prrte_node_t *src)
+{
+    char *tmp, *tmp2, *tmp3, *pfx2 = "\t", *pfx3;
+    int32_t i;
+    prrte_proc_t *proc;
+    char **alias;
+
+    /* set default result */
+    *output = NULL;
+
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, NULL, PRRTE_BOOL)) {
+        /* need to create the output in XML format */
+        prrte_asprintf(&tmp, "%s<host name=\"%s\" slots=\"%d\" max_slots=\"%d\">\n", pfx2,
+                       (NULL == src->name) ? "UNKNOWN" : src->name,
+                       (int)src->slots, (int)src->slots_max);
+        /* does this node have any aliases? */
+        tmp3 = NULL;
+        if (prrte_get_attribute(&src->attributes, PRRTE_NODE_ALIAS, (void**)&tmp3, PRRTE_STRING)) {
+            alias = prrte_argv_split(tmp3, ',');
+            for (i=0; NULL != alias[i]; i++) {
+                prrte_asprintf(&tmp2, "%s%s\t<noderesolve resolved=\"%s\"/>\n", tmp, pfx2, alias[i]);
+                free(tmp);
+                tmp = tmp2;
+            }
+            prrte_argv_free(alias);
+        }
+        if (NULL != tmp3) {
+            free(tmp3);
+        }
+        *output = tmp;
+        return;
+    }
+
+    if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL)) {
+        /* just provide a simple output for users */
+        if (0 == src->num_procs) {
+            /* no procs mapped yet, so just show allocation */
+            prrte_asprintf(&tmp, "\n%sData for node: %s\tNum slots: %ld\tMax slots: %ld",
+                           pfx2, (NULL == src->name) ? "UNKNOWN" : src->name,
+                           (long)src->slots, (long)src->slots_max);
+            /* does this node have any aliases? */
+            tmp3 = NULL;
+            if (prrte_get_attribute(&src->attributes, PRRTE_NODE_ALIAS, (void**)&tmp3, PRRTE_STRING)) {
+                alias = prrte_argv_split(tmp3, ',');
+                for (i=0; NULL != alias[i]; i++) {
+                    prrte_asprintf(&tmp2, "%s%s\tresolved from %s\n", tmp, pfx2, alias[i]);
+                    free(tmp);
+                    tmp = tmp2;
+                }
+                prrte_argv_free(alias);
+            }
+            if (NULL != tmp3) {
+                free(tmp3);
+            }
+            *output = tmp;
+            return;
+        }
+        prrte_asprintf(&tmp, "\n%sData for node: %s\tNum slots: %ld\tMax slots: %ld\tNum procs: %ld",
+                       pfx2, (NULL == src->name) ? "UNKNOWN" : src->name,
+                       (long)src->slots, (long)src->slots_max, (long)src->num_procs);
+        /* does this node have any aliases? */
+        tmp3 = NULL;
+        if (prrte_get_attribute(&src->attributes, PRRTE_NODE_ALIAS, (void**)&tmp3, PRRTE_STRING)) {
+            alias = prrte_argv_split(tmp3, ',');
+            for (i=0; NULL != alias[i]; i++) {
+                prrte_asprintf(&tmp2, "%s%s\tresolved from %s\n", tmp, pfx2, alias[i]);
+                free(tmp);
+                tmp = tmp2;
+            }
+            prrte_argv_free(alias);
+        }
+        if (NULL != tmp3) {
+            free(tmp3);
+        }
+        goto PRINT_PROCS;
+    }
+
+    prrte_asprintf(&tmp, "\n%sData for node: %s\tState: %0x\tFlags: %02x",
+             pfx2, (NULL == src->name) ? "UNKNOWN" : src->name, src->state, src->flags);
+    /* does this node have any aliases? */
+    tmp3 = NULL;
+    if (prrte_get_attribute(&src->attributes, PRRTE_NODE_ALIAS, (void**)&tmp3, PRRTE_STRING)) {
+        alias = prrte_argv_split(tmp3, ',');
+        for (i=0; NULL != alias[i]; i++) {
+            prrte_asprintf(&tmp2, "%s%s\tresolved from %s\n", tmp, pfx2, alias[i]);
+            free(tmp);
+            tmp = tmp2;
+        }
+        prrte_argv_free(alias);
+    }
+    if (NULL != tmp3) {
+        free(tmp3);
+    }
+
+    if (NULL == src->daemon) {
+        prrte_asprintf(&tmp2, "%s\n%s\tDaemon: %s\tDaemon launched: %s", tmp, pfx2,
+                 "Not defined", PRRTE_FLAG_TEST(src, PRRTE_NODE_FLAG_DAEMON_LAUNCHED) ? "True" : "False");
+    } else {
+        prrte_asprintf(&tmp2, "%s\n%s\tDaemon: %s\tDaemon launched: %s", tmp, pfx2,
+                 PRRTE_NAME_PRINT(&(src->daemon->name)),
+                 PRRTE_FLAG_TEST(src, PRRTE_NODE_FLAG_DAEMON_LAUNCHED) ? "True" : "False");
+    }
+    free(tmp);
+    tmp = tmp2;
+
+    prrte_asprintf(&tmp2, "%s\n%s\tNum slots: %ld\tSlots in use: %ld\tOversubscribed: %s", tmp, pfx2,
+             (long)src->slots, (long)src->slots_inuse,
+             PRRTE_FLAG_TEST(src, PRRTE_NODE_FLAG_OVERSUBSCRIBED) ? "TRUE" : "FALSE");
+    free(tmp);
+    tmp = tmp2;
+
+    prrte_asprintf(&tmp2, "%s\n%s\tNum slots allocated: %ld\tMax slots: %ld", tmp, pfx2,
+             (long)src->slots, (long)src->slots_max);
+    free(tmp);
+    tmp = tmp2;
+
+    tmp3 = NULL;
+    if (prrte_get_attribute(&src->attributes, PRRTE_NODE_USERNAME, (void**)&tmp3, PRRTE_STRING)) {
+        prrte_asprintf(&tmp2, "%s\n%s\tUsername on node: %s", tmp, pfx2, tmp3);
+        free(tmp3);
+        free(tmp);
+        tmp = tmp2;
+    }
+
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_TOPO, NULL, PRRTE_BOOL)
+        && NULL != src->topology) {
+        prrte_asprintf(&tmp2, "%s\n%s\tDetected Resources:\n", tmp, pfx2);
+        free(tmp);
+        tmp = tmp2;
+
+        tmp2 = NULL;
+        prrte_asprintf(&pfx3, "%s\t\t", pfx2);
+        prrte_dss.print(&tmp2, pfx3, src->topology, PRRTE_HWLOC_TOPO);
+        free(pfx3);
+        prrte_asprintf(&tmp3, "%s%s", tmp, tmp2);
+        free(tmp);
+        free(tmp2);
+        tmp = tmp3;
+    }
+
+    prrte_asprintf(&tmp2, "%s\n%s\tNum procs: %ld\tNext node_rank: %ld", tmp, pfx2,
+             (long)src->num_procs, (long)src->next_node_rank);
+    free(tmp);
+    tmp = tmp2;
+
+ PRINT_PROCS:
+    for (i=0; i < src->procs->size; i++) {
+        if (NULL == (proc = (prrte_proc_t*)prrte_pointer_array_get_item(src->procs, i))) {
+            continue;
+        }
+        if (proc->job != jdata) {
+            continue;
+        }
+        prrte_print_proc(&tmp2, jdata, proc);
+        prrte_asprintf(&tmp3, "%s%s", tmp, tmp2);
+        free(tmp);
+        free(tmp2);
+        tmp = tmp3;
+    }
+
+    /* set the return */
+    *output = tmp;
+
+    return;
+}
+
+static void prrte_print_proc(char **output,
+                             prrte_job_t *jdata,
+                             prrte_proc_t *src)
+{
+    char *tmp, *tmp3, *pfx2 = "\t\t";
+    hwloc_obj_t loc=NULL;
+    char locale[1024], tmp1[1024], tmp2[1024];
+    hwloc_cpuset_t mycpus;
+    char *str=NULL, *cpu_bitmap=NULL;
+
+
+    /* set default result */
+    *output = NULL;
+
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, NULL, PRRTE_BOOL)) {
+        /* need to create the output in XML format */
+        if (0 == src->pid) {
+            prrte_asprintf(output, "%s<process rank=\"%s\" status=\"%s\"/>\n", pfx2,
+                           PRRTE_VPID_PRINT(src->name.vpid), prrte_proc_state_to_str(src->state));
+        } else {
+            prrte_asprintf(output, "%s<process rank=\"%s\" pid=\"%d\" status=\"%s\"/>\n", pfx2,
+                           PRRTE_VPID_PRINT(src->name.vpid), (int)src->pid, prrte_proc_state_to_str(src->state));
+        }
+        return;
+    }
+
+    if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL)) {
+        if (prrte_get_attribute(&src->attributes, PRRTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, PRRTE_STRING) &&
+            NULL != src->node->topology && NULL != src->node->topology->topo) {
+            mycpus = hwloc_bitmap_alloc();
+            hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
+            if (PRRTE_ERR_NOT_BOUND == prrte_hwloc_base_cset2str(tmp1, sizeof(tmp1), src->node->topology->topo, mycpus)) {
+                str = strdup("UNBOUND");
+            } else {
+                prrte_hwloc_base_cset2mapstr(tmp2, sizeof(tmp2), src->node->topology->topo, mycpus);
+                prrte_asprintf(&str, "%s:%s", tmp1, tmp2);
+            }
+            hwloc_bitmap_free(mycpus);
+            prrte_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: %s", pfx2,
+                     PRRTE_JOBID_PRINT(src->name.jobid), (long)src->app_idx,
+                     PRRTE_VPID_PRINT(src->name.vpid), (NULL == str) ? "N/A" : str);
+            if (NULL != str) {
+                free(str);
+            }
+            if (NULL != cpu_bitmap) {
+                free(cpu_bitmap);
+            }
+        } else {
+            /* just print a very simple output for users */
+            prrte_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: N/A", pfx2,
+                           PRRTE_JOBID_PRINT(src->name.jobid), (long)src->app_idx,
+                           PRRTE_VPID_PRINT(src->name.vpid));
+        }
+
+        /* set the return */
+        *output = tmp;
+        return;
+    }
+
+    prrte_asprintf(&tmp, "\n%sData for proc: %s", pfx2, PRRTE_NAME_PRINT(&src->name));
+
+    prrte_asprintf(&tmp3, "%s\n%s\tPid: %ld\tLocal rank: %lu\tNode rank: %lu\tApp rank: %d", tmp, pfx2,
+             (long)src->pid, (unsigned long)src->local_rank, (unsigned long)src->node_rank, src->app_rank);
+    free(tmp);
+    tmp = tmp3;
+
+    if (prrte_get_attribute(&src->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&loc, PRRTE_PTR)) {
+        if (NULL != loc) {
+            if (PRRTE_ERR_NOT_BOUND == prrte_hwloc_base_cset2mapstr(locale, sizeof(locale), src->node->topology->topo, loc->cpuset)) {
+                strcpy(locale, "NODE");
+            }
+        } else {
+            strcpy(locale, "UNKNOWN");
+        }
+    } else {
+        strcpy(locale, "UNKNOWN");
+    }
+    if (prrte_get_attribute(&src->attributes, PRRTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, PRRTE_STRING) &&
+        NULL != src->node->topology && NULL != src->node->topology->topo) {
+        mycpus = hwloc_bitmap_alloc();
+        hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
+        prrte_hwloc_base_cset2mapstr(tmp2, sizeof(tmp2), src->node->topology->topo, mycpus);
+    } else {
+        snprintf(tmp2, sizeof(tmp2), "UNBOUND");
+    }
+    prrte_asprintf(&tmp3, "%s\n%s\tState: %s\tApp_context: %ld\n%s\tLocale:  %s\n%s\tBinding: %s", tmp, pfx2,
+                   prrte_proc_state_to_str(src->state), (long)src->app_idx, pfx2, locale, pfx2,  tmp2);
+    free(tmp);
+    if (NULL != str) {
+        free(str);
+    }
+    if (NULL != cpu_bitmap) {
+        free(cpu_bitmap);
+    }
+
+    /* set the return */
+    *output = tmp3;
+
+    return;
 }

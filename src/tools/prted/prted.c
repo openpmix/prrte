@@ -423,7 +423,7 @@ int main(int argc, char *argv[])
             /* if the result is all zeros, then don't bind */
             if (!hwloc_bitmap_iszero(ours)) {
                 (void)hwloc_set_cpubind(prrte_hwloc_topology, ours, 0);
-                if (prrte_hwloc_report_bindings) {
+                if (prrte_debug_daemons_flag) {
                     prrte_hwloc_base_cset2mapstr(tmp, sizeof(tmp), prrte_hwloc_topology, ours);
                     prrte_output(0, "Daemon %s is bound to cores %s",
                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), tmp);

@@ -54,14 +54,64 @@
 
 #include "src/mca/ras/base/ras_private.h"
 
+static char *flag_string(prrte_node_t *node)
+{
+    char *tmp, *t2;
+
+    if (0 == node->flags) {
+        tmp = strdup("flags: NONE");
+        return tmp;
+    }
+
+    tmp = strdup("flags: ");
+    if (PRRTE_FLAG_TEST(node, PRRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
+        prrte_asprintf(&t2, "%sDAEMON_LAUNCHED:", tmp);
+        free(tmp);
+        tmp = t2;
+    }
+    if (PRRTE_FLAG_TEST(node, PRRTE_NODE_FLAG_LOC_VERIFIED)) {
+        prrte_asprintf(&t2, "%sLOCATION_VERIFIED:", tmp);
+        free(tmp);
+        tmp = t2;
+    }
+    if (PRRTE_FLAG_TEST(node, PRRTE_NODE_FLAG_OVERSUBSCRIBED)) {
+        prrte_asprintf(&t2, "%sOVERSUBSCRIBED:", tmp);
+        free(tmp);
+        tmp = t2;
+    }
+    if (PRRTE_FLAG_TEST(node, PRRTE_NODE_FLAG_MAPPED)) {
+        prrte_asprintf(&t2, "%sMAPPED:", tmp);
+        free(tmp);
+        tmp = t2;
+    }
+    if (PRRTE_FLAG_TEST(node, PRRTE_NODE_FLAG_SLOTS_GIVEN)) {
+        prrte_asprintf(&t2, "%sSLOTS_GIVEN:", tmp);
+        free(tmp);
+        tmp = t2;
+    }
+    if (PRRTE_FLAG_TEST(node, PRRTE_NODE_NON_USABLE)) {
+        prrte_asprintf(&t2, "%sNONUSABLE:", tmp);
+        free(tmp);
+        tmp = t2;
+    }
+    if (':' == tmp[strlen(tmp)-1]) {
+        tmp[strlen(tmp)-1] = '\0';
+    } else {
+        free(tmp);
+        tmp = strdup("flags: NONE");
+    }
+    return tmp;
+}
+
 /* function to display allocation */
-void prrte_ras_base_display_alloc(void)
+void prrte_ras_base_display_alloc(prrte_job_t *jdata)
 {
     char *tmp=NULL, *tmp2, *tmp3;
     int i, istart;
     prrte_node_t *alloc;
+    char *flgs;
 
-    if (prrte_xml_output) {
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, NULL, PRRTE_BOOL)) {
         prrte_asprintf(&tmp, "<allocation>\n");
     } else {
         prrte_asprintf(&tmp, "\n======================   ALLOCATED NODES   ======================\n");
@@ -75,16 +125,19 @@ void prrte_ras_base_display_alloc(void)
         if (NULL == (alloc = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, i))) {
             continue;
         }
-        if (prrte_xml_output) {
+        if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, NULL, PRRTE_BOOL)) {
             /* need to create the output in XML format */
             prrte_asprintf(&tmp2, "\t<host name=\"%s\" slots=\"%d\" max_slots=\"%d\" slots_inuse=\"%d\">\n",
                      (NULL == alloc->name) ? "UNKNOWN" : alloc->name,
                      (int)alloc->slots, (int)alloc->slots_max, (int)alloc->slots_inuse);
         } else {
-            prrte_asprintf(&tmp2, "\t%s: flags=0x%02x slots=%d max_slots=%d slots_inuse=%d state=%s\n",
-                     (NULL == alloc->name) ? "UNKNOWN" : alloc->name, alloc->flags,
+            /* build the flags string */
+            flgs = flag_string(alloc);
+            prrte_asprintf(&tmp2, "\t%s: slots=%d max_slots=%d slots_inuse=%d state=%s\n\t%s\n",
+                     (NULL == alloc->name) ? "UNKNOWN" : alloc->name,
                      (int)alloc->slots, (int)alloc->slots_max, (int)alloc->slots_inuse,
-                     prrte_node_state_to_str(alloc->state));
+                     prrte_node_state_to_str(alloc->state), flgs);
+            free(flgs);
         }
         if (NULL == tmp) {
             tmp = tmp2;
@@ -95,7 +148,7 @@ void prrte_ras_base_display_alloc(void)
             tmp = tmp3;
         }
     }
-    if (prrte_xml_output) {
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, NULL, PRRTE_BOOL)) {
         fprintf(prrte_xml_fp, "%s</allocation>\n", tmp);
         fflush(prrte_xml_fp);
     } else {
@@ -455,7 +508,7 @@ void prrte_ras_base_allocate(int fd, short args, void *cbdata)
   DISPLAY:
     /* shall we display the results? */
     if (4 < prrte_output_get_verbosity(prrte_ras_base_framework.framework_output)) {
-        prrte_ras_base_display_alloc();
+        prrte_ras_base_display_alloc(jdata);
     }
 
   next_state:
@@ -592,7 +645,7 @@ int prrte_ras_base_add_hosts(prrte_job_t *jdata)
 
     /* shall we display the results? */
     if (0 < prrte_output_get_verbosity(prrte_ras_base_framework.framework_output)) {
-        prrte_ras_base_display_alloc();
+        prrte_ras_base_display_alloc(jdata);
     }
 
     return PRRTE_SUCCESS;

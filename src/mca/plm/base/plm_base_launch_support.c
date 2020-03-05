@@ -132,7 +132,7 @@ void prrte_plm_base_daemons_reported(int fd, short args, void *cbdata)
 
     /* if we are not launching, then we just assume that all
      * daemons share our topology */
-    if (prrte_do_not_launch) {
+    if (prrte_get_attribute(&caddy->jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL)) {
         node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, 0);
         t = node->topology;
         for (i=1; i < prrte_node_pool->size; i++) {
@@ -142,6 +142,7 @@ void prrte_plm_base_daemons_reported(int fd, short args, void *cbdata)
             if (NULL == node->topology) {
                 node->topology = t;
             }
+            node->state = PRRTE_NODE_STATE_UP;
         }
     }
 
@@ -167,8 +168,8 @@ void prrte_plm_base_daemons_reported(int fd, short args, void *cbdata)
         }
     }
 
-    if (prrte_display_allocation) {
-        prrte_ras_base_display_alloc();
+    if (prrte_get_attribute(&caddy->jdata->attributes, PRRTE_JOB_DISPLAY_ALLOC, NULL, PRRTE_BOOL)) {
+        prrte_ras_base_display_alloc(caddy->jdata);
     }
     /* ensure we update the routing plan */
     prrte_routed.update_routing_plan();
@@ -190,7 +191,7 @@ void prrte_plm_base_allocation_complete(int fd, short args, void *cbdata)
     /* if we don't want to launch, then we at least want
      * to map so we can see where the procs would have
      * gone - so skip to the mapping state */
-    if (prrte_do_not_launch) {
+    if (prrte_get_attribute(&caddy->jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL)) {
         caddy->jdata->state = PRRTE_JOB_STATE_ALLOCATION_COMPLETE;
         PRRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRRTE_JOB_STATE_MAP);
     } else {
@@ -1083,6 +1084,7 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
 
         /* mark the daemon as launched */
         PRRTE_FLAG_SET(daemon->node, PRRTE_NODE_FLAG_DAEMON_LAUNCHED);
+        daemon->node->state = PRRTE_NODE_STATE_UP;
 
         /* first, store the nodename itself as an alias. We do
          * this in case the nodename isn't the same as what we
@@ -1474,12 +1476,6 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
     if (prrte_leave_session_attached) {
         prrte_argv_append(argc, argv, "--prtemca");
         prrte_argv_append(argc, argv, "prrte_leave_session_attached");
-        prrte_argv_append(argc, argv, "1");
-    }
-
-    if (prrte_hwloc_report_bindings) {
-        prrte_argv_append(argc, argv, "--prtemca");
-        prrte_argv_append(argc, argv, "prrte_report_bindings");
         prrte_argv_append(argc, argv, "1");
     }
 

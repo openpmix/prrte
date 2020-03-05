@@ -169,7 +169,6 @@ static int plm_alps_launch_job(prrte_job_t *jdata)
 static void launch_daemons(int fd, short args, void *cbdata)
 {
     prrte_job_map_t *map;
-    char *jobid_string = NULL;
     char *param;
     char **argv = NULL;
     int argc;
@@ -245,9 +244,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
         PRRTE_RELEASE(state);
         return;
     }
-
-    /* need integer value for command line parameter */
-    prrte_util_convert_jobid_to_string(&jobid_string, daemons->jobid);
 
     /*
      * start building argv array
@@ -438,10 +434,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
     if (NULL != env) {
         prrte_argv_free(env);
-    }
-
-    if(NULL != jobid_string) {
-        free(jobid_string);
     }
 
     /* cleanup the caddy */

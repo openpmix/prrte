@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -538,7 +538,8 @@ PRRTE_CLASS_INSTANCE(prrte_rmaps_base_selected_module_t,
                    NULL, NULL);
 
 
-static int check_modifiers(char *ck, prrte_mapping_policy_t *tmp)
+static int check_modifiers(char *ck, prrte_job_t *jdata,
+                           prrte_mapping_policy_t *tmp)
 {
     char **ck2, *ptr;
     int i;
@@ -582,6 +583,30 @@ static int check_modifiers(char *ck, prrte_mapping_policy_t *tmp)
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_NO_OVERSUBSCRIBE);
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_SUBSCRIBE_GIVEN);
             found = true;
+        } else if (0 == strncasecmp(ck2[i], "DISPLAY", strlen(ck2[i]))) {
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_MAP, PRRTE_ATTR_GLOBAL,
+                                NULL, PRRTE_BOOL);
+        } else if (0 == strncasecmp(ck2[i], "DISPLAYDEVEL", strlen(ck2[i]))) {
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, PRRTE_ATTR_GLOBAL,
+                                NULL, PRRTE_BOOL);
+        } else if (0 == strncasecmp(ck2[i], "DISPLAYTOPO", strlen(ck2[i]))) {
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_TOPO, PRRTE_ATTR_GLOBAL,
+                                NULL, PRRTE_BOOL);
+        } else if (0 == strncasecmp(ck2[i], "DISPLAYDIFF", strlen(ck2[i]))) {
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, PRRTE_ATTR_GLOBAL,
+                                NULL, PRRTE_BOOL);
+        } else if (0 == strncasecmp(ck2[i], "DISPLAYALLOC", strlen(ck2[i]))) {
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_ALLOC, PRRTE_ATTR_GLOBAL,
+                                NULL, PRRTE_BOOL);
+        } else if (0 == strncasecmp(ck2[i], "DONOTLAUNCH", strlen(ck2[i]))) {
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, PRRTE_ATTR_GLOBAL,
+                                NULL, PRRTE_BOOL);
+        } else if (0 == strncasecmp(ck2[i], "NOLOCAL", strlen(ck2[i]))) {
+            prrte_set_attribute(&jdata->attributes, PRRTE_MAPPING_NO_USE_LOCAL, PRRTE_ATTR_GLOBAL,
+                                NULL, PRRTE_BOOL);
+        } else if (0 == strncasecmp(ck2[i], "XMLOUTPUT", strlen(ck2[i]))) {
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, PRRTE_ATTR_GLOBAL,
+                                NULL, PRRTE_BOOL);
         } else {
             /* unrecognized modifier */
             prrte_argv_free(ck2);
@@ -596,8 +621,8 @@ static int check_modifiers(char *ck, prrte_mapping_policy_t *tmp)
 }
 
 int prrte_rmaps_base_set_mapping_policy(prrte_job_t *jdata,
-                                       prrte_mapping_policy_t *policy,
-                                       char **device, char *inspec)
+                                        prrte_mapping_policy_t *policy,
+                                        char **device, char *inspec)
 {
     char *ck;
     char *ptr, *cptr;
@@ -636,7 +661,7 @@ int prrte_rmaps_base_set_mapping_policy(prrte_job_t *jdata,
                                 "%s rmaps:base only modifiers %s provided - assuming bysocket mapping",
                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), ck);
             PRRTE_SET_MAPPING_POLICY(tmp, PRRTE_MAPPING_BYSOCKET);
-            if (PRRTE_ERR_SILENT == (rc = check_modifiers(ck, &tmp)) &&
+            if (PRRTE_ERR_SILENT == (rc = check_modifiers(ck, jdata, &tmp)) &&
                 PRRTE_ERR_BAD_PARAM != rc) {
                 free(spec);
                 return PRRTE_ERR_SILENT;
@@ -678,7 +703,7 @@ int prrte_rmaps_base_set_mapping_policy(prrte_job_t *jdata,
                 /* now check for modifiers  - may be none, so
                  * don't emit an error message if the modifier
                  * isn't recognized */
-                if (PRRTE_ERR_SILENT == (rc = check_modifiers(cptr, &tmp)) &&
+                if (PRRTE_ERR_SILENT == (rc = check_modifiers(cptr, jdata, &tmp)) &&
                     PRRTE_ERR_BAD_PARAM != rc) {
                     free(spec);
                     return PRRTE_ERR_SILENT;
@@ -695,7 +720,7 @@ int prrte_rmaps_base_set_mapping_policy(prrte_job_t *jdata,
             free(spec);
             goto setpolicy;
         }
-        if (PRRTE_SUCCESS != (rc = check_modifiers(ck, &tmp)) &&
+        if (PRRTE_SUCCESS != (rc = check_modifiers(ck, jdata, &tmp)) &&
             PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
             if (PRRTE_ERR_BAD_PARAM == rc) {
                 prrte_show_help("help-prrte-rmaps-base.txt", "unrecognized-modifier", true, inspec);

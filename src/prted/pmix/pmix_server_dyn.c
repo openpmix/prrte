@@ -350,7 +350,7 @@ static void interim(int sd, short args, void *cbdata)
         /***   MAP-BY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
             rc = prrte_rmaps_base_set_mapping_policy(jdata, &jdata->map->mapping,
-                                                    NULL, info->value.data.string);
+                                                     NULL, info->value.data.string);
             if (PRRTE_SUCCESS != rc) {
                 goto complete;
             }
@@ -365,7 +365,7 @@ static void interim(int sd, short args, void *cbdata)
 
         /***   BIND-TO   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_BINDTO)) {
-            rc = prrte_hwloc_base_set_binding_policy(&jdata->map->binding,
+            rc = prrte_hwloc_base_set_binding_policy(jdata, &jdata->map->binding,
                                                     info->value.data.string);
             if (PRRTE_SUCCESS != rc) {
                 goto complete;

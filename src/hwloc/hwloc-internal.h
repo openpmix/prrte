@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
  * Copyright (c) 2011-2012 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2018      Research Organization for Information Science
@@ -193,7 +193,6 @@ typedef uint16_t prrte_binding_policy_t;
 PRRTE_EXPORT extern hwloc_topology_t prrte_hwloc_topology;
 PRRTE_EXPORT extern prrte_binding_policy_t prrte_hwloc_binding_policy;
 PRRTE_EXPORT extern hwloc_cpuset_t prrte_hwloc_my_cpuset;
-PRRTE_EXPORT extern bool prrte_hwloc_report_bindings;
 PRRTE_EXPORT extern hwloc_obj_type_t prrte_hwloc_levels[];
 PRRTE_EXPORT extern bool prrte_hwloc_use_hwthreads_as_cpus;
 
@@ -271,7 +270,8 @@ PRRTE_EXPORT extern char *prrte_hwloc_base_topo_file;
 PRRTE_EXPORT prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t topo,
                                                                           char *cpuset1, char *cpuset2);
 
-PRRTE_EXPORT int prrte_hwloc_base_set_binding_policy(prrte_binding_policy_t *policy, char *spec);
+PRRTE_EXPORT int prrte_hwloc_base_set_binding_policy(void *jdata,
+                                                     prrte_binding_policy_t *policy, char *spec);
 
 /**
  * Loads prrte_hwloc_my_cpuset (global variable in

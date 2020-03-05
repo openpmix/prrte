@@ -72,3 +72,11 @@ this option. Please contact the community for how best to resolve this issue.
   Reason: %s
 
 We are not able to proceed. Please update your command line.
+#
+[bad-ppr]
+The proc-per-resource request is not correct. The request must include both
+the number of procs for each resource and the type of resource to be used.
+
+  Specified option:  %s
+
+We are not able to proceed. Please correct your command line.

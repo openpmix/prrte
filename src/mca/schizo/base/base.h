@@ -65,6 +65,10 @@ typedef struct {
 } prrte_schizo_base_active_module_t;
 PRRTE_CLASS_DECLARATION(prrte_schizo_base_active_module_t);
 
+/* base support functions */
+PRRTE_EXPORT int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
+                                           char *option, char *directive, char *modifier);
+
 /* the base stub functions */
 PRRTE_EXPORT int prrte_schizo_base_define_cli(prrte_cmd_line_t *cli);
 PRRTE_EXPORT int prrte_schizo_base_parse_cli(int argc, int start, char **argv,

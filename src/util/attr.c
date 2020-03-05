@@ -16,6 +16,7 @@
 
 #include "src/dss/dss.h"
 #include "src/util/output.h"
+#include "src/util/printf.h"
 #include "src/util/string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -200,6 +201,25 @@ int prrte_attr_register(const char *project,
     }
 
     return PRRTE_ERR_OUT_OF_RESOURCE;
+}
+
+char *prrte_attr_print_list(prrte_list_t *attributes)
+{
+    char *out1, *out2, *cache = NULL;
+    prrte_attribute_t *attr;
+
+    PRRTE_LIST_FOREACH(attr, attributes, prrte_attribute_t) {
+        prrte_dss.print(&out1, NULL, attr, PRRTE_ATTRIBUTE);
+        if (NULL == cache) {
+            cache = out1;
+        } else {
+            prrte_asprintf(&out2, "%s\n%s", cache, out1);
+            free(cache);
+            free(out1);
+            cache = out2;
+        }
+    }
+    return cache;
 }
 
 const char *prrte_attr_key_to_str(prrte_attribute_key_t key)
@@ -392,6 +412,20 @@ const char *prrte_attr_key_to_str(prrte_attribute_key_t key)
             return "JOB_STOP_ON_EXEC";
         case PRRTE_JOB_SPAWN_NOTIFIED:
             return "JOB_SPAWN_NOTIFIED";
+        case PRRTE_JOB_DISPLAY_MAP:
+            return "DISPLAY_JOB_MAP";
+        case PRRTE_JOB_DISPLAY_DEVEL_MAP:
+            return "DISPLAY_DEVEL_JOB_MAP";
+        case PRRTE_JOB_DISPLAY_TOPO:
+            return "DISPLAY_TOPOLOGY";
+        case PRRTE_JOB_DISPLAY_DIFF:
+            return "DISPLAY_DIFFABLE";
+        case PRRTE_JOB_DISPLAY_ALLOC:
+            return "DISPLAY_ALLOCATION";
+        case PRRTE_JOB_DO_NOT_LAUNCH:
+            return "DO_NOT_LAUNCH";
+        case PRRTE_JOB_XML_OUTPUT:
+            return "XML_OUTPUT";
 
         case PRRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

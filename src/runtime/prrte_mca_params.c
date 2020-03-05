@@ -70,7 +70,7 @@ int prrte_max_thread_in_progress = 1;
 
 int prrte_register_params(void)
 {
-    int id, ret;
+    int ret;
     prrte_output_stream_t lds;
     char *string = NULL;
 
@@ -783,30 +783,6 @@ int prrte_register_params(void)
                                   PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                   PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                   &prrte_set_slots);
-
-    /* should we display the allocation after determining it? */
-    prrte_display_allocation = false;
-    id = prrte_mca_base_var_register ("prrte", "prrte", NULL, "display_alloc",
-                                "Whether to display the allocation after it is determined",
-                                PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                &prrte_display_allocation);
-    /* register a synonym for old name -- should we remove this now? */
-    prrte_mca_base_var_register_synonym (id, "prrte", "ras", "base", "display_alloc", PRRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-
-    /* should we display a detailed (developer-quality) version of the allocation after determining it? */
-    prrte_devel_level_output = false;
-    id = prrte_mca_base_var_register ("prrte", "prrte", NULL, "display_devel_alloc",
-                                "Whether to display a developer-detail allocation after it is determined",
-                                PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                &prrte_devel_level_output);
-    /* register a synonym for old name -- should we remove this now? */
-    prrte_mca_base_var_register_synonym (id, "prrte", "ras", "base", "display_devel_alloc", PRRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-
-    if (prrte_devel_level_output) {
-        prrte_display_allocation = true;
-    }
 
     /* should we treat any -host directives as "soft" - i.e., desired
      * but not required
