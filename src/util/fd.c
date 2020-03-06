@@ -147,13 +147,14 @@ bool prrte_fd_is_blkdev(int fd)
     return S_ISBLK(buf.st_mode);
 }
 
+#if PRRTE_ENABLE_IPV6
+    static char str[INET6_ADDRSTRLEN];
+#else
+    static char str[INET_ADDRSTRLEN];
+#endif
+
 const char *prrte_fd_get_peer_name(int fd)
 {
-#if PRRTE_ENABLE_IPV6
-    char str[INET6_ADDRSTRLEN];
-#else
-    char str[INET_ADDRSTRLEN];
-#endif
     const char *ret = NULL;
     struct sockaddr sa;
     socklen_t slt = (socklen_t) sizeof(sa);
