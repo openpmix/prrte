@@ -115,6 +115,159 @@ PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, schizo, "PRRTE Schizo Subsystem",
                                  prrte_schizo_base_open, prrte_schizo_base_close,
                                  prrte_schizo_base_static_components, 0);
 
+typedef struct {
+    char *name;
+    char **conflicts;
+} prrte_schizo_conflicts_t;
+
+static prrte_schizo_conflicts_t mapby_modifiers[] = {
+    {.name = "oversubscribe", .conflicts = (char *[]){"nooversubscribe", NULL}},
+    {.name = ""}
+};
+
+static prrte_schizo_conflicts_t rankby_modifiers[] = {
+    {.name = ""}
+};
+
+static prrte_schizo_conflicts_t bindto_modifiers[] = {
+    {.name = ""}
+};
+
+static int check_modifiers(char *modifier, char **checks, prrte_schizo_conflicts_t *conflicts)
+{
+    int n, m, k;
+
+    for (n=0; 0 != strlen(conflicts[n].name); n++) {
+        if (0 == strcasecmp(conflicts[n].name, modifier)) {
+            for (m=0; NULL != checks[m]; m++) {
+                for (k=0; NULL != conflicts[n].conflicts[k]; k++) {
+                    if (0 == strcasecmp(checks[m], conflicts[n].conflicts[k])) {
+                        return PRRTE_ERR_BAD_PARAM;
+                    }
+                }
+            }
+            break;
+        }
+    }
+    return PRRTE_SUCCESS;
+}
+
+int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
+                              char *option, char *directive, char *modifier)
+{
+    bool found;
+    char *p2, *help_str, *old_arg;
+    int j, k, cnt, rc;
+    char **pargs = *argv;
+    char **tmp;
+    prrte_schizo_conflicts_t *modifiers;
+
+    /* pick the modifiers to be checked */
+    if (0 == strcmp(option, "--map-by")) {
+        modifiers = mapby_modifiers;
+    } else if (0 == strcmp(option, "--rank-by")) {
+        modifiers = rankby_modifiers;
+    } else if (0 == strcmp(option, "--bind-to")) {
+        modifiers = bindto_modifiers;
+    } else {
+        prrte_output(0, "UNRECOGNIZED OPTION");
+        return PRRTE_ERR_BAD_PARAM;
+    }
+
+    /* did they give the map-by option? */
+    found = false;
+    for (j=0; NULL != pargs[j]; j++) {
+        if (0 == strcmp(pargs[j], option)) {
+            /* were we given a directive? */
+            if (NULL != directive) {
+                /* does it conflict? */
+                if (0 != strncasecmp(pargs[j+1], directive, strlen(directive))) {
+                    prrte_asprintf(&help_str, "Conflicting directives \"%s %s\"", pargs[j+1], directive);
+                    prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
+                                    pargs[j], help_str);
+                    free(help_str);
+                    return PRRTE_ERR_BAD_PARAM;
+                }
+                /* if they match, then nothing further to do */
+            }
+            /* were we given a modifier? */
+            if (NULL != modifier) {
+                /* add the modifier to this value */
+                if (0 == strncmp(pargs[j+1], "ppr", 3)) {
+                    /* count the number of characters in the directive */
+                    cnt = 0;
+                    for (k=0; '\0' != pargs[j+1][k]; k++) {
+                        if (':' == pargs[j+1][k]) {
+                            ++cnt;
+                        }
+                    }
+                    /* there are two colons in the map-by directive */
+                    if (2 == cnt) {
+                        /* no modifier */
+                        prrte_asprintf(&p2, "%s:%s", pargs[j+1], modifier);
+                    } else {
+                        /* there already is a modifier in the directive */
+                        p2 = strrchr(pargs[j+1], ':');
+                        goto modify;
+                    }
+                } else if (NULL == (p2 = strchr(pargs[j+1], ':'))) {
+                    prrte_asprintf(&p2, "%s:%s", pargs[j+1], modifier);
+                } else {
+        modify:
+                    /* we already have modifiers - need to check for conflict with
+                     * the one we were told to add */
+                    ++p2; // step over the colon
+                    tmp = prrte_argv_split(p2, ',');
+                    rc = check_modifiers(modifier, tmp, modifiers);
+                    prrte_argv_free(tmp);
+                    if (PRRTE_SUCCESS != rc) {
+                        /* we have a conflict */
+                        prrte_asprintf(&help_str, "  Option %s\n  Conflicting modifiers \"%s %s\"", option, pargs[j+1], modifier);
+                        prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
+                                        pargs[j], help_str);
+                        free(help_str);
+                        return PRRTE_ERR_BAD_PARAM;
+                    }
+                    prrte_asprintf(&p2, "%s,%s", pargs[j+1], modifier);
+                }
+                free(pargs[j+1]);
+                pargs[j+1] = p2;
+                prrte_asprintf(&help_str, "%s %s", option, p2);
+                prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                                pargs[idx], help_str);
+                free(help_str);
+            }
+            if (0 < ntodelete) {
+                /* we need to remove the indicated number of positions */
+                prrte_argv_delete(NULL, argv, idx, ntodelete);
+            }
+            return PRRTE_SUCCESS;
+        }
+    }
+    if (!found) {
+        /* add the map-by option */
+        old_arg = strdup(pargs[idx]);
+        free(pargs[idx]);
+        pargs[idx] = strdup(option);
+        if (NULL == directive) {
+            prrte_asprintf(&p2, ":%s", modifier);
+        } else if (NULL == modifier) {
+            p2 = strdup(directive);
+        } else {
+            prrte_asprintf(&p2, "%s:%s", directive, modifier);
+        }
+        prrte_argv_insert_element(&pargs, idx+1, p2);
+        free(p2);
+        prrte_asprintf(&help_str, "%s %s", pargs[idx], (*argv)[idx+1]);
+        prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+                        old_arg, help_str);
+        free(help_str);
+        free(old_arg);
+        *argv = pargs;  // will have been reallocated
+    }
+    return PRRTE_SUCCESS;
+}
+
 PRRTE_CLASS_INSTANCE(prrte_schizo_base_active_module_t,
                    prrte_list_item_t,
                    NULL, NULL);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017      Inria.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
@@ -329,7 +329,7 @@ static void set(prrte_job_t *jobdat,
                 }
             }
         }
-        if (0 == rc && prrte_hwloc_report_bindings) {
+        if (0 == rc && prrte_get_attribute(&jobdat->attributes, PRRTE_JOB_REPORT_BINDINGS, NULL, PRRTE_BOOL)) {
             prrte_output(0, "MCW rank %d is not bound (or bound to all available processors)", child->name.vpid);
             /* avoid reporting it twice */
             (void) prrte_mca_base_var_env_name ("hwloc_base_report_bindings", &param);
@@ -402,7 +402,7 @@ static void set(prrte_job_t *jobdat,
                 free(msg);
             }
         }
-        if (0 == rc && prrte_hwloc_report_bindings) {
+        if (0 == rc && prrte_get_attribute(&jobdat->attributes, PRRTE_JOB_REPORT_BINDINGS, NULL, PRRTE_BOOL)) {
             char tmp1[1024], tmp2[1024];
             hwloc_cpuset_t mycpus;
             /* get the cpus we are bound to */

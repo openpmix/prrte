@@ -481,7 +481,9 @@ int prrte_argv_delete(int *argc, char ***argv, int start, int num_to_delete)
     if (NULL != tmp) *argv = tmp;
 
     /* adjust the argc */
-    (*argc) -= num_to_delete;
+    if (NULL != argc) {
+        (*argc) = prrte_argv_count(*argv);
+    }
 
     return PRRTE_SUCCESS;
 }

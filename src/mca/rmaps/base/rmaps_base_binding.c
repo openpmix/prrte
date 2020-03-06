@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2014 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Inria.  All rights reserved.
@@ -136,6 +136,8 @@ static int bind_generic(prrte_job_t *jdata,
     hwloc_obj_t locale;
     char *cpu_bitmap;
     unsigned min_bound;
+    bool dobind;
+    struct hwloc_topology_support *support;
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind downward for job %s with bindings %s",
@@ -144,6 +146,14 @@ static int bind_generic(prrte_job_t *jdata,
     /* initialize */
     map = jdata->map;
     totalcpuset = hwloc_bitmap_alloc();
+
+    dobind = false;
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, NULL, PRRTE_BOOL)) {
+        dobind = true;
+    }
 
     /* cycle thru the procs */
     for (j=0; j < node->procs->size; j++) {
@@ -154,6 +164,51 @@ static int bind_generic(prrte_job_t *jdata,
         if (proc->name.jobid != jdata->jobid) {
             continue;
         }
+        if ((int)PRRTE_PROC_MY_NAME->vpid != node->index && !dobind) {
+            continue;
+        }
+
+        if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL)) {
+            /* if we don't want to launch, then we are just testing the system,
+             * so ignore questions about support capabilities
+             */
+            support = (struct hwloc_topology_support*)hwloc_topology_get_support(node->topology->topo);
+            /* check if topology supports cpubind - have to be careful here
+             * as Linux doesn't currently support thread-level binding. This
+             * may change in the future, though, and it isn't clear how hwloc
+             * interprets the current behavior. So check both flags to be sure.
+             */
+            if (!support->cpubind->set_thisproc_cpubind &&
+                !support->cpubind->set_thisthread_cpubind) {
+                if (!PRRTE_BINDING_REQUIRED(map->binding) ||
+                    !PRRTE_BINDING_POLICY_IS_SET(map->binding)) {
+                    /* we are not required to bind, so ignore this */
+                    continue;
+                }
+                prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:cpubind-not-supported", true, node->name);
+                return PRRTE_ERR_SILENT;
+            }
+            /* check if topology supports membind - have to be careful here
+             * as hwloc treats this differently than I (at least) would have
+             * expected. Per hwloc, Linux memory binding is at the thread,
+             * and not process, level. Thus, hwloc sets the "thisproc" flag
+             * to "false" on all Linux systems, and uses the "thisthread" flag
+             * to indicate binding capability - don't warn if the user didn't
+             * specifically request binding
+             */
+            if (!support->membind->set_thisproc_membind &&
+                !support->membind->set_thisthread_membind &&
+                PRRTE_BINDING_POLICY_IS_SET(map->binding)) {
+                if (PRRTE_HWLOC_BASE_MBFA_WARN == prrte_hwloc_base_mbfa && !membind_warned) {
+                    prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:membind-not-supported", true, node->name);
+                    membind_warned = true;
+                } else if (PRRTE_HWLOC_BASE_MBFA_ERROR == prrte_hwloc_base_mbfa) {
+                    prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:membind-not-supported-fatal", true, node->name);
+                    return PRRTE_ERR_SILENT;
+                }
+            }
+        }
+
         /* bozo check */
         locale = NULL;
         if (!prrte_get_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRRTE_PTR) ||
@@ -305,6 +360,7 @@ static int bind_in_place(prrte_job_t *jdata,
     hwloc_obj_t locale, sib;
     char *cpu_bitmap;
     bool found;
+    bool dobind;
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind in place for job %s with bindings %s",
@@ -313,14 +369,22 @@ static int bind_in_place(prrte_job_t *jdata,
     /* initialize */
     map = jdata->map;
 
+    dobind = false;
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, NULL, PRRTE_BOOL)) {
+        dobind = true;
+    }
+
     for (i=0; i < map->nodes->size; i++) {
         if (NULL == (node = (prrte_node_t*)prrte_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
-        if ((int)PRRTE_PROC_MY_NAME->vpid != node->index) {
+        if ((int)PRRTE_PROC_MY_NAME->vpid != node->index && !dobind) {
             continue;
         }
-        if (!prrte_do_not_launch) {
+        if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL)) {
             /* if we don't want to launch, then we are just testing the system,
              * so ignore questions about support capabilities
              */
@@ -518,6 +582,7 @@ static int bind_to_cpuset(prrte_job_t *jdata)
     unsigned id;
     prrte_local_rank_t lrank;
     hwloc_bitmap_t mycpuset, tset;
+    bool dobind;
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind job %s to cpus %s",
@@ -527,14 +592,22 @@ static int bind_to_cpuset(prrte_job_t *jdata)
     map = jdata->map;
     mycpuset = hwloc_bitmap_alloc();
 
+    dobind = false;
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, NULL, PRRTE_BOOL)) {
+        dobind = true;
+    }
+
     for (i=0; i < map->nodes->size; i++) {
         if (NULL == (node = (prrte_node_t*)prrte_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
-        if ((int)PRRTE_PROC_MY_NAME->vpid != node->index) {
+        if ((int)PRRTE_PROC_MY_NAME->vpid != node->index && !dobind) {
             continue;
         }
-        if (!prrte_do_not_launch) {
+        if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL)) {
             /* if we don't want to launch, then we are just testing the system,
              * so ignore questions about support capabilities
              */
@@ -644,6 +717,7 @@ int prrte_rmaps_base_compute_bindings(prrte_job_t *jdata)
     int i, rc;
     struct hwloc_topology_support *support;
     int bind_depth;
+    bool dobind;
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps: compute bindings for job %s with policy %s[%x]",
@@ -760,15 +834,22 @@ int prrte_rmaps_base_compute_bindings(prrte_job_t *jdata)
                         "mca:rmaps: computing bindings for job %s",
                         PRRTE_JOBID_PRINT(jdata->jobid));
 
+    dobind = false;
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL) ||
+        prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, NULL, PRRTE_BOOL)) {
+        dobind = true;
+    }
+
     for (i=0; i < jdata->map->nodes->size; i++) {
         if (NULL == (node = (prrte_node_t*)prrte_pointer_array_get_item(jdata->map->nodes, i))) {
             continue;
         }
-        if (!prrte_do_not_launch &&
-            (int)PRRTE_PROC_MY_NAME->vpid != node->index) {
+        if ((int)PRRTE_PROC_MY_NAME->vpid != node->index && !dobind) {
             continue;
         }
-        if (!prrte_do_not_launch) {
+        if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL)) {
             /* if we don't want to launch, then we are just testing the system,
              * so ignore questions about support capabilities
              */

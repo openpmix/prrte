@@ -166,6 +166,13 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_OUTPUT_TO_DIRECTORY    (PRRTE_JOB_START_KEY + 61)    // string - path of directory to which stdout/err is to be directed
 #define PRRTE_JOB_STOP_ON_EXEC           (PRRTE_JOB_START_KEY + 62)    // bool - stop procs on first instruction for debugger attach
 #define PRRTE_JOB_SPAWN_NOTIFIED         (PRRTE_JOB_START_KEY + 63)    // bool - process requesting a spawn operation has been notified of result
+#define PRRTE_JOB_DISPLAY_MAP            (PRRTE_JOB_START_KEY + 64)    // bool - display job map
+#define PRRTE_JOB_DISPLAY_DEVEL_MAP      (PRRTE_JOB_START_KEY + 65)    // bool - display devel level job map
+#define PRRTE_JOB_DISPLAY_TOPO           (PRRTE_JOB_START_KEY + 66)    // bool - display topology with job map
+#define PRRTE_JOB_DISPLAY_DIFF           (PRRTE_JOB_START_KEY + 67)    // bool - display diffable job map
+#define PRRTE_JOB_DISPLAY_ALLOC          (PRRTE_JOB_START_KEY + 68)    // bool - display allocation
+#define PRRTE_JOB_DO_NOT_LAUNCH          (PRRTE_JOB_START_KEY + 69)    // bool - do not launch job
+#define PRRTE_JOB_XML_OUTPUT             (PRRTE_JOB_START_KEY + 70)    // bool - print in xml format
 
 #define PRRTE_JOB_MAX_KEY   300
 
@@ -259,6 +266,8 @@ PRRTE_EXPORT int prrte_attr_load(prrte_attribute_t *kv,
 
 PRRTE_EXPORT int prrte_attr_unload(prrte_attribute_t *kv,
                                    void **data, prrte_data_type_t type);
+
+PRRTE_EXPORT char *prrte_attr_print_list(prrte_list_t *attributes);
 
 /*
  * Register a handler for converting attr keys to strings

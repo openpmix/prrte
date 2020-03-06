@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +31,7 @@
 #include "src/mca/base/prrte_mca_base_framework.h"
 
 #include "src/util/printf.h"
-
+#include "src/runtime/prrte_globals.h"
 #include "src/mca/ras/ras.h"
 /*
  * Global functions for MCA overall collective open and close
@@ -59,7 +59,7 @@ typedef struct prrte_ras_base_t {
 
 PRRTE_EXPORT extern prrte_ras_base_t prrte_ras_base;
 
-PRRTE_EXPORT void prrte_ras_base_display_alloc(void);
+PRRTE_EXPORT void prrte_ras_base_display_alloc(prrte_job_t *jdata);
 
 PRRTE_EXPORT void prrte_ras_base_allocate(int fd, short args, void *cbdata);
 
