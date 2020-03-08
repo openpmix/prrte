@@ -468,7 +468,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
                 /* app size */
                 kv = PRRTE_NEW(prrte_info_item_t);
                 PMIX_INFO_LOAD(&kv->info, PMIX_APP_SIZE, &app->num_procs, PMIX_UINT32);
-                prrte_list_append(info, &kv->super);
+                prrte_list_append(pmap, &kv->super);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
                 app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, pptr->app_idx);
