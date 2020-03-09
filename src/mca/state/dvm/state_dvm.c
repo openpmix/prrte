@@ -676,9 +676,8 @@ static void dvm_notify(int sd, short args, void *cbdata)
     } else {
         rc = jdata->exit_code;
     }
-    ret = prrte_pmix_convert_rc(rc);
 
-    if (0 == ret && prrte_get_attribute(&jdata->attributes, PRRTE_JOB_SILENT_TERMINATION, NULL, PRRTE_BOOL)) {
+    if (0 == rc && prrte_get_attribute(&jdata->attributes, PRRTE_JOB_SILENT_TERMINATION, NULL, PRRTE_BOOL)) {
         notify = false;
     }
     /* if the jobid matches that of the requestor, then don't notify */
@@ -710,7 +709,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         flag = true;
         PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, &flag, PMIX_BOOL);
         /* provide the status */
-        PMIX_INFO_LOAD(&info[1], PMIX_JOB_TERM_STATUS, &ret, PMIX_STATUS);
+        PMIX_INFO_LOAD(&info[1], PMIX_JOB_TERM_STATUS, &rc, PMIX_STATUS);
         /* tell the requestor which job or proc  */
         PMIX_LOAD_NSPACE(pname.nspace, jdata->nspace);
         if (NULL != pptr) {
