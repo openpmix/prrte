@@ -73,7 +73,8 @@ PRRTE_EXPORT int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
 PRRTE_EXPORT int prrte_schizo_base_define_cli(prrte_cmd_line_t *cli);
 PRRTE_EXPORT int prrte_schizo_base_parse_cli(int argc, int start, char **argv,
                                              char *personality, char ***target);
-PRRTE_EXPORT int prrte_schizo_base_parse_deprecated_cli(int *argc, char ***argv);
+PRRTE_EXPORT int prrte_schizo_base_parse_deprecated_cli(prrte_cmd_line_t *cmdline,
+                                                        int *argc, char ***argv);
 
 PRRTE_EXPORT void prrte_schizo_base_parse_proxy_cli(prrte_cmd_line_t *cmd_line,
                                                     char ***argv);

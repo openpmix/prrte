@@ -17,8 +17,14 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prrte_globals.h"
+#include "src/util/argv.h"
 #include "src/util/name_fns.h"
+#include "src/util/show_help.h"
 #include "src/mca/schizo/base/base.h"
+
+static int process_deprecated_cli(prrte_cmd_line_t *cmdline,
+                                  int *argc, char ***argv,
+                                  prrte_list_t *convertors);
 
  int prrte_schizo_base_define_cli(prrte_cmd_line_t *cli)
 {
@@ -55,21 +61,25 @@ int prrte_schizo_base_parse_cli(int argc, int start, char **argv,
     return PRRTE_SUCCESS;
 }
 
-int prrte_schizo_base_parse_deprecated_cli(int *argc, char ***argv)
+int prrte_schizo_base_parse_deprecated_cli(prrte_cmd_line_t *cmdline,
+                                           int *argc, char ***argv)
 {
     int rc;
     prrte_schizo_base_active_module_t *mod;
+    prrte_list_t convertors;
+
+    PRRTE_CONSTRUCT(&convertors, prrte_list_t);
 
     PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
-        if (NULL != mod->module->parse_deprecated_cli) {
-            rc = mod->module->parse_deprecated_cli(argc, argv);
-            if (PRRTE_SUCCESS != rc && PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
-                PRRTE_ERROR_LOG(rc);
-                return rc;
-            }
+        if (NULL != mod->module->register_deprecated_cli) {
+            mod->module->register_deprecated_cli(&convertors);
         }
     }
-    return PRRTE_SUCCESS;
+
+    rc = process_deprecated_cli(cmdline, argc, argv, &convertors);
+    PRRTE_LIST_DESTRUCT(&convertors);
+
+    return rc;
 }
 
 void prrte_schizo_base_parse_proxy_cli(prrte_cmd_line_t *cmd_line,
@@ -271,4 +281,106 @@ void prrte_schizo_base_finalize(void)
             mod->module->finalize();
         }
     }
+}
+
+
+static int process_deprecated_cli(prrte_cmd_line_t *cmdline,
+                                  int *argc, char ***argv,
+                                  prrte_list_t *convertors)
+{
+    int pargc;
+    char **pargs, *p2;
+    int i, n, rc, ret;
+    prrte_cmd_line_init_t e;
+    prrte_cmd_line_option_t *option;
+    bool found;
+    prrte_convertor_t *cv;
+
+    pargs = *argv;
+    pargc = *argc;
+    ret = PRRTE_SUCCESS;
+
+    /* check for deprecated cmd line options */
+    for (i=1; NULL != pargs[i]; i++) {
+        /* Are we done?  i.e., did we find the special "--" token? */
+        if (0 == strcmp(pargs[i], "--")) {
+            break;
+        }
+
+        /* check for option */
+        if ('-' != pargs[i][0]) {
+            /* not an option - we are done. Note that options
+             * are required to increment past their arguments
+             * so we don't mistakenly think we are at the end */
+            break;
+        }
+
+        /* is this an argument someone needs to convert? */
+        found = false;
+        PRRTE_LIST_FOREACH(cv, convertors, prrte_convertor_t) {
+            for (n=0; NULL != cv->options[n]; n++) {
+                if (0 == strcmp(pargs[i], cv->options[n])) {
+                    rc = cv->convert(cv->options[n], argv, i);
+                    if (PRRTE_SUCCESS != rc) {
+                        return rc;
+                    }
+                    --i;
+                    found = true;
+                    ret = PRRTE_OPERATION_SUCCEEDED;
+                    pargs = *argv;
+                    pargc = prrte_argv_count(pargs);
+                    break;  // for loop
+                }
+            }
+            if (found) {
+                break;  // foreach loop
+            }
+        }
+
+        if (!found) {
+            if ('-' != pargs[i][1] && 2 < strlen(pargs[i])) {
+                /* we know this is incorrect */
+                p2 = strdup(pargs[i]);
+                free(pargs[i]);
+                prrte_asprintf(&pargs[i], "-%s", p2);
+                prrte_show_help("help-schizo-base.txt", "single-dash-error", true,
+                                p2, pargs[i]);
+                free(p2);
+                ret = PRRTE_OPERATION_SUCCEEDED;
+            }
+            /* check for single-dash option */
+            else if (2 == strlen(pargs[i])) {
+                /* find the option */
+                memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+                e.ocl_cmd_short_name = pargs[i][1];
+                option = prrte_cmd_line_find_option(cmdline, &e);
+
+                /* if this isn't an option, then we are done */
+                if (NULL == option) {
+                    break;
+                }
+
+                /* increment past the number of arguments for this option */
+                i += option->clo_num_params;
+            }
+            /* check if we are done */
+            else {
+                /* find the option */
+                memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+                e.ocl_cmd_long_name = &pargs[i][2];
+                option = prrte_cmd_line_find_option(cmdline, &e);
+
+                /* if this isn't an option, then we are done */
+                if (NULL == option) {
+                    break;
+                }
+
+                /* increment past the number of arguments for this option */
+                i += option->clo_num_params;
+            }
+        }
+    }
+    *argc = pargc;
+
+    return ret;
 }

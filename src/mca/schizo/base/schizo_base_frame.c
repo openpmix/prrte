@@ -36,7 +36,7 @@
  * Global variables
  */
 prrte_schizo_base_t prrte_schizo_base = {{{0}}};
-prrte_schizo_base_module_t prrte_schizo = {
+prrte_schizo_API_module_t prrte_schizo = {
     .define_cli = prrte_schizo_base_define_cli,
     .parse_cli = prrte_schizo_base_parse_cli,
     .parse_deprecated_cli = prrte_schizo_base_parse_deprecated_cli,
@@ -115,6 +115,20 @@ PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, schizo, "PRRTE Schizo Subsystem",
                                  prrte_schizo_base_open, prrte_schizo_base_close,
                                  prrte_schizo_base_static_components, 0);
 
+static void cvcon(prrte_convertor_t *p)
+{
+    p->options = NULL;
+}
+static void cvdes(prrte_convertor_t *p)
+{
+    if (NULL != p->options) {
+        prrte_argv_free(p->options);
+    }
+}
+PRRTE_CLASS_INSTANCE(prrte_convertor_t,
+                     prrte_list_item_t,
+                     cvcon, cvdes);
+
 typedef struct {
     char *name;
     char **conflicts;
@@ -159,7 +173,7 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
     char *p2, *help_str, *old_arg;
     int j, k, cnt, rc;
     char **pargs = *argv;
-    char **tmp;
+    char **tmp, *output;
     prrte_schizo_conflicts_t *modifiers;
 
     /* pick the modifiers to be checked */
@@ -183,8 +197,11 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                 /* does it conflict? */
                 if (0 != strncasecmp(pargs[j+1], directive, strlen(directive))) {
                     prrte_asprintf(&help_str, "Conflicting directives \"%s %s\"", pargs[j+1], directive);
-                    prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
-                                    pargs[j], help_str);
+                    /* can't just call show_help as we want every instance to be reported */
+                    output = prrte_show_help_string("help-schizo-base.txt", "deprecated-fail", true,
+                                                    pargs[j], help_str);
+                    fprintf(stderr, "%s\n", output);
+                    free(output);
                     free(help_str);
                     return PRRTE_ERR_BAD_PARAM;
                 }
@@ -223,8 +240,11 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                     if (PRRTE_SUCCESS != rc) {
                         /* we have a conflict */
                         prrte_asprintf(&help_str, "  Option %s\n  Conflicting modifiers \"%s %s\"", option, pargs[j+1], modifier);
-                        prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
-                                        pargs[j], help_str);
+                        /* can't just call show_help as we want every instance to be reported */
+                        output = prrte_show_help_string("help-schizo-base.txt", "deprecated-fail", true,
+                                                        pargs[j], help_str);
+                        fprintf(stderr, "%s\n", output);
+                        free(output);
                         free(help_str);
                         return PRRTE_ERR_BAD_PARAM;
                     }
@@ -233,8 +253,11 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                 free(pargs[j+1]);
                 pargs[j+1] = p2;
                 prrte_asprintf(&help_str, "%s %s", option, p2);
-                prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
-                                pargs[idx], help_str);
+                /* can't just call show_help as we want every instance to be reported */
+                output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                                                pargs[idx], help_str);
+                fprintf(stderr, "%s\n", output);
+                free(output);
                 free(help_str);
             }
             if (0 < ntodelete) {
@@ -257,10 +280,13 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
             prrte_asprintf(&p2, "%s:%s", directive, modifier);
         }
         prrte_argv_insert_element(&pargs, idx+1, p2);
-        free(p2);
-        prrte_asprintf(&help_str, "%s %s", pargs[idx], (*argv)[idx+1]);
-        prrte_show_help("help-schizo-base.txt", "deprecated-converted", true,
+        prrte_asprintf(&help_str, "%s %s", pargs[idx], p2);
+        /* can't just call show_help as we want every instance to be reported */
+        output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
                         old_arg, help_str);
+        fprintf(stderr, "%s\n", output);
+        free(output);
+        free(p2);
         free(help_str);
         free(old_arg);
         *argv = pargs;  // will have been reallocated

@@ -24,6 +24,8 @@
 
 #include "prrte_config.h"
 #include "types.h"
+
+#include "src/class/prrte_list.h"
 #include "src/util/cmd_line.h"
 
 #include "src/mca/mca.h"
@@ -32,6 +34,15 @@
 
 
 BEGIN_C_DECLS
+
+typedef int (*prrte_schizo_convertor_fn_t)(char *option, char ***argv, int idx);
+
+typedef struct {
+    prrte_list_item_t super;
+    char **options;
+    prrte_schizo_convertor_fn_t convert;
+} prrte_convertor_t;
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_convertor_t);
 
 /*
  * schizo module functions
@@ -67,7 +78,7 @@ typedef int (*prrte_schizo_base_module_parse_cli_fn_t)(int argc, int start,
                                                       char *personality,
                                                       char ***target);
 
-typedef int (*prrte_schizo_base_module_parse_deprecated_cli_fn_t)(int *argc, char ***argv);
+typedef void (*prrte_schizo_base_module_register_deprecated_cli_fn_t)(prrte_list_t *convertors);
 
 /* detect if we are running as a proxy
  * Check the environment to determine what, if any, host we are running
@@ -134,25 +145,46 @@ typedef int (*prrte_schizo_base_module_get_rem_time_fn_t)(uint32_t *timeleft);
  * schizo module version 1.3.0
  */
 typedef struct {
-    prrte_schizo_base_module_init_fn_t                   init;
-    prrte_schizo_base_module_define_cli_fn_t             define_cli;
-    prrte_schizo_base_module_parse_cli_fn_t              parse_cli;
-    prrte_schizo_base_module_parse_deprecated_cli_fn_t   parse_deprecated_cli;
-    prrte_schizo_base_module_parse_proxy_cli_fn_t        parse_proxy_cli;
-    prrte_schizo_base_module_parse_env_fn_t              parse_env;
-    prrte_schizo_base_detect_proxy_fn_t                  detect_proxy;
-    prrte_schizo_base_define_session_dir_fn_t            define_session_dir;
-    prrte_schizo_base_module_allow_run_as_root_fn_t      allow_run_as_root;
-    prrte_schizo_base_module_wrap_args_fn_t              wrap_args;
-    prrte_schizo_base_module_setup_app_fn_t              setup_app;
-    prrte_schizo_base_module_setup_fork_fn_t             setup_fork;
-    prrte_schizo_base_module_setup_child_fn_t            setup_child;
-    prrte_schizo_base_module_get_rem_time_fn_t           get_remaining_time;
-    prrte_schizo_base_module_finalize_fn_t               finalize;
+    prrte_schizo_base_module_init_fn_t                      init;
+    prrte_schizo_base_module_define_cli_fn_t                define_cli;
+    prrte_schizo_base_module_parse_cli_fn_t                 parse_cli;
+    prrte_schizo_base_module_register_deprecated_cli_fn_t   register_deprecated_cli;
+    prrte_schizo_base_module_parse_proxy_cli_fn_t           parse_proxy_cli;
+    prrte_schizo_base_module_parse_env_fn_t                 parse_env;
+    prrte_schizo_base_detect_proxy_fn_t                     detect_proxy;
+    prrte_schizo_base_define_session_dir_fn_t               define_session_dir;
+    prrte_schizo_base_module_allow_run_as_root_fn_t         allow_run_as_root;
+    prrte_schizo_base_module_wrap_args_fn_t                 wrap_args;
+    prrte_schizo_base_module_setup_app_fn_t                 setup_app;
+    prrte_schizo_base_module_setup_fork_fn_t                setup_fork;
+    prrte_schizo_base_module_setup_child_fn_t               setup_child;
+    prrte_schizo_base_module_get_rem_time_fn_t              get_remaining_time;
+    prrte_schizo_base_module_finalize_fn_t                  finalize;
 } prrte_schizo_base_module_t;
 
-PRRTE_EXPORT extern prrte_schizo_base_module_t prrte_schizo;
 
+typedef int (*prrte_schizo_base_API_parse_deprecated_cli_fn_t)(prrte_cmd_line_t *cmdline,
+                                                               int *argc, char ***argv);
+
+typedef struct {
+    prrte_schizo_base_module_init_fn_t                      init;
+    prrte_schizo_base_module_define_cli_fn_t                define_cli;
+    prrte_schizo_base_module_parse_cli_fn_t                 parse_cli;
+    prrte_schizo_base_API_parse_deprecated_cli_fn_t         parse_deprecated_cli;
+    prrte_schizo_base_module_parse_proxy_cli_fn_t           parse_proxy_cli;
+    prrte_schizo_base_module_parse_env_fn_t                 parse_env;
+    prrte_schizo_base_detect_proxy_fn_t                     detect_proxy;
+    prrte_schizo_base_define_session_dir_fn_t               define_session_dir;
+    prrte_schizo_base_module_allow_run_as_root_fn_t         allow_run_as_root;
+    prrte_schizo_base_module_wrap_args_fn_t                 wrap_args;
+    prrte_schizo_base_module_setup_app_fn_t                 setup_app;
+    prrte_schizo_base_module_setup_fork_fn_t                setup_fork;
+    prrte_schizo_base_module_setup_child_fn_t               setup_child;
+    prrte_schizo_base_module_get_rem_time_fn_t              get_remaining_time;
+    prrte_schizo_base_module_finalize_fn_t                  finalize;
+} prrte_schizo_API_module_t;
+
+PRRTE_EXPORT extern prrte_schizo_API_module_t prrte_schizo;
 /*
  * schizo component
  */

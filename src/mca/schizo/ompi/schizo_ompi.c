@@ -52,7 +52,7 @@
 #include "schizo_ompi.h"
 
 static int define_cli(prrte_cmd_line_t *cli);
-static int parse_deprecated_cli(int *argc, char ***argv);
+static void register_deprecated_cli(prrte_list_t *convertors);
 static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
                             char ***argv);
 static int parse_env(prrte_cmd_line_t *cmd_line,
@@ -64,7 +64,7 @@ static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 
 prrte_schizo_base_module_t prrte_schizo_ompi_module = {
     .define_cli = define_cli,
-    .parse_deprecated_cli = parse_deprecated_cli,
+    .register_deprecated_cli = register_deprecated_cli,
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
     .detect_proxy = detect_proxy,
@@ -208,260 +208,146 @@ static int define_cli(prrte_cmd_line_t *cli)
     return PRRTE_SUCCESS;
 }
 
-static int parse_deprecated_cli(int *argc, char ***argv)
+static int parse_deprecated_cli(char *option, char ***argv, int i)
 {
-    int i, pargc;
     char **pargs, *p2, *modifier;
-    bool takeus = false;
     int rc;
 
-    /* if they gave us a list of personalities,
-     * see if we are included */
-    if (NULL != prrte_schizo_base.personalities) {
-        for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
-            if (0 == strcmp(prrte_schizo_base.personalities[i], "ompi")) {
-                takeus = true;
-                break;
-            }
-        }
-        if (!takeus) {
-            return PRRTE_ERR_TAKE_NEXT_OPTION;
-        }
-    }
-
     pargs = *argv;
-    pargc = *argc;
-    /* check for deprecated cmd line options */
-    for (i=0; NULL != pargs[i]; i++) {
-        /* check for option */
-        if ('-' != pargs[i][0]) {
-            continue;
-        }
-        /* check for single-dash errors */
-        if ('-' != pargs[i][1] && 2 < strlen(pargs[i])) {
-            /* we know this is incorrect */
-            p2 = strdup(pargs[i]);
-            free(pargs[i]);
-            prrte_asprintf(&pargs[i], "-%s", p2);
-            prrte_show_help("help-schizo-base.txt", "single-dash-error", true,
-                            p2, pargs[i]);
-            free(p2);
-        }
 
         /* --nolocal -> --map-by :nolocal */
-        if (0 == strcmp(pargs[i], "--nolocal")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "NOLOCAL");
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
+    if (0 == strcmp(option, "--nolocal")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "NOLOCAL");
+    }
+    /* --oversubscribe -> --map-by :OVERSUBSCRIBE
+     * --nooversubscribe -> --map-by :NOOVERSUBSCRIBE
+     */
+    else if (0 == strcmp(option, "--oversubscribe") ||
+             0 == strcmp(option, "--nooversubscribe") ) {
+        if (0 == strcmp(option, "--nooversubscribe")) {
+            prrte_show_help("help-schizo-base.txt", "deprecated-inform", true,
+                            option, "This is the default behavior so does not need to be specified");
+            modifier = "NOOVERSUBSCRIBE";
+        } else {
+            modifier = "OVERSUBSCRIBE";
         }
-        /* --oversubscribe -> --map-by :OVERSUBSCRIBE
-         * --nooversubscribe -> --map-by :NOOVERSUBSCRIBE
-         */
-        else if (0 == strcmp(pargs[i], "--oversubscribe") ||
-                 0 == strcmp(pargs[i], "--nooversubscribe") ) {
-            if (0 == strcmp(pargs[i], "--nooversubscribe")) {
-                prrte_show_help("help-schizo-base.txt", "deprecated-inform", true,
-                                pargs[i], "This is the default behavior so does not need to be specified");
-                modifier = "NOOVERSUBSCRIBE";
-            } else {
-                modifier = "OVERSUBSCRIBE";
-            }
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, modifier);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, modifier);
+    }
+    /* --use-hwthread-cpus -> --bind-to hwthread */
+    else if (0 == strcmp(option, "--use-hwthread-cpus")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", "hwthread", NULL);
+    }
+    /* --cpu-set and --cpu-list -> --map-by pr-list:X
+     * - Needs to be implemented
+     */
+    else if (0 == strcmp(option, "--cpu-set") ||
+             0 == strcmp(option, "--cpu-list") ) {
+        prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
+                        option, "Not converted yet - work to do");
+        return PRRTE_ERR_BAD_PARAM;
+    }
+    /* --bind-to-core and --bind-to-socket -> --bind-to X */
+    else if (0 == strcmp(option, "--bind-to-core")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", "core", NULL);
+    }
+    else if (0 == strcmp(option, "--bind-to-socket")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", "socket", NULL);
+    }
+    /* --bynode -> "--map-by X --rank-by X" */
+    else if (0 == strcmp(option, "--bynode")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", "node", NULL);
+        if (PRRTE_SUCCESS != rc) {
+            return rc;
         }
-        /* --use-hwthread-cpus -> --bind-to hwthread */
-        else if (0 == strcmp(pargs[i], "--use-hwthread-cpus")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", "hwthread", NULL);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
+        // paired with rank-by - note that we would have already removed the
+        // ith location where the option was stored, so don't do it again
+        rc = prrte_schizo_base_convert(argv, i, 0, "--rank-by", "node", NULL);
+    }
+    /* --bycore -> "--map-by X --rank-by X" */
+    else if (0 == strcmp(option, "--bycore")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", "core", NULL);
+        if (PRRTE_SUCCESS != rc) {
+            return rc;
         }
-        /* --cpu-set and --cpu-list -> --map-by pr-list:X
-         * - Needs to be implemented
-         */
-        else if (0 == strcmp(pargs[i], "--cpu-set") ||
-                 0 == strcmp(pargs[i], "--cpu-list") ) {
-            prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
-                            pargs[i], "Not converted yet - work to do");
+        // paired with rank-by - note that we would have already removed the
+        // ith location where the option was stored, so don't do it again
+        rc = prrte_schizo_base_convert(argv, i, 0, "--rank-by", "core", NULL);
+    }
+    /* --byslot -> "--map-by X --rank-by X" */
+    else if (0 == strcmp(option, "--byslot")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", "slot", NULL);
+        if (PRRTE_SUCCESS != rc) {
+            return rc;
+        }
+        // paired with rank-by - note that we would have already removed the
+        // ith location where the option was stored, so don't do it again
+        rc = prrte_schizo_base_convert(argv, i, 0, "--rank-by", "slot", NULL);
+    }
+    /* --cpus-per-proc/rank X -> --map-by :pe=X */
+    else if (0 == strcmp(option, "--cpus-per-proc") ||
+             0 == strcmp(option, "--cpus-per-rank") ) {
+        prrte_asprintf(&p2, "pe=%s", pargs[i+1]);
+        rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2);
+        free(p2);
+    }
+    /* --npernode X and --npersocket X -> --map-by ppr:X:node/socket */
+    else if (0 == strcmp(option, "--npernode")) {
+        prrte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
+        rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
+        free(p2);
+    }
+    else if (0 == strcmp(option, "--pernode")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", "ppr:1:node", NULL);
+        free(p2);
+    }
+    else if (0 == strcmp(option, "--npersocket")) {
+        prrte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
+        rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
+        free(p2);
+   }
+    /* --ppr X -> --map-by ppr:X */
+    else if (0 == strcmp(option, "--ppr")) {
+        /* if they didn't specify a complete pattern, then this is an error */
+        if (NULL == strchr(pargs[i+1], ':')) {
+            prrte_show_help("help-schizo-base.txt", "bad-ppr", true, pargs[i+1]);
             return PRRTE_ERR_BAD_PARAM;
         }
-        /* --bind-to-core and --bind-to-socket -> --bind-to X */
-        else if (0 == strcmp(pargs[i], "--bind-to-core")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", "core", NULL);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        else if (0 == strcmp(pargs[i], "--bind-to-socket")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", "socket", NULL);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --bynode -> "--map-by X --rank-by X" */
-        else if (0 == strcmp(pargs[i], "--bynode")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", "node", NULL);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // paired with rank-by - note that we would have already removed the
-            // ith location where the option was stored, so don't do it again
-            rc = prrte_schizo_base_convert(argv, i, 0, "--rank-by", "node", NULL);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --bycore -> "--map-by X --rank-by X" */
-        else if (0 == strcmp(pargs[i], "--bycore")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", "core", NULL);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // paired with rank-by - note that we would have already removed the
-            // ith location where the option was stored, so don't do it again
-            rc = prrte_schizo_base_convert(argv, i, 0, "--rank-by", "core", NULL);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --byslot -> "--map-by X --rank-by X" */
-        else if (0 == strcmp(pargs[i], "--byslot")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", "slot", NULL);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // paired with rank-by - note that we would have already removed the
-            // ith location where the option was stored, so don't do it again
-            rc = prrte_schizo_base_convert(argv, i, 0, "--rank-by", "slot", NULL);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --cpus-per-proc/rank X -> --map-by :pe=X */
-        else if (0 == strcmp(pargs[i], "--cpus-per-proc") ||
-                 0 == strcmp(pargs[i], "--cpus-per-rank") ) {
-            prrte_asprintf(&p2, "pe=%s", pargs[i+1]);
-            rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2);
-            free(p2);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --npernode X and --npersocket X -> --map-by ppr:X:node/socket */
-        else if (0 == strcmp(pargs[i], "--npernode")) {
-            prrte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
-            rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
-            free(p2);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-        }
-        else if (0 == strcmp(pargs[i], "--pernode")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", "ppr:1:node", NULL);
-            free(p2);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-        }
-        else if (0 == strcmp(pargs[i], "--npersocket")) {
-            prrte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
-            rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
-            free(p2);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-       }
-        /* --ppr X -> --map-by ppr:X */
-        else if (0 == strcmp(pargs[i], "--ppr")) {
-            /* if they didn't specify a complete pattern, then this is an error */
-            if (NULL == strchr(pargs[i+1], ':')) {
-                prrte_show_help("help-schizo-base.txt", "bad-ppr", true, pargs[i+1]);
-                return PRRTE_ERR_BAD_PARAM;
-            }
-            prrte_asprintf(&p2, "ppr:%s", pargs[i+1]);
-            rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
-            free(p2);
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-        }
+        prrte_asprintf(&p2, "ppr:%s", pargs[i+1]);
+        rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
+        free(p2);
     }
-    *argc = pargc;
 
-    return PRRTE_SUCCESS;
+    return rc;
+}
+
+static void register_deprecated_cli(prrte_list_t *convertors)
+{
+    prrte_convertor_t *cv;
+    char *options[] = {
+        "--nolocal",
+        "--oversubscribe",
+        "--nooversubscribe",
+        "--use-hwthread-cpus",
+        "--cpu-set",
+        "--cpu-list",
+        "--bind-to-core",
+        "--bind-to-socket",
+        "--bynode",
+        "--bycore",
+        "--byslot",
+        "--cpus-per-proc",
+        "--cpus-per-rank",
+        "--npernode",
+        "--pernode",
+        "--npersocket",
+        "--ppr",
+        NULL
+    };
+
+    cv = PRRTE_NEW(prrte_convertor_t);
+    cv->options = prrte_argv_copy(options);
+    cv->convert = parse_deprecated_cli;
+    prrte_list_append(convertors, &cv->super);
 }
 
 static char *strip_quotes(char *p)

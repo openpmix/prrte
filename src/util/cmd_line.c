@@ -90,8 +90,6 @@ static char special_empty_token[] = {
  */
 static int make_opt(prrte_cmd_line_t *cmd, prrte_cmd_line_init_t *e);
 static void free_parse_results(prrte_cmd_line_t *cmd);
-static prrte_cmd_line_option_t *find_option(prrte_cmd_line_t *cmd,
-                                            prrte_cmd_line_init_t *e) __prrte_attribute_nonnull__(1) __prrte_attribute_nonnull__(2);
 static prrte_value_t*  set_dest(prrte_cmd_line_option_t *option, char *sval);
 static void fill(const prrte_cmd_line_option_t *a, char result[3][BUFSIZ]);
 static int qsort_callback(const void *a, const void *b);
@@ -229,7 +227,7 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
     /* Check up front: do we have a --help option? */
     memset(&e, 0, sizeof(prrte_cmd_line_init_t));
     e.ocl_cmd_long_name = "help";
-    option = find_option(cmd, &e);
+    option = prrte_cmd_line_find_option(cmd, &e);
     if (NULL != option) {
         have_help_option = true;
     }
@@ -274,7 +272,7 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
             is_option = true;
             memset(&e, 0, sizeof(prrte_cmd_line_init_t));
             e.ocl_cmd_long_name = &cmd->lcl_argv[i][2];
-            option = find_option(cmd, &e);
+            option = prrte_cmd_line_find_option(cmd, &e);
         }
 
         /* Is it the special-cased "-np" name? */
@@ -282,7 +280,7 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
             is_option = true;
             memset(&e, 0, sizeof(prrte_cmd_line_init_t));
             e.ocl_cmd_long_name = &cmd->lcl_argv[i][1];
-            option = find_option(cmd, &e);
+            option = prrte_cmd_line_find_option(cmd, &e);
         }
 
         /* It could be a short name.  Is it? */
@@ -293,7 +291,7 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
             } else {
                 memset(&e, 0, sizeof(prrte_cmd_line_init_t));
                 e.ocl_cmd_short_name = cmd->lcl_argv[i][1];
-                option = find_option(cmd, &e);
+                option = prrte_cmd_line_find_option(cmd, &e);
 
                 /* If we didn't find it, then it is an unknown option */
                 if (NULL == option) {
@@ -719,7 +717,7 @@ int prrte_cmd_line_get_ninsts(prrte_cmd_line_t *cmd, const char *opt)
     } else {
         e.ocl_cmd_short_name = opt[0];
     }
-    option = find_option(cmd, &e);
+    option = prrte_cmd_line_find_option(cmd, &e);
     if (NULL != option) {
         PRRTE_LIST_FOREACH(param, &cmd->lcl_params, prrte_cmd_line_param_t) {
             if (param->clp_option == option) {
@@ -764,7 +762,7 @@ prrte_value_t *prrte_cmd_line_get_param(prrte_cmd_line_t *cmd,
     } else {
         e.ocl_cmd_short_name = opt[0];
     }
-    option = find_option(cmd, &e);
+    option = prrte_cmd_line_find_option(cmd, &e);
     if (NULL != option) {
         ninst = 0;
         /* scan thru the found params */
@@ -913,7 +911,7 @@ static int make_opt(prrte_cmd_line_t *cmd, prrte_cmd_line_init_t *e)
     }
 
     /* see if the option already exists */
-    if (NULL != find_option(cmd, e)) {
+    if (NULL != prrte_cmd_line_find_option(cmd, e)) {
         prrte_output(0, "Duplicate cmd line entry %c:%s",
                      ('\0' == e->ocl_cmd_short_name) ? ' ' : e->ocl_cmd_short_name,
                      (NULL == e->ocl_cmd_long_name) ? "NULL" : e->ocl_cmd_long_name);
@@ -972,8 +970,8 @@ static void free_parse_results(prrte_cmd_line_t *cmd)
 }
 
 
-static prrte_cmd_line_option_t *find_option(prrte_cmd_line_t *cmd,
-                                            prrte_cmd_line_init_t *e)
+prrte_cmd_line_option_t *prrte_cmd_line_find_option(prrte_cmd_line_t *cmd,
+                                                    prrte_cmd_line_init_t *e)
 {
     int i;
     prrte_cmd_line_option_t *option;

@@ -51,7 +51,7 @@
 #include "schizo_prrte.h"
 
 static int define_cli(prrte_cmd_line_t *cli);
-static int parse_deprecated_cli(int *argc, char ***argv);
+static void register_deprecated_cli(prrte_list_t *convertors);
 static int parse_cli(int argc, int start, char **argv,
                      char *personality, char ***target);
 static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
@@ -69,7 +69,7 @@ static void wrap_args(char **args);
 
 prrte_schizo_base_module_t prrte_schizo_prrte_module = {
     .define_cli = define_cli,
-    .parse_deprecated_cli = parse_deprecated_cli,
+    .register_deprecated_cli = register_deprecated_cli,
     .parse_cli = parse_cli,
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
@@ -315,129 +315,67 @@ static int parse_cli(int argc, int start, char **argv,
     return PRRTE_SUCCESS;
 }
 
-static int parse_deprecated_cli(int *argc, char ***argv)
+static int parse_deprecated_cli(char *option, char ***argv, int i)
 {
-    int i, rc, pargc;
-    char **pargs;
+    int rc;
 
-    pargs = *argv;
-    pargc = *argc;
-    /* check for deprecated cmd line options */
-    for (i=0; NULL != pargs[i]; i++) {
-        /* check for option */
-        if ('-' != pargs[i][0]) {
-            continue;
-        }
-
-        /* --display-devel-map  ->  PRRTE_MCA_rmaps_base_display_devel_map */
-        if (0 == strcmp(pargs[i], "--display-devel-map")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDEVEL");
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --display-map  ->  PRRTE_MCA_rmaps_base_display_map */
-        else if (0 == strcmp(pargs[i], "--display-map")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAY");
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --display-topo  ->  PRRTE_MCA_rmaps_base_display_topo_with_map */
-        else if (0 == strcmp(pargs[i], "--display-topo")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYTOPO");
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --display-diffable-map  ->  PRRTE_MCA_rmaps_base_display_diffable_map */
-        else if (0 == strcmp(pargs[i], "--display-diff")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDIFF");
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --report-bindings  ->  PRRTE_MCA_hwloc_base_report_bindings */
-        else if (0 == strcmp(pargs[i], "--report-bindings")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", NULL, "REPORT");
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --display-allocation  ->  PRRTE_MCA_prrte_display_alloc */
-        else if (0 == strcmp(pargs[i], "--display-allocation")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYALLOC");
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --do-not-launch  ->   */
-        else if (0 == strcmp(pargs[i], "--do-not-launch")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DONOTLAUNCH");
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
-        /* --xml-output  ->   */
-        else if (0 == strcmp(pargs[i], "--xml-output")) {
-            rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "XMLOUTPUT");
-            if (PRRTE_SUCCESS != rc) {
-                return rc;
-            }
-            // look at this position again in the next cycle since
-            // the ith location was removed
-            i--;
-            pargs = *argv;
-            pargc = prrte_argv_count(pargs);
-            break;
-        }
+    /* --display-devel-map  ->  PRRTE_MCA_rmaps_base_display_devel_map */
+    if (0 == strcmp(option, "--display-devel-map")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDEVEL");
     }
-    *argc = pargc;
+    /* --display-map  ->  PRRTE_MCA_rmaps_base_display_map */
+    else if (0 == strcmp(option, "--display-map")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAY");
+    }
+    /* --display-topo  ->  PRRTE_MCA_rmaps_base_display_topo_with_map */
+    else if (0 == strcmp(option, "--display-topo")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYTOPO");
+    }
+    /* --display-diffable-map  ->  PRRTE_MCA_rmaps_base_display_diffable_map */
+    else if (0 == strcmp(option, "--display-diff")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDIFF");
+    }
+    /* --report-bindings  ->  PRRTE_MCA_hwloc_base_report_bindings */
+    else if (0 == strcmp(option, "--report-bindings")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", NULL, "REPORT");
+    }
+    /* --display-allocation  ->  PRRTE_MCA_prrte_display_alloc */
+    else if (0 == strcmp(option, "--display-allocation")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYALLOC");
+    }
+    /* --do-not-launch  ->   */
+    else if (0 == strcmp(option, "--do-not-launch")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DONOTLAUNCH");
+    }
+    /* --xml-output  ->   */
+    else if (0 == strcmp(option, "--xml-output")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "XMLOUTPUT");
+    }
 
-    return PRRTE_SUCCESS;
+    return rc;
 }
+
+static void register_deprecated_cli(prrte_list_t *convertors)
+{
+    prrte_convertor_t *cv;
+    char *options[] = {
+        "--display-devel-map",
+        "--display-map",
+        "--display-topo",
+        "--display-diff",
+        "--report-bindings",
+        "--display-allocation",
+        "--do-not-launch",
+        "--xml-output",
+        NULL
+    };
+
+    cv = PRRTE_NEW(prrte_convertor_t);
+    cv->options = prrte_argv_copy(options);
+    cv->convert = parse_deprecated_cli;
+    prrte_list_append(convertors, &cv->super);
+}
+
 
 static int parse_env(prrte_cmd_line_t *cmd_line,
                      char **srcenv,
