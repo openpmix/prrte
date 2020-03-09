@@ -594,6 +594,9 @@ PRRTE_EXPORT prrte_value_t *prrte_cmd_line_get_param(prrte_cmd_line_t *cmd,
 PRRTE_EXPORT int prrte_cmd_line_get_tail(prrte_cmd_line_t *cmd, int *tailc,
                                          char ***tailv);
 
+PRRTE_EXPORT prrte_cmd_line_option_t *prrte_cmd_line_find_option(prrte_cmd_line_t *cmd,
+                                                                 prrte_cmd_line_init_t *e) __prrte_attribute_nonnull__(1) __prrte_attribute_nonnull__(2);
+
 END_C_DECLS
 
 

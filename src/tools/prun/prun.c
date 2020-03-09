@@ -154,7 +154,6 @@ static bool forcibly_die=false;
 static prrte_event_t term_handler;
 static int term_pipe[2];
 static prrte_atomic_lock_t prun_abort_inprogress_lock = PRRTE_ATOMIC_LOCK_INIT;
-static prrte_event_base_t *myevbase = NULL;
 static bool proxyrun = false;
 static bool verbose = false;
 static prrte_cmd_line_t *prrte_cmd_line = NULL;
@@ -648,6 +647,42 @@ int prun(int argc, char *argv[])
     pargc = argc;
     pargv = prrte_argv_copy(argv);
 
+    /** setup callbacks for abort signals - from this point
+     * forward, we need to abort in a manner that allows us
+     * to cleanup. However, we cannot directly use libevent
+     * to trap these signals as otherwise we cannot respond
+     * to them if we are stuck in an event! So instead use
+     * the basic POSIX trap functions to handle the signal,
+     * and then let that signal handler do some magic to
+     * avoid the hang
+     *
+     * NOTE: posix traps don't allow us to do anything major
+     * in them, so use a pipe tied to a libevent event to
+     * reach a "safe" place where the termination event can
+     * be created
+     */
+    if (0 != (rc = pipe(term_pipe))) {
+        exit(1);
+    }
+    /* setup an event to attempt normal termination on signal */
+    prrte_event_base = prrte_progress_thread_init(NULL);
+    prrte_event_set(prrte_event_base, &term_handler, term_pipe[0], PRRTE_EV_READ, clean_abort, NULL);
+    prrte_event_add(&term_handler, NULL);
+
+    /* Set both ends of this pipe to be close-on-exec so that no
+       children inherit it */
+    if (prrte_fd_set_cloexec(term_pipe[0]) != PRRTE_SUCCESS ||
+        prrte_fd_set_cloexec(term_pipe[1]) != PRRTE_SUCCESS) {
+        fprintf(stderr, "unable to set the pipe to CLOEXEC\n");
+        prrte_progress_thread_finalize(NULL);
+        exit(1);
+    }
+
+    /* point the signal trap to a function that will activate that event */
+    signal(SIGTERM, abort_signal_callback);
+    signal(SIGINT, abort_signal_callback);
+    signal(SIGHUP, abort_signal_callback);
+
     /* setup our cmd line */
     prrte_cmd_line = PRRTE_NEW(prrte_cmd_line_t);
     if (PRRTE_SUCCESS != (rc = prrte_cmd_line_add(prrte_cmd_line, cmd_line_init))) {
@@ -705,9 +740,15 @@ int prun(int argc, char *argv[])
     }
 
     /* handle deprecated options */
-    if (PRRTE_SUCCESS != (rc = prrte_schizo.parse_deprecated_cli(&pargc, &pargv))) {
-        PRRTE_ERROR_LOG(rc);
-        return rc;
+    if (PRRTE_SUCCESS != (rc = prrte_schizo.parse_deprecated_cli(prrte_cmd_line, &pargc, &pargv))) {
+        if (PRRTE_OPERATION_SUCCEEDED == rc) {
+            /* the cmd line was restructured - show them the end result */
+            param = prrte_argv_join(pargv, ' ');
+            fprintf(stderr, "\n******* Corrected cmd line: %s\n\n\n", param);
+            free(param);
+        } else {
+            return rc;
+        }
     }
 
     /* parse the result to get values - this will not include MCA params */
@@ -777,42 +818,6 @@ int prun(int argc, char *argv[])
         PRRTE_ERROR_LOG(ret);
         return rc;
     }
-
-    /** setup callbacks for abort signals - from this point
-     * forward, we need to abort in a manner that allows us
-     * to cleanup. However, we cannot directly use libevent
-     * to trap these signals as otherwise we cannot respond
-     * to them if we are stuck in an event! So instead use
-     * the basic POSIX trap functions to handle the signal,
-     * and then let that signal handler do some magic to
-     * avoid the hang
-     *
-     * NOTE: posix traps don't allow us to do anything major
-     * in them, so use a pipe tied to a libevent event to
-     * reach a "safe" place where the termination event can
-     * be created
-     */
-    if (0 != (rc = pipe(term_pipe))) {
-        exit(1);
-    }
-    /* setup an event to attempt normal termination on signal */
-    myevbase = prrte_progress_thread_init(NULL);
-    prrte_event_set(myevbase, &term_handler, term_pipe[0], PRRTE_EV_READ, clean_abort, NULL);
-    prrte_event_add(&term_handler, NULL);
-
-    /* Set both ends of this pipe to be close-on-exec so that no
-       children inherit it */
-    if (prrte_fd_set_cloexec(term_pipe[0]) != PRRTE_SUCCESS ||
-        prrte_fd_set_cloexec(term_pipe[1]) != PRRTE_SUCCESS) {
-        fprintf(stderr, "unable to set the pipe to CLOEXEC\n");
-        prrte_progress_thread_finalize(NULL);
-        exit(1);
-    }
-
-    /* point the signal trap to a function that will activate that event */
-    signal(SIGTERM, abort_signal_callback);
-    signal(SIGINT, abort_signal_callback);
-    signal(SIGHUP, abort_signal_callback);
 
     if (proxyrun) {
         /* we need to start our own private DVM - start by initializing
