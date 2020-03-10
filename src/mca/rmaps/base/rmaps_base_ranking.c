@@ -642,6 +642,11 @@ int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata)
                             continue;
                         }
                         proc->name.vpid = vpid++;
+                        if (0 == cnt) {
+                            app->first_rank = proc->name.vpid;
+                        }
+                        cnt++;
+
                         /* insert the proc into the jdata array */
                         if (NULL != (pptr = (prrte_proc_t*)prrte_pointer_array_get_item(jdata->procs, proc->name.vpid))) {
                             PRRTE_RELEASE(pptr);
@@ -651,7 +656,6 @@ int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata)
                             PRRTE_ERROR_LOG(rc);
                             return rc;
                         }
-                        cnt++;
                         one_found = true;
                         /* track where the highest vpid landed - this is our
                          * new bookmark
@@ -677,6 +681,7 @@ int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata)
                             PRRTE_JOBID_PRINT(jdata->jobid));
         vpid = 0;
         for (n=0; n < jdata->apps->size; n++) {
+            cnt = 0;
             if (NULL == (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, n))) {
                 continue;
             }
@@ -704,6 +709,11 @@ int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata)
                                             "mca:rmaps:base: assigning rank %s to node %s",
                                             PRRTE_VPID_PRINT(vpid), node->name);
                         proc->name.vpid = vpid++;
+                        if (0 == cnt) {
+                            app->first_rank = proc->name.vpid;
+                        }
+                        cnt++;
+
                        /* track where the highest vpid landed - this is our
                          * new bookmark
                          */
