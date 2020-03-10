@@ -62,12 +62,15 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
 static int detect_proxy(char **argv, char **rfile);
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 
+static int setup_fork(prrte_job_t *jdata, prrte_app_context_t *context);
+
 prrte_schizo_base_module_t prrte_schizo_ompi_module = {
     .define_cli = define_cli,
     .register_deprecated_cli = register_deprecated_cli,
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
     .detect_proxy = detect_proxy,
+    .setup_fork   = setup_fork,
     .allow_run_as_root = allow_run_as_root
 };
 
@@ -816,4 +819,106 @@ static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
         prrte_argv_append_nosize(argv, "prrte_tmpdir_base");
         prrte_argv_append_nosize(argv, pval->data.string);
     }
+}
+
+static int setup_fork(prrte_job_t *jdata, prrte_app_context_t *context) {
+
+    int first_rank_buf_size = 256, num_ranks_buf_size = 256;
+    int  first_rank_buf_idx = 0, num_ranks_buf_idx = 0;
+    char *first_rank_buf = malloc(first_rank_buf_size);
+    char *num_ranks_buf  = malloc(num_ranks_buf_size);
+    prrte_app_context_t *app = NULL;
+
+    /* Construct buffers for OMPI_FIRST_RANKS and  OMPI_APP_CTX_NUM_PROCS */
+    for(int j= 0; j < jdata->apps->size; j++) {
+        if (NULL == (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, j))) {
+            continue;
+        }
+
+        char tmp[16] = {0};
+        snprintf(tmp, 16, "%d", app -> first_rank);
+        snprintf(&first_rank_buf[first_rank_buf_idx], first_rank_buf_size - first_rank_buf_idx,
+                 "%s ", tmp);
+        first_rank_buf_idx += (strlen(tmp) + 1);
+
+        tmp[0] = '\0';
+        snprintf(tmp, 16, "%d", app -> num_procs);
+        snprintf(&num_ranks_buf[num_ranks_buf_idx], num_ranks_buf_size - num_ranks_buf_idx,
+                 "%s ", tmp);
+        num_ranks_buf_idx += (strlen(tmp) + 1);
+
+        if(first_rank_buf_idx >= first_rank_buf_size) {
+          first_rank_buf_size *= 2;
+          first_rank_buf = realloc(first_rank_buf, first_rank_buf_size);
+        }
+        if(num_ranks_buf_idx >= num_ranks_buf_size) {
+          num_ranks_buf_size *= 2;
+          num_ranks_buf = realloc(num_ranks_buf, num_ranks_buf_size);
+        }
+    }
+
+    /* Get rid of trailing space. */
+    first_rank_buf[first_rank_buf_idx - 1] = '\0';
+    num_ranks_buf[num_ranks_buf_idx - 1] = '\0';
+
+    for(int j = 0; j < jdata->apps->size; j++) {
+        if (NULL == (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, j))) {
+            continue;
+        }
+
+        /* Tell all children first rank list. */
+        prrte_setenv("OMPI_FIRST_RANKS", first_rank_buf, true, &app->env);
+
+        /* Tell all children the number of ranks in each app. */
+        prrte_setenv("OMPI_APP_CTX_NUM_PROCS", num_ranks_buf, true, &app->env);
+
+        char ompi_env_buf[16] = {0};
+        /* Tell all children the number of procs */
+        snprintf(ompi_env_buf, 16, "%d", jdata->num_procs);
+        prrte_setenv("OMPI_MCA_prrte_odls_num_procs", ompi_env_buf, true, &app->env);
+
+        /* Tell all children number of apps. */
+        ompi_env_buf[0] = '\0';
+        snprintf(ompi_env_buf, 16, "%d", jdata->num_apps);
+        prrte_setenv("OMPI_NUM_APP_CTX", ompi_env_buf, true, &app->env);
+
+        /* Tell each app its command. */
+        if(app->argv[0]) {
+            prrte_setenv("OMPI_COMMAND", app->argv[0], true, &app->env);
+        }
+
+        /* Tell each app its command. */
+        if(app->argv[0]) {
+            prrte_setenv("OMPI_COMMAND", app->argv[0], true, &app->env);
+        }
+
+        /* Tell each app its argv. */
+        if(app->argv[1]) {
+            int argv_buf_len = 2048;
+            char *argv_buf = malloc(argv_buf_len);
+            int argv_buf_idx = 0;
+
+            /* Construct the argv buffer */
+            for(int app_i = 1; app->argv[app_i]; app_i++) {
+                snprintf(&argv_buf[argv_buf_idx], argv_buf_len - argv_buf_idx, "%s ",
+                     app->argv[app_i]);
+                argv_buf_idx += (strlen(app->argv[app_i]) + 1);
+                if(argv_buf_idx >= argv_buf_len) {
+                    argv_buf_len *= 2;
+                    argv_buf = realloc(argv_buf, argv_buf_len);
+                }
+            }
+
+            /* Remove trailing space. */
+            argv_buf[argv_buf_idx - 1] = '\0';
+            prrte_setenv("OMPI_ARGV", argv_buf, true, &app->env);
+            free(argv_buf);
+        }
+    } // end app loop
+
+    free(first_rank_buf); first_rank_buf = NULL;
+
+    free(num_ranks_buf); num_ranks_buf = NULL;
+
+    return PRRTE_SUCCESS;
 }
