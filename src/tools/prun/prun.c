@@ -1704,8 +1704,8 @@ int prun(int argc, char *argv[])
         flag = true;
         PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
         PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        rc = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
-        if (PMIX_SUCCESS == rc) {
+        ret = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
+        if (PMIX_SUCCESS == ret) {
 #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
             /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
              * being called when the server successes. The callback might be eventually
@@ -1727,8 +1727,11 @@ int prun(int argc, char *argv[])
 
     /* cleanup and leave */
     ret = PMIx_tool_finalize();
-    if (PRRTE_SUCCESS == rc && PMIX_SUCCESS != ret) {
-        rc = ret;
+    if (PMIX_SUCCESS != ret) {
+        // Since the user job has probably exited by
+        // now, let's preserve its return code and print
+        // a warning here, if prrte logging is on.
+        prrte_output(0, "PMIx_tool_finalize() failed. Status = %d", ret);
     }
     return rc;
 }
