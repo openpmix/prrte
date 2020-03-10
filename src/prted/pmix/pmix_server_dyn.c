@@ -548,6 +548,24 @@ static void interim(int sd, short args, void *cbdata)
 #if PMIX_NUMERIC_VERSION >= 0x00040000
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             PRRTE_FLAG_SET(jdata, PRRTE_JOB_FLAG_TOOL);
+
+        } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
+            prrte_add_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT,
+                               PRRTE_ATTR_GLOBAL, &info->value.data.integer, PRRTE_INT);
+
+        } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT_STACKTRACES)) {
+            flag = PMIX_INFO_TRUE(info);
+            if (flag) {
+                prrte_add_attribute(&jdata->attributes, PRRTE_JOB_STACKTRACES,
+                                   PRRTE_ATTR_GLOBAL, &flag, PRRTE_BOOL);
+            }
+
+        } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT_REPORT_STATE)) {
+            flag = PMIX_INFO_TRUE(info);
+            if (flag) {
+                prrte_add_attribute(&jdata->attributes, PRRTE_JOB_REPORT_STATE,
+                                   PRRTE_ATTR_GLOBAL, &flag, PRRTE_BOOL);
+            }
 #endif
         /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {

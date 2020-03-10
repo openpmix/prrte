@@ -432,6 +432,7 @@ static void check_complete(int fd, short args, void *cbdata)
     pmix_status_t ret;
     prrte_pointer_array_t procs;
     char *tmp;
+    prrte_timer_t *timer;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -440,6 +441,12 @@ static void check_complete(int fd, short args, void *cbdata)
                         "%s state:dvm:check_job_complete on job %s",
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                         (NULL == jdata) ? "NULL" : PRRTE_JOBID_PRINT(jdata->jobid));
+
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT_EVENT, (void**)&timer, PRRTE_PTR)) {
+        /* timer is an prrte_timer_t object */
+        PRRTE_RELEASE(timer);
+        prrte_remove_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT_EVENT);
+    }
 
     if (NULL == jdata || jdata->jobid == PRRTE_PROC_MY_NAME->jobid) {
         /* just check to see if the daemons are complete */

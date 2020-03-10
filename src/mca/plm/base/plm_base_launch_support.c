@@ -646,12 +646,219 @@ int prrte_plm_base_spawn_reponse(int32_t status, prrte_job_t *jdata)
     return PRRTE_SUCCESS;
 }
 
+static uint32_t ntraces = 0;
+
+static void stack_trace_recv(int status, prrte_process_name_t* sender,
+                             prrte_buffer_t *buffer, prrte_rml_tag_t tag,
+                             void* cbdata)
+{
+    prrte_buffer_t *blob;
+    char *st;
+    int32_t cnt;
+    prrte_process_name_t name;
+    char *hostname;
+    pid_t pid;
+    prrte_job_t *jdata = NULL;
+    prrte_timer_t *timer;
+    prrte_proc_t *proc;
+    prrte_pointer_array_t parray;
+    int rc;
+
+    /* unpack the stack_trace blob */
+    cnt = 1;
+    while (PRRTE_SUCCESS == prrte_dss.unpack(buffer, &blob, &cnt, PRRTE_BUFFER)) {
+        /* first piece is the name of the process */
+        cnt = 1;
+        if (PRRTE_SUCCESS != prrte_dss.unpack(blob, &name, &cnt, PRRTE_NAME) ||
+            PRRTE_SUCCESS != prrte_dss.unpack(blob, &hostname, &cnt, PRRTE_STRING) ||
+            PRRTE_SUCCESS != prrte_dss.unpack(blob, &pid, &cnt, PRRTE_PID)) {
+            PRRTE_RELEASE(blob);
+            continue;
+        }
+        fprintf(stderr, "STACK TRACE FOR PROC %s (%s, PID %lu)\n", PRRTE_NAME_PRINT(&name), hostname, (unsigned long) pid);
+        free(hostname);
+        /* unpack the stack_trace until complete */
+        cnt = 1;
+        while (PRRTE_SUCCESS == prrte_dss.unpack(blob, &st, &cnt, PRRTE_STRING)) {
+            fprintf(stderr, "\t%s", st);  // has its own newline
+            free(st);
+            cnt = 1;
+        }
+        fprintf(stderr, "\n");
+        if (NULL == jdata) {
+            jdata = prrte_get_job_data_object(name.jobid);
+        }
+        PRRTE_RELEASE(blob);
+        cnt = 1;
+    }
+    ++ntraces;
+    if (prrte_process_info.num_daemons == ntraces) {
+        if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_TRACE_TIMEOUT_EVENT, (void**)&timer, PRRTE_PTR)) {
+            /* timer is an prrte_timer_t object */
+            PRRTE_RELEASE(timer);
+            prrte_remove_attribute(&jdata->attributes, PRRTE_JOB_TRACE_TIMEOUT_EVENT);
+        }
+        /* abort the job */
+        PRRTE_CONSTRUCT(&parray, prrte_pointer_array_t);
+        /* create an object */
+        proc = PRRTE_NEW(prrte_proc_t);
+        proc->name.jobid = jdata->jobid;
+        proc->name.vpid = PRRTE_VPID_WILDCARD;
+        prrte_pointer_array_add(&parray, proc);
+        if (PRRTE_SUCCESS != (rc = prrte_plm.terminate_procs(&parray))) {
+            PRRTE_ERROR_LOG(rc);
+        }
+        PRRTE_RELEASE(proc);
+        PRRTE_DESTRUCT(&parray);
+        ntraces = 0;
+    }
+}
+
+static void stack_trace_timeout(int sd, short args, void *cbdata)
+{
+    prrte_job_t *jdata = (prrte_job_t*)cbdata;
+    prrte_proc_t *proc;
+    prrte_pointer_array_t parray;
+    int rc;
+
+    /* abort the job */
+    PRRTE_CONSTRUCT(&parray, prrte_pointer_array_t);
+    /* create an object */
+    proc = PRRTE_NEW(prrte_proc_t);
+    proc->name.jobid = jdata->jobid;
+    proc->name.vpid = PRRTE_VPID_WILDCARD;
+    prrte_pointer_array_add(&parray, proc);
+    if (PRRTE_SUCCESS != (rc = prrte_plm.terminate_procs(&parray))) {
+        PRRTE_ERROR_LOG(rc);
+    }
+    PRRTE_RELEASE(proc);
+    PRRTE_DESTRUCT(&parray);
+}
+
+/* catch job execution timeout */
+static void timeout_cb(int fd, short event, void *cbdata)
+{
+    prrte_job_t *jdata = (prrte_job_t*)cbdata;
+    prrte_timer_t *timer=NULL;
+    prrte_proc_t *proc;
+    int i, rc;
+    prrte_pointer_array_t parray;
+
+    PRRTE_ACQUIRE_OBJECT(jdata);
+
+prrte_output(0, "JOB TIMEOUT");
+    /* clear the timer */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT_EVENT, (void**)&timer, PRRTE_PTR)) {
+        /* timer is an prrte_timer_t object */
+        PRRTE_RELEASE(timer);
+        prrte_remove_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT_EVENT);
+    }
+
+    /* see if they want proc states reported */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_REPORT_STATE, NULL, PRRTE_BOOL)) {
+        /* don't use the opal_output system as it may be borked */
+        fprintf(stderr, "DATA FOR JOB: %s\n", PRRTE_JOBID_PRINT(jdata->jobid));
+        fprintf(stderr, "\tNum apps: %d\tNum procs: %d\tJobState: %s\tAbort: %s\n",
+                (int)jdata->num_apps, (int)jdata->num_procs,
+                prrte_job_state_to_str(jdata->state),
+                (PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_ABORTED)) ? "True" : "False");
+        fprintf(stderr, "\tNum launched: %ld\tNum reported: %ld\tNum terminated: %ld\n",
+                (long)jdata->num_launched, (long)jdata->num_reported, (long)jdata->num_terminated);
+        fprintf(stderr, "\n\tProcs:\n");
+        for (i=0; i < jdata->procs->size; i++) {
+            if (NULL != (proc = (prrte_proc_t*)prrte_pointer_array_get_item(jdata->procs, i))) {
+                fprintf(stderr, "\t\tRank: %s\tNode: %s\tPID: %u\tState: %s\tExitCode %d\n",
+                        PRRTE_VPID_PRINT(proc->name.vpid),
+                        (NULL == proc->node) ? "UNKNOWN" : proc->node->name,
+                        (unsigned int)proc->pid,
+                        prrte_proc_state_to_str(proc->state), proc->exit_code);
+            }
+        }
+        fprintf(stderr, "\n");
+    }
+
+    /* see if they want stacktraces */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_STACKTRACES, NULL, PRRTE_BOOL)) {
+        /* if they asked for stack_traces, attempt to get them, but timeout
+         * if we cannot do so */
+        prrte_daemon_cmd_flag_t command = PRRTE_DAEMON_GET_STACK_TRACES;
+        prrte_buffer_t *buffer;
+        prrte_grpcomm_signature_t *sig;
+
+        fprintf(stderr, "Waiting for stack traces (this may take a few moments)...\n");
+
+        /* set the recv */
+        prrte_rml.recv_buffer_nb(PRRTE_NAME_WILDCARD, PRRTE_RML_TAG_STACK_TRACE,
+                                 PRRTE_RML_PERSISTENT, stack_trace_recv, NULL);
+
+        /* setup the buffer */
+        buffer = PRRTE_NEW(prrte_buffer_t);
+        /* pack the command */
+        if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buffer, &command, 1, PRRTE_DAEMON_CMD))) {
+            PRRTE_ERROR_LOG(rc);
+            PRRTE_RELEASE(buffer);
+            goto giveup;
+        }
+        /* pack the jobid */
+        if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buffer, &jdata->jobid, 1, PRRTE_JOBID))) {
+            PRRTE_ERROR_LOG(rc);
+            PRRTE_RELEASE(buffer);
+            goto giveup;
+        }
+        /* goes to all daemons */
+        sig = PRRTE_NEW(prrte_grpcomm_signature_t);
+        sig->signature = (prrte_process_name_t*)malloc(sizeof(prrte_process_name_t));
+        sig->signature[0].jobid = PRRTE_PROC_MY_NAME->jobid;
+        sig->signature[0].vpid = PRRTE_VPID_WILDCARD;
+        sig->sz = 1;
+        if (PRRTE_SUCCESS != (rc = prrte_grpcomm.xcast(sig, PRRTE_RML_TAG_DAEMON, buffer))) {
+            PRRTE_ERROR_LOG(rc);
+            PRRTE_RELEASE(buffer);
+            PRRTE_RELEASE(sig);
+            goto giveup;
+        }
+        PRRTE_RELEASE(buffer);
+        /* maintain accounting */
+        PRRTE_RELEASE(sig);
+        /* we will terminate after we get the stack_traces, but set a timeout
+         * just in case we never hear back from everyone */
+        if (prrte_stack_trace_wait_timeout > 0) {
+            timer = PRRTE_NEW(prrte_timer_t);
+            timer->payload = jdata;
+            prrte_event_evtimer_set(prrte_event_base,
+                                    timer->ev, stack_trace_timeout, jdata);
+            prrte_event_set_priority(timer->ev, PRRTE_ERROR_PRI);
+            timer->tv.tv_sec = prrte_stack_trace_wait_timeout;
+            timer->tv.tv_usec = 0;
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_TRACE_TIMEOUT_EVENT, PRRTE_ATTR_LOCAL, timer, PRRTE_PTR);
+            PRRTE_POST_OBJECT(timer);
+            prrte_event_evtimer_add(timer->ev, &timer->tv);
+        }
+        return;
+    }
+
+  giveup:
+    /* abort the job */
+    PRRTE_CONSTRUCT(&parray, prrte_pointer_array_t);
+    /* create an object */
+    proc = PRRTE_NEW(prrte_proc_t);
+    proc->name.jobid = jdata->jobid;
+    proc->name.vpid = PRRTE_VPID_WILDCARD;
+    prrte_pointer_array_add(&parray, proc);
+    if (PRRTE_SUCCESS != (rc = prrte_plm.terminate_procs(&parray))) {
+        PRRTE_ERROR_LOG(rc);
+    }
+    PRRTE_RELEASE(proc);
+    PRRTE_DESTRUCT(&parray);
+}
+
 void prrte_plm_base_post_launch(int fd, short args, void *cbdata)
 {
     int32_t rc;
     prrte_job_t *jdata;
     prrte_state_caddy_t *caddy = (prrte_state_caddy_t*)cbdata;
     prrte_timer_t *timer=NULL;
+    int time, *tp;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
 
@@ -681,6 +888,22 @@ void prrte_plm_base_post_launch(int fd, short args, void *cbdata)
     rc = prrte_plm_base_spawn_reponse(PRRTE_SUCCESS, jdata);
     if (PRRTE_SUCCESS != rc) {
         PRRTE_ERROR_LOG(rc);
+    }
+
+    /* if the job has a timeout assigned to it, setup the timer for it */
+    tp = &time;
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT, (void**)&tp, PRRTE_INT)) {
+        /* setup a timer to monitor execution time */
+        timer = PRRTE_NEW(prrte_timer_t);
+        timer->payload = jdata;
+        prrte_event_evtimer_set(prrte_event_base,
+                               timer->ev, timeout_cb, jdata);
+        prrte_event_set_priority(timer->ev, PRRTE_ERROR_PRI);
+        timer->tv.tv_sec = time;
+        timer->tv.tv_usec = 0;
+        prrte_set_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT_EVENT, PRRTE_ATTR_LOCAL, timer, PRRTE_PTR);
+        PRRTE_POST_OBJECT(timer);
+        prrte_event_evtimer_add(timer->ev, &timer->tv);
     }
 
     /* cleanup */

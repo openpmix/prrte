@@ -1279,7 +1279,7 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LOAD(ds->info, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
         prrte_list_append(&job_info, &ds->super);
     }
-   /* cannot have both files and directory set for output */
+    /* cannot have both files and directory set for output */
     param = NULL;
     ptr = NULL;
     if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "output-filename", 0, 0))) {
@@ -1428,6 +1428,44 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LOAD(ds->info, PMIX_DEBUG_STOP_ON_EXEC, &flag, PMIX_BOOL);
         prrte_list_append(&job_info, &ds->super);
     }
+
+    /* check for a job timeout specification, to be provided in seconds
+     * as that is what MPICH used
+     */
+    param = NULL;
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "timeout", 0, 0)) ||
+        NULL != (param = getenv("MPIEXEC_TIMEOUT"))) {
+        if (NULL != param) {
+            i = strtol(param, NULL, 10);
+            /* both cannot be present, or they must agree */
+            if (NULL != pval && i != pval->data.integer) {
+                prrte_show_help("help-prun.txt", "prun:timeoutconflict", false,
+                               prrte_tool_basename, pval->data.integer, param);
+                exit(1);
+            }
+        } else {
+            i = pval->data.integer;
+        }
+        ds = PRRTE_NEW(prrte_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT, &i, PMIX_INT);
+        prrte_list_append(&job_info, &ds->super);
+    }
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "get-stack-traces")) {
+        ds = PRRTE_NEW(prrte_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        flag = true;
+        PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT_STACKTRACES, &flag, PMIX_BOOL);
+        prrte_list_append(&job_info, &ds->super);
+    }
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "report-state-on-timeout")) {
+        ds = PRRTE_NEW(prrte_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        flag = true;
+        PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT_REPORT_STATE, &flag, PMIX_BOOL);
+        prrte_list_append(&job_info, &ds->super);
+    }
+
 
     /* pickup any relevant envars */
     flag = true;
