@@ -426,6 +426,16 @@ const char *prrte_attr_key_to_str(prrte_attribute_key_t key)
             return "DO_NOT_LAUNCH";
         case PRRTE_JOB_XML_OUTPUT:
             return "XML_OUTPUT";
+        case PRRTE_JOB_TIMEOUT:
+            return "JOB_TIMEOUT";
+        case PRRTE_JOB_STACKTRACES:
+            return "JOB_STACKTRACES";
+        case PRRTE_JOB_REPORT_STATE:
+            return "JOB_REPORT_STATE";
+        case PRRTE_JOB_TIMEOUT_EVENT:
+            return "JOB_TIMEOUT_EVENT";
+        case PRRTE_JOB_TRACE_TIMEOUT_EVENT:
+            return "JOB_TRACE_TIMEOUT_EVENT";
 
         case PRRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

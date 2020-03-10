@@ -727,6 +727,13 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
         answer = PRRTE_NEW(prrte_buffer_t);
         pathptr = path;
 
+        /* unpack the jobid */
+        n = 1;
+        if (PRRTE_SUCCESS != (ret = prrte_dss.unpack(buffer, &job, &n, PRRTE_JOBID))) {
+            PRRTE_ERROR_LOG(ret);
+            goto CLEANUP;
+        }
+
         // Try to find the "gstack" executable.  Failure to find the
         // executable will be handled below, because the receiver
         // expects to have the process name, hostname, and PID in the
@@ -737,7 +744,8 @@ void prrte_daemon_recv(int status, prrte_process_name_t* sender,
         /* hit each local process with a gstack command */
         for (i=0; i < prrte_local_children->size; i++) {
             if (NULL != (proct = (prrte_proc_t*)prrte_pointer_array_get_item(prrte_local_children, i)) &&
-                PRRTE_FLAG_TEST(proct, PRRTE_PROC_FLAG_ALIVE)) {
+                PRRTE_FLAG_TEST(proct, PRRTE_PROC_FLAG_ALIVE) &&
+                proct->name.jobid == job) {
                 relay_msg = PRRTE_NEW(prrte_buffer_t);
                 if (PRRTE_SUCCESS != prrte_dss.pack(relay_msg, &proct->name, 1, PRRTE_NAME) ||
                     PRRTE_SUCCESS != prrte_dss.pack(relay_msg, &proct->node->name, 1, PRRTE_STRING) ||

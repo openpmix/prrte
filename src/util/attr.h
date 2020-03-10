@@ -173,6 +173,11 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_DISPLAY_ALLOC          (PRRTE_JOB_START_KEY + 68)    // bool - display allocation
 #define PRRTE_JOB_DO_NOT_LAUNCH          (PRRTE_JOB_START_KEY + 69)    // bool - do not launch job
 #define PRRTE_JOB_XML_OUTPUT             (PRRTE_JOB_START_KEY + 70)    // bool - print in xml format
+#define PRRTE_JOB_TIMEOUT                (PRRTE_JOB_START_KEY + 71)    // int32 - number of seconds job can run before terminating it as timed out
+#define PRRTE_JOB_STACKTRACES            (PRRTE_JOB_START_KEY + 72)    // bool - include process stack traces in timeout report
+#define PRRTE_JOB_REPORT_STATE           (PRRTE_JOB_START_KEY + 73)    // bool - include process state in timeout report
+#define PRRTE_JOB_TIMEOUT_EVENT          (PRRTE_JOB_START_KEY + 74)    // prrte_ptr (prrte_timer_t*) - timer event for job timeout
+#define PRRTE_JOB_TRACE_TIMEOUT_EVENT    (PRRTE_JOB_START_KEY + 75)    // prrte_ptr (prrte_timer_t*) - timer event for stacktrace collection
 
 #define PRRTE_JOB_MAX_KEY   300
 
