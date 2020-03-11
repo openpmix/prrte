@@ -186,6 +186,7 @@ static int bind_generic(prrte_job_t *jdata,
                     continue;
                 }
                 prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:cpubind-not-supported", true, node->name);
+                hwloc_bitmap_free(totalcpuset);
                 return PRRTE_ERR_SILENT;
             }
             /* check if topology supports membind - have to be careful here
@@ -204,6 +205,7 @@ static int bind_generic(prrte_job_t *jdata,
                     membind_warned = true;
                 } else if (PRRTE_HWLOC_BASE_MBFA_ERROR == prrte_hwloc_base_mbfa) {
                     prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:membind-not-supported-fatal", true, node->name);
+                    hwloc_bitmap_free(totalcpuset);
                     return PRRTE_ERR_SILENT;
                 }
             }

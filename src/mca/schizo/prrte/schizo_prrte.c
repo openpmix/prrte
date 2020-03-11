@@ -317,7 +317,7 @@ static int parse_cli(int argc, int start, char **argv,
 
 static int parse_deprecated_cli(char *option, char ***argv, int i)
 {
-    int rc;
+    int rc = PRRTE_SUCCESS;
 
     /* --display-devel-map  ->  PRRTE_MCA_rmaps_base_display_devel_map */
     if (0 == strcmp(option, "--display-devel-map")) {

@@ -214,7 +214,7 @@ static int define_cli(prrte_cmd_line_t *cli)
 static int parse_deprecated_cli(char *option, char ***argv, int i)
 {
     char **pargs, *p2, *modifier;
-    int rc;
+    int rc = PRRTE_SUCCESS;
 
     pargs = *argv;
 
@@ -301,7 +301,6 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     }
     else if (0 == strcmp(option, "--pernode")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", "ppr:1:node", NULL);
-        free(p2);
     }
     else if (0 == strcmp(option, "--npersocket")) {
         prrte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);

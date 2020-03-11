@@ -52,8 +52,7 @@ EXAMPLES = \
 	log \
 	bad_exit \
 	jctrl \
-	launcher \
-	double-get
+	launcher
 
 all: $(EXAMPLES)
 

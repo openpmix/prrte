@@ -235,17 +235,11 @@ static void proc_errors(int fd, short args, void *cbdata)
                          PRRTE_NAME_PRINT(proc),
                          prrte_proc_state_to_str(state)));
 
-    /*
-     * if prrte is trying to shutdown, just let it
-     */
-    if (prrte_finalizing) {
-        goto cleanup;
-    }
-
     /* get the job object */
-    if (NULL == (jdata = prrte_get_job_data_object(proc->jobid))) {
+    if (prrte_finalizing || NULL == (jdata = prrte_get_job_data_object(proc->jobid))) {
         /* could be a race condition */
-        goto cleanup;
+        PRRTE_RELEASE(caddy);
+        return;
     }
     pptr = (prrte_proc_t*)prrte_pointer_array_get_item(jdata->procs, proc->vpid);
 

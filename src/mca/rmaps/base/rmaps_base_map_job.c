@@ -924,7 +924,7 @@ static void prrte_print_proc(char **output,
     hwloc_obj_t loc=NULL;
     char locale[1024], tmp1[1024], tmp2[1024];
     hwloc_cpuset_t mycpus;
-    char *str=NULL, *cpu_bitmap=NULL;
+    char *str, *cpu_bitmap=NULL;
 
 
     /* set default result */
@@ -944,7 +944,7 @@ static void prrte_print_proc(char **output,
 
     if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL)) {
         if (prrte_get_attribute(&src->attributes, PRRTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, PRRTE_STRING) &&
-            NULL != src->node->topology && NULL != src->node->topology->topo) {
+            NULL != cpu_bitmap && NULL != src->node->topology && NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
             hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
             if (PRRTE_ERR_NOT_BOUND == prrte_hwloc_base_cset2str(tmp1, sizeof(tmp1), src->node->topology->topo, mycpus)) {
@@ -956,13 +956,9 @@ static void prrte_print_proc(char **output,
             hwloc_bitmap_free(mycpus);
             prrte_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: %s", pfx2,
                      PRRTE_JOBID_PRINT(src->name.jobid), (long)src->app_idx,
-                     PRRTE_VPID_PRINT(src->name.vpid), (NULL == str) ? "N/A" : str);
-            if (NULL != str) {
-                free(str);
-            }
-            if (NULL != cpu_bitmap) {
-                free(cpu_bitmap);
-            }
+                     PRRTE_VPID_PRINT(src->name.vpid), str);
+            free(str);
+            free(cpu_bitmap);
         } else {
             /* just print a very simple output for users */
             prrte_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: N/A", pfx2,
@@ -998,15 +994,13 @@ static void prrte_print_proc(char **output,
         mycpus = hwloc_bitmap_alloc();
         hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
         prrte_hwloc_base_cset2mapstr(tmp2, sizeof(tmp2), src->node->topology->topo, mycpus);
+        hwloc_bitmap_free(mycpus);
     } else {
         snprintf(tmp2, sizeof(tmp2), "UNBOUND");
     }
     prrte_asprintf(&tmp3, "%s\n%s\tState: %s\tApp_context: %ld\n%s\tLocale:  %s\n%s\tBinding: %s", tmp, pfx2,
                    prrte_proc_state_to_str(src->state), (long)src->app_idx, pfx2, locale, pfx2,  tmp2);
     free(tmp);
-    if (NULL != str) {
-        free(str);
-    }
     if (NULL != cpu_bitmap) {
         free(cpu_bitmap);
     }
