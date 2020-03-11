@@ -32,7 +32,12 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+
 #include <ctype.h>
+
+#ifdef HAVE_SYS_UTSNAME_H
+#include <sys/utsname.h>
+#endif
 
 #include "src/util/argv.h"
 #include "src/util/keyval_parse.h"
@@ -865,6 +870,9 @@ static int setup_fork(prrte_job_t *jdata, prrte_app_context_t *context) {
             continue;
         }
 
+        /* Tell all children their cwd */
+        prrte_setenv("OMPI_MCA_initial_wdir", app->cwd, true, &app->env);
+
         /* Tell all children first rank list. */
         prrte_setenv("OMPI_FIRST_RANKS", first_rank_buf, true, &app->env);
 
@@ -874,17 +882,12 @@ static int setup_fork(prrte_job_t *jdata, prrte_app_context_t *context) {
         char ompi_env_buf[16] = {0};
         /* Tell all children the number of procs */
         snprintf(ompi_env_buf, 16, "%d", jdata->num_procs);
-        prrte_setenv("OMPI_MCA_prrte_odls_num_procs", ompi_env_buf, true, &app->env);
+        prrte_setenv("OMPI_MCA_num_procs", ompi_env_buf, true, &app->env);
 
         /* Tell all children number of apps. */
         ompi_env_buf[0] = '\0';
         snprintf(ompi_env_buf, 16, "%d", jdata->num_apps);
         prrte_setenv("OMPI_NUM_APP_CTX", ompi_env_buf, true, &app->env);
-
-        /* Tell each app its command. */
-        if(app->argv[0]) {
-            prrte_setenv("OMPI_COMMAND", app->argv[0], true, &app->env);
-        }
 
         /* Tell each app its command. */
         if(app->argv[0]) {
@@ -913,6 +916,17 @@ static int setup_fork(prrte_job_t *jdata, prrte_app_context_t *context) {
             prrte_setenv("OMPI_ARGV", argv_buf, true, &app->env);
             free(argv_buf);
         }
+
+        /* Tell each app the arch - if available */
+#ifdef HAVE_SYS_UTSNAME_H
+        struct utsname sysname = {0};
+        if(-1 < uname(&sysname)) {
+            if((sysname.machine[0] != 0) && (sysname.machine[0] != '\0')) {
+                prrte_setenv("OMPI_MCA_cpu_type", (const char *) &sysname.machine, true, &app->env);
+            }
+        }
+#endif
+
     } // end app loop
 
     free(first_rank_buf); first_rank_buf = NULL;
