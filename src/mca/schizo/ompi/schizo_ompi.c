@@ -984,7 +984,6 @@ static int setup_child(prrte_job_t *jdata,
     if (PRRTE_LOCAL_RANK_INVALID == child->local_rank ||
         PRRTE_NODE_RANK_INVALID == child->node_rank ||
         PMIX_RANK_INVALID == child->rank) {
-        fprintf(stderr, "%d, %d %d\n", child->local_rank, child->node_rank, child->rank);
         PRRTE_ERROR_LOG(PRRTE_ERR_VALUE_OUT_OF_BOUNDS);
         rc = PRRTE_ERR_VALUE_OUT_OF_BOUNDS;
         return rc;
