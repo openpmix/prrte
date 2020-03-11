@@ -577,6 +577,7 @@ static void _send_notification(int status,
     PRRTE_PMIX_CONVERT_NAME(rc, &psource, target);
     if (PRRTE_SUCCESS != rc) {
         PRRTE_ERROR_LOG(rc);
+        PMIX_INFO_FREE(info, ninfo);
         return;
     }
     PMIX_INFO_LOAD(&info[1], PMIX_EVENT_CUSTOM_RANGE, &psource, PMIX_PROC);
