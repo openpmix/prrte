@@ -759,7 +759,6 @@ void prrte_pmix_server_tool_conn_complete(prrte_job_t *jdata,
     proc->local_rank = 0;
     proc->node_rank = 0;
     proc->app_rank = 0;
-    proc->app_idx = 0;
     if (NULL == req->operation) {
         /* it is on my node */
         node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, 0);

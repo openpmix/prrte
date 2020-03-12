@@ -569,6 +569,7 @@ static void check_complete(int fd, short args, void *cbdata)
                 if (!PRRTE_FLAG_TEST(proc, PRRTE_PROC_FLAG_TOOL)) {
                     node->slots_inuse--;
                     node->num_procs--;
+                    node->next_node_rank--;
                 }
 
                 PRRTE_OUTPUT_VERBOSE((2, prrte_state_base_framework.framework_output,

@@ -152,7 +152,8 @@ static int rank_span(prrte_job_t *jdata,
                         }
                         prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                             "mca:rmaps:rank_span: assigning vpid %s", PRRTE_VPID_PRINT(vpid));
-                        proc->name.vpid = vpid++;
+                        proc->name.vpid = vpid;
+                        proc->rank = vpid++;
                         if (0 == cnt) {
                             app->first_rank = proc->name.vpid;
                         }
@@ -275,7 +276,8 @@ static int rank_fill(prrte_job_t *jdata,
                     }
                     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:rank_fill: assigning vpid %s", PRRTE_VPID_PRINT(vpid));
-                    proc->name.vpid = vpid++;
+                    proc->name.vpid = vpid;
+                    proc->rank = vpid++;
                     if (0 == cnt) {
                         app->first_rank = proc->name.vpid;
                     }
@@ -433,7 +435,8 @@ static int rank_by(prrte_job_t *jdata,
                             continue;
                         }
                         /* assign the vpid */
-                        proc->name.vpid = vpid++;
+                        proc->name.vpid = vpid;
+                        proc->rank = vpid++;
                         if (0 == cnt) {
                             app->first_rank = proc->name.vpid;
                         }
@@ -641,7 +644,8 @@ int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata)
                         if (PRRTE_VPID_INVALID != proc->name.vpid) {
                             continue;
                         }
-                        proc->name.vpid = vpid++;
+                        proc->name.vpid = vpid;
+                        proc->rank = vpid++;
                         if (0 == cnt) {
                             app->first_rank = proc->name.vpid;
                         }
@@ -708,7 +712,8 @@ int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata)
                         prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                             "mca:rmaps:base: assigning rank %s to node %s",
                                             PRRTE_VPID_PRINT(vpid), node->name);
-                        proc->name.vpid = vpid++;
+                        proc->name.vpid = vpid;
+                        proc -> rank = vpid++;
                         if (0 == cnt) {
                             app->first_rank = proc->name.vpid;
                         }

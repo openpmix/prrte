@@ -1053,32 +1053,37 @@ int prrte_util_generate_ppn(prrte_job_t *jdata,
     prrte_proc_t *proc;
     size_t sz;
     prrte_buffer_t bucket;
+    prrte_app_context_t *app;
 
     PRRTE_CONSTRUCT(&bucket, prrte_buffer_t);
 
     for (i=0; i < jdata->num_apps; i++) {
         /* for each app_context */
-        for (j=0; j < jdata->map->nodes->size; j++) {
-            if (NULL == (nptr = (prrte_node_t*)prrte_pointer_array_get_item(jdata->map->nodes, j))) {
-                continue;
-            }
-            if (NULL == nptr->daemon) {
-                continue;
-            }
-            ppn = 0;
-            for (k=0; k < nptr->procs->size; k++) {
-                if (NULL != (proc = (prrte_proc_t*)prrte_pointer_array_get_item(nptr->procs, k))) {
-                    if (proc->name.jobid == jdata->jobid) {
-                        ++ppn;
+        if (NULL != (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, i))) {
+            for (j=0; j < jdata->map->num_nodes; j++) {
+                if (NULL == (nptr = (prrte_node_t*)prrte_pointer_array_get_item(jdata->map->nodes, j))) {
+                    continue;
+                     
+                }
+                if (NULL == nptr->daemon) {
+                    continue;
+                }
+                ppn = 0;
+                for (k=0; k < nptr->procs->size; k++) {
+                    if (NULL != (proc = (prrte_proc_t*)prrte_pointer_array_get_item(nptr->procs, k))) {
+                        if (proc->name.jobid == jdata->jobid &&
+                            proc->app_idx == app->idx) {
+                            ++ppn;
+                        }
                     }
                 }
-            }
-            if (0 < ppn) {
-                if (PRRTE_SUCCESS != (rc = prrte_dss.pack(&bucket, &nptr->index, 1, PRRTE_STD_CNTR))) {
-                    goto cleanup;
-                }
-                if (PRRTE_SUCCESS != (rc = prrte_dss.pack(&bucket, &ppn, 1, PRRTE_UINT16))) {
-                    goto cleanup;
+                if (0 < ppn) {
+                    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(&bucket, &nptr->index, 1, PRRTE_STD_CNTR))) {
+                        goto cleanup;
+                    }
+                    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(&bucket, &ppn, 1, PRRTE_UINT16))) {
+                        goto cleanup;
+                    }
                 }
             }
         }
@@ -1139,8 +1144,8 @@ int prrte_util_decode_ppn(prrte_job_t *jdata,
     prrte_buffer_t bucket;
 
     /* reset any flags */
-    for (m=0; m < prrte_node_pool->size; m++) {
-        if (NULL != (node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, m))) {
+    for (m=0; m < jdata->map->nodes->size; m++) {
+        if (NULL != (node = (prrte_node_t*)prrte_pointer_array_get_item(jdata->map->nodes, m))) {
             PRRTE_FLAG_UNSET(node, PRRTE_NODE_FLAG_MAPPED);
         }
     }
@@ -1235,7 +1240,6 @@ int prrte_util_decode_ppn(prrte_job_t *jdata,
                 /* we will add the proc to the jdata array when we
                  * compute its rank */
             }
-            node->num_procs += ppn;
             cnt = 1;
         }
         PRRTE_DESTRUCT(&bucket);

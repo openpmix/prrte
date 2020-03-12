@@ -828,8 +828,6 @@ static int setup_path(prrte_app_context_t *app, char **wdir)
         }
         *wdir = strdup(dir);
         prrte_setenv("PWD", dir, true, &app->env);
-        /* update the initial wdir value too */
-        prrte_setenv("OMPI_MCA_initial_wdir", dir, true, &app->env);
     } else {
         *wdir = NULL;
     }
@@ -1064,7 +1062,6 @@ void prrte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     char *msg;
     prrte_odls_spawn_caddy_t *cd;
     prrte_event_base_t *evb;
-    char *effective_dir = NULL;
     char **argvptr;
     char *pathenv = NULL, *mpiexec_pathenv = NULL;
     char *full_search;
@@ -1176,6 +1173,35 @@ void prrte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             continue;
         }
 
+        /* setup the working directory for this app - will jump us
+         * to that directory
+         */
+        if (PRRTE_SUCCESS != (rc = setup_path(app, &app->cwd))) {
+            PRRTE_OUTPUT_VERBOSE((5, prrte_odls_base_framework.framework_output,
+                                 "%s odls:launch:setup_path failed with error %s(%d)",
+                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                                 PRRTE_ERROR_NAME(rc), rc));
+            /* do not ERROR_LOG this failure - it will be reported
+             * elsewhere. The launch is going to fail. Since we could have
+             * multiple app_contexts, we need to ensure that we flag only
+             * the correct one that caused this operation to fail. We then have
+             * to flag all the other procs from the app_context as having "not failed"
+             * so we can report things out correctly
+             */
+            /* cycle through children to find those for this jobid */
+            for (idx=0; idx < prrte_local_children->size; idx++) {
+                if (NULL == (child = (prrte_proc_t*)prrte_pointer_array_get_item(prrte_local_children, idx))) {
+                    continue;
+                }
+                if (PRRTE_EQUAL == prrte_dss.compare(&job, &(child->name.jobid), PRRTE_JOBID) &&
+                    j == (int)child->app_idx) {
+                    child->exit_code = rc;
+                    PRRTE_ACTIVATE_PROC_STATE(&child->name, PRRTE_PROC_STATE_FAILED_TO_LAUNCH);
+                }
+            }
+            goto GETOUT;
+        }
+
         /* setup the environment for this app */
         if (PRRTE_SUCCESS != (rc = prrte_schizo.setup_fork(jobdat, app))) {
 
@@ -1199,35 +1225,6 @@ void prrte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 if (PRRTE_EQUAL == prrte_dss.compare(&job, &(child->name.jobid), PRRTE_JOBID) &&
                     j == (int)child->app_idx) {
                     child->exit_code = PRRTE_PROC_STATE_FAILED_TO_LAUNCH;
-                    PRRTE_ACTIVATE_PROC_STATE(&child->name, PRRTE_PROC_STATE_FAILED_TO_LAUNCH);
-                }
-            }
-            goto GETOUT;
-        }
-
-        /* setup the working directory for this app - will jump us
-         * to that directory
-         */
-        if (PRRTE_SUCCESS != (rc = setup_path(app, &effective_dir))) {
-            PRRTE_OUTPUT_VERBOSE((5, prrte_odls_base_framework.framework_output,
-                                 "%s odls:launch:setup_path failed with error %s(%d)",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                 PRRTE_ERROR_NAME(rc), rc));
-            /* do not ERROR_LOG this failure - it will be reported
-             * elsewhere. The launch is going to fail. Since we could have
-             * multiple app_contexts, we need to ensure that we flag only
-             * the correct one that caused this operation to fail. We then have
-             * to flag all the other procs from the app_context as having "not failed"
-             * so we can report things out correctly
-             */
-            /* cycle through children to find those for this jobid */
-            for (idx=0; idx < prrte_local_children->size; idx++) {
-                if (NULL == (child = (prrte_proc_t*)prrte_pointer_array_get_item(prrte_local_children, idx))) {
-                    continue;
-                }
-                if (PRRTE_EQUAL == prrte_dss.compare(&job, &(child->name.jobid), PRRTE_JOBID) &&
-                    j == (int)child->app_idx) {
-                    child->exit_code = rc;
                     PRRTE_ACTIVATE_PROC_STATE(&child->name, PRRTE_PROC_STATE_FAILED_TO_LAUNCH);
                 }
             }
@@ -1397,9 +1394,6 @@ void prrte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
 
             /* dispatch this child to the next available launch thread */
             cd = PRRTE_NEW(prrte_odls_spawn_caddy_t);
-            if (NULL != effective_dir) {
-                cd->wdir = strdup(effective_dir);
-            }
             cd->jdata = jobdat;
             cd->app = app;
             cd->child = child;
@@ -1443,17 +1437,9 @@ void prrte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             prrte_event_active(&cd->ev, PRRTE_EV_WRITE, 1);
 
         }
-        if (NULL != effective_dir) {
-            free(effective_dir);
-            effective_dir = NULL;
-        }
     }
 
   GETOUT:
-    if (NULL != effective_dir) {
-        free(effective_dir);
-        effective_dir = NULL;
-    }
 
   ERROR_OUT:
     /* ensure we reset our working directory back to our default location  */

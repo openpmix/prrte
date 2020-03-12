@@ -397,37 +397,6 @@ void prrte_state_base_print_proc_state_machine(void)
     }
 }
 
-static void cleanup_node(prrte_proc_t *proc)
-{
-    prrte_node_t *node;
-    prrte_proc_t *p;
-    int i;
-
-    PRRTE_OUTPUT_VERBOSE((2, prrte_state_base_framework.framework_output,
-                         "%s state:base:cleanup_node on proc %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         PRRTE_NAME_PRINT(&proc->name)));
-
-    if (NULL == (node = proc->node)) {
-        return;
-    }
-    if (!PRRTE_FLAG_TEST(proc, PRRTE_PROC_FLAG_TOOL)) {
-        node->num_procs--;
-        node->slots_inuse--;
-    }
-    for (i=0; i < node->procs->size; i++) {
-        if (NULL == (p = (prrte_proc_t*)prrte_pointer_array_get_item(node->procs, i))) {
-            continue;
-        }
-        if (p->name.jobid == proc->name.jobid &&
-            p->name.vpid == proc->name.vpid) {
-            prrte_pointer_array_set_item(node->procs, i, NULL);
-            PRRTE_RELEASE(p);
-            break;
-        }
-    }
-}
-
 void prrte_state_base_local_launch_complete(int fd, short argc, void *cbdata)
 {
     prrte_state_caddy_t *state = (prrte_state_caddy_t*)cbdata;
@@ -773,8 +742,6 @@ void prrte_state_base_track_procs(int fd, short argc, void *cbdata)
             PRRTE_ACTIVATE_JOB_STATE(NULL, PRRTE_JOB_STATE_DAEMONS_TERMINATED);
             goto cleanup;
         }
-        /* return the allocated slot for reuse */
-        cleanup_node(pdata);
         /* track job status */
         jdata->num_terminated++;
         if (jdata->num_terminated == jdata->num_procs) {
