@@ -325,6 +325,17 @@ static void interim(int sd, short args, void *cbdata)
         /***   PERSONALITY   ***/
         if (PMIX_CHECK_KEY(info, PMIX_PERSONALITY)) {
             jdata->personality = prrte_argv_split(info->value.data.string, ',');
+            /* cache for inclusion with job info at registration as PMIx needs it too */
+            kv = PRRTE_NEW(prrte_value_t);
+            kv->key = strdup(info->key);
+            prrte_pmix_value_unload(kv, &info->value);
+            if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_INFO_CACHE, (void**)&cache, PRRTE_PTR)) {
+                prrte_list_append(cache, &kv->super);
+            } else {
+                cache = PRRTE_NEW(prrte_list_t);
+                prrte_list_append(cache, &kv->super);
+                prrte_set_attribute(&jdata->attributes, PRRTE_JOB_INFO_CACHE, PRRTE_ATTR_LOCAL, (void*)cache, PRRTE_PTR);
+            }
 
         /***   REQUESTED MAPPER   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {

@@ -441,8 +441,6 @@ PRRTE_EXPORT extern bool prrte_debug_daemons_flag;
 PRRTE_EXPORT extern bool prrte_debug_daemons_file_flag;
 PRRTE_EXPORT extern bool prrte_leave_session_attached;
 PRRTE_EXPORT extern bool prrte_do_not_launch;
-PRRTE_EXPORT extern char *prrte_local_cpu_type;
-PRRTE_EXPORT extern char *prrte_local_cpu_model;
 PRRTE_EXPORT extern bool prrte_coprocessors_detected;
 PRRTE_EXPORT extern prrte_hash_table_t *prrte_coprocessors;
 PRRTE_EXPORT extern char *prrte_topo_signature;

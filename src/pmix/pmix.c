@@ -932,8 +932,8 @@ static void dsicon(prrte_ds_info_t *p)
     p->persistence = PMIX_PERSIST_INVALID;
 }
 PRRTE_EXPORT PRRTE_CLASS_INSTANCE(prrte_ds_info_t,
-                                prrte_list_item_t,
-                                dsicon, NULL);
+                                  prrte_list_item_t,
+                                  dsicon, NULL);
 
 static void infoitmcon(prrte_info_item_t *p)
 {
@@ -944,5 +944,17 @@ static void infoitdecon(prrte_info_item_t *p)
     PMIX_INFO_DESTRUCT(&p->info);
 }
 PRRTE_EXPORT PRRTE_CLASS_INSTANCE(prrte_info_item_t,
-                                prrte_list_item_t,
-                                infoitmcon, infoitdecon);
+                                  prrte_list_item_t,
+                                  infoitmcon, infoitdecon);
+
+static void arritmcon(prrte_info_array_item_t *p)
+{
+    PRRTE_CONSTRUCT(&p->infolist, prrte_list_t);
+}
+static void arritdecon(prrte_info_array_item_t *p)
+{
+    PRRTE_LIST_DESTRUCT(&p->infolist);
+}
+PRRTE_EXPORT PRRTE_CLASS_INSTANCE(prrte_info_array_item_t,
+                                  prrte_list_item_t,
+                                  arritmcon, arritdecon);
