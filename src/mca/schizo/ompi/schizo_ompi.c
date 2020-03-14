@@ -67,20 +67,12 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
 static int detect_proxy(char **argv, char **rfile);
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 
-static int setup_fork(prrte_job_t *jdata, prrte_app_context_t *context);
-static int setup_child(prrte_job_t *jdata,
-                       prrte_proc_t *child,
-                       prrte_app_context_t *app,
-                       char ***env);
-
 prrte_schizo_base_module_t prrte_schizo_ompi_module = {
     .define_cli = define_cli,
     .register_deprecated_cli = register_deprecated_cli,
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
     .detect_proxy = detect_proxy,
-    .setup_fork   = setup_fork,
-    .setup_child  = setup_child,
     .allow_run_as_root = allow_run_as_root
 };
 
@@ -695,7 +687,7 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
      * see if we are included */
     if (NULL != prrte_schizo_base.personalities) {
         for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
-            if (0 == strcmp(prrte_schizo_base.personalities[i], "ompi")) {
+            if (0 == strncasecmp(prrte_schizo_base.personalities[i], "ompi", 4)) {
                 takeus = true;
                 break;
             }
@@ -790,7 +782,7 @@ static int detect_proxy(char **argv, char **rfile)
         /* create a rendezvous file */
         prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
         /* add us to the personalities */
-        prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi");
+        prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi5");
         return PRRTE_SUCCESS;
     }
 
@@ -828,208 +820,4 @@ static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
         prrte_argv_append_nosize(argv, "prrte_tmpdir_base");
         prrte_argv_append_nosize(argv, pval->data.string);
     }
-}
-
-static int setup_fork(prrte_job_t *jdata, prrte_app_context_t *context) {
-
-    int first_rank_buf_size = 256, num_ranks_buf_size = 256;
-    int  first_rank_buf_idx = 0, num_ranks_buf_idx = 0;
-    char *first_rank_buf = malloc(first_rank_buf_size);
-    char *num_ranks_buf  = malloc(num_ranks_buf_size);
-    prrte_app_context_t *app = NULL;
-    int rc = PRRTE_SUCCESS;
-
-    /* Construct buffers for OMPI_FIRST_RANKS and  OMPI_APP_CTX_NUM_PROCS */
-    for(int j= 0; j < jdata->apps->size; j++) {
-        if (NULL == (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, j))) {
-            continue;
-        }
-
-        char tmp[16] = {0};
-        snprintf(tmp, 16, "%d", app -> first_rank);
-        snprintf(&first_rank_buf[first_rank_buf_idx], first_rank_buf_size - first_rank_buf_idx,
-                 "%s ", tmp);
-        first_rank_buf_idx += (strlen(tmp) + 1);
-
-        tmp[0] = '\0';
-        snprintf(tmp, 16, "%d", app -> num_procs);
-        snprintf(&num_ranks_buf[num_ranks_buf_idx], num_ranks_buf_size - num_ranks_buf_idx,
-                 "%s ", tmp);
-        num_ranks_buf_idx += (strlen(tmp) + 1);
-
-        if(first_rank_buf_idx >= first_rank_buf_size) {
-          first_rank_buf_size *= 2;
-          first_rank_buf = realloc(first_rank_buf, first_rank_buf_size);
-        }
-        if(num_ranks_buf_idx >= num_ranks_buf_size) {
-          num_ranks_buf_size *= 2;
-          num_ranks_buf = realloc(num_ranks_buf, num_ranks_buf_size);
-        }
-    }
-
-    /* Get rid of trailing space. */
-    first_rank_buf[first_rank_buf_idx - 1] = '\0';
-    num_ranks_buf[num_ranks_buf_idx - 1] = '\0';
-
-    for(int j = 0; j < jdata->apps->size; j++) {
-        if (NULL == (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, j))) {
-            continue;
-        }
-
-        /* pass an envar so the proc can find any files it had prepositioned */
-        prrte_setenv("OMPI_FILE_LOCATION", prrte_process_info.proc_session_dir, true, &app->env);
-
-        /* Tell all children their cwd */
-        prrte_setenv("OMPI_MCA_initial_wdir", app->cwd, true, &app->env);
-
-        /* Tell all children first rank list. */
-        prrte_setenv("OMPI_FIRST_RANKS", first_rank_buf, true, &app->env);
-
-        /* Tell all children the number of ranks in each app. */
-        prrte_setenv("OMPI_APP_CTX_NUM_PROCS", num_ranks_buf, true, &app->env);
-
-        char ompi_env_buf[16] = {0};
-
-        /* Tell all children the world and world local size */
-        snprintf(ompi_env_buf, 16, "%d", jdata->num_procs);
-        prrte_setenv("OMPI_WORLD_SIZE", ompi_env_buf, true, &app->env);
-        prrte_setenv("OMPI_MCA_num_procs", ompi_env_buf, true, &app->env);
-        ompi_env_buf[0] = '\0';
-
-        snprintf(ompi_env_buf, 16, "%d", jdata->num_local_procs);
-        prrte_setenv("OMPI_WORLD_LOCAL_SIZE", ompi_env_buf, true, &app->env);
-        ompi_env_buf[0] = '\0';
-
-        /* Tell all children number of apps. */
-        snprintf(ompi_env_buf, 16, "%d", jdata->num_apps);
-        prrte_setenv("OMPI_NUM_APP_CTX", ompi_env_buf, true, &app->env);
-        ompi_env_buf[0] = '\0';
-
-        /* Tell each app its command. */
-        if(app->argv[0]) {
-            prrte_setenv("OMPI_COMMAND", app->argv[0], true, &app->env);
-        }
-
-        /* Tell each app its argv. */
-        if(app->argv[1]) {
-            int argv_buf_len = 2048;
-            char *argv_buf = malloc(argv_buf_len);
-            int argv_buf_idx = 0;
-
-            /* Construct the argv buffer */
-            for(int app_i = 1; app->argv[app_i]; app_i++) {
-                snprintf(&argv_buf[argv_buf_idx], argv_buf_len - argv_buf_idx, "%s ",
-                     app->argv[app_i]);
-                argv_buf_idx += (strlen(app->argv[app_i]) + 1);
-                if(argv_buf_idx >= argv_buf_len) {
-                    argv_buf_len *= 2;
-                    argv_buf = realloc(argv_buf, argv_buf_len);
-                }
-            }
-
-            /* Remove trailing space. */
-            argv_buf[argv_buf_idx - 1] = '\0';
-            prrte_setenv("OMPI_ARGV", argv_buf, true, &app->env);
-            free(argv_buf);
-        }
-
-        /* Tell each app the arch - if available */
-#ifdef HAVE_SYS_UTSNAME_H
-        struct utsname sysname;
-        memset(&sysname, 0, sizeof(sysname));
-        if(-1 < uname(&sysname)) {
-            if((sysname.machine[0] != 0) && (sysname.machine[0] != '\0')) {
-                prrte_setenv("OMPI_MCA_cpu_type", (const char *) &sysname.machine, true, &app->env);
-            }
-        }
-#endif
-
-    } // end app loop
-
-    free(first_rank_buf); first_rank_buf = NULL;
-
-    free(num_ranks_buf); num_ranks_buf = NULL;
-
-    return rc;
-}
-
-static int setup_child(prrte_job_t *jdata,
-                       prrte_proc_t *child,
-                       prrte_app_context_t *app,
-                       char ***env)
-{
-    char *param, value[64] = {0};
-    int rc = PRRTE_SUCCESS;
-    int32_t nrestarts = 0, *nrptr;
-    
-    /* although the vpid IS the process' rank within the job, users
-     * would appreciate being given a public environmental variable
-     * that also represents this value - something MPI specific - so
-     * do that here.
-     *
-     * AND YES - THIS BREAKS THE ABSTRACTION BARRIER TO SOME EXTENT.
-     * We know - just live with it
-     */
-    snprintf(value, 64, "%lu", (unsigned long) child->name.jobid);
-    prrte_setenv("OMPI_COMM_WORLD_RANK", value, true, env);
-    value[0] = '\0';
-
-    /* users would appreciate being given a public environmental variable
-     * that also represents the local rank value - something MPI specific - so
-     * do that here.
-     *
-     * AND YES - THIS BREAKS THE ABSTRACTION BARRIER TO SOME EXTENT.
-     * We know - just live with it
-     */
-    if (PRRTE_LOCAL_RANK_INVALID == child->local_rank ||
-        PRRTE_NODE_RANK_INVALID == child->node_rank ||
-        PMIX_RANK_INVALID == child->rank) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_VALUE_OUT_OF_BOUNDS);
-        rc = PRRTE_ERR_VALUE_OUT_OF_BOUNDS;
-        return rc;
-    }
-
-    if (NULL != app->cwd) {
-        /* change to it */
-        if (0 != chdir(app->cwd)) {
-            return PRRTE_ERROR;
-        }
-    }
-
-    snprintf(value, 64, "%lu", (unsigned long) child->rank);
-    prrte_setenv("OMPI_COMM_WORLD_RANK", value, true, env);
-    value[0] = '\0';
-
-    snprintf(value, 64, "%lu", (unsigned long) child->local_rank);
-    prrte_setenv("OMPI_COMM_WORLD_LOCAL_RANK", value, true, env);
-    value[0] = '\0';
-
-    snprintf(value, 64, "%lu", (unsigned long) child->node_rank);
-    prrte_setenv("OMPI_COMM_WORLD_NODE_RANK", value, true, env);
-    value[0] = '\0';
-
-    nrptr = &nrestarts;
-    if (prrte_get_attribute(&child->attributes, PRRTE_PROC_NRESTARTS, (void**)&nrptr, PRRTE_INT32)) {
-        /* pass the number of restarts for this proc - will be zero for
-         * an initial start, but procs would like to know if they are being
-         * restarted so they can take appropriate action
-         */
-        snprintf(value, 64, "%d", nrestarts);
-        prrte_setenv("OMPI_MCA_num_restarts", value, true, env);
-        value[0] = '\0';
-    }
-
-    /* if the proc should not barrier in prte_init, tell it */
-    if (prrte_get_attribute(&child->attributes, PRRTE_PROC_NOBARRIER, NULL, PRRTE_BOOL)
-        || 0 < nrestarts) {
-        prrte_setenv("OMPI_MCA_do_not_barrier", "1", true, env);
-    }
-
-    /* if the proc isn't going to forward IO, then we need to flag that
-     * it has "completed" iof termination as otherwise it will never fire
-     */
-    if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_FORWARD_OUTPUT)) {
-        PRRTE_FLAG_SET(child, PRRTE_PROC_FLAG_IOF_COMPLETE);
-    }
-    return rc;
 }

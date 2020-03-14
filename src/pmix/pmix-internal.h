@@ -59,6 +59,11 @@ typedef struct {
 } prrte_info_item_t;
 PRRTE_CLASS_DECLARATION(prrte_info_item_t);
 
+typedef struct {
+    prrte_list_item_t super;
+    prrte_list_t infolist;
+} prrte_info_array_item_t;
+PRRTE_CLASS_DECLARATION(prrte_info_array_item_t);
 
 typedef struct {
     prrte_mutex_t mutex;

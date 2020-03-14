@@ -61,12 +61,12 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     int rc;
     prrte_proc_t *pptr;
     int i, k, n, p;
-    prrte_list_t *info, *pmap;
+    prrte_list_t *info, *pmap, nodeinfo, appinfo;
     prrte_info_item_t *kv, *kptr;
-    prrte_node_t *node, *mynode;
+    prrte_info_array_item_t *iarray;
+    prrte_node_t *node;
     prrte_vpid_t vpid;
     char **list, **procs, **micro, *tmp, *regex;
-    prrte_job_t *dmns;
     prrte_job_map_t *map;
     prrte_app_context_t *app;
     uid_t uid;
@@ -75,7 +75,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     hwloc_obj_t machine;
     pmix_proc_t pproc;
     pmix_status_t ret;
-    pmix_info_t *pinfo;
+    pmix_info_t *pinfo, *iptr;
     size_t ninfo;
     prrte_pmix_lock_t lock;
     prrte_list_t local_procs;
@@ -92,6 +92,8 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
 
     /* setup the info list */
     info = PRRTE_NEW(prrte_list_t);
+    PRRTE_CONSTRUCT(&nodeinfo, prrte_list_t);
+    PRRTE_CONSTRUCT(&appinfo, prrte_list_t);
     uid = geteuid();
     gid = getegid();
 
@@ -140,15 +142,41 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     list = NULL;
     procs = NULL;
     map = jdata->map;
+    PMIX_LOAD_NSPACE(pproc.nspace, jdata->nspace);
+    PRRTE_CONSTRUCT(&local_procs, prrte_list_t);
     for (i=0; i < map->nodes->size; i++) {
-        micro = NULL;
         if (NULL != (node = (prrte_node_t*)prrte_pointer_array_get_item(map->nodes, i))) {
+            micro = NULL;
+            tmp = NULL;
+            vpid = PRRTE_VPID_MAX;
+            ui32 = 0;
             prrte_argv_append_nosize(&list, node->name);
             /* assemble all the ranks for this job that are on this node */
             for (k=0; k < node->procs->size; k++) {
                 if (NULL != (pptr = (prrte_proc_t*)prrte_pointer_array_get_item(node->procs, k))) {
                     if (jdata->jobid == pptr->name.jobid) {
                         prrte_argv_append_nosize(&micro, PRRTE_VPID_PRINT(pptr->name.vpid));
+                        if (pptr->name.vpid < vpid) {
+                            vpid = pptr->name.vpid;
+                        }
+                        ++ui32;
+                    }
+                    if (PRRTE_PROC_MY_NAME->vpid == node->daemon->name.vpid) {
+                        /* track all procs on our node */
+                        nm = PRRTE_NEW(prrte_namelist_t);
+                        nm->name.jobid = pptr->name.jobid;
+                        nm->name.vpid = pptr->name.vpid;
+                        prrte_list_append(&local_procs, &nm->super);
+                        if (jdata->jobid == pptr->name.jobid) {
+                            /* go ahead and register this client - since we are going to wait
+                             * for register_nspace to complete and the PMIx library serializes
+                             * the registration requests, we don't need to wait here */
+                            PRRTE_PMIX_CONVERT_VPID(pproc.rank,  pptr->name.vpid);
+                            ret = PMIx_server_register_client(&pproc, uid, gid, (void*)pptr, NULL, NULL);
+                            if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+                                PMIX_ERROR_LOG(ret);
+                            }
+                        }
                     }
                 }
             }
@@ -157,8 +185,38 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
                 tmp = prrte_argv_join(micro, ',');
                 prrte_argv_free(micro);
                 prrte_argv_append_nosize(&procs, tmp);
+            }
+            /* construct the node info array */
+            iarray = PRRTE_NEW(prrte_info_array_item_t);
+            /* start with the hostname */
+            kv = PRRTE_NEW(prrte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, node->name, PMIX_STRING);
+            prrte_list_append(&iarray->infolist, &kv->super);
+            /* pass the node ID */
+            kv = PRRTE_NEW(prrte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_NODEID, &node->index, PMIX_UINT32);
+            prrte_list_append(&iarray->infolist, &kv->super);
+            /* add node size */
+            kv = PRRTE_NEW(prrte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_NODE_SIZE, &node->num_procs, PMIX_UINT32);
+            prrte_list_append(&iarray->infolist, &kv->super);
+            /* add local size for this job */
+            kv = PRRTE_NEW(prrte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_LOCAL_SIZE, &ui32, PMIX_UINT32);
+            prrte_list_append(&iarray->infolist, &kv->super);
+            /* pass the local ldr */
+            kv = PRRTE_NEW(prrte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_LOCALLDR, &vpid, PMIX_PROC_RANK);
+            prrte_list_append(&iarray->infolist, &kv->super);
+            /* add the local peers */
+            if (NULL != tmp) {
+                kv = PRRTE_NEW(prrte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_LOCAL_PEERS, tmp, PMIX_STRING);
+                prrte_list_append(&iarray->infolist, &kv->super);
                 free(tmp);
             }
+            /* add to the overall payload */
+            prrte_list_append(&nodeinfo, &iarray->super);
         }
     }
     /* let the PMIx server generate the nodemap regex */
@@ -205,40 +263,6 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
         prrte_list_append(info, &kv->super);
     }
 
-    /* get our local node */
-    if (NULL == (dmns = prrte_get_job_data_object(PRRTE_PROC_MY_NAME->jobid))) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        PRRTE_LIST_RELEASE(info);
-        return PRRTE_ERR_NOT_FOUND;
-    }
-    if (NULL == (pptr = (prrte_proc_t*)prrte_pointer_array_get_item(dmns->procs, PRRTE_PROC_MY_NAME->vpid))) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        PRRTE_LIST_RELEASE(info);
-        return PRRTE_ERR_NOT_FOUND;
-    }
-    mynode = pptr->node;
-    if (NULL == mynode) {
-        /* cannot happen */
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        PRRTE_LIST_RELEASE(info);
-        return PRRTE_ERR_NOT_FOUND;
-    }
-
-    /* pass our hostname */
-    kv = PRRTE_NEW(prrte_info_item_t);
-    PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, prrte_process_info.nodename, PMIX_STRING);
-    prrte_list_append(info, &kv->super);
-
-    /* pass our node ID */
-    kv = PRRTE_NEW(prrte_info_item_t);
-    PMIX_INFO_LOAD(&kv->info, PMIX_NODEID, &mynode->index, PMIX_UINT32);
-    prrte_list_append(info, &kv->super);
-
-    /* pass our node size */
-    kv = PRRTE_NEW(prrte_info_item_t);
-    PMIX_INFO_LOAD(&kv->info, PMIX_NODE_SIZE, &mynode->num_procs, PMIX_UINT32);
-    prrte_list_append(info, &kv->super);
-
     /* pass the number of nodes in the job */
     kv = PRRTE_NEW(prrte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_NUM_NODES, &map->num_nodes, PMIX_UINT32);
@@ -257,11 +281,6 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     /* number of apps in this job */
     kv = PRRTE_NEW(prrte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_JOB_NUM_APPS, &jdata->num_apps, PMIX_UINT32);
-    prrte_list_append(info, &kv->super);
-
-    /* local size */
-    kv = PRRTE_NEW(prrte_info_item_t);
-    PMIX_INFO_LOAD(&kv->info, PMIX_LOCAL_SIZE, &jdata->num_local_procs, PMIX_UINT32);
     prrte_list_append(info, &kv->super);
 
     /* max procs */
@@ -305,18 +324,6 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     PMIX_INFO_LOAD(&kv->info, PMIX_BINDTO, prrte_hwloc_base_print_binding(jdata->map->binding), PMIX_STRING);
     prrte_list_append(info, &kv->super);
 
-    /* register any psets for this job */
-    for (i=0; i < (int)jdata->num_apps; i++) {
-        app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, pptr->app_idx);
-        tmp = NULL;
-        if (prrte_get_attribute(&app->attributes, PRRTE_APP_PSET_NAME, (void**)&tmp, PRRTE_STRING) &&
-            NULL != tmp) {
-            pset = PRRTE_NEW(pmix_server_pset_t);
-            pset->name = strdup(tmp);
-            prrte_list_append(&prrte_pmix_server_globals.psets, &pset->super);
-        }
-    }
-
     /* pass the top-level session directory - this is our jobfam session dir */
     kv = PRRTE_NEW(prrte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_TMPDIR, prrte_process_info.jobfam_session_dir, PMIX_STRING);
@@ -336,51 +343,52 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     free(tmp);
     prrte_list_append(info, &kv->super);
 
-    /* register any local clients */
-    vpid = PRRTE_VPID_MAX;
-    PMIX_LOAD_NSPACE(pproc.nspace, jdata->nspace);
-    micro = NULL;
-    PRRTE_CONSTRUCT(&local_procs, prrte_list_t);
-    for (i=0; i < mynode->procs->size; i++) {
-        if (NULL == (pptr = (prrte_proc_t*)prrte_pointer_array_get_item(mynode->procs, i))) {
+    /* for each app in the job, create an app-array */
+    for (n=0; n < jdata->apps->size; n++) {
+        if (NULL == (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, n))) {
             continue;
         }
-        /* track all procs on the node */
-        nm = PRRTE_NEW(prrte_namelist_t);
-        nm->name.jobid = pptr->name.jobid;
-        nm->name.vpid = pptr->name.vpid;
-        prrte_list_append(&local_procs, &nm->super);
-        /* see if this is a peer - i.e., from the same jobid */
-        if (pptr->name.jobid == jdata->jobid) {
-            prrte_argv_append_nosize(&micro, PRRTE_VPID_PRINT(pptr->name.vpid));
-            if (pptr->name.vpid < vpid) {
-                vpid = pptr->name.vpid;
-            }
-            /* go ahead and register this client - since we are going to wait
-             * for register_nspace to complete and the PMIx library serializes
-             * the registration requests, we don't need to wait here */
-            PRRTE_PMIX_CONVERT_VPID(pproc.rank,  pptr->name.vpid);
-            ret = PMIx_server_register_client(&pproc, uid, gid, (void*)pptr, NULL, NULL);
-            if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
-                PMIX_ERROR_LOG(ret);
-            }
-        }
-    }
-    if (NULL != micro) {
-        /* pass the local peers */
+        iarray = PRRTE_NEW(prrte_info_array_item_t);
+        /* start with the app number */
         kv = PRRTE_NEW(prrte_info_item_t);
-        tmp = prrte_argv_join(micro, ',');
-        PMIX_INFO_LOAD(&kv->info, PMIX_LOCAL_PEERS, tmp, PMIX_STRING);
+        PMIX_INFO_LOAD(&kv->info, PMIX_APPNUM, &n, PMIX_UINT32);
+        prrte_list_append(&iarray->infolist, &kv->super);
+        /* add the app size */
+        kv = PRRTE_NEW(prrte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_APP_SIZE, &app->num_procs, PMIX_UINT32);
+        prrte_list_append(&iarray->infolist, &kv->super);
+        /* add the app leader */
+        kv = PRRTE_NEW(prrte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_APPLDR, &app->first_rank, PMIX_PROC_RANK);
+        prrte_list_append(&iarray->infolist, &kv->super);
+        /* add the wdir */
+        kv = PRRTE_NEW(prrte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_WDIR, app->cwd, PMIX_STRING);
+        prrte_list_append(&iarray->infolist, &kv->super);
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+        /* add the argv */
+        tmp = prrte_argv_join(app->argv, ' ');
+        kv = PRRTE_NEW(prrte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_APP_ARGV, tmp, PMIX_STRING);
         free(tmp);
-        prrte_argv_free(micro);
-        prrte_list_append(info, &kv->super);
+        prrte_list_append(&iarray->infolist, &kv->super);
+        /* add the pset name */
+        tmp = NULL;
+        if (prrte_get_attribute(&app->attributes, PRRTE_APP_PSET_NAME, (void**)&tmp, PRRTE_STRING) &&
+            NULL != tmp) {
+            kv = PRRTE_NEW(prrte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_PSET_NAME, tmp, PMIX_STRING);
+            prrte_list_append(&iarray->infolist, &kv->super);
+            /* register it */
+            pset = PRRTE_NEW(pmix_server_pset_t);
+            pset->name = strdup(tmp);
+            prrte_list_append(&prrte_pmix_server_globals.psets, &pset->super);
+            free(tmp);
+        }
+#endif
+        /* add to the main payload */
+        prrte_list_append(&appinfo, &iarray->super);
     }
-
-    /* pass the local ldr */
-    kv = PRRTE_NEW(prrte_info_item_t);
-    PMIX_INFO_LOAD(&kv->info, PMIX_LOCALLDR, &vpid, PMIX_PROC_RANK);
-    prrte_list_append(info, &kv->super);
-
     /* for each proc in this job, create an object that
      * includes the info describing the proc so the recipient has a complete
      * picture. This allows procs to connect to each other without
@@ -411,7 +419,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
             prrte_list_append(pmap, &kv->super);
 
             /* location, for local procs */
-            if (node == mynode) {
+            if (PRRTE_PROC_MY_NAME->vpid == node->daemon->name.vpid) {
                 tmp = NULL;
                 if (prrte_get_attribute(&pptr->attributes, PRRTE_PROC_CPU_BITMAP, (void**)&tmp, PRRTE_STRING) &&
                     NULL != tmp) {
@@ -448,50 +456,15 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
             PMIX_INFO_LOAD(&kv->info, PMIX_GLOBAL_RANK, &vpid, PMIX_PROC_RANK);
             prrte_list_append(pmap, &kv->super);
 
-            if (1 < jdata->num_apps) {
-                /* appnum */
-                kv = PRRTE_NEW(prrte_info_item_t);
-                PMIX_INFO_LOAD(&kv->info, PMIX_APPNUM, &pptr->app_idx, PMIX_UINT32);
-                prrte_list_append(pmap, &kv->super);
+            /* appnum */
+            kv = PRRTE_NEW(prrte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_APPNUM, &pptr->app_idx, PMIX_UINT32);
+            prrte_list_append(pmap, &kv->super);
 
-                /* app ldr */
-                app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, pptr->app_idx);
-                kv = PRRTE_NEW(prrte_info_item_t);
-                PMIX_INFO_LOAD(&kv->info, PMIX_APPLDR, &app->first_rank, PMIX_PROC_RANK);
-                prrte_list_append(pmap, &kv->super);
-
-                /* app rank */
-                kv = PRRTE_NEW(prrte_info_item_t);
-                PMIX_INFO_LOAD(&kv->info, PMIX_APP_RANK, &pptr->app_rank, PMIX_PROC_RANK);
-                prrte_list_append(pmap, &kv->super);
-
-                /* app size */
-                kv = PRRTE_NEW(prrte_info_item_t);
-                PMIX_INFO_LOAD(&kv->info, PMIX_APP_SIZE, &app->num_procs, PMIX_UINT32);
-                prrte_list_append(pmap, &kv->super);
-
-#if PMIX_NUMERIC_VERSION >= 0x00040000
-                app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, pptr->app_idx);
-                tmp = NULL;
-                if (prrte_get_attribute(&app->attributes, PRRTE_APP_PSET_NAME, (void**)&tmp, PRRTE_STRING) &&
-                    NULL != tmp) {
-                    kv = PRRTE_NEW(prrte_info_item_t);
-                    PMIX_INFO_LOAD(&kv->info, PMIX_PSET_NAME, tmp, PMIX_STRING);
-                    free(tmp);
-                    prrte_list_append(pmap, &kv->super);
-                }
-            } else {
-                app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, 0);
-                tmp = NULL;
-                if (prrte_get_attribute(&app->attributes, PRRTE_APP_PSET_NAME, (void**)&tmp, PRRTE_STRING) &&
-                    NULL != tmp) {
-                    kv = PRRTE_NEW(prrte_info_item_t);
-                    PMIX_INFO_LOAD(&kv->info, PMIX_PSET_NAME, tmp, PMIX_STRING);
-                    free(tmp);
-                    prrte_list_append(pmap, &kv->super);
-                }
-#endif
-            }
+            /* app rank */
+            kv = PRRTE_NEW(prrte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_APP_RANK, &pptr->app_rank, PMIX_PROC_RANK);
+            prrte_list_append(pmap, &kv->super);
 
             /* local rank */
             kv = PRRTE_NEW(prrte_info_item_t);
@@ -543,7 +516,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     prrte_set_attribute(&jdata->attributes, PRRTE_JOB_NSPACE_REGISTERED, PRRTE_ATTR_LOCAL, NULL, PRRTE_BOOL);
 
     /* pass it down */
-    ninfo = prrte_list_get_size(info);
+    ninfo = prrte_list_get_size(info) + prrte_list_get_size(&nodeinfo) + prrte_list_get_size(&appinfo);
     /* if there are local procs, then we add that here */
     if (0 < (nmsize = prrte_list_get_size(&local_procs))) {
         ++ninfo;
@@ -569,7 +542,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
 
     PRRTE_LIST_DESTRUCT(&local_procs);
 
-    /* now load the rest of the list */
+    /* now load the rest of the job info */
     if (0 < nmsize) {
         n = 1;
     } else {
@@ -580,6 +553,38 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
         ++n;
     }
     PRRTE_LIST_RELEASE(info);
+
+    /* now load the node info */
+    PRRTE_LIST_FOREACH(iarray, &nodeinfo, prrte_info_array_item_t) {
+        nmsize = prrte_list_get_size(&iarray->infolist);
+        PMIX_LOAD_KEY(pinfo[n].key, PMIX_NODE_INFO_ARRAY);
+        pinfo[n].value.type = PMIX_DATA_ARRAY;
+        PMIX_DATA_ARRAY_CREATE(pinfo[n].value.data.darray, nmsize, PMIX_INFO);
+        iptr = (pmix_info_t*)pinfo[n].value.data.darray->array;
+        k=0;
+        PRRTE_LIST_FOREACH(kv, &iarray->infolist, prrte_info_item_t) {
+            PMIX_INFO_XFER(&iptr[k], &kv->info);
+            ++k;
+        }
+        ++n;
+    }
+    PRRTE_LIST_DESTRUCT(&nodeinfo);
+
+    /* now load the app info */
+    PRRTE_LIST_FOREACH(iarray, &appinfo, prrte_info_array_item_t) {
+        nmsize = prrte_list_get_size(&iarray->infolist);
+        PMIX_LOAD_KEY(pinfo[n].key, PMIX_APP_INFO_ARRAY);
+        pinfo[n].value.type = PMIX_DATA_ARRAY;
+        PMIX_DATA_ARRAY_CREATE(pinfo[n].value.data.darray, nmsize, PMIX_INFO);
+        iptr = (pmix_info_t*)pinfo[n].value.data.darray->array;
+        k=0;
+        PRRTE_LIST_FOREACH(kv, &iarray->infolist, prrte_info_item_t) {
+            PMIX_INFO_XFER(&iptr[k], &kv->info);
+            ++k;
+        }
+        ++n;
+    }
+    PRRTE_LIST_DESTRUCT(&appinfo);
 
     /* register it */
     PRRTE_PMIX_CONSTRUCT_LOCK(&lock);

@@ -1296,9 +1296,6 @@ void prrte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         }
 
 
-        /* tell all children that they are being launched via PRRTE */
-        prrte_setenv("OMPI_MCA_prrte_launch", "1", true, &app->env);
-
         /* if the user requested it, set the system resource limits */
         if (PRRTE_SUCCESS != (rc = prrte_util_init_sys_limits(&msg))) {
             prrte_show_help("help-prrte-odls-default.txt", "set limit", true,
@@ -1396,6 +1393,7 @@ void prrte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             cd = PRRTE_NEW(prrte_odls_spawn_caddy_t);
             cd->jdata = jobdat;
             cd->app = app;
+            cd->wdir = strdup(app->cwd);
             cd->child = child;
             cd->fork_local = fork_local;
             cd->index_argv = index_argv;

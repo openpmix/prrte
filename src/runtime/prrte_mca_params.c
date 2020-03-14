@@ -671,21 +671,6 @@ int prrte_register_params(void)
                                   PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                   &prrte_report_launch_progress);
 
-    /* cluster hardware info detected by prrte only */
-    prrte_local_cpu_type = NULL;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "cpu_type",
-                                  "cpu type detected in node",
-                                  PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prrte_local_cpu_type);
-
-    prrte_local_cpu_model = NULL;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "cpu_model",
-                                  "cpu model detected in node",
-                                  PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prrte_local_cpu_model);
-
     /* tool communication controls */
     prrte_report_events_uri = NULL;
     (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "report_events",

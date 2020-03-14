@@ -634,6 +634,7 @@ int prun(int argc, char *argv[])
     char **pargv;
     int pargc;
     pmix_rank_t zero;
+    char **tmp;
 
     /* init the globals */
     PRRTE_CONSTRUCT(&job_info, prrte_list_t);
@@ -706,7 +707,6 @@ int prun(int argc, char *argv[])
     /* add anything they specified */
     for (i=0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
-            char **tmp;
             tmp = prrte_argv_split(argv[i+1], ',');
             for (m=0; NULL != tmp[m]; m++) {
                 prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, tmp[m]);
@@ -762,15 +762,16 @@ int prun(int argc, char *argv[])
        return rc;
     }
 
-    /* let the schizo components take a pass at it to get the MCA params */
+    /* let the schizo components take a pass at it to get the MCA params - this
+     * will include whatever default/user-level param files each schizo component
+     * supports */
     if (PRRTE_SUCCESS != (rc = prrte_schizo.parse_cli(pargc, 0, pargv, NULL, NULL))) {
         if (PRRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n",
                     prrte_tool_basename,
                     prrte_strerror(rc));
         }
-         PRRTE_ERROR_LOG(rc);
-       return rc;
+        return rc;
     }
 
     if (prrte_cmd_line_is_taken(prrte_cmd_line, "verbose")) {
@@ -1254,12 +1255,22 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LOAD(ds->info, PMIX_NOTIFY_COMPLETION, &flag, PMIX_BOOL);
     prrte_list_append(&job_info, &ds->super);
 
-    /* see if they specified the personality */
-    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "personality", 0, 0))) {
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_PERSONALITY, pval->data.string, PMIX_STRING);
-        prrte_list_append(&job_info, &ds->super);
+    /* pass the personality */
+    for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
+        tmp = NULL;
+        if (0 != strcmp(prrte_schizo_base.personalities[i], "prrte") &&
+            0 != strcmp(prrte_schizo_base.personalities[i], "pmix")) {
+            prrte_argv_append_nosize(&tmp, prrte_schizo_base.personalities[i]);
+        }
+        if (NULL != tmp) {
+            param = prrte_argv_join(tmp, ',');
+            prrte_argv_free(tmp);
+            ds = PRRTE_NEW(prrte_ds_info_t);
+            PMIX_INFO_CREATE(ds->info, 1);
+            PMIX_INFO_LOAD(ds->info, PMIX_PERSONALITY, param, PMIX_STRING);
+            free(param);
+            prrte_list_append(&job_info, &ds->super);
+        }
     }
 
     /* check for stdout/err directives */
@@ -1535,18 +1546,15 @@ int prun(int argc, char *argv[])
         ++param;
         (void)strncpy(controller.nspace, ptr, PMIX_MAX_NSLEN);
         controller.rank = strtoul(param, NULL, 10);
-        /* do not cache this event - the tool is waiting for us */
-        PMIX_INFO_CREATE(iptr, 2);
-        flag = true;
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_DO_NOT_CACHE, &flag, PMIX_BOOL);
+        PMIX_INFO_CREATE(iptr, 1);
         /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
 
         PMIx_Notify_event(PMIX_LAUNCHER_READY, &pname, PMIX_RANGE_CUSTOM,
-                          iptr, 2, NULL, NULL);
+                          iptr, 1, NULL, NULL);
         /* now wait for the launch directives to arrive */
         PRRTE_PMIX_WAIT_THREAD(&myinfo.lock);
-        PMIX_INFO_FREE(iptr, 2);
+        PMIX_INFO_FREE(iptr, 1);
 
         /* process the returned directives */
         if (NULL != myinfo.info) {
