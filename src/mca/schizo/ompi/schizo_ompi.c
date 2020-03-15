@@ -174,10 +174,43 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { '\0', NULL, 0, PRRTE_CMD_LINE_TYPE_NULL, NULL }
 };
 
+static bool checkus(void)
+{
+    bool takeus = false;
+    char *ptr;
+    size_t i;
+    uint vers;
+
+    /* if they gave us a list of personalities,
+     * see if we are included */
+    if (NULL != prrte_schizo_base.personalities) {
+        for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
+            if (0 == strcmp(prrte_schizo_base.personalities[i], "ompi")) {
+                /* they didn't specify a level, so we will service
+                 * them just in case */
+                takeus = true;
+                break;
+            }
+            if (0 == strncmp(prrte_schizo_base.personalities[i], "ompi", 4)) {
+                /* if they specifically requested an ompi level greater
+                 * than or equal to us, then we service it */
+                ptr = &prrte_schizo_base.personalities[i][4];
+                vers = strtoul(ptr, NULL, 10);
+                if (vers >= 5) {
+                    takeus = true;
+                }
+                break;
+            }
+        }
+    }
+
+    return takeus;
+}
+
+
 static int define_cli(prrte_cmd_line_t *cli)
 {
-    int rc, i;
-    bool takeus = false;
+    int rc;
 
     prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
                         "%s schizo:ompi: define_cli",
@@ -188,18 +221,8 @@ static int define_cli(prrte_cmd_line_t *cli)
         return PRRTE_ERR_BAD_PARAM;
     }
 
-    /* if they gave us a list of personalities,
-     * see if we are included */
-    if (NULL != prrte_schizo_base.personalities) {
-        for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
-            if (0 == strcmp(prrte_schizo_base.personalities[i], "ompi")) {
-                takeus = true;
-                break;
-            }
-        }
-        if (!takeus) {
-            return PRRTE_ERR_TAKE_NEXT_OPTION;
-        }
+    if (!checkus()) {
+        return PRRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     rc = prrte_cmd_line_add(cli, cmd_line_init);
@@ -220,7 +243,7 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
 
     pargs = *argv;
 
-        /* --nolocal -> --map-by :nolocal */
+    /* --nolocal -> --map-by :nolocal */
     if (0 == strcmp(option, "--nolocal")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "NOLOCAL");
     }
@@ -347,6 +370,10 @@ static void register_deprecated_cli(prrte_list_t *convertors)
         "--ppr",
         NULL
     };
+
+    if (!checkus()) {
+        return;
+    }
 
     cv = PRRTE_NEW(prrte_convertor_t);
     cv->options = prrte_argv_copy(options);
@@ -665,10 +692,8 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      char ***dstenv,
                      bool cmdline)
 {
-    int i;
     char *param, *p1, *p2;
     char *env_set_flag;
-    bool takeus = false;
     prrte_value_t *pval;
     prrte_cmd_line_param_t *cparm;
     prrte_cmd_line_option_t *option;
@@ -683,18 +708,8 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
         return PRRTE_ERR_TAKE_NEXT_OPTION;
     }
 
-    /* if they gave us a list of personalities,
-     * see if we are included */
-    if (NULL != prrte_schizo_base.personalities) {
-        for (i=0; NULL != prrte_schizo_base.personalities[i]; i++) {
-            if (0 == strncasecmp(prrte_schizo_base.personalities[i], "ompi", 4)) {
-                takeus = true;
-                break;
-            }
-        }
-        if (!takeus) {
-            return PRRTE_ERR_TAKE_NEXT_OPTION;
-        }
+    if (!checkus()) {
+        return PRRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     /* Begin by examining the environment as the cmd line trumps all */
