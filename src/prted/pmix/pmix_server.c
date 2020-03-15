@@ -352,6 +352,13 @@ int pmix_server_init(void)
 
     PRRTE_CONSTRUCT(&ilist, prrte_list_t);
 
+    /* tell the server our hostname so we agree on it */
+    kv = PRRTE_NEW(prrte_value_t);
+    kv->key = strdup(PMIX_HOSTNAME);
+    kv->type = PRRTE_STRING;
+    kv->data.string = strdup(prrte_process_info.nodename);
+    prrte_list_append(&ilist, &kv->super);
+
 #if HWLOC_API_VERSION < 0x20000
      /* pass the topology string as we don't
       * have HWLOC shared memory available - we do

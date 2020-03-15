@@ -844,6 +844,12 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LOAD(ds->info, PMIX_TOOL_RANK, &zero, PMIX_PROC_RANK);
         prrte_list_append(&tinfo, &ds->super);
 
+        /* pass our hostname so the PMIx library agrees with us */
+        ds = PRRTE_NEW(prrte_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_HOSTNAME, prrte_process_info.nodename, PMIX_STRING);
+        prrte_list_append(&tinfo, &ds->super);
+
         /* set our session directory to something hopefully unique so
          * our rendezvous files don't conflict with other prun/prte
          * instances */
