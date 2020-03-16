@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -328,7 +328,7 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
         }
 
         /* check for nolocal and remove the head node, if required */
-        if (map->mapping & PRRTE_MAPPING_NO_USE_LOCAL) {
+        if (PRRTE_GET_MAPPING_DIRECTIVE(map->mapping) & PRRTE_MAPPING_NO_USE_LOCAL) {
             for (item  = prrte_list_get_first(seq_list);
                  item != prrte_list_get_end(seq_list);
                  item  = prrte_list_get_next(item) ) {
