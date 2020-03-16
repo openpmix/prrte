@@ -602,8 +602,7 @@ static int check_modifiers(char *ck, prrte_job_t *jdata,
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
         } else if (0 == strncasecmp(ck2[i], "NOLOCAL", strlen(ck2[i]))) {
-            prrte_set_attribute(&jdata->attributes, PRRTE_MAPPING_NO_USE_LOCAL, PRRTE_ATTR_GLOBAL,
-                                NULL, PRRTE_BOOL);
+            PRRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRRTE_MAPPING_NO_USE_LOCAL);
         } else if (0 == strncasecmp(ck2[i], "XMLOUTPUT", strlen(ck2[i]))) {
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
