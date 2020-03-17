@@ -68,6 +68,8 @@ PRRTE_EXPORT int prrte_ess_base_std_prolog(void);
 PRRTE_EXPORT int prrte_ess_base_prted_setup(void);
 PRRTE_EXPORT int prrte_ess_base_prted_finalize(void);
 
+PRRTE_EXPORT int prrte_ess_base_setup_signals(char *signals);
+
 /* Detect whether or not this proc is bound - if not,
  * see if it should bind itself
  */
@@ -84,6 +86,7 @@ typedef struct {
     prrte_list_item_t super;
     char *signame;
     int signal;
+    bool can_forward;
 } prrte_ess_base_signal_t;
 PRRTE_CLASS_DECLARATION(prrte_ess_base_signal_t);
 

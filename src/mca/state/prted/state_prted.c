@@ -297,6 +297,10 @@ static void track_procs(int fd, short argc, void *cbdata)
         goto cleanup;
     }
     pdata = (prrte_proc_t*)prrte_pointer_array_get_item(jdata->procs, proc->vpid);
+    if (NULL == pdata) {
+        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+        goto cleanup;
+    }
 
     if (PRRTE_PROC_STATE_RUNNING == state) {
         /* update the proc state */

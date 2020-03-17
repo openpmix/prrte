@@ -442,7 +442,7 @@ static void check_complete(int fd, short args, void *cbdata)
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                         (NULL == jdata) ? "NULL" : PRRTE_JOBID_PRINT(jdata->jobid));
 
-    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT_EVENT, (void**)&timer, PRRTE_PTR)) {
+    if (NULL != jdata && prrte_get_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT_EVENT, (void**)&timer, PRRTE_PTR)) {
         /* timer is an prrte_timer_t object */
         PRRTE_RELEASE(timer);
         prrte_remove_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT_EVENT);

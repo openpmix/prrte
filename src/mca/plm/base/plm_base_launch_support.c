@@ -1862,6 +1862,10 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
              * have assigned our node to us.
              */
             node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, 0);
+            if (NULL == node) {
+                PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+                return PRRTE_ERR_NOT_FOUND;
+            }
             prrte_pointer_array_add(map->nodes, (void*)node);
             ++(map->num_nodes);
             /* maintain accounting */
@@ -1958,6 +1962,10 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
         if (0 == prrte_list_get_size(&nodes)) {
             /* if the HNP has some procs, then we are still good */
             node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, 0);
+            if (NULL == node) {
+                PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+                return PRRTE_ERR_NOT_FOUND;
+            }
             if (0 < node->num_procs) {
                 PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
                                      "%s plm:base:setup_vm only HNP in use",
@@ -1987,6 +1995,10 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
          * have assigned our node to us.
          */
         node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, 0);
+        if (NULL == node) {
+            PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+            return PRRTE_ERR_NOT_FOUND;
+        }
         prrte_pointer_array_add(map->nodes, (void*)node);
         ++(map->num_nodes);
         /* maintain accounting */
@@ -2196,6 +2208,10 @@ int prrte_plm_base_setup_virtual_machine(prrte_job_t *jdata)
      */
     if (prrte_hnp_is_allocated) {
         node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, 0);
+        if (NULL == node) {
+            PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+            return PRRTE_ERR_NOT_FOUND;
+        }
         PRRTE_RETAIN(node);
         prrte_list_prepend(&nodes, &node->super);
     }

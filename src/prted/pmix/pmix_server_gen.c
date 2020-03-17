@@ -783,20 +783,24 @@ void prrte_pmix_server_tool_conn_complete(prrte_job_t *jdata,
             prrte_pointer_array_add(prrte_node_pool, node);
         }
     }
-    proc->node = node;
-    PRRTE_RETAIN(node);  /* keep accounting straight */
+    if (NULL == node) {
+        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+    } else {
+        proc->node = node;
+        PRRTE_RETAIN(node);  /* keep accounting straight */
+        /* add the node to the job map */
+        PRRTE_RETAIN(node);
+        prrte_pointer_array_add(jdata->map->nodes, node);
+        jdata->map->num_nodes++;
+        /* and it obviously is on the node - note that
+         * we do _not_ increment the #procs on the node
+         * as the tool doesn't count against the slot
+         * allocation */
+        PRRTE_RETAIN(proc);
+        prrte_pointer_array_add(node->procs, proc);
+    }
     prrte_pointer_array_add(jdata->procs, proc);
     jdata->num_procs = 1;
-    /* add the node to the job map */
-    PRRTE_RETAIN(node);
-    prrte_pointer_array_add(jdata->map->nodes, node);
-    jdata->map->num_nodes++;
-    /* and it obviously is on the node - note that
-     * we do _not_ increment the #procs on the node
-     * as the tool doesn't count against the slot
-     * allocation */
-    PRRTE_RETAIN(proc);
-    prrte_pointer_array_add(node->procs, proc);
     /* if they indicated a preference for termination, set it */
     if (req->flag) {
         prrte_set_attribute(&jdata->attributes, PRRTE_JOB_SILENT_TERMINATION,
@@ -926,13 +930,16 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
                                       pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
     int rc, j;
+    int32_t signum;
     size_t m, n;
     prrte_proc_t *proc;
+    prrte_jobid_t jobid;
     prrte_pointer_array_t parray, *ptrarray;
     prrte_process_name_t name;
     prrte_buffer_t *cmd;
-    prrte_daemon_cmd_flag_t cmmnd = PRRTE_DAEMON_HALT_VM_CMD;
+    prrte_daemon_cmd_flag_t cmmnd;
     prrte_grpcomm_signature_t *sig;
+    pmix_proc_t *proct;
 
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
                         "%s job control request from %s:%d",
@@ -981,12 +988,12 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
                 }
                 PRRTE_DESTRUCT(&parray);
             }
-            continue;
         } else if (0 == strncmp(directives[m].key, PMIX_JOB_CTRL_TERMINATE, PMIX_MAX_KEYLEN)) {
             if (NULL == targets) {
                 /* terminate the daemons and all running jobs */
                 cmd = PRRTE_NEW(prrte_buffer_t);
                 /* pack the command */
+                cmmnd = PRRTE_DAEMON_HALT_VM_CMD;
                 if (PRRTE_SUCCESS != (rc = prrte_dss.pack(cmd, &cmmnd, 1, PRRTE_DAEMON_CMD))) {
                     PRRTE_ERROR_LOG(rc);
                     PRRTE_RELEASE(cmd);
@@ -1003,6 +1010,52 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
                 PRRTE_RELEASE(cmd);
                 PRRTE_RELEASE(sig);
             }
+        } else if (0 == strncmp(directives[m].key, PMIX_JOB_CTRL_SIGNAL, PMIX_MAX_KEYLEN)) {
+                cmd = PRRTE_NEW(prrte_buffer_t);
+                cmmnd = PRRTE_DAEMON_SIGNAL_LOCAL_PROCS;
+                /* pack the command */
+                if (PRRTE_SUCCESS != (rc = prrte_dss.pack(cmd, &cmmnd, 1, PRRTE_DAEMON_CMD))) {
+                    PRRTE_ERROR_LOG(rc);
+                    PRRTE_RELEASE(cmd);
+                    return rc;
+                }
+                /* pack the target jobid */
+                if (NULL == targets) {
+                    jobid = PRRTE_JOBID_WILDCARD;
+                } else {
+                    proct = (pmix_proc_t*)&targets[0];
+                    PRRTE_PMIX_CONVERT_NSPACE(rc, &jobid, proct->nspace);
+                    if (PRRTE_SUCCESS != rc) {
+                        PRRTE_RELEASE(cmd);
+                        return PMIX_ERR_BAD_PARAM;
+                    }
+                }
+                if (PRRTE_SUCCESS != (rc = prrte_dss.pack(cmd, &jobid, 1, PRRTE_JOBID))) {
+                    PRRTE_ERROR_LOG(rc);
+                    PRRTE_RELEASE(cmd);
+                    return rc;
+                }
+                /* pack the signal */
+                PMIX_VALUE_GET_NUMBER(rc, &directives[m].value, signum, int32_t);
+                if (PMIX_SUCCESS != rc) {
+                    PRRTE_RELEASE(cmd);
+                    return rc;
+                }
+                if (PRRTE_SUCCESS != (rc = prrte_dss.pack(cmd, &signum, 1, PRRTE_INT32))) {
+                    PRRTE_ERROR_LOG(rc);
+                    PRRTE_RELEASE(cmd);
+                    return rc;
+                }
+                /* goes to all daemons */
+                sig = PRRTE_NEW(prrte_grpcomm_signature_t);
+                sig->signature = (prrte_process_name_t*)malloc(sizeof(prrte_process_name_t));
+                sig->signature[0].jobid = PRRTE_PROC_MY_NAME->jobid;
+                sig->signature[0].vpid = PRRTE_VPID_WILDCARD;
+                if (PRRTE_SUCCESS != (rc = prrte_grpcomm.xcast(sig, PRRTE_RML_TAG_DAEMON, cmd))) {
+                    PRRTE_ERROR_LOG(rc);
+                }
+                PRRTE_RELEASE(cmd);
+                PRRTE_RELEASE(sig);
         }
     }
 
