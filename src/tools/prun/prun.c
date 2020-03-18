@@ -1066,7 +1066,7 @@ int prun(int argc, char *argv[])
 
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        rc = 100;
+        rc = 200;
         PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_MAX_RETRIES, &rc, PMIX_INT32);
         prrte_list_append(&tinfo, &ds->super);
 
@@ -1795,7 +1795,7 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
         PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
         ret = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
-        if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+        if (PMIX_SUCCESS == ret || PMIX_OPERATION_SUCCEEDED == ret) {
 #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
             /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
              * being called when the server successes. The callback might be eventually
@@ -2285,7 +2285,7 @@ static void clean_abort(int fd, short flags, void *arg)
     }
 
     /* tell PRRTE to terminate our job */
-    PMIX_LOAD_PROCID(&target, prrte_process_info.myproc.nspace, PMIX_RANK_WILDCARD);
+    PMIX_LOAD_PROCID(&target, spawnednspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
     rc = PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL);
     prrte_output(0, "JOB CTRL %s", PMIx_Error_string(rc));

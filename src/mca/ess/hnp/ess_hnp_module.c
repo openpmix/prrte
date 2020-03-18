@@ -639,9 +639,6 @@ static int rte_finalize(void)
         free(contact_path);
     }
 
-    /* shutdown the pmix server */
-    pmix_server_finalize();
-
     /* close frameworks */
     (void) prrte_mca_base_framework_close(&prrte_filem_base_framework);
     (void) prrte_mca_base_framework_close(&prrte_grpcomm_base_framework);
