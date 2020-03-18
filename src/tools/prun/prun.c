@@ -1521,6 +1521,8 @@ int prun(int argc, char *argv[])
         prrte_list_append(&job_info, &ds->super);
     }
 
+    /* give the schizo components a chance to add to the job info */
+    prrte_schizo.job_info(prrte_cmd_line, &job_info);
 
     /* pickup any relevant envars */
     flag = true;

@@ -94,6 +94,7 @@ PRRTE_EXPORT int prrte_schizo_base_setup_child(prrte_job_t *jobdat,
                                                prrte_proc_t *child,
                                                prrte_app_context_t *app,
                                                char ***env);
+PRRTE_EXPORT void prrte_schizo_base_job_info(prrte_cmd_line_t *cmdline, prrte_list_t *jobinfo);
 PRRTE_EXPORT int prrte_schizo_base_get_remaining_time(uint32_t *timeleft);
 PRRTE_EXPORT void prrte_schizo_base_finalize(void);
 

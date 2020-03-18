@@ -49,6 +49,7 @@ prrte_schizo_API_module_t prrte_schizo = {
     .setup_app = prrte_schizo_base_setup_app,
     .setup_fork = prrte_schizo_base_setup_fork,
     .setup_child = prrte_schizo_base_setup_child,
+    .job_info = prrte_schizo_base_job_info,
     .get_remaining_time = prrte_schizo_base_get_remaining_time,
     .finalize = prrte_schizo_base_finalize
 };
