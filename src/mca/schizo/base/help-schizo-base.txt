@@ -80,3 +80,11 @@ the number of procs for each resource and the type of resource to be used.
   Specified option:  %s
 
 We are not able to proceed. Please correct your command line.
+#
+[bad-stream-buffering-value]
+An incorrect value for the "--stream-buffering" option was given:
+
+  Specified value:  %d
+
+Valid values are limited to 0, 1, or 2. Your application will continue, but
+please correct your command line in the future.

@@ -141,6 +141,10 @@ typedef void (*prrte_schizo_base_module_finalize_fn_t)(void);
  * another module should be tried */
 typedef int (*prrte_schizo_base_module_get_rem_time_fn_t)(uint32_t *timeleft);
 
+
+/* give the components a chance to add job info */
+typedef void (*prrte_schizo_base_module_job_info_fn_t)(prrte_cmd_line_t *cmdline, prrte_list_t *jobinfo);
+
 /*
  * schizo module version 1.3.0
  */
@@ -159,6 +163,7 @@ typedef struct {
     prrte_schizo_base_module_setup_fork_fn_t                setup_fork;
     prrte_schizo_base_module_setup_child_fn_t               setup_child;
     prrte_schizo_base_module_get_rem_time_fn_t              get_remaining_time;
+    prrte_schizo_base_module_job_info_fn_t                  job_info;
     prrte_schizo_base_module_finalize_fn_t                  finalize;
 } prrte_schizo_base_module_t;
 
@@ -181,6 +186,7 @@ typedef struct {
     prrte_schizo_base_module_setup_fork_fn_t                setup_fork;
     prrte_schizo_base_module_setup_child_fn_t               setup_child;
     prrte_schizo_base_module_get_rem_time_fn_t              get_remaining_time;
+    prrte_schizo_base_module_job_info_fn_t                  job_info;
     prrte_schizo_base_module_finalize_fn_t                  finalize;
 } prrte_schizo_API_module_t;
 

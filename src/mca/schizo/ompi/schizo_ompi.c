@@ -66,6 +66,7 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      bool cmdline);
 static int detect_proxy(char **argv, char **rfile);
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
+static void job_info(prrte_cmd_line_t *cmdline, prrte_list_t *jobinfo);
 
 prrte_schizo_base_module_t prrte_schizo_ompi_module = {
     .define_cli = define_cli,
@@ -73,7 +74,8 @@ prrte_schizo_base_module_t prrte_schizo_ompi_module = {
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
     .detect_proxy = detect_proxy,
-    .allow_run_as_root = allow_run_as_root
+    .allow_run_as_root = allow_run_as_root,
+    .job_info = job_info
 };
 
 static char *frameworks[] = {
@@ -140,6 +142,10 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "tune", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Profile options file list for OMPI applications",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "stream-buffering", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]",
+      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+
 
     /* Debug options */
     { '\0', "debug-daemons", 0, PRRTE_CMD_LINE_TYPE_BOOL,
@@ -821,6 +827,26 @@ static int allow_run_as_root(prrte_cmd_line_t *cmd_line)
     }
 
     return PRRTE_ERR_TAKE_NEXT_OPTION;
+}
+
+static void job_info(prrte_cmd_line_t *cmdline, prrte_list_t *jobinfo)
+{
+    prrte_ds_info_t *ds;
+    prrte_value_t *pval;
+    uint16_t u16;
+
+    if (NULL != (pval = prrte_cmd_line_get_param(cmdline, "stream-buffering", 0, 0))) {
+        u16 = pval->data.integer;
+        if (0 != u16 && 1 != u16 && 2 != u16) {
+            /* bad value */
+            prrte_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, pval->data.integer);
+            return;
+        }
+        ds = PRRTE_NEW(prrte_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, "OMPI_STREAM_BUFFERING", &u16, PMIX_UINT16);
+        prrte_list_append(jobinfo, &ds->super);
+    }
 }
 
 static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,

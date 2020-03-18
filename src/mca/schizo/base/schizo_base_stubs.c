@@ -256,6 +256,17 @@ int prrte_schizo_base_setup_child(prrte_job_t *jdata,
     return PRRTE_SUCCESS;
 }
 
+void prrte_schizo_base_job_info(prrte_cmd_line_t *cmdline, prrte_list_t *jobinfo)
+{
+    prrte_schizo_base_active_module_t *mod;
+
+    PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
+        if (NULL != mod->module->job_info) {
+            mod->module->job_info(cmdline, jobinfo);
+        }
+    }
+}
+
 int prrte_schizo_base_get_remaining_time(uint32_t *timeleft)
 {
     int rc;
