@@ -150,13 +150,15 @@ static void _client_finalized(int sd, short args, void *cbdata)
                 break;
             }
         }
-        /* if we came thru this code path, then this client must be an
-         * independent tool that connected to us - i.e., it wasn't
-         * something we spawned. For accounting purposes, we have to
-         * ensure the job complete procedure is run - otherwise, slots
-         * and other resources won't correctly be released */
-        PRRTE_FLAG_SET(p, PRRTE_PROC_FLAG_IOF_COMPLETE);
-        PRRTE_FLAG_SET(p, PRRTE_PROC_FLAG_WAITPID);
+        if (NULL != p) {
+            /* if we came thru this code path, then this client must be an
+             * independent tool that connected to us - i.e., it wasn't
+             * something we spawned. For accounting purposes, we have to
+             * ensure the job complete procedure is run - otherwise, slots
+             * and other resources won't correctly be released */
+            PRRTE_FLAG_SET(p, PRRTE_PROC_FLAG_IOF_COMPLETE);
+            PRRTE_FLAG_SET(p, PRRTE_PROC_FLAG_WAITPID);
+        }
         PRRTE_ACTIVATE_PROC_STATE(&cd->proc, PRRTE_PROC_STATE_TERMINATED);
     }
     if (NULL != p) {

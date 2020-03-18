@@ -446,6 +446,7 @@ static void defhandler(size_t evhdlr_registration_id,
 {
     prrte_pmix_lock_t *lock = NULL;
     size_t n;
+    pmix_status_t rc;
 
     if (verbose) {
         prrte_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
@@ -459,7 +460,8 @@ static void defhandler(size_t evhdlr_registration_id,
         /* tell PRRTE to terminate our job */
         PMIX_LOAD_PROCID(&target, prrte_process_info.myproc.nspace, PMIX_RANK_WILDCARD);
         PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
-        if (PMIX_SUCCESS != PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL)) {
+        rc = PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL);
+        if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
             PMIx_tool_finalize();
             /* exit with a non-zero status */
             exit(1);
@@ -1251,25 +1253,29 @@ int prun(int argc, char *argv[])
                 fprintf(stderr, "TERMINATING DVM...");
             }
             PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
-            PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
-    #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-            /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
-             * being called when the server terminates. The callback might be eventually
-             * called though then the connection to the server closes with
-             * status PMIX_ERR_COMM_FAILURE */
-            poll(NULL, 0, 1000);
-            infocb(PMIX_SUCCESS, NULL, 0, (void *)&lock, NULL, NULL);
-    #endif
-            PRRTE_PMIX_WAIT_THREAD(&lock);
-            PRRTE_PMIX_DESTRUCT_LOCK(&lock);
-            /* wait for connection to depart */
-            PRRTE_PMIX_WAIT_THREAD(&rellock);
-            PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
-            /* wait for the connection to go away */
+            rc = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
+            if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
+                goto DONE;
+            } else if (PMIX_SUCCESS == rc) {
+        #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
+                /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
+                 * being called when the server terminates. The callback might be eventually
+                 * called though then the connection to the server closes with
+                 * status PMIX_ERR_COMM_FAILURE */
+                poll(NULL, 0, 1000);
+                infocb(PMIX_SUCCESS, NULL, 0, (void *)&lock, NULL, NULL);
+        #endif
+                PRRTE_PMIX_WAIT_THREAD(&lock);
+                PRRTE_PMIX_DESTRUCT_LOCK(&lock);
+                /* wait for connection to depart */
+                PRRTE_PMIX_WAIT_THREAD(&rellock);
+                PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
+                /* wait for the connection to go away */
+            }
             if (!proxyrun) {
                 fprintf(stderr, "DONE\n");
             }
-    #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
+#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
             return rc;
     #else
             goto DONE;
@@ -1789,7 +1795,7 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
         PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
         ret = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
-        if (PMIX_SUCCESS == ret) {
+        if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
 #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
             /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
              * being called when the server successes. The callback might be eventually
@@ -2260,6 +2266,7 @@ static void clean_abort(int fd, short flags, void *arg)
 {
     pmix_proc_t target;
     pmix_info_t directive;
+    pmix_status_t rc;
 
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
@@ -2280,7 +2287,9 @@ static void clean_abort(int fd, short flags, void *arg)
     /* tell PRRTE to terminate our job */
     PMIX_LOAD_PROCID(&target, prrte_process_info.myproc.nspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
-    if (PMIX_SUCCESS != PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL)) {
+    rc = PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL);
+    prrte_output(0, "JOB CTRL %s", PMIx_Error_string(rc));
+    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
         PMIx_tool_finalize();
         /* exit with a non-zero status */
         exit(1);
@@ -2342,7 +2351,7 @@ static void signal_forward_callback(int signum)
     PMIX_LOAD_PROCID(&proc, spawnednspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
     rc = PMIx_Job_control(&proc, 1, &info, 1, NULL, NULL);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
         fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)",
                 signum, spawnednspace, PMIx_Error_string(rc));
     }
