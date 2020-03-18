@@ -63,7 +63,6 @@ static prrte_mca_base_var_enum_value_t stream_buffering_values[] = {
   {0, NULL}
 };
 
-static int setup_signals(void);
 static char *forwarded_signals = NULL;
 
 static int prrte_ess_base_register(prrte_mca_base_register_flag_t flags)
@@ -134,11 +133,10 @@ static int prrte_ess_base_open(prrte_mca_base_open_flag_t flags)
 
     PRRTE_CONSTRUCT(&prrte_ess_base_signals, prrte_list_t);
 
-    if (PRRTE_PROC_IS_MASTER || PRRTE_PROC_IS_DAEMON) {
-        if (PRRTE_SUCCESS != (rc = setup_signals())) {
-            return rc;
-        }
+    if (PRRTE_SUCCESS != (rc = prrte_ess_base_setup_signals(forwarded_signals))) {
+        return rc;
     }
+
     return prrte_mca_base_framework_components_open(&prrte_ess_base_framework, flags);
 }
 
@@ -217,14 +215,14 @@ static struct known_signal known_signals[] = {
 
 #define ESS_ADDSIGNAL(x, s)                                                 \
     do {                                                                    \
-        prrte_ess_base_signal_t *_sig;                                       \
-        _sig = PRRTE_NEW(prrte_ess_base_signal_t);                             \
+        prrte_ess_base_signal_t *_sig;                                      \
+        _sig = PRRTE_NEW(prrte_ess_base_signal_t);                          \
         _sig->signal = (x);                                                 \
         _sig->signame = strdup((s));                                        \
-        prrte_list_append(&prrte_ess_base_signals, &_sig->super);             \
+        prrte_list_append(&prrte_ess_base_signals, &_sig->super);           \
     } while(0)
 
-static int setup_signals(void)
+int prrte_ess_base_setup_signals(char *mysignals)
 {
     int i, sval, nsigs;
     char **signals, *tmp;
@@ -232,8 +230,8 @@ static int setup_signals(void)
     bool ignore, found;
 
     /* if they told us "none", then nothing to do */
-    if (NULL != forwarded_signals &&
-        0 == strcmp(forwarded_signals, "none")) {
+    if (NULL != mysignals &&
+        0 == strcmp(mysignals, "none")) {
         return PRRTE_SUCCESS;
     }
 
@@ -248,9 +246,9 @@ static int setup_signals(void)
 
     /* see if they asked for anything beyond those - note that they may
      * have asked for some we already cover, and so we ignore any duplicates */
-    if (NULL != forwarded_signals) {
+    if (NULL != mysignals) {
         /* if they told us "none", then dump the list */
-        signals = prrte_argv_split(forwarded_signals, ',');
+        signals = prrte_argv_split(mysignals, ',');
         for (i=0; NULL != signals[i]; i++) {
             sval = 0;
             if (0 != strncmp(signals[i], "SIG", 3)) {
@@ -323,5 +321,5 @@ static void sdes(prrte_ess_base_signal_t *t)
     }
 }
 PRRTE_CLASS_INSTANCE(prrte_ess_base_signal_t,
-                   prrte_list_item_t,
-                   scon, sdes);
+                     prrte_list_item_t,
+                     scon, sdes);

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2010-2015 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -77,3 +77,7 @@ int prrte_event_assign(struct event *ev, prrte_event_base_t *evbase,
 #endif
     return 0;
 }
+
+PRRTE_CLASS_INSTANCE(prrte_event_list_item_t,
+                     prrte_list_item_t,
+                     NULL, NULL);

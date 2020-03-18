@@ -1086,7 +1086,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
         prrte_show_help("help-plm-rsh.txt", "deadlock-params",
                        true, prrte_plm_rsh_component.num_concurrent, map->num_new_daemons);
         PRRTE_ERROR_LOG(PRRTE_ERR_FATAL);
-        PRRTE_RELEASE(state);
         rc = PRRTE_ERR_SILENT;
         goto cleanup;
     }
@@ -1109,6 +1108,11 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * doing this.
      */
     app = (prrte_app_context_t*)prrte_pointer_array_get_item(state->jdata->apps, 0);
+    if (NULL == app) {
+        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+        rc = PRRTE_ERR_NOT_FOUND;
+        goto cleanup;
+    }
     if (!prrte_get_attribute(&app->attributes, PRRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PRRTE_STRING)) {
         /* check to see if enable-prun-prefix-by-default was given - if
          * this is being done by a singleton, then prun will not be there

@@ -67,25 +67,26 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/mca/base/base.h"
 #include "src/util/argv.h"
-#include "src/util/output.h"
 #include "src/util/basename.h"
 #include "src/util/cmd_line.h"
+#include "src/util/fd.h"
+#include "src/util/os_path.h"
+#include "src/util/output.h"
+#include "src/util/path.h"
+#include "src/util/printf.h"
 #include "src/util/prrte_environ.h"
 #include "src/util/prrte_getcwd.h"
-#include "src/util/printf.h"
 #include "src/util/show_help.h"
-#include "src/util/fd.h"
 #include "src/sys/atomic.h"
 
 #include "src/runtime/prrte_progress_threads.h"
-#include "src/util/os_path.h"
-#include "src/util/path.h"
 #include "src/class/prrte_pointer_array.h"
 #include "src/dss/dss.h"
 
 #include "src/runtime/runtime.h"
 #include "src/runtime/prrte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/ess/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"
 
@@ -141,6 +142,7 @@ typedef struct {
 static prrte_list_t job_info;
 static prrte_jobid_t myjobid = PRRTE_JOBID_INVALID;
 static myinfo_t myinfo;
+static pmix_nspace_t spawnednspace;
 
 static int create_app(int argc, char* argv[],
                       prrte_list_t *jdata,
@@ -158,10 +160,12 @@ static bool proxyrun = false;
 static bool verbose = false;
 static prrte_cmd_line_t *prrte_cmd_line = NULL;
 static bool want_prefix_by_default = (bool) PRRTE_WANT_PRRTE_PREFIX_BY_DEFAULT;
+static prrte_list_t forwarded_signals;
 
 /* prun-specific options */
 static prrte_cmd_line_init_t cmd_line_init[] = {
 
+    /* DVM options */
     /* tell the dvm to terminate */
     { '\0', "terminate", 0, PRRTE_CMD_LINE_TYPE_BOOL,
       "Terminate the DVM", PRRTE_CMD_LINE_OTYPE_DVM },
@@ -193,6 +197,12 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "dvm-uri", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Specify the URI of the DVM master, or the name of the file (specified as file:filename) that contains that info",
       PRRTE_CMD_LINE_OTYPE_DVM },
+    /* forward signals */
+    { '\0', "forward-signals", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Comma-delimited list of additional signals (names or integers) to forward to "
+      "application processes [\"none\" => forward nothing]. Signals provided by "
+      "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
+      PRRTE_CMD_LINE_OTYPE_DVM},
 
 
     /* testing options */
@@ -375,7 +385,6 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
       PRRTE_CMD_LINE_OTYPE_FT },
 
 
-
     /* End of list */
     { '\0', NULL, 0, PRRTE_CMD_LINE_TYPE_NULL, NULL }
 };
@@ -383,6 +392,8 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
 
 static void abort_signal_callback(int signal);
 static void clean_abort(int fd, short flags, void *arg);
+static void signal_forward_callback(int signal);
+static void epipe_signal_callback(int signal);
 
 static void infocb(pmix_status_t status,
                    pmix_info_t *info, size_t ninfo,
@@ -621,7 +632,6 @@ int prun(int argc, char *argv[])
     size_t m, n, ninfo;
     pmix_app_t *papps;
     size_t napps;
-    char nspace[PMIX_MAX_NSLEN+1];
     mylock_t mylock;
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     bool notify_launch = false;
@@ -635,10 +645,14 @@ int prun(int argc, char *argv[])
     int pargc;
     pmix_rank_t zero;
     char **tmp;
+    prrte_ess_base_signal_t *sig;
+    pmix_nspace_t dvmnspace;
+    prrte_event_list_item_t *evitm;
 
     /* init the globals */
     PRRTE_CONSTRUCT(&job_info, prrte_list_t);
     PRRTE_CONSTRUCT(&apps, prrte_list_t);
+    PRRTE_CONSTRUCT(&forwarded_signals, prrte_list_t);
 
     prrte_atomic_lock_init(&prun_abort_inprogress_lock, PRRTE_ATOMIC_LOCK_UNLOCKED);
     /* init the tiny part of PRRTE we use */
@@ -683,6 +697,9 @@ int prun(int argc, char *argv[])
     signal(SIGTERM, abort_signal_callback);
     signal(SIGINT, abort_signal_callback);
     signal(SIGHUP, abort_signal_callback);
+
+    /* setup callback for SIGPIPE */
+    signal(SIGPIPE, epipe_signal_callback);
 
     /* setup our cmd line */
     prrte_cmd_line = PRRTE_NEW(prrte_cmd_line_t);
@@ -814,6 +831,21 @@ int prun(int argc, char *argv[])
         prrte_schizo.allow_run_as_root(prrte_cmd_line);  // will exit us if not allowed
     }
 
+    /** setup callbacks for signals we should forward */
+    PRRTE_CONSTRUCT(&prrte_ess_base_signals, prrte_list_t);
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "forward-signals", 0, 0))) {
+        param = pval->data.string;
+    } else {
+        param = NULL;
+    }
+    if (PRRTE_SUCCESS != (rc = prrte_ess_base_setup_signals(param))) {
+        return rc;
+    }
+    PRRTE_LIST_FOREACH(sig, &prrte_ess_base_signals, prrte_ess_base_signal_t) {
+        signal(sig->signal, signal_forward_callback);
+    }
+
+    /* setup the job data global table */
     prrte_job_data = PRRTE_NEW(prrte_hash_table_t);
     if (PRRTE_SUCCESS != (ret = prrte_hash_table_init(prrte_job_data, 128))) {
         PRRTE_ERROR_LOG(ret);
@@ -1014,7 +1046,7 @@ int prun(int argc, char *argv[])
         prrte_setenv("PMIX_SERVER_TMPDIR", mytmpdir, true, &papps->env);
 
         /* start the DVM */
-        ret = PMIx_Spawn(NULL, 0, papps, 1, nspace);
+        ret = PMIx_Spawn(NULL, 0, papps, 1, dvmnspace);
         PMIX_APP_RELEASE(papps);
         if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
             fprintf(stderr, "DVM failed to start on error %s\n", PMIx_Error_string(ret));
@@ -1065,7 +1097,7 @@ int prun(int argc, char *argv[])
         ret = PMIx_tool_connect_to_server(&myproc, iptr, ninfo);
         PMIX_INFO_FREE(iptr, ninfo);
         if (PMIX_SUCCESS != ret) {
-            fprintf(stderr, "Could not connect to prte at nspace %s: %s\n", nspace, PMIx_Error_string(ret));
+            fprintf(stderr, "Could not connect to prte at nspace %s: %s\n", dvmnspace, PMIx_Error_string(ret));
             PMIx_tool_finalize();
             exit(1);
         }
@@ -1643,14 +1675,14 @@ int prun(int argc, char *argv[])
         prrte_output(0, "Calling PMIx_Spawn");
     }
 
-    ret = PMIx_Spawn(iptr, ninfo, papps, napps, nspace);
+    ret = PMIx_Spawn(iptr, ninfo, papps, napps, spawnednspace);
     if (PRRTE_SUCCESS != ret) {
         prrte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
         rc = ret;
         goto DONE;
     }
 
-    PRRTE_PMIX_CONVERT_NSPACE(rc, &myjobid, nspace);
+    PRRTE_PMIX_CONVERT_NSPACE(rc, &myjobid, spawnednspace);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     if (notify_launch) {
@@ -1663,12 +1695,12 @@ int prun(int argc, char *argv[])
         /* target this notification solely to that one tool */
         PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
         /* pass the nspace of the spawned job */
-        PMIX_INFO_LOAD(&iptr[2], PMIX_NSPACE, nspace, PMIX_STRING);
+        PMIX_INFO_LOAD(&iptr[2], PMIX_NSPACE, spawnednspace, PMIX_STRING);
         PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &controller, PMIX_RANGE_CUSTOM,
                           iptr, 3, NULL, NULL);
     }
     /* push our stdin to the apps */
-    PMIX_LOAD_PROCID(&pname, nspace, 0);  // forward stdin to rank=0
+    PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
     PMIX_INFO_CREATE(iptr, 1);
     PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
     PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
@@ -1692,7 +1724,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_HDLR_NAME, "JOB_TERMINATION_EVENT", PMIX_STRING);
     /* specify we only want to be notified when our
      * job terminates */
-    PMIX_LOAD_PROCID(&pname, nspace, PMIX_RANK_WILDCARD);
+    PMIX_LOAD_PROCID(&pname, spawnednspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
     /* request that they return our lock object */
     PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
@@ -1776,6 +1808,11 @@ int prun(int argc, char *argv[])
             PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
         }
     }
+
+    PRRTE_LIST_FOREACH(evitm, &forwarded_signals, prrte_event_list_item_t) {
+        prrte_event_signal_del(&evitm->ev);
+    }
+    PRRTE_LIST_DESTRUCT(&forwarded_signals);
 
     /* cleanup and leave */
     ret = PMIx_tool_finalize();
@@ -2288,4 +2325,42 @@ static void abort_signal_callback(int fd)
     if (-1 == write(term_pipe[1], &foo, 1)) {
         exit(1);
     }
+}
+
+static void signal_forward_callback(int signum)
+{
+    pmix_status_t rc;
+    pmix_proc_t proc;
+    pmix_info_t info;
+
+    if (verbose){
+        fprintf(stderr, "%s: Forwarding signal %d to job\n",
+                prrte_tool_basename, signum);
+    }
+
+    /* send the signal out to the processes */
+    PMIX_LOAD_PROCID(&proc, spawnednspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
+    rc = PMIx_Job_control(&proc, 1, &info, 1, NULL, NULL);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)",
+                signum, spawnednspace, PMIx_Error_string(rc));
+    }
+}
+
+/**
+ * Deal with sigpipe errors
+ */
+static int sigpipe_error_count=0;
+static void epipe_signal_callback(int signal)
+{
+    sigpipe_error_count++;
+
+    if (10 < sigpipe_error_count) {
+        /* time to abort */
+        prrte_output(0, "%s: SIGPIPE detected - aborting", prrte_tool_basename);
+        clean_abort(0, 0, NULL);
+    }
+
+    return;
 }

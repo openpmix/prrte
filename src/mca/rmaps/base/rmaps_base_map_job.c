@@ -601,6 +601,10 @@ void prrte_rmaps_base_display_map(prrte_job_t *jdata)
          /* test locality - for the first node, print the locality of each proc relative to the first one */
         node = (prrte_node_t*)prrte_pointer_array_get_item(jdata->map->nodes, 0);
         p0 = (prrte_proc_t*)prrte_pointer_array_get_item(node->procs, 0);
+        if (NULL == p0) {
+            PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+            return;
+        }
         p0bitmap = NULL;
         if (prrte_get_attribute(&p0->attributes, PRRTE_PROC_CPU_BITMAP, (void**)&p0bitmap, PRRTE_STRING) &&
             NULL != p0bitmap) {

@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
@@ -33,6 +33,7 @@
 #endif
 
 #include "src/util/output.h"
+#include "src/class/prrte_list.h"
 
 typedef event_callback_fn prrte_event_cbfunc_t;
 
@@ -151,6 +152,12 @@ PRRTE_EXPORT prrte_event_t* prrte_event_new(prrte_event_base_t *b, int fd,
 #define prrte_event_signal_initalized(x) event_initialized((x))
 
 #define prrte_event_loop(b, fg) event_base_loop((b), (fg))
+
+typedef struct {
+    prrte_list_item_t super;
+    prrte_event_t ev;
+} prrte_event_list_item_t;
+PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_event_list_item_t);
 
 END_C_DECLS
 

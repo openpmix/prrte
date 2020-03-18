@@ -236,13 +236,15 @@ void prrte_plm_base_recv(int status, prrte_process_name_t* sender,
              */
             app = (prrte_app_context_t*)prrte_pointer_array_get_item(parent->apps, 0);
             child_app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, 0);
-            prefix_dir = NULL;
-            if (prrte_get_attribute(&app->attributes, PRRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PRRTE_STRING) &&
-                !prrte_get_attribute(&child_app->attributes, PRRTE_APP_PREFIX_DIR, NULL, PRRTE_STRING)) {
-                prrte_set_attribute(&child_app->attributes, PRRTE_APP_PREFIX_DIR, PRRTE_ATTR_GLOBAL, prefix_dir, PRRTE_STRING);
-            }
-            if (NULL != prefix_dir) {
-                free(prefix_dir);
+            if (NULL != app && NULL != child_app) {
+                prefix_dir = NULL;
+                if (prrte_get_attribute(&app->attributes, PRRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PRRTE_STRING) &&
+                    !prrte_get_attribute(&child_app->attributes, PRRTE_APP_PREFIX_DIR, NULL, PRRTE_STRING)) {
+                    prrte_set_attribute(&child_app->attributes, PRRTE_APP_PREFIX_DIR, PRRTE_ATTR_GLOBAL, prefix_dir, PRRTE_STRING);
+                }
+                if (NULL != prefix_dir) {
+                    free(prefix_dir);
+                }
             }
             /* link the spawned job to the spawner */
             PRRTE_RETAIN(jdata);

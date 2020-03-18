@@ -180,6 +180,10 @@ static void _query(int sd, short args, void *cbdata)
                         PMIX_INFO_LOAD(&info[0], PMIX_NSPACE, jdata->nspace, PMIX_STRING);
                         /* add the cmd line */
                         app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, 0);
+                        if (NULL == app) {
+                            ret = PMIX_ERR_NOT_FOUND;
+                            goto done;
+                        }
                         cmdline = prrte_argv_join(app->argv, ' ');
                         PMIX_INFO_LOAD(&info[1], PMIX_CMD_LINE, cmdline, PMIX_STRING);
                         free(cmdline);
