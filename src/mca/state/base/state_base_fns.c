@@ -643,12 +643,10 @@ void prrte_state_base_track_procs(int fd, short argc, void *cbdata)
 
     /* get the job object for this proc */
     if (NULL == (jdata = prrte_get_job_data_object(proc->jobid))) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         goto cleanup;
     }
     pdata = (prrte_proc_t*)prrte_pointer_array_get_item(jdata->procs, proc->vpid);
     if (NULL == pdata) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         goto cleanup;
     }
 
