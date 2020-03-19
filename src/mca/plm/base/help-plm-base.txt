@@ -11,6 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -173,3 +174,12 @@ detected that the following node differs in endianness:
   Local endian:  %s
 
 Please correct the situation and try again.
+#
+[timeout]
+The user-provided time limit for job execution has been reached:
+
+  Timeout: %d seconds
+
+The job will now be aborted.  Please check your code and/or
+adjust/remove the job execution time limit (as specified by --timeout
+command line option oror MPIEXEC_TIMEOUT environment variable).

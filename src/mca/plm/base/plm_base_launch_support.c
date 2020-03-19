@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2017 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2009      Institut National de Recherche en Informatique
  *                         et Automatique. All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
@@ -741,12 +741,22 @@ static void timeout_cb(int fd, short event, void *cbdata)
     prrte_job_t *jdata = (prrte_job_t*)cbdata;
     prrte_timer_t *timer=NULL;
     prrte_proc_t *proc;
-    int i, rc;
+    int i, rc, timeout, *tp;
     prrte_pointer_array_t parray;
 
     PRRTE_ACQUIRE_OBJECT(jdata);
 
-prrte_output(0, "JOB TIMEOUT");
+    /* Display a useful message to the user */
+    tp = &timeout;
+    if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT,
+                             (void**)&tp, PRRTE_INT)) {
+        /* This shouldn't happen, but at least don't segv / display
+           *something* if it does */
+        timeout = -1;
+    }
+    prrte_show_help("help-plm-base.txt", "timeout",
+                    true, timeout);
+
     /* clear the timer */
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT_EVENT, (void**)&timer, PRRTE_PTR)) {
         /* timer is an prrte_timer_t object */
