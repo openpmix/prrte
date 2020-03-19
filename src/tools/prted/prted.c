@@ -259,6 +259,17 @@ int main(int argc, char *argv[])
     prrte_init_util();
     prrte_tool_basename = prrte_basename(argv[0]);
 
+    /* because we have to use the schizo framework prior to parsing the
+     * incoming argv for cmd line options, do a hacky search to support
+     * passing of verbosity option for schizo debugging */
+    for (i=1; NULL != argv[i]; i++) {
+        if (0 == strcmp(argv[i], "schizo_base_verbose")) {
+            /* the next option is the verbosity level */
+            prrte_setenv("PRRTE_MCA_schizo_base_verbose", argv[i+1], true, &environ);
+            break;
+        }
+    }
+
     /* setup our cmd line */
     prrte_cmd_line = PRRTE_NEW(prrte_cmd_line_t);
     if (PRRTE_SUCCESS != (ret = prrte_cmd_line_add(prrte_cmd_line, prrte_cmd_line_opts))) {

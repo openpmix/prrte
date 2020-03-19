@@ -192,6 +192,14 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
             kv = PRRTE_NEW(prrte_info_item_t);
             PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, node->name, PMIX_STRING);
             prrte_list_append(&iarray->infolist, &kv->super);
+            /* add any aliases */
+            if (prrte_get_attribute(&node->attributes, PRRTE_NODE_ALIAS, (void**)&regex, PRRTE_STRING) &&
+                NULL != regex) {
+                kv = PRRTE_NEW(prrte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME_ALIASES, regex, PMIX_STRING);
+                prrte_list_append(&iarray->infolist, &kv->super);
+                free(regex);
+            }
             /* pass the node ID */
             kv = PRRTE_NEW(prrte_info_item_t);
             PMIX_INFO_LOAD(&kv->info, PMIX_NODEID, &node->index, PMIX_UINT32);
