@@ -243,106 +243,106 @@ PRRTE_CLASS_DECLARATION(prrte_pmix_mdx_caddy_t);
     } while(0);
 
 /* define the server module functions */
-extern pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc, void* server_object,
-                                                     pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_client_finalized_fn(const pmix_proc_t *proc, void* server_object,
-                                                     pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_abort_fn(const pmix_proc_t *proc, void *server_object,
-                                          int status, const char msg[],
-                                          pmix_proc_t procs[], size_t nprocs,
-                                          pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
-                                            const pmix_info_t info[], size_t ninfo,
-                                            char *data, size_t ndata,
-                                            pmix_modex_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_dmodex_req_fn(const pmix_proc_t *proc,
-                                               const pmix_info_t info[], size_t ninfo,
-                                               pmix_modex_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc,
-                                            const pmix_info_t info[], size_t ninfo,
+PRRTE_EXPORT extern pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc, void* server_object,
+                                                                  pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_client_finalized_fn(const pmix_proc_t *proc, void* server_object,
+                                                                  pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_abort_fn(const pmix_proc_t *proc, void *server_object,
+                                                       int status, const char msg[],
+                                                       pmix_proc_t procs[], size_t nprocs,
+                                                       pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
+                                                         const pmix_info_t info[], size_t ninfo,
+                                                         char *data, size_t ndata,
+                                                         pmix_modex_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_dmodex_req_fn(const pmix_proc_t *proc,
+                                                            const pmix_info_t info[], size_t ninfo,
+                                                            pmix_modex_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc,
+                                                         const pmix_info_t info[], size_t ninfo,
+                                                         pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
+                                                        const pmix_info_t info[], size_t ninfo,
+                                                        pmix_lookup_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
+                                                           const pmix_info_t info[], size_t ninfo,
+                                                           pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_spawn_fn(const pmix_proc_t *proc,
+                                                       const pmix_info_t job_info[], size_t ninfo,
+                                                       const pmix_app_t apps[], size_t napps,
+                                                       pmix_spawn_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
+                                                         const pmix_info_t info[], size_t ninfo,
+                                                         pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_disconnect_fn(const pmix_proc_t procs[], size_t nprocs,
+                                                            const pmix_info_t info[], size_t ninfo,
+                                                            pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_register_events_fn(pmix_status_t *codes, size_t ncodes,
+                                                                 const pmix_info_t info[], size_t ninfo,
+                                                                 pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_deregister_events_fn(pmix_status_t *codes, size_t ncodes,
+                                                                   pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_notify_event(pmix_status_t code,
+                                                           const pmix_proc_t *source,
+                                                           pmix_data_range_t range,
+                                                           pmix_info_t info[], size_t ninfo,
+                                                           pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_query_fn(pmix_proc_t *proct,
+                                                       pmix_query_t *queries, size_t nqueries,
+                                                       pmix_info_cbfunc_t cbfunc,
+                                                       void *cbdata);
+PRRTE_EXPORT extern void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo,
+                                                pmix_tool_connection_cbfunc_t cbfunc,
+                                                void *cbdata);
+
+PRRTE_EXPORT extern void pmix_server_log_fn(const pmix_proc_t *client,
+                                            const pmix_info_t data[], size_t ndata,
+                                            const pmix_info_t directives[], size_t ndirs,
                                             pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
-                                           const pmix_info_t info[], size_t ninfo,
-                                           pmix_lookup_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
-                                              const pmix_info_t info[], size_t ninfo,
-                                              pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_spawn_fn(const pmix_proc_t *proc,
-                                          const pmix_info_t job_info[], size_t ninfo,
-                                          const pmix_app_t apps[], size_t napps,
-                                          pmix_spawn_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
-                                            const pmix_info_t info[], size_t ninfo,
-                                            pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_disconnect_fn(const pmix_proc_t procs[], size_t nprocs,
-                                               const pmix_info_t info[], size_t ninfo,
-                                               pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_register_events_fn(pmix_status_t *codes, size_t ncodes,
-                                                    const pmix_info_t info[], size_t ninfo,
-                                                    pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_deregister_events_fn(pmix_status_t *codes, size_t ncodes,
-                                                      pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_notify_event(pmix_status_t code,
-                                              const pmix_proc_t *source,
-                                              pmix_data_range_t range,
-                                              pmix_info_t info[], size_t ninfo,
-                                              pmix_op_cbfunc_t cbfunc, void *cbdata);
-extern pmix_status_t pmix_server_query_fn(pmix_proc_t *proct,
-                                          pmix_query_t *queries, size_t nqueries,
-                                          pmix_info_cbfunc_t cbfunc,
-                                          void *cbdata);
-extern void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo,
-                                   pmix_tool_connection_cbfunc_t cbfunc,
-                                   void *cbdata);
 
-extern void pmix_server_log_fn(const pmix_proc_t *client,
-                               const pmix_info_t data[], size_t ndata,
-                               const pmix_info_t directives[], size_t ndirs,
-                               pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
+                                                       pmix_alloc_directive_t directive,
+                                                       const pmix_info_t data[], size_t ndata,
+                                                       pmix_info_cbfunc_t cbfunc, void *cbdata);
 
-extern pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
-                                          pmix_alloc_directive_t directive,
-                                          const pmix_info_t data[], size_t ndata,
-                                          pmix_info_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
+                                                          const pmix_proc_t targets[], size_t ntargets,
+                                                          const pmix_info_t directives[], size_t ndirs,
+                                                          pmix_info_cbfunc_t cbfunc, void *cbdata);
 
-extern pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
-                                             const pmix_proc_t targets[], size_t ntargets,
-                                             const pmix_info_t directives[], size_t ndirs,
-                                             pmix_info_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
+                                                          const pmix_info_t directives[], size_t ndirs,
+                                                          pmix_iof_channel_t channels,
+                                                          pmix_op_cbfunc_t cbfunc, void *cbdata);
 
-extern pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
-                                             const pmix_info_t directives[], size_t ndirs,
-                                             pmix_iof_channel_t channels,
-                                             pmix_op_cbfunc_t cbfunc, void *cbdata);
-
-extern pmix_status_t pmix_server_stdin_fn(const pmix_proc_t *source,
-                                          const pmix_proc_t targets[], size_t ntargets,
-                                          const pmix_info_t directives[], size_t ndirs,
-                                          const pmix_byte_object_t *bo,
-                                          pmix_op_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_stdin_fn(const pmix_proc_t *source,
+                                                       const pmix_proc_t targets[], size_t ntargets,
+                                                       const pmix_info_t directives[], size_t ndirs,
+                                                       const pmix_byte_object_t *bo,
+                                                       pmix_op_cbfunc_t cbfunc, void *cbdata);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
-extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
-                                          const pmix_proc_t procs[], size_t nprocs,
-                                          const pmix_info_t directives[], size_t ndirs,
-                                          pmix_info_cbfunc_t cbfunc, void *cbdata);
+PRRTE_EXPORT extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
+                                                       const pmix_proc_t procs[], size_t nprocs,
+                                                       const pmix_info_t directives[], size_t ndirs,
+                                                       pmix_info_cbfunc_t cbfunc, void *cbdata);
 #endif
 
-void prrte_pmix_server_tool_conn_complete(prrte_job_t *jdata,
-                                         pmix_server_req_t *req);
+PRRTE_EXPORT void prrte_pmix_server_tool_conn_complete(prrte_job_t *jdata,
+                                                       pmix_server_req_t *req);
 
 /* declare the RML recv functions for responses */
-extern void pmix_server_launch_resp(int status, prrte_process_name_t* sender,
-                                    prrte_buffer_t *buffer,
-                                    prrte_rml_tag_t tg, void *cbdata);
+PRRTE_EXPORT extern void pmix_server_launch_resp(int status, prrte_process_name_t* sender,
+                                                 prrte_buffer_t *buffer,
+                                                 prrte_rml_tag_t tg, void *cbdata);
 
-extern void pmix_server_keyval_client(int status, prrte_process_name_t* sender,
-                                      prrte_buffer_t *buffer,
-                                      prrte_rml_tag_t tg, void *cbdata);
+PRRTE_EXPORT extern void pmix_server_keyval_client(int status, prrte_process_name_t* sender,
+                                                   prrte_buffer_t *buffer,
+                                                   prrte_rml_tag_t tg, void *cbdata);
 
-extern void pmix_server_notify(int status, prrte_process_name_t* sender,
-                               prrte_buffer_t *buffer,
-                               prrte_rml_tag_t tg, void *cbdata);
+PRRTE_EXPORT extern void pmix_server_notify(int status, prrte_process_name_t* sender,
+                                            prrte_buffer_t *buffer,
+                                            prrte_rml_tag_t tg, void *cbdata);
 
 /* exposed shared variables */
 typedef struct {
