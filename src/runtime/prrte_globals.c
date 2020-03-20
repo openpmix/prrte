@@ -72,6 +72,7 @@ char *prrte_data_server_uri = NULL;
 char *prrte_tool_basename = NULL;
 bool prrte_dvm_ready = false;
 prrte_pointer_array_t *prrte_cache = NULL;
+bool prrte_persistent = true;
 
 /* PRRTE OOB port flags */
 bool prrte_static_ports = false;

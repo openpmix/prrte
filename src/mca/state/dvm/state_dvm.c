@@ -375,7 +375,7 @@ static void vm_ready(int fd, short args, void *cbdata)
         }
         /* notify that the vm is ready */
         if (0 > prrte_state_base_parent_fd) {
-            if (prrte_state_base_ready_msg) {
+            if (prrte_state_base_ready_msg && prrte_persistent) {
                 fprintf(stdout, "DVM ready\n"); fflush(stdout);
             }
         } else {
@@ -505,38 +505,47 @@ static void check_complete(int fd, short args, void *cbdata)
     PRRTE_PMIX_WAIT_THREAD(&lock);
     PRRTE_PMIX_DESTRUCT_LOCK(&lock);
 
-    /* tell the data server to purge any data from this nspace */
-    buf = PRRTE_NEW(prrte_buffer_t);
-    /* room number is ignored, but has to be included for pack sequencing */
-    i=0;
-    prrte_dss.pack(buf, &i, 1, PRRTE_INT);
-    prrte_dss.pack(buf, &command, 1, PRRTE_UINT8);
-    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-    /* pack the nspace to be purged */
-    pname.rank = PMIX_RANK_WILDCARD;
-    if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &pname, 1, PMIX_PROC))) {
-        PMIX_ERROR_LOG(ret);
-        goto release;
+    if (!prrte_persistent) {
+        /* just shut us down */
+        prrte_plm.terminate_orteds();
+        PRRTE_RELEASE(caddy);
+        return;
     }
-    PMIX_DATA_BUFFER_UNLOAD(&pbkt, pbo.bytes, pbo.size);
-    bo.bytes = (uint8_t*)pbo.bytes;
-    bo.size = pbo.size;
-    /* pack it into our command */
-    boptr = &bo;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buf, &boptr, 1, PRRTE_BYTE_OBJECT))) {
-        PRRTE_ERROR_LOG(rc);
+
+    if (NULL != prrte_data_server_uri) {
+        /* tell the data server to purge any data from this nspace */
+        buf = PRRTE_NEW(prrte_buffer_t);
+        /* room number is ignored, but has to be included for pack sequencing */
+        i=0;
+        prrte_dss.pack(buf, &i, 1, PRRTE_INT);
+        prrte_dss.pack(buf, &command, 1, PRRTE_UINT8);
+        PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
+        /* pack the nspace to be purged */
+        pname.rank = PMIX_RANK_WILDCARD;
+        if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &pname, 1, PMIX_PROC))) {
+            PMIX_ERROR_LOG(ret);
+            goto release;
+        }
+        PMIX_DATA_BUFFER_UNLOAD(&pbkt, pbo.bytes, pbo.size);
+        bo.bytes = (uint8_t*)pbo.bytes;
+        bo.size = pbo.size;
+        /* pack it into our command */
+        boptr = &bo;
+        if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buf, &boptr, 1, PRRTE_BYTE_OBJECT))) {
+            PRRTE_ERROR_LOG(rc);
+            free(bo.bytes);
+            PRRTE_RELEASE(buf);
+            goto release;
+        }
         free(bo.bytes);
-        PRRTE_RELEASE(buf);
-        goto release;
-    }
-    free(bo.bytes);
-    /* send it to the data server */
-    rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_NAME, buf,
-                                 PRRTE_RML_TAG_DATA_SERVER,
-                                 prrte_rml_send_callback, NULL);
-    if (PRRTE_SUCCESS != rc) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_RELEASE(buf);
+        /* send it to the data server */
+        rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_NAME, buf,
+                                     PRRTE_RML_TAG_DATA_SERVER,
+                                     prrte_rml_send_callback, NULL);
+        if (PRRTE_SUCCESS != rc) {
+            PRRTE_ERROR_LOG(rc);
+            PRRTE_RELEASE(buf);
+        }
     }
 
   release:

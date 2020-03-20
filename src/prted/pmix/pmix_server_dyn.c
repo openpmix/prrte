@@ -160,8 +160,8 @@ static void spawn(int sd, short args, void *cbdata)
 
     /* send it to the HNP for processing - might be myself! */
     if (PRRTE_SUCCESS != (rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_HNP, buf,
-                                                      PRRTE_RML_TAG_PLM,
-                                                      prrte_rml_send_callback, NULL))) {
+                                                        PRRTE_RML_TAG_PLM,
+                                                        prrte_rml_send_callback, NULL))) {
         PRRTE_ERROR_LOG(rc);
         prrte_hotel_checkout(&prrte_pmix_server_globals.reqs, req->room_num);
         PRRTE_RELEASE(buf);

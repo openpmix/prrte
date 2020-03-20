@@ -699,3 +699,7 @@ correct and retry.
   Error:     %s
   Nodename:  %s
   Rank:      %lu
+#
+[use-pterm]
+Use of %s to terminate the PRRTE DVM has been deprecated. Please use
+the "pterm" tool instead in the future.
