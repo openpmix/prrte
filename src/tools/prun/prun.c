@@ -156,10 +156,8 @@ static bool forcibly_die=false;
 static prrte_event_t term_handler;
 static int term_pipe[2];
 static prrte_atomic_lock_t prun_abort_inprogress_lock = PRRTE_ATOMIC_LOCK_INIT;
-static bool proxyrun = false;
 static bool verbose = false;
 static prrte_cmd_line_t *prrte_cmd_line = NULL;
-static bool want_prefix_by_default = (bool) PRRTE_WANT_PRRTE_PREFIX_BY_DEFAULT;
 static prrte_list_t forwarded_signals;
 
 /* prun-specific options */
@@ -621,7 +619,7 @@ static void launchhandler(size_t evhdlr_registration_id,
 int prun(int argc, char *argv[])
 {
     int rc=1, i;
-    char *param, *ptr, *tpath;
+    char *param, *ptr;
     prrte_pmix_lock_t lock, rellock;
     prrte_list_t apps;
     prrte_pmix_app_t *app;
@@ -645,10 +643,8 @@ int prun(int argc, char *argv[])
     char *mytmpdir;
     char **pargv;
     int pargc;
-    pmix_rank_t zero;
     char **tmp;
     prrte_ess_base_signal_t *sig;
-    pmix_nspace_t dvmnspace;
     prrte_event_list_item_t *evitm;
 
     /* init the globals */
@@ -745,16 +741,12 @@ int prun(int argc, char *argv[])
         }
     }
 
-    /* detect if we are running as a proxy and setup the rendezvous
-     * and session directory files */
+    /* setup the rendezvous and session directory files */
     if (PRRTE_SUCCESS != (rc = prrte_schizo.detect_proxy(pargv, &rfile))) {
         if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
             PRRTE_ERROR_LOG(rc);
             return rc;
         }
-    }
-    if (PRRTE_SUCCESS == rc) {
-        proxyrun = true;
     }
 
     /* get our session directory */
@@ -865,434 +857,180 @@ int prun(int argc, char *argv[])
         return rc;
     }
 
-    if (proxyrun) {
-        /* we need to start our own private DVM - start by initializing
-         * PMIx tool support, indicating that we don't want to connect
-         * to anyone */
-        PRRTE_CONSTRUCT(&tinfo, prrte_list_t);
+    /* setup options */
+    PRRTE_CONSTRUCT(&tinfo, prrte_list_t);
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "do-not-connect")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         PMIX_INFO_LOAD(ds->info, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
-
-        /* we have to provide an nspace/rank for ourselves */
+    } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "system-server-first")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        prrte_asprintf(&param, "%lu.%lu", (unsigned long)getpid(), (unsigned long)geteuid());
-        PMIX_INFO_LOAD(ds->info, PMIX_TOOL_NSPACE, param, PMIX_STRING);
-        free(param);
+        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
-
+    } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "system-server-only")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        zero=0;
-        PMIX_INFO_LOAD(ds->info, PMIX_TOOL_RANK, &zero, PMIX_PROC_RANK);
+        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
-
-        /* pass our hostname so the PMIx library agrees with us */
+    }
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "wait-to-connect", 0, 0)) &&
+        0 < pval->data.integer) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_HOSTNAME, prrte_process_info.nodename, PMIX_STRING);
+        ui32 = pval->data.integer;
+        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
         prrte_list_append(&tinfo, &ds->super);
-
-        /* set our session directory to something hopefully unique so
-         * our rendezvous files don't conflict with other prun/prte
-         * instances */
+    }
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "num-connect-retries", 0, 0)) &&
+        0 < pval->data.integer) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_TMPDIR, mytmpdir, PMIX_STRING);
+        ui32 = pval->data.integer;
+        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
         prrte_list_append(&tinfo, &ds->super);
-
-        /* if we were launched by a debugger, then we need to have
-         * notification of our termination sent */
-        if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            flag = false;
-            PMIX_INFO_LOAD(ds->info, PMIX_EVENT_SILENT_TERMINATION, &flag, PMIX_BOOL);
-            prrte_list_append(&tinfo, &ds->super);
-        }
-
-        /* ensure we don't try to use the usock PTL component */
+    }
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "pid", 0, 0)) &&
+        0 < pval->data.integer) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_USOCK_DISABLE, NULL, PMIX_BOOL);
+        pid = pval->data.integer;
+        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
         prrte_list_append(&tinfo, &ds->super);
+    }
+    /* ensure we don't try to use the usock PTL component */
+    ds = PRRTE_NEW(prrte_ds_info_t);
+    PMIX_INFO_CREATE(ds->info, 1);
+    PMIX_INFO_LOAD(ds->info, PMIX_USOCK_DISABLE, NULL, PMIX_BOOL);
+    prrte_list_append(&tinfo, &ds->super);
 
-        /* we are also a launcher, so pass that down so PMIx knows
-         * to setup rendezvous points */
+    /* set our session directory to something hopefully unique so
+     * our rendezvous files don't conflict with other prun/prte
+     * instances */
+    ds = PRRTE_NEW(prrte_ds_info_t);
+    PMIX_INFO_CREATE(ds->info, 1);
+    PMIX_INFO_LOAD(ds->info, PMIX_SERVER_TMPDIR, mytmpdir, PMIX_STRING);
+    prrte_list_append(&tinfo, &ds->super);
+
+    /* we are also a launcher, so pass that down so PMIx knows
+     * to setup rendezvous points */
+    ds = PRRTE_NEW(prrte_ds_info_t);
+    PMIX_INFO_CREATE(ds->info, 1);
+    PMIX_INFO_LOAD(ds->info, PMIX_LAUNCHER, NULL, PMIX_BOOL);
+    prrte_list_append(&tinfo, &ds->super);
+    /* we always support session-level rendezvous */
+    ds = PRRTE_NEW(prrte_ds_info_t);
+    PMIX_INFO_CREATE(ds->info, 1);
+    PMIX_INFO_LOAD(ds->info, PMIX_SERVER_TOOL_SUPPORT, NULL, PMIX_BOOL);
+    prrte_list_append(&tinfo, &ds->super);
+    /* use only one listener */
+    ds = PRRTE_NEW(prrte_ds_info_t);
+    PMIX_INFO_CREATE(ds->info, 1);
+    PMIX_INFO_LOAD(ds->info, PMIX_SINGLE_LISTENER, NULL, PMIX_BOOL);
+    prrte_list_append(&tinfo, &ds->super);
+
+    /* setup any output format requests */
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "tag-output")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_LAUNCHER, NULL, PMIX_BOOL);
+        PMIX_INFO_LOAD(ds->info, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
-        /* we always support session-level rendezvous */
+    }
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "timestamp-output")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_TOOL_SUPPORT, NULL, PMIX_BOOL);
+        PMIX_INFO_LOAD(ds->info, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
-        /* use only one listener */
+    }
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "xml")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SINGLE_LISTENER, NULL, PMIX_BOOL);
+        PMIX_INFO_LOAD(ds->info, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
+    }
 
-        /* convert to array of info */
-        ninfo = prrte_list_get_size(&tinfo);
-        PMIX_INFO_CREATE(iptr, ninfo);
-        n = 0;
-        PRRTE_LIST_FOREACH(ds, &tinfo, prrte_ds_info_t) {
-            PMIX_INFO_XFER(&iptr[n], ds->info);
-            ++n;
-        }
-        PRRTE_LIST_DESTRUCT(&tinfo);
-
-        if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
-            fprintf(stderr, "%s failed to initialize\n", prrte_tool_basename);
-            exit(1);
-        }
-        PMIX_INFO_FREE(iptr, ninfo);
-        /* now setup the DVM "app" so we can PMIx_Spawn it - this will
-         * simply fork/exec on our behalf */
-        tpath = NULL;
-        char *tmp_basename;
-        if ('/' == argv[0][0]) {
-            tpath = prrte_dirname(pargv[0]);
-        } else if (!prrte_cmd_line_is_taken(prrte_cmd_line, "prefix")) {
-            /* get the absolute path of our command for relative paths */
-            param = prrte_find_absolute_path(pargv[0]);
-            if (NULL == param) {
-                fprintf(stderr, "%s was unable to determine the absolute path for its command\n", prrte_tool_basename);
-                exit(1);
-            }
-            tpath = prrte_dirname(param);
-            free(param);
-            param = NULL;
-        }
-
-        if (NULL != tpath) {
-            /* Quick sanity check to ensure we got
-               something/bin/<exec_name> and that the installation
-               tree is at least more or less what we expect it to
-               be */
-            tmp_basename = prrte_basename(tpath);
-            if (0 == strcmp("bin", tmp_basename)) {
-                char* tmp = tpath;
-                tpath = prrte_dirname(tmp);
-                free(tmp);
-            } else {
-                free(tpath);
-                tpath = NULL;
-            }
-            free(tmp_basename);
-        }
-
-        /* see if they told us a prefix to use */
-        if (prrte_cmd_line_is_taken(prrte_cmd_line, "prefix") &&
-            NULL != tpath) {
-            /* if they don't match, then that merits a warning */
-            pval = prrte_cmd_line_get_param(prrte_cmd_line, "prefix", 0, 0);
-            param = strdup(pval->data.string);
-            /* ensure we strip any trailing '/' */
-            if (0 == strcmp(PRRTE_PATH_SEP, &(param[strlen(param)-1]))) {
-                param[strlen(param)-1] = '\0';
-            }
-            tmp_basename = strdup(tpath);
-            if (0 == strcmp(PRRTE_PATH_SEP, &(tmp_basename[strlen(tmp_basename)-1]))) {
-                tmp_basename[strlen(tmp_basename)-1] = '\0';
-            }
-            if (0 != strcmp(param, tmp_basename)) {
-                prrte_show_help("help-prun.txt", "prun:double-prefix",
-                                true, prrte_tool_basename, prrte_tool_basename,
-                                param, tmp_basename, prrte_tool_basename);
-            }
-            /* use the prefix over the path-to-argv[0] so that
-             * people can specify the backend prefix as different
-             * from the local one
-             */
-            free(tpath);
-            tpath = NULL;
-            free(tmp_basename);
-        } else if (NULL != tpath) {
-            param = strdup(tpath);
-            free(tpath);
-        } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "prefix")){
-            /* must be --prefix alone */
-            pval = prrte_cmd_line_get_param(prrte_cmd_line, "prefix", 0, 0);
-            param = strdup(pval->data.string);
-        } else if (want_prefix_by_default) {
-            /* --enable-prrte-prefix-default was given to prun */
-            param = strdup(prrte_install_dirs.prefix);
-        }
-
-        size_t param_len;
-        /* "Parse" the param, aka remove superfluous path_sep. */
-        param_len = strlen(param);
-        while (0 == strcmp (PRRTE_PATH_SEP, &(param[param_len-1]))) {
-            param[param_len-1] = '\0';
-            param_len--;
-            if (0 == param_len) {
-                prrte_show_help("help-prun.txt", "prun:empty-prefix",
-                                true, prrte_tool_basename, prrte_tool_basename);
-                free(param);
-                return PRRTE_ERR_FATAL;
-            }
-        }
-
-        /* param now contains the full path executable for prte */
-        PMIX_APP_CREATE(papps, 1);
-        prrte_asprintf(&papps->cmd, "%s/bin/prte", param);
-        free(param);
-        prrte_argv_append_nosize(&papps->argv, "prte");
-        prrte_schizo.parse_proxy_cli(prrte_cmd_line, &papps->argv);
-        prrte_argv_append_nosize(&papps->argv, "--no-ready-msg");
-        papps->maxprocs = 1;
-
-        /* copy our environment */
-        papps->env = prrte_argv_copy(environ);
-
-        /* pass along a rendezvous file to use that we will attach to */
-        prrte_setenv("PMIX_LAUNCHER_RENDEZVOUS_FILE", rfile, true, &papps->env);
-
-        /* set our session directory to something hopefully unique so
-         * our rendezvous files don't conflict with other prun/prte
-         * instances */
-        prrte_setenv("PMIX_SERVER_TMPDIR", mytmpdir, true, &papps->env);
-
-        /* start the DVM */
-        ret = PMIx_Spawn(NULL, 0, papps, 1, dvmnspace);
-        PMIX_APP_RELEASE(papps);
-        if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
-            fprintf(stderr, "DVM failed to start on error %s\n", PMIx_Error_string(ret));
-            PMIx_tool_finalize();
-            exit(1);
-        }
-        /* register to hear if/when prte terminates */
-
-        /* connect to it */
-        PRRTE_CONSTRUCT(&tinfo, prrte_list_t);
+    /* if they specified the URI, then pass it along */
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "dvm-uri", 0, 0))) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_TOOL_ATTACHMENT_FILE, rfile, PMIX_STRING);
+        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_URI, pval->data.string, PMIX_STRING);
         prrte_list_append(&tinfo, &ds->super);
+    }
 
+    /* if we were launched by a debugger, then we need to have
+     * notification of our termination sent */
+    if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        rc = 200;
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_MAX_RETRIES, &rc, PMIX_INT32);
+        flag = false;
+        PMIX_INFO_LOAD(ds->info, PMIX_EVENT_SILENT_TERMINATION, &flag, PMIX_BOOL);
         prrte_list_append(&tinfo, &ds->super);
+    }
 
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        rc = 0;
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_RETRY_DELAY, &rc, PMIX_INT32);
-        prrte_list_append(&tinfo, &ds->super);
+    /* convert to array of info */
+    ninfo = prrte_list_get_size(&tinfo);
+    PMIX_INFO_CREATE(iptr, ninfo);
+    n = 0;
+    PRRTE_LIST_FOREACH(ds, &tinfo, prrte_ds_info_t) {
+        PMIX_INFO_XFER(&iptr[n], ds->info);
+        ++n;
+    }
+    PRRTE_LIST_DESTRUCT(&tinfo);
 
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_TOOL_NSPACE, myproc.nspace, PMIX_STRING);
-        prrte_list_append(&tinfo, &ds->super);
+    /* now initialize PMIx - we have to indicate we are a launcher so that we
+     * will provide rendezvous points for tools to connect to us */
+    if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
+        fprintf(stderr, "%s failed to initialize, likely due to no DVM being available\n", prrte_tool_basename);
+        exit(1);
+    }
+    PMIX_INFO_FREE(iptr, ninfo);
 
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_TOOL_RANK, &myproc.rank, PMIX_PROC_RANK);
-        prrte_list_append(&tinfo, &ds->super);
-
-        /* convert to array of info */
-        ninfo = prrte_list_get_size(&tinfo);
-        PMIX_INFO_CREATE(iptr, ninfo);
-        n = 0;
-        PRRTE_LIST_FOREACH(ds, &tinfo, prrte_ds_info_t) {
-            PMIX_INFO_XFER(&iptr[n], ds->info);
-            ++n;
-        }
-        PRRTE_LIST_DESTRUCT(&tinfo);
-
-        ret = PMIx_tool_connect_to_server(&myproc, iptr, ninfo);
-        PMIX_INFO_FREE(iptr, ninfo);
-        if (PMIX_SUCCESS != ret) {
-            fprintf(stderr, "Could not connect to prte at nspace %s: %s\n", dvmnspace, PMIx_Error_string(ret));
-            PMIx_tool_finalize();
-            exit(1);
-        }
-
-    } else {
-
-        /* setup options */
-        PRRTE_CONSTRUCT(&tinfo, prrte_list_t);
-        if (prrte_cmd_line_is_taken(prrte_cmd_line, "do-not-connect")) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
-            prrte_list_append(&tinfo, &ds->super);
-        } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "system-server-first")) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-            prrte_list_append(&tinfo, &ds->super);
-        } else if (prrte_cmd_line_is_taken(prrte_cmd_line, "system-server-only")) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
-            prrte_list_append(&tinfo, &ds->super);
-        }
-        if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "wait-to-connect", 0, 0)) &&
-            0 < pval->data.integer) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            ui32 = pval->data.integer;
-            PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
-            prrte_list_append(&tinfo, &ds->super);
-        }
-        if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "num-connect-retries", 0, 0)) &&
-            0 < pval->data.integer) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            ui32 = pval->data.integer;
-            PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
-            prrte_list_append(&tinfo, &ds->super);
-        }
-        if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "pid", 0, 0)) &&
-            0 < pval->data.integer) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            pid = pval->data.integer;
-            PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
-            prrte_list_append(&tinfo, &ds->super);
-        }
-        /* ensure we don't try to use the usock PTL component */
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_USOCK_DISABLE, NULL, PMIX_BOOL);
-        prrte_list_append(&tinfo, &ds->super);
-
-        /* set our session directory to something hopefully unique so
-         * our rendezvous files don't conflict with other prun/prte
-         * instances */
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_TMPDIR, mytmpdir, PMIX_STRING);
-        prrte_list_append(&tinfo, &ds->super);
-
-        /* we are also a launcher, so pass that down so PMIx knows
-         * to setup rendezvous points */
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_LAUNCHER, NULL, PMIX_BOOL);
-        prrte_list_append(&tinfo, &ds->super);
-        /* we always support session-level rendezvous */
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_TOOL_SUPPORT, NULL, PMIX_BOOL);
-        prrte_list_append(&tinfo, &ds->super);
-        /* use only one listener */
-        ds = PRRTE_NEW(prrte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SINGLE_LISTENER, NULL, PMIX_BOOL);
-        prrte_list_append(&tinfo, &ds->super);
-
-        /* setup any output format requests */
-        if (prrte_cmd_line_is_taken(prrte_cmd_line, "tag-output")) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
-            prrte_list_append(&tinfo, &ds->super);
-        }
-        if (prrte_cmd_line_is_taken(prrte_cmd_line, "timestamp-output")) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
-            prrte_list_append(&tinfo, &ds->super);
-        }
-        if (prrte_cmd_line_is_taken(prrte_cmd_line, "xml")) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
-            prrte_list_append(&tinfo, &ds->super);
-        }
-
-        /* if they specified the URI, then pass it along */
-        if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "dvm-uri", 0, 0))) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_SERVER_URI, pval->data.string, PMIX_STRING);
-            prrte_list_append(&tinfo, &ds->super);
-        }
-
-        /* if we were launched by a debugger, then we need to have
-         * notification of our termination sent */
-        if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
-            ds = PRRTE_NEW(prrte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            flag = false;
-            PMIX_INFO_LOAD(ds->info, PMIX_EVENT_SILENT_TERMINATION, &flag, PMIX_BOOL);
-            prrte_list_append(&tinfo, &ds->super);
-        }
-
-        /* convert to array of info */
-        ninfo = prrte_list_get_size(&tinfo);
-        PMIX_INFO_CREATE(iptr, ninfo);
-        n = 0;
-        PRRTE_LIST_FOREACH(ds, &tinfo, prrte_ds_info_t) {
-            PMIX_INFO_XFER(&iptr[n], ds->info);
-            ++n;
-        }
-        PRRTE_LIST_DESTRUCT(&tinfo);
-
-        /* now initialize PMIx - we have to indicate we are a launcher so that we
-         * will provide rendezvous points for tools to connect to us */
-        if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
-            fprintf(stderr, "%s failed to initialize, likely due to no DVM being available\n", prrte_tool_basename);
-            exit(1);
-        }
-        PMIX_INFO_FREE(iptr, ninfo);
-
-        /* if the user just wants us to terminate a DVM, then do so */
-        if (prrte_cmd_line_is_taken(prrte_cmd_line, "terminate")) {
-            /* setup a lock to track the connection */
-            PRRTE_PMIX_CONSTRUCT_LOCK(&rellock);
-            /* register to trap connection loss */
-            pmix_status_t code[2] = {PMIX_ERR_UNREACH, PMIX_ERR_LOST_CONNECTION_TO_SERVER};
-            PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
-            PMIX_INFO_LOAD(&info, PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
-            PMIx_Register_event_handler(code, 2, &info, 1,
-                                        evhandler, regcbfunc, &lock);
+    /* if the user just wants us to terminate a DVM, then do so */
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "terminate")) {
+        /* advise the user to utilize "pterm" in the future */
+        prrte_show_help("help-prun.txt", "use-pterm", true, prrte_tool_basename);
+        /* setup a lock to track the connection */
+        PRRTE_PMIX_CONSTRUCT_LOCK(&rellock);
+        /* register to trap connection loss */
+        pmix_status_t code[2] = {PMIX_ERR_UNREACH, PMIX_ERR_LOST_CONNECTION_TO_SERVER};
+        PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
+        PMIX_INFO_LOAD(&info, PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
+        PMIx_Register_event_handler(code, 2, &info, 1,
+                                    evhandler, regcbfunc, &lock);
+        PRRTE_PMIX_WAIT_THREAD(&lock);
+        PRRTE_PMIX_DESTRUCT_LOCK(&lock);
+        flag = true;
+        PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
+        fprintf(stderr, "TERMINATING DVM...");
+        PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
+        rc = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
+        if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
+            goto DONE;
+        } else if (PMIX_SUCCESS == rc) {
+    #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
+            /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
+             * being called when the server terminates. The callback might be eventually
+             * called though then the connection to the server closes with
+             * status PMIX_ERR_COMM_FAILURE */
+            poll(NULL, 0, 1000);
+            infocb(PMIX_SUCCESS, NULL, 0, (void *)&lock, NULL, NULL);
+    #endif
             PRRTE_PMIX_WAIT_THREAD(&lock);
             PRRTE_PMIX_DESTRUCT_LOCK(&lock);
-            flag = true;
-            PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
-            if (!proxyrun) {
-                fprintf(stderr, "TERMINATING DVM...");
-            }
-            PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
-            rc = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
-            if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-                goto DONE;
-            } else if (PMIX_SUCCESS == rc) {
-        #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-                /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
-                 * being called when the server terminates. The callback might be eventually
-                 * called though then the connection to the server closes with
-                 * status PMIX_ERR_COMM_FAILURE */
-                poll(NULL, 0, 1000);
-                infocb(PMIX_SUCCESS, NULL, 0, (void *)&lock, NULL, NULL);
-        #endif
-                PRRTE_PMIX_WAIT_THREAD(&lock);
-                PRRTE_PMIX_DESTRUCT_LOCK(&lock);
-                /* wait for connection to depart */
-                PRRTE_PMIX_WAIT_THREAD(&rellock);
-                PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
-                /* wait for the connection to go away */
-            }
-            if (!proxyrun) {
-                fprintf(stderr, "DONE\n");
-            }
-#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-            return rc;
-    #else
-            goto DONE;
-    #endif
+            /* wait for connection to depart */
+            PRRTE_PMIX_WAIT_THREAD(&rellock);
+            PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
+            /* wait for the connection to go away */
         }
+        fprintf(stderr, "DONE\n");
+#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
+        return rc;
+#else
+        goto DONE;
+#endif
     }
+
 
     /* register a default event handler and pass it our release lock
      * so we can cleanly exit if the server goes away */
@@ -1793,41 +1531,6 @@ int prun(int argc, char *argv[])
 #endif
 
   DONE:
-    if (proxyrun) {
-        /* setup a lock to track the connection */
-        PRRTE_PMIX_CONSTRUCT_LOCK(&rellock);
-        /* register to trap connection loss */
-        pmix_status_t code[2] = {PMIX_ERR_UNREACH, PMIX_ERR_LOST_CONNECTION_TO_SERVER};
-        PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        PMIX_INFO_LOAD(&info, PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
-        PMIx_Register_event_handler(code, 2, &info, 1,
-                                    evhandler, regcbfunc, &lock);
-        PRRTE_PMIX_WAIT_THREAD(&lock);
-        PRRTE_PMIX_DESTRUCT_LOCK(&lock);
-        flag = true;
-        PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
-        PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        ret = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
-        if (PMIX_SUCCESS == ret || PMIX_OPERATION_SUCCEEDED == ret) {
-#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-            /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
-             * being called when the server successes. The callback might be eventually
-             * called though then the connection to the server closes with
-             * status PMIX_ERR_COMM_FAILURE */
-            poll(NULL, 0, 1000);
-            infocb(PMIX_SUCCESS, NULL, 0, (void *)&lock, NULL, NULL);
-#endif
-            PRRTE_PMIX_WAIT_THREAD(&lock);
-            PRRTE_PMIX_DESTRUCT_LOCK(&lock);
-            /* wait for connection to depart */
-            PRRTE_PMIX_WAIT_THREAD(&rellock);
-            PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
-        } else {
-            PRRTE_PMIX_DESTRUCT_LOCK(&lock);
-            PRRTE_PMIX_DESTRUCT_LOCK(&rellock);
-        }
-    }
-
     PRRTE_LIST_FOREACH(evitm, &forwarded_signals, prrte_event_list_item_t) {
         prrte_event_signal_del(&evitm->ev);
     }

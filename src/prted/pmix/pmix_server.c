@@ -434,8 +434,7 @@ int pmix_server_init(void)
      * PMIx connection point - only do this for the HNP as, in
      * at least one case, a daemon can be colocated with the
      * HNP and would overwrite the server rendezvous file */
-    if (prrte_pmix_server_globals.system_server &&
-        (PRRTE_PROC_IS_MASTER || PRRTE_PROC_IS_MASTER)) {
+    if (prrte_pmix_server_globals.system_server && PRRTE_PROC_IS_MASTER) {
         kv = PRRTE_NEW(prrte_value_t);
         kv->key = strdup(PMIX_SERVER_SYSTEM_SUPPORT);
         kv->type = PRRTE_BOOL;
@@ -468,6 +467,16 @@ int pmix_server_init(void)
     kv->type = PRRTE_BOOL;
     kv->data.flag = true;
     prrte_list_append(&ilist, &kv->super);
+
+    /* if we were launched by a debugger, then we need to have
+     * notification of our termination sent */
+    if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
+        kv = PRRTE_NEW(prrte_value_t);
+        kv->key = strdup(PMIX_EVENT_SILENT_TERMINATION);
+        kv->type = PRRTE_BOOL;
+        kv->data.flag = false;
+        prrte_list_append(&ilist, &kv->super);
+    }
 
     /* convert to an info array */
     ninfo = prrte_list_get_size(&ilist) + 2;

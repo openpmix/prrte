@@ -869,6 +869,7 @@ void prrte_plm_base_post_launch(int fd, short args, void *cbdata)
     prrte_state_caddy_t *caddy = (prrte_state_caddy_t*)cbdata;
     prrte_timer_t *timer=NULL;
     int time, *tp;
+    prrte_process_name_t name;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
 
@@ -893,6 +894,23 @@ void prrte_plm_base_post_launch(int fd, short args, void *cbdata)
     }
     /* update job state */
     caddy->jdata->state = caddy->job_state;
+
+    /* if we are not a persistent DVM, then we need to
+     * complete wiring up the iof */
+    if (!prrte_persistent) {
+        PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
+                             "%s plm:base:launch wiring up iof for job %s",
+                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                             PRRTE_JOBID_PRINT(jdata->jobid)));
+
+        /* push stdin - the IOF will know what to do with the specified target */
+        name.jobid = jdata->jobid;
+        name.vpid = jdata->stdin_target;
+
+        if (PRRTE_SUCCESS != (rc = prrte_iof.push(&name, PRRTE_IOF_STDIN, 0))) {
+            PRRTE_ERROR_LOG(rc);
+        }
+    }
 
     /* notify the spawn requestor */
     rc = prrte_plm_base_spawn_reponse(PRRTE_SUCCESS, jdata);
