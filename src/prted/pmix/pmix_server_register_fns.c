@@ -332,6 +332,11 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     PMIX_INFO_LOAD(&kv->info, PMIX_BINDTO, prrte_hwloc_base_print_binding(jdata->map->binding), PMIX_STRING);
     prrte_list_append(info, &kv->super);
 
+    /* tell the user what we did with FQDN */
+    kv = PRRTE_NEW(prrte_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME_KEEP_FQDN, &prrte_keep_fqdn_hostnames, PMIX_BOOL);
+    prrte_list_append(info, &kv->super);
+
     /* pass the top-level session directory - this is our jobfam session dir */
     kv = PRRTE_NEW(prrte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_TMPDIR, prrte_process_info.jobfam_session_dir, PMIX_STRING);
