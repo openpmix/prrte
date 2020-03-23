@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2015-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -70,42 +70,42 @@ PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_recursive_mutex_t);
 #endif
 
 #if PRRTE_ENABLE_DEBUG
-#define PRRTE_MUTEX_STATIC_INIT                                          \
+#define PRRTE_MUTEX_STATIC_INIT                                         \
     {                                                                   \
-        .super = PRRTE_OBJ_STATIC_INIT(prrte_mutex_t),                    \
+        .super = PRRTE_OBJ_STATIC_INIT(prrte_mutex_t),                  \
         .m_lock_pthread = PTHREAD_MUTEX_INITIALIZER,                    \
         .m_lock_debug = 0,                                              \
         .m_lock_file = NULL,                                            \
         .m_lock_line = 0,                                               \
-        .m_lock_atomic = {PRRTE_ATOMIC_LOCK_UNLOCKED},                   \
+        .m_lock_atomic = PRRTE_ATOMIC_LOCK_INIT,                        \
     }
 #else
-#define PRRTE_MUTEX_STATIC_INIT                                          \
+#define PRRTE_MUTEX_STATIC_INIT                                         \
     {                                                                   \
-        .super = PRRTE_OBJ_STATIC_INIT(prrte_mutex_t),                    \
+        .super = PRRTE_OBJ_STATIC_INIT(prrte_mutex_t),                  \
         .m_lock_pthread = PTHREAD_MUTEX_INITIALIZER,                    \
-        .m_lock_atomic = {PRRTE_ATOMIC_LOCK_UNLOCKED},                   \
+        .m_lock_atomic = PRRTE_ATOMIC_LOCK_INIT,                        \
     }
 #endif
 
 #if defined(PRRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER)
 
 #if PRRTE_ENABLE_DEBUG
-#define PRRTE_RECURSIVE_MUTEX_STATIC_INIT                                \
+#define PRRTE_RECURSIVE_MUTEX_STATIC_INIT                               \
     {                                                                   \
-        .super = PRRTE_OBJ_STATIC_INIT(prrte_mutex_t),                    \
-        .m_lock_pthread = PRRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER,     \
+        .super = PRRTE_OBJ_STATIC_INIT(prrte_mutex_t),                  \
+        .m_lock_pthread = PRRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER,    \
         .m_lock_debug = 0,                                              \
         .m_lock_file = NULL,                                            \
         .m_lock_line = 0,                                               \
-        .m_lock_atomic = {PRRTE_ATOMIC_LOCK_UNLOCKED},                   \
+        .m_lock_atomic = PRRTE_ATOMIC_LOCK_INIT,                        \
     }
 #else
-#define PRRTE_RECURSIVE_MUTEX_STATIC_INIT                                \
+#define PRRTE_RECURSIVE_MUTEX_STATIC_INIT                               \
     {                                                                   \
-        .super = PRRTE_OBJ_STATIC_INIT(prrte_mutex_t),                    \
-        .m_lock_pthread = PRRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER,     \
-        .m_lock_atomic = {PRRTE_ATOMIC_LOCK_UNLOCKED},                   \
+        .super = PRRTE_OBJ_STATIC_INIT(prrte_mutex_t),                  \
+        .m_lock_pthread = PRRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER,    \
+        .m_lock_atomic = PRRTE_ATOMIC_LOCK_INIT,                        \
     }
 #endif
 
