@@ -506,6 +506,8 @@ static void check_complete(int fd, short args, void *cbdata)
     PRRTE_PMIX_DESTRUCT_LOCK(&lock);
 
     if (!prrte_persistent) {
+        /* update our exit status */
+        PRRTE_UPDATE_EXIT_STATUS(jdata->exit_code);
         /* just shut us down */
         prrte_plm.terminate_orteds();
         PRRTE_RELEASE(caddy);
