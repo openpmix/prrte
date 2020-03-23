@@ -752,13 +752,13 @@ int main(int argc, char *argv[])
         PMIX_INFO_CREATE(iptr, 1);
         /* target this notification solely to that one tool */
         PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
-
         PMIx_Notify_event(PMIX_LAUNCHER_READY, &pname, PMIX_RANGE_CUSTOM,
                           iptr, 1, NULL, NULL);
         /* now wait for the launch directives to arrive */
-        PRRTE_PMIX_WAIT_THREAD(&myinfo.lock);
+        while (prrte_event_base_active && myinfo.lock.active) {
+            prrte_event_loop(prrte_event_base, PRRTE_EVLOOP_ONCE);
+        }
         PMIX_INFO_FREE(iptr, 1);
-
         /* process the returned directives */
         if (NULL != myinfo.info) {
             for (n=0; n < myinfo.ninfo; n++) {
