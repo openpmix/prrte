@@ -349,6 +349,10 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
         rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
         free(p2);
     }
+    /* --amca X -> --tune X */
+    else if (0 == strcmp(option, "--amca")) {
+        rc = prrte_schizo_base_convert(argv, i, 1, "--tune", NULL, NULL);
+    }
 
     return rc;
 }
@@ -374,6 +378,7 @@ static void register_deprecated_cli(prrte_list_t *convertors)
         "--pernode",
         "--npersocket",
         "--ppr",
+        "--amca",
         NULL
     };
 

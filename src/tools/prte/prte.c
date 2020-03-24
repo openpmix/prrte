@@ -198,6 +198,10 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
       "application processes [\"none\" => forward nothing]. Signals provided by "
       "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
       PRRTE_CMD_LINE_OTYPE_DVM},
+    /* do not print a "ready" message */
+    { '\0', "no-ready-msg", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Do not print a DVM ready message",
+      PRRTE_CMD_LINE_OTYPE_DVM },
 
 
     /* testing options */
@@ -920,14 +924,10 @@ int main(int argc, char *argv[])
 
     /* see if they want to run an application - let's parse
      * the cmd line to get it */
-    if (PRRTE_SUCCESS != (rc = parse_locals(&apps, pargc, pargv))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_LIST_DESTRUCT(&apps);
-        goto DONE;
-    }
+    rc = parse_locals(&apps, pargc, pargv);
 
     /* did they provide an app? */
-    if (0 == prrte_list_get_size(&apps)) {
+    if (PMIX_SUCCESS != rc || 0 == prrte_list_get_size(&apps)) {
         /* nope - just need to wait for instructions */
         goto proceed;
     }
@@ -1412,8 +1412,6 @@ static int create_app(int argc, char* argv[],
 
     /* See if we have anything left */
     if (0 == count) {
-        prrte_show_help("help-prun.txt", "prun:executable-not-specified",
-                       true, "prun", "prun");
         rc = PRRTE_ERR_NOT_FOUND;
         goto cleanup;
     }
