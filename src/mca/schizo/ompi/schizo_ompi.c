@@ -349,9 +349,10 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
         rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
         free(p2);
     }
-    /* --amca X -> --tune X */
-    else if (0 == strcmp(option, "--amca")) {
-        rc = prrte_schizo_base_convert(argv, i, 1, "--tune", NULL, NULL);
+    /* --am[ca] X -> --tune X */
+    else if (0 == strcmp(option, "--amca") ||
+             0 == strcmp(option, "--am")) {
+        rc = prrte_schizo_base_convert(argv, i, 2, "--tune", NULL, NULL);
     }
 
     return rc;
@@ -379,6 +380,7 @@ static void register_deprecated_cli(prrte_list_t *convertors)
         "--npersocket",
         "--ppr",
         "--amca",
+        "--am",
         NULL
     };
 
@@ -533,28 +535,6 @@ static void save_value(const char *name, const char *value, char ***dstenv)
         prrte_setenv(param, value, true, dstenv);
         free(param);
     }
-}
-
-static void process_env_files(char *filename, char ***dstenv, char sep)
-{
-    char **tmp = prrte_argv_split(filename, sep);
-    int i, count;
-
-    if (NULL == tmp) {
-        return;
-    }
-
-    count = prrte_argv_count(tmp);
-
-    /* Iterate through all the files passed in -- read them in reverse
-       order so that we preserve unix/shell path-like semantics (i.e.,
-       the entries farthest to the left get precedence) */
-
-    for (i = count - 1; i >= 0; --i) {
-        prrte_util_keyval_parse(tmp[i], dstenv, save_value);
-    }
-
-    prrte_argv_free(tmp);
 }
 
 static char *schizo_getline(FILE *fp)
@@ -773,13 +753,6 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
             process_generic(p1, p2, dstenv);
             free(p1);
             free(p2);
-        } else if (0 == strcmp(option->clo_long_name, "am")) {
-            /* the first value on the list is the name of the file */
-            pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
-            p1 = strip_quotes(pval->data.string);
-            /* process it */
-            process_env_files(p1, dstenv, ',');
-            free(p1);
         } else if (0 == strcmp(option->clo_long_name, "tune")) {
             /* the first value on the list is the name of the file */
             pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
