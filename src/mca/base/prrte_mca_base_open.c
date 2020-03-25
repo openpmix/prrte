@@ -74,32 +74,34 @@ static void parse_verbose(char *e, prrte_output_stream_t *lds);
  */
 int prrte_mca_base_open(void)
 {
-    char *value;
+    char *value = NULL;
     prrte_output_stream_t lds;
 
     if (prrte_mca_base_opened++) {
         return PRRTE_SUCCESS;
     }
 
-    /* define the system and user default paths */
-#if PRRTE_WANT_HOME_CONFIG_FILES
-    prrte_mca_base_system_default_path = strdup(prrte_install_dirs.prrtelibdir);
-    value = (char*)prrte_home_directory();
-    if (NULL == value) {
-         prrte_output(0, "Error: Unable to get the user home directory\n");
-        return PRRTE_ERROR;
-    }
-    prrte_asprintf(&prrte_mca_base_user_default_path, "%s"PRRTE_PATH_SEP".prrte"PRRTE_PATH_SEP"components", value);
-#else
-    prrte_asprintf(&prrte_mca_base_system_default_path, "%s", prrte_install_dirs.prrtelibdir);
-#endif
+    if (NULL == getenv("PRRTE_LAUNCHED")) {
+        /* define the system and user default paths */
+    #if PRRTE_WANT_HOME_CONFIG_FILES
+        prrte_mca_base_system_default_path = strdup(prrte_install_dirs.prrtelibdir);
+        value = (char*)prrte_home_directory();
+        if (NULL == value) {
+             prrte_output(0, "Error: Unable to get the user home directory\n");
+            return PRRTE_ERROR;
+        }
+        prrte_asprintf(&prrte_mca_base_user_default_path, "%s"PRRTE_PATH_SEP".prrte"PRRTE_PATH_SEP"components", value);
+    #else
+        prrte_asprintf(&prrte_mca_base_system_default_path, "%s", prrte_install_dirs.prrtelibdir);
+    #endif
 
-    /* see if the user wants to override the defaults */
-    if (NULL == prrte_mca_base_user_default_path) {
-        value = strdup(prrte_mca_base_system_default_path);
-    } else {
-        prrte_asprintf(&value, "%s%c%s", prrte_mca_base_system_default_path,
-                 PRRTE_ENV_SEP, prrte_mca_base_user_default_path);
+        /* see if the user wants to override the defaults */
+        if (NULL == prrte_mca_base_user_default_path) {
+            value = strdup(prrte_mca_base_system_default_path);
+        } else {
+            prrte_asprintf(&value, "%s%c%s", prrte_mca_base_system_default_path,
+                     PRRTE_ENV_SEP, prrte_mca_base_user_default_path);
+        }
     }
 
     prrte_mca_base_component_path = value;
@@ -109,7 +111,9 @@ int prrte_mca_base_open(void)
                                 PRRTE_INFO_LVL_9,
                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &prrte_mca_base_component_path);
-    free(value);
+    if (NULL != value) {
+        free(value);
+    }
 
     prrte_mca_base_component_show_load_errors =
         (bool) PRRTE_SHOW_LOAD_ERRORS_DEFAULT;

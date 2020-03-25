@@ -215,11 +215,16 @@ int prrte_mca_base_component_repository_add (const char *path)
 
     dir = strtok_r (path_to_use, sep, &ctx);
     do {
-        if ((0 == strcmp(dir, "USER_DEFAULT") || 0 == strcmp(dir, "USR_DEFAULT"))
-            && NULL != prrte_mca_base_user_default_path) {
+        if (0 == strcmp(dir, "USER_DEFAULT") || 0 == strcmp(dir, "USR_DEFAULT")) {
+            if (NULL == prrte_mca_base_user_default_path) {
+                continue;
+            }
             dir = prrte_mca_base_user_default_path;
         } else if (0 == strcmp(dir, "SYS_DEFAULT") ||
                    0 == strcmp(dir, "SYSTEM_DEFAULT")) {
+            if (NULL == prrte_mca_base_system_default_path) {
+                continue;
+            }
             dir = prrte_mca_base_system_default_path;
         }
 
