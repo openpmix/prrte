@@ -96,6 +96,7 @@ int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace_t nspace)
     jdata = PRRTE_NEW(prrte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, nspace);  // ensure we do this first so create_jobid can use the nspace
     PRRTE_HASH_STR(nspace, hash32);
+
     /* now compress to 16-bits */
     jobfam = (uint16_t)(((0x0000ffff & (0xffff0000 & hash32) >> 16)) ^ (0x0000ffff & hash32));
     jdata->jobid = 0xffff0000 & ((uint32_t)jobfam << 16);

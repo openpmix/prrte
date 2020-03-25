@@ -524,19 +524,6 @@ static void process_env_list(const char *env_list, char ***argv, char sep)
     prrte_argv_free(tokens);
 }
 
-static void save_value(const char *name, const char *value, char ***dstenv)
-{
-    char *param;
-
-    if (0 == strcmp(name, "mca_base_env_list")) {
-        process_env_list(value, dstenv, ';');
-    } else {
-        prrte_asprintf(&param, "OMPI_MCA_%s", name);
-        prrte_setenv(param, value, true, dstenv);
-        free(param);
-    }
-}
-
 static char *schizo_getline(FILE *fp)
 {
     char *ret, *buff;
