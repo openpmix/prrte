@@ -360,12 +360,8 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
-    /* Setup the job data object for the daemons */
-    /* create and store the job data object */
-    jdata = PRRTE_NEW(prrte_job_t);
-    jdata->jobid = PRRTE_PROC_MY_NAME->jobid;
-    PMIX_LOAD_NSPACE(jdata->nspace, prrte_process_info.myproc.nspace);
-    prrte_hash_table_set_value_uint32(prrte_job_data, jdata->jobid, jdata);
+    /* get the job data object for the daemons */
+    jdata = prrte_get_job_data_object(PRRTE_PROC_MY_NAME->jobid);
 
     /* mark that the daemons have reported as we are the
      * only ones in the system right now, and we definitely

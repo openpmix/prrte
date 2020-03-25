@@ -108,10 +108,7 @@ int prrte_finalize(void)
 {
     prrte_pointer_array_t * array = prrte_node_pool;
     int i;
-    prrte_node_t* node = (prrte_node_t *)prrte_pointer_array_get_item(prrte_node_pool, 0);
-    assert(NULL != node);
-    PRRTE_RELEASE(node->daemon);
-    node->daemon = NULL;
+    prrte_node_t *node;
     if( array->number_free != array->size ) {
         prrte_mutex_lock(&array->lock);
         array->lowest_free = 0;
@@ -119,7 +116,12 @@ int prrte_finalize(void)
         for(i=0; i<array->size; i++) {
             if(NULL != array->addr[i]) {
                 node= (prrte_node_t*)array->addr[i];
-                PRRTE_RELEASE(node);
+                if (NULL != node) {
+                    if (NULL != node->daemon) {
+                        PRRTE_RELEASE(node->daemon);
+                    }
+                    PRRTE_RELEASE(node);
+                }
             }
             array->addr[i] = NULL;
         }

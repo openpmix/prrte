@@ -198,6 +198,10 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
       "application processes [\"none\" => forward nothing]. Signals provided by "
       "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
       PRRTE_CMD_LINE_OTYPE_DVM},
+    /* do not print a "ready" message */
+    { '\0', "no-ready-msg", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Do not print a DVM ready message",
+      PRRTE_CMD_LINE_OTYPE_DVM },
 
 
     /* testing options */
@@ -759,10 +763,12 @@ int main(int argc, char *argv[])
             prrte_event_loop(prrte_event_base, PRRTE_EVLOOP_ONCE);
         }
         PMIX_INFO_FREE(iptr, 1);
+
         /* process the returned directives */
         if (NULL != myinfo.info) {
             for (n=0; n < myinfo.ninfo; n++) {
-                if (0 == strncmp(myinfo.info[n].key, PMIX_DEBUG_JOB_DIRECTIVES, PMIX_MAX_KEYLEN)) {
+
+                if (PMIX_CHECK_KEY(&myinfo.info[n], PMIX_DEBUG_JOB_DIRECTIVES)) {
                     /* there will be a pmix_data_array containing the directives */
                     iptr = (pmix_info_t*)myinfo.info[n].value.data.darray->array;
                     ninfo = myinfo.info[n].value.data.darray->size;
@@ -918,14 +924,10 @@ int main(int argc, char *argv[])
 
     /* see if they want to run an application - let's parse
      * the cmd line to get it */
-    if (PRRTE_SUCCESS != (rc = parse_locals(&apps, pargc, pargv))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_LIST_DESTRUCT(&apps);
-        goto DONE;
-    }
+    rc = parse_locals(&apps, pargc, pargv);
 
     /* did they provide an app? */
-    if (0 == prrte_list_get_size(&apps)) {
+    if (PMIX_SUCCESS != rc || 0 == prrte_list_get_size(&apps)) {
         /* nope - just need to wait for instructions */
         goto proceed;
     }
@@ -1254,16 +1256,14 @@ int main(int argc, char *argv[])
     if (notify_launch) {
         /* direct an event back to our controller telling them
          * the namespace of the spawned job */
-        PMIX_INFO_CREATE(iptr, 3);
-        /* do not cache this event - the tool is waiting for us */
-        flag = true;
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_DO_NOT_CACHE, &flag, PMIX_BOOL);
+        PMIX_INFO_CREATE(iptr, 2);
         /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
         /* pass the nspace of the spawned job */
-        PMIX_INFO_LOAD(&iptr[2], PMIX_NSPACE, spawnednspace, PMIX_STRING);
-        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &controller, PMIX_RANGE_CUSTOM,
-                          iptr, 3, NULL, NULL);
+        PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, spawnednspace, PMIX_STRING);
+        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &prrte_process_info.myproc, PMIX_RANGE_CUSTOM,
+                          iptr, 2, NULL, NULL);
+        PMIX_INFO_FREE(iptr, 2);
     }
 #endif
 
@@ -1412,8 +1412,6 @@ static int create_app(int argc, char* argv[],
 
     /* See if we have anything left */
     if (0 == count) {
-        prrte_show_help("help-prun.txt", "prun:executable-not-specified",
-                       true, "prun", "prun");
         rc = PRRTE_ERR_NOT_FOUND;
         goto cleanup;
     }

@@ -326,6 +326,17 @@ static int process_deprecated_cli(prrte_cmd_line_t *cmdline,
             break;
         }
 
+        if ('-' != pargs[i][1] && 2 < strlen(pargs[i])) {
+            /* we know this is incorrect */
+            p2 = strdup(pargs[i]);
+            free(pargs[i]);
+            prrte_asprintf(&pargs[i], "-%s", p2);
+            prrte_show_help("help-schizo-base.txt", "single-dash-error", true,
+                            p2, pargs[i]);
+            free(p2);
+            ret = PRRTE_OPERATION_SUCCEEDED;
+        }
+
         /* is this an argument someone needs to convert? */
         found = false;
         PRRTE_LIST_FOREACH(cv, convertors, prrte_convertor_t) {
@@ -349,18 +360,8 @@ static int process_deprecated_cli(prrte_cmd_line_t *cmdline,
         }
 
         if (!found) {
-            if ('-' != pargs[i][1] && 2 < strlen(pargs[i])) {
-                /* we know this is incorrect */
-                p2 = strdup(pargs[i]);
-                free(pargs[i]);
-                prrte_asprintf(&pargs[i], "-%s", p2);
-                prrte_show_help("help-schizo-base.txt", "single-dash-error", true,
-                                p2, pargs[i]);
-                free(p2);
-                ret = PRRTE_OPERATION_SUCCEEDED;
-            }
             /* check for single-dash option */
-            else if (2 == strlen(pargs[i])) {
+            if (2 == strlen(pargs[i])) {
                 /* find the option */
                 memset(&e, 0, sizeof(prrte_cmd_line_init_t));
                 e.ocl_cmd_short_name = pargs[i][1];

@@ -39,31 +39,37 @@
  */
 int prrte_plm_base_set_hnp_name(void)
 {
-    uint16_t jobfam;
-    uint32_t hash32;
-    uint32_t bias;
+    char *evar;
+    int rc;
 
-    /* hash the nodename */
-    PRRTE_HASH_STR(prrte_process_info.nodename, hash32);
+    /* we may have been passed a PMIx nspace to use */
+    if (NULL != (evar = getenv("PMIX_SERVER_NSPACE"))) {
+        PMIX_LOAD_PROCID(&prrte_process_info.myproc, evar, 0);
+        /* setup the corresponding numerical jobid and add the
+         * job to the hash table */
+        PRRTE_PMIX_CONVERT_NSPACE(rc, &PRRTE_PROC_MY_NAME->jobid, evar);
+        if (PRRTE_SUCCESS != rc) {
+            return rc;
+        }
+        if (NULL != (evar = getenv("PMIX_SERVER_RANK"))) {
+            PRRTE_PROC_MY_NAME->vpid = strtoul(evar, NULL, 10);
+        } else {
+            PRRTE_PROC_MY_NAME->vpid = 0;
+        }
+        /* copy it to the HNP field */
+        PRRTE_PROC_MY_HNP->jobid = PRRTE_PROC_MY_NAME->jobid;
+        PRRTE_PROC_MY_HNP->vpid = PRRTE_PROC_MY_NAME->vpid;
+        return PRRTE_SUCCESS;
+    }
 
-    bias = (uint32_t)prrte_process_info.pid;
+    /* for our nspace, we will use the nodename+pid */
+    prrte_asprintf(&evar, "%s-%s%u", prrte_tool_basename, prrte_process_info.nodename, (uint32_t)prrte_process_info.pid);
 
-    PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
-                         "plm:base:set_hnp_name: initial bias %ld nodename hash %lu",
-                         (long)bias, (unsigned long)hash32));
-
-    /* fold in the bias */
-    hash32 = hash32 ^ bias;
-
-    /* now compress to 16-bits */
-    jobfam = (uint16_t)(((0x0000ffff & (0xffff0000 & hash32) >> 16)) ^ (0x0000ffff & hash32));
-
-    PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
-                         "plm:base:set_hnp_name: final jobfam %lu",
-                         (unsigned long)jobfam));
-
-    /* set the name */
-    PRRTE_PROC_MY_NAME->jobid = 0xffff0000 & ((uint32_t)jobfam << 16);
+    PRRTE_PMIX_CONVERT_NSPACE(rc, &PRRTE_PROC_MY_NAME->jobid, evar);
+    if (PRRTE_SUCCESS != rc) {
+        free(evar);
+        return rc;
+    }
     PRRTE_PROC_MY_NAME->vpid = 0;
 
     /* copy it to the HNP field */
@@ -71,9 +77,12 @@ int prrte_plm_base_set_hnp_name(void)
     PRRTE_PROC_MY_HNP->vpid = PRRTE_PROC_MY_NAME->vpid;
 
     /* set the nspace */
-    PRRTE_PMIX_CREATE_NSPACE(prrte_process_info.myproc.nspace, PRRTE_PROC_MY_NAME->jobid);
+    PMIX_LOAD_NSPACE(prrte_process_info.myproc.nspace, evar);
+    prrte_process_info.myproc.rank = 0;
+
 
     /* done */
+    free(evar);
     return PRRTE_SUCCESS;
 }
 
@@ -88,6 +97,8 @@ int prrte_plm_base_create_jobid(prrte_job_t *jdata)
     prrte_jobid_t pjid;
     prrte_job_t *ptr;
     bool found;
+    char *tmp;
+    int rc;
 
     if (PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_RESTART)) {
         /* this job is being restarted - do not assign it
@@ -121,9 +132,14 @@ int prrte_plm_base_create_jobid(prrte_job_t *jdata)
         }
     }
 
-    /* take the next jobid */
-    jdata->jobid =  PRRTE_CONSTRUCT_LOCAL_JOBID(PRRTE_PROC_MY_NAME->jobid, prrte_plm_globals.next_jobid);
-    PRRTE_PMIX_CREATE_NSPACE(jdata->nspace, jdata->jobid);
+    /* the new nspace is our nspace with a ".N" extension */
+    prrte_asprintf(&tmp, "%s.%u", prrte_process_info.myproc.nspace, (unsigned)prrte_plm_globals.next_jobid);
+    PMIX_LOAD_NSPACE(jdata->nspace, tmp);
+    free(tmp);
+    PRRTE_PMIX_CONVERT_NSPACE(rc, &jdata->jobid, jdata->nspace);
+    if (PRRTE_SUCCESS != rc) {
+        return rc;
+    }
     prrte_plm_globals.next_jobid++;
     if (INT16_MAX == prrte_plm_globals.next_jobid) {
         reuse = true;

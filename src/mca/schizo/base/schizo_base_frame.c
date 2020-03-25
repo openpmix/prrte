@@ -174,25 +174,57 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
     char *p2, *help_str, *old_arg;
     int j, k, cnt, rc;
     char **pargs = *argv;
-    char **tmp, *output;
+    char **tmp, **tmp2, *output;
     prrte_schizo_conflicts_t *modifiers;
 
     /* pick the modifiers to be checked */
-    if (0 == strcmp(option, "--map-by")) {
-        modifiers = mapby_modifiers;
-    } else if (0 == strcmp(option, "--rank-by")) {
-        modifiers = rankby_modifiers;
-    } else if (0 == strcmp(option, "--bind-to")) {
-        modifiers = bindto_modifiers;
-    } else {
-        prrte_output(0, "UNRECOGNIZED OPTION");
-        return PRRTE_ERR_BAD_PARAM;
+    if (NULL != modifier) {
+        if (0 == strcmp(option, "--map-by")) {
+            modifiers = mapby_modifiers;
+        } else if (0 == strcmp(option, "--rank-by")) {
+            modifiers = rankby_modifiers;
+        } else if (0 == strcmp(option, "--bind-to")) {
+            modifiers = bindto_modifiers;
+        } else  {
+            prrte_output(0, "UNRECOGNIZED OPTION: %s", option);
+            return PRRTE_ERR_BAD_PARAM;
+        }
     }
 
-    /* did they give the map-by option? */
+    /* does the matching option already exist? */
     found = false;
     for (j=0; NULL != pargs[j]; j++) {
         if (0 == strcmp(pargs[j], option)) {
+            found = true;
+            /* if it is a --tune option, then we need to simply append the
+             * comma-delimited list of files they gave to the existing one */
+            if (0 == strcasecmp(option, "--tune")) {
+                /* it is possible someone gave the same name twice - avoid that here
+                 * while preserving ordering of files */
+                if (j < idx) {
+                    tmp = prrte_argv_split(pargs[j+1], ',');
+                    tmp2 = prrte_argv_split(pargs[idx+1], ',');
+                } else {
+                    tmp2 = prrte_argv_split(pargs[j+1], ',');
+                    tmp = prrte_argv_split(pargs[idx+1], ',');
+                }
+                for (k=0; NULL != tmp2[k]; k++) {
+                    prrte_argv_append_unique_nosize(&tmp, tmp2[k]);
+                }
+                prrte_argv_free(tmp2);
+                p2 = prrte_argv_join(tmp, ',');
+                prrte_argv_free(tmp);
+                free(pargs[j+1]);
+                pargs[j+1] = p2;
+                prrte_asprintf(&help_str, "%s %s", option, p2);
+                /* can't just call show_help as we want every instance to be reported */
+                output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                                                pargs[idx], help_str);
+                fprintf(stderr, "%s\n", output);
+                free(output);
+                free(help_str);
+                break;
+            }
             /* were we given a directive? */
             if (NULL != directive) {
                 /* does it conflict? */
@@ -261,37 +293,46 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                 free(output);
                 free(help_str);
             }
-            if (0 < ntodelete) {
-                /* we need to remove the indicated number of positions */
-                prrte_argv_delete(NULL, argv, idx, ntodelete);
-            }
-            return PRRTE_SUCCESS;
         }
     }
-    if (!found) {
-        /* add the map-by option */
-        old_arg = strdup(pargs[idx]);
-        free(pargs[idx]);
-        pargs[idx] = strdup(option);
-        if (NULL == directive) {
-            prrte_asprintf(&p2, ":%s", modifier);
-        } else if (NULL == modifier) {
-            p2 = strdup(directive);
-        } else {
-            prrte_asprintf(&p2, "%s:%s", directive, modifier);
+    if (found) {
+        if (0 < ntodelete) {
+            /* we need to remove the indicated number of positions */
+            prrte_argv_delete(NULL, argv, idx, ntodelete);
         }
+        return PRRTE_SUCCESS;
+    }
+
+    /* add the option */
+    old_arg = strdup(pargs[idx]);
+    free(pargs[idx]);
+    pargs[idx] = strdup(option);
+    if (0 == strcasecmp(option, "--tune")) {
+        p2 = NULL;
+        prrte_asprintf(&help_str, "%s %s", pargs[idx], pargs[idx+1]);
+    } else if (NULL == directive) {
+        prrte_asprintf(&p2, ":%s", modifier);
+    } else if (NULL == modifier) {
+        p2 = strdup(directive);
+    } else {
+        prrte_asprintf(&p2, "%s:%s", directive, modifier);
+    }
+    if (NULL != p2) {
         prrte_argv_insert_element(&pargs, idx+1, p2);
         prrte_asprintf(&help_str, "%s %s", pargs[idx], p2);
-        /* can't just call show_help as we want every instance to be reported */
-        output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
-                        old_arg, help_str);
-        fprintf(stderr, "%s\n", output);
-        free(output);
-        free(p2);
-        free(help_str);
-        free(old_arg);
-        *argv = pargs;  // will have been reallocated
     }
+    /* can't just call show_help as we want every instance to be reported */
+    output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                    old_arg, help_str);
+    fprintf(stderr, "%s\n", output);
+    free(output);
+    if (NULL != p2) {
+        free(p2);
+    }
+    free(help_str);
+    free(old_arg);
+    *argv = pargs;  // will have been reallocated
+
     return PRRTE_SUCCESS;
 }
 

@@ -225,9 +225,7 @@ void prrte_oob_base_get_addr(char **uri)
     prrte_mca_base_component_list_item_t *cli;
     prrte_oob_base_component_t *component;
     pmix_value_t val;
-    pmix_proc_t proc;
     pmix_status_t rc;
-    prrte_job_t *jdata;
 
     /* start with our process name */
     if (PRRTE_SUCCESS != (rc = prrte_util_convert_process_name_to_string(&final, PRRTE_PROC_MY_NAME))) {
@@ -283,10 +281,8 @@ void prrte_oob_base_get_addr(char **uri)
 
     *uri = final;
     /* push this into our modex storage */
-    jdata = prrte_get_job_data_object(PRRTE_PROC_MY_NAME->jobid);
-    PMIX_LOAD_PROCID(&proc, jdata->nspace, PRRTE_PROC_MY_NAME->vpid);
     PMIX_VALUE_LOAD(&val, final, PMIX_STRING);
-    if (PMIX_SUCCESS != (rc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Store_internal(&prrte_process_info.myproc, PMIX_PROC_URI, &val))) {
         PMIX_ERROR_LOG(rc);
     }
     PMIX_VALUE_DESTRUCT(&val);

@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -189,7 +189,7 @@ int prrte_rml_oob_send_buffer_nb(prrte_process_name_t* peer,
     PRRTE_OUTPUT_VERBOSE((1, prrte_rml_base_framework.framework_output,
                          "%s rml_send_buffer to peer %s at tag %d",
                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         PRRTE_NAME_PRINT(peer), tag));
+                         (NULL == peer) ? "NULL" : PRRTE_NAME_PRINT(peer), tag));
 
     if (PRRTE_RML_TAG_INVALID == tag) {
         /* cannot send to an invalid tag */

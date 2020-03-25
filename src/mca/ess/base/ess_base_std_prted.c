@@ -366,7 +366,7 @@ int prrte_ess_base_prted_setup(void)
 
         /* extract the HNP's name so we can update the routing table */
         if (PRRTE_SUCCESS != (ret = prrte_rml_base_parse_uris(prrte_process_info.my_hnp_uri,
-                                                            PRRTE_PROC_MY_HNP, NULL))) {
+                                                              PRRTE_PROC_MY_HNP, NULL))) {
             PRRTE_ERROR_LOG(ret);
             error = "prrte_rml_parse_HNP";
             goto error;

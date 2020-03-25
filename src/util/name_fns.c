@@ -342,7 +342,7 @@ int prrte_util_convert_string_to_process_name(prrte_process_name_t *name,
     char *temp, *token;
     prrte_jobid_t job;
     prrte_vpid_t vpid;
-    int return_code=PRRTE_SUCCESS;
+    int rc;
 
     /* set default */
     name->jobid = PRRTE_JOBID_INVALID;
@@ -366,70 +366,34 @@ int prrte_util_convert_string_to_process_name(prrte_process_name_t *name,
     *token = '\0';
     token++;
 
-    /* check for WILDCARD character - assign
-     * value accordingly, if found
-     */
-    if (0 == strcmp(temp, PRRTE_SCHEMA_WILDCARD_STRING)) {
-        job = PRRTE_JOBID_WILDCARD;
-    } else if (0 == strcmp(temp, PRRTE_SCHEMA_INVALID_STRING)) {
-        job = PRRTE_JOBID_INVALID;
-    } else {
-        job = strtoul(temp, NULL, 10);
+    PRRTE_PMIX_CONVERT_NSPACE(rc, &job, temp);
+    if (PRRTE_SUCCESS != rc) {
+        free(temp);
+        return rc;
     }
-
-    /* check for WILDCARD character - assign
-     * value accordingly, if found
-     */
-    if (0 == strcmp(token, PRRTE_SCHEMA_WILDCARD_STRING)) {
-        vpid = PRRTE_VPID_WILDCARD;
-    } else if (0 == strcmp(token, PRRTE_SCHEMA_INVALID_STRING)) {
-        vpid = PRRTE_VPID_INVALID;
-    } else {
-        vpid = strtoul(token, NULL, 10);
-    }
+    vpid = strtoul(token, NULL, 10);
 
     name->jobid = job;
     name->vpid = vpid;
 
     free(temp);
 
-    return return_code;
+    return PRRTE_SUCCESS;
 }
 
 int prrte_util_convert_process_name_to_string(char **name_string,
                                              const prrte_process_name_t* name)
 {
-    char *tmp, *tmp2;
+    prrte_job_t *jdata;
 
     if (NULL == name) { /* got an error */
         PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
         return PRRTE_ERR_BAD_PARAM;
     }
 
-    /* check for wildcard and invalid values - where encountered, insert the
-     * corresponding string so we can correctly parse the name string when
-     * it is passed back to us later
-     */
-    if (PRRTE_JOBID_WILDCARD == name->jobid) {
-        prrte_asprintf(&tmp, "%s", PRRTE_SCHEMA_WILDCARD_STRING);
-    } else if (PRRTE_JOBID_INVALID == name->jobid) {
-        prrte_asprintf(&tmp, "%s", PRRTE_SCHEMA_INVALID_STRING);
-    } else {
-        prrte_asprintf(&tmp, "%lu", (unsigned long)name->jobid);
-    }
+    jdata = prrte_get_job_data_object(name->jobid);
 
-    if (PRRTE_VPID_WILDCARD == name->vpid) {
-        prrte_asprintf(&tmp2, "%s%c%s", tmp, PRRTE_SCHEMA_DELIMITER_CHAR, PRRTE_SCHEMA_WILDCARD_STRING);
-    } else if (PRRTE_VPID_INVALID == name->vpid) {
-        prrte_asprintf(&tmp2, "%s%c%s", tmp, PRRTE_SCHEMA_DELIMITER_CHAR, PRRTE_SCHEMA_INVALID_STRING);
-    } else {
-        prrte_asprintf(&tmp2, "%s%c%lu", tmp, PRRTE_SCHEMA_DELIMITER_CHAR, (unsigned long)name->vpid);
-    }
-
-    prrte_asprintf(name_string, "%s", tmp2);
-
-    free(tmp);
-    free(tmp2);
+    prrte_asprintf(name_string, "%s%c%lu", jdata->nspace, PRRTE_SCHEMA_DELIMITER_CHAR, (unsigned long)name->vpid);
 
     return PRRTE_SUCCESS;
 }
