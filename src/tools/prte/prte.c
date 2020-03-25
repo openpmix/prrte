@@ -525,7 +525,7 @@ int main(int argc, char *argv[])
     PRRTE_CONSTRUCT(&apps, prrte_list_t);
 
     /* init the tiny part of PRRTE we use */
-    prrte_init_util();
+    prrte_init_util(PRRTE_PROC_MASTER);
 
     prrte_tool_basename = prrte_basename(argv[0]);
     pargc = argc;

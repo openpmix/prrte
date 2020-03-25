@@ -61,8 +61,8 @@ PRRTE_EXPORT extern int prrte_cache_line_size;
      * @param pargv  The list of arguments.
      * @param flags  Whether we are PRRTE tool or not
      */
-PRRTE_EXPORT    int prrte_init(int*pargc, char*** pargv, prrte_proc_type_t flags);
-PRRTE_EXPORT int prrte_init_util(void);
+PRRTE_EXPORT int prrte_init(int*pargc, char*** pargv, prrte_proc_type_t flags);
+PRRTE_EXPORT int prrte_init_util(prrte_proc_type_t flags);
 
     /**
      * Initialize parameters for PRRTE.

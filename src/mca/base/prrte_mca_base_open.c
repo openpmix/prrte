@@ -74,14 +74,14 @@ static void parse_verbose(char *e, prrte_output_stream_t *lds);
  */
 int prrte_mca_base_open(void)
 {
-    char *value = NULL;
+    char *value;
     prrte_output_stream_t lds;
 
     if (prrte_mca_base_opened++) {
         return PRRTE_SUCCESS;
     }
 
-    if (NULL == getenv("PRRTE_LAUNCHED")) {
+    if (PRRTE_PROC_IS_MASTER) {
         /* define the system and user default paths */
     #if PRRTE_WANT_HOME_CONFIG_FILES
         prrte_mca_base_system_default_path = strdup(prrte_install_dirs.prrtelibdir);
@@ -102,6 +102,9 @@ int prrte_mca_base_open(void)
             prrte_asprintf(&value, "%s%c%s", prrte_mca_base_system_default_path,
                      PRRTE_ENV_SEP, prrte_mca_base_user_default_path);
         }
+    } else {
+        prrte_asprintf(&prrte_mca_base_system_default_path, "%s", prrte_install_dirs.prrtelibdir);
+        value = strdup(prrte_mca_base_system_default_path);
     }
 
     prrte_mca_base_component_path = value;
@@ -111,9 +114,7 @@ int prrte_mca_base_open(void)
                                 PRRTE_INFO_LVL_9,
                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &prrte_mca_base_component_path);
-    if (NULL != value) {
-        free(value);
-    }
+    free(value);
 
     prrte_mca_base_component_show_load_errors =
         (bool) PRRTE_SHOW_LOAD_ERRORS_DEFAULT;

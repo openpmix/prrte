@@ -432,7 +432,7 @@ main(int argc, char *argv[])
     bool disable_flags = true;
     bool real_flag = false;
 
-    if (PRRTE_SUCCESS != (ret = prrte_init_util())) {
+    if (PRRTE_SUCCESS != (ret = prrte_init_util(PRRTE_PROC_MASTER))) {
         return ret;
     }
 

@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
 
     prrte_atomic_lock_init(&prun_abort_inprogress_lock, PRRTE_ATOMIC_LOCK_UNLOCKED);
     /* init the tiny part of PRRTE we use */
-    prrte_init_util();
+    prrte_init_util(PRRTE_PROC_MASTER);
 
     prrte_tool_basename = prrte_basename(argv[0]);
 

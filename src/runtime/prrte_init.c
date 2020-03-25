@@ -109,7 +109,7 @@ static bool util_initialized = false;
 #endif
 const char prrte_version_string[] = PRRTE_IDENT_STRING;
 
-int prrte_init_util(void)
+int prrte_init_util(prrte_proc_type_t flags)
 {
     int ret;
     char *error = NULL;
@@ -118,6 +118,9 @@ int prrte_init_util(void)
         return PRRTE_SUCCESS;
     }
     util_initialized = true;
+
+    /* ensure we know the type of proc for when we finalize */
+    prrte_process_info.proc_type = flags;
 
     /* set the nodename right away so anyone who needs it has it */
     prrte_setup_hostname();
@@ -242,7 +245,7 @@ int prrte_init(int* pargc, char*** pargv, prrte_proc_type_t flags)
     }
     prrte_initialized++;
 
-    ret = prrte_init_util();
+    ret = prrte_init_util(flags);
     if (PRRTE_SUCCESS != ret) {
         return ret;
     }

@@ -269,6 +269,7 @@ int prrte_mca_base_component_repository_init(void)
 
     ret = prrte_mca_base_component_repository_add (prrte_mca_base_component_path);
     if (PRRTE_SUCCESS != ret) {
+        prrte_output(0, "ERROR ON REPO ADD");
         PRRTE_DESTRUCT(&prrte_mca_base_component_repository);
         (void) prrte_mca_base_framework_close (&prrte_prtedl_base_framework);
         return ret;

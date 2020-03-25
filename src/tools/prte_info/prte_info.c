@@ -48,10 +48,10 @@
 #include "src/util/argv.h"
 #include "src/mca/base/base.h"
 #include "src/mca/schizo/base/base.h"
+#include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 
 #include "constants.h"
-#include "src/util/show_help.h"
 #include "src/runtime/prrte_locks.h"
 #include "src/include/frameworks.h"
 
@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
     }
 
     /* Get MCA parameters, if any */
-
+    prrte_process_info.proc_type = PRRTE_PROC_MASTER;
     if( PRRTE_SUCCESS != prrte_mca_base_open() ) {
         prrte_show_help("help-pinfo.txt", "lib-call-fail", true, "mca_base_open", __FILE__, __LINE__ );
         PRRTE_RELEASE(prrte_info_cmd_line);
