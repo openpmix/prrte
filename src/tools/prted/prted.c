@@ -256,7 +256,7 @@ int main(int argc, char *argv[])
     bucket = PRRTE_NEW(prrte_buffer_t);
 
     /* init the tiny part of PRRTE we use */
-    prrte_init_util();
+    prrte_init_util(PRRTE_PROC_DAEMON);
     prrte_tool_basename = prrte_basename(argv[0]);
 
     /* because we have to use the schizo framework prior to parsing the

@@ -654,7 +654,7 @@ int prun(int argc, char *argv[])
 
     prrte_atomic_lock_init(&prun_abort_inprogress_lock, PRRTE_ATOMIC_LOCK_UNLOCKED);
     /* init the tiny part of PRRTE we use */
-    prrte_init_util();
+    prrte_init_util(PRRTE_PROC_MASTER);  // just so we pickup any PRRTE params from sys/user files
 
     prrte_tool_basename = prrte_basename(argv[0]);
     pargc = argc;
@@ -1424,7 +1424,10 @@ int prun(int argc, char *argv[])
             }
         }
         /* pickup any relevant envars */
-        prrte_schizo.parse_env(prrte_cmd_line, environ, &papps[n].env, false);
+        rc = prrte_schizo.parse_env(prrte_cmd_line, environ, &papps[n].env, false);
+        if (PRRTE_SUCCESS != rc) {
+            goto DONE;
+        }
         ++n;
     }
 

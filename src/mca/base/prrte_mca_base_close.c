@@ -13,7 +13,7 @@
  * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,10 +50,14 @@ void prrte_mca_base_close (void)
     }
 
     /* release the default paths */
-    free (prrte_mca_base_system_default_path);
+    if (NULL != prrte_mca_base_system_default_path) {
+        free (prrte_mca_base_system_default_path);
+    }
     prrte_mca_base_system_default_path = NULL;
 
-    free (prrte_mca_base_user_default_path);
+    if (NULL != prrte_mca_base_user_default_path) {
+        free (prrte_mca_base_user_default_path);
+    }
     prrte_mca_base_user_default_path = NULL;
 
     /* Close down the component repository */

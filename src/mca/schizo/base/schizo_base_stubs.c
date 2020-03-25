@@ -106,7 +106,6 @@ int prrte_schizo_base_parse_env(prrte_cmd_line_t *cmd_line,
         if (NULL != mod->module->parse_env) {
             rc = mod->module->parse_env(cmd_line, srcenv, dstenv, cmdline);
             if (PRRTE_SUCCESS != rc && PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
-                PRRTE_ERROR_LOG(rc);
                 return rc;
             }
         }
@@ -331,8 +330,12 @@ static int process_deprecated_cli(prrte_cmd_line_t *cmdline,
             p2 = strdup(pargs[i]);
             free(pargs[i]);
             prrte_asprintf(&pargs[i], "-%s", p2);
-            prrte_show_help("help-schizo-base.txt", "single-dash-error", true,
-                            p2, pargs[i]);
+            /* if it is the special "-np" option, we silently
+             * change it and don't emit an error */
+            if (0 != strcmp(p2, "-np")) {
+                prrte_show_help("help-schizo-base.txt", "single-dash-error", true,
+                                p2, pargs[i]);
+            }
             free(p2);
             ret = PRRTE_OPERATION_SUCCEEDED;
         }

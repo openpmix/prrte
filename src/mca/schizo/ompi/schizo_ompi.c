@@ -136,9 +136,6 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "gomca", 2, PRRTE_CMD_LINE_TYPE_STRING,
       "Pass global OMPI MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "am", 1, PRRTE_CMD_LINE_TYPE_STRING,
-      "Aggregate OMPI MCA parameter set file list",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
     { '\0', "tune", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Profile options file list for OMPI applications",
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
@@ -354,6 +351,10 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
              0 == strcmp(option, "--am")) {
         rc = prrte_schizo_base_convert(argv, i, 2, "--tune", NULL, NULL);
     }
+    /* --tune X -> aggregate */
+    else if (0 == strcmp(option, "--tune")) {
+        rc = prrte_schizo_base_convert(argv, i, 2, "--tune", NULL, NULL);
+    }
 
     return rc;
 }
@@ -411,12 +412,49 @@ static char *strip_quotes(char *p)
 
 }
 
-static void process_envar(const char *p, char ***dstenv)
+static int check_cache(char ***c1, char ***c2,
+                       char *p1, char *p2)
+{
+    char **cache;
+    char **cachevals;
+    int k;
+
+    if (NULL == c1 || NULL == c2) {
+        /* add them to the cache */
+        prrte_argv_append_nosize(c1, p1);
+        prrte_argv_append_nosize(c2, p2);
+        return PRRTE_SUCCESS;
+    }
+    cache = *c1;
+    cachevals = *c2;
+
+    if (NULL != cache) {
+        /* see if we already have these */
+        for (k=0; NULL != cache[k]; k++) {
+            if (0 == strcmp(cache[k], p1)) {
+                /* we do have it - check for same value */
+                if (0 != strcmp(cachevals[k], p2)) {
+                    /* this is an error */
+                    prrte_show_help("help-schizo-base.txt",
+                                    "duplicate-value", true,
+                                    p1, p2, cachevals[k]);
+                    return PRRTE_ERR_BAD_PARAM;
+                }
+            }
+        }
+    }
+    /* add them to the cache */
+    prrte_argv_append_nosize(c1, p1);
+    prrte_argv_append_nosize(c2, p2);
+    return PRRTE_SUCCESS;
+}
+
+static int process_envar(const char *p, char ***cache, char ***cachevals)
 {
     char *value, **tmp;
     char *p1, *p2;
     size_t len;
-    int k;
+    int k, rc=PRRTE_SUCCESS;
     bool found;
 
     p1 = strdup(p);
@@ -425,8 +463,7 @@ static void process_envar(const char *p, char ***dstenv)
         *value = '\0';
         /* step over the equals */
         value++;
-        /* overwrite any prior entry */
-        prrte_setenv(p1, value, true, dstenv);
+        rc = check_cache(cache, cachevals, p1, value);
     } else {
         /* check for a '*' wildcard at the end of the value */
         if ('*' == p1[strlen(p1)-1]) {
@@ -441,23 +478,24 @@ static void process_envar(const char *p, char ***dstenv)
                     p2 = strchr(value, '=');
                     *p2 = '\0';
                     ++p2;
-                    /* overwrite any prior entry */
-                    prrte_setenv(value, p2, true, dstenv);
+                    rc = check_cache(cache, cachevals, value, p2);
                     free(value);
                 }
             }
         } else {
             value = getenv(p1);
             if (NULL != value) {
-                /* overwrite any prior entry */
-                prrte_setenv(p1, value, true, dstenv);
+                rc = check_cache(cache, cachevals, p1, value);
             } else {
-                /* see if it is already in the dstenv */
-                tmp = *dstenv;
                 found = false;
-                for (k=0; NULL != tmp[k]; k++) {
-                    if (0 == strncmp(p1, tmp[k], strlen(p1))) {
-                        found = true;
+                if (NULL != cache) {
+                    /* see if it is already in the cache */
+                    tmp = *cache;
+                    for (k=0; NULL != tmp[k]; k++) {
+                        if (0 == strncmp(p1, tmp[k], strlen(p1))) {
+                            found = true;
+                            break;
+                        }
                     }
                 }
                 if (!found) {
@@ -467,11 +505,13 @@ static void process_envar(const char *p, char ***dstenv)
         }
     }
     free(p1);
+    return rc;
 }
 
-static int process_token(char *token, char ***argv)
+static int process_token(char *token, char ***cache, char ***cachevals)
 {
     char *ptr, *value;
+    int rc;
 
     if (NULL == (ptr = strchr(token, '='))) {
         value = getenv(token);
@@ -480,7 +520,7 @@ static int process_token(char *token, char ***argv)
         }
 
         /* duplicate the value to silence tainted string coverity issue */
-        value = strdup (value);
+        value = strdup(value);
         if (NULL == value) {
             /* out of memory */
             return PRRTE_ERR_OUT_OF_RESOURCE;
@@ -488,32 +528,34 @@ static int process_token(char *token, char ***argv)
 
         if (NULL != (ptr = strchr(value, '='))) {
             *ptr = '\0';
-            prrte_setenv(value, ptr + 1, true, argv);
+            rc = check_cache(cache, cachevals, value, ptr+1);
         } else {
-            prrte_setenv(token, value, true, argv);
+            rc = check_cache(cache, cachevals, token, value);
         }
 
-        free (value);
+        free(value);
     } else {
         *ptr = '\0';
-        prrte_setenv(token, ptr + 1, true, argv);
+        rc = check_cache(cache, cachevals, token, ptr+1);
         /* NTH: don't bother resetting ptr to = since the string will not be used again */
     }
-    return PRRTE_SUCCESS;
+    return rc;
 }
 
-static void process_env_list(const char *env_list, char ***argv, char sep)
+static int process_env_list(const char *env_list,
+                            char ***cache, char ***cachevals,
+                            char sep)
 {
     char** tokens;
-    int rc;
+    int rc = PRRTE_SUCCESS;
 
     tokens = prrte_argv_split(env_list, (int)sep);
     if (NULL == tokens) {
-        return;
+        return PRRTE_SUCCESS;
     }
 
     for (int i = 0 ; NULL != tokens[i] ; ++i) {
-        rc = process_token(tokens[i], argv);
+        rc = process_token(tokens[i], cache, cachevals);
         if (PRRTE_SUCCESS != rc) {
             prrte_show_help("help-schizo-base.txt", "incorrect-env-list-param",
                            true, tokens[i], env_list);
@@ -522,6 +564,7 @@ static void process_env_list(const char *env_list, char ***argv, char sep)
     }
 
     prrte_argv_free(tokens);
+    return rc;
 }
 
 static char *schizo_getline(FILE *fp)
@@ -540,24 +583,22 @@ static char *schizo_getline(FILE *fp)
     return NULL;
 }
 
-static void process_tune_files(char *filename, char ***dstenv, char sep)
+static int process_tune_files(char *filename, char ***dstenv, char sep)
 {
     FILE *fp;
     char **tmp, **opts, *line, *param, *p1, *p2;
-    int i, count, n, rc;
+    int i, n, rc=PRRTE_SUCCESS;
+    char **cache = NULL, **cachevals = NULL;
 
     tmp = prrte_argv_split(filename, sep);
     if (NULL == tmp) {
-        return;
+        return PRRTE_SUCCESS;
     }
 
-    count = prrte_argv_count(tmp);
+    /* Iterate through all the files passed in -- it is an ERROR if
+     * a given param appears more than once with different values */
 
-    /* Iterate through all the files passed in -- read them in reverse
-       order so that we preserve unix/shell path-like semantics (i.e.,
-       the entries farthest to the left get precedence) */
-
-    for (i = count - 1; i >= 0; --i) {
+    for (i=0; NULL != tmp[i]; i++) {
         fp = fopen(tmp[i], "r");
         if (NULL == fp) {
             prrte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);
@@ -593,8 +634,16 @@ static void process_tune_files(char *filename, char ***dstenv, char sep)
                         p1 = param;
                         ++n;  // need an extra step
                     }
-                    process_envar(p1, dstenv);
+                    rc = process_envar(p1, &cache, &cachevals);
                     free(p1);
+                    if (PRRTE_SUCCESS != rc) {
+                        fclose(fp);
+                        prrte_argv_free(tmp);
+                        prrte_argv_free(opts);
+                        prrte_argv_free(cache);
+                        prrte_argv_free(cachevals);
+                        return rc;
+                    }
                     ++n;  // skip over the envar option
                 } else if (0 == strcmp(opts[n], "--mca")) {
                     if (NULL == opts[n+1] || NULL == opts[n+2]) {
@@ -605,13 +654,21 @@ static void process_tune_files(char *filename, char ***dstenv, char sep)
                     p2 = strip_quotes(opts[n+2]);
                     if (0 == strcmp(p1, "mca_base_env_list")) {
                         /* next option must be the list of envars */
-                        process_env_list(p2, dstenv, ';');
+                        rc = process_env_list(p2, &cache, &cachevals, ';');
                     } else {
                         /* treat it as an arbitrary MCA param */
-                        prrte_asprintf(&param, "OMPI_MCA_%s=%s", p1, p2);
+                        rc = check_cache(&cache, &cachevals, p1, p2);
                     }
                     free(p1);
                     free(p2);
+                    if (PRRTE_SUCCESS != rc) {
+                        fclose(fp);
+                        prrte_argv_free(tmp);
+                        prrte_argv_free(opts);
+                        prrte_argv_free(cache);
+                        prrte_argv_free(cachevals);
+                        return rc;
+                    }
                     n += 2;  // skip over the MCA option
                 } else if (0 == strncmp(opts[n], "mca_base_env_list", strlen("mca_base_env_list"))) {
                     /* find the equal sign */
@@ -621,12 +678,26 @@ static void process_tune_files(char *filename, char ***dstenv, char sep)
                         break;
                     }
                     ++p1;
-                    process_env_list(p1, dstenv, ';');
-                } else {
-                    rc = process_token(opts[n], dstenv);
+                    rc = process_env_list(p1, &cache, &cachevals, ';');
+                    free(p1);
                     if (PRRTE_SUCCESS != rc) {
+                        fclose(fp);
+                        prrte_argv_free(tmp);
+                        prrte_argv_free(opts);
+                        prrte_argv_free(cache);
+                        prrte_argv_free(cachevals);
+                        return rc;
+                    }
+                } else {
+                    rc = process_token(opts[n], &cache, &cachevals);
+                    if (PRRTE_SUCCESS != rc) {
+                        fclose(fp);
+                        prrte_argv_free(tmp);
+                        prrte_argv_free(opts);
+                        prrte_argv_free(cache);
+                        prrte_argv_free(cachevals);
                         prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
-                        break;
+                        return rc;
                     }
                 }
             }
@@ -636,33 +707,39 @@ static void process_tune_files(char *filename, char ***dstenv, char sep)
     }
 
     prrte_argv_free(tmp);
+
+    if (NULL != cache) {
+        /* add the results into dstenv */
+        for (n=0; NULL != cache[n]; n++) {
+            prrte_setenv(cache[n], cachevals[n], true, dstenv);
+        }
+        prrte_argv_free(cache);
+        prrte_argv_free(cachevals);
+    }
+    return PRRTE_SUCCESS;
 }
 
-static void process_generic(char *p1, char *p2, char ***dstenv)
+static bool check_generic(char *p1)
 {
     int j;
-    char *param;
 
     /* this is a generic MCA designation, so see if the parameter it
      * refers to belongs to a project base or one of our frameworks */
     if (0 == strncmp("opal_", p1, strlen("opal_")) ||
         0 == strncmp("orte_", p1, strlen("orte_")) ||
         0 == strncmp("ompi_", p1, strlen("ompi_"))) {
-        prrte_asprintf(&param, "OMPI_MCA_%s", p1);
-        prrte_setenv(param, p2, true, dstenv);
-        free(param);
+        return true;
     } else if (0 == strcmp(p1, "mca_base_env_list")) {
-        process_env_list(p2, dstenv, ';');
+        return true;
     } else {
         for (j=0; NULL != frameworks[j]; j++) {
             if (0 == strncmp(p1, frameworks[j], strlen(frameworks[j]))) {
-                prrte_asprintf(&param, "OMPI_MCA_%s", p1);
-                prrte_setenv(param, p2, true, dstenv);
-                free(param);
-                break;
+                return true;
             }
         }
     }
+
+    return false;
 }
 
 static int parse_env(prrte_cmd_line_t *cmd_line,
@@ -670,11 +747,12 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      char ***dstenv,
                      bool cmdline)
 {
-    char *param, *p1, *p2;
+    char *p1, *p2;
     char *env_set_flag;
+    char **cache=NULL, **cachevals=NULL;
+    char **envlist = NULL, **envtgt = NULL;
     prrte_value_t *pval;
-    prrte_cmd_line_param_t *cparm;
-    prrte_cmd_line_option_t *option;
+    int i, j, rc;
 
     prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
                         "%s schizo:ompi: parse_env",
@@ -693,64 +771,231 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
     /* Begin by examining the environment as the cmd line trumps all */
     env_set_flag = getenv("OMPI_MCA_mca_base_env_list");
     if (NULL != env_set_flag) {
-        process_env_list(env_set_flag, dstenv, ';');
+        rc = process_env_list(env_set_flag, &cache, &cachevals, ';');
+        if (PRRTE_SUCCESS != rc) {
+            prrte_argv_free(cache);
+            prrte_argv_free(cachevals);
+            return rc;
+        }
+    }
+    /* process the resulting cache into the dstenv */
+    if (NULL != cache) {
+        for (i=0; NULL != cache[i]; i++) {
+            prrte_setenv(cache[i], cachevals[i], true, dstenv);
+        }
+        prrte_argv_free(cache);
+        cache = NULL;
+        prrte_argv_free(cachevals);
+        cachevals = NULL;
     }
 
-    prrte_mutex_lock(&cmd_line->lcl_mutex);
-
-    PRRTE_LIST_FOREACH(cparm, &cmd_line->lcl_params, prrte_cmd_line_param_t) {
-        option = cparm->clp_option;
-
-        if ('x' == option->clo_short_name) {
-            pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
-            p1 = strip_quotes(pval->data.string);
-            /* process it */
-            process_token(p1, dstenv);
-            free(p1);
-            continue;
-        }
-
-        if (NULL == option->clo_long_name) {
-            continue;
-        }
-
-        if (0 == strcmp(option->clo_long_name, "omca") ||
-            0 == strcmp(option->clo_long_name, "gomca")) {
-            /* the first value on the list is the name of the param */
-            pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
-            p1 = strip_quotes(pval->data.string);
-            /* next value on the list is the value */
-            pval = (prrte_value_t*)prrte_list_get_next(&pval->super);
-            p2 = strip_quotes(pval->data.string);
-            /* construct the MCA param value and add it to the dstenv */
-            prrte_asprintf(&param, "OMPI_MCA_%s", p1);
-            prrte_setenv(param, p2, true, dstenv);
-            free(param);
-            free(p1);
-            free(p2);
-        } else if (0 == strcmp(option->clo_long_name, "mca") ||
-            0 == strcmp(option->clo_long_name, "gmca")) {
-            /* the first value on the list is the name of the param */
-            pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
-            p1 = strip_quotes(pval->data.string);
-            /* next value on the list is the value */
-            pval = (prrte_value_t*)prrte_list_get_next(&pval->super);
-            p2 = strip_quotes(pval->data.string);
-            /* process it */
-            process_generic(p1, p2, dstenv);
-            free(p1);
-            free(p2);
-        } else if (0 == strcmp(option->clo_long_name, "tune")) {
-            /* the first value on the list is the name of the file */
-            pval = (prrte_value_t*)prrte_list_get_first(&cparm->clp_values);
-            p1 = strip_quotes(pval->data.string);
-            /* process it */
-            process_tune_files(p1, dstenv, ',');
-            free(p1);
+    /* now process any tune file specification - the tune file processor
+     * will police itself for duplicate values */
+    if (NULL != (pval = prrte_cmd_line_get_param(cmd_line, "tune", 0, 0))) {
+        p1 = strip_quotes(pval->data.string);
+        rc = process_tune_files(p1, dstenv, ',');
+        free(p1);
+        if (PRRTE_SUCCESS != rc) {
+            return rc;
         }
     }
 
-    prrte_mutex_unlock(&cmd_line->lcl_mutex);
+    /* now look for any "--mca" options - note that it is an error
+     * for the same MCA param to be given more than once if the
+     * values differ */
+    if (0 < (j = prrte_cmd_line_get_ninsts(cmd_line, "omca"))) {
+        for (i = 0; i < j; ++i) {
+            /* the first value on the list is the name of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "omca", i, 0);
+            p1 = strip_quotes(pval->data.string);
+            /* next value on the list is the value */
+            pval = prrte_cmd_line_get_param(cmd_line, "omca", i, 1);
+            p2 = strip_quotes(pval->data.string);
+            /* treat mca_base_env_list as a special case */
+            if (0 == strcmp(p1, "mca_base_env_list")) {
+                prrte_argv_append_nosize(&envlist, p2);
+                free(p1);
+                free(p2);
+                continue;
+            }
+            rc = check_cache(&cache, &cachevals, p1, p2);
+            free(p1);
+            free(p2);
+            if (PRRTE_SUCCESS != rc) {
+                prrte_argv_free(cache);
+                prrte_argv_free(cachevals);
+                return rc;
+            }
+        }
+    }
+    if (0 < (j = prrte_cmd_line_get_ninsts(cmd_line, "gomca"))) {
+        for (i = 0; i < j; ++i) {
+            /* the first value on the list is the name of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "gomca", i, 0);
+            p1 = strip_quotes(pval->data.string);
+            /* next value on the list is the value */
+            pval = prrte_cmd_line_get_param(cmd_line, "gomca", i, 1);
+            p2 = strip_quotes(pval->data.string);
+            /* treat mca_base_env_list as a special case */
+            if (0 == strcmp(p1, "mca_base_env_list")) {
+                prrte_argv_append_nosize(&envlist, p2);
+                free(p1);
+                free(p2);
+                continue;
+            }
+            rc = check_cache(&cache, &cachevals, p1, p2);
+            free(p1);
+            free(p2);
+            if (PRRTE_SUCCESS != rc) {
+                prrte_argv_free(cache);
+                prrte_argv_free(cachevals);
+                return rc;
+            }
+        }
+    }
+    if (0 < (j = prrte_cmd_line_get_ninsts(cmd_line, "mca"))) {
+        for (i = 0; i < j; ++i) {
+            /* the first value on the list is the name of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "mca", i, 0);
+            p1 = strip_quotes(pval->data.string);
+            /* check if this is one of ours */
+            if (!check_generic(p1)) {
+                free(p1);
+                continue;
+            }
+            /* next value on the list is the value */
+            pval = prrte_cmd_line_get_param(cmd_line, "mca", i, 1);
+            p2 = strip_quotes(pval->data.string);
+            /* treat mca_base_env_list as a special case */
+            if (0 == strcmp(p1, "mca_base_env_list")) {
+                prrte_argv_append_nosize(&envlist, p2);
+                free(p1);
+                free(p2);
+                continue;
+            }
+            rc = check_cache(&cache, &cachevals, p1, p2);
+            free(p1);
+            free(p2);
+            if (PRRTE_SUCCESS != rc) {
+                prrte_argv_free(cache);
+                prrte_argv_free(cachevals);
+                prrte_argv_free(envlist);
+                return rc;
+            }
+        }
+    }
+    if (0 < (j = prrte_cmd_line_get_ninsts(cmd_line, "gmca"))) {
+        for (i = 0; i < j; ++i) {
+            /* the first value on the list is the name of the param */
+            pval = prrte_cmd_line_get_param(cmd_line, "gmca", i, 0);
+            p1 = strip_quotes(pval->data.string);
+            /* check if this is one of ours */
+            if (!check_generic(p1)) {
+                free(p1);
+                continue;
+            }
+            /* next value on the list is the value */
+            pval = prrte_cmd_line_get_param(cmd_line, "gmca", i, 1);
+            p2 = strip_quotes(pval->data.string);
+            /* treat mca_base_env_list as a special case */
+            if (0 == strcmp(p1, "mca_base_env_list")) {
+                prrte_argv_append_nosize(&envlist, p2);
+                free(p1);
+                free(p2);
+                continue;
+            }
+            rc = check_cache(&cache, &cachevals, p1, p2);
+            free(p1);
+            free(p2);
+            if (PRRTE_SUCCESS != rc) {
+                prrte_argv_free(cache);
+                prrte_argv_free(cachevals);
+                prrte_argv_free(envlist);
+                return rc;
+            }
+        }
+    }
+
+    /* if we got any env lists, process them here */
+    if (NULL != envlist) {
+        for (i=0; NULL != envlist[i]; i++) {
+            envtgt = prrte_argv_split(envlist[i], ';');
+            for (j=0; NULL != envtgt[j]; j++) {
+                if (NULL == (p2 = strchr(envtgt[j], '='))) {
+                    p1 = getenv(envtgt[j]);
+                    if (NULL == p1) {
+                        continue;
+                    }
+                    p1 = strdup(p1);
+                    if (NULL != (p2 = strchr(p1, '='))) {
+                        *p2 = '\0';
+                        rc = check_cache(&cache, &cachevals, p1, p2 + 1);
+                    } else {
+                        rc = check_cache(&cache, &cachevals, envtgt[j], p1);
+                    }
+                    free(p1);
+                    if (PRRTE_SUCCESS != rc) {
+                        prrte_argv_free(cache);
+                        prrte_argv_free(cachevals);
+                        prrte_argv_free(envtgt);
+                        prrte_argv_free(envlist);
+                        return rc;
+                    }
+                } else {
+                    *p2 = '\0';
+                    rc = check_cache(&cache, &cachevals, envtgt[j], p2 + 1);
+                    if (PRRTE_SUCCESS != rc) {
+                        prrte_argv_free(cache);
+                        prrte_argv_free(cachevals);
+                        prrte_argv_free(envtgt);
+                        prrte_argv_free(envlist);
+                        return rc;
+                    }
+                }
+            }
+            prrte_argv_free(envtgt);
+        }
+    }
+    prrte_argv_free(envlist);
+
+    /* now look for -x options - not allowed to conflict with a -mca option */
+    if (0 < (j = prrte_cmd_line_get_ninsts(cmd_line, "x"))) {
+        for (i = 0; i < j; ++i) {
+            /* the value is the envar */
+            pval = prrte_cmd_line_get_param(cmd_line, "x", i, 0);
+            p1 = strip_quotes(pval->data.string);
+            /* if there is an '=' in it, then they are setting a value */
+            if (NULL != (p2 = strchr(p1, '='))) {
+                *p2 = '\0';
+                ++p2;
+            } else {
+                p2 = getenv(p1);
+                if (NULL == p2) {
+                    free(p1);
+                    continue;
+                }
+            }
+            /* not allowed to duplicate anything from an MCA param on the cmd line */
+            rc = check_cache(&cache, &cachevals, p1, p2);
+            free(p1);
+            if (PRRTE_SUCCESS != rc) {
+                prrte_argv_free(cache);
+                prrte_argv_free(cachevals);
+                return rc;
+            }
+        }
+    }
+
+    /* process the resulting cache into the dstenv */
+    if (NULL != cache) {
+        for (i=0; NULL != cache[i]; i++) {
+            prrte_setenv(cache[i], cachevals[i], true, dstenv);
+        }
+    }
+
+    prrte_argv_free(cache);
+    prrte_argv_free(cachevals);
+
     return PRRTE_SUCCESS;
 }
 

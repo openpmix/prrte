@@ -215,11 +215,16 @@ int prrte_mca_base_component_repository_add (const char *path)
 
     dir = strtok_r (path_to_use, sep, &ctx);
     do {
-        if ((0 == strcmp(dir, "USER_DEFAULT") || 0 == strcmp(dir, "USR_DEFAULT"))
-            && NULL != prrte_mca_base_user_default_path) {
+        if (0 == strcmp(dir, "USER_DEFAULT") || 0 == strcmp(dir, "USR_DEFAULT")) {
+            if (NULL == prrte_mca_base_user_default_path) {
+                continue;
+            }
             dir = prrte_mca_base_user_default_path;
         } else if (0 == strcmp(dir, "SYS_DEFAULT") ||
                    0 == strcmp(dir, "SYSTEM_DEFAULT")) {
+            if (NULL == prrte_mca_base_system_default_path) {
+                continue;
+            }
             dir = prrte_mca_base_system_default_path;
         }
 
@@ -264,6 +269,7 @@ int prrte_mca_base_component_repository_init(void)
 
     ret = prrte_mca_base_component_repository_add (prrte_mca_base_component_path);
     if (PRRTE_SUCCESS != ret) {
+        prrte_output(0, "ERROR ON REPO ADD");
         PRRTE_DESTRUCT(&prrte_mca_base_component_repository);
         (void) prrte_mca_base_framework_close (&prrte_prtedl_base_framework);
         return ret;

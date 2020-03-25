@@ -81,25 +81,30 @@ int prrte_mca_base_open(void)
         return PRRTE_SUCCESS;
     }
 
-    /* define the system and user default paths */
-#if PRRTE_WANT_HOME_CONFIG_FILES
-    prrte_mca_base_system_default_path = strdup(prrte_install_dirs.prrtelibdir);
-    value = (char*)prrte_home_directory();
-    if (NULL == value) {
-         prrte_output(0, "Error: Unable to get the user home directory\n");
-        return PRRTE_ERROR;
-    }
-    prrte_asprintf(&prrte_mca_base_user_default_path, "%s"PRRTE_PATH_SEP".prrte"PRRTE_PATH_SEP"components", value);
-#else
-    prrte_asprintf(&prrte_mca_base_system_default_path, "%s", prrte_install_dirs.prrtelibdir);
-#endif
+    if (PRRTE_PROC_IS_MASTER) {
+        /* define the system and user default paths */
+    #if PRRTE_WANT_HOME_CONFIG_FILES
+        prrte_mca_base_system_default_path = strdup(prrte_install_dirs.prrtelibdir);
+        value = (char*)prrte_home_directory();
+        if (NULL == value) {
+             prrte_output(0, "Error: Unable to get the user home directory\n");
+            return PRRTE_ERROR;
+        }
+        prrte_asprintf(&prrte_mca_base_user_default_path, "%s"PRRTE_PATH_SEP".prrte"PRRTE_PATH_SEP"components", value);
+    #else
+        prrte_asprintf(&prrte_mca_base_system_default_path, "%s", prrte_install_dirs.prrtelibdir);
+    #endif
 
-    /* see if the user wants to override the defaults */
-    if (NULL == prrte_mca_base_user_default_path) {
-        value = strdup(prrte_mca_base_system_default_path);
+        /* see if the user wants to override the defaults */
+        if (NULL == prrte_mca_base_user_default_path) {
+            value = strdup(prrte_mca_base_system_default_path);
+        } else {
+            prrte_asprintf(&value, "%s%c%s", prrte_mca_base_system_default_path,
+                     PRRTE_ENV_SEP, prrte_mca_base_user_default_path);
+        }
     } else {
-        prrte_asprintf(&value, "%s%c%s", prrte_mca_base_system_default_path,
-                 PRRTE_ENV_SEP, prrte_mca_base_user_default_path);
+        prrte_asprintf(&prrte_mca_base_system_default_path, "%s", prrte_install_dirs.prrtelibdir);
+        value = strdup(prrte_mca_base_system_default_path);
     }
 
     prrte_mca_base_component_path = value;

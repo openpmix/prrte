@@ -199,7 +199,7 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
             /* if it is a --tune option, then we need to simply append the
              * comma-delimited list of files they gave to the existing one */
             if (0 == strcasecmp(option, "--tune")) {
-                /* it is possible someone gave the same name twice - avoid that here
+                /* it is possible someone gave this option more than once - avoid that here
                  * while preserving ordering of files */
                 if (j < idx) {
                     tmp = prrte_argv_split(pargs[j+1], ',');
@@ -216,13 +216,15 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                 prrte_argv_free(tmp);
                 free(pargs[j+1]);
                 pargs[j+1] = p2;
-                prrte_asprintf(&help_str, "%s %s", option, p2);
-                /* can't just call show_help as we want every instance to be reported */
-                output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
-                                                pargs[idx], help_str);
-                fprintf(stderr, "%s\n", output);
-                free(output);
-                free(help_str);
+                if (0 != strcmp(pargs[j], "--tune")) {
+                    prrte_asprintf(&help_str, "%s %s", option, p2);
+                    /* can't just call show_help as we want every instance to be reported */
+                    output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                                                    pargs[idx], help_str);
+                    fprintf(stderr, "%s\n", output);
+                    free(output);
+                    free(help_str);
+                }
                 break;
             }
             /* were we given a directive? */
