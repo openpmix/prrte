@@ -88,3 +88,14 @@ An incorrect value for the "--stream-buffering" option was given:
 
 Valid values are limited to 0, 1, or 2. Your application will continue, but
 please correct your command line in the future.
+#
+[duplicate-value]
+WARNING: an MCA parameter was listed more than once on the command line,
+but with conflicting values:
+
+  Param:  %s
+  Value:  %s
+  Value:  %s
+
+We cannot determine which value was intended, and therefore are unable to proceed.
+Please correct your command line.

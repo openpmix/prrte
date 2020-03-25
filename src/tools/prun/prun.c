@@ -1424,7 +1424,10 @@ int prun(int argc, char *argv[])
             }
         }
         /* pickup any relevant envars */
-        prrte_schizo.parse_env(prrte_cmd_line, environ, &papps[n].env, false);
+        rc = prrte_schizo.parse_env(prrte_cmd_line, environ, &papps[n].env, false);
+        if (PRRTE_SUCCESS != rc) {
+            goto DONE;
+        }
         ++n;
     }
 

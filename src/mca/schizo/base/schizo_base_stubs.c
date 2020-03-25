@@ -106,7 +106,6 @@ int prrte_schizo_base_parse_env(prrte_cmd_line_t *cmd_line,
         if (NULL != mod->module->parse_env) {
             rc = mod->module->parse_env(cmd_line, srcenv, dstenv, cmdline);
             if (PRRTE_SUCCESS != rc && PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
-                PRRTE_ERROR_LOG(rc);
                 return rc;
             }
         }
