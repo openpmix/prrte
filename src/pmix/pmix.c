@@ -66,8 +66,9 @@ int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace_t nspace)
 {
     uint32_t key;
     prrte_job_t *jdata;
-    uint32_t hash32;
+    uint32_t hash32, localjob = 0;
     uint16_t jobfam;
+    char *p = NULL;
 
     /* set a default */
     *jobid = PRRTE_JOBID_INVALID;
@@ -76,11 +77,11 @@ int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace_t nspace)
     if (0 == strlen(nspace)) {
         return PRRTE_SUCCESS;
     }
-    if (PMIX_CHECK_NSPACE(nspace, "PRRTE_JOBID_WILDCARD")) {
+    if (NULL != strstr(nspace, "JOBID_WILDCARD")) {
         *jobid = PRRTE_JOBID_WILDCARD;
         return PRRTE_SUCCESS;
     }
-    if (PMIX_CHECK_NSPACE(nspace, "PRRTE_JOBID_INVALID")) {
+    if (NULL != strstr(nspace, "JOBID_INVALID")) {
         *jobid = PRRTE_JOBID_INVALID;
         return PRRTE_SUCCESS;
     }
@@ -95,11 +96,20 @@ int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace_t nspace)
     /* if we get here, we don't know this nspace */
     jdata = PRRTE_NEW(prrte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, nspace);  // ensure we do this first so create_jobid can use the nspace
+    /* now find the "." at the end that indicates the child job */
+    if (NULL != (p = strrchr(nspace, '.'))) {
+        *p = '\0';
+    }
     PRRTE_HASH_STR(nspace, hash32);
+    if (NULL != p) {
+        *p = '.';
+        ++p;
+        localjob = strtoul(p, NULL, 10);
+    }
 
     /* now compress to 16-bits */
     jobfam = (uint16_t)(((0x0000ffff & (0xffff0000 & hash32) >> 16)) ^ (0x0000ffff & hash32));
-    jdata->jobid = 0xffff0000 & ((uint32_t)jobfam << 16);
+    jdata->jobid = (0xffff0000 & ((uint32_t)jobfam << 16)) | (0x0000ffff & localjob);
     *jobid = jdata->jobid;
     prrte_hash_table_set_value_uint32(prrte_job_data, jdata->jobid, jdata);
 
