@@ -510,6 +510,7 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
                 }
                 if (!found) {
                     prrte_show_help("help-schizo-base.txt", "env-not-found", true, p1);
+                    rc = PRRTE_ERR_NOT_FOUND;
                 }
             }
         }
@@ -557,7 +558,7 @@ static int process_env_list(const char *env_list,
                             char ***xparams, char ***xvals,
                             char sep)
 {
-    char** tokens;
+    char** tokens, *p1;
     int rc = PRRTE_SUCCESS;
 
     tokens = prrte_argv_split(env_list, (int)sep);
@@ -568,8 +569,10 @@ static int process_env_list(const char *env_list,
     for (int i = 0 ; NULL != tokens[i] ; ++i) {
         rc = process_token(tokens[i], xparams, xvals);
         if (PRRTE_SUCCESS != rc) {
-            prrte_show_help("help-schizo-base.txt", "incorrect-env-list-param",
-                           true, tokens[i], env_list);
+            if (PRRTE_ERR_NOT_FOUND == rc) {
+                prrte_show_help("help-schizo-base.txt", "incorrect-env-list-param",
+                                true, tokens[i], env_list);
+            }
             break;
         }
     }
@@ -614,21 +617,38 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         fp = fopen(tmp[i], "r");
         if (NULL == fp) {
             prrte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);
-            continue;
+            prrte_argv_free(tmp);
+            prrte_argv_free(cache);
+            prrte_argv_free(cachevals);
+            prrte_argv_free(xparams);
+            prrte_argv_free(xvals);
+            return PRRTE_ERR_NOT_FOUND;
         }
         while (NULL != (line = schizo_getline(fp))) {
             opts = prrte_argv_split(line, ' ');
             if (NULL == opts) {
                 prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
                 free(line);
-                break;
+                prrte_argv_free(tmp);
+                prrte_argv_free(cache);
+                prrte_argv_free(cachevals);
+                prrte_argv_free(xparams);
+                prrte_argv_free(xvals);
+                return PRRTE_ERR_BAD_PARAM;
             }
             for (n=0; NULL != opts[n]; n++) {
                 if (0 == strcmp(opts[n], "-x")) {
                     /* the next value must be the envar */
                     if (NULL == opts[n+1]) {
                         prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
-                        break;
+                        free(line);
+                        prrte_argv_free(tmp);
+                        prrte_argv_free(opts);
+                        prrte_argv_free(cache);
+                        prrte_argv_free(cachevals);
+                        prrte_argv_free(xparams);
+                        prrte_argv_free(xvals);
+                        return PRRTE_ERR_BAD_PARAM;
                     }
                     p1 = strip_quotes(opts[n+1]);
                     /* some idiot decided to allow spaces around an "=" sign, which is
@@ -637,7 +657,14 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     if (NULL != opts[n+2] && 0 == strcmp(opts[n+2], "=")) {
                         if (NULL == opts[n+3]) {
                             prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
-                            break;
+                            free(line);
+                            prrte_argv_free(tmp);
+                            prrte_argv_free(opts);
+                            prrte_argv_free(cache);
+                            prrte_argv_free(cachevals);
+                            prrte_argv_free(xparams);
+                            prrte_argv_free(xvals);
+                            return PRRTE_ERR_BAD_PARAM;
                         }
                         p2 = strip_quotes(opts[n+3]);
                         prrte_asprintf(&param, "%s=%s", p1, p2);
@@ -656,13 +683,21 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         prrte_argv_free(cachevals);
                         prrte_argv_free(xparams);
                         prrte_argv_free(xvals);
+                        free(line);
                         return rc;
                     }
                     ++n;  // skip over the envar option
                 } else if (0 == strcmp(opts[n], "--mca")) {
                     if (NULL == opts[n+1] || NULL == opts[n+2]) {
                         prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
-                        break;
+                        free(line);
+                        prrte_argv_free(tmp);
+                        prrte_argv_free(opts);
+                        prrte_argv_free(cache);
+                        prrte_argv_free(cachevals);
+                        prrte_argv_free(xparams);
+                        prrte_argv_free(xvals);
+                        return PRRTE_ERR_BAD_PARAM;
                     }
                     p1 = strip_quotes(opts[n+1]);
                     p2 = strip_quotes(opts[n+2]);
@@ -683,6 +718,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         prrte_argv_free(cachevals);
                         prrte_argv_free(xparams);
                         prrte_argv_free(xvals);
+                        free(line);
                         return rc;
                     }
                     n += 2;  // skip over the MCA option
@@ -691,7 +727,14 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     p1 = strchr(opts[n], '=');
                     if (NULL == p1) {
                         prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
-                        break;
+                        free(line);
+                        prrte_argv_free(tmp);
+                        prrte_argv_free(opts);
+                        prrte_argv_free(cache);
+                        prrte_argv_free(cachevals);
+                        prrte_argv_free(xparams);
+                        prrte_argv_free(xvals);
+                        return PRRTE_ERR_BAD_PARAM;
                     }
                     ++p1;
                     rc = process_env_list(p1, &xparams, &xvals, ';');
@@ -703,19 +746,21 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         prrte_argv_free(cachevals);
                         prrte_argv_free(xparams);
                         prrte_argv_free(xvals);
+                        free(line);
                         return rc;
                     }
                 } else {
                     rc = process_token(opts[n], &cache, &cachevals);
                     if (PRRTE_SUCCESS != rc) {
+                        prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
                         fclose(fp);
                         prrte_argv_free(tmp);
                         prrte_argv_free(opts);
                         prrte_argv_free(cache);
                         prrte_argv_free(cachevals);
-                        prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
                         prrte_argv_free(xparams);
                         prrte_argv_free(xvals);
+                        free(line);
                         return rc;
                     }
                 }

@@ -905,17 +905,17 @@ static int show_help(const char *filename, const char *topic,
     /* Not already displayed */
     else if (PRRTE_ERR_NOT_FOUND == rc) {
         if (NULL != prrte_iof.output) {
+            /* send it to any connected tools */
             prrte_iof.output(sender, PRRTE_IOF_STDDIAG, output);
+        }
+        if (prrte_xml_output) {
+            char *tmp;
+            tmp = xml_format((unsigned char*)output);
+            fprintf(prrte_xml_fp, "%s", tmp);
+            fflush(prrte_xml_fp);
+            free(tmp);
         } else {
-            if (prrte_xml_output) {
-                char *tmp;
-                tmp = xml_format((unsigned char*)output);
-                fprintf(prrte_xml_fp, "%s", tmp);
-                fflush(prrte_xml_fp);
-                free(tmp);
-            } else {
-                prrte_output(output_stream, "%s", output);
-            }
+            prrte_output(output_stream, "%s", output);
         }
         if (!show_help_timer_set) {
             show_help_time_last_displayed = now;
