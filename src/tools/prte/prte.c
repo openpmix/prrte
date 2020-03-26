@@ -925,10 +925,13 @@ int main(int argc, char *argv[])
     /* see if they want to run an application - let's parse
      * the cmd line to get it */
     rc = parse_locals(&apps, pargc, pargv);
-
+    size_t apps_size = prrte_list_get_size(&apps);
     /* did they provide an app? */
-    if (PMIX_SUCCESS != rc || 0 == prrte_list_get_size(&apps)) {
+    if (PMIX_SUCCESS != rc || 0 == apps_size) {
         /* nope - just need to wait for instructions */
+        if(0 == apps_size) {
+            prrte_output(0, "No application specified!");
+        }
         goto proceed;
     }
     /* mark that we are not a persistent DVM */

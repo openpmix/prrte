@@ -225,8 +225,7 @@ void prrte_plm_base_recv(int status, prrte_process_name_t* sender,
         }
 
         /* get the parent's job object */
-        if (NULL != (parent = prrte_get_job_data_object(name.jobid)) &&
-            !PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
+        if (NULL != (parent = prrte_get_job_data_object(name.jobid))) {
             /* if the prefix was set in the parent's job, we need to transfer
              * that prefix to the child's app_context so any further launch of
              * orteds can find the correct binary. There always has to be at

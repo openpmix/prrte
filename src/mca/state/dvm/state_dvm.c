@@ -509,6 +509,12 @@ static void check_complete(int fd, short args, void *cbdata)
         /* update our exit status */
         PRRTE_UPDATE_EXIT_STATUS(jdata->exit_code);
         /* just shut us down */
+        if(PRRTE_SUCCESS != jdata -> exit_code) {
+            char *output = prrte_dump_aborted_procs(jdata);
+            if(output) {
+              fprintf(stderr, "%s", output);
+            }
+        }
         prrte_plm.terminate_orteds();
         PRRTE_RELEASE(caddy);
         return;
