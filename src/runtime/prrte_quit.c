@@ -54,6 +54,7 @@
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
+#include "src/util/output.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 #include "src/threads/threads.h"
@@ -317,7 +318,7 @@ char* prrte_dump_aborted_procs(prrte_job_t *jdata)
         /* cycle through and count the number that were killed or aborted */
         for (i=0; i < job->procs->size; i++) {
             if (NULL == (pptr = (prrte_proc_t*)prrte_pointer_array_get_item(job->procs, i))) {
-                /* array is left-justfied - we are done */
+                /* array is left-justified - we are done */
                 break;
             }
             if (PRRTE_PROC_STATE_FAILED_TO_START == pptr->state ||

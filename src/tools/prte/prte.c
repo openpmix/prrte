@@ -937,6 +937,8 @@ int main(int argc, char *argv[])
     /* did they provide an app? */
     if (PMIX_SUCCESS != rc || 0 == prrte_list_get_size(&apps)) {
         if (proxyrun) {
+            prrte_show_help("help-prun.txt", "prun:executable-not-specified",
+                           true, prrte_tool_basename, prrte_tool_basename);
             PRRTE_UPDATE_EXIT_STATUS(rc);
             goto DONE;
         }
@@ -1435,8 +1437,6 @@ static int create_app(int argc, char* argv[],
     /* See if we have anything left */
     if (0 == count) {
         rc = PRRTE_ERR_NOT_FOUND;
-        prrte_show_help("help-prun.txt", "prun:executable-not-specified",
-                       true, prrte_tool_basename, prrte_tool_basename);
         goto cleanup;
     }
 

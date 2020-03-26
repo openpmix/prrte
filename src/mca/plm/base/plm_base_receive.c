@@ -225,25 +225,26 @@ void prrte_plm_base_recv(int status, prrte_process_name_t* sender,
         }
 
         /* get the parent's job object */
-        if (NULL != (parent = prrte_get_job_data_object(name.jobid)) &&
-            !PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
-            /* if the prefix was set in the parent's job, we need to transfer
-             * that prefix to the child's app_context so any further launch of
-             * orteds can find the correct binary. There always has to be at
-             * least one app_context in both parent and child, so we don't
-             * need to check that here. However, be sure not to overwrite
-             * the prefix if the user already provided it!
-             */
-            app = (prrte_app_context_t*)prrte_pointer_array_get_item(parent->apps, 0);
-            child_app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, 0);
-            if (NULL != app && NULL != child_app) {
-                prefix_dir = NULL;
-                if (prrte_get_attribute(&app->attributes, PRRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PRRTE_STRING) &&
-                    !prrte_get_attribute(&child_app->attributes, PRRTE_APP_PREFIX_DIR, NULL, PRRTE_STRING)) {
-                    prrte_set_attribute(&child_app->attributes, PRRTE_APP_PREFIX_DIR, PRRTE_ATTR_GLOBAL, prefix_dir, PRRTE_STRING);
-                }
-                if (NULL != prefix_dir) {
-                    free(prefix_dir);
+        if (NULL != (parent = prrte_get_job_data_object(name.jobid))) {
+            if (!PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
+                /* if the prefix was set in the parent's job, we need to transfer
+                 * that prefix to the child's app_context so any further launch of
+                 * orteds can find the correct binary. There always has to be at
+                 * least one app_context in both parent and child, so we don't
+                 * need to check that here. However, be sure not to overwrite
+                 * the prefix if the user already provided it!
+                 */
+                app = (prrte_app_context_t*)prrte_pointer_array_get_item(parent->apps, 0);
+                child_app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, 0);
+                if (NULL != app && NULL != child_app) {
+                    prefix_dir = NULL;
+                    if (prrte_get_attribute(&app->attributes, PRRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PRRTE_STRING) &&
+                        !prrte_get_attribute(&child_app->attributes, PRRTE_APP_PREFIX_DIR, NULL, PRRTE_STRING)) {
+                        prrte_set_attribute(&child_app->attributes, PRRTE_APP_PREFIX_DIR, PRRTE_ATTR_GLOBAL, prefix_dir, PRRTE_STRING);
+                    }
+                    if (NULL != prefix_dir) {
+                        free(prefix_dir);
+                    }
                 }
             }
             /* link the spawned job to the spawner */

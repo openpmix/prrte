@@ -632,7 +632,7 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc,
     int rc;
 
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
-                        "%s spawn upcalled from proc %s:%u",
+                        "%s spawn upcalled on behalf of proc %s:%u",
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                         proc->nspace, proc->rank);
 
