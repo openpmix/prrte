@@ -518,7 +518,7 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
     return rc;
 }
 
-/* process MCA params from an env_list - just add them to the cache */
+/* process params from an env_list - add them to the cache */
 static int process_token(char *token, char ***cache, char ***cachevals)
 {
     char *ptr, *value;
@@ -554,7 +554,7 @@ static int process_token(char *token, char ***cache, char ***cachevals)
 }
 
 static int process_env_list(const char *env_list,
-                            char ***cache, char ***cachevals,
+                            char ***xparams, char ***xvals,
                             char sep)
 {
     char** tokens;
@@ -566,7 +566,7 @@ static int process_env_list(const char *env_list,
     }
 
     for (int i = 0 ; NULL != tokens[i] ; ++i) {
-        rc = process_token(tokens[i], cache, cachevals);
+        rc = process_token(tokens[i], xparams, xvals);
         if (PRRTE_SUCCESS != rc) {
             prrte_show_help("help-schizo-base.txt", "incorrect-env-list-param",
                            true, tokens[i], env_list);
@@ -668,7 +668,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     p2 = strip_quotes(opts[n+2]);
                     if (0 == strcmp(p1, "mca_base_env_list")) {
                         /* next option must be the list of envars */
-                        rc = process_env_list(p2, &cache, &cachevals, ';');
+                        rc = process_env_list(p2, &xparams, &xvals, ';');
                     } else {
                         /* treat it as an arbitrary MCA param */
                         rc = check_cache(&cache, &cachevals, p1, p2);
@@ -694,8 +694,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         break;
                     }
                     ++p1;
-                    rc = process_env_list(p1, &cache, &cachevals, ';');
-                    free(p1);
+                    rc = process_env_list(p1, &xparams, &xvals, ';');
                     if (PRRTE_SUCCESS != rc) {
                         fclose(fp);
                         prrte_argv_free(tmp);
@@ -808,28 +807,22 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
     /* Begin by examining the environment as the cmd line trumps all */
     env_set_flag = getenv("OMPI_MCA_mca_base_env_list");
     if (NULL != env_set_flag) {
-        rc = process_env_list(env_set_flag, &cache, &cachevals, ';');
+        rc = process_env_list(env_set_flag, &xparams, &xvals, ';');
         if (PRRTE_SUCCESS != rc) {
-            prrte_argv_free(cache);
-            prrte_argv_free(cachevals);
+            prrte_argv_free(xparams);
+            prrte_argv_free(xvals);
             return rc;
         }
     }
     /* process the resulting cache into the dstenv */
-    if (NULL != cache) {
-        for (i=0; NULL != cache[i]; i++) {
-            if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
-                prrte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
-                prrte_setenv(p1, cachevals[i], true, dstenv);
-                free(p1);
-            } else {
-                prrte_setenv(cache[i], cachevals[i], true, dstenv);
-            }
+    if (NULL != xparams) {
+        for (i=0; NULL != xparams[i]; i++) {
+            prrte_setenv(xparams[i], xvals[i], true, dstenv);
         }
-        prrte_argv_free(cache);
-        cache = NULL;
-        prrte_argv_free(cachevals);
-        cachevals = NULL;
+        prrte_argv_free(xparams);
+        xparams = NULL;
+        prrte_argv_free(xvals);
+        xvals = NULL;
     }
 
     /* now process any tune file specification - the tune file processor
@@ -972,9 +965,9 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                     p1 = strdup(p1);
                     if (NULL != (p2 = strchr(p1, '='))) {
                         *p2 = '\0';
-                        rc = check_cache(&cache, &cachevals, p1, p2 + 1);
+                        rc = check_cache(&xparams, &xvals, p1, p2 + 1);
                     } else {
-                        rc = check_cache(&cache, &cachevals, envtgt[j], p1);
+                        rc = check_cache(&xparams, &xvals, envtgt[j], p1);
                     }
                     free(p1);
                     if (PRRTE_SUCCESS != rc) {
@@ -986,7 +979,7 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                     }
                 } else {
                     *p2 = '\0';
-                    rc = check_cache(&cache, &cachevals, envtgt[j], p2 + 1);
+                    rc = check_cache(&xparams, &xvals, envtgt[j], p2 + 1);
                     if (PRRTE_SUCCESS != rc) {
                         prrte_argv_free(cache);
                         prrte_argv_free(cachevals);
