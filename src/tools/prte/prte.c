@@ -519,6 +519,7 @@ int main(int argc, char *argv[])
     char **tmp;
     prrte_job_t *jdata;
     prrte_app_context_t *dapp;
+    bool proxyrun = false;
 
     /* init the globals */
     PRRTE_CONSTRUCT(&job_info, prrte_list_t);
@@ -580,6 +581,8 @@ int main(int argc, char *argv[])
             PRRTE_ERROR_LOG(rc);
             return rc;
         }
+    } else {
+        proxyrun = true;
     }
 
     /* get our session directory */
@@ -933,6 +936,10 @@ int main(int argc, char *argv[])
 
     /* did they provide an app? */
     if (PMIX_SUCCESS != rc || 0 == prrte_list_get_size(&apps)) {
+        if (proxyrun) {
+            PRRTE_UPDATE_EXIT_STATUS(rc);
+            goto DONE;
+        }
         /* nope - just need to wait for instructions */
         goto proceed;
     }
@@ -1428,6 +1435,8 @@ static int create_app(int argc, char* argv[],
     /* See if we have anything left */
     if (0 == count) {
         rc = PRRTE_ERR_NOT_FOUND;
+        prrte_show_help("help-prun.txt", "prun:executable-not-specified",
+                       true, prrte_tool_basename, prrte_tool_basename);
         goto cleanup;
     }
 

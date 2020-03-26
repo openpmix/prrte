@@ -508,6 +508,13 @@ static void check_complete(int fd, short args, void *cbdata)
     if (!prrte_persistent) {
         /* update our exit status */
         PRRTE_UPDATE_EXIT_STATUS(jdata->exit_code);
+        /* if this is an abnormal termination, report it */
+        if (jdata->state > PRRTE_JOB_STATE_ERROR) {
+            char *msg;
+            msg = prrte_dump_aborted_procs(jdata);
+            prrte_output(prrte_clean_output, "%s", msg);
+            free(msg);
+        }
         /* just shut us down */
         prrte_plm.terminate_orteds();
         PRRTE_RELEASE(caddy);
