@@ -90,8 +90,8 @@ Valid values are limited to 0, 1, or 2. Your application will continue, but
 please correct your command line in the future.
 #
 [duplicate-value]
-WARNING: an MCA parameter was listed more than once on the command line,
-but with conflicting values:
+WARNING: an MCA parameter was listed more than once on the command line, or
+multiple times in one or more files, but with conflicting values:
 
   Param:  %s
   Value:  %s

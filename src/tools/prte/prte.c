@@ -809,13 +809,15 @@ int main(int argc, char *argv[])
     if (NULL == (jdata = prrte_get_job_data_object(PRRTE_PROC_MY_NAME->jobid))) {
         prrte_show_help("help-prun.txt", "bad-job-object", true,
                        prrte_tool_basename);
-        exit(0);
+        PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERR_FATAL);
+        goto DONE;
     }
     /* also should have created a daemon "app" */
     if (NULL == (dapp = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, 0))) {
         prrte_show_help("help-prun.txt", "bad-app-object", true,
                        prrte_tool_basename);
-        exit(0);
+        PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERR_FATAL);
+        goto DONE;
     }
 
     /* Did the user specify a prefix, or want prefix by default? */
@@ -834,7 +836,8 @@ int main(int argc, char *argv[])
             if (0 == param_len) {
                 prrte_show_help("help-prun.txt", "prun:empty-prefix",
                                true, prrte_tool_basename, prrte_tool_basename);
-                return PRRTE_ERR_FATAL;
+                PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERR_FATAL);
+                goto DONE;
             }
         }
         prrte_set_attribute(&dapp->attributes, PRRTE_APP_PREFIX_DIR, PRRTE_ATTR_GLOBAL, param, PRRTE_STRING);
@@ -875,7 +878,8 @@ int main(int argc, char *argv[])
         if(1 < j) {
             prrte_show_help("help-prun.txt", "prun:multiple-hostfiles",
                            true, prrte_tool_basename, NULL);
-            return PRRTE_ERR_FATAL;
+            PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERR_FATAL);
+            goto DONE;
         } else {
             pval = prrte_cmd_line_get_param(prrte_cmd_line, "hostfile", 0, 0);
             prrte_set_attribute(&dapp->attributes, PRRTE_APP_HOSTFILE, PRRTE_ATTR_LOCAL, pval->data.string, PRRTE_STRING);
@@ -885,7 +889,8 @@ int main(int argc, char *argv[])
         if(1 < j || prrte_get_attribute(&dapp->attributes, PRRTE_APP_HOSTFILE, NULL, PRRTE_STRING)) {
             prrte_show_help("help-prun.txt", "prun:multiple-hostfiles",
                            true, prrte_tool_basename, NULL);
-            return PRRTE_ERR_FATAL;
+            PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERR_FATAL);
+            goto DONE;
         } else {
             pval = prrte_cmd_line_get_param(prrte_cmd_line, "machinefile", 0, 0);
             prrte_set_attribute(&dapp->attributes, PRRTE_APP_HOSTFILE, PRRTE_ATTR_LOCAL, pval->data.string, PRRTE_STRING);
@@ -993,7 +998,8 @@ int main(int argc, char *argv[])
         if (!prrte_path_is_absolute(param)) {
             char cwd[PRRTE_PATH_MAX];
             if (NULL == getcwd(cwd, sizeof(cwd))) {
-                return PRRTE_ERR_FATAL;
+                PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERR_FATAL);
+                goto DONE;
             }
             ptr = prrte_os_path(false, cwd, param, NULL);
         } else {
@@ -1014,7 +1020,8 @@ int main(int argc, char *argv[])
         if (!prrte_path_is_absolute(ptr)) {
             char cwd[PRRTE_PATH_MAX];
             if (NULL == getcwd(cwd, sizeof(cwd))) {
-                return PRRTE_ERR_FATAL;
+                PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERR_FATAL);
+                goto DONE;
             }
             param = prrte_os_path(false, cwd, ptr, NULL);
         } else {
@@ -1131,7 +1138,8 @@ int main(int argc, char *argv[])
             if (NULL != pval && i != pval->data.integer) {
                 prrte_show_help("help-prun.txt", "prun:timeoutconflict", false,
                                prrte_tool_basename, pval->data.integer, param);
-                exit(1);
+                PRRTE_UPDATE_EXIT_STATUS(1);
+                goto DONE;
             }
         } else {
             i = pval->data.integer;
@@ -1168,6 +1176,7 @@ int main(int argc, char *argv[])
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PRRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
+        PRRTE_UPDATE_EXIT_STATUS(ret);
         goto DONE;
     }
     PRRTE_PMIX_WAIT_THREAD(&mylock.lock);
@@ -1224,7 +1233,11 @@ int main(int argc, char *argv[])
             }
         }
         /* pickup any relevant envars */
-        prrte_schizo.parse_env(prrte_cmd_line, environ, &papps[n].env, false);
+        rc = prrte_schizo.parse_env(prrte_cmd_line, environ, &papps[n].env, false);
+        if (PRRTE_SUCCESS != rc) {
+            PRRTE_UPDATE_EXIT_STATUS(rc);
+            goto DONE;
+        }
         ++n;
     }
 
@@ -1237,6 +1250,7 @@ int main(int argc, char *argv[])
     if (PRRTE_SUCCESS != ret) {
         prrte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
         rc = ret;
+        PRRTE_UPDATE_EXIT_STATUS(rc);
         goto DONE;
     }
     /* we have to cycle the event library here so we can process
@@ -1246,6 +1260,7 @@ int main(int argc, char *argv[])
     }
     PRRTE_ACQUIRE_OBJECT(&lock.lock);
     if (PMIX_SUCCESS != lock.status) {
+        PRRTE_UPDATE_EXIT_STATUS(lock.status);
         goto DONE;
     }
     PMIX_LOAD_NSPACE(spawnednspace, lock.msg);
