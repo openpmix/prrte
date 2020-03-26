@@ -471,9 +471,11 @@ PRRTE_EXPORT int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace
         free(_tmp);                         \
     } while(0)
 
+/* convert prrte_jobid to pmix nspace */
 #define PRRTE_PMIX_CONVERT_JOBID(r, n, j) \
     (r) = prrte_convert_jobid_to_nspace((n), (j))
 
+/* convert prrte_vpid to pmix rank */
 #define PRRTE_PMIX_CONVERT_VPID(r, v)               \
     do {                                            \
         if (PRRTE_VPID_WILDCARD == (v)) {           \
@@ -485,6 +487,7 @@ PRRTE_EXPORT int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace
         }                                           \
     } while(0)
 
+/* convert prrte_process_name_t to pmix_proc_t */
 #define PRRTE_PMIX_CONVERT_NAME(r, p, n)                        \
     do {                                                        \
         PRRTE_PMIX_CONVERT_JOBID(r, (p)->nspace, (n)->jobid);   \
@@ -494,9 +497,11 @@ PRRTE_EXPORT int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace
     } while(0)
 
 
+/* convert pmix_nspace_t to prrte_jobid_t */
 #define PRRTE_PMIX_CONVERT_NSPACE(r, j, n)       \
     (r) = prrte_convert_nspace_to_jobid((j), (n))
 
+/* convert pmix rank to prrte_vpid_t */
 #define PRRTE_PMIX_CONVERT_RANK(v, r)           \
     do {                                        \
         if (PMIX_RANK_WILDCARD == (r)) {        \
@@ -508,6 +513,7 @@ PRRTE_EXPORT int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace
         }                                       \
     } while(0)
 
+/* convert pmix_proc_t to prrte_process_name_t */
 #define PRRTE_PMIX_CONVERT_PROCT(r, n, p)                           \
     do {                                                            \
         PRRTE_PMIX_CONVERT_NSPACE((r), &(n)->jobid, (p)->nspace);   \
