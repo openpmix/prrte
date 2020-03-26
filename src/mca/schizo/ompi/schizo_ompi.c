@@ -412,19 +412,17 @@ static char *strip_quotes(char *p)
 
 }
 
-static int check_cache(char ***c1, char ***c2,
-                       char *p1, char *p2)
+static int check_cache_noadd(char ***c1, char ***c2,
+                             char *p1, char *p2)
 {
     char **cache;
     char **cachevals;
     int k;
 
     if (NULL == c1 || NULL == c2) {
-        /* add them to the cache */
-        prrte_argv_append_nosize(c1, p1);
-        prrte_argv_append_nosize(c2, p2);
         return PRRTE_SUCCESS;
     }
+
     cache = *c1;
     cachevals = *c2;
 
@@ -443,10 +441,22 @@ static int check_cache(char ***c1, char ***c2,
             }
         }
     }
-    /* add them to the cache */
-    prrte_argv_append_nosize(c1, p1);
-    prrte_argv_append_nosize(c2, p2);
     return PRRTE_SUCCESS;
+}
+
+static int check_cache(char ***c1, char ***c2,
+                       char *p1, char *p2)
+{
+    int rc;
+
+    rc = check_cache_noadd(c1, c2, p1, p2);
+
+    if (PRRTE_SUCCESS == rc) {
+        /* add them to the cache */
+        prrte_argv_append_nosize(c1, p1);
+        prrte_argv_append_nosize(c2, p2);
+    }
+    return rc;
 }
 
 static int process_envar(const char *p, char ***cache, char ***cachevals)
@@ -508,6 +518,7 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
     return rc;
 }
 
+/* process MCA params from an env_list - just add them to the cache */
 static int process_token(char *token, char ***cache, char ***cachevals)
 {
     char *ptr, *value;
@@ -589,6 +600,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
     char **tmp, **opts, *line, *param, *p1, *p2;
     int i, n, rc=PRRTE_SUCCESS;
     char **cache = NULL, **cachevals = NULL;
+    char **xparams = NULL, **xvals = NULL;
 
     tmp = prrte_argv_split(filename, sep);
     if (NULL == tmp) {
@@ -634,7 +646,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         p1 = param;
                         ++n;  // need an extra step
                     }
-                    rc = process_envar(p1, &cache, &cachevals);
+                    rc = process_envar(p1, &xparams, &xvals);
                     free(p1);
                     if (PRRTE_SUCCESS != rc) {
                         fclose(fp);
@@ -642,6 +654,8 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         prrte_argv_free(opts);
                         prrte_argv_free(cache);
                         prrte_argv_free(cachevals);
+                        prrte_argv_free(xparams);
+                        prrte_argv_free(xvals);
                         return rc;
                     }
                     ++n;  // skip over the envar option
@@ -667,6 +681,8 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         prrte_argv_free(opts);
                         prrte_argv_free(cache);
                         prrte_argv_free(cachevals);
+                        prrte_argv_free(xparams);
+                        prrte_argv_free(xvals);
                         return rc;
                     }
                     n += 2;  // skip over the MCA option
@@ -686,6 +702,8 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         prrte_argv_free(opts);
                         prrte_argv_free(cache);
                         prrte_argv_free(cachevals);
+                        prrte_argv_free(xparams);
+                        prrte_argv_free(xvals);
                         return rc;
                     }
                 } else {
@@ -697,6 +715,8 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         prrte_argv_free(cache);
                         prrte_argv_free(cachevals);
                         prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                        prrte_argv_free(xparams);
+                        prrte_argv_free(xvals);
                         return rc;
                     }
                 }
@@ -711,11 +731,27 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
     if (NULL != cache) {
         /* add the results into dstenv */
         for (n=0; NULL != cache[n]; n++) {
-            prrte_setenv(cache[n], cachevals[n], true, dstenv);
+            if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
+                prrte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
+                prrte_setenv(p1, cachevals[i], true, dstenv);
+                free(p1);
+            } else {
+                prrte_setenv(cache[i], cachevals[i], true, dstenv);
+            }
         }
         prrte_argv_free(cache);
         prrte_argv_free(cachevals);
     }
+
+    /* add the -x values */
+    if (NULL != xparams) {
+        for (i=0; NULL != xparams[i]; i++) {
+            prrte_setenv(xparams[i], xvals[i], true, dstenv);
+        }
+        prrte_argv_free(xparams);
+        prrte_argv_free(xvals);
+    }
+
     return PRRTE_SUCCESS;
 }
 
@@ -750,6 +786,7 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
     char *p1, *p2;
     char *env_set_flag;
     char **cache=NULL, **cachevals=NULL;
+    char **xparams=NULL, **xvals=NULL;
     char **envlist = NULL, **envtgt = NULL;
     prrte_value_t *pval;
     int i, j, rc;
@@ -781,7 +818,13 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
     /* process the resulting cache into the dstenv */
     if (NULL != cache) {
         for (i=0; NULL != cache[i]; i++) {
-            prrte_setenv(cache[i], cachevals[i], true, dstenv);
+            if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
+                prrte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
+                prrte_setenv(p1, cachevals[i], true, dstenv);
+                free(p1);
+            } else {
+                prrte_setenv(cache[i], cachevals[i], true, dstenv);
+            }
         }
         prrte_argv_free(cache);
         cache = NULL;
@@ -976,25 +1019,45 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                 }
             }
             /* not allowed to duplicate anything from an MCA param on the cmd line */
-            rc = check_cache(&cache, &cachevals, p1, p2);
-            free(p1);
+            rc = check_cache_noadd(&cache, &cachevals, p1, p2);
             if (PRRTE_SUCCESS != rc) {
                 prrte_argv_free(cache);
                 prrte_argv_free(cachevals);
+                free(p1);
+                prrte_argv_free(xparams);
+                prrte_argv_free(xvals);
                 return rc;
             }
+            /* cache this for later inclusion */
+            prrte_argv_append_nosize(&xparams, p1);
+            prrte_argv_append_nosize(&xvals, p2);
+            free(p1);
         }
     }
 
     /* process the resulting cache into the dstenv */
     if (NULL != cache) {
         for (i=0; NULL != cache[i]; i++) {
-            prrte_setenv(cache[i], cachevals[i], true, dstenv);
+            if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
+                prrte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
+                prrte_setenv(p1, cachevals[i], true, dstenv);
+                free(p1);
+            } else {
+                prrte_setenv(cache[i], cachevals[i], true, dstenv);
+            }
         }
     }
-
     prrte_argv_free(cache);
     prrte_argv_free(cachevals);
+
+    /* add the -x values */
+    if (NULL != xparams) {
+        for (i=0; NULL != xparams[i]; i++) {
+            prrte_setenv(xparams[i], xvals[i], true, dstenv);
+        }
+        prrte_argv_free(xparams);
+        prrte_argv_free(xvals);
+    }
 
     return PRRTE_SUCCESS;
 }
