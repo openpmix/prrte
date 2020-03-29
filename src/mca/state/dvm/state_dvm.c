@@ -791,6 +791,14 @@ static void dvm_notify(int sd, short args, void *cbdata)
 
         /* insert into prrte_buffer_t */
         reply = PRRTE_NEW(prrte_buffer_t);
+        /* we need to add a flag indicating this came from an invalid proc so that we will
+         * inject it into our own PMIx server library */
+        if (PRRTE_SUCCESS != (rc = prrte_dss.pack(reply, &PRRTE_NAME_INVALID->vpid, 1, PRRTE_VPID))) {
+            PRRTE_ERROR_LOG(rc);
+            free(bo.bytes);
+            PRRTE_RELEASE(reply);
+            return;
+        }
         boptr = &bo;
         if (PRRTE_SUCCESS != (rc = prrte_dss.pack(reply, &boptr, 1, PRRTE_BYTE_OBJECT))) {
             PRRTE_ERROR_LOG(rc);

@@ -499,7 +499,7 @@ int main(int argc, char *argv[])
     prrte_list_t apps;
     prrte_pmix_app_t *app;
     pmix_info_t info, *iptr;
-    pmix_proc_t pname, controller;
+    pmix_proc_t controller;
     pmix_status_t ret;
     bool flag;
     prrte_ds_info_t *ds;
@@ -643,14 +643,6 @@ int main(int argc, char *argv[])
         exit(0);
     }
 
-    /* check if we are running as root - if we are, then only allow
-     * us to proceed if the allow-run-as-root flag was given. Otherwise,
-     * exit with a giant warning flag
-     */
-    if (0 == geteuid()) {
-        prrte_schizo.allow_run_as_root(prrte_cmd_line);  // will exit us if not allowed
-    }
-
     /* Check for help request */
     if (prrte_cmd_line_is_taken(prrte_cmd_line, "help")) {
         char *str, *args = NULL;
@@ -667,6 +659,14 @@ int main(int argc, char *argv[])
 
         /* If someone asks for help, that should be all we do */
         exit(0);
+    }
+
+    /* check if we are running as root - if we are, then only allow
+     * us to proceed if the allow-run-as-root flag was given. Otherwise,
+     * exit with a giant warning flag
+     */
+    if (0 == geteuid()) {
+        prrte_schizo.allow_run_as_root(prrte_cmd_line);  // will exit us if not allowed
     }
 
     /* detach from controlling terminal
@@ -756,14 +756,13 @@ int main(int argc, char *argv[])
         PMIX_INFO_CREATE(iptr, 1);
         /* target this notification solely to that one tool */
         PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
-        PMIx_Notify_event(PMIX_LAUNCHER_READY, &pname, PMIX_RANGE_CUSTOM,
+        PMIx_Notify_event(PMIX_LAUNCHER_READY, &prrte_process_info.myproc, PMIX_RANGE_CUSTOM,
                           iptr, 1, NULL, NULL);
         /* now wait for the launch directives to arrive */
         while (prrte_event_base_active && myinfo.lock.active) {
             prrte_event_loop(prrte_event_base, PRRTE_EVLOOP_ONCE);
         }
         PMIX_INFO_FREE(iptr, 1);
-
         /* process the returned directives */
         if (NULL != myinfo.info) {
             for (n=0; n < myinfo.ninfo; n++) {
@@ -1266,7 +1265,6 @@ int main(int argc, char *argv[])
         PMIX_INFO_FREE(iptr, 2);
     }
 #endif
-
 
     if (verbose) {
         prrte_output(0, "JOB %s EXECUTING", PRRTE_JOBID_PRINT(myjobid));
