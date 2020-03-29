@@ -701,12 +701,12 @@ int prun(int argc, char *argv[])
 
     /* because we have to use the schizo framework prior to parsing the
      * incoming argv for cmd line options, do a hacky search to support
-     * passing of verbosity option for schizo debugging */
+     * passing of options (e.g., verbosity) for schizo */
     for (i=1; NULL != argv[i]; i++) {
-        if (0 == strcmp(argv[i], "schizo_base_verbose")) {
-            /* the next option is the verbosity level */
-            prrte_setenv("PRRTE_MCA_schizo_base_verbose", argv[i+1], true, &environ);
-            break;
+        if (0 == strncmp(argv[i], "schizo", 6)) {
+            prrte_asprintf(&param, "PRRTE_MCA_%s", argv[i]);
+            prrte_setenv(param, argv[i+1], true, &environ);
+            free(param);
         }
     }
 
@@ -1345,10 +1345,12 @@ int prun(int argc, char *argv[])
         /* target this notification solely to that one tool */
         PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
 
-        PMIx_Notify_event(PMIX_LAUNCHER_READY, &pname, PMIX_RANGE_CUSTOM,
+        PMIx_Notify_event(PMIX_LAUNCHER_READY, &prrte_process_info.myproc, PMIX_RANGE_CUSTOM,
                           iptr, 1, NULL, NULL);
         /* now wait for the launch directives to arrive */
-        PRRTE_PMIX_WAIT_THREAD(&myinfo.lock);
+        while (prrte_event_base_active && myinfo.lock.active) {
+            prrte_event_loop(prrte_event_base, PRRTE_EVLOOP_ONCE);
+        }
         PMIX_INFO_FREE(iptr, 1);
 
         /* process the returned directives */
@@ -1448,16 +1450,14 @@ int prun(int argc, char *argv[])
     if (notify_launch) {
         /* direct an event back to our controller telling them
          * the namespace of the spawned job */
-        PMIX_INFO_CREATE(iptr, 3);
-        /* do not cache this event - the tool is waiting for us */
-        flag = true;
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_DO_NOT_CACHE, &flag, PMIX_BOOL);
+        PMIX_INFO_CREATE(iptr, 2);
         /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
         /* pass the nspace of the spawned job */
-        PMIX_INFO_LOAD(&iptr[2], PMIX_NSPACE, spawnednspace, PMIX_STRING);
+        PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, spawnednspace, PMIX_STRING);
         PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &controller, PMIX_RANGE_CUSTOM,
-                          iptr, 3, NULL, NULL);
+                          iptr, 2, NULL, NULL);
+        PMIX_INFO_FREE(iptr, 2);
     }
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
@@ -1580,9 +1580,8 @@ static int parse_locals(prrte_list_t *jdata, int argc, char* argv[])
                 rc = create_app(temp_argc, temp_argv, jdata, &app, &made_app, &env);
                 if (PRRTE_SUCCESS != rc) {
                     /* Assume that the error message has already been
-                       printed; no need to cleanup -- we can just
-                       exit */
-                    exit(1);
+                       printed */
+                    return rc;
                 }
                 if (made_app) {
                     prrte_list_append(jdata, &app->super);

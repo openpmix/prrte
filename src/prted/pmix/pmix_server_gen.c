@@ -356,11 +356,23 @@ void pmix_server_notify(int status, prrte_process_name_t* sender,
     size_t ninfo;
     prrte_jobid_t jobid;
     prrte_job_t *jdata;
+    prrte_vpid_t vpid;
 
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
                         "%s PRRTE Notification received from %s",
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                         PRRTE_NAME_PRINT(sender));
+
+    /* unpack the daemon who broadcast the event */
+    cnt = 1;
+    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &vpid, &cnt, PRRTE_VPID))) {
+        PRRTE_ERROR_LOG(rc);
+        return;
+    }
+    /* if I am the one who sent it, then discard it */
+    if (vpid == PRRTE_PROC_MY_NAME->vpid) {
+        return;
+    }
 
     /* unpack the byte object payload */
     cnt = 1;
@@ -521,8 +533,17 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
     bo.bytes = (uint8_t*)pbo.bytes;
     bo.size = pbo.size;
 
-    /* pack it into our reply */
+    /* setup the broadcast */
     buf = PRRTE_NEW(prrte_buffer_t);
+    /* we need to add a flag indicating this came from us as we are going to get it echoed
+     * back to us by the broadcast */
+    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buf, &PRRTE_PROC_MY_NAME->vpid, 1, PRRTE_VPID))) {
+        PRRTE_ERROR_LOG(rc);
+        free(bo.bytes);
+        PRRTE_RELEASE(buf);
+        return PMIX_ERR_PACK_FAILURE;
+    }
+    /* add the payload */
     boptr = &bo;
     if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buf, &boptr, 1, PRRTE_BYTE_OBJECT))) {
         PRRTE_ERROR_LOG(rc);
