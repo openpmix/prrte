@@ -606,6 +606,16 @@ static int check_modifiers(char *ck, prrte_job_t *jdata,
         } else if (0 == strncasecmp(ck2[i], "XMLOUTPUT", strlen(ck2[i]))) {
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
+        } else if (0 == strncasecmp(ck2[i], "PE-LIST", strlen(ck2[i]))) {
+            if (NULL == (ptr = strchr(ck2[i], '='))) {
+                /* missing the value */
+                prrte_show_help("help-prrte-rmaps-base.txt", "missing-value", true, "pe-list", ck2[i]);
+                prrte_argv_free(ck2);
+                return PRRTE_ERR_SILENT;
+            }
+            ptr++;
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_CPU_LIST, PRRTE_ATTR_GLOBAL,
+                                ptr, PRRTE_STRING);
         } else {
             /* unrecognized modifier */
             prrte_argv_free(ck2);

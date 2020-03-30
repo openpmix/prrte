@@ -268,14 +268,13 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--use-hwthread-cpus")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", "hwthread", NULL);
     }
-    /* --cpu-set and --cpu-list -> --map-by pr-list:X
-     * - Needs to be implemented
+    /* --cpu-set and --cpu-list -> --map-by pe-list:X
      */
     else if (0 == strcmp(option, "--cpu-set") ||
              0 == strcmp(option, "--cpu-list") ) {
-        prrte_show_help("help-schizo-base.txt", "deprecated-fail", true,
-                        option, "Not converted yet - work to do");
-        return PRRTE_ERR_BAD_PARAM;
+        prrte_asprintf(&p2, "PE-LIST=%s", pargs[i+1]);
+        rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2);
+        free(p2);
     }
     /* --bind-to-core and --bind-to-socket -> --bind-to X */
     else if (0 == strcmp(option, "--bind-to-core")) {
@@ -558,7 +557,7 @@ static int process_env_list(const char *env_list,
                             char ***xparams, char ***xvals,
                             char sep)
 {
-    char** tokens, *p1;
+    char** tokens;
     int rc = PRRTE_SUCCESS;
 
     tokens = prrte_argv_split(env_list, (int)sep);

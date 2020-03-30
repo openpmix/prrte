@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2008      Voltaire. All rights reserved
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -88,7 +88,7 @@ static int prrte_rmaps_rf_map(prrte_job_t *jdata)
     int rc;
     prrte_proc_t *proc;
     prrte_mca_base_component_t *c = &prrte_rmaps_rank_file_component.super.base_version;
-    char *slots;
+    char *slots, *jobslots = NULL;
     bool initial_map=true;
     prrte_hwloc_resource_type_t rtype;
 
@@ -163,6 +163,9 @@ static int prrte_rmaps_rf_map(prrte_job_t *jdata)
 
     /* END SANITY CHECKS */
 
+    /* see if the job was given a slot list */
+    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPU_LIST, (void**)&jobslots, PRRTE_STRING);
+
     /* start at the beginning... */
     vpid_start = 0;
     jdata->num_procs = 0;
@@ -210,40 +213,43 @@ static int prrte_rmaps_rf_map(prrte_job_t *jdata)
             rank = vpid_start + k;
             /* get the rankfile entry for this rank */
             if (NULL == (rfmap = (prrte_rmaps_rank_file_map_t*)prrte_pointer_array_get_item(&rankmap, rank))) {
-                /* if we were give a default slot-list, then use it */
-                if (NULL != prrte_hwloc_base_cpu_list) {
+                /* if this job was given a slot-list, then use it */
+                if (NULL != jobslots) {
+                    slots = jobslots;
+                } else if (NULL != prrte_hwloc_base_cpu_list) {
+                    /* if we were give a default slot-list, then use it */
                     slots = prrte_hwloc_base_cpu_list;
-                    /* take the next node off of the available list */
-                    node = NULL;
-                    PRRTE_LIST_FOREACH(nd, &node_list, prrte_node_t) {
-                        /* if adding one to this node would oversubscribe it, then try
-                         * the next one */
-                        if (nd->slots <= (int)nd->num_procs) {
-                            continue;
-                        }
-                        /* take this one */
-                        node = nd;
-                        break;
-                    }
-                    if (NULL == node) {
-                        /* all would be oversubscribed, so take the least loaded one */
-                        k = UINT32_MAX;
-                        PRRTE_LIST_FOREACH(nd, &node_list, prrte_node_t) {
-                            if (nd->num_procs < (prrte_vpid_t)k) {
-                                k = nd->num_procs;
-                                node = nd;
-                            }
-                        }
-                    }
-                    /* if we still have nothing, then something is very wrong */
-                    if (NULL == node) {
-                        rc = PRRTE_ERR_OUT_OF_RESOURCE;
-                        goto error;
-                    }
                 } else {
                     /* all ranks must be specified */
                     prrte_show_help("help-rmaps_rank_file.txt", "missing-rank", true, rank, prrte_rankfile);
                     rc = PRRTE_ERR_SILENT;
+                    goto error;
+                }
+                /* take the next node off of the available list */
+                node = NULL;
+                PRRTE_LIST_FOREACH(nd, &node_list, prrte_node_t) {
+                    /* if adding one to this node would oversubscribe it, then try
+                     * the next one */
+                    if (nd->slots <= (int)nd->num_procs) {
+                        continue;
+                    }
+                    /* take this one */
+                    node = nd;
+                    break;
+                }
+                if (NULL == node) {
+                    /* all would be oversubscribed, so take the least loaded one */
+                    k = UINT32_MAX;
+                    PRRTE_LIST_FOREACH(nd, &node_list, prrte_node_t) {
+                        if (nd->num_procs < (prrte_vpid_t)k) {
+                            k = nd->num_procs;
+                            node = nd;
+                        }
+                    }
+                }
+                /* if we still have nothing, then something is very wrong */
+                if (NULL == node) {
+                    rc = PRRTE_ERR_OUT_OF_RESOURCE;
                     goto error;
                 }
             } else {
