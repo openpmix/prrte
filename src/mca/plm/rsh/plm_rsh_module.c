@@ -611,6 +611,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
          (prrte_plm_rsh_component.using_qrsh && prrte_plm_rsh_component.daemonize_qrsh)) &&
         ((!prrte_plm_rsh_component.using_llspawn) ||
          (prrte_plm_rsh_component.using_llspawn && prrte_plm_rsh_component.daemonize_llspawn))) {
+        prrte_argv_append(&argc, &argv, "--daemonize");
     }
 
     /*

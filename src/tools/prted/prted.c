@@ -617,6 +617,7 @@ int main(int argc, char *argv[])
         pmix_info_t *info;
         size_t ninfo;
         pmix_value_t *vptr;
+        int32_t one=1;
 
         boptr = &bo;
         bo.bytes = NULL;
@@ -649,11 +650,23 @@ int main(int argc, char *argv[])
             bo.bytes = (uint8_t*)pbo.bytes;
             bo.size = pbo.size;
             PMIX_VALUE_RELEASE(vptr);
-        }
-        if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &boptr, 1, PRRTE_BYTE_OBJECT))) {
-            PRRTE_ERROR_LOG(ret);
-            PRRTE_RELEASE(buffer);
-            goto DONE;
+            if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &one, 1, PRRTE_INT32))) {
+                PRRTE_ERROR_LOG(ret);
+                PRRTE_RELEASE(buffer);
+                goto DONE;
+            }
+            if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &boptr, 1, PRRTE_BYTE_OBJECT))) {
+                PRRTE_ERROR_LOG(ret);
+                PRRTE_RELEASE(buffer);
+                goto DONE;
+            }
+        } else {
+            int32_t zero=0;
+            if (PRRTE_SUCCESS != (ret = prrte_dss.pack(buffer, &zero, 1, PRRTE_INT32))) {
+                PRRTE_ERROR_LOG(ret);
+                PRRTE_RELEASE(buffer);
+                goto DONE;
+            }
         }
     }
 
@@ -928,6 +941,7 @@ static void rollup(int status, prrte_process_name_t* sender,
     pmix_info_t *info;
     pmix_proc_t proc;
     pmix_status_t prc;
+    size_t ninfo;
 
     ncollected++;
 
@@ -963,12 +977,18 @@ static void rollup(int status, prrte_process_name_t* sender,
             }
             /* it was packed using PMIx, so unpack it the same way */
             PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
-            PMIX_INFO_CREATE(info, (size_t)flag);
-            if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&proc, &pbkt, (void*)info, &flag, PMIX_INFO))) {
+            cnt = 1;
+            if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&proc, &pbkt, &ninfo, &cnt, PMIX_SIZE))) {
                 PMIX_ERROR_LOG(prc);
                 goto report;
             }
-            for (cnt=0; cnt < flag; cnt++) {
+            PMIX_INFO_CREATE(info, ninfo);
+            cnt = ninfo;
+            if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&proc, &pbkt, (void*)info, &cnt, PMIX_INFO))) {
+                PMIX_ERROR_LOG(prc);
+                goto report;
+            }
+            for (cnt=0; cnt < (int)ninfo; cnt++) {
                 prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &info[cnt].value);
                 if (PMIX_SUCCESS != prc) {
                     PMIX_ERROR_LOG(prc);
