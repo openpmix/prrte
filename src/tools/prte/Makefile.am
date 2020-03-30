@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -36,8 +36,14 @@ $(nodist_man_MANS): $(top_builddir)/src/include/prrte_config.h
 prte_SOURCES = \
         prte.c
 
+prte_LDFLAGS = \
+	$(prrte_libev_LDFLAGS) \
+	$(prrte_libevent_LDFLAGS)
+
 prte_LDADD = \
     $(PRRTE_EXTRA_LTLIB) \
+    $(prrte_libevent_LIBS) \
+    $(prrte_libev_LIBS) \
 	$(top_builddir)/src/libprrte.la
 
 distclean-local:

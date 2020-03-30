@@ -42,8 +42,14 @@ prun_SOURCES = \
         prun.c \
         prun.h
 
+prun_LDFLAGS = \
+	$(prrte_libev_LDFLAGS) \
+	$(prrte_libevent_LDFLAGS)
+
 prun_LDADD = \
     $(PRRTE_EXTRA_LTLIB) \
+    $(prrte_libevent_LIBS) \
+    $($prrte_libev_LIBS) \
 	$(top_builddir)/src/libprrte.la
 
 distclean-local:
