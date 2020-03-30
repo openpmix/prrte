@@ -597,11 +597,11 @@ static int setup_launch(int *argcptr, char ***argvptr,
     free(final_cmd);  /* done with this */
     if (NULL != orted_prefix) free(orted_prefix);
 
-    /* if we are not tree launching or debugging, tell the daemon
+    /* unless we are debugging or in specific use-cases that
+     * require us to retain connection, tell the daemon
      * to daemonize so we can launch the next group
      */
-    if (prrte_plm_rsh_component.no_tree_spawn &&
-        !prrte_debug_flag &&
+    if (prrte_debug_flag &&
         !prrte_debug_daemons_flag &&
         !prrte_debug_daemons_file_flag &&
         !prrte_leave_session_attached &&
@@ -611,6 +611,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
          (prrte_plm_rsh_component.using_qrsh && prrte_plm_rsh_component.daemonize_qrsh)) &&
         ((!prrte_plm_rsh_component.using_llspawn) ||
          (prrte_plm_rsh_component.using_llspawn && prrte_plm_rsh_component.daemonize_llspawn))) {
+        prrte_argv_append(&argc, &argv, "--daemonize");
     }
 
     /*
