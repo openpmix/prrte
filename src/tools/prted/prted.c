@@ -377,13 +377,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Daemon was launched on %s - beginning to initialize\n", prrte_process_info.nodename);
     }
 
-#if defined(HAVE_SETSID)
-    /* see if we were directed to separate from current session */
-    if (prrte_cmd_line_is_taken(prrte_cmd_line, "set-sid")) {
-        setsid();
-    }
-#endif
-
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
@@ -395,6 +388,13 @@ int main(int argc, char *argv[])
         prrte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
     }
+#if defined(HAVE_SETSID)
+    /* see if we were directed to separate from current session */
+    if (prrte_cmd_line_is_taken(prrte_cmd_line, "set-sid")) {
+        setsid();
+    }
+#endif
+
 
     if (PRRTE_SUCCESS != (ret = prrte_init(&argc, &argv, PRRTE_PROC_DAEMON))) {
         PRRTE_ERROR_LOG(ret);
