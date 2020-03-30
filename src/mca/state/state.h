@@ -63,6 +63,12 @@ BEGIN_C_DECLS
  */
 PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
 
+
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif
+
+
 /* For ease in debugging the state machine, it is STRONGLY recommended
  * that the functions be accessed using the following macros
  */
@@ -74,12 +80,24 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
         } \
     } while(0);
 
+/* Timestamp for state printouts */
+#define PRTE_STATE_GET_TIMESTAMP(t)                                         \
+    do {                                                                    \
+        struct timeval tv;                                                  \
+        gettimeofday(&tv, NULL);                                            \
+        t  = tv.tv_sec;                                                     \
+        t += (double)tv.tv_usec / 1000000.0;                                \
+    } while(0);
+
 #define PRTE_ACTIVATE_JOB_STATE(j, s)                                       \
     do {                                                                    \
         prte_job_t *shadow=(j);                                             \
+        double timestamp = 0.0;                                             \
+        PRTE_STATE_GET_TIMESTAMP(timestamp);                                \
         prte_output_verbose(1, prte_state_base_framework.framework_output,  \
-                            "%s ACTIVATE JOB %s STATE %s AT %s:%d",         \
+                            "%s [%f] ACTIVATE JOB %s STATE %s AT %s:%d",    \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),             \
+                            timestamp,                                      \
                             (NULL == shadow) ? "NULL" :                     \
                             PRTE_JOBID_PRINT(shadow->jobid),                \
                             prte_job_state_to_str((s)),                     \
@@ -90,9 +108,12 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
 #define PRTE_ACTIVATE_PROC_STATE(p, s)                                      \
     do {                                                                    \
         prte_process_name_t *shadow=(p);                                    \
+        double timestamp = 0.0;                                             \
+        PRTE_STATE_GET_TIMESTAMP(timestamp);                                \
         prte_output_verbose(1, prte_state_base_framework.framework_output,  \
-                            "%s ACTIVATE PROC %s STATE %s AT %s:%d",        \
+                            "%s [%f] ACTIVATE PROC %s STATE %s AT %s:%d",   \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),             \
+                            timestamp,                                      \
                             (NULL == shadow) ? "NULL" :                     \
                             PRTE_NAME_PRINT(shadow),                        \
                             prte_proc_state_to_str((s)),                    \
