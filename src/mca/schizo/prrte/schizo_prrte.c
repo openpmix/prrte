@@ -382,9 +382,10 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      char ***dstenv,
                      bool cmdline)
 {
-    int i;
+    int i, n;
     char *param, *p1;
     char *value;
+    char **env = *dstenv;
 
     prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
                         "%s schizo:prrte: parse_env",
@@ -404,6 +405,13 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
             *value = '\0';
             value++;
             if (cmdline) {
+                /* check if it is already present */
+                for (n=0; NULL != env[n]; n++) {
+                    if (0 == strcmp(env[n], p1)) {
+                        /* this param is already given */
+                        goto next;
+                    }
+                }
                 prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
                                      "%s schizo:prrte:parse_env adding %s %s to cmd line",
                                      PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), p1, value);
@@ -425,7 +433,9 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                     prrte_setenv(param, value, true, dstenv);
                 }
             }
+          next:
             free(param);
+            env = *dstenv;
         }
     }
 

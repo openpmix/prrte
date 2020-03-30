@@ -1215,7 +1215,7 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
     prrte_daemon_cmd_flag_t cmd;
     char *myendian;
     pmix_proc_t pproc;
-    char *alias, **atmp=NULL;
+    char *alias, **atmp;
     uint8_t naliases, ni;
 
     /* get the daemon job, if necessary */
@@ -1242,12 +1242,14 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
         size_t n, ninfo;
         prrte_byte_object_t *bptr;
         pmix_data_buffer_t pbuf;
+        int32_t flag;
 
         PRRTE_OUTPUT_VERBOSE((5, prrte_plm_base_framework.framework_output,
                              "%s plm:base:orted_report_launch from daemon %s",
                              PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                              PRRTE_NAME_PRINT(&dname)));
 
+        atmp = NULL;
         /* update state and record for this daemon contact info */
         if (NULL == (daemon = (prrte_proc_t*)prrte_pointer_array_get_item(jdatorted->procs, dname.vpid))) {
             PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
@@ -1258,17 +1260,22 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
         /* record that this daemon is alive */
         PRRTE_FLAG_SET(daemon, PRRTE_PROC_FLAG_ALIVE);
 
-        /* unpack the byte object containing the info array */
+        /* unpack the flag indicating if we have info objects */
         idx = 1;
-        if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &bptr, &idx, PRRTE_BYTE_OBJECT))) {
+        if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &flag, &idx, PRRTE_INT32))) {
             PRRTE_ERROR_LOG(rc);
             prted_failed_launch = true;
             goto CLEANUP;
         }
-        /* if nothing is present, then ignore it */
-        if (0 == bptr->size) {
-            free(bptr);
-        } else {
+
+        if (0 < flag) {
+            /* unpack the byte object containing the info array */
+            idx = 1;
+            if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &bptr, &idx, PRRTE_BYTE_OBJECT))) {
+                PRRTE_ERROR_LOG(rc);
+                prted_failed_launch = true;
+                goto CLEANUP;
+            }
             /* load the bytes into a PMIx data buffer for unpacking */
             PMIX_DATA_BUFFER_LOAD(&pbuf, bptr->bytes, bptr->size);
             bptr->bytes = NULL;
