@@ -446,6 +446,11 @@ static void timer_cb(int fd, short event, void *cbdata)
 
     /* declare launch failed */
     PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_FAILED_TO_START);
+    jdata->exit_code = PRRTE_ERR_TIMEOUT;
+
+    if (!prrte_persistent) {
+        PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERR_TIMEOUT);
+    }
 
     /* free event */
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_FAILURE_TIMER_EVENT, (void**)&timer, PRRTE_PTR)) {
