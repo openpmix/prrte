@@ -182,6 +182,8 @@ int prrte_odls_base_default_get_add_procs_data(prrte_buffer_t *buffer,
     char **list, **procs, **micro, *tmp, *regex;
     prrte_odls_jcaddy_t cd = {0};
     prrte_proc_t *pptr;
+    uint32_t uid;
+    uint32_t gid;
 
     /* get the job data pointer */
     if (NULL == (jdata = prrte_get_job_data_object(job))) {
@@ -278,7 +280,7 @@ int prrte_odls_base_default_get_add_procs_data(prrte_buffer_t *buffer,
     /* assemble the node and proc map info */
     list = NULL;
     procs = NULL;
-    cd.ninfo = 3;
+    cd.ninfo = 5;
     PMIX_INFO_CREATE(cd.info, cd.ninfo);
     for (i=0; i < map->nodes->size; i++) {
         micro = NULL;
@@ -337,7 +339,7 @@ int prrte_odls_base_default_get_add_procs_data(prrte_buffer_t *buffer,
 #ifdef PMIX_REGEX
         PMIX_INFO_LOAD(&cd.info[1], PMIX_PROC_MAP, regex, PMIX_REGEX);
 #else
-        PMIX_INFO_LOAD(&cd.info[0], PMIX_PROC_MAP, regex, PMIX_STRING);
+        PMIX_INFO_LOAD(&cd.info[1], PMIX_PROC_MAP, regex, PMIX_STRING);
 #endif
         free(regex);
     }
@@ -361,6 +363,12 @@ int prrte_odls_base_default_get_add_procs_data(prrte_buffer_t *buffer,
     free(tmp);
     PMIX_INFO_LOAD(&info[1], PMIX_ALLOC_NETWORK_SEC_KEY, NULL, PMIX_BOOL);
     PMIX_INFO_LOAD(&info[2], PMIX_SETUP_APP_ENVARS, NULL, PMIX_BOOL);
+
+    /* add in the user's uid and gid */
+    uid = geteuid();
+    PMIX_INFO_LOAD(&cd.info[3], PMIX_USERID, &uid, PMIX_UINT32);
+    gid = getegid();
+    PMIX_INFO_LOAD(&cd.info[4], PMIX_GRPID, &gid, PMIX_UINT32);
 
     /* we don't want to block here because it could
      * take some indeterminate time to get the info */

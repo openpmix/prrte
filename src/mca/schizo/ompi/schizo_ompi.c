@@ -1114,6 +1114,10 @@ static int detect_proxy(char **argv, char **rfile)
         prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
         /* add us to the personalities */
         prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi5");
+        if (0 == strcmp(prrte_tool_basename, "oshrun")) {
+            /* add oshmem to the personalities */
+        prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "oshmem");
+        }
         return PRRTE_SUCCESS;
     }
 
