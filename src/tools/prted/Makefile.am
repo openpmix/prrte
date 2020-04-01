@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -23,6 +23,7 @@ include $(top_srcdir)/Makefile.prrte-rules
 
 man_pages = prted.1
 EXTRA_DIST = $(man_pages:.1=.1in)
+AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS)
 
 bin_PROGRAMS = prted
 

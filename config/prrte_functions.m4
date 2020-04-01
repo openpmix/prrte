@@ -13,7 +13,7 @@ dnl                         All rights reserved.
 dnl Copyright (c) 2007      Sun Microsystems, Inc.  All rights reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl Copyright (c) 2009-2016 Cisco Systems, Inc.  All rights reserved.
-dnl Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2017      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl
@@ -110,6 +110,9 @@ AC_DEFINE_UNQUOTED([PRRTE_CONFIGURE_HOST], "$PRRTE_CONFIGURE_HOST",
 AC_SUBST(PRRTE_CONFIGURE_DATE)
 AC_DEFINE_UNQUOTED([PRRTE_CONFIGURE_DATE], "$PRRTE_CONFIGURE_DATE",
                    [Date when PMIx was built])
+
+PRRTE_LIBNL_SANITY_INIT
+
 ])dnl
 
 dnl #######################################################################

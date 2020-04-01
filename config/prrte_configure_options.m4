@@ -17,7 +17,7 @@ dnl Copyright (c) 2009-2013 Los Alamos National Security, LLC.  All rights
 dnl                         reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl
-dnl Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -300,6 +300,24 @@ AS_IF([test ! -z "$with_prrte_extra_ltlib"],
       [AC_MSG_RESULT([no])
        PRRTE_EXTRA_LTLIB=])
 AC_SUBST(PRRTE_EXTRA_LTLIB)
+
+# Add any extra LDFLAGS for the extra libs?
+AC_ARG_WITH([prrte-extra-lib-ldflags],
+            AC_HELP_STRING([--with-prrte-extra-lib-ldflags=flags],
+                           [Where to find the extra libs]))
+AC_MSG_CHECKING([for extra lib LDFLAGS])
+AS_IF([test ! -z "$with_prrte_extra_lib_ldflags"],
+      [AS_IF([test "$with_prrte_extra_lib_ldflags" = "yes" || test "$with_prrte_extra_lib_ldflags" = "no"],
+             [AC_MSG_RESULT([ERROR])
+              AC_MSG_WARN([Invalid value for --with-prrte-extra-lib-ldflags:])
+              AC_MSG_WARN([    $with_prrte_extra_lib_ldflags])
+              AC_MSG_WARN([Must be path name pointing to the libs to add])
+              AC_MSG_ERROR([Cannot continue])],
+             [AC_MSG_RESULT([$with_prrte_extra_lib_ldflags])
+              PRRTE_EXTRA_LIB_LDFLAGS=$with_prrte_extra_lib_ldflags])],
+      [AC_MSG_RESULT([no])
+       PRRTE_EXTRA_LIB_LDFLAGS=])
+AC_SUBST(PRRTE_EXTRA_LIB_LDFLAGS)
 
 #
 # Package/brand string
