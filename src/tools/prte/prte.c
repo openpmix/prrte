@@ -498,7 +498,7 @@ int main(int argc, char *argv[])
     prrte_pmix_lock_t lock;
     prrte_list_t apps;
     prrte_pmix_app_t *app;
-    pmix_info_t info, *iptr;
+    pmix_info_t *iptr;
     pmix_proc_t controller;
     pmix_status_t ret;
     bool flag;
@@ -520,6 +520,7 @@ int main(int argc, char *argv[])
     prrte_job_t *jdata;
     prrte_app_context_t *dapp;
     bool proxyrun = false;
+    char *personality = NULL;
 
     /* init the globals */
     PRRTE_CONSTRUCT(&job_info, prrte_list_t);
@@ -955,12 +956,12 @@ int main(int argc, char *argv[])
             prrte_argv_append_nosize(&tmp, prrte_schizo_base.personalities[i]);
         }
         if (NULL != tmp) {
-            param = prrte_argv_join(tmp, ',');
+            personality = prrte_argv_join(tmp, ',');
             prrte_argv_free(tmp);
             ds = PRRTE_NEW(prrte_ds_info_t);
             PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_PERSONALITY, param, PMIX_STRING);
-            free(param);
+            PMIX_INFO_LOAD(ds->info, PMIX_PERSONALITY, personality, PMIX_STRING);
+            /* don't free personality as we need it again later */
             prrte_list_append(&job_info, &ds->super);
         }
     }
@@ -1176,11 +1177,24 @@ int main(int argc, char *argv[])
     prrte_schizo.job_info(prrte_cmd_line, &job_info);
 
     /* pickup any relevant envars */
+    ninfo = 3;
+    if (NULL != personality) {
+        ++ninfo;
+    }
+    PMIX_INFO_CREATE(iptr, ninfo);
     flag = true;
-    PMIX_INFO_LOAD(&info, PMIX_SETUP_APP_ENVARS, &flag, PMIX_BOOL);
+    PMIX_INFO_LOAD(&iptr[0], PMIX_SETUP_APP_ENVARS, &flag, PMIX_BOOL);
+    ui32 = geteuid();
+    PMIX_INFO_LOAD(&iptr[1], PMIX_USERID, &ui32, PMIX_UINT32);
+    ui32 = getegid();
+    PMIX_INFO_LOAD(&iptr[2], PMIX_GRPID, &ui32, PMIX_UINT32);
+    if (NULL != personality) {
+        PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, personality, PMIX_STRING);
+        free(personality);  // done with this now
+    }
 
     PRRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
-    ret = PMIx_server_setup_application(prrte_process_info.myproc.nspace, &info, 1, setupcbfunc, &mylock);
+    ret = PMIx_server_setup_application(prrte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc, &mylock);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PRRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
@@ -1188,6 +1202,7 @@ int main(int argc, char *argv[])
         goto DONE;
     }
     PRRTE_PMIX_WAIT_THREAD(&mylock.lock);
+    PMIX_INFO_FREE(iptr, ninfo);
     PRRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
     /* transfer any returned ENVARS to the job_info */
     if (NULL != mylock.info) {
