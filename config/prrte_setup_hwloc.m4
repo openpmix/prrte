@@ -35,7 +35,7 @@ AC_DEFUN([PRRTE_HWLOC_CONFIG],[
               [PRRTE_HWLOC_HEADER="\"$with_hwloc_header\""
                prrte_hwloc_header_given=1])
         prrte_hwloc_support=1
-        prrte_hwloc_source=embedded
+        prrte_hwloc_source="external header"
 
     elif test "$with_hwloc" != "no"; then
         AC_MSG_CHECKING([for hwloc in])

@@ -15,7 +15,7 @@ dnl Copyright (c) 2009-2016 Cisco Systems, Inc.  All rights reserved.
 dnl Copyright (c) 2015-2019 Research Organization for Information Science
 dnl                         and Technology (RIST).  All rights reserved.
 dnl Copyright (c) 2016      IBM Corporation.  All rights reserved.
-dnl Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -37,8 +37,6 @@ AC_DEFUN([PRRTE_WRAPPER_FLAGS_ADD], [
         [m4_fatal([PRRTE_WRAPPER_FLAGS_ADD can not be called from a component configure])])
     m4_if([$1], [CPPFLAGS], [PRRTE_FLAGS_APPEND_UNIQ([wrapper_extra_cppflags], [$2])],
           [$1], [CFLAGS], [PRRTE_FLAGS_APPEND_UNIQ([wrapper_extra_cflags], [$2])],
-          [$1], [CXXFLAGS], [PRRTE_FLAGS_APPEND_UNIQ([wrapper_extra_cxxflags], [$2])],
-          [$1], [FCFLAGS], [PRRTE_FLAGS_APPEND_UNIQ([wrapper_extra_fcflags], [$2])],
           [$1], [LDFLAGS], [PRRTE_FLAGS_APPEND_UNIQ([wrapper_extra_ldflags], [$2])],
           [$1], [LIBS], [PRRTE_FLAGS_APPEND_UNIQ([wrapper_extra_libs], [$2])],
           [m4_fatal([Unknown wrapper flag type $1])])
@@ -66,7 +64,7 @@ AC_DEFUN([PRRTE_WRAPPER_FLAGS_ADD], [
 # framework, the component is a static component, and devel headers
 # are installed.  Note that MCA components are ONLY allowed to
 # (indirectly) influence the wrapper CPPFLAGS, LDFLAGS, and LIBS.
-# That is, a component may not influence CFLAGS, CXXFLAGS, or FCFLAGS.
+# That is, a component may not influence CFLAGS.
 #
 # Notes:
 #   * Keep user flags separate as 1) they should have no influence
@@ -99,19 +97,6 @@ AC_DEFUN([PRRTE_SETUP_WRAPPER_INIT],[
                         [Extra flags to add to CXXFLAGS when using mpiCC/mpic++])])
     AS_IF([test "$with_wrapper_cxxflags_prefix" = "yes" || test "$with_wrapper_cxxflags_prefix" = "no"],
           [AC_MSG_ERROR([--with-wrapper-cxxflags-prefix must have an argument.])])
-
-    m4_ifdef([project_ompi], [
-            AC_ARG_WITH([wrapper-fcflags],
-                [AC_HELP_STRING([--with-wrapper-fcflags],
-                        [Extra flags to add to FCFLAGS when using mpifort])])
-            AS_IF([test "$with_wrapper_fcflags" = "yes" || test "$with_wrapper_fcflags" = "no"],
-                [AC_MSG_ERROR([--with-wrapper-fcflags must have an argument.])])
-
-            AC_ARG_WITH([wrapper-fcflags-prefix],
-                [AC_HELP_STRING([--with-wrapper-fcflags-prefix],
-                        [Extra flags (before user flags) to add to FCFLAGS when using mpifort])])
-            AS_IF([test "$with_wrapper_fcflags_prefix" = "yes" || test "$with_wrapper_fcflags_prefix" = "no"],
-                [AC_MSG_ERROR([--with-wrapper-fcflags-prefix must have an argument.])])])
 
     AC_ARG_WITH([wrapper-ldflags],
                 [AC_HELP_STRING([--with-wrapper-ldflags],
@@ -193,8 +178,7 @@ AC_DEFUN([PRRTE_SETUP_RPATH],[
 
     AS_IF([test -n "$rpath_args"],
           [WRAPPER_RPATH_SUPPORT=rpath
-           PRRTE_LIBTOOL_CONFIG([hardcode_libdir_flag_spec],[rpath_fc_args],[--tag=FC],[libdir=LIBDIR])
-           AC_MSG_RESULT([yes ($rpath_args + $rpath_fc_args)])],
+           AC_MSG_RESULT([yes ($rpath_args)])],
           [WRAPPER_RPATH_SUPPORT=unnecessary
            AC_MSG_RESULT([yes (no extra flags needed)])])
 
@@ -213,7 +197,7 @@ AC_DEFUN([PRRTE_SETUP_RPATH],[
 # If DT_RUNPATH is supported, then we'll use *both* the RPATH and
 # RUNPATH flags in the LDFLAGS.
 AC_DEFUN([PRRTE_SETUP_RUNPATH],[
-    PRRTE_VAR_SCOPE_PUSH([LDFLAGS_save wl_fc])
+    PRRTE_VAR_SCOPE_PUSH([LDFLAGS_save])
 
     # Set the output in $runpath_args
     runpath_args=
@@ -228,16 +212,7 @@ AC_DEFUN([PRRTE_SETUP_RUNPATH],[
                             AC_MSG_RESULT([yes (-Wl,--enable-new-dtags)])],
                            [AC_MSG_RESULT([no])])
             AC_LANG_POP([C])])
-    m4_ifdef([project_ompi],[
-        PRRTE_LIBTOOL_CONFIG([wl],[wl_fc],[--tag=FC],[])
 
-        LDFLAGS="$LDFLAGS_save ${wl_fc}--enable-new-dtags"
-        AC_LANG_PUSH([Fortran])
-        AC_LINK_IFELSE([AC_LANG_SOURCE([[program test
-end program]])],
-                       [runpath_fc_args="${wl_fc}--enable-new-dtags"],
-                       [runpath_fc_args=""])
-        AC_LANG_POP([Fortran])])
     LDFLAGS=$LDFLAGS_save
 
     PRRTE_VAR_SCOPE_POP
@@ -269,8 +244,6 @@ AC_DEFUN([RPATHIFY_LDFLAGS_INTERNAL],[
 ])
 
 AC_DEFUN([RPATHIFY_LDFLAGS],[RPATHIFY_LDFLAGS_INTERNAL([$1], [rpath_args], [runpath_args])])
-
-AC_DEFUN([RPATHIFY_FC_LDFLAGS],[RPATHIFY_LDFLAGS_INTERNAL([$1], [rpath_fc_args], [runpath_fc_args])])
 
 dnl
 dnl Avoid some repetitive code below

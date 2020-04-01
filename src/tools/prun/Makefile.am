@@ -25,6 +25,7 @@ include $(top_srcdir)/Makefile.prrte-rules
 
 man_pages = prun.1
 EXTRA_DIST = $(man_pages:.1=.1in)
+AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS)
 
 bin_PROGRAMS = prun
 

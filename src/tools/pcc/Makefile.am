@@ -10,7 +10,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # $COPYRIGHT$
@@ -25,6 +25,7 @@ include $(top_srcdir)/Makefile.prrte-rules
 
 man_pages = pcc.1
 EXTRA_DIST = $(man_pages:.1=.1in)
+AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS)
 
 bin_PROGRAMS = pcc
 
