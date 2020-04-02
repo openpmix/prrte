@@ -1,8 +1,8 @@
 /***************************************************************************
  *                                                                         *
- *          PRRTE: Open Source High Performance Computing               *
+ *          PRRTE: PMIx Reference RunTime Environment (PRRTE)              *
  *                                                                         *
- *                   http://www.open-mpi.org/                              *
+ *                   https://github.com/openpmix/prrte                     *
  *                                                                         *
  ***************************************************************************/
 
@@ -25,6 +25,7 @@ int main(int argc, char *argv[])
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
