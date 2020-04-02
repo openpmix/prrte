@@ -176,20 +176,21 @@ AC_DEFUN([PRRTE_CHECK_PMIX],[
                AC_MSG_ERROR([cannot continue])])
 
         AS_IF([test "$pmix_ext_install_dir" != "/usr"],
-              [CPPFLAGS="-I$pmix_ext_install_dir/include $CPPFLAGS"
-               LDFLAGS="-L$pmix_ext_install_libdir $LDFLAGS"])
+              [prrte_pmix_CPPFLAGS="-I$pmix_ext_install_dir/include"
+               prrte_pmix_LDFLAGS="-L$pmix_ext_install_libdir"])
 
-        PRRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, -I$pmix_ext_install_dir/include)
-        PRRTE_WRAPPER_FLAGS_ADD([CPPFLAGS], [-I$pmix_ext_install_dir/include])
+        PRRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prrte_pmix_CPPFLAGS)
+        PRRTE_WRAPPER_FLAGS_ADD([CPPFLAGS], [$prrte_pmix_CPPFLAGS])
 
         AS_IF([test "$enable_pmix_devel_support" = "yes"],
               [PRRTE_WRAPPER_FLAGS_ADD([CPPFLAGS], [-I$pmix_ext_install_dir/include/pmix -I$pmix_ext_install_dir/include/pmix/src -I$pmix_ext_install_dir/include/pmix/src/include])])
 
-        PRRTE_FLAGS_APPEND_UNIQ(LDFLAGS, -L$pmix_ext_install_libdir)
-        PRRTE_WRAPPER_FLAGS_ADD([LDFLAGS], [-L$pmix_ext_install_libdir])
+        PRRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prrte_pmix_LDFLAGS)
+        PRRTE_WRAPPER_FLAGS_ADD([LDFLAGS], [$prrte_pmix_LDFLAGS])
 
-        PRRTE_FLAGS_APPEND_UNIQ(LIBS, -lpmix)
-        PRRTE_WRAPPER_FLAGS_ADD(LIBS, -lpmix)
+        prrte_pmix_LIBS=-lpmix
+        PRRTE_FLAGS_APPEND_UNIQ(LIBS, $prrte_pmix_LIBS)
+        PRRTE_WRAPPER_FLAGS_ADD(LIBS, $prrte_pmix_LIBS)
     fi
 
     AC_DEFINE_UNQUOTED([PRRTE_PMIX_HEADER], [$PRRTE_PMIX_HEADER], [PMIx header to use])

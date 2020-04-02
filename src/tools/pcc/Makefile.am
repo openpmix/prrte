@@ -25,7 +25,7 @@ include $(top_srcdir)/Makefile.prrte-rules
 
 man_pages = pcc.1
 EXTRA_DIST = $(man_pages:.1=.1in)
-AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS)
+AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS) $(prrte_hwloc_LDFLAGS) $(prrte_libevent_LDFLAGS) $(prrte_pmix_LDFLAGS)
 
 bin_PROGRAMS = pcc
 
@@ -45,6 +45,9 @@ pcc_SOURCES = \
 
 pcc_LDADD = \
     $(PRRTE_EXTRA_LTLIB) \
+    $(prrte_libevent_LIBS) \
+    $(prrte_hwloc_LIBS) \
+    $(prrte_pmix_LIBS) \
 	$(top_builddir)/src/libprrte.la
 
 distclean-local:

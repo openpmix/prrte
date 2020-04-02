@@ -332,12 +332,14 @@ static int process_deprecated_cli(prrte_cmd_line_t *cmdline,
             prrte_asprintf(&pargs[i], "-%s", p2);
             /* if it is the special "-np" option, we silently
              * change it and don't emit an error */
-            if (0 != strcmp(p2, "-np")) {
+            if (0 == strcmp(p2, "-np")) {
+                free(p2);
+            } else {
                 prrte_show_help("help-schizo-base.txt", "single-dash-error", true,
                                 p2, pargs[i]);
+                free(p2);
+                ret = PRRTE_OPERATION_SUCCEEDED;
             }
-            free(p2);
-            ret = PRRTE_OPERATION_SUCCEEDED;
         }
 
         /* is this an argument someone needs to convert? */
