@@ -148,10 +148,15 @@ AC_DEFUN([PRRTE_LIBTOOL_CONFIG],[
 # (because if script A sources script B, and B calls "exit", then both
 # B and A will exit).  Instead, we have to send the output to a file
 # and then source that.
-$PRRTE_TOP_BUILDDIR/libtool $3 --config > $rpath_outfile
-
-chmod +x $rpath_outfile
-. ./$rpath_outfile
+prrte_eval="libtool --config 2>&1 > /dev/null"
+prrte_found=`eval $prrte_eval`
+status=$?
+if test "$status" = "0"; then
+    libtool $3 --config 2>&1 > $rpath_outfile
+    chmod +x $rpath_outfile
+    . ./$rpath_outfile
+else
+    exit 1
 rm -f $rpath_outfile
 
 # Evaluate \$$1, and substitute in LIBDIR for \$libdir
