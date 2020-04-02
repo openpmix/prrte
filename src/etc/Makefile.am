@@ -26,7 +26,7 @@ EXTRA_DIST = $(prrte_config_files) prrte-default-hostfile
 # Steal a little trickery from a generated Makefile to only install
 # files if they do not already exist at the target.  Be sure to read
 # thread starting here
-# (http://www.open-mpi.org/community/lists/devel/2008/06/4080.php) for
+# (https://www.open-mpi.org/community/lists/devel/2008/06/4080.php) for
 # details why the mkdir is in install-data-local.
 
 install-data-local:

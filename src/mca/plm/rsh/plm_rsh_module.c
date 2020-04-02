@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2006-2007 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2007-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2008-2009 Sun Microsystems, Inc.  All rights reserved.
@@ -525,7 +525,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
                [t]csh's order of evaluation and not
                using a variable before it is defined.
                See this thread for more details:
-               http://www.open-mpi.org/community/lists/users/2006/01/0517.php. */
+               https://www.open-mpi.org/community/lists/users/2006/01/0517.php. */
             /* if there is nothing preceding orted, then we can just
              * assemble the cmd with the orted_cmd at the end. Otherwise,
              * we have to insert the orted_prefix in the right place
