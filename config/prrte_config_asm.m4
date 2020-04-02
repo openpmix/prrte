@@ -774,7 +774,7 @@ AC_DEFUN([PRRTE_CHECK_ASM_GNU_STACKEXEC], [
 int testfunc() {return 0; }
 EOF
              PRRTE_LOG_COMMAND([$CC $CFLAGS -c conftest.c -o conftest.$OBJEXT],
-                 [$OBJDUMP -x conftest.$OBJEXT | $GREP '\.note\.GNU-stack' > /dev/null && prrte_cv_asm_gnu_stack_result=yes],
+                 [$OBJDUMP -x conftest.$OBJEXT 2>&1 | $GREP '\.note\.GNU-stack' &> /dev/null && prrte_cv_asm_gnu_stack_result=yes],
                  [PRRTE_LOG_MSG([the failed program was:], 1)
                   PRRTE_LOG_FILE([conftest.c])
                   prrte_cv_asm_gnu_stack_result=no])

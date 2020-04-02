@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
-# Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # $COPYRIGHT$
@@ -42,6 +42,8 @@ AM_CFLAGS = \
             -DPRRTE_WRAPPER_EXTRA_LDFLAGS="\"@PRRTE_WRAPPER_EXTRA_LDFLAGS@\"" \
             -DPRRTE_WRAPPER_EXTRA_LIBS="\"@PRRTE_WRAPPER_EXTRA_LIBS@\""
 
+AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS) $(prrte_hwloc_LDFLAGS) $(prrte_libevent_LDFLAGS) $(prrte_pmix_LDFLAGS)
+
 include $(top_srcdir)/Makefile.prrte-rules
 
 man_pages = prte_info.1
@@ -68,6 +70,9 @@ prte_info_SOURCES = \
 
 prte_info_LDADD = \
     $(PRRTE_EXTRA_LTLIB) \
+    $(prrte_libevent_LIBS) \
+    $(prrte_hwloc_LIBS) \
+    $(prrte_pmix_LIBS) \
 	$(top_builddir)/src/libprrte.la
 
 clean-local:
