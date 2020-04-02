@@ -322,6 +322,8 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
     if (NULL != p2) {
         prrte_argv_insert_element(&pargs, idx+1, p2);
         prrte_asprintf(&help_str, "%s %s", pargs[idx], p2);
+    } else {
+        help_str = strdup(pargs[idx]);
     }
     /* can't just call show_help as we want every instance to be reported */
     output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,

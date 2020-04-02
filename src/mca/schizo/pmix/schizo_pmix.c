@@ -288,12 +288,10 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param, value);
                     prrte_setenv(param, value, true, &environ);
                 }
-                if (NULL != dstenv) {
-                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
-                                         "%s schizo:pmix:parse_env pushing %s=%s into dest environment",
-                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param, value);
-                    prrte_setenv(param, value, true, dstenv);
-                }
+                prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                                     "%s schizo:pmix:parse_env pushing %s=%s into dest environment",
+                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param, value);
+                prrte_setenv(param, value, true, dstenv);
             }
           next:
             env = *dstenv;

@@ -633,6 +633,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 prrte_argv_free(cachevals);
                 prrte_argv_free(xparams);
                 prrte_argv_free(xvals);
+                fclose(fp);
                 return PRRTE_ERR_BAD_PARAM;
             }
             for (n=0; NULL != opts[n]; n++) {
@@ -647,6 +648,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         prrte_argv_free(cachevals);
                         prrte_argv_free(xparams);
                         prrte_argv_free(xvals);
+                        fclose(fp);
                         return PRRTE_ERR_BAD_PARAM;
                     }
                     p1 = strip_quotes(opts[n+1]);
@@ -663,6 +665,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                             prrte_argv_free(cachevals);
                             prrte_argv_free(xparams);
                             prrte_argv_free(xvals);
+                            fclose(fp);
                             return PRRTE_ERR_BAD_PARAM;
                         }
                         p2 = strip_quotes(opts[n+3]);
@@ -696,6 +699,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         prrte_argv_free(cachevals);
                         prrte_argv_free(xparams);
                         prrte_argv_free(xvals);
+                        fclose(fp);
                         return PRRTE_ERR_BAD_PARAM;
                     }
                     p1 = strip_quotes(opts[n+1]);
@@ -733,6 +737,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         prrte_argv_free(cachevals);
                         prrte_argv_free(xparams);
                         prrte_argv_free(xvals);
+                        fclose(fp);
                         return PRRTE_ERR_BAD_PARAM;
                     }
                     ++p1;
