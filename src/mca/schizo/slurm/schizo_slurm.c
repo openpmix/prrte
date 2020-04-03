@@ -27,38 +27,13 @@
 
 #include "schizo_slurm.h"
 
-static int detect_proxy(char **argv, char **rfile);
 static int get_remaining_time(uint32_t *timeleft);
 static int define_session_dir(char **tmpdir);
 
 prrte_schizo_base_module_t prrte_schizo_slurm_module = {
-    .detect_proxy = detect_proxy,
     .define_session_dir = define_session_dir,
     .get_remaining_time = get_remaining_time
 };
-
-static int detect_proxy(char **argv, char **rfile)
-{
-    char *jid;
-
-    /* if we are active, then we must be inside a Slurm
-     * allocation - set the rendezvous file accordingly */
-    jid = getenv("SLURM_JOBID");
-    prrte_asprintf(rfile, "%s/%s.rndz.%s", prrte_tmp_directory(), prrte_tool_basename, jid);
-    if (prrte_schizo_base.test_proxy_launch ||
-        0 == strcmp(prrte_tool_basename, "mpirun") ||
-        0 == strcmp(prrte_tool_basename, "mpiexec") ||
-        0 == strcmp(prrte_tool_basename, "oshrun")) {
-        /* add to the personalities */
-        prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi5");
-        if (0 == strcmp(prrte_tool_basename, "oshrun")) {
-            /* add oshmem to the personalities */
-            prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "oshmem");
-        }
-    }
-
-    return PRRTE_SUCCESS;
-}
 
 static int define_session_dir(char **tmpdir)
 {
