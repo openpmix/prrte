@@ -152,10 +152,22 @@ prrte_cmd_line_init_t prrte_cmd_line_opts[] = {
     { '\0', "tree-spawn", 0, PRRTE_CMD_LINE_TYPE_BOOL,
       "Tree-based spawn in progress",
       PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "daemonize", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Daemonize the DVM daemons into the background",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "set-sid", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Direct the DVM daemons to separate from the current session",
+      PRRTE_CMD_LINE_OTYPE_DVM },
 
     /* Debug options */
+    { '\0', "debug", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Top-level PRRTE debug switch (default: false)",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
     { '\0', "debug-daemons", 0, PRRTE_CMD_LINE_TYPE_BOOL,
       "Debug daemons",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "debug-verbose", 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Verbosity level for PRRTE debug messages (default: 1)",
       PRRTE_CMD_LINE_OTYPE_DEBUG },
     { 'd', "debug-devel", 0, PRRTE_CMD_LINE_TYPE_BOOL,
       "Enable debugging of PRRTE",
@@ -241,6 +253,7 @@ int main(int argc, char *argv[])
     prrte_byte_object_t bo, *boptr;
     prrte_process_name_t target;
     char *myuri;
+    prrte_value_t *pval;
 
     char *umask_str = getenv("PRRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -368,11 +381,24 @@ int main(int argc, char *argv[])
     /* purge any ess/prrte flags set in the environ when we were launched */
     prrte_unsetenv("PRRTE_MCA_ess", &prrte_launch_environ);
 
+    /* set debug flags */
+    prrte_debug_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug");
+    prrte_debug_daemons_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug-daemons");
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "debug-verbose", 0, 0))) {
+        prrte_debug_verbosity = pval->data.integer;
+    }
+    prrte_debug_daemons_file_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug-daemons");
+    if (prrte_debug_daemons_file_flag) {
+        prrte_debug_daemons_flag = true;
+    }
+    prrte_leave_session_attached = prrte_cmd_line_is_taken(prrte_cmd_line, "leave-session-attached");
+    /* if any debug level is set, ensure we output debug level dumps */
+    if (prrte_debug_flag || prrte_debug_daemons_flag || prrte_leave_session_attached) {
+        prrte_devel_level_output = true;
+    }
     /* if prrte_daemon_debug is set, let someone know we are alive right
      * away just in case we have a problem along the way
      */
-    prrte_debug_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug");
-    prrte_debug_daemons_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug-daemons");
     if (prrte_debug_daemons_flag) {
         fprintf(stderr, "Daemon was launched on %s - beginning to initialize\n", prrte_process_info.nodename);
     }

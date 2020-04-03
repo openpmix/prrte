@@ -390,47 +390,6 @@ int prrte_register_params(void)
                                   PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_ALL,
                                   &prrte_report_silent_errors);
 
-    prrte_debug_flag = false;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "debug",
-                                  "Top-level PRRTE debug switch (default: false)",
-                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_ALL,
-                                  &prrte_debug_flag);
-
-    prrte_debug_verbosity = -1;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "debug_verbose",
-                                  "Verbosity level for PRRTE debug messages (default: 1)",
-                                  PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
-                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_ALL,
-                                  &prrte_debug_verbosity);
-
-    prrte_debug_daemons_file_flag = false;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "debug_daemons_file",
-                                  "Whether want stdout/stderr of daemons to go to a file or not",
-                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_ALL,
-                                  &prrte_debug_daemons_file_flag);
-    /* If --debug-daemons-file was specified, that also implies
-       --debug-daemons */
-    if (prrte_debug_daemons_file_flag) {
-        prrte_debug_daemons_flag = true;
-
-        /* value can't change */
-        (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "debug_daemons",
-                                      "Whether to debug the PRRTE daemons or not",
-                                      PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                      PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
-                                      &prrte_debug_daemons_flag);
-    } else {
-        prrte_debug_daemons_flag = false;
-
-        (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "debug_daemons",
-                                      "Whether to debug the PRRTE daemons or not",
-                                      PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                      PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_ALL,
-                                      &prrte_debug_daemons_flag);
-    }
-
     prrte_progress_thread_debug_level = -1;
     (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "progress_thread_debug",
                                   "Debug level for PRRTE progress threads",
@@ -443,28 +402,6 @@ int prrte_register_params(void)
         prrte_output_set_verbosity(prrte_progress_thread_debug,
                                   prrte_progress_thread_debug_level);
     }
-
-    /* do we want session output left open? */
-    prrte_leave_session_attached = false;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "leave_session_attached",
-                                  "Whether applications and/or daemons should leave their sessions "
-                                  "attached so that any output can be received - this allows X forwarding "
-                                  "without all the attendant debugging output",
-                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_ALL,
-                                  &prrte_leave_session_attached);
-
-    /* if any debug level is set, ensure we output debug level dumps */
-    if (prrte_debug_flag || prrte_debug_daemons_flag || prrte_leave_session_attached) {
-        prrte_devel_level_output = true;
-    }
-
-    prrte_do_not_launch = false;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "do_not_launch",
-                                  "Perform all necessary operations to prepare to launch the application, but do not actually launch it",
-                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prrte_do_not_launch);
 
     prted_debug_failure = PRRTE_VPID_INVALID;
     (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "daemon_fail",

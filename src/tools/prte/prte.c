@@ -161,37 +161,6 @@ static bool want_prefix_by_default = (bool) PRRTE_WANT_PRRTE_PREFIX_BY_DEFAULT;
 static prrte_cmd_line_init_t cmd_line_init[] = {
 
     /* DVM options */
-    /* tell the dvm to terminate */
-    { '\0', "terminate", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Terminate the DVM", PRRTE_CMD_LINE_OTYPE_DVM },
-    /* look first for a system server */
-    { '\0', "system-server-first", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "First look for a system server and connect to it if found",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    /* connect only to a system server */
-    { '\0', "system-server-only", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Connect only to a system-level server",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    /* do not connect */
-    { '\0', "do-not-connect", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Do not connect to a server",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    /* wait to connect */
-    { '\0', "wait-to-connect", 0, PRRTE_CMD_LINE_TYPE_INT,
-      "Delay specified number of seconds before trying to connect",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    /* number of times to try to connect */
-    { '\0', "num-connect-retries", 0, PRRTE_CMD_LINE_TYPE_INT,
-      "Max number of times to try to connect",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    /* provide a connection PID */
-    { '\0', "pid", 1, PRRTE_CMD_LINE_TYPE_INT,
-      "PID of the session-level daemon to which we should connect",
-      PRRTE_CMD_LINE_OTYPE_DVM },
-    /* uri of the dvm, or at least where to get it */
-    { '\0', "dvm-uri", 1, PRRTE_CMD_LINE_TYPE_STRING,
-      "Specify the URI of the DVM master, or the name of the file (specified as file:filename) that contains that info",
-      PRRTE_CMD_LINE_OTYPE_DVM },
     /* forward signals */
     { '\0', "forward-signals", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Comma-delimited list of additional signals (names or integers) to forward to "
@@ -202,6 +171,50 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "no-ready-msg", 0, PRRTE_CMD_LINE_TYPE_BOOL,
       "Do not print a DVM ready message",
       PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "daemonize", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Daemonize the DVM daemons into the background",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "set-sid", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Direct the DVM daemons to separate from the current session",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    /* maximum size of VM - typically used to subdivide an allocation */
+    { '\0', "max-vm-size", 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Number of daemons to start",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    /* Specify the launch agent to be used */
+    { '\0', "launch-agent", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Name of daemon executable used to start processes on remote nodes (default: prted)",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "report-pid", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Printout pid on stdout [-], stderr [+], or a file [anything else]",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "report-uri", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Printout URI on stdout [-], stderr [+], or a file [anything else]",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+
+
+    /* Debug options */
+    { '\0', "debug", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Top-level PRRTE debug switch (default: false)",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "debug-daemons", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Debug daemons",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "debug-verbose", 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Verbosity level for PRRTE debug messages (default: 1)",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { 'd', "debug-devel", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Enable debugging of PRRTE",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "debug-daemons-file", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Enable debugging of any PRRTE daemons used by this application, storing output in files",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "leave-session-attached", 0, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Do not discard stdout/stderr of remote PRTE daemons",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0',  "test-suicide", 1, PRRTE_CMD_LINE_TYPE_BOOL,
+      "Suicide instead of clean abort after delay",
+      PRRTE_CMD_LINE_OTYPE_DEBUG },
 
 
     /* testing options */
@@ -271,9 +284,6 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
 
 
     /* User-level debugger arguments */
-    { '\0', "debug", 1, PRRTE_CMD_LINE_TYPE_STRING,
-      "Invoke the indicated user-level debugger (provide a comma-delimited list of debuggers to search for)",
-      PRRTE_CMD_LINE_OTYPE_DEBUG },
     { '\0', "output-proctable", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Print the complete proctable to stdout [-], stderr [+], or a file [anything else] after launch",
       PRRTE_CMD_LINE_OTYPE_DEBUG },
@@ -670,11 +680,26 @@ int main(int argc, char *argv[])
         prrte_schizo.allow_run_as_root(prrte_cmd_line);  // will exit us if not allowed
     }
 
+    /* set debug flags */
+    prrte_debug_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug");
+    prrte_debug_daemons_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug-daemons");
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "debug-verbose", 0, 0))) {
+        prrte_debug_verbosity = pval->data.integer;
+    }
+    prrte_debug_daemons_file_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug-daemons");
+    if (prrte_debug_daemons_file_flag) {
+        prrte_debug_daemons_flag = true;
+    }
+    prrte_leave_session_attached = prrte_cmd_line_is_taken(prrte_cmd_line, "leave-session-attached");
+    /* if any debug level is set, ensure we output debug level dumps */
+    if (prrte_debug_flag || prrte_debug_daemons_flag || prrte_leave_session_attached) {
+        prrte_devel_level_output = true;
+    }
+    prrte_do_not_launch = prrte_cmd_line_is_taken(prrte_cmd_line, "do-not-launch");
+
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
-    prrte_debug_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug");
-    prrte_debug_daemons_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug-daemons");
     if (!prrte_debug_flag &&
         !prrte_debug_daemons_flag &&
         prrte_cmd_line_is_taken(prrte_cmd_line, "daemonize")) {
