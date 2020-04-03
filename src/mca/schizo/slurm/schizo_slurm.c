@@ -45,6 +45,17 @@ static int detect_proxy(char **argv, char **rfile)
      * allocation - set the rendezvous file accordingly */
     jid = getenv("SLURM_JOBID");
     prrte_asprintf(rfile, "%s/%s.rndz.%s", prrte_tmp_directory(), prrte_tool_basename, jid);
+    if (prrte_schizo_base.test_proxy_launch ||
+        0 == strcmp(prrte_tool_basename, "mpirun") ||
+        0 == strcmp(prrte_tool_basename, "mpiexec") ||
+        0 == strcmp(prrte_tool_basename, "oshrun")) {
+        /* add to the personalities */
+        prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi5");
+        if (0 == strcmp(prrte_tool_basename, "oshrun")) {
+            /* add oshmem to the personalities */
+            prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "oshmem");
+        }
+    }
 
     return PRRTE_SUCCESS;
 }
