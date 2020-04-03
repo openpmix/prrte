@@ -50,10 +50,10 @@ env:
 
 before_install:
     - env
-    - if [[ "GCC_VERSION" == "7" ]]; then COMPILERS="CC=gcc-7 CXX=g++-7 FC=gfortran-7"; elif [[ "$CC" == "clang" ]]; then COMPILERS="CC=`which clang`"; fi
+    - if [[ "GCC_VERSION" == "7" ]]; then COMPILERS="CC=gcc-7 "; elif [[ "$CC" == "clang" ]]; then COMPILERS="CC=`which clang`"; fi
     - export CONFIGURE_ARGS="--prefix=$HOME/bogus --enable-prrterun-prefix-by-default $COMPILERS" DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_ARGS"
     - export DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_ARGS"
-    - if [[ "$GCC_VERSION" == "6" ]] ; then sudo apt-get --assume-yes install gcc-6 g++-6 gfortran-6; elif [[ "$GCC_VERSION" == "7" ]] ; then sudo apt-get --assume-yes install gcc-7 g++-7 gfortran-7; fi
+    - if [[ "$GCC_VERSION" == "6" ]] ; then sudo apt-get --assume-yes install gcc-6 ; elif [[ "$GCC_VERSION" == "7" ]] ; then sudo apt-get --assume-yes install gcc-7 ; fi
     - echo COMPILERS=$COMPILERS
     - ./contrib/travis/install-pmix.sh $COMPILERS
 
