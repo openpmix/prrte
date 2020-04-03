@@ -1108,7 +1108,6 @@ static int detect_proxy(char **argv, char **rfile)
 {
     pid_t mypid;
 
-    mypid = getpid();
     /* if the basename of the cmd was "mpirun" or "mpiexec",
      * we default to us */
     if (prrte_schizo_base.test_proxy_launch ||
@@ -1116,12 +1115,13 @@ static int detect_proxy(char **argv, char **rfile)
         0 == strcmp(prrte_tool_basename, "mpiexec") ||
         0 == strcmp(prrte_tool_basename, "oshrun")) {
         /* create a rendezvous file */
+        mypid = getpid();
         prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
         /* add us to the personalities */
         prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi5");
         if (0 == strcmp(prrte_tool_basename, "oshrun")) {
             /* add oshmem to the personalities */
-        prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "oshmem");
+            prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "oshmem");
         }
         return PRRTE_SUCCESS;
     }
