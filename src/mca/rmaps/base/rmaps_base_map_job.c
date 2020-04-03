@@ -155,6 +155,7 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
             prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                 "mca:rmaps mapping given by MCA param");
             jdata->map->mapping = prrte_rmaps_base.mapping;
+            jdata->map->ranking = prrte_rmaps_base.ranking;
         } else {
             /* default based on number of procs */
             if (nprocs <= 2) {
@@ -192,6 +193,7 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYSLOT);
                 }
             }
+            PRRTE_SET_RANKING_POLICY(prrte_rmaps_base.ranking, PRRTE_RANK_BY_SLOT);
         }
     }
 
