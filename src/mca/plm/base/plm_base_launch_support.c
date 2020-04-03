@@ -1722,24 +1722,16 @@ int prrte_plm_base_prted_append_basic_args(int *argc, char ***argv,
 
     /* check for debug flags */
     if (prrte_debug_flag) {
-        prrte_argv_append(argc, argv, "--prtemca");
-        prrte_argv_append(argc, argv, "prrte_debug");
-        prrte_argv_append(argc, argv, "1");
+        prrte_argv_append(argc, argv, "--debug");
     }
     if (prrte_debug_daemons_flag) {
-        prrte_argv_append(argc, argv, "--prtemca");
-        prrte_argv_append(argc, argv, "prrte_debug_daemons");
-        prrte_argv_append(argc, argv, "1");
+        prrte_argv_append(argc, argv, "--debug-daemons");
     }
     if (prrte_debug_daemons_file_flag) {
-        prrte_argv_append(argc, argv, "--prtemca");
-        prrte_argv_append(argc, argv, "prrte_debug_daemons_file");
-        prrte_argv_append(argc, argv, "1");
+        prrte_argv_append(argc, argv, "--debug-daemons-file");
     }
     if (prrte_leave_session_attached) {
-        prrte_argv_append(argc, argv, "--prtemca");
-        prrte_argv_append(argc, argv, "prrte_leave_session_attached");
-        prrte_argv_append(argc, argv, "1");
+        prrte_argv_append(argc, argv, "--leave-session-attached");
     }
 
     if (prrte_map_stddiag_to_stderr) {
