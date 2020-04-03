@@ -64,7 +64,7 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      char **srcenv,
                      char ***dstenv,
                      bool cmdline);
-static int detect_proxy(char **argv, char **rfile);
+static int detect_proxy(char **argv);
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 static void job_info(prrte_cmd_line_t *cmdline, prrte_list_t *jobinfo);
 
@@ -1104,19 +1104,14 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
     return PRRTE_SUCCESS;
 }
 
-static int detect_proxy(char **argv, char **rfile)
+static int detect_proxy(char **argv)
 {
-    pid_t mypid;
-
     /* if the basename of the cmd was "mpirun" or "mpiexec",
      * we default to us */
     if (prrte_schizo_base.test_proxy_launch ||
         0 == strcmp(prrte_tool_basename, "mpirun") ||
         0 == strcmp(prrte_tool_basename, "mpiexec") ||
         0 == strcmp(prrte_tool_basename, "oshrun")) {
-        /* create a rendezvous file */
-        mypid = getpid();
-        prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
         /* add us to the personalities */
         prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi5");
         if (0 == strcmp(prrte_tool_basename, "oshrun")) {

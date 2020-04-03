@@ -113,24 +113,23 @@ int prrte_schizo_base_parse_env(prrte_cmd_line_t *cmd_line,
     return PRRTE_SUCCESS;
 }
 
-int prrte_schizo_base_detect_proxy(char **argv, char **rfile)
+int prrte_schizo_base_detect_proxy(char **argv)
 {
-    int rc;
+    int rc, ret = PRRTE_ERR_TAKE_NEXT_OPTION;
     prrte_schizo_base_active_module_t *mod;
 
     PRRTE_LIST_FOREACH(mod, &prrte_schizo_base.active_modules, prrte_schizo_base_active_module_t) {
         if (NULL != mod->module->detect_proxy) {
-            rc = mod->module->detect_proxy(argv, rfile);
+            rc = mod->module->detect_proxy(argv);
             if (PRRTE_SUCCESS == rc) {
-                return rc;
-            }
-            if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                ret = PRRTE_SUCCESS;  // indicate we are running as a proxy
+            } else if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
                 PRRTE_ERROR_LOG(rc);
                 return rc;
             }
         }
     }
-    return PRRTE_ERR_TAKE_NEXT_OPTION;
+    return ret;
 }
 
 int prrte_schizo_base_define_session_dir(char **tmpdir)

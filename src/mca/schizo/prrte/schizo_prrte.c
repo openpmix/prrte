@@ -62,7 +62,6 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                      bool cmdline);
 static int setup_fork(prrte_job_t *jdata,
                       prrte_app_context_t *context);
-static int detect_proxy(char **argv, char **rfile);
 static int define_session_dir(char **tmpdir);
 static int allow_run_as_root(prrte_cmd_line_t *cmd_line);
 static void wrap_args(char **args);
@@ -74,7 +73,6 @@ prrte_schizo_base_module_t prrte_schizo_prrte_module = {
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
     .setup_fork = setup_fork,
-    .detect_proxy = detect_proxy,
     .define_session_dir = define_session_dir,
     .allow_run_as_root = allow_run_as_root,
     .wrap_args = wrap_args
@@ -577,33 +575,6 @@ static int setup_fork(prrte_job_t *jdata,
     }
 
     return PRRTE_SUCCESS;
-}
-
-static int detect_proxy(char **argv, char **rfile)
-{
-    pid_t mypid;
-
-    /* if the basename isn't prun, and nobody before us recognized
-     * it, then we need to treat it as a proxy */
-    if (prrte_schizo_base.test_proxy_launch) {
-        /* create a rendezvous file */
-        mypid = getpid();
-        prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
-        if (prrte_schizo_base.test_proxy_launch ||
-            0 == strcmp(prrte_tool_basename, "mpirun") ||
-            0 == strcmp(prrte_tool_basename, "mpiexec") ||
-            0 == strcmp(prrte_tool_basename, "oshrun")) {
-            /* add to the personalities */
-            prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi5");
-            if (0 == strcmp(prrte_tool_basename, "oshrun")) {
-                /* add oshmem to the personalities */
-                prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "oshmem");
-            }
-        }
-        return PRRTE_SUCCESS;
-    }
-
-    return PRRTE_ERR_TAKE_NEXT_OPTION;
 }
 
 static int define_session_dir(char **tmpdir)

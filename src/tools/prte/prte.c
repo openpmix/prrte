@@ -512,7 +512,6 @@ int main(int argc, char *argv[])
 #endif
     prrte_value_t *pval;
     uint32_t ui32;
-    char *rfile = NULL;
     char *mytmpdir;
     char **pargv;
     int pargc;
@@ -575,15 +574,13 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* detect if we are running as a proxy and setup the rendezvous
-     * and session directory files */
-    if (PRRTE_SUCCESS != (rc = prrte_schizo.detect_proxy(pargv, &rfile))) {
-        if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
-            PRRTE_ERROR_LOG(rc);
-            return rc;
-        }
-    } else {
+    /* detect if we are running as a proxy */
+    rc = prrte_schizo.detect_proxy(pargv);
+    if (PRRTE_SUCCESS == rc) {
         proxyrun = true;
+    } else if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
+        PRRTE_ERROR_LOG(rc);
+        return rc;
     }
 
     /* get our session directory */

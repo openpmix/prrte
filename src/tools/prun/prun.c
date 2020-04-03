@@ -639,7 +639,6 @@ int prun(int argc, char *argv[])
     prrte_value_t *pval;
     uint32_t ui32;
     pid_t pid;
-    char *rfile = NULL;
     char *mytmpdir;
     char **pargv;
     int pargc;
@@ -739,14 +738,6 @@ int prun(int argc, char *argv[])
                 prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, tmp[m]);
             }
             prrte_argv_free(tmp);
-        }
-    }
-
-    /* setup the rendezvous and session directory files */
-    if (PRRTE_SUCCESS != (rc = prrte_schizo.detect_proxy(pargv, &rfile))) {
-        if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
-            PRRTE_ERROR_LOG(rc);
-            return rc;
         }
     }
 
