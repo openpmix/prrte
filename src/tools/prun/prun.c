@@ -1348,12 +1348,13 @@ int prun(int argc, char *argv[])
         ++param;
         (void)strncpy(controller.nspace, ptr, PMIX_MAX_NSLEN);
         controller.rank = strtoul(param, NULL, 10);
-        PMIX_INFO_CREATE(iptr, 1);
+        PMIX_INFO_CREATE(iptr, 2);
         /* target this notification solely to that one tool */
         PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
-
+        /* not to be delivered to a default event handler */
+        PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
         PMIx_Notify_event(PMIX_LAUNCHER_READY, &prrte_process_info.myproc, PMIX_RANGE_CUSTOM,
-                          iptr, 1, NULL, NULL);
+                          iptr, 2, NULL, NULL);
         /* now wait for the launch directives to arrive */
         while (prrte_event_base_active && myinfo.lock.active) {
             prrte_event_loop(prrte_event_base, PRRTE_EVLOOP_ONCE);
@@ -1457,14 +1458,16 @@ int prun(int argc, char *argv[])
     if (notify_launch) {
         /* direct an event back to our controller telling them
          * the namespace of the spawned job */
-        PMIX_INFO_CREATE(iptr, 2);
+        PMIX_INFO_CREATE(iptr, 3);
         /* target this notification solely to that one tool */
         PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
         /* pass the nspace of the spawned job */
         PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, spawnednspace, PMIX_STRING);
+        /* not to be delivered to a default event handler */
+        PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
         PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &controller, PMIX_RANGE_CUSTOM,
-                          iptr, 2, NULL, NULL);
-        PMIX_INFO_FREE(iptr, 2);
+                          iptr, 3, NULL, NULL);
+        PMIX_INFO_FREE(iptr, 3);
     }
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
