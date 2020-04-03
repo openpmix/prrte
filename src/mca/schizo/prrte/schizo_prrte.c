@@ -583,12 +583,23 @@ static int detect_proxy(char **argv, char **rfile)
 {
     pid_t mypid;
 
-    mypid = getpid();
     /* if the basename isn't prun, and nobody before us recognized
      * it, then we need to treat it as a proxy */
     if (prrte_schizo_base.test_proxy_launch) {
         /* create a rendezvous file */
+        mypid = getpid();
         prrte_asprintf(rfile, "%s.rndz.%lu", prrte_tool_basename, (unsigned long)mypid);
+        if (prrte_schizo_base.test_proxy_launch ||
+            0 == strcmp(prrte_tool_basename, "mpirun") ||
+            0 == strcmp(prrte_tool_basename, "mpiexec") ||
+            0 == strcmp(prrte_tool_basename, "oshrun")) {
+            /* add to the personalities */
+            prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "ompi5");
+            if (0 == strcmp(prrte_tool_basename, "oshrun")) {
+                /* add oshmem to the personalities */
+                prrte_argv_append_unique_nosize(&prrte_schizo_base.personalities, "oshmem");
+            }
+        }
         return PRRTE_SUCCESS;
     }
 
