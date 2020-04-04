@@ -144,24 +144,6 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
       PRRTE_CMD_LINE_OTYPE_LAUNCH },
 
 
-    /* Debug options */
-    { '\0', "debug-daemons", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Debug daemons",
-      PRRTE_CMD_LINE_OTYPE_DEBUG },
-    { 'd', "debug-devel", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Enable debugging of PRRTE",
-      PRRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "debug-daemons-file", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Enable debugging of any PRRTE daemons used by this application, storing output in files",
-      PRRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "leave-session-attached", 0, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Do not discard stdout/stderr of remote PRTE daemons",
-      PRRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0',  "test-suicide", 1, PRRTE_CMD_LINE_TYPE_BOOL,
-      "Suicide instead of clean abort after delay",
-      PRRTE_CMD_LINE_OTYPE_DEBUG },
-
-
     /* DVM-specific options */
     /* uri of PMIx publish/lookup server, or at least where to get it */
     { '\0', "ompi-server", 1, PRRTE_CMD_LINE_TYPE_STRING,
