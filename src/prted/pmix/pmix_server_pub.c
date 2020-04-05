@@ -46,7 +46,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/base/rml_contact.h"
 
-#include "pmix_server_internal.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 
 static int init_server(void)
 {

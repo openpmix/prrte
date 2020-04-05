@@ -32,9 +32,9 @@
 
 #include PRRTE_PMIX_HEADER
 #if ! PRRTE_PMIX_HEADER_GIVEN
-#include "pmix_server.h"
-#include "pmix_tool.h"
-#include "pmix_version.h"
+#include <pmix_server.h>
+#include <pmix_tool.h>
+#include <pmix_version.h>
 #endif
 
 BEGIN_C_DECLS

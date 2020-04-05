@@ -51,7 +51,7 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/plm/base/plm_private.h"
 
-#include "pmix_server_internal.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 
 static void qrel(void *cbdata)
 {

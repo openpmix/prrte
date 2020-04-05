@@ -1078,10 +1078,12 @@ if test "$PRRTE_TOP_BUILDDIR" != "$PRRTE_TOP_SRCDIR"; then
     # rather than have successive assignments to these shell
     # variables, lest the $(foo) names try to get evaluated here.
     # Yuck!
-    CPPFLAGS='-I$(top_srcdir) -I$(top_builddir) -I$(top_srcdir)/src/include -I$(top_builddir)/src/include'" $CPPFLAGS"
+    cpp_includes="$PRRTE_TOP_SRCDIR $PRRTE_TOP_BUILDDIR $PRRTE_TOP_SRCDIR/src/include $PRRTE_TOP_BUILDDIR/src/include"
 else
-    CPPFLAGS='-I$(top_srcdir) -I$(top_srcdir)/src/include'" $CPPFLAGS"
+    cpp_includes="$PRRTE_TOP_SRCDIR $PRRTE_TOP_SRCDIR/src/include"
 fi
+CPP_INCLUDES="$(echo $cpp_includes | $SED 's/[[^ \]]* */'"$prrte_cc_iquote"'&/g')"
+CPPFLAGS="$CPP_INCLUDES $CPPFLAGS"
 
 #
 # Delayed the substitution of CFLAGS and CXXFLAGS until now because

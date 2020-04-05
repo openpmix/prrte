@@ -50,8 +50,8 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
 
-#include "pmix_server_internal.h"
-#include "pmix_server.h"
+#include "src/prted/pmix/pmix_server_internal.h"
+#include "src/prted/pmix/pmix_server.h"
 
 static void opcbfunc(pmix_status_t status, void *cbdata);
 
