@@ -804,6 +804,7 @@ static void prrte_proc_construct(prrte_proc_t* proc)
     proc->pid = 0;
     proc->local_rank = PRRTE_LOCAL_RANK_INVALID;
     proc->node_rank = PRRTE_NODE_RANK_INVALID;
+    proc->numa_rank = PRRTE_LOCAL_RANK_INVALID;
     proc->app_rank = -1;
     proc->last_errmgr_state = PRRTE_PROC_STATE_UNDEF;
     proc->state = PRRTE_PROC_STATE_UNDEF;

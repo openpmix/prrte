@@ -115,6 +115,7 @@ examples/log
 examples/pmi1client
 examples/probe
 examples/pub
+examples/showkeys
 examples/target
 examples/tool
 examples/debugger/direct

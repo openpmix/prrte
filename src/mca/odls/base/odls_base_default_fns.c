@@ -799,7 +799,7 @@ int prrte_odls_base_default_construct_child_list(prrte_buffer_t *buffer,
      * for it to happen - especially so developers don't have to
      * deal with the hang!
      */
-    PRRTE_ACTIVATE_JOB_STATE(NULL, PRRTE_JOB_STATE_NEVER_LAUNCHED);
+    PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_NEVER_LAUNCHED);
     return rc;
 }
 

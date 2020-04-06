@@ -387,6 +387,9 @@ struct prrte_proc_t {
      * applications
      */
     int32_t app_rank;
+    /* rank of this proc amongst its peers within the
+     * NUMA region to which it is bound */
+    prrte_local_rank_t numa_rank;
     /* Last state used to trigger the errmgr for this proc */
     prrte_proc_state_t last_errmgr_state;
     /* process state */
