@@ -686,7 +686,7 @@ int main(int argc, char *argv[])
     if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "debug-verbose", 0, 0))) {
         prrte_debug_verbosity = pval->data.integer;
     }
-    prrte_debug_daemons_file_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug-daemons");
+    prrte_debug_daemons_file_flag = prrte_cmd_line_is_taken(prrte_cmd_line, "debug-daemons-file");
     if (prrte_debug_daemons_file_flag) {
         prrte_debug_daemons_flag = true;
     }
