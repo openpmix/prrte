@@ -73,8 +73,8 @@
 #include "src/runtime/prrte_globals.h"
 #include "src/runtime/prrte_data_server.h"
 
-#include "pmix_server.h"
-#include "pmix_server_internal.h"
+#include "src/prted/pmix/pmix_server.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 
 /*
  * Local utility functions

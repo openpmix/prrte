@@ -44,8 +44,8 @@
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/rml/rml.h"
 
-#include "pmix_server_internal.h"
-#include "pmix_server.h"
+#include "src/prted/pmix/pmix_server_internal.h"
+#include "src/prted/pmix/pmix_server.h"
 
 static void relcb(void *cbdata)
 {
