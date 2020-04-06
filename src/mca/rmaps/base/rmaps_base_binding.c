@@ -52,7 +52,28 @@
 #include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/base/base.h"
 
+#define RMAPS_MAX_NUMAS  1024
+
+static prrte_local_rank_t numa_ranks[RMAPS_MAX_NUMAS] = {0};
 static bool membind_warned=false;
+
+static int get_numa(prrte_node_t *node,
+                    hwloc_bitmap_t cpuset)
+{
+    int idx=0, depth;
+    hwloc_obj_t obj = NULL;
+
+    depth = hwloc_get_type_depth(node->topology->topo, HWLOC_OBJ_NODE);
+    while (idx < RMAPS_MAX_NUMAS &&
+           NULL != (obj = hwloc_get_next_obj_by_depth(node->topology->topo, depth, obj))) {
+        if (hwloc_bitmap_intersects(cpuset, obj->cpuset)) {
+            return idx;
+        }
+        ++idx;
+    }
+
+    return -1;
+}
 
 static void reset_usage(prrte_node_t *node, prrte_jobid_t jobid)
 {
@@ -68,6 +89,7 @@ static void reset_usage(prrte_node_t *node, prrte_jobid_t jobid)
 
     /* start by clearing any existing info */
     prrte_hwloc_base_clear_usage(node->topology->topo);
+    memset(numa_ranks, 0, RMAPS_MAX_NUMAS * sizeof(prrte_local_rank_t));
 
     /* cycle thru the procs on the node and record
      * their usage in the topology
@@ -131,7 +153,7 @@ static int bind_generic(prrte_job_t *jdata,
     hwloc_obj_t trg_obj, tmp_obj, nxt_obj;
     unsigned int ncpus;
     prrte_hwloc_obj_data_t *data;
-    int total_cpus;
+    int total_cpus, idx;
     hwloc_cpuset_t totalcpuset;
     hwloc_obj_t locale;
     char *cpu_bitmap;
@@ -154,6 +176,8 @@ static int bind_generic(prrte_job_t *jdata,
         prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, NULL, PRRTE_BOOL)) {
         dobind = true;
     }
+    /* reset usage */
+    reset_usage(node, jdata->jobid);
 
     /* cycle thru the procs */
     for (j=0; j < node->procs->size; j++) {
@@ -316,6 +340,11 @@ static int bind_generic(prrte_job_t *jdata,
                             PRRTE_NAME_PRINT(&proc->name), cpu_bitmap);
         prrte_set_attribute(&proc->attributes, PRRTE_PROC_CPU_BITMAP, PRRTE_ATTR_GLOBAL, cpu_bitmap, PRRTE_STRING);
         if (NULL != cpu_bitmap) {
+            idx = get_numa(node, totalcpuset);
+            if (0 <= idx) {
+                proc->numa_rank = numa_ranks[idx];
+                ++numa_ranks[idx];
+            }
             free(cpu_bitmap);
         }
         if (4 < prrte_output_get_verbosity(prrte_rmaps_base_framework.framework_output)) {
@@ -363,6 +392,7 @@ static int bind_in_place(prrte_job_t *jdata,
     char *cpu_bitmap;
     bool found;
     bool dobind;
+    int indx;
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind in place for job %s with bindings %s",
@@ -562,6 +592,11 @@ static int bind_in_place(prrte_job_t *jdata,
                                 cpu_bitmap, hwloc_obj_type_string(locale->type),
                                 idx, node->name);
             if (NULL != cpu_bitmap) {
+                indx = get_numa(node, locale->cpuset);
+                if (0 <= indx) {
+                    proc->numa_rank = numa_ranks[indx];
+                    ++numa_ranks[indx];
+                }
                 free(cpu_bitmap);
             }
         }
@@ -585,6 +620,7 @@ static int bind_to_cpuset(prrte_job_t *jdata)
     prrte_local_rank_t lrank;
     hwloc_bitmap_t mycpuset, tset;
     bool dobind;
+    int idx;
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind job %s to cpus %s",
@@ -662,6 +698,7 @@ static int bind_to_cpuset(prrte_job_t *jdata)
             hwloc_bitmap_free(mycpuset);
             return PRRTE_ERR_NOT_FOUND;
         }
+        reset_usage(node, jdata->jobid);
         /* the cpu list in sum->available has already been filtered
          * to include _only_ the cpus defined by the user */
         for (j=0; j < node->procs->size; j++) {
@@ -701,6 +738,11 @@ static int bind_to_cpuset(prrte_job_t *jdata)
             hwloc_bitmap_list_asprintf(&cpu_bitmap, tset);
             prrte_set_attribute(&proc->attributes, PRRTE_PROC_CPU_BITMAP, PRRTE_ATTR_GLOBAL, cpu_bitmap, PRRTE_STRING);
             if (NULL != cpu_bitmap) {
+                idx = get_numa(node, tset);
+                if (0 <= idx) {
+                    proc->numa_rank = numa_ranks[idx];
+                    ++numa_ranks[idx];
+                }
                 free(cpu_bitmap);
             }
         }
@@ -904,12 +946,6 @@ int prrte_rmaps_base_compute_bindings(prrte_job_t *jdata)
                                 node->name);
             continue;
         }
-
-        /* we share topologies in order
-         * to save space, so we need to reset the usage info to reflect
-         * our own current state
-         */
-        reset_usage(node, jdata->jobid);
 
         /* determine the relative depth on this node */
 #if HWLOC_API_VERSION < 0x20000

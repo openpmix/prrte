@@ -52,7 +52,8 @@ EXAMPLES = \
 	log \
 	bad_exit \
 	jctrl \
-	launcher
+	launcher \
+	showkeys
 
 all: $(EXAMPLES)
 
