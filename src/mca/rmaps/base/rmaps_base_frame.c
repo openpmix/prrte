@@ -575,11 +575,11 @@ static int check_modifiers(char *ck, prrte_job_t *jdata,
                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                                 prrte_rmaps_base.cpus_per_rank);
             found = true;
-        } else if (0 == strncasecmp(ck2[i], "oversubscribe", strlen(ck2[i]))) {
+        } else if (0 == strncasecmp(ck2[i], "OVERSUBSCRIBE", strlen(ck2[i]))) {
             PRRTE_UNSET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_NO_OVERSUBSCRIBE);
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_SUBSCRIBE_GIVEN);
             found = true;
-        } else if (0 == strncasecmp(ck2[i], "nooversubscribe", strlen(ck2[i]))) {
+        } else if (0 == strncasecmp(ck2[i], "NOOVERSUBSCRIBE", strlen(ck2[i]))) {
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_NO_OVERSUBSCRIBE);
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_SUBSCRIBE_GIVEN);
             found = true;
@@ -616,6 +616,9 @@ static int check_modifiers(char *ck, prrte_job_t *jdata,
             ptr++;
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_CPU_LIST, PRRTE_ATTR_GLOBAL,
                                 ptr, PRRTE_STRING);
+        } else if (0 == strncasecmp(ck2[i], "INHERIT", strlen(ck2[i]))) {
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_INHERIT, PRRTE_ATTR_GLOBAL,
+                                NULL, PRRTE_BOOL);
         } else {
             /* unrecognized modifier */
             prrte_argv_free(ck2);

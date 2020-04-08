@@ -730,7 +730,9 @@ void prrte_state_base_track_procs(int fd, short argc, void *cbdata)
              * itself.  This covers the case where the process died abnormally
              * and didn't cleanup its own session directory.
              */
-            prrte_session_dir_finalize(proc);
+            if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON)) {
+                prrte_session_dir_finalize(proc);
+            }
         }
         /* if we are trying to terminate and our routes are
          * gone, then terminate ourselves IF no local procs

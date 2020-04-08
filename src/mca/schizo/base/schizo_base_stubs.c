@@ -347,12 +347,14 @@ static int process_deprecated_cli(prrte_cmd_line_t *cmdline,
             for (n=0; NULL != cv->options[n]; n++) {
                 if (0 == strcmp(pargs[i], cv->options[n])) {
                     rc = cv->convert(cv->options[n], argv, i);
-                    if (PRRTE_SUCCESS != rc) {
+                    if (PRRTE_SUCCESS != rc && PRRTE_ERR_SILENT != rc) {
                         return rc;
                     }
                     --i;
                     found = true;
-                    ret = PRRTE_OPERATION_SUCCEEDED;
+                    if (PRRTE_ERR_SILENT != rc) {
+                        ret = PRRTE_OPERATION_SUCCEEDED;
+                    }
                     pargs = *argv;
                     pargc = prrte_argv_count(pargs);
                     break;  // for loop

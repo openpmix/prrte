@@ -56,7 +56,7 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
     int rc, i, ppx = 0;
     bool did_map, pernode = false, persocket = false;
     prrte_rmaps_base_selected_module_t *mod;
-    prrte_job_t *parent;
+    prrte_job_t *parent = NULL;
     prrte_vpid_t nprocs;
     prrte_app_context_t *app;
     bool inherit = false;
@@ -77,7 +77,11 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PRRTE_NAME)) {
         if (NULL != (parent = prrte_get_job_data_object(name.jobid)) &&
             !PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
-            inherit = prrte_rmaps_base.inherit;
+            if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_INHERIT, NULL, PRRTE_BOOL)) {
+                inherit = true;
+            } else {
+                inherit = prrte_rmaps_base.inherit;
+            }
             prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                 "mca:rmaps: dynamic job %s %s inherit launch directives - parent %s is %s",
                                 PRRTE_JOBID_PRINT(jdata->jobid),
@@ -88,7 +92,7 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
             inherit = true;
         }
     } else {
-        /* initial launch always takes on MCA params */
+        /* initial launch always takes on default MCA params or non-specified policies */
         inherit = true;
     }
 
@@ -97,11 +101,21 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
 
     if (inherit) {
-        if (NULL == jdata->map->ppr && NULL != prrte_rmaps_base.ppr) {
-            jdata->map->ppr = strdup(prrte_rmaps_base.ppr);
+        if (NULL == jdata->map->ppr) {
+            /* get the parent job's ppr, if it had one */
+            if (NULL != parent && NULL != parent->map && NULL != parent->map->ppr) {
+                jdata->map->ppr = strdup(parent->map->ppr);
+            } else if (NULL != prrte_rmaps_base.ppr) {
+                /* if it didn't, then inherit the default one if there is one */
+                jdata->map->ppr = strdup(prrte_rmaps_base.ppr);
+            }
         }
         if (0 == jdata->map->cpus_per_rank) {
-            jdata->map->cpus_per_rank = prrte_rmaps_base.cpus_per_rank;
+            if (NULL != parent && NULL != parent->map) {
+                jdata->map->cpus_per_rank = parent->map->cpus_per_rank;
+            } else {
+                jdata->map->cpus_per_rank = prrte_rmaps_base.cpus_per_rank;
+            }
         }
     }
     if (NULL != jdata->map->ppr) {

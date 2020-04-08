@@ -312,7 +312,7 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", "ppr:1:node", NULL);
     }
     else if (0 == strcmp(option, "--npersocket")) {
-        prrte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
+        prrte_asprintf(&p2, "ppr:%s:socket", pargs[i+1]);
         rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
         free(p2);
    }
