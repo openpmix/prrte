@@ -305,36 +305,54 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
         return PRRTE_SUCCESS;
     }
 
-    /* add the option */
-    old_arg = strdup(pargs[idx]);
-    free(pargs[idx]);
-    pargs[idx] = strdup(option);
-    if (0 == strcasecmp(option, "--tune")) {
-        p2 = NULL;
-        prrte_asprintf(&help_str, "%s %s", pargs[idx], pargs[idx+1]);
-    } else if (NULL == directive) {
-        prrte_asprintf(&p2, ":%s", modifier);
-    } else if (NULL == modifier) {
-        p2 = strdup(directive);
+    /**** Get here if the specified option is not found in the
+     **** current argv list
+     ****/
+
+    /* if this is the special "-N" option, we silently change it */
+    if (0 == strcmp(pargs[idx], "-N")) {
+        /* free the location of "-N" */
+        free(pargs[idx]);
+        /* replace it with the option */
+        pargs[idx] = strdup(option);
+        /* free the next position as it holds the ppn */
+        free(pargs[idx+1]);
+        /* replace it with the directive */
+        pargs[idx+1] = strdup(directive);
+        *argv = pargs;
+        return PRRTE_ERR_SILENT;
     } else {
-        prrte_asprintf(&p2, "%s:%s", directive, modifier);
+        /* add the option */
+        old_arg = strdup(pargs[idx]);
+        free(pargs[idx]);
+        pargs[idx] = strdup(option);
+        if (0 == strcasecmp(option, "--tune")) {
+            p2 = NULL;
+            prrte_asprintf(&help_str, "%s %s", pargs[idx], pargs[idx+1]);
+        } else if (NULL == directive) {
+            prrte_asprintf(&p2, ":%s", modifier);
+        } else if (NULL == modifier) {
+            p2 = strdup(directive);
+        } else {
+            prrte_asprintf(&p2, "%s:%s", directive, modifier);
+        }
+        if (NULL != p2) {
+            prrte_argv_insert_element(&pargs, idx+1, p2);
+            prrte_asprintf(&help_str, "%s %s", pargs[idx], p2);
+        } else {
+            help_str = strdup(pargs[idx]);
+        }
+        /* can't just call show_help as we want every instance to be reported */
+        output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                        old_arg, help_str);
+        fprintf(stderr, "%s\n", output);
+        free(output);
+        if (NULL != p2) {
+            free(p2);
+        }
+        free(help_str);
+        free(old_arg);
     }
-    if (NULL != p2) {
-        prrte_argv_insert_element(&pargs, idx+1, p2);
-        prrte_asprintf(&help_str, "%s %s", pargs[idx], p2);
-    } else {
-        help_str = strdup(pargs[idx]);
-    }
-    /* can't just call show_help as we want every instance to be reported */
-    output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
-                    old_arg, help_str);
-    fprintf(stderr, "%s\n", output);
-    free(output);
-    if (NULL != p2) {
-        free(p2);
-    }
-    free(help_str);
-    free(old_arg);
     *argv = pargs;  // will have been reallocated
 
     return PRRTE_SUCCESS;

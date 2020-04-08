@@ -178,6 +178,7 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_REPORT_STATE           (PRRTE_JOB_START_KEY + 73)    // bool - include process state in timeout report
 #define PRRTE_JOB_TIMEOUT_EVENT          (PRRTE_JOB_START_KEY + 74)    // prrte_ptr (prrte_timer_t*) - timer event for job timeout
 #define PRRTE_JOB_TRACE_TIMEOUT_EVENT    (PRRTE_JOB_START_KEY + 75)    // prrte_ptr (prrte_timer_t*) - timer event for stacktrace collection
+#define PRRTE_JOB_INHERIT                (PRRTE_JOB_START_KEY + 76)    // bool - job inherits parent's mapping/ranking/binding policies
 
 #define PRRTE_JOB_MAX_KEY   300
 

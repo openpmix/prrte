@@ -239,6 +239,9 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { 'n', "n", 1, PRRTE_CMD_LINE_TYPE_INT,
       "Number of processes to run",
       PRRTE_CMD_LINE_OTYPE_GENERAL },
+    { 'N', NULL, 1, PRRTE_CMD_LINE_TYPE_INT,
+      "Number of processes to run per node",
+      PRRTE_CMD_LINE_OTYPE_GENERAL },
     /* Use an appfile */
     { '\0',  "app", 1, PRRTE_CMD_LINE_TYPE_STRING,
       "Provide an appfile; ignore all other command line options",

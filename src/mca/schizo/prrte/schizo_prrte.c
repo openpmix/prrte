@@ -296,6 +296,8 @@ static int parse_cli(int argc, int start, char **argv,
 static int parse_deprecated_cli(char *option, char ***argv, int i)
 {
     int rc = PRRTE_SUCCESS;
+    char **pargs = *argv;
+    char *p2;
 
     /* --display-devel-map  ->  PRRTE_MCA_rmaps_base_display_devel_map */
     if (0 == strcmp(option, "--display-devel-map")) {
@@ -329,6 +331,12 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--xml-output")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "XMLOUTPUT");
     }
+    /* -N ->   map-by ppr:N:node */
+    else if (0 == strcmp(option, "-N")) {
+        prrte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
+        rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
+        free(p2);
+    }
 
     return rc;
 }
@@ -345,6 +353,7 @@ static void register_deprecated_cli(prrte_list_t *convertors)
         "--display-allocation",
         "--do-not-launch",
         "--xml-output",
+        "-N",
         NULL
     };
 

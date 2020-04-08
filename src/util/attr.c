@@ -436,6 +436,8 @@ const char *prrte_attr_key_to_str(prrte_attribute_key_t key)
             return "JOB_TIMEOUT_EVENT";
         case PRRTE_JOB_TRACE_TIMEOUT_EVENT:
             return "JOB_TRACE_TIMEOUT_EVENT";
+        case PRRTE_JOB_INHERIT:
+            return "JOB_INHERIT";
 
         case PRRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
