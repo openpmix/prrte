@@ -761,7 +761,7 @@ static void timeout_cb(int fd, short event, void *cbdata)
     }
     prrte_show_help("help-plm-base.txt", "timeout",
                     true, timeout);
-
+    PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERR_TIMEOUT);
     /* clear the timer */
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_TIMEOUT_EVENT, (void**)&timer, PRRTE_PTR)) {
         /* timer is an prrte_timer_t object */
