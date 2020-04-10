@@ -56,6 +56,7 @@
 #include "src/hwloc/hwloc-internal.h"
 
 #include "src/mca/oob/base/base.h"
+#include "src/mca/prtereachable/base/base.h"
 #include "src/mca/rml/base/base.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/routed/base/base.h"
@@ -310,6 +311,16 @@ static int rte_init(int argc, char **argv)
     if (PRRTE_SUCCESS != (ret = prrte_routed_base_select())) {
         PRRTE_ERROR_LOG(ret);
         error = "prrte_routed_base_select";
+        goto error;
+    }
+    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_prtereachable_base_framework, 0))) {
+        PRRTE_ERROR_LOG(ret);
+        error = "prrte_prtereachable_base_open";
+        goto error;
+    }
+    if (PRRTE_SUCCESS != (ret = prrte_reachable_base_select())) {
+        PRRTE_ERROR_LOG(ret);
+        error = "prrte_prtereachable_base_select";
         goto error;
     }
     /*
@@ -647,6 +658,7 @@ static int rte_finalize(void)
     (void) prrte_mca_base_framework_close(&prrte_routed_base_framework);
     (void) prrte_mca_base_framework_close(&prrte_rml_base_framework);
     (void) prrte_mca_base_framework_close(&prrte_oob_base_framework);
+    (void) prrte_mca_base_framework_close(&prrte_prtereachable_base_framework);
     (void) prrte_mca_base_framework_close(&prrte_errmgr_base_framework);
     (void) prrte_mca_base_framework_close(&prrte_state_base_framework);
 

@@ -58,6 +58,7 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/prtereachable/base/base.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/filem/base/base.h"
 #include "src/util/session_dir.h"
@@ -336,6 +337,16 @@ int prrte_ess_base_prted_setup(void)
         error = "prrte_routed_base_select";
         goto error;
     }
+    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_prtereachable_base_framework, 0))) {
+        PRRTE_ERROR_LOG(ret);
+        error = "prrte_prtereachable_base_open";
+        goto error;
+    }
+    if (PRRTE_SUCCESS != (ret = prrte_reachable_base_select())) {
+        PRRTE_ERROR_LOG(ret);
+        error = "prrte_prtereachable_base_select";
+        goto error;
+    }
     if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_oob_base_framework, 0))) {
         PRRTE_ERROR_LOG(ret);
         error = "prrte_oob_base_open";
@@ -552,6 +563,7 @@ int prrte_ess_base_prted_finalize(void)
     (void) prrte_mca_base_framework_close(&prrte_routed_base_framework);
     (void) prrte_mca_base_framework_close(&prrte_rml_base_framework);
     (void) prrte_mca_base_framework_close(&prrte_oob_base_framework);
+    (void) prrte_mca_base_framework_close(&prrte_prtereachable_base_framework);
     (void) prrte_mca_base_framework_close(&prrte_errmgr_base_framework);
     (void) prrte_mca_base_framework_close(&prrte_state_base_framework);
     /* remove our use of the session directory tree */
