@@ -102,7 +102,7 @@ typedef struct {
  * Macro for use in components that are of type reachable
  */
 #define PRRTE_REACHABLE_BASE_VERSION_2_0_0             \
-    PRRTE_MCA_BASE_VERSION_2_1_0("reachable", 2, 0, 0)
+    PRRTE_MCA_BASE_VERSION_2_1_0("prtereachable", 2, 0, 0)
 
 /* Global structure for accessing reachability functions */
 PRRTE_EXPORT extern prrte_reachable_base_module_t prrte_reachable;
