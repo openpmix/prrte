@@ -17,6 +17,8 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies Ltd. All rights reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -73,6 +75,8 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/routed/routed.h"
 #include "src/runtime/prrte_wait.h"
+#include "src/mca/prteif/prteif.h"
+#include "src/mca/prtereachable/base/base.h"
 
 #include "oob_tcp.h"
 #include "src/mca/oob/tcp/oob_tcp_component.h"
@@ -157,19 +161,55 @@ static int tcp_peer_create_socket(prrte_oob_tcp_peer_t* peer, sa_family_t family
  */
 void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
 {
+    prrte_list_t *local_list = &prrte_oob_tcp_component.local_ifs, *remote_list;
+    int rc, i, j, local_if_count, remote_if_count, best, best_i, best_j;
     prrte_oob_tcp_conn_op_t *op = (prrte_oob_tcp_conn_op_t*)cbdata;
-    prrte_oob_tcp_peer_t *peer;
+    prrte_mca_base_component_list_item_t *cli;
+    prrte_oob_base_component_t *component;
+    prrte_reachable_t *results = NULL;
+    volatile prrte_list_item_t *ptr;
     int current_socket_family = 0;
-    int rc;
     prrte_socklen_t addrlen = 0;
+    prrte_oob_tcp_peer_t *peer;
     prrte_oob_tcp_addr_t *addr;
-    char *host;
     prrte_oob_tcp_send_t *snd;
     bool connected = false;
+    prrte_if_t *interface;
+    char *host;
+
+    remote_list = PRRTE_NEW(prrte_list_t);
+    if (NULL == remote_list) {
+        prrte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+        PRRTE_FORCED_TERMINATE(1);
+        return;
+    }
 
     PRRTE_ACQUIRE_OBJECT(op);
     peer = op->peer;
 
+    /* Construct a list of remote prrte_if_t from peer */
+    PRRTE_LIST_FOREACH(addr, &peer->addrs, prrte_oob_tcp_addr_t) {
+        interface = PRRTE_NEW(prrte_if_t);
+        if (NULL == interface) {
+            prrte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+            PRRTE_FORCED_TERMINATE(1);
+            goto cleanup;
+        }
+        interface->af_family = addr->addr.ss_family;
+        memcpy(&interface->if_addr, &addr->addr, sizeof(struct sockaddr_storage));
+        interface->if_mask = addr->if_mask;
+        /* We do not pass along bandwidth information, setting as arbitrary non
+         * zero value
+         */
+        interface->if_bandwidth = 1;
+        prrte_list_append(remote_list, &(interface->super));
+    }
+    local_if_count = prrte_list_get_size(local_list);
+    remote_if_count = prrte_list_get_size(remote_list);
+
+    results = prrte_reachable.reachable(local_list, remote_list);
+
+    /* Find match, bind socket. If connect attempt failed, move to next */
     prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
                         "%s prrte_tcp_peer_try_connect: "
                         "attempting to connect to proc %s",
@@ -182,58 +222,126 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                         PRRTE_NAME_PRINT(&(peer->name)), peer->sd);
 
-    peer->active_addr = NULL;
-    PRRTE_LIST_FOREACH(addr, &peer->addrs, prrte_oob_tcp_addr_t) {
+    /* Loops over the reachable bitmap. This should only run once, but
+     * if a connection does fail even after being declared as reachable,
+     * it will try remaining connections.
+     */
+    while (!connected) {
+        /* Select the best connection. This is not going to be a large
+         * table and should only run once in the normal case, so no sorting
+         * is attempted.
+         */
+        best = 0;
+        for (i = 0; i < local_if_count; i++) {
+            for (j = 0; j < remote_if_count; j++) {
+                if (best < results->weights[i][j]) {
+                    best = results->weights[i][j];
+                    best_i = i;
+                    best_j = j;
+                }
+            }
+        }
+        /* If no connections are found, skip the rest of the connecting logic
+         * and exit the loop.
+         */
+        if (0 == best) {
+            break;
+        }
+        /* Set this entry to be 0 so it won't be selected when looking for
+         * the next best connection
+         */
+        results->weights[best_i][best_j] = 0;
+        ptr = peer->addrs.prrte_list_sentinel.prrte_list_next;
+        for (j = 0; j < best_j; j++) {
+            ptr = ptr->prrte_list_next;
+        }
+        /* Record the peer address we are using */
+        peer->active_addr = (prrte_oob_tcp_addr_t *)ptr;
+        addr = peer->active_addr;
+        /* Grab the local address we are using to bind the socket with */
+        ptr = prrte_oob_tcp_component.local_ifs.prrte_list_sentinel.prrte_list_next;
+        for (i = 0; i < best_i; i++) {
+            ptr = ptr->prrte_list_next;
+        }
+        interface = (prrte_if_t *)ptr;
         prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                            "%s prrte_tcp_peer_try_connect: "
-                            "attempting to connect to proc %s on %s:%d - %d retries",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                            PRRTE_NAME_PRINT(&(peer->name)),
-                            prrte_net_get_hostname((struct sockaddr*)&addr->addr),
-                            prrte_net_get_port((struct sockaddr*)&addr->addr),
-                            addr->retries);
+                             "%s prrte_tcp_peer_try_connect: "
+                             "attempting to connect to proc %s on %s:%d - %d retries",
+                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                             PRRTE_NAME_PRINT(&(peer->name)),
+                             prrte_net_get_hostname((struct sockaddr*)&addr->addr),
+                             prrte_net_get_port((struct sockaddr*)&addr->addr),
+                             addr->retries);
         if (MCA_OOB_TCP_FAILED == addr->state) {
             prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                                "%s prrte_tcp_peer_try_connect: %s:%d is down",
-                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                prrte_net_get_hostname((struct sockaddr*)&addr->addr),
-                                prrte_net_get_port((struct sockaddr*)&addr->addr));
+                                 "%s prrte_tcp_peer_try_connect: %s:%d is down",
+                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                                 prrte_net_get_hostname((struct sockaddr*)&addr->addr),
+                                 prrte_net_get_port((struct sockaddr*)&addr->addr));
             continue;
         }
         if (prrte_oob_tcp_component.max_retries < addr->retries) {
             prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                                "%s prrte_tcp_peer_try_connect: %s:%d retries exceeded",
-                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                prrte_net_get_hostname((struct sockaddr*)&addr->addr),
-                                prrte_net_get_port((struct sockaddr*)&addr->addr));
+                                 "%s prrte_tcp_peer_try_connect: %s:%d retries exceeded",
+                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                                 prrte_net_get_hostname((struct sockaddr*)&addr->addr),
+                                 prrte_net_get_port((struct sockaddr*)&addr->addr));
             continue;
         }
-        peer->active_addr = addr;  // record the one we are using
         addrlen = addr->addr.ss_family == AF_INET6 ? sizeof(struct sockaddr_in6)
                                                    : sizeof(struct sockaddr_in);
-        if (addr->addr.ss_family != current_socket_family) {
-            if (peer->sd >= 0) {
-                CLOSE_THE_SOCKET(peer->sd);
-                peer->sd = -1;
-            }
-            rc = tcp_peer_create_socket(peer, addr->addr.ss_family);
-            current_socket_family = addr->addr.ss_family;
 
-            if (PRRTE_SUCCESS != rc) {
-                /* FIXME: we cannot create a TCP socket - this spans
-                 * all interfaces, so all we can do is report
-                 * back to the component that this peer is
-                 * unreachable so it can remove the peer
-                 * from its list and report back to the base
-                 * NOTE: this could be a reconnect attempt,
-                 * so we also need to mark any queued messages
-                 * and return them as "unreachable"
-                 */
-                prrte_output(0, "%s CANNOT CREATE SOCKET", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-                PRRTE_FORCED_TERMINATE(1);
-                goto cleanup;
-            }
+        /* Since we are manually binding sockets now, we must
+         * close and create a new socket if we are binding to a
+         * new address.
+         */
+        if (peer->sd >= 0) {
+            CLOSE_THE_SOCKET(peer->sd);
+            peer->sd = -1;
         }
+        rc = tcp_peer_create_socket(peer, addr->addr.ss_family);
+        current_socket_family = addr->addr.ss_family;
+
+        if (PRRTE_SUCCESS != rc) {
+            /* FIXME: we cannot create a TCP socket - this spans
+             * all interfaces, so all we can do is report
+             * back to the component that this peer is
+             * unreachable so it can remove the peer
+             * from its list and report back to the base
+             * NOTE: this could be a reconnect attempt,
+             * so we also need to mark any queued messages
+             * and return them as "unreachable"
+             */
+            prrte_output(0, "%s CANNOT CREATE SOCKET", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+            PRRTE_FORCED_TERMINATE(1);
+            goto cleanup;
+        }
+
+        /* Bind the socket manually to selected address */
+        if (bind(peer->sd, (struct sockaddr*)&interface->if_addr, addrlen) < 0) {
+            /* If we cannot bind to this address, set remaining entries
+             * for this address from the reachable table to no connection
+             * and try a new connection.
+             */
+            if( (EADDRINUSE == prrte_socket_errno) || (EADDRNOTAVAIL == prrte_socket_errno) ) {
+                for (j = 0; j < remote_if_count; j++) {
+                    results->weights[best_i][j] = 0;
+                }
+                continue;
+            }
+            /* If we have another bind issue, something has gone horribly
+             * wrong.
+             */
+            prrte_output(0, "%s bind() failed, can't recover : %s (%d)",
+                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                         strerror(prrte_socket_errno),
+                         prrte_socket_errno );
+
+            CLOSE_THE_SOCKET(peer->sd);
+            PRRTE_FORCED_TERMINATE(1);
+            goto cleanup;
+        }
+
     retry_connect:
         addr->retries++;
 
@@ -242,29 +350,30 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
             /* non-blocking so wait for completion */
             if (prrte_socket_errno == EINPROGRESS || prrte_socket_errno == EWOULDBLOCK) {
                 prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                                    "%s waiting for connect completion to %s - activating send event",
-                                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                    PRRTE_NAME_PRINT(&peer->name));
+                                     "%s waiting for connect completion to %s - activating send event",
+                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                                     PRRTE_NAME_PRINT(&peer->name));
                 /* just ensure the send_event is active */
                 if (!peer->send_ev_active) {
                     prrte_event_add(&peer->send_event, 0);
                     peer->send_ev_active = true;
                 }
                 PRRTE_RELEASE(op);
-                return;
+                goto out;
             }
 
             /* Some kernels (Linux 2.6) will automatically software
-               abort a connection that was ECONNREFUSED on the last
-               attempt, without even trying to establish the
-               connection.  Handle that case in a semi-rational
-               way by trying twice before giving up */
+             * abort a connection that was ECONNREFUSED on the last
+             * attempt, without even trying to establish the
+             * connection.  Handle that case in a semi-rational
+             * way by trying twice before giving up
+             */
             if (ECONNABORTED == prrte_socket_errno) {
                 if (addr->retries < prrte_oob_tcp_component.max_retries) {
                     prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                                        "%s connection aborted by OS to %s - retrying",
-                                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                        PRRTE_NAME_PRINT(&peer->name));
+                                         "%s connection aborted by OS to %s - retrying",
+                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                                         PRRTE_NAME_PRINT(&peer->name));
                     goto retry_connect;
                 } else {
                     /* We were unsuccessful in establishing this connection, and are
@@ -281,8 +390,9 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
             peer->num_retries = 0;
             break;
         }
-    }
+    } // End of looping over reachable bitmap entries
 
+    /* End of attempting connection */
     if (!connected) {
         /* it could be that the intended recipient just hasn't
          * started yet. if requested, wait awhile and try again
@@ -374,7 +484,7 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         }
         /* close the socket */
         CLOSE_THE_SOCKET(peer->sd);
-        return;
+        goto out;
     } else {
         prrte_output(0,
                     "%s prrte_tcp_peer_try_connect: "
@@ -390,8 +500,15 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         PRRTE_FORCED_TERMINATE(1);
     }
 
- cleanup:
+cleanup:
     PRRTE_RELEASE(op);
+out:
+    if (NULL != results) {
+        free(results);
+    }
+    if (NULL != remote_list) {
+        OBJ_RELEASE(remote_list);
+    }
 }
 
 /* send a handshake that includes our process identifier, our

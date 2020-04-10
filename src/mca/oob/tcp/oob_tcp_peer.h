@@ -15,6 +15,8 @@
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +39,8 @@ typedef struct {
     prrte_list_item_t super;
     struct sockaddr_storage addr; // an address where a peer can be found
     int retries;                  // number of times we have tried to connect to this address
-    prrte_oob_tcp_state_t state;    // state of this address
+    prrte_oob_tcp_state_t state;  // state of this address
+    int if_mask;                  // if mask of this address
 } prrte_oob_tcp_addr_t;
 PRRTE_CLASS_DECLARATION(prrte_oob_tcp_addr_t);
 
