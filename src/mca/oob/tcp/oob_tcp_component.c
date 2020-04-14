@@ -19,6 +19,8 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,7 +61,7 @@
 #include "src/util/error.h"
 #include "src/util/output.h"
 #include "src/include/prrte_socket_errno.h"
-#include "src/util/if.h"
+#include "src/mca/prteif/prteif.h"
 #include "src/util/net.h"
 #include "src/util/argv.h"
 #include "src/class/prrte_hash_table.h"
@@ -153,6 +155,7 @@ static int tcp_component_open(void)
     prrte_oob_tcp_component.ipv4ports = NULL;
     prrte_oob_tcp_component.ipv6conns = NULL;
     prrte_oob_tcp_component.ipv6ports = NULL;
+    prrte_oob_tcp_component.if_masks = NULL;
 
     /* if_include and if_exclude need to be mutually exclusive */
     if (PRRTE_SUCCESS !=
@@ -167,6 +170,7 @@ static int tcp_component_open(void)
            "open" failing is not printed */
         return PRRTE_ERR_NOT_AVAILABLE;
     }
+    PRRTE_CONSTRUCT(&prrte_oob_tcp_component.local_ifs, prrte_list_t);
     return PRRTE_SUCCESS;
 }
 
@@ -175,6 +179,7 @@ static int tcp_component_open(void)
  */
 static int tcp_component_close(void)
 {
+    PRRTE_LIST_DESTRUCT(&prrte_oob_tcp_component.local_ifs);
     PRRTE_DESTRUCT(&prrte_oob_tcp_component.peers);
 
     if (NULL != prrte_oob_tcp_component.ipv4conns) {
@@ -192,6 +197,9 @@ static int tcp_component_close(void)
         prrte_argv_free(prrte_oob_tcp_component.ipv6ports);
     }
 #endif
+    if (NULL != prrte_oob_tcp_component.if_masks) {
+        prrte_argv_free(prrte_oob_tcp_component.if_masks);
+    }
 
     return PRRTE_SUCCESS;
 }
@@ -455,12 +463,15 @@ static char **split_and_resolve(char **orig_str, char *name);
 
 static int component_available(void)
 {
-    int i, rc;
-    char **interfaces = NULL;
+    prrte_if_t *copied_interface, *selected_interface;
     bool including = false, excluding = false;
-    char name[32];
     struct sockaddr_storage my_ss;
+    char name[PRRTE_IF_NAMESIZE];
+    char **interfaces = NULL;
+    /* Larger than necessary, used for copying mask */
+    char string[50];
     int kindex;
+    int i, rc;
 
     prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
                         "oob:tcp: component_available called");
@@ -483,13 +494,11 @@ static int component_available(void)
     }
 
     /* look at all available interfaces */
-    for (i = prrte_ifbegin(); i >= 0; i = prrte_ifnext(i)) {
-        if (PRRTE_SUCCESS != prrte_ifindextoaddr(i, (struct sockaddr*) &my_ss,
-                                               sizeof (my_ss))) {
-            prrte_output (0, "oob_tcp: problems getting address for index %i (kernel index %i)\n",
-                         i, prrte_ifindextokindex(i));
-            continue;
-        }
+    PRRTE_LIST_FOREACH(selected_interface, &prrte_if_list, prrte_if_t) {
+        i = selected_interface->if_index;
+        kindex = selected_interface->if_kernel_index;
+        memcpy((struct sockaddr*)&my_ss, &selected_interface->if_addr,
+               MIN(sizeof(struct sockaddr_storage), sizeof(selected_interface->if_addr)));
         /* ignore non-ip4/6 interfaces */
         if (AF_INET != my_ss.ss_family
 #if PRRTE_ENABLE_IPV6
@@ -498,19 +507,13 @@ static int component_available(void)
             ) {
             continue;
         }
-        kindex = prrte_ifindextokindex(i);
-        if (kindex <= 0) {
-            continue;
-        }
         prrte_output_verbose(10, prrte_oob_base_framework.framework_output,
                             "WORKING INTERFACE %d KERNEL INDEX %d FAMILY: %s", i, kindex,
                             (AF_INET == my_ss.ss_family) ? "V4" : "V6");
 
-        /* get the name for diagnostic purposes */
-        prrte_ifindextoname(i, name, sizeof(name));
 
         /* ignore any virtual interfaces */
-        if (0 == strncmp(name, "vir", 3)) {
+        if (0 == strncmp(selected_interface->if_name, "vir", 3)) {
             continue;
         }
 
@@ -531,7 +534,7 @@ static int component_available(void)
                 if (PRRTE_SUCCESS != rc) {
                     prrte_output_verbose(20, prrte_oob_base_framework.framework_output,
                                         "%s oob:tcp:init rejecting interface %s (not in include list)",
-                                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), name);
+                                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), selected_interface->if_name);
                     continue;
                 }
             } else {
@@ -539,7 +542,7 @@ static int component_available(void)
                 if (PRRTE_SUCCESS == rc) {
                     prrte_output_verbose(20, prrte_oob_base_framework.framework_output,
                                         "%s oob:tcp:init rejecting interface %s (in exclude list)",
-                                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), name);
+                                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), selected_interface->if_name);
                     continue;
                 }
             }
@@ -550,7 +553,7 @@ static int component_available(void)
             if (1 < prrte_ifcount() && prrte_ifisloopback(i)) {
                 prrte_output_verbose(20, prrte_oob_base_framework.framework_output,
                                     "%s oob:tcp:init rejecting loopback interface %s",
-                                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), name);
+                                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), selected_interface->if_name);
                 continue;
             }
         }
@@ -586,6 +589,28 @@ static int component_available(void)
                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                                 prrte_net_get_hostname((struct sockaddr*) &my_ss));
         }
+        copied_interface = PRRTE_NEW(prrte_if_t);
+        if (NULL == copied_interface) {
+            prrte_argv_free(interfaces);
+            return PRRTE_ERR_OUT_OF_RESOURCE;
+        }
+        prrte_string_copy(copied_interface->if_name, selected_interface->if_name, sizeof(name));
+        copied_interface->if_index = i;
+        copied_interface->if_kernel_index = kindex;
+        copied_interface->af_family = my_ss.ss_family;
+        copied_interface->if_flags = selected_interface->if_flags;
+        copied_interface->if_speed = selected_interface->if_speed;
+        memcpy(&copied_interface->if_addr, &selected_interface->if_addr, sizeof(struct sockaddr_storage));
+        copied_interface->if_mask = selected_interface->if_mask;
+        /* If bandwidth is not found, set to arbitrary non zero value */
+        copied_interface->if_bandwidth = selected_interface->if_bandwidth > 0 ? selected_interface->if_bandwidth : 1;
+        memcpy(&copied_interface->if_mac, &selected_interface->if_mac, sizeof(copied_interface->if_mac));
+        copied_interface->ifmtu = selected_interface->ifmtu;
+        /* Add the if_mask to the list */
+        sprintf(string, "%d", selected_interface->if_mask);
+        prrte_argv_append_nosize(&prrte_oob_tcp_component.if_masks, string);
+        prrte_list_append(&prrte_oob_tcp_component.local_ifs, &(copied_interface->super));
+
     }
 
     /* cleanup */
@@ -697,15 +722,17 @@ static int component_send(prrte_rml_send_t *msg)
 
 static char* component_get_addr(void)
 {
-    char *cptr=NULL, *tmp, *tp;
+    char *cptr=NULL, *tmp, *tp, *tm;
 
     if (!prrte_oob_tcp_component.disable_ipv4_family &&
         NULL != prrte_oob_tcp_component.ipv4conns) {
         tmp = prrte_argv_join(prrte_oob_tcp_component.ipv4conns, ',');
         tp = prrte_argv_join(prrte_oob_tcp_component.ipv4ports, ',');
-        prrte_asprintf(&cptr, "tcp://%s:%s", tmp, tp);
+        tm = prrte_argv_join(prrte_oob_tcp_component.if_masks, ',');
+        prrte_asprintf(&cptr, "tcp://%s:%s:%s", tmp, tp, tm);
         free(tmp);
         free(tp);
+        free(tm);
     }
 #if PRRTE_ENABLE_IPV6
     if (!prrte_oob_tcp_component.disable_ipv6_family &&
@@ -725,16 +752,18 @@ static char* component_get_addr(void)
          */
         tmp = prrte_argv_join(prrte_oob_tcp_component.ipv6conns, ',');
         tp = prrte_argv_join(prrte_oob_tcp_component.ipv6ports, ',');
+        tm = prrte_argv_join(prrte_oob_tcp_component.if_masks, ',');
         if (NULL == cptr) {
             /* no ipv4 stuff */
-            prrte_asprintf(&cptr, "tcp6://[%s]:%s", tmp, tp);
+            prrte_asprintf(&cptr, "tcp6://[%s]:%s:%s", tmp, tp, tm);
         } else {
-            prrte_asprintf(&tmp2, "%s;tcp6://[%s]:%s", cptr, tmp, tp);
+            prrte_asprintf(&tmp2, "%s;tcp6://[%s]:%s:%s", cptr, tmp, tp, tm);
             free(cptr);
             cptr = tmp2;
         }
         free(tmp);
         free(tp);
+        free(tm);
     }
 #endif // PRRTE_ENABLE_IPV6
 
@@ -784,8 +813,8 @@ static int parse_uri(const uint16_t af_family,
 static int component_set_addr(prrte_process_name_t *peer,
                               char **uris)
 {
-    char **addrs, *hptr;
-    char *tcpuri=NULL, *host, *ports;
+    char **addrs, **masks, *hptr;
+    char *tcpuri=NULL, *host, *ports, *masks_string;
     int i, j, rc;
     uint16_t af_family = AF_UNSPEC;
     uint64_t ui64;
@@ -834,6 +863,18 @@ static int component_set_addr(prrte_process_name_t *peer,
                             "%s oob:tcp: working peer %s address %s",
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                             PRRTE_NAME_PRINT(peer), uris[i]);
+
+        /* separate the mask from the network addrs */
+        masks_string = strrchr(tcpuri, ':');
+        if (NULL == masks_string) {
+            PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+            free(tcpuri);
+            continue;
+        }
+        *masks_string = '\0';
+        masks_string++;
+        masks = prrte_argv_split(masks_string, ',');
+
         /* separate the ports from the network addrs */
         ports = strrchr(tcpuri, ':');
         if (NULL == ports) {
@@ -865,6 +906,13 @@ static int component_set_addr(prrte_process_name_t *peer,
 
         /* cycle across the provided addrs */
         for (j=0; NULL != addrs[j]; j++) {
+            if (NULL == masks[j]) {
+                /* Missing mask information */
+                prrte_output_verbose(2, prrte_oob_base_framework.framework_output,
+                                     "%s oob:tcp: uri missing mask information.",
+                                      PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+                return PRRTE_ERR_TAKE_NEXT_OPTION;
+            }
             /* if they gave us "localhost", then just take the first conn on our list */
             if (0 == strcasecmp(addrs[j], "localhost")) {
 #if PRRTE_ENABLE_IPV6
@@ -914,6 +962,7 @@ static int component_set_addr(prrte_process_name_t *peer,
                 PRRTE_RELEASE(pr);
                 return PRRTE_ERR_TAKE_NEXT_OPTION;
             }
+            maddr->if_mask = atoi(masks[j]);
 
             prrte_output_verbose(20, prrte_oob_base_framework.framework_output,
                                 "%s set_peer: peer %s is listening on net %s port %s",

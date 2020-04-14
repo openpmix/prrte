@@ -15,6 +15,8 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -73,6 +75,8 @@ typedef struct {
     char**             ipv6ports;
 
     /* connection support */
+    prrte_list_t       local_ifs;              /**< prrte list of local prrte_if_t interfaces */
+    char**             if_masks;
     char*              my_uri;                 /**< uri for connecting to the TCP module */
     int                num_hnp_ports;          /**< number of ports the HNP should listen on */
     prrte_list_t        listeners;              /**< List of sockets being monitored by event or thread */
