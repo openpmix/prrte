@@ -1589,6 +1589,26 @@ static int build_map(int *num_sockets_arg, int *num_cores_arg,
 }
 
 /*
+ * use a cached WHOLE_SYSTEM topology in cset2str / cset2mapstr
+ * if the input topology is this system (hwloc_topology_is_thissystem())
+*/
+static hwloc_topology_t cached_whole_system_topology = NULL;
+
+static int
+conditionally_modify_the_topology_to_whole_system(hwloc_topology_t *ptopo)
+{
+    if (hwloc_topology_is_thissystem(*ptopo)) {
+        if (cached_whole_system_topology == NULL) {
+            hwloc_topology_init(&cached_whole_system_topology);
+            hwloc_topology_set_flags(cached_whole_system_topology,
+                HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM);
+            hwloc_topology_load(cached_whole_system_topology);
+        }
+        *ptopo = cached_whole_system_topology;
+    }
+}
+
+/*
  * Make a prettyprint string for a hwloc_cpuset_t
  */
 int prrte_hwloc_base_cset2str(char *str, int len,
@@ -1603,6 +1623,8 @@ int prrte_hwloc_base_cset2str(char *str, int len,
     int **map=NULL;
     hwloc_obj_t root;
     prrte_hwloc_topo_data_t *sum;
+
+    conditionally_modify_the_topology_to_whole_system(&topo);
 
     str[0] = tmp[stmp] = '\0';
 
@@ -1797,6 +1819,9 @@ int prrte_hwloc_base_cset2mapstr(char *str, int len,
     if (0 != hwloc_bitmap_isincluded(sum->available, cpuset)) {
         return PRRTE_ERR_NOT_BOUND;
     }
+
+    conditionally_modify_the_topology_to_whole_system(&topo);
+    root = hwloc_get_root_obj(topo);
 
     /* hwloc trees aren't required to have sockets and cores,
      * just a MACHINE at the top and PU at the bottom. The 'fake_*' vars make
