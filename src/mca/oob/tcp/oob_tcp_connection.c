@@ -164,11 +164,8 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     prrte_list_t *local_list = &prrte_oob_tcp_component.local_ifs, *remote_list;
     int rc, i, j, local_if_count, remote_if_count, best, best_i, best_j;
     prrte_oob_tcp_conn_op_t *op = (prrte_oob_tcp_conn_op_t*)cbdata;
-    prrte_mca_base_component_list_item_t *cli;
-    prrte_oob_base_component_t *component;
     prrte_reachable_t *results = NULL;
     volatile prrte_list_item_t *ptr;
-    int current_socket_family = 0;
     prrte_socklen_t addrlen = 0;
     prrte_oob_tcp_peer_t *peer;
     prrte_oob_tcp_addr_t *addr;
@@ -300,7 +297,6 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
             peer->sd = -1;
         }
         rc = tcp_peer_create_socket(peer, addr->addr.ss_family);
-        current_socket_family = addr->addr.ss_family;
 
         if (PRRTE_SUCCESS != rc) {
             /* FIXME: we cannot create a TCP socket - this spans

@@ -390,6 +390,7 @@ static int rte_init(int argc, char **argv)
     node = PRRTE_NEW(prrte_node_t);
     node->name = strdup(prrte_process_info.nodename);
     node->index = PRRTE_PROC_MY_NAME->vpid;
+    PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_LOC_VERIFIED);
     prrte_pointer_array_set_item(prrte_node_pool, 0, node);
 
     /* create and store a proc object for us */
