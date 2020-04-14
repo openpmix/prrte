@@ -1766,8 +1766,6 @@ int prrte_hwloc_base_cset2mapstr(char *str, int len,
     hwloc_obj_t socket, core, pu;
     hwloc_obj_t root;
     prrte_hwloc_topo_data_t *sum;
-    bool fake_on_first_socket;
-    bool fake_on_first_core;
     hwloc_cpuset_t cpuset_for_socket;
     hwloc_cpuset_t cpuset_for_core;
     hwloc_obj_t prev_numa = NULL;
@@ -1807,12 +1805,8 @@ int prrte_hwloc_base_cset2mapstr(char *str, int len,
     type_under_numa = first_type_under_a_numa(topo);
 
     /* Iterate over all existing sockets */
-    fake_on_first_socket = true;
     socket = hwloc_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0);
     do {
-        fake_on_first_socket = false;
-        strncat(str, "[", len - strlen(str) - 1);
-
         // if numas contain sockets, example output <[../..][../..]><[../..][../..]>
         if (HWLOC_OBJ_SOCKET == type_under_numa) {
             prev_numa = cur_numa;
@@ -1833,14 +1827,11 @@ int prrte_hwloc_base_cset2mapstr(char *str, int len,
         }
 
         /* Iterate over all existing cores in this socket */
-        fake_on_first_core = true;
         core_index = 0;
         core = hwloc_get_obj_inside_cpuset_by_type(topo,
                                                    cpuset_for_socket,
                                                    HWLOC_OBJ_CORE, core_index);
-        while (NULL != core || fake_on_first_core) {
-            fake_on_first_core = false;
-
+        do {
             /* if numas contain cores and are contained by sockets,
              * example output [<../..><../..>][<../../../..>]
              */
@@ -1911,7 +1902,7 @@ int prrte_hwloc_base_cset2mapstr(char *str, int len,
             core = hwloc_get_obj_inside_cpuset_by_type(topo,
                                                         cpuset_for_socket,
                                                         HWLOC_OBJ_CORE, ++core_index);
-        } /* end while core */
+        } while (NULL != core);
         if (HWLOC_OBJ_CORE == type_under_numa) {
             if (a_numa_marker_is_open) {
                 strncat(str, ">", len - strlen(str) - 1);
@@ -1922,7 +1913,7 @@ int prrte_hwloc_base_cset2mapstr(char *str, int len,
             strncat(str, "]", len - strlen(str) - 1);
             socket = socket->next_cousin;
         }
-    } while (NULL != socket || fake_on_first_socket);
+    } while (NULL != socket);
 
     if (HWLOC_OBJ_SOCKET == type_under_numa) {
         if (a_numa_marker_is_open) {
