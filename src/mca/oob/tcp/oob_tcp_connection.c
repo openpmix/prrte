@@ -507,7 +507,7 @@ out:
         free(results);
     }
     if (NULL != remote_list) {
-        OBJ_RELEASE(remote_list);
+        PRRTE_RELEASE(remote_list);
     }
 }
 
