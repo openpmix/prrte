@@ -2175,7 +2175,7 @@ char* prrte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
     complete = (hwloc_bitmap_t)hwloc_topology_get_complete_cpuset(topo);
     allowed = (hwloc_bitmap_t)hwloc_topology_get_allowed_cpuset(topo);
     pus = NULL;
-    if (0 != hwloc_bitmap_list_asprintf(&pus, allowed)) {
+    if (0 >= hwloc_bitmap_list_asprintf(&pus, allowed)) {
         if (NULL != pus) {
             free(pus);
         }
@@ -2185,7 +2185,7 @@ char* prrte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
         cpus = strdup("");
     } else {
         cpus = NULL;
-        if (0 != hwloc_bitmap_list_asprintf(&cpus, complete)) {
+        if (0 >= hwloc_bitmap_list_asprintf(&cpus, complete)) {
             if (NULL != cpus) {
                 free(cpus);
             }
