@@ -512,8 +512,10 @@ static void check_complete(int fd, short args, void *cbdata)
         if (jdata->state > PRRTE_JOB_STATE_ERROR) {
             char *msg;
             msg = prrte_dump_aborted_procs(jdata);
-            prrte_output(prrte_clean_output, "%s", msg);
-            free(msg);
+            if (NULL != msg) {
+                prrte_output(prrte_clean_output, "%s", msg);
+                free(msg);
+            }
         }
         /* just shut us down */
         prrte_plm.terminate_orteds();
