@@ -13,6 +13,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020      Huawei Technologies Co., Ltd.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -144,7 +145,8 @@ static int rank_span(prrte_job_t *jdata,
                             return PRRTE_ERROR;
                         }
                         /* ignore procs not on this object */
-                        if (!hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
+                        if (NULL == locale ||
+                            !hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
                             prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                                 "mca:rmaps:rank_span: proc at position %d is not on object %d",
                                                 j, i);
@@ -177,6 +179,11 @@ static int rank_span(prrte_job_t *jdata,
                     }
                 }
             }
+        }
+
+        /* Are all the procs ranked? we don't want to crash on INVALID ranks */
+        if (cnt < app->num_procs) {
+            return PRRTE_ERR_NOT_SUPPORTED;
         }
     }
 
@@ -268,7 +275,8 @@ static int rank_fill(prrte_job_t *jdata,
                         return PRRTE_ERROR;
                     }
                     /* ignore procs not on this object */
-                    if (!hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
+                    if (NULL == locale ||
+                        !hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
                         prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                             "mca:rmaps:rank_fill: proc at position %d is not on object %d",
                                             j, i);
@@ -298,6 +306,11 @@ static int rank_fill(prrte_job_t *jdata,
                     jdata->bookmark = node;
                 }
             }
+        }
+
+        /* Are all the procs ranked? we don't want to crash on INVALID ranks */
+        if (cnt < app->num_procs) {
+            return PRRTE_ERR_NOT_SUPPORTED;
         }
     }
 
@@ -388,7 +401,7 @@ static int rank_by(prrte_job_t *jdata,
                 noassign = true;
                 for (i=0; i < num_objs && cnt < app->num_procs; i++) {
                     /* get the next object */
-                    obj = (hwloc_obj_t)prrte_pointer_array_get_item(&objs, i % num_objs);
+                    obj = (hwloc_obj_t)prrte_pointer_array_get_item(&objs, i);
                     if (NULL == obj) {
                         break;
                     }
@@ -471,6 +484,11 @@ static int rank_by(prrte_job_t *jdata,
         }
         /* cleanup */
         PRRTE_DESTRUCT(&objs);
+
+        /* Are all the procs ranked? we don't want to crash on INVALID ranks */
+        if (cnt < app->num_procs) {
+            return PRRTE_ERR_NOT_SUPPORTED;
+        }
     }
     return PRRTE_SUCCESS;
 }
