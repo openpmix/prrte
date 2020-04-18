@@ -189,7 +189,11 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
       PRRTE_CMD_LINE_OTYPE_DVM },
     /* provide a connection PID */
     { '\0', "pid", 1, PRRTE_CMD_LINE_TYPE_INT,
-      "PID of the session-level daemon to which we should connect",
+      "PID of the daemon to which we should connect",
+      PRRTE_CMD_LINE_OTYPE_DVM },
+    /* provide a connection namespace */
+    { '\0', "namespace", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      "Namespace of the daemon to which we should connect",
       PRRTE_CMD_LINE_OTYPE_DVM },
     /* uri of the dvm, or at least where to get it */
     { '\0', "dvm-uri", 1, PRRTE_CMD_LINE_TYPE_STRING,
@@ -889,6 +893,12 @@ int prun(int argc, char *argv[])
         PMIX_INFO_CREATE(ds->info, 1);
         pid = pval->data.integer;
         PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
+        prrte_list_append(&tinfo, &ds->super);
+    }
+    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "namespace", 0, 0))) {
+        ds = PRRTE_NEW(prrte_ds_info_t);
+        PMIX_INFO_CREATE(ds->info, 1);
+        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_NSPACE, pval->data.string, PMIX_STRING);
         prrte_list_append(&tinfo, &ds->super);
     }
     /* ensure we don't try to use the usock PTL component */

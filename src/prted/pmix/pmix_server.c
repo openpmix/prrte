@@ -121,25 +121,15 @@ static pmix_server_module_t pmix_server = {
 };
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
-static char *prrte_fns[] = {
-    "fence_nb",
-    "direct_modex"
-};
-
 typedef struct {
-    char *name;
-    char *string;
-    pmix_data_type_t type;
-    char **description;
+    char *function;
+    char **attrs;
 } prrte_regattr_input_t;
 
 static prrte_regattr_input_t prrte_attributes[] = {
     // fence_nb
-    {.name = "PMIX_TIMEOUT", .string = PMIX_TIMEOUT, .type = PMIX_INT, .description = (char *[]){"POSITIVE INTEGERS", "Time in seconds before", "declaring not found", NULL}},
-    {.name = ""},
-    // direct_modex
-    {.name = "PMIX_TIMEOUT", .string = PMIX_TIMEOUT, .type = PMIX_INT, .description = (char *[]){"POSITIVE INTEGERS", "Time in seconds before", "declaring not found", NULL}},
-    {.name = ""},
+    {.function = "PMIx_Fence", .attrs = (char *[]){"PMIX_TIMEOUT", NULL}},
+    {.function = ""},
 };
 #endif
 
@@ -315,10 +305,6 @@ int pmix_server_init(void)
     prrte_value_t *kv;
     pmix_info_t *info;
     size_t n, ninfo;
-#if PMIX_NUMERIC_VERSION >= 0x00040000
-    pmix_regattr_t *attrs;
-    size_t m, nregs, nattrs, cnt;
-#endif
 
     if (prrte_pmix_server_globals.initialized) {
         return PRRTE_SUCCESS;
@@ -513,26 +499,11 @@ int pmix_server_init(void)
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* register our support */
-    nregs = sizeof(prrte_fns) / sizeof(char*);
-    cnt = 0;
-    for (n=0; n < nregs; n++) {
-        nattrs = 0;
-        while (0 != strlen(prrte_attributes[cnt+nattrs].name)) {
-            ++nattrs;
-        }
-        PMIX_REGATTR_CREATE(attrs, nattrs);
-        for (m=0; m < nattrs; m++) {
-            attrs[m].name = strdup(prrte_attributes[m+cnt].name);
-            PMIX_LOAD_KEY(attrs[m].string, prrte_attributes[m+cnt].string);
-            attrs[m].type = prrte_attributes[m+cnt].type;
-            PMIX_ARGV_COPY(attrs[m].description, prrte_attributes[m+cnt].description);
-        }
-        rc = PMIx_Register_attributes(prrte_fns[n], attrs, nattrs);
-        PMIX_REGATTR_FREE(attrs, nattrs);
+    for (n=0; 0 != strlen(prrte_attributes[n].function); n++) {
+        rc = PMIx_Register_attributes(prrte_attributes[n].function, prrte_attributes[n].attrs);
         if (PMIX_SUCCESS != rc) {
             break;
         }
-        cnt += nattrs + 1;
     }
 #endif
 
