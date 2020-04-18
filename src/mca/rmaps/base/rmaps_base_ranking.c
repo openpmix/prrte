@@ -140,13 +140,18 @@ static int rank_span(prrte_job_t *jdata,
                         }
                         /* protect against bozo case */
                         locale = NULL;
-                        if (!prrte_get_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRRTE_PTR)) {
+                        if (!prrte_get_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRRTE_PTR) ||
+                            NULL == locale) {
+                            /* all mappers are _required_ to set the locale where the proc
+                             * has been mapped - it is therefore an error for this attribute
+                             * not to be set. Likewise, only a programming error could allow
+                             * the attribute to be set to a NULL value - however, we add that
+                             * conditional here to silence any compiler warnings */
                             PRRTE_ERROR_LOG(PRRTE_ERROR);
                             return PRRTE_ERROR;
                         }
                         /* ignore procs not on this object */
-                        if (NULL == locale ||
-                            !hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
+                        if (!hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
                             prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                                 "mca:rmaps:rank_span: proc at position %d is not on object %d",
                                                 j, i);
@@ -183,7 +188,7 @@ static int rank_span(prrte_job_t *jdata,
 
         /* Are all the procs ranked? we don't want to crash on INVALID ranks */
         if (cnt < app->num_procs) {
-            return PRRTE_ERR_NOT_SUPPORTED;
+            return PRRTE_ERR_FAILED_TO_MAP;
         }
     }
 
@@ -270,13 +275,18 @@ static int rank_fill(prrte_job_t *jdata,
                     }
                      /* protect against bozo case */
                     locale = NULL;
-                    if (!prrte_get_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRRTE_PTR)) {
+                    if (!prrte_get_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRRTE_PTR) ||
+                        NULL == locale) {
+                        /* all mappers are _required_ to set the locale where the proc
+                         * has been mapped - it is therefore an error for this attribute
+                         * not to be set. Likewise, only a programming error could allow
+                         * the attribute to be set to a NULL value - however, we add that
+                         * conditional here to silence any compiler warnings */
                         PRRTE_ERROR_LOG(PRRTE_ERROR);
                         return PRRTE_ERROR;
                     }
                     /* ignore procs not on this object */
-                    if (NULL == locale ||
-                        !hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
+                    if (!hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
                         prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                             "mca:rmaps:rank_fill: proc at position %d is not on object %d",
                                             j, i);
@@ -310,7 +320,7 @@ static int rank_fill(prrte_job_t *jdata,
 
         /* Are all the procs ranked? we don't want to crash on INVALID ranks */
         if (cnt < app->num_procs) {
-            return PRRTE_ERR_NOT_SUPPORTED;
+            return PRRTE_ERR_FAILED_TO_MAP;
         }
     }
 
@@ -405,7 +415,7 @@ static int rank_by(prrte_job_t *jdata,
                     if (NULL == obj) {
                         break;
                     }
-                    /* scan across the procs and find the one that is on this object */
+                    /* scan across the procs and find the first unassigned one that includes this object */
                     for (j=0; j < node->procs->size && cnt < app->num_procs; j++) {
                         if (NULL == (proc = (prrte_proc_t*)prrte_pointer_array_get_item(node->procs, j))) {
                             continue;
@@ -417,8 +427,6 @@ static int rank_by(prrte_job_t *jdata,
                                                 PRRTE_NAME_PRINT(&proc->name), num_ranked);
                             continue;
                         }
-                        /* tie proc to its job */
-                        proc->job = jdata;
                         /* ignore procs that are already ranked */
                         if (PRRTE_VPID_INVALID != proc->name.vpid) {
                             prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
@@ -426,22 +434,29 @@ static int rank_by(prrte_job_t *jdata,
                                                 PRRTE_NAME_PRINT(&proc->name), num_ranked);
                             continue;
                         }
-                        /* ignore procs from other apps */
+                        /* ignore procs from other apps - we will get to them */
                         if (proc->app_idx != app->idx) {
                             prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                                 "mca:rmaps:rank_by skipping proc %s - from another app, num_ranked %d",
                                                 PRRTE_NAME_PRINT(&proc->name), num_ranked);
                             continue;
                         }
+                        /* tie proc to its job */
+                        proc->job = jdata;
                          /* protect against bozo case */
                         locale = NULL;
-                        if (!prrte_get_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRRTE_PTR)) {
+                        if (!prrte_get_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRRTE_PTR) ||
+                            NULL == locale) {
+                            /* all mappers are _required_ to set the locale where the proc
+                             * has been mapped - it is therefore an error for this attribute
+                             * not to be set. Likewise, only a programming error could allow
+                             * the attribute to be set to a NULL value - however, we add that
+                             * conditional here to silence any compiler warnings */
                             PRRTE_ERROR_LOG(PRRTE_ERROR);
                             return PRRTE_ERROR;
                         }
                         /* ignore procs not on this object */
-                        if (NULL == locale ||
-                            !hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
+                        if (!hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
                             prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                                 "mca:rmaps:rank_by: proc at position %d is not on object %d",
                                                 j, i);
@@ -487,7 +502,7 @@ static int rank_by(prrte_job_t *jdata,
 
         /* Are all the procs ranked? we don't want to crash on INVALID ranks */
         if (cnt < app->num_procs) {
-            return PRRTE_ERR_NOT_SUPPORTED;
+            return PRRTE_ERR_FAILED_TO_MAP;
         }
     }
     return PRRTE_SUCCESS;
