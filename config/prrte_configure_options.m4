@@ -213,24 +213,49 @@ AC_DEFINE_UNQUOTED(PRRTE_SHOW_LOAD_ERRORS_DEFAULT, $PRRTE_SHOW_LOAD_ERRORS_DEFAU
 
 
 #
-# Heterogeneous support
+# Handle embedded version strings
 #
-
-AC_MSG_CHECKING([if want heterogeneous support])
-AC_ARG_ENABLE([heterogeneous],
-    [AC_HELP_STRING([--enable-heterogeneous],
-                    [Enable features required for heterogeneous
-                     platform support (default: disabled)])])
-if test "$enable_heterogeneous" = "yes" ; then
-     AC_MSG_RESULT([yes])
-     prrte_want_heterogeneous=1
+AC_MSG_CHECKING([if a proxy version string for prte is required])
+AC_ARG_WITH(proxy-version-string,
+    AC_HELP_STRING([--with-proxy-version-string],
+                   [Return the provided string when prte is used in proxy mode and the version is requested]))
+if test -n "$with_proxy_version_string"; then
+    AC_MSG_RESULT([yes])
+    PRRTE_PROXY_VERSION_STRING=$with_proxy_version_string
 else
-     AC_MSG_RESULT([no])
-     prrte_want_heterogeneous=0
+    AC_MSG_RESULT([no])
+    PRRTE_PROXY_VERSION_STRING=$PRRTE_VERSION
 fi
-AC_DEFINE_UNQUOTED([PRRTE_ENABLE_HETEROGENEOUS_SUPPORT],
-                   [$prrte_want_heterogeneous],
-                   [Enable features required for heterogeneous support])
+AC_DEFINE_UNQUOTED(PRRTE_PROXY_VERSION_STRING, "$PRRTE_PROXY_VERSION_STRING",
+                   [Version string to be returned by prte when in proxy mode])
+
+AC_MSG_CHECKING([if a proxy package name for prte is required])
+AC_ARG_WITH(proxy-package-name,
+    AC_HELP_STRING([--with-proxy-package-name],
+                   [Return the provided string when prte is used in proxy mode and the package name is requested]))
+if test -n "$with_proxy_package_name"; then
+    AC_MSG_RESULT([yes])
+    PRRTE_PROXY_PACKAGE_NAME=$with_proxy_package_name
+else
+    AC_MSG_RESULT([no])
+    PRRTE_PROXY_PACKAGE_NAME="PMIx Reference RunTime Environment"
+fi
+AC_DEFINE_UNQUOTED(PRRTE_PROXY_PACKAGE_NAME, "$PRRTE_PROXY_PACKAGE_NAME",
+                   [Package name to be returned by prte when in proxy mode])
+
+AC_MSG_CHECKING([if a proxy bugreport path for prte is required])
+AC_ARG_WITH(proxy-bugreport,
+    AC_HELP_STRING([--with-proxy-bugreport],
+                   [Return the provided string when prte is used in proxy mode and the PACKAGE_BUGREPORT is requested]))
+if test -n "$with_proxy_bugreport"; then
+    AC_MSG_RESULT([yes])
+    PRRTE_PROXY_BUGREPORT=$with_proxy_bugreport
+else
+    AC_MSG_RESULT([no])
+    PRRTE_PROXY_BUGREPORT=https://github.com/openpmix/prrte/
+fi
+AC_DEFINE_UNQUOTED(PRRTE_PROXY_BUGREPORT, "$PRRTE_PROXY_BUGREPORT",
+                   [Bugreport string to be returned by prte when in proxy mode])
 
 
 #

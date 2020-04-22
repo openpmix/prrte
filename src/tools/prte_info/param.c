@@ -344,14 +344,12 @@ void prrte_info_do_hostname()
  */
 void prrte_info_do_config(bool want_all)
 {
-    char *heterogeneous;
     char *debug;
     char *have_dl;
     char *prun_prefix_by_default;
     char *symbol_visibility;
 
     /* setup the strings that don't require allocations*/
-    heterogeneous = PRRTE_ENABLE_HETEROGENEOUS_SUPPORT ? "yes" : "no";
     debug = PRRTE_ENABLE_DEBUG ? "yes" : "no";
     have_dl = PRRTE_HAVE_DL_SUPPORT ? "yes" : "no";
     prun_prefix_by_default = PRRTE_WANT_PRRTE_PREFIX_BY_DEFAULT ? "yes" : "no";
@@ -414,7 +412,6 @@ void prrte_info_do_config(bool want_all)
 
     prrte_info_out("Internal debug support", "option:debug", debug);
     prrte_info_out("dl support", "option:dlopen", have_dl);
-    prrte_info_out("Heterogeneous support", "options:heterogeneous", heterogeneous);
     prrte_info_out("prun default --prefix", "prun:prefix_by_default",
                   prun_prefix_by_default);
     prrte_info_out("Symbol vis. support", "options:visibility", symbol_visibility);
