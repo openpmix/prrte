@@ -654,9 +654,15 @@ int main(int argc, char *argv[])
      * check for help so that --version --help works as
      * one might expect. */
      if (prrte_cmd_line_is_taken(prrte_cmd_line, "version")) {
-        fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n",
-                prrte_tool_basename, "PMIx Reference RunTime Environment",
-                PRRTE_VERSION, PACKAGE_BUGREPORT);
+        if (proxyrun) {
+            fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n",
+                    prrte_tool_basename, PRRTE_PROXY_PACKAGE_NAME,
+                    PRRTE_PROXY_VERSION_STRING, PRRTE_PROXY_BUGREPORT);
+        } else {
+            fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n",
+                    prrte_tool_basename, "PMIx Reference RunTime Environment",
+                    PRRTE_VERSION, PACKAGE_BUGREPORT);
+        }
         exit(0);
     }
 

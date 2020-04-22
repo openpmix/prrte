@@ -1518,24 +1518,6 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
                 free(sig);
                 break;
             }
-#if !PRRTE_ENABLE_HETEROGENEOUS_SUPPORT
-              else {
-                /* check if the difference is due to the endianness */
-                ptr = strrchr(sig, ':');
-                ++ptr;
-                if (0 != strcmp(ptr, myendian)) {
-                    /* we don't currently handle multi-endian operations in the
-                     * MPI support */
-                    prrte_show_help("help-plm-base", "multi-endian", true,
-                                   nodename, ptr, myendian);
-                    prted_failed_launch = true;
-                    if (NULL != topo) {
-                        hwloc_topology_destroy(topo);
-                    }
-                    goto CLEANUP;
-                }
-            }
-#endif
         }
 
         if (!found) {

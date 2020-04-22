@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,12 +44,6 @@
 #include "src/util/output.h"
 #endif
 
-#if PRRTE_ENABLE_HETEROGENEOUS_SUPPORT
-#include <arpa/inet.h>
-#endif
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
 #include "src/dss/dss_types.h"
 
 /**
@@ -84,7 +78,7 @@ typedef uint32_t prrte_app_idx_t;
 
 /* general typedefs & structures */
 
-#if PRRTE_ENABLE_HETEROGENEOUS_SUPPORT && !defined(WORDS_BIGENDIAN)
+#if !defined(WORDS_BIGENDIAN)
 #define PRRTE_PROCESS_NAME_NTOH(guid) prrte_process_name_ntoh_intr(&(guid))
 static inline __prrte_attribute_always_inline__ void
 prrte_process_name_ntoh_intr(prrte_process_name_t *name)
