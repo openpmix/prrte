@@ -263,7 +263,7 @@ static void _query(int sd, short args, void *cbdata)
                 if (local_only) {
                     if (0 == prrte_list_get_size(&targets)) {
                         kv = PRRTE_NEW(prrte_info_item_t);
-                        (void)strncpy(kv->info.key, PMIX_QUERY_PROC_TABLE, PMIX_MAX_KEYLEN);
+                        (void)strncpy(kv->info.key, PMIX_QUERY_MEMORY_USAGE, PMIX_MAX_KEYLEN);
                         prrte_list_append(&results, &kv->super);
                         /* create an entry for myself plus the avg of all local procs */
                         PMIX_DATA_ARRAY_CREATE(darray, 2, PMIX_INFO);

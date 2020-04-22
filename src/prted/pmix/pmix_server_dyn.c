@@ -479,7 +479,7 @@ static void interim(int sd, short args, void *cbdata)
             goto complete;
 #endif
 
-        /***   STOP IN INIT  AND WAIT AT SOME PROGRAMMATIC POINT FOR DEBUGGER   ***/
+        /***   STOP IN INIT AND WAIT AT SOME PROGRAMMATIC POINT FOR DEBUGGER    ***/
         /***   ALLOW TO FALL INTO THE JOB-LEVEL CACHE AS THEY ARE INCLUDED IN   ***/
         /***   THE INITIAL JOB-INFO DELIVERED TO PROCS                          ***/
 
@@ -805,7 +805,7 @@ static void _cnct(int sd, short args, void *cbdata)
             uid = geteuid();
             PMIX_INFO_LOAD(&cd->directives[0], PMIX_USERID, &uid, PRRTE_UINT32);
             if (PRRTE_SUCCESS != (rc = pmix_server_lookup_fn(&cd->procs[n], keys,
-                                                            cd->directives, cd->ndirs, _cnlk, cd))) {
+                                                             cd->directives, cd->ndirs, _cnlk, cd))) {
                 prrte_argv_free(keys);
                 PMIX_INFO_FREE(cd->directives, cd->ndirs);
                 goto release;
