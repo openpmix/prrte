@@ -1372,9 +1372,7 @@ int prun(int argc, char *argv[])
         PMIx_Notify_event(PMIX_LAUNCHER_READY, &prrte_process_info.myproc, PMIX_RANGE_CUSTOM,
                           iptr, 2, NULL, NULL);
         /* now wait for the launch directives to arrive */
-        while (prrte_event_base_active && myinfo.lock.active) {
-            prrte_event_loop(prrte_event_base, PRRTE_EVLOOP_ONCE);
-        }
+        PRRTE_PMIX_WAIT_THREAD(&myinfo.lock);
         PMIX_INFO_FREE(iptr, 1);
 
         /* process the returned directives */
