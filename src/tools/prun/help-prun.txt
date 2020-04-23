@@ -703,3 +703,13 @@ correct and retry.
 [use-pterm]
 Use of %s to terminate the PRRTE DVM has been deprecated. Please use
 the "pterm" tool instead in the future.
+#
+[bad-pause-for-tool]
+%s detected the presence of the PMIX_LAUNCHER_PAUSE_FOR_TOOL environmental
+variable, but the value of the variable is in an improper form:
+
+  PMIX_LAUNCHER_PAUSE_FOR_TOOL:  %s
+
+The variable must be of the form (nspace:rank) of the tool requesting that
+%s pause for it to connect. Please reset the value of the variable and try
+again.
