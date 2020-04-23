@@ -730,7 +730,8 @@ void prrte_state_base_track_procs(int fd, short argc, void *cbdata)
              * itself.  This covers the case where the process died abnormally
              * and didn't cleanup its own session directory.
              */
-            if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON)) {
+            if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON) &&
+                !PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL)) {
                 prrte_session_dir_finalize(proc);
             }
         }
@@ -918,8 +919,11 @@ void prrte_state_base_check_all_complete(int fd, short args, void *cbdata)
                     /* skip procs from another job */
                     continue;
                 }
-                node->slots_inuse--;
-                node->num_procs--;
+                if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON) &&
+                    !PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL)) {
+                    node->slots_inuse--;
+                    node->num_procs--;
+                }
                 PRRTE_OUTPUT_VERBOSE((2, prrte_state_base_framework.framework_output,
                                      "%s releasing proc %s from node %s",
                                      PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),

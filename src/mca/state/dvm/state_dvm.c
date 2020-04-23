@@ -586,7 +586,8 @@ static void check_complete(int fd, short args, void *cbdata)
                     /* skip procs from another job */
                     continue;
                 }
-                if (!PRRTE_FLAG_TEST(proc, PRRTE_PROC_FLAG_TOOL)) {
+                if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON) &&
+                    !PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL)) {
                     node->slots_inuse--;
                     node->num_procs--;
                     node->next_node_rank--;
