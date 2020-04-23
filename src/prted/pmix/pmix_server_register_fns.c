@@ -446,21 +446,25 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
                     PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, NULL, PMIX_STRING);
                     prrte_list_append(pmap, &kv->super);
                 }
-                /* create and pass a proc-level session directory */
-                if (0 > prrte_asprintf(&tmp, "%s/%d/%d",
-                                       prrte_process_info.jobfam_session_dir,
-                                       PRRTE_LOCAL_JOBID(jdata->jobid), pptr->name.vpid)) {
-                    PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
-                    return PRRTE_ERR_OUT_OF_RESOURCE;
+                /* debugger daemons and tools don't get session directories */
+                if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON) &&
+                    !PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL)) {
+                    /* create and pass a proc-level session directory */
+                    if (0 > prrte_asprintf(&tmp, "%s/%d/%d",
+                                           prrte_process_info.jobfam_session_dir,
+                                           PRRTE_LOCAL_JOBID(jdata->jobid), pptr->name.vpid)) {
+                        PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+                        return PRRTE_ERR_OUT_OF_RESOURCE;
+                    }
+                    if (PRRTE_SUCCESS != (rc = prrte_os_dirpath_create(tmp, S_IRWXU))) {
+                        PRRTE_ERROR_LOG(rc);
+                        return rc;
+                    }
+                    kv = PRRTE_NEW(prrte_info_item_t);
+                    PMIX_INFO_LOAD(&kv->info, PMIX_PROCDIR, tmp, PMIX_STRING);
+                    free(tmp);
+                    prrte_list_append(pmap, &kv->super);
                 }
-                if (PRRTE_SUCCESS != (rc = prrte_os_dirpath_create(tmp, S_IRWXU))) {
-                    PRRTE_ERROR_LOG(rc);
-                    return rc;
-                }
-                kv = PRRTE_NEW(prrte_info_item_t);
-                PMIX_INFO_LOAD(&kv->info, PMIX_PROCDIR, tmp, PMIX_STRING);
-                free(tmp);
-                prrte_list_append(pmap, &kv->super);
             }
 
             /* global/univ rank */

@@ -960,7 +960,9 @@ void prrte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     }
 
     /* did the user request we display output in xterms? */
-    if (NULL != prrte_xterm && !PRRTE_FLAG_TEST(jobdat, PRRTE_JOB_FLAG_DEBUGGER_DAEMON)) {
+    if (NULL != prrte_xterm &&
+        !PRRTE_FLAG_TEST(jobdat, PRRTE_JOB_FLAG_DEBUGGER_DAEMON) &&
+        !PRRTE_FLAG_TEST(jobdat, PRRTE_JOB_FLAG_TOOL)) {
         prrte_list_item_t *nmitem;
         prrte_namelist_t *nm;
         /* see if this rank is one of those requested */
@@ -1020,7 +1022,9 @@ void prrte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     }
 
     /* if we are indexing the argv by rank, do so now */
-    if (cd->index_argv && !PRRTE_FLAG_TEST(jobdat, PRRTE_JOB_FLAG_DEBUGGER_DAEMON)) {
+    if (cd->index_argv &&
+        !PRRTE_FLAG_TEST(jobdat, PRRTE_JOB_FLAG_DEBUGGER_DAEMON) &&
+        !PRRTE_FLAG_TEST(jobdat, PRRTE_JOB_FLAG_TOOL)) {
         char *param;
         prrte_asprintf(&param, "%s-%d", cd->argv[0], (int)child->name.vpid);
         free(cd->argv[0]);
@@ -1576,10 +1580,11 @@ void prrte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         goto MOVEON;
     }
 
-    /* if this is a debugger daemon, then just report the state
+    /* if this is a debugger daemon or tool, then just report the state
      * and return as we aren't monitoring it
      */
-    if (PRRTE_FLAG_TEST(jobdat, PRRTE_JOB_FLAG_DEBUGGER_DAEMON))  {
+    if (PRRTE_FLAG_TEST(jobdat, PRRTE_JOB_FLAG_DEBUGGER_DAEMON) ||
+        PRRTE_FLAG_TEST(jobdat, PRRTE_JOB_FLAG_TOOL))  {
         goto MOVEON;
     }
 

@@ -402,7 +402,10 @@ static void track_procs(int fd, short argc, void *cbdata)
          * itself.  This covers the case where the process died abnormally
          * and didn't cleanup its own session directory.
          */
-        prrte_session_dir_finalize(proc);
+        if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON) &&
+            !PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL)) {
+            prrte_session_dir_finalize(proc);
+        }
         /* if we are trying to terminate and our routes are
          * gone, then terminate ourselves IF no local procs
          * remain (might be some from another job)
@@ -495,7 +498,8 @@ static void track_procs(int fd, short argc, void *cbdata)
                             /* skip procs from another job */
                             continue;
                         }
-                        if (!PRRTE_FLAG_TEST(pptr, PRRTE_PROC_FLAG_TOOL)) {
+                        if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON) &&
+                            !PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL)) {
                             node->slots_inuse--;
                             node->num_procs--;
                         }

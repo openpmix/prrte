@@ -538,7 +538,8 @@ prrte_proc_t* prrte_rmaps_base_setup_proc(prrte_job_t *jdata,
     proc->node = node;
     /* if this is a debugger job, then it doesn't count against
      * available slots - otherwise, it does */
-    if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON)) {
+    if (!PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_DEBUGGER_DAEMON) &&
+        !PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_TOOL)) {
         node->num_procs++;
         ++node->slots_inuse;
     }
