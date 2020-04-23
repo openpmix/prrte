@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2017      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2017-2020 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -635,7 +635,7 @@ static void prrte_job_construct(prrte_job_t* job)
                             PRRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     job->map = NULL;
     job->bookmark = NULL;
-    job->bkmark_obj = 0;
+    job->bkmark_obj = -1; // so the initial "next" obj is 0
     job->state = PRRTE_JOB_STATE_UNDEF;
 
     job->num_mapped = 0;
