@@ -772,6 +772,17 @@ int main(int argc, char *argv[])
      * on the daemon executable, the fork/exec agent to be used by
      * the daemons, or other directives impacting the DVM itself */
     if (NULL != (param = getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL"))) {
+        /* check against bad param */
+        ptr = strdup(param);
+        param = strchr(ptr, ':');
+        if (NULL == param) {
+            prrte_show_help("help-prun.txt", "bad-pause-for-tool", true,
+                           prrte_tool_basename, ptr, prrte_tool_basename);
+            PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERR_FATAL);
+            goto DONE;
+        }
+        *param = '\0';
+        ++param;
         /* register for the PMIX_LAUNCH_DIRECTIVE event */
         PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
         ret = PMIX_LAUNCH_DIRECTIVE;
@@ -785,10 +796,6 @@ int main(int argc, char *argv[])
         PRRTE_PMIX_WAIT_THREAD(&lock);
         PRRTE_PMIX_DESTRUCT_LOCK(&lock);
         /* notify the tool that we are ready */
-        ptr = strdup(param);
-        param = strchr(ptr, ':');
-        *param = '\0';
-        ++param;
         (void)strncpy(controller.nspace, ptr, PMIX_MAX_NSLEN);
         controller.rank = strtoul(param, NULL, 10);
         PMIX_INFO_CREATE(iptr, 2);
