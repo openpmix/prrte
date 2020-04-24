@@ -108,9 +108,7 @@ static int prrte_rmaps_rank_file_register(void)
 static int prrte_rmaps_rank_file_open(void)
 {
     /* ensure we flag mapping by user */
-    if ((PRRTE_BIND_TO_CPUSET == PRRTE_GET_BINDING_POLICY(prrte_hwloc_binding_policy) &&
-        !PRRTE_BIND_ORDERED_REQUESTED(prrte_hwloc_binding_policy)) ||
-         NULL != prrte_rankfile) {
+    if (NULL != prrte_rankfile) {
         if (PRRTE_MAPPING_GIVEN & PRRTE_GET_MAPPING_DIRECTIVE(prrte_rmaps_base.mapping)) {
             /* if a non-default mapping is already specified, then we
              * have an error

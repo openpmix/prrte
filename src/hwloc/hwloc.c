@@ -208,7 +208,9 @@ int prrte_hwloc_base_open(void)
          * we do bind to the given cpus if provided, otherwise this would be
          * ignored if someone didn't also specify a binding policy
          */
-        PRRTE_SET_BINDING_POLICY(prrte_hwloc_binding_policy, PRRTE_BIND_TO_CPUSET);
+        if (!PRRTE_BINDING_POLICY_IS_SET(prrte_hwloc_binding_policy)) {
+            PRRTE_SET_BINDING_POLICY(prrte_hwloc_binding_policy, PRRTE_BIND_TO_CPUSET);
+        }
     }
 
     /* if we are binding to hwthreads, then we must use hwthreads as cpus */

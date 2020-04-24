@@ -227,6 +227,11 @@ int prrte_hwloc_base_filter_cpus(hwloc_topology_t topo)
     /* cache this info */
     sum->available = avail;
 
+    /* Treat PRRTE_MCA_hwloc_base_cpu_list=#,#,# analogously to how
+     * a cgroup is treated, eg make the loaded topology
+     * only contain what is available. */
+    hwloc_topology_restrict(topo, avail, 0);
+
     return PRRTE_SUCCESS;
 }
 
