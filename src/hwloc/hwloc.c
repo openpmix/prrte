@@ -3,6 +3,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -482,8 +483,10 @@ int prrte_hwloc_base_set_binding_policy(void *jdat,
                 } else if (0 == strncasecmp(quals[i], "ordered", strlen(quals[i]))) {
                     tmp |= PRRTE_BIND_ORDERED;
                 } else if (0 == strncasecmp(quals[i], "REPORT", strlen(quals[i]))) {
-                    prrte_set_attribute(&jdata->attributes, PRRTE_JOB_REPORT_BINDINGS,
+                    if (jdata) {
+                        prrte_set_attribute(&jdata->attributes, PRRTE_JOB_REPORT_BINDINGS,
                                         PRRTE_ATTR_GLOBAL, NULL, PRRTE_BOOL);
+                    }
                 } else {
                     /* unknown option */
                     prrte_output(0, "Unknown qualifier to binding policy: %s", spec);
