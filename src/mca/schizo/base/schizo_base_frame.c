@@ -326,6 +326,10 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
         old_arg = strdup(pargs[idx]);
         free(pargs[idx]);
         pargs[idx] = strdup(option);
+        /* delete arguments if needed */
+        if (1 < ntodelete) {
+            prrte_argv_delete(NULL, argv, idx+1, ntodelete-1);
+        }
         if (0 == strcasecmp(option, "--tune")) {
             p2 = NULL;
             prrte_asprintf(&help_str, "%s %s", pargs[idx], pargs[idx+1]);
