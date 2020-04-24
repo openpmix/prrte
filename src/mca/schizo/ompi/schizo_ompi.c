@@ -255,6 +255,14 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--cpu-set") ||
              0 == strcmp(option, "--cpu-list") ) {
         prrte_asprintf(&p2, "PE-LIST=%s", pargs[i+1]);
+        // In --cpu-list it's fine to have 1,2,3
+        // but --map-by is already a comma separated list
+        // so use its alternate syntax of colon separated items in the PE-LIST
+        char *p = p2;
+        while (*p) {
+            if (*p == ',') { *p = ':'; }
+            ++p;
+        }
         rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2);
         free(p2);
     }

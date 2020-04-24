@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -556,11 +557,39 @@ static int check_modifiers(char *ck, prrte_job_t *jdata,
 
     ck2 = prrte_argv_split(ck, ',');
     for (i=0; NULL != ck2[i]; i++) {
+        // PE-LIST=1,5-10,20 doesn't parse nicely from the above split
+        // it would come out be 3 ck2[] items: "PE-LIST=1"  "5-10"  "20"
+        char *pelist = NULL;
+        int pelist_next_i;
+        if (0 == strncasecmp(ck2[i], "PE-LIST",
+            MIN(strlen(ck2[i]), strlen("PE-LIST"))))
+        {
+            int len = strlen(ck2[i]) + 1; // room for a null or a comma
+            int j = i + 1;
+            int n;
+            while (NULL != ck2[j] && strspn(ck2[j], "0123456789-") == strlen(ck2[j])) {
+                len += strlen(ck2[j]) + 1;
+                ++j;
+            }
+            pelist = malloc(len + 1); // +1 unnecessary, but I'd rather go over than be wrong
+            pelist[0] = 0;
+            n = j;
+            for (j=i; j<n; ++j) {
+                if (j > i) {
+                    strcat(pelist, ",");
+                }
+                strcat(pelist, ck2[j]);
+            }
+            pelist_next_i = n;
+        }
+
         if (0 == strncasecmp(ck2[i], "span", strlen(ck2[i]))) {
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_SPAN);
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_GIVEN);
             found = true;
-        } else if (0 == strncasecmp(ck2[i], "pe", strlen("pe"))) {
+        } else if (0 == strncasecmp(ck2[i], "pe", strlen("pe")) &&
+                 !(0 == strncasecmp(ck2[i], "PE-LIST", strlen("PE-LIST"))))
+        {
             /* break this at the = sign to get the number */
             if (NULL == (ptr = strchr(ck2[i], '='))) {
                 /* missing the value */
@@ -606,16 +635,22 @@ static int check_modifiers(char *ck, prrte_job_t *jdata,
         } else if (0 == strncasecmp(ck2[i], "XMLOUTPUT", strlen(ck2[i]))) {
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
-        } else if (0 == strncasecmp(ck2[i], "PE-LIST", strlen(ck2[i]))) {
-            if (NULL == (ptr = strchr(ck2[i], '='))) {
+        } else if (pelist) { // PE-LIST=#,#-#,#..
+            if (NULL == (ptr = strchr(pelist, '='))) {
                 /* missing the value */
-                prrte_show_help("help-prrte-rmaps-base.txt", "missing-value", true, "pe-list", ck2[i]);
+                prrte_show_help("help-prrte-rmaps-base.txt", "missing-value", true, "pe-list", pelist);
                 prrte_argv_free(ck2);
                 return PRRTE_ERR_SILENT;
             }
             ptr++;
-            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_CPU_LIST, PRRTE_ATTR_GLOBAL,
-                                ptr, PRRTE_STRING);
+            if (jdata) {
+                prrte_set_attribute(&jdata->attributes, PRRTE_JOB_CPU_LIST, PRRTE_ATTR_GLOBAL,
+                                    ptr, PRRTE_STRING);
+            }
+            // at the end of this loop i will get ++
+            i = pelist_next_i - 1;
+            free(pelist);
+            pelist = NULL;
         } else if (0 == strncasecmp(ck2[i], "INHERIT", strlen(ck2[i]))) {
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_INHERIT, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);

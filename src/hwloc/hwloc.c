@@ -3,6 +3,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -139,6 +140,16 @@ int prrte_hwloc_base_register(void)
                                   PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_base_cpu_list);
     prrte_mca_base_var_register_synonym (varid, "prrte", "hwloc", "base", "slot_list", PRRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     prrte_mca_base_var_register_synonym (varid, "prrte", "hwloc", "base", "cpu_set", PRRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+    // Allow an alternate syntax for the separator, using colon
+    // instead of just commas.  Translate here to commas
+    {
+        char *p;
+        p = prrte_hwloc_base_cpu_list;
+        while (p && *p) {
+            if (*p == ':') { *p = ','; }
+            ++p;
+        }
+    }
 
     /* declare hwthreads as independent cpus */
     prrte_hwloc_use_hwthreads_as_cpus = false;
