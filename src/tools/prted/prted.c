@@ -19,6 +19,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -267,6 +268,38 @@ int main(int argc, char *argv[])
 
     /* initialize the globals */
     bucket = PRRTE_NEW(prrte_buffer_t);
+
+/*
+ *  More order-hacking.  HWLOC gets initialized early (below in
+ *  prrte_init_util).  But it needs the -prtemca hwloc_base_binding_policy ..
+ *  from the cmdline already available (it looks for it via
+ *  mca_base_var_register) because hwloc uses it to set up and modify
+ *  the binding policy in prrte_hwloc_binding_policy.
+ *
+ *  For this we'll use the prrte_cmd_line_equivalencies structure to
+ *  decide which settings need to be made early
+ */
+    int nexti;
+    for (i=1; NULL != argv[i]; i=nexti) {
+        nexti = i + 1;
+
+        char *p;
+        prrte_cmdline_equivalencies_t *eqarg;
+        for (eqarg = prrte_cmd_line_equivalencies; eqarg && eqarg->mca_name; ++eqarg) {
+            p = argv[i];
+            while (*p == '-') { ++p; }
+            if (p && argv[i+1] && argv[i+2] &&
+                0 == strcmp(p, "prtemca") &&
+                0 == strcmp(argv[i+1], eqarg->mca_name) &&
+                eqarg->is_required_early)
+            {
+               char mca_env_var[PRRTE_MCA_BASE_MAX_VARIABLE_NAME_LEN + 64];
+                sprintf(mca_env_var, "PRRTE_MCA_%s", eqarg->mca_name);
+                prrte_setenv(mca_env_var, argv[i+2], true, &environ);
+                nexti = i + 3;
+            }
+        }
+    }
 
     /* init the tiny part of PRRTE we use */
     prrte_init_util(PRRTE_PROC_DAEMON);

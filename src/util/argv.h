@@ -15,6 +15,7 @@
  * Copyright (c) 2012      Los Alamos National Security, LLC. All rights reserved.
  *
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -293,6 +294,30 @@ PRRTE_EXPORT  int prrte_argv_insert(char ***target, int start, char **source);
  * target).
  */
 PRRTE_EXPORT  int prrte_argv_insert_element(char ***target, int location, char *source);
+
+/*
+ * This is used to parse the argument in cases like
+ *   --map-by core:pe=2,PE-LIST=4-63
+ * Here the input arg is "core:pe=2,PE-LIST=4-63"
+ *
+ * The list_item might be "pe" in which case want the output
+ * to be *str = strdup of "2"
+ *
+ * The list_item_separators string specifies where the list
+ * begins, and what separates items.
+ *
+ * Also though I don't think it's allowed elsewhere, here we'll
+ * allow --map-by pe=2 for example, so if arg starts with the
+ * string being searched for, it will accept it without requiring
+ * that it be after an expected initial colon.
+ *
+ * returns 1 if it found the setting listed, 0 if it didn't
+ */
+PRRTE_EXPORT  int prrte_parse_arg_for_a_listed_setting(
+    char *arg,
+    char *list_item,
+    char *list_item_term,
+    char **str);
 
 END_C_DECLS
 

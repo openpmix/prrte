@@ -507,6 +507,23 @@ static int wait_dvm(pid_t pid) {
     return 255;
 }
 
+static int
+is_true(void *str) {
+    if (!str) { return 0; }
+    if (0 == strcasecmp(str, "true") ||
+        0 == strcasecmp(str, "t") ||
+        0 == strcasecmp(str, "enabled") ||
+        0 == strcasecmp(str, "yes") ||
+        0 == strcasecmp(str, "y"))
+    {
+        return 1;
+    }
+    if (strspn(str, "0123456789") == strlen(str) && atoi(str) > 0) {
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     int rc=1, i, j;
@@ -540,6 +557,112 @@ int main(int argc, char *argv[])
     /* init the globals */
     PRRTE_CONSTRUCT(&job_info, prrte_list_t);
     PRRTE_CONSTRUCT(&apps, prrte_list_t);
+
+/*
+ *  The first part of processing cmdline/MCA equivalencies is to catch
+ *  options like these:
+ *    --bind-to .. 
+ *    --prtemca hwloc_base_binding_policy ..
+ *  and set an equivalent MCA setting
+ *    PRRTE_MCA_hwloc_base_binding_policy=..
+ *
+ *  The multiple methods of providing settings can result in inconsistent or
+ *  unseen settings in a couple ways:
+ *  1. settings are queried through completely different mechanisms in
+ *     different parts of the code:
+ *     a. prrte_cmd_line_get_param(prrte_cmd_line, "bind-to",,)
+ *     b. prrte_mca_base_var_register("prrte", "hwloc", "base", "binding_policy",)
+ *     those settings diverge depending on how the bind-to option is specified.
+ *  2. there's an ordering issue at least in hwloc where initialization happens
+ *     very early so even if --prtemca hwloc_base_binding_policy .. is on the
+ *     cmdline, prrte_mca_base_var_register() won't see it because it happens
+ *     too early and the cmdline hasn't been processed yet.
+ *
+ *  We'll address this in two locations, one has to happen very early to
+ *  handle visibility of the hwloc MCA settings for example.  The first section
+ *  only needs to operate on the settings flagged as 'is_required_early' and
+ *  needs to parse the command line for things like
+ *    --bind-to .. 
+ *    --prtemca hwloc_base_binding_policy ..
+ *  and needs to call
+ *    prrte_setenv("PRRTE_MCA_hwloc_base_binding_policy", ..)
+ *  to make the MCA setting visible to early users who check for the
+ *  setting with prrte_mca_base_var_register().
+ *
+ *  The second location will do the same for the rest of the equivalencies.
+ *  It doesn't need to detect any --prtemca though, those should already be done
+ *  by the regular code unrelated to processing equivalncies.
+ */
+    char mca_env_var[PRRTE_MCA_BASE_MAX_VARIABLE_NAME_LEN + 64];
+    int nexti;
+    for (i=1; NULL != argv[i]; i=nexti) {
+        nexti = i + 1;
+
+        char *p, *str;
+        prrte_cmdline_equivalencies_t *eqarg;
+        for (eqarg = prrte_cmd_line_equivalencies; eqarg && eqarg->mca_name; ++eqarg) {
+            p = argv[i];
+            while (*p == '-') { ++p; }
+            if (p && argv[i+1] && (0 == strcmp(p, eqarg->cmdline_arg)) &&
+                eqarg->is_required_early)
+            {
+                if (!eqarg->list_item) {
+                    sprintf(mca_env_var, "PRRTE_MCA_%s", eqarg->mca_name);
+                    prrte_setenv(mca_env_var, argv[i+1], true, &environ);
+                } else {
+// The basic case above handled
+//   --map-by socket:pe=2    ==>  PRRTE_MCA_rmaps_base_mapping_policy=socket:pe=2
+// this next part handles things like
+//   --bind-to stuff:REPORT  ==>  PRRTE_MCA_hwloc_base_report_bindings=1
+//   --map-by socket:pe=2    ==>  PRRTE_MCA_rmaps_base_cpus_per_proc=2
+                    if (prrte_parse_arg_for_a_listed_setting(
+                        argv[i+1],             // ex "socket:pe=2"
+                        eqarg->list_item,      // ex ":pe"
+                        eqarg->list_item_separators, // ex ":,,"
+                        &str))                 // str would be strdup of "2"
+                     {
+                         sprintf(mca_env_var, "PRRTE_MCA_%s", eqarg->mca_name);
+                         prrte_setenv(mca_env_var, str, true, &environ);
+                         free(str);
+                     }
+                }
+                nexti = i+2; // skip over --bind-to and over its arg
+            }
+
+// Next we process the --prtemca settings the same way so that
+//   --prtemca rmaps_base_mapping_policy socket:pe=2
+// goes into both
+//   PRRTE_MCA_rmaps_base_mapping_policy=socket:pe=2
+//   PRRTE_MCA_rmaps_base_cpus_per_proc=2
+// And so
+//   --prtemca hwloc_base_report_bindings stuff:REPORT
+// goes into both
+//   PRRTE_MCA_hwloc_base_binding_policy=stuff:REPORT
+//   PRRTE_MCA_hwloc_base_report_bindings=1
+            else if (p && argv[i+1] && argv[i+2] &&
+                0 == strcmp(p, "prtemca") &&
+                0 == strcmp(argv[i+1], eqarg->mca_name) &&
+                eqarg->is_required_early)
+            {
+                if (!eqarg->list_item) {
+                    sprintf(mca_env_var, "PRRTE_MCA_%s", eqarg->mca_name);
+                    prrte_setenv(mca_env_var, argv[i+2], true, &environ);
+                } else {
+                    if (prrte_parse_arg_for_a_listed_setting(
+                        argv[i+2],             // ex "socket:pe=2"
+                        eqarg->list_item,      // ex ":pe"
+                        eqarg->list_item_separators, // ex ":,,"
+                        &str))                 // str would be strdup of "2"
+                     {
+                         sprintf(mca_env_var, "PRRTE_MCA_%s", eqarg->mca_name);
+                         prrte_setenv(mca_env_var, str, true, &environ);
+                         free(str);
+                     }
+                }
+                nexti = i+3; // skip over --prtemca and over var and over val
+            }
+        }
+    }
 
     /* init the tiny part of PRRTE we use */
     prrte_init_util(PRRTE_PROC_MASTER);
@@ -644,6 +767,43 @@ int main(int argc, char *argv[])
                     prrte_strerror(rc));
         }
         return rc;
+    }
+
+// Note: this seems to be the spot after which --prtemca foo bar
+// becomes visible to a getenv("PRRTE_MCA_foo") call.
+    for (i=1; NULL != argv[i]; i=nexti) {
+        nexti = i + 1;
+
+        char *p, *str;
+        prrte_cmdline_equivalencies_t *eqarg;
+        for (eqarg = prrte_cmd_line_equivalencies; eqarg && eqarg->mca_name; ++eqarg) {
+            p = argv[i];
+            while (*p == '-') { ++p; }
+            if (p && argv[i+1] && (0 == strcmp(p, eqarg->cmdline_arg)))
+            {
+                if (!eqarg->list_item) {
+                    sprintf(mca_env_var, "PRRTE_MCA_%s", eqarg->mca_name);
+                    prrte_setenv(mca_env_var, argv[i+1], true, &environ);
+                } else {
+// The basic case above handled
+//   --map-by socket:pe=2    ==>  PRRTE_MCA_rmaps_base_mapping_policy=socket:pe=2
+// this next part handles things like
+//   --bind-to stuff:REPORT  ==>  PRRTE_MCA_hwloc_base_report_bindings=1
+//   --map-by socket:pe=2    ==>  PRRTE_MCA_rmaps_base_cpus_per_proc=2
+                    if (prrte_parse_arg_for_a_listed_setting(
+                        argv[i+1],             // ex "socket:pe=2"
+                        eqarg->list_item,      // ex ":pe"
+                        eqarg->list_item_separators, // ex ":,,"
+                        &str))                 // str would be strdup of "2"
+                     {
+                         sprintf(mca_env_var, "PRRTE_MCA_%s", eqarg->mca_name);
+                         prrte_setenv(mca_env_var, str, true, &environ);
+                         free(str);
+                     }
+                }
+                nexti = i + 2;
+            }
+        }
     }
 
     if (prrte_cmd_line_is_taken(prrte_cmd_line, "verbose")) {
@@ -1109,7 +1269,9 @@ int main(int argc, char *argv[])
         prrte_list_append(&job_info, &ds->super);
     }
 
-    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "map-by", 0, 0))) {
+    if (NULL != (pval = prrte_cmd_line_get_param_or_env(prrte_cmd_line, "map-by",
+        "PRRTE_MCA_rmaps_base_mapping_policy", 0, 0)))
+    {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         PMIX_INFO_LOAD(ds->info, PMIX_MAPBY, pval->data.string, PMIX_STRING);
@@ -1117,7 +1279,9 @@ int main(int argc, char *argv[])
     }
 
     /* if the user specified a ranking policy, then set it */
-    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "rank-by", 0, 0))) {
+    if (NULL != (pval = prrte_cmd_line_get_param_or_env(prrte_cmd_line, "rank-by",
+        "PRRTE_MCA_rmaps_base_ranking_policy", 0, 0)))
+    {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         PMIX_INFO_LOAD(ds->info, PMIX_RANKBY, pval->data.string, PMIX_STRING);
@@ -1125,10 +1289,34 @@ int main(int argc, char *argv[])
     }
 
     /* if the user specified a binding policy, then set it */
-    if (NULL != (pval = prrte_cmd_line_get_param(prrte_cmd_line, "bind-to", 0, 0))) {
+    if (NULL != (pval = prrte_cmd_line_get_param_or_env(prrte_cmd_line, "bind-to",
+        "PRRTE_MCA_hwloc_base_binding_policy", 0, 0))
+        ||
+        is_true(getenv("PRRTE_MCA_hwloc_base_report_bindings")))
+    {
+        char *string_to_use;
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_BINDTO, pval->data.string, PMIX_STRING);
+        if (pval) {
+            string_to_use = pval->data.string;
+        }
+
+        // potentially modify string_to_use based on PRRTE_MCA_hwloc_base_report_bindings
+        if (is_true(getenv("PRRTE_MCA_hwloc_base_report_bindings"))) {
+            if (pval) {
+                char *oldstring = pval->data.string;
+                string_to_use = malloc(strlen(oldstring) + 64);
+                if (!strchr(oldstring, ':')) {
+                    sprintf(string_to_use, "%s:REPORT", oldstring);
+                } else {
+                    sprintf(string_to_use, "%s,REPORT", oldstring);
+                }
+                free(oldstring);
+            } else {
+                string_to_use = ":REPORT";
+            }
+        }
+        PMIX_INFO_LOAD(ds->info, PMIX_BINDTO, string_to_use, PMIX_STRING);
         prrte_list_append(&job_info, &ds->super);
     }
 

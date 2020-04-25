@@ -15,6 +15,7 @@
  *                         and Technology (RIST). All rights reserved.
  *
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -579,4 +580,113 @@ int prrte_argv_insert_element(char ***target, int location, char *source)
 
     /* All done */
     return PRRTE_SUCCESS;
+}
+
+// This is used to parse the argument in cases like
+//   --map-by core:pe=2,PE-LIST=4-63
+// Here the input arg is "core:pe=2,PE-LIST=4-63"
+//
+// The list_item might be "pe" in which case want the output
+// to be *str = strdup of "2"
+//
+// The list_item_separators string specifies where the list
+// begins, and what separates items.
+//
+// Also though I don't think it's allowed elsewhere, here we'll
+// allow --map-by pe=2 for example, so if arg starts with the
+// string being searched for, it will accept it without requiring
+// that it be after an expected initial colon.
+//
+// returns 1 if it found the setting listed, 0 if it didn't
+
+int
+prrte_parse_arg_for_a_listed_setting(
+    char *arg,
+    char *list_item,
+    char *list_item_separators,
+    char **str)
+{
+    *str = NULL;
+    if (!arg) { return 0; }
+    if (!list_item) { return 0; }
+
+    char start_char = list_item_separators[0];
+    char separator_char = list_item_separators[1];
+
+    // See if the list_item is at the very front of the string first
+    int found = 0;
+    char *p = arg;
+    char *p2;
+    if (0 == strncmp(p, list_item, strlen(list_item))) {
+        p2 = p + strlen(list_item);
+        if (*p2 == '\0' || *p2 == '=' || *p2 == separator_char) {
+            found = 1;
+        }
+    }
+
+    // if not yet found, advance p beyond the first start_char (probably :)
+    if (!found) {
+        while (*p && *p != start_char) { ++p; }
+        if (*p) { ++p; } // past the :
+    }
+
+    // Now loop similarly to the first check
+    while (!found && *p) {
+        if (0 == strncmp(p, list_item, strlen(list_item))) {
+            p2 = p + strlen(list_item);
+            if (*p2 == '\0' || *p2 == '=' || *p2 == separator_char) {
+                found = 1;
+            }
+        }
+        // if not found, advance p beyond the next separator_char
+        if (!found) {
+            while (*p && *p != separator_char) { ++p; }
+            if (*p) { ++p; } // past the ,
+        }
+    }
+
+    if (!found) { return 0; }
+
+    // At this point p would be on an item like
+    //   pe=2                 from --map-by socket:pe=2
+    //   PE-LIST=4-63,68-127  from --map-by hwthread:PE-LIST=4-63,68-127
+    //   REPORT               from --bind-to hwthread:REPORT
+    //
+    // If there's an equal sign (before the next separator), then
+    // the thing following it is the value we return
+    // up through the null or a separator char.
+    // If no equal, then the value we return is just "1"
+
+    char *pval = strchr(p, '=');
+    char *psep = strchr(p, separator_char);
+    if (psep && pval && psep < pval) {
+        // eg if we're looking for REPORT in --bind-to hwthread:REPORT,var=val
+        // p is at REPORT:var=val
+        // pval would find the "val"
+        // psep would find the ",var=val"
+        // and that would let us know the pval wasn't for this portion
+        pval = NULL;
+    }
+    if (!pval) {
+        // option without a val, like --bind-to hwthread:REPORT
+        *str = strdup("1"); // this tells the caller to set MCA_something=1
+    } else {
+        ++pval; // the string after the '='
+        if (!*pval) { return 0; }
+        *str = strdup(pval);
+        // put a null after the separator char, eg for a case like
+        // --map-by hwthread:pe=2,otherstuff
+        // we just strduped "2,otherstuff" so we're about to put a null where
+        // the comma is.
+        //
+        // But hard-code an exception for PE-LIST where we skip past a
+        // comma separated list of numbers first, then do the same thing
+        p = *str;
+        if (0 == strcmp(list_item, "PE-LIST")) {
+            p += strspn(p, "0123456789-,");
+        }
+        while (*p && *p != separator_char) { ++p; }
+        *p = '\0';
+    }
+    return 1;
 }

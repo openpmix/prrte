@@ -14,7 +14,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2017      IBM Corporation. All rights reserved.
+ * Copyright (c) 2017-2020 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -258,6 +258,24 @@ typedef struct prrte_cmd_line_init_t {
     /** Category for --help output */
     prrte_cmd_line_otype_t ocl_otype;
 } prrte_cmd_line_init_t;
+
+/*
+ * Keep track of command line options imply what MCA settings.  This is
+ * needed for options like --bind-to where hwloc initialization happens
+ * before the cmdline is parsed, and mca_var_register() calls start saving
+ * settings that aren't visible yet.  And more generally whenever settings
+ * are queried with mca_var_register() the cmdline options don't
+ * necessarily cause those MCA settings to be visible.
+ */
+typedef struct {
+  char *cmdline_arg;
+  char *list_item;
+  char *list_item_separators;
+  char *mca_name;
+  int is_required_early;
+} prrte_cmdline_equivalencies_t;
+
+extern prrte_cmdline_equivalencies_t prrte_cmd_line_equivalencies[];
 
 /**
  * Top-level command line handle.
@@ -561,6 +579,16 @@ PRRTE_EXPORT int prrte_cmd_line_get_ninsts(prrte_cmd_line_t *cmd,
  */
 PRRTE_EXPORT prrte_value_t *prrte_cmd_line_get_param(prrte_cmd_line_t *cmd,
                                                      const char *opt,
+                                                     int instance_num,
+                                                     int param_num);
+
+/**
+ * The next function is a wrapper of the above that additionally checks
+ * if the setting is available at the specified MCA setting env var
+ */
+PRRTE_EXPORT prrte_value_t *prrte_cmd_line_get_param_or_env(prrte_cmd_line_t *cmd,
+                                                     const char *opt,
+                                                     const char *env,
                                                      int instance_num,
                                                      int param_num);
 

@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2017      IBM Corporation. All rights reserved.
+ * Copyright (c) 2017-2020 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -735,6 +735,43 @@ int prrte_cmd_line_get_ninsts(prrte_cmd_line_t *cmd, const char *opt)
     return ret;
 }
 
+/*
+ * Return a specific parameter for a specific instance of a option
+ * from the parsed command line, or allow an MCA environment equivalent.
+ */
+prrte_value_t *
+prrte_cmd_line_get_param_or_env(prrte_cmd_line_t *cmd,
+                                        const char *opt,
+                                        const char *env,
+                                        int inst, int idx)
+{
+    prrte_value_t *val;
+
+    val = prrte_cmd_line_get_param(cmd, opt, inst, idx);
+    if (val) { return val; }
+
+// check MCA env var equivalent
+    char *p;
+    if (!env) { return NULL; }
+    p = getenv(env);
+    if (!p) { return NULL; }
+
+    prrte_cmd_line_option_t *option;
+    prrte_cmd_line_init_t e;
+    memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+    if (1 < strlen(opt)) {
+        e.ocl_cmd_long_name = opt;
+    } else {
+        e.ocl_cmd_short_name = opt[0];
+    }
+    option = prrte_cmd_line_find_option(cmd, &e);
+    if (!option) { return NULL; }
+
+    val = set_dest(option, p);
+    if (!val) { return NULL; }
+
+    return val;
+}
 
 /*
  * Return a specific parameter for a specific instance of a option
@@ -1164,3 +1201,24 @@ static char *build_parsable(prrte_cmd_line_option_t *option) {
 
     return line;
 }
+
+/*
+ *  Globals used in cmdline / mca parsing
+ */
+// For parsing cmdline and setting equivalent MCA to make them visible
+// to code that is only checking the MCA
+prrte_cmdline_equivalencies_t prrte_cmd_line_equivalencies[] = {
+  {"map-by",      NULL,       NULL,   "rmaps_base_mapping_policy",   0 },
+  {"rank-by",     NULL,       NULL,   "rmaps_base_ranking_policy",   0 },
+  {"bind-to",     NULL,       NULL,   "hwloc_base_binding_policy",   1 },
+  {"cpu-list",    NULL,       NULL,   "hwloc_base_cpu_list",         1 },
+    // note about the above cpu-list. although schizo translates that
+    // deprecated option into --map-by ..,PE-LIST=.. that translation
+    // happens too late, hwloc has already set up its topology and used
+    // the available cpus list. That's why this cmdline is handled here
+//{"map-by",      "pe",       ":,",  "rmaps_base_cpus_per_proc",    0 }, // MCA deprecated
+  {"bind-to",     "REPORT",   ":,",  "hwloc_base_report_bindings",  1 },
+  {"map-by",      "PE-LIST",  ":,",  "hwloc_base_cpu_list",         1 },
+  // terminator so we can tell when the list ends
+  {NULL, NULL, NULL, NULL, 0 }
+};
