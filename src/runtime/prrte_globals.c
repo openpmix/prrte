@@ -635,7 +635,7 @@ static void prrte_job_construct(prrte_job_t* job)
                             PRRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     job->map = NULL;
     job->bookmark = NULL;
-    job->bkmark_obj = 0;
+    job->bkmark_obj = UINT_MAX;  // mark that we haven't assigned a bkmark yet
     job->state = PRRTE_JOB_STATE_UNDEF;
 
     job->num_mapped = 0;

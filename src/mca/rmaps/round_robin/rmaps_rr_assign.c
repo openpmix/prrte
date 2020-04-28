@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2009-2013 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * $COPYRIGHT$
@@ -128,7 +128,8 @@ int prrte_rmaps_rr_assign_byobj(prrte_job_t *jdata,
 
             /* if this is a comm_spawn situation, start with the object
              * where the parent left off and increment */
-            if (PRRTE_JOBID_INVALID != jdata->originator.jobid) {
+            if (PRRTE_JOBID_INVALID != jdata->originator.jobid &&
+                UINT_MAX != jdata->bkmark_obj) {
                 start = (jdata->bkmark_obj + 1) % nobjs;
             } else {
                 start = 0;
@@ -163,6 +164,8 @@ int prrte_rmaps_rr_assign_byobj(prrte_job_t *jdata,
                     return PRRTE_ERR_SILENT;
                 }
                 prrte_set_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE, PRRTE_ATTR_LOCAL, obj, PRRTE_PTR);
+                /* track the bookmark */
+                jdata->bkmark_obj = (j + start) % nobjs;
             }
         }
     }
