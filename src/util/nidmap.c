@@ -752,10 +752,12 @@ int prrte_util_parse_node_info(prrte_buffer_t *buf)
     uint16_t *slots = NULL;
     uint8_t *flags = NULL;
     uint8_t *bytes = NULL;
-    prrte_topology_t *t2;
+    prrte_topology_t *t2, *t3;
     hwloc_topology_t topo;
     char *sig;
     prrte_buffer_t bucket;
+    hwloc_obj_t root;
+    prrte_hwloc_topo_data_t *sum;
 
     /* check to see if we have uniform topologies */
     cnt = 1;
@@ -836,6 +838,19 @@ int prrte_util_parse_node_info(prrte_buffer_t *buf)
             t2->index = index;
             t2->sig = sig;
             t2->topo = topo;
+            if (NULL != (t3 = (prrte_topology_t*)prrte_pointer_array_get_item(prrte_node_topologies, index))) {
+                /* if this is our topology, then we have to protect it */
+                if (0 == strcmp(t3->sig, prrte_topo_signature)) {
+                    t3->sig = NULL;
+                    t3->topo = NULL;
+                }
+                PRRTE_RELEASE(t3);
+            }
+            /* need to ensure the summary is setup */
+            root = hwloc_get_root_obj(topo);
+            root->userdata = (void*)PRRTE_NEW(prrte_hwloc_topo_data_t);
+            sum = (prrte_hwloc_topo_data_t*)root->userdata;
+            sum->available = prrte_hwloc_base_setup_summary(topo);
             prrte_pointer_array_set_item(prrte_node_topologies, index, t2);
         }
         PRRTE_DESTRUCT(&bucket);
@@ -1063,7 +1078,7 @@ int prrte_util_generate_ppn(prrte_job_t *jdata,
             for (j=0; j < jdata->map->num_nodes; j++) {
                 if (NULL == (nptr = (prrte_node_t*)prrte_pointer_array_get_item(jdata->map->nodes, j))) {
                     continue;
-                     
+
                 }
                 if (NULL == nptr->daemon) {
                     continue;

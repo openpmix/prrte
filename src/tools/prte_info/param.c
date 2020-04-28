@@ -372,13 +372,6 @@ void prrte_info_do_config(bool want_all)
 
     if (want_all) {
         prrte_info_out_int("C char size", "compiler:c:sizeof:char", sizeof(char));
-        /* JMS: should be fixed in MPI-2.2 to differentiate between C
-         _Bool and C++ bool.  For the moment, the code base assumes
-         that they are the same.  Because of prrte_config_bottom.h,
-         we can sizeof(bool) here, so we might as well -- even
-         though this technically isn't right.  This should be fixed
-         when we update to MPI-2.2.  See below for note about C++
-         bool alignment. */
         prrte_info_out_int("C bool size", "compiler:c:sizeof:bool", sizeof(bool));
         prrte_info_out_int("C short size", "compiler:c:sizeof:short", sizeof(short));
         prrte_info_out_int("C int size", "compiler:c:sizeof:int", sizeof(int));

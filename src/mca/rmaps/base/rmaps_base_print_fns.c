@@ -123,14 +123,8 @@ char* prrte_rmaps_base_print_mapping(prrte_mapping_policy_t mapping)
     case PRRTE_MAPPING_BYNODE:
         map = "BYNODE";
         break;
-    case PRRTE_MAPPING_BYBOARD:
-        map = "BYBOARD";
-        break;
-    case PRRTE_MAPPING_BYNUMA:
-        map = "BYNUMA";
-        break;
-    case PRRTE_MAPPING_BYSOCKET:
-        map = "BYSOCKET";
+    case PRRTE_MAPPING_BYPACKAGE:
+        map = "BYPACKAGE";
         break;
     case PRRTE_MAPPING_BYL3CACHE:
         map = "BYL3CACHE";
@@ -207,12 +201,8 @@ char* prrte_rmaps_base_print_ranking(prrte_ranking_policy_t ranking)
     switch(PRRTE_GET_RANKING_POLICY(ranking)) {
     case PRRTE_RANK_BY_NODE:
         return "NODE";
-    case PRRTE_RANK_BY_BOARD:
-        return "BOARD";
-    case PRRTE_RANK_BY_NUMA:
-        return "NUMA";
-    case PRRTE_RANK_BY_SOCKET:
-        return "SOCKET";
+    case PRRTE_RANK_BY_PACKAGE:
+        return "PACKAGE";
     case PRRTE_RANK_BY_CORE:
         return "CORE";
     case PRRTE_RANK_BY_HWTHREAD:

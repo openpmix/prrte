@@ -27,6 +27,7 @@
 #include <string.h>
 
 #include "src/util/argv.h"
+#include "src/util/output.h"
 #include "src/util/string_copy.h"
 #include "constants.h"
 
@@ -168,74 +169,79 @@ void prrte_argv_free(char **argv)
 /*
  * Split a string into a NULL-terminated argv array.
  */
-static char **prrte_argv_split_inter(const char *src_string, int delimiter,
-        int include_empty)
+static char **prrte_argv_split_inter(const char *src_string,
+                                     int delimiter,
+                                     int include_empty)
 {
-  char arg[ARGSIZE];
-  char **argv = NULL;
-  const char *p;
-  char *argtemp;
-  int argc = 0;
-  size_t arglen;
+    char arg[ARGSIZE];
+    char **argv = NULL;
+    const char *p, *src;
+    char *argtemp;
+    int argc = 0;
+    size_t arglen;
 
-  while (src_string && *src_string) {
-    p = src_string;
-    arglen = 0;
+    src = src_string;
+    while (NULL != src && '\0' != *src) {
+        p = src;
+        arglen = 0;
 
-    while (('\0' != *p) && (*p != delimiter)) {
-      ++p;
-      ++arglen;
+        while (('\0' != *p) && (*p != delimiter)) {
+            ++p;
+            ++arglen;
+        }
+
+        /* zero length argument, skip */
+
+        if (src == p) {
+            if (include_empty) {
+                arg[0] = '\0';
+                if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, arg)) {
+                    return NULL;
+                }
+            }
+        }
+
+        /* tail argument, add straight from the original string */
+
+        else if ('\0' == *p) {
+            if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, src)) {
+                return NULL;
+            }
+            break;
+        }
+
+        /* long argument, malloc buffer, copy and add */
+
+        else if (arglen > (ARGSIZE - 1)) {
+            argtemp = (char*) malloc(arglen + 1);
+            if (NULL == argtemp) {
+               return NULL;
+            }
+
+            prrte_string_copy(argtemp, src, arglen + 1);
+            argtemp[arglen] = '\0';
+
+            if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, argtemp)) {
+               free(argtemp);
+               return NULL;
+            }
+
+            free(argtemp);
+        }
+
+        /* short argument, copy to buffer and add */
+
+        else {
+            prrte_string_copy(arg, src, arglen + 1);
+            arg[arglen] = '\0';
+
+            if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, arg)) {
+               return NULL;
+            }
+        }
+
+        src = p + 1;
     }
-
-    /* zero length argument, skip */
-
-    if (src_string == p) {
-      if (include_empty) {
-        arg[0] = '\0';
-        if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, arg))
-          return NULL;
-      }
-    }
-
-    /* tail argument, add straight from the original string */
-
-    else if ('\0' == *p) {
-      if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, src_string))
-	return NULL;
-      src_string = p;
-      continue;
-    }
-
-    /* long argument, malloc buffer, copy and add */
-
-    else if (arglen > (ARGSIZE - 1)) {
-        argtemp = (char*) malloc(arglen + 1);
-      if (NULL == argtemp)
-	return NULL;
-
-      prrte_string_copy(argtemp, src_string, arglen + 1);
-      argtemp[arglen] = '\0';
-
-      if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, argtemp)) {
-	free(argtemp);
-	return NULL;
-      }
-
-      free(argtemp);
-    }
-
-    /* short argument, copy to buffer and add */
-
-    else {
-      prrte_string_copy(arg, src_string, arglen + 1);
-      arg[arglen] = '\0';
-
-      if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, arg))
-	return NULL;
-    }
-
-    src_string = p + 1;
-  }
 
   /* All done */
 

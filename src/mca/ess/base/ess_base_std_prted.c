@@ -461,9 +461,10 @@ int prrte_ess_base_prted_setup(void)
      */
     t = PRRTE_NEW(prrte_topology_t);
     t->topo = prrte_hwloc_topology;
-    /* generate the signature */
-    prrte_topo_signature = prrte_hwloc_base_get_topo_signature(prrte_hwloc_topology);
+    /* save the signature */
     t->sig = strdup(prrte_topo_signature);
+    /* save the topology - note that this may have to be moved later
+     * to ensure a common array position with the DVM master */
     prrte_pointer_array_add(prrte_node_topologies, t);
     if (15 < prrte_output_get_verbosity(prrte_ess_base_framework.framework_output)) {
         prrte_output(0, "%s Topology Info:", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));

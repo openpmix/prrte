@@ -123,7 +123,7 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_SPIN_FOR_DEBUG         (PRRTE_JOB_START_KEY + 18)    // bool - job consists of continuously operating apps
 #define PRRTE_JOB_CONTINUOUS_OP          (PRRTE_JOB_START_KEY + 19)    // bool - recovery policy defined for job
 #define PRRTE_JOB_RECOVER_DEFINED        (PRRTE_JOB_START_KEY + 20)    // bool - recovery policy has been defined
-#define PRRTE_JOB_NON_PRRTE_JOB           (PRRTE_JOB_START_KEY + 22)    // bool - non-prrte job
+#define PRRTE_JOB_NON_PRRTE_JOB          (PRRTE_JOB_START_KEY + 22)    // bool - non-prrte job
 #define PRRTE_JOB_STDOUT_TARGET          (PRRTE_JOB_START_KEY + 23)    // prrte_jobid_t - job that is to receive the stdout (on its stdin) from this one
 #define PRRTE_JOB_POWER                  (PRRTE_JOB_START_KEY + 24)    // string - power setting for nodes in job
 #define PRRTE_JOB_MAX_FREQ               (PRRTE_JOB_START_KEY + 25)    // string - max freq setting for nodes in job
@@ -135,10 +135,10 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_INIT_BAR_ID            (PRRTE_JOB_START_KEY + 31)    // prrte_grpcomm_coll_id_t - collective id
 #define PRRTE_JOB_FINI_BAR_ID            (PRRTE_JOB_START_KEY + 32)    // prrte_grpcomm_coll_id_t - collective id
 #define PRRTE_JOB_FWDIO_TO_TOOL          (PRRTE_JOB_START_KEY + 33)    // Forward IO for this job to the tool requesting its spawn
-#define PRRTE_JOB_PHYSICAL_CPUIDS        (PRRTE_JOB_START_KEY + 34)    // bool - Hostfile contains physical jobids in cpuset
+#define PRRTE_JOB_PHYSICAL_CPUIDS        (PRRTE_JOB_START_KEY + 34)    // bool - Hostfile contains physical ids in cpuset
 #define PRRTE_JOB_LAUNCHED_DAEMONS       (PRRTE_JOB_START_KEY + 35)    // bool - Job caused new daemons to be spawned
 #define PRRTE_JOB_REPORT_BINDINGS        (PRRTE_JOB_START_KEY + 36)    // bool - Report process bindings
-#define PRRTE_JOB_CPU_LIST               (PRRTE_JOB_START_KEY + 37)    // string - cpus to which procs are to be bound
+#define PRRTE_JOB_CPUSET                 (PRRTE_JOB_START_KEY + 37)    // string - "soft" cgroup envelope for the job
 #define PRRTE_JOB_NOTIFICATIONS          (PRRTE_JOB_START_KEY + 38)    // string - comma-separated list of desired notifications+methods
 #define PRRTE_JOB_ROOM_NUM               (PRRTE_JOB_START_KEY + 39)    // int - number of remote request's hotel room
 #define PRRTE_JOB_LAUNCH_PROXY           (PRRTE_JOB_START_KEY + 40)    // prrte_process_name_t - name of spawn requestor
@@ -179,6 +179,12 @@ typedef uint16_t prrte_job_flags_t;
 #define PRRTE_JOB_TIMEOUT_EVENT          (PRRTE_JOB_START_KEY + 74)    // prrte_ptr (prrte_timer_t*) - timer event for job timeout
 #define PRRTE_JOB_TRACE_TIMEOUT_EVENT    (PRRTE_JOB_START_KEY + 75)    // prrte_ptr (prrte_timer_t*) - timer event for stacktrace collection
 #define PRRTE_JOB_INHERIT                (PRRTE_JOB_START_KEY + 76)    // bool - job inherits parent's mapping/ranking/binding policies
+#define PRRTE_JOB_PES_PER_PROC           (PRRTE_JOB_START_KEY + 77)    // uint16_t - number of cpus to be assigned to each process
+#define PRRTE_JOB_DIST_DEVICE            (PRRTE_JOB_START_KEY + 78)    // char* - device to use for dist mapping
+#define PRRTE_JOB_HWT_CPUS               (PRRTE_JOB_START_KEY + 79)    // bool - job requests hwthread cpus
+#define PRRTE_JOB_CORE_CPUS              (PRRTE_JOB_START_KEY + 80)    // bool - job requests core cpus
+#define PRRTE_JOB_PPR                    (PRRTE_JOB_START_KEY + 81)    // char* - string specifying the procs-per-resource pattern
+#define PRRTE_JOB_NOINHERIT              (PRRTE_JOB_START_KEY + 82)    // bool do NOT inherit parent's mapping/ranking/binding policies
 
 #define PRRTE_JOB_MAX_KEY   300
 
@@ -287,4 +293,13 @@ PRRTE_EXPORT int prrte_attr_register(const char *project,
                                      prrte_attribute_key_t key_max,
                                      prrte_attr2str_fn_t converter);
 
+
+/** FOR DIAGNOSTIC PURPOSES **/
+#define PRRTE_SHOW_ATTRS(a)                                 \
+    do {                                                    \
+        char *_output = prrte_attr_print_list((a));         \
+        fprintf(stderr, "[%s:%s:%d]\n%s\n",                 \
+                __FILE__, __func__, __LINE__, _output);     \
+        free(_output);                                      \
+    } while(0)
 #endif

@@ -799,7 +799,6 @@ static bool check_generic(char *p1)
     /* this is a generic MCA designation, so see if the parameter it
      * refers to belongs to a project base or one of our frameworks */
     if (0 == strncmp("opal_", p1, strlen("opal_")) ||
-        0 == strncmp("orte_", p1, strlen("orte_")) ||
         0 == strncmp("ompi_", p1, strlen("ompi_"))) {
         return true;
     } else if (0 == strcmp(p1, "mca_base_env_list")) {

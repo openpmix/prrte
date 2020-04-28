@@ -12,7 +12,7 @@
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -212,10 +212,6 @@ int prrte_dt_copy_map(prrte_job_map_t **dest, prrte_job_map_t *src, prrte_data_t
     (*dest)->mapping = src->mapping;
     (*dest)->ranking = src->ranking;
     (*dest)->binding = src->binding;
-    if (NULL != src->ppr) {
-        (*dest)->ppr = strdup(src->ppr);
-    }
-    (*dest)->display_map = src->display_map;
     (*dest)->num_new_daemons = src->num_new_daemons;
     (*dest)->daemon_vpid_start = src->daemon_vpid_start;
     (*dest)->num_nodes = src->num_nodes;

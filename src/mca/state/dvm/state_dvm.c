@@ -271,7 +271,7 @@ static void vm_ready(int fd, short args, void *cbdata)
         prrte_dvm_ready = true;
         /* if there is only one daemon in the job, then there
          * is just a little bit to do */
-        if (1 < prrte_process_info.num_daemons) {
+        if (!prrte_do_not_launch && 1 < prrte_process_info.num_daemons) {
             /* send the daemon map to every daemon in this DVM - we
              * do this here so we don't have to do it for every
              * job we are going to launch */

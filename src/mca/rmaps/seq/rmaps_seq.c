@@ -109,6 +109,7 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
     char *hosts = NULL, *sep, *eptr;
     FILE *fp;
     prrte_hwloc_resource_type_t rtype;
+    bool use_hwthread_cpus;
 
     PRRTE_OUTPUT_VERBOSE((1, prrte_rmaps_base_framework.framework_output,
                          "%s rmaps:seq called on job %s",
@@ -205,6 +206,14 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
             prrte_list_append(&default_seq_list, &sq->super);
         }
         fclose(fp);
+    }
+
+    /* check for type of cpu being used */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL) &&
+        PRRTE_BIND_TO_HWTHREAD == PRRTE_GET_BINDING_POLICY(jdata->map->binding)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
     }
 
     /* start at the beginning... */
@@ -454,13 +463,12 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                 /* if we are using hwthreads as cpus and binding to hwthreads, then
                  * we can just copy the cpuset across as it already specifies things
                  * at that level */
-                if (prrte_hwloc_use_hwthreads_as_cpus &&
-                    PRRTE_BIND_TO_HWTHREAD == PRRTE_GET_BINDING_POLICY(prrte_hwloc_binding_policy)) {
+                if (use_hwthread_cpus) {
                     cpu_bitmap = strdup(sq->cpuset);
                 } else {
                     /* setup the bitmap */
                     bitmap = hwloc_bitmap_alloc();
-                    /* parse the slot_list to find the socket and core */
+                    /* parse the slot_list to find the package and core */
                     if (PRRTE_SUCCESS != (rc = prrte_hwloc_base_cpu_list_parse(sq->cpuset, node->topology->topo, rtype, bitmap))) {
                         PRRTE_ERROR_LOG(rc);
                         hwloc_bitmap_free(bitmap);
@@ -478,8 +486,6 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                 prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:seq: binding proc %s to cpuset %s bitmap %s",
                                     PRRTE_VPID_PRINT(proc->name.vpid), sq->cpuset, cpu_bitmap);
-                /* we are going to bind to cpuset since the user is specifying the cpus */
-                PRRTE_SET_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_CPUSET);
                 /* note that the user specified the mapping */
                 PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYUSER);
                 PRRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRRTE_MAPPING_GIVEN);

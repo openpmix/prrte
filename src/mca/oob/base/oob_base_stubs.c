@@ -257,7 +257,7 @@ void prrte_oob_base_get_addr(char **uri)
          * do NOT free it!
          */
         turi = component->get_addr();
-        if (NULL != turi) {
+       if (NULL != turi) {
             /* check overall length for limits */
             if (0 < prrte_oob_base.max_uri_length &&
                 prrte_oob_base.max_uri_length < (int)(len + strlen(turi))) {

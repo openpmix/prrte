@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,10 +56,6 @@ struct prrte_job_map_t {
     prrte_mapping_policy_t mapping;
     prrte_ranking_policy_t ranking;
     prrte_binding_policy_t binding;
-    /* mapping options */
-    char *ppr;
-    int16_t cpus_per_rank;
-    bool display_map;
     /* *** */
     /* number of new daemons required to be launched
      * to support this job map
@@ -108,17 +104,15 @@ PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_job_map_t);
  * levels in src/hwloc/hwloc-internal.h
  */
 #define PRRTE_MAPPING_BYNODE            1
-#define PRRTE_MAPPING_BYBOARD           2
-#define PRRTE_MAPPING_BYNUMA            3
-#define PRRTE_MAPPING_BYSOCKET          4
-#define PRRTE_MAPPING_BYL3CACHE         5
-#define PRRTE_MAPPING_BYL2CACHE         6
-#define PRRTE_MAPPING_BYL1CACHE         7
-#define PRRTE_MAPPING_BYCORE            8
-#define PRRTE_MAPPING_BYHWTHREAD        9
+#define PRRTE_MAPPING_BYPACKAGE          2
+#define PRRTE_MAPPING_BYL3CACHE         3
+#define PRRTE_MAPPING_BYL2CACHE         4
+#define PRRTE_MAPPING_BYL1CACHE         5
+#define PRRTE_MAPPING_BYCORE            6
+#define PRRTE_MAPPING_BYHWTHREAD        7
 /* now take the other round-robin options */
-#define PRRTE_MAPPING_BYSLOT            10
-#define PRRTE_MAPPING_BYDIST            11
+#define PRRTE_MAPPING_BYSLOT            8
+#define PRRTE_MAPPING_BYDIST            9
 /* convenience - declare anything <= 15 to be round-robin*/
 #define PRRTE_MAPPING_RR                0x000f
 
@@ -154,15 +148,13 @@ PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_job_map_t);
 
 /* define ranking policies */
 #define PRRTE_RANK_BY_NODE           1
-#define PRRTE_RANK_BY_BOARD          2
-#define PRRTE_RANK_BY_NUMA           3
-#define PRRTE_RANK_BY_SOCKET         4
-#define PRRTE_RANK_BY_L3CACHE        5
-#define PRRTE_RANK_BY_L2CACHE        6
-#define PRRTE_RANK_BY_L1CACHE        7
-#define PRRTE_RANK_BY_CORE           8
-#define PRRTE_RANK_BY_HWTHREAD       9
-#define PRRTE_RANK_BY_SLOT           10
+#define PRRTE_RANK_BY_PACKAGE         2
+#define PRRTE_RANK_BY_L3CACHE        3
+#define PRRTE_RANK_BY_L2CACHE        4
+#define PRRTE_RANK_BY_L1CACHE        5
+#define PRRTE_RANK_BY_CORE           6
+#define PRRTE_RANK_BY_HWTHREAD       7
+#define PRRTE_RANK_BY_SLOT           8
 #define PRRTE_GET_RANKING_POLICY(pol) \
     ((pol) & 0x0fff)
 /* macro to determine if ranking policy is set */

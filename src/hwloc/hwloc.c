@@ -22,7 +22,7 @@
 #include "src/mca/base/base.h"
 #include "src/threads/tsd.h"
 #include "src/runtime/prrte_globals.h"
-
+#include "src/mca/rmaps/rmaps_types.h"
 #include "src/hwloc/hwloc-internal.h"
 
 
@@ -32,24 +32,24 @@
 bool prrte_hwloc_base_inited = false;
 hwloc_topology_t prrte_hwloc_topology=NULL;
 hwloc_cpuset_t prrte_hwloc_my_cpuset=NULL;
-hwloc_cpuset_t prrte_hwloc_base_given_cpus=NULL;
 prrte_hwloc_base_map_t prrte_hwloc_base_map = PRRTE_HWLOC_BASE_MAP_NONE;
 prrte_hwloc_base_mbfa_t prrte_hwloc_base_mbfa = PRRTE_HWLOC_BASE_MBFA_WARN;
-prrte_binding_policy_t prrte_hwloc_binding_policy=0;
-char *prrte_hwloc_base_cpu_list=NULL;
+prrte_binding_policy_t prrte_hwloc_default_binding_policy=0;
+char *prrte_hwloc_default_cpu_list=NULL;
+char *prrte_hwloc_base_topo_file = NULL;
+int prrte_hwloc_base_output = -1;
+bool prrte_hwloc_default_use_hwthread_cpus = false;
+
 hwloc_obj_type_t prrte_hwloc_levels[] = {
     HWLOC_OBJ_MACHINE,
     HWLOC_OBJ_NODE,
-    HWLOC_OBJ_SOCKET,
+    HWLOC_OBJ_PACKAGE,
     HWLOC_OBJ_L3CACHE,
     HWLOC_OBJ_L2CACHE,
     HWLOC_OBJ_L1CACHE,
     HWLOC_OBJ_CORE,
     HWLOC_OBJ_PU
 };
-bool prrte_hwloc_use_hwthreads_as_cpus = false;
-char *prrte_hwloc_base_topo_file = NULL;
-int prrte_hwloc_base_output = -1;
 
 static prrte_mca_base_var_enum_value_t hwloc_base_map[] = {
     {PRRTE_HWLOC_BASE_MAP_NONE, "none"},
@@ -65,14 +65,14 @@ static prrte_mca_base_var_enum_value_t hwloc_failure_action[] = {
 };
 
 static char *prrte_hwloc_base_binding_policy = NULL;
-static bool prrte_hwloc_base_bind_to_core = false;
-static bool prrte_hwloc_base_bind_to_socket = false;
 static int verbosity = 0;
+static char *default_cpu_list = NULL;
 
 int prrte_hwloc_base_register(void)
 {
     prrte_mca_base_var_enum_t *new_enum;
-    int ret, varid;
+    int ret;
+    char *ptr;
 
     /* debug output */
     (void) prrte_mca_base_var_register("prrte", "hwloc", "base", "verbose",
@@ -88,11 +88,14 @@ int prrte_hwloc_base_register(void)
 
     prrte_hwloc_base_map = PRRTE_HWLOC_BASE_MAP_NONE;
     prrte_mca_base_var_enum_create("hwloc memory allocation policy", hwloc_base_map, &new_enum);
-    ret = prrte_mca_base_var_register("prrte", "hwloc", "base", "mem_alloc_policy",
-                                "General memory allocations placement policy (this is not memory binding). "
-                                "\"none\" means that no memory policy is applied. \"local_only\" means that a process' memory allocations will be restricted to its local NUMA node. "
+    ret = prrte_mca_base_var_register("prrte", "hwloc", "default", "mem_alloc_policy",
+                                "Default general memory allocations placement policy (this is not memory binding). "
+                                "\"none\" means that no memory policy is applied. \"local_only\" means that a process' "
+                                "memory allocations will be restricted to its local NUMA domain. "
                                 "If using direct launch, this policy will not be in effect until after MPI_INIT. "
-                                "Note that operating system paging policies are unaffected by this setting. For example, if \"local_only\" is used and local NUMA node memory is exhausted, a new memory allocation may cause paging.",
+                                "Note that operating system paging policies are unaffected by this setting. For "
+                                "example, if \"local_only\" is used and local NUMA domain memory is exhausted, a new "
+                                "memory allocation may cause paging.",
                                 PRRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, 0, PRRTE_INFO_LVL_9,
                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_base_map);
     PRRTE_RELEASE(new_enum);
@@ -103,8 +106,14 @@ int prrte_hwloc_base_register(void)
     /* hwloc_base_bind_failure_action */
     prrte_hwloc_base_mbfa = PRRTE_HWLOC_BASE_MBFA_WARN;
     prrte_mca_base_var_enum_create("hwloc memory bind failure action", hwloc_failure_action, &new_enum);
-    ret = prrte_mca_base_var_register("prrte", "hwloc", "base", "mem_bind_failure_action",
-                                "What PRRTE will do if it explicitly tries to bind memory to a specific NUMA location, and fails.  Note that this is a different case than the general allocation policy described by hwloc_base_alloc_policy.  A value of \"silent\" means that PRRTE will proceed without comment. A value of \"warn\" means that PRRTE will warn the first time this happens, but allow the job to continue (possibly with degraded performance).  A value of \"error\" means that PRRTE will abort the job if this happens.",
+    ret = prrte_mca_base_var_register("prrte", "hwloc", "default", "mem_bind_failure_action",
+                                "What PRRTE will do if it explicitly tries to bind memory to a specific NUMA "
+                                "location, and fails.  Note that this is a different case than the general "
+                                "allocation policy described by mem_alloc_policy.  A value of \"silent\" "
+                                "means that PRRTE will proceed without comment. A value of \"warn\" means that "
+                                "PRRTE will warn the first time this happens, but allow the job to continue "
+                                "(possibly with degraded performance).  A value of \"error\" means that PRRTE "
+                                "will abort the job if this happens.",
                                 PRRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, 0, PRRTE_INFO_LVL_9,
                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_base_mbfa);
     PRRTE_RELEASE(new_enum);
@@ -112,43 +121,74 @@ int prrte_hwloc_base_register(void)
         return ret;
     }
 
+    /* NOTE: for future developers and readers of this code, the binding policies are strictly limited to
+     *       none, hwthread, core, l1cache, l2cache, l3cache, package, and numa
+     *
+     * The default binding policy can be modified by any combination of the following:
+     *    * overload-allowed - multiple processes can be bound to the same PU (core or HWT)
+     *    * if-supported - perform the binding if it is supported by the OS, but do not
+     *                     generate an error if it cannot be done
+     */
     prrte_hwloc_base_binding_policy = NULL;
-    (void) prrte_mca_base_var_register("prrte", "hwloc", "base", "binding_policy",
-                                 "Policy for binding processes. Allowed values: none, hwthread, core, l1cache, l2cache, "
-                                 "l3cache, socket, numa, board, cpu-list (\"none\" is the default when oversubscribed, \"core\" is "
-                                 "the default when np<=2, and \"numa\" is the default when np>2). Allowed qualifiers: "
-                                 "overload-allowed, if-supported, ordered",
+    (void) prrte_mca_base_var_register("prrte", "hwloc", "default", "binding_policy",
+                                 "Default policy for binding processes. Allowed values: none, hwthread, core, l1cache, l2cache, "
+                                 "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
+                                 "the default when np<=2, and \"package\" is the default when np>2). Allowed colon-delimited qualifiers: "
+                                 "overload-allowed, if-supported",
                                  PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_9,
                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_base_binding_policy);
 
-    /* backward compatibility */
-    prrte_hwloc_base_bind_to_core = false;
-    (void) prrte_mca_base_var_register("prrte", "hwloc", "base", "bind_to_core", "Bind processes to cores",
-                                 PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_base_bind_to_core);
+    /* Allow specification of a default CPU list - a comma-delimited list of cpu ranges that
+     * are the default PUs for this DVM. CPUs are to be specified as LOGICAL indices. If a
+     * cpuset is provided, then all process placements and bindings will be constrained to the
+     * identified CPUs. IN ESSENCE, THIS IS A USER-DEFINED "SOFT" CGROUP.
+     *
+     * Example: if the default binding policy is "core", then each process will be bound to the
+     * first unused core underneath the topological object upon which it has been mapped. In other
+     * words, if two processes are mapped to a given package, then the first process will be bound
+     * to core0 of that package, and the second process will be bound to core1.
+     *
+     * If the cpuset specified that only cores 10, 12, and 14 were to be used, then the first process
+     * would be bound to core10 and the second process would be bound to core12.
+     *
+     * If the default binding policy had been set to "package", and if cores 10, 12, and 14 are all
+     * on the same package, then both processes would be bound to cores 10, 12, and 14. Note that
+     * they would have been bound to all PUs on the package if the cpuset had not been given.
+     *
+     * If cores 10 and 12 are on package0, and core14 is on package1, then if the first process is mapped
+     * to package0 and we are using a binding policy of "package", the first process would be bound to
+     * core10 and core12. If the second process were mapped to package1, then it would be bound only
+     * to core14 as that is the only PU in the cpuset that lies in package1.
+     */
+    default_cpu_list = NULL;
+    prrte_mca_base_var_register("prrte", "hwloc", "default", "cpu_list",
+                                "Comma-separated list of ranges specifying logical cpus to be used by the DVM. "
+                                "Supported modifier:HWTCPUS (ranges specified in hwthreads) or CORECPUS "
+                                "(default: ranges specified in cores)",
+                                PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_9,
+                                PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &default_cpu_list);
 
-    prrte_hwloc_base_bind_to_socket = false;
-    (void) prrte_mca_base_var_register("prrte", "hwloc", "base", "bind_to_socket", "Bind processes to sockets",
-                                 PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_base_bind_to_socket);
-
-    prrte_hwloc_base_cpu_list = NULL;
-    varid = prrte_mca_base_var_register("prrte", "hwloc", "base", "cpu_list",
-                                  "Comma-separated list of ranges specifying logical cpus to be used by these processes [default: none]",
-                                  PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_base_cpu_list);
-    prrte_mca_base_var_register_synonym (varid, "prrte", "hwloc", "base", "slot_list", PRRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-    prrte_mca_base_var_register_synonym (varid, "prrte", "hwloc", "base", "cpu_set", PRRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-
-    /* declare hwthreads as independent cpus */
-    prrte_hwloc_use_hwthreads_as_cpus = false;
-    (void) prrte_mca_base_var_register("prrte", "hwloc", "base", "use_hwthreads_as_cpus",
-                                 "Use hardware threads as independent cpus",
-                                 PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_use_hwthreads_as_cpus);
+    if (NULL != default_cpu_list) {
+        if (NULL != (ptr = strrchr(default_cpu_list, ':'))) {
+            *ptr = '\0';
+            prrte_hwloc_default_cpu_list = strdup(default_cpu_list);
+            ++ptr;
+            if (0 == strcasecmp(ptr, "HWTCPUS")) {
+                prrte_hwloc_default_use_hwthread_cpus = true;
+            } else if (0 == strcasecmp(ptr, "CORECPUS")) {
+                prrte_hwloc_default_use_hwthread_cpus = false;
+            } else {
+                prrte_show_help("help-prrte-hwloc-base.txt", "bad-processor-type", true,
+                                default_cpu_list, ptr);
+                return PRRTE_ERR_BAD_PARAM;
+            }
+        } else {
+            prrte_hwloc_default_cpu_list = strdup(default_cpu_list);
+        }
+    }
 
     prrte_hwloc_base_topo_file = NULL;
-    (void) prrte_mca_base_var_register("prrte", "hwloc", "base", "topo_file",
+    (void) prrte_mca_base_var_register("prrte", "hwloc", "use", "topo_file",
                                  "Read local topology from file instead of directly sensing it",
                                  PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_9,
                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_hwloc_base_topo_file);
@@ -167,53 +207,10 @@ int prrte_hwloc_base_open(void)
     }
     prrte_hwloc_base_inited = true;
 
-    if (PRRTE_SUCCESS != (rc = prrte_hwloc_base_set_binding_policy(NULL, &prrte_hwloc_binding_policy,
-                                                                   prrte_hwloc_base_binding_policy))) {
+    /* check the provided default binding policy for correctness - specifically want to ensure
+     * there are no disallowed qualifiers and setup the global param */
+    if (PRRTE_SUCCESS != (rc = prrte_hwloc_base_set_binding_policy(NULL, prrte_hwloc_base_binding_policy))) {
         return rc;
-    }
-
-    if (prrte_hwloc_base_bind_to_core) {
-        prrte_show_help("help-prrte-hwloc-base.txt", "deprecated", true,
-                       "--bind-to-core", "--bind-to core",
-                       "hwloc_base_bind_to_core", "hwloc_base_binding_policy=core");
-        /* set binding policy to core - error if something else already set */
-        if (PRRTE_BINDING_POLICY_IS_SET(prrte_hwloc_binding_policy) &&
-            PRRTE_GET_BINDING_POLICY(prrte_hwloc_binding_policy) != PRRTE_BIND_TO_CORE) {
-            /* error - cannot redefine the default ranking policy */
-            prrte_show_help("help-prrte-hwloc-base.txt", "redefining-policy", true,
-                           "core", prrte_hwloc_base_print_binding(prrte_hwloc_binding_policy));
-            return PRRTE_ERR_BAD_PARAM;
-        }
-        PRRTE_SET_BINDING_POLICY(prrte_hwloc_binding_policy, PRRTE_BIND_TO_CORE);
-    }
-
-    if (prrte_hwloc_base_bind_to_socket) {
-        prrte_show_help("help-prrte-hwloc-base.txt", "deprecated", true,
-                       "--bind-to-socket", "--bind-to socket",
-                       "hwloc_base_bind_to_socket", "hwloc_base_binding_policy=socket");
-        /* set binding policy to socket - error if something else already set */
-        if (PRRTE_BINDING_POLICY_IS_SET(prrte_hwloc_binding_policy) &&
-            PRRTE_GET_BINDING_POLICY(prrte_hwloc_binding_policy) != PRRTE_BIND_TO_SOCKET) {
-            /* error - cannot redefine the default ranking policy */
-            prrte_show_help("help-prrte-hwloc-base.txt", "redefining-policy", true,
-                           "socket", prrte_hwloc_base_print_binding(prrte_hwloc_binding_policy));
-            return PRRTE_ERR_SILENT;
-        }
-        PRRTE_SET_BINDING_POLICY(prrte_hwloc_binding_policy, PRRTE_BIND_TO_SOCKET);
-    }
-
-    /* did the user provide a slot list? */
-    if (NULL != prrte_hwloc_base_cpu_list) {
-        /* it is okay if a binding policy was already given - just ensure that
-         * we do bind to the given cpus if provided, otherwise this would be
-         * ignored if someone didn't also specify a binding policy
-         */
-        PRRTE_SET_BINDING_POLICY(prrte_hwloc_binding_policy, PRRTE_BIND_TO_CPUSET);
-    }
-
-    /* if we are binding to hwthreads, then we must use hwthreads as cpus */
-    if (PRRTE_GET_BINDING_POLICY(prrte_hwloc_binding_policy) == PRRTE_BIND_TO_HWTHREAD) {
-        prrte_hwloc_use_hwthreads_as_cpus = true;
     }
 
     /* declare the hwloc data types */
@@ -243,12 +240,15 @@ void prrte_hwloc_base_close(void)
         prrte_hwloc_my_cpuset = NULL;
     }
 
+    if (NULL != prrte_hwloc_default_cpu_list) {
+        free(prrte_hwloc_default_cpu_list);
+    }
+
     /* destroy the topology */
     if (NULL != prrte_hwloc_topology) {
         prrte_hwloc_base_free_topology(prrte_hwloc_topology);
         prrte_hwloc_topology = NULL;
     }
-
 
     /* All done */
     prrte_hwloc_base_inited = false;
@@ -330,16 +330,7 @@ char* prrte_hwloc_base_print_locality(prrte_hwloc_locality_t locality)
         ptr->buffers[ptr->cntr][idx++] = 'N';
         ptr->buffers[ptr->cntr][idx++] = ':';
     }
-    if (PRRTE_PROC_ON_LOCAL_BOARD(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'B';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRRTE_PROC_ON_LOCAL_NUMA(locality)) {
-        ptr->buffers[ptr->cntr][idx++] = 'N';
-        ptr->buffers[ptr->cntr][idx++] = 'u';
-        ptr->buffers[ptr->cntr][idx++] = ':';
-    }
-    if (PRRTE_PROC_ON_LOCAL_SOCKET(locality)) {
+    if (PRRTE_PROC_ON_LOCAL_PACKAGE(locality)) {
         ptr->buffers[ptr->cntr][idx++] = 'S';
         ptr->buffers[ptr->cntr][idx++] = ':';
     }
@@ -443,92 +434,88 @@ PRRTE_CLASS_INSTANCE(prrte_rmaps_numa_node_t,
         NULL,
         NULL);
 
-int prrte_hwloc_base_set_binding_policy(void *jdat,
-                                        prrte_binding_policy_t *policy, char *spec)
+int prrte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 {
     int i;
     prrte_binding_policy_t tmp;
-    char **tmpvals, **quals;
+    char **quals, *myspec, *ptr;
     prrte_job_t *jdata = (prrte_job_t*)jdat;
+    size_t len;
 
     /* set default */
     tmp = 0;
 
     /* binding specification */
     if (NULL == spec) {
-        if (prrte_hwloc_use_hwthreads_as_cpus) {
-            /* default to bind-to hwthread */
-            PRRTE_SET_DEFAULT_BINDING_POLICY(tmp, PRRTE_BIND_TO_HWTHREAD);
-        } else {
-            /* default to bind-to core */
-            PRRTE_SET_DEFAULT_BINDING_POLICY(tmp, PRRTE_BIND_TO_CORE);
-        }
-    } else if (0 == strncasecmp(spec, "none", strlen("none"))) {
-        PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_NONE);
-    } else {
-        tmpvals = prrte_argv_split(spec, ':');
-        if (1 < prrte_argv_count(tmpvals) || ':' == spec[0]) {
-            if (':' == spec[0]) {
-                quals = prrte_argv_split(&spec[1], ',');
-            } else {
-                quals = prrte_argv_split(tmpvals[1], ',');
-            }
-            for (i=0; NULL != quals[i]; i++) {
-                if (0 == strncasecmp(quals[i], "if-supported", strlen(quals[i]))) {
-                    tmp |= PRRTE_BIND_IF_SUPPORTED;
-                } else if (0 == strncasecmp(quals[i], "overload-allowed", strlen(quals[i])) ||
-                           0 == strncasecmp(quals[i], "oversubscribe-allowed", strlen(quals[i]))) {
-                    tmp |= PRRTE_BIND_ALLOW_OVERLOAD;
-                } else if (0 == strncasecmp(quals[i], "ordered", strlen(quals[i]))) {
-                    tmp |= PRRTE_BIND_ORDERED;
-                } else if (0 == strncasecmp(quals[i], "REPORT", strlen(quals[i]))) {
-                    prrte_set_attribute(&jdata->attributes, PRRTE_JOB_REPORT_BINDINGS,
-                                        PRRTE_ATTR_GLOBAL, NULL, PRRTE_BOOL);
-                } else {
-                    /* unknown option */
-                    prrte_output(0, "Unknown qualifier to binding policy: %s", spec);
-                    prrte_argv_free(quals);
-                    prrte_argv_free(tmpvals);
-                    return PRRTE_ERR_BAD_PARAM;
+        return PRRTE_SUCCESS;
+    }
+
+    myspec = strdup(spec);  // protect the input
+
+    /* check for qualifiers */
+    ptr = strchr(myspec, ':');
+    if (NULL != ptr) {
+        *ptr = '\0';
+        ++ptr;
+        quals = prrte_argv_split(ptr, ':');
+        for (i=0; NULL != quals[i]; i++) {
+            if (0 == strcasecmp(quals[i], "if-supported")) {
+                tmp |= PRRTE_BIND_IF_SUPPORTED;
+            } else if (0 == strcasecmp(quals[i], "overload-allowed")) {
+                tmp |= PRRTE_BIND_ALLOW_OVERLOAD;
+            } else if (0 == strcasecmp(quals[i], "ordered")) {
+                tmp |= PRRTE_BIND_ORDERED;
+            } else if (0 == strcasecmp(quals[i], "REPORT")) {
+                if (NULL == jdata) {
+                    prrte_show_help("help-prrte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                    "binding policy", quals[i]);
+                    return PRRTE_ERR_SILENT;
                 }
-            }
-            prrte_argv_free(quals);
-        }
-        if (NULL == tmpvals[0] || ':' == spec[0]) {
-            PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_CORE);
-            tmp &= ~PRRTE_BIND_GIVEN;
-        } else {
-            if (0 == strcasecmp(tmpvals[0], "hwthread")) {
-                PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_HWTHREAD);
-            } else if (0 == strcasecmp(tmpvals[0], "core")) {
-                PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_CORE);
-            } else if (0 == strcasecmp(tmpvals[0], "l1cache")) {
-                PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_L1CACHE);
-            } else if (0 == strcasecmp(tmpvals[0], "l2cache")) {
-                PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_L2CACHE);
-            } else if (0 == strcasecmp(tmpvals[0], "l3cache")) {
-                PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_L3CACHE);
-            } else if (0 == strcasecmp(tmpvals[0], "socket")) {
-                PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_SOCKET);
-            } else if (0 == strcasecmp(tmpvals[0], "numa")) {
-                PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_NUMA);
-            } else if (0 == strcasecmp(tmpvals[0], "board")) {
-                PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_BOARD);
-            } else if (0 == strcasecmp(tmpvals[0], "cpu-list") ||
-                       0 == strcasecmp(tmpvals[0], "cpulist")) {
-                // Accept both "cpu-list" (which matches the
-                // "--cpu-list" CLI option) and "cpulist" (because
-                // people will be lazy)
-                PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_CPUSET);
+                prrte_set_attribute(&jdata->attributes, PRRTE_JOB_REPORT_BINDINGS,
+                                    PRRTE_ATTR_GLOBAL, NULL, PRRTE_BOOL);
             } else {
-                prrte_show_help("help-prrte-hwloc-base.txt", "invalid binding_policy", true, "binding", spec);
-                prrte_argv_free(tmpvals);
+                /* unknown option */
+                prrte_show_help("help-prrte-hwloc-base.txt", "unrecognized-modifier", true, spec);
+                prrte_argv_free(quals);
+                free(myspec);
                 return PRRTE_ERR_BAD_PARAM;
             }
         }
-        prrte_argv_free(tmpvals);
+        prrte_argv_free(quals);
     }
 
-    *policy = tmp;
+    len = strlen(myspec);
+    if (0 < len) {
+        if (0 == strncasecmp(myspec, "none", len)) {
+            PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_NONE);
+        } else if (0 == strncasecmp(myspec, "hwthread", len)) {
+            PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_HWTHREAD);
+        } else if (0 == strncasecmp(myspec, "core", len)) {
+            PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_CORE);
+        } else if (0 == strncasecmp(myspec, "l1cache", len)) {
+            PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_L1CACHE);
+        } else if (0 == strncasecmp(myspec, "l2cache", len)) {
+            PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_L2CACHE);
+        } else if (0 == strncasecmp(myspec, "l3cache", len)) {
+            PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_L3CACHE);
+        } else if (0 == strncasecmp(myspec, "package", len)) {
+            PRRTE_SET_BINDING_POLICY(tmp, PRRTE_BIND_TO_PACKAGE);
+        } else {
+            prrte_show_help("help-prrte-hwloc-base.txt", "invalid binding_policy", true, "binding", spec);
+            free(myspec);
+            return PRRTE_ERR_BAD_PARAM;
+        }
+    }
+    free(myspec);
+
+    if (NULL == jdata) {
+        prrte_hwloc_default_binding_policy = tmp;
+    } else {
+        if (NULL == jdata->map) {
+            PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+            return PRRTE_ERR_BAD_PARAM;
+        }
+        jdata->map->binding = tmp;
+    }
     return PRRTE_SUCCESS;
 }

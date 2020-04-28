@@ -164,7 +164,7 @@ static int prrte_rmaps_rf_map(prrte_job_t *jdata)
     /* END SANITY CHECKS */
 
     /* see if the job was given a slot list */
-    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPU_LIST, (void**)&jobslots, PRRTE_STRING);
+    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&jobslots, PRRTE_STRING);
 
     /* start at the beginning... */
     vpid_start = 0;
@@ -216,9 +216,9 @@ static int prrte_rmaps_rf_map(prrte_job_t *jdata)
                 /* if this job was given a slot-list, then use it */
                 if (NULL != jobslots) {
                     slots = jobslots;
-                } else if (NULL != prrte_hwloc_base_cpu_list) {
+                } else if (NULL != prrte_hwloc_default_cpu_list) {
                     /* if we were give a default slot-list, then use it */
-                    slots = prrte_hwloc_base_cpu_list;
+                    slots = prrte_hwloc_default_cpu_list;
                 } else {
                     /* all ranks must be specified */
                     prrte_show_help("help-rmaps_rank_file.txt", "missing-rank", true, rank, prrte_rankfile);
@@ -335,7 +335,7 @@ static int prrte_rmaps_rf_map(prrte_job_t *jdata)
                     goto error;
                 }
                 bitmap = hwloc_bitmap_alloc();
-                /* parse the slot_list to find the socket and core */
+                /* parse the slot_list to find the package and core */
                 if (PRRTE_SUCCESS != (rc = prrte_hwloc_base_cpu_list_parse(slots, node->topology->topo, rtype, bitmap))) {
                     PRRTE_ERROR_LOG(rc);
                     hwloc_bitmap_free(bitmap);

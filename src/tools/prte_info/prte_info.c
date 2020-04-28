@@ -50,10 +50,12 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
+#include "src/prted/pmix/pmix_server.h"
 
 #include "constants.h"
 #include "src/runtime/prrte_locks.h"
 #include "src/include/frameworks.h"
+#include "src/include/version.h"
 
 #include "src/tools/prte_info/pinfo.h"
 
@@ -84,10 +86,17 @@ int main(int argc, char *argv[])
      * and then abnormally terminates the pipe early */
     signal(SIGPIPE, SIG_IGN);
 
+    /* Initialize the argv parsing stuff */
+    if (PRRTE_SUCCESS != (ret = prrte_init_util(PRRTE_PROC_MASTER))) {
+        prrte_show_help("help-prrte-info.txt", "lib-call-fail", true,
+                       "prrte_init_util", __FILE__, __LINE__, NULL);
+        exit(ret);
+    }
+
     prrte_info_cmd_line = PRRTE_NEW(prrte_cmd_line_t);
     if (NULL == prrte_info_cmd_line) {
         ret = errno;
-        prrte_show_help("help-pinfo.txt", "lib-call-fail", true,
+        prrte_show_help("help-prrte-info.txt", "lib-call-fail", true,
                        "prrte_cmd_line_create", __FILE__, __LINE__, NULL);
         exit(ret);
     }
@@ -118,32 +127,6 @@ int main(int argc, char *argv[])
                             "Show all configuration options and MCA parameters",
                             PRRTE_CMD_LINE_OTYPE_GENERAL);
 
-    /* Call some useless functions in order to guarantee to link in some
-     * global variables.  Only check the return value so that the
-     * cprrteler doesn't optimize out the useless function.
-     */
-
-    if (PRRTE_SUCCESS != prrte_locks_init()) {
-        /* Stop .. or I'll say stop again! */
-        ++ret;
-    } else {
-        --ret;
-    }
-
-    /* initialize install dirs code */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_prteinstalldirs_base_framework, 0))) {
-        fprintf(stderr, "prrte_installdirs_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRRTE_SUCCESS)\n",
-                __FILE__, __LINE__, ret);
-        return ret;
-    }
-
-    /* Get MCA parameters, if any */
-    prrte_process_info.proc_type = PRRTE_PROC_MASTER;
-    if( PRRTE_SUCCESS != prrte_mca_base_open() ) {
-        prrte_show_help("help-pinfo.txt", "lib-call-fail", true, "mca_base_open", __FILE__, __LINE__ );
-        PRRTE_RELEASE(prrte_info_cmd_line);
-        exit(1);
-    }
     /* open the SCHIZO framework */
     if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_schizo_base_framework, 0))) {
         PRRTE_ERROR_LOG(ret);
@@ -168,7 +151,6 @@ int main(int argc, char *argv[])
     }
 
     /* Do the parsing */
-
     ret = prrte_cmd_line_parse(prrte_info_cmd_line, false, false, argc, argv);
     if (PRRTE_SUCCESS != ret) {
         if (PRRTE_ERR_SILENT != ret) {
@@ -184,7 +166,7 @@ int main(int argc, char *argv[])
 
         want_help = true;
         usage = prrte_cmd_line_get_usage_msg(prrte_info_cmd_line, false);
-        str = prrte_show_help_string("help-pinfo.txt", "usage", true,
+        str = prrte_show_help_string("help-prrte-info.txt", "usage", true,
                                     usage);
         if (NULL != str) {
             printf("%s", str);
@@ -198,9 +180,27 @@ int main(int argc, char *argv[])
         exit(cmd_error ? 1 : 0);
     }
 
+    if (prrte_cmd_line_is_taken(prrte_info_cmd_line, "version")) {
+        fprintf(stdout, "PRRTE v%s\n\n%s\n",
+                PRRTE_VERSION, PACKAGE_BUGREPORT);
+        exit(0);
+    }
+
+
     /* setup the mca_types array */
     PRRTE_CONSTRUCT(&mca_types, prrte_pointer_array_t);
     prrte_pointer_array_init(&mca_types, 256, INT_MAX, 128);
+
+    /* add a type for prrte itself */
+    prrte_pointer_array_add(&mca_types, "prrte");
+
+    /* add a type for hwloc */
+    prrte_pointer_array_add(&mca_types, "hwloc");
+
+    /* let the pmix server register params */
+    pmix_server_register_params();
+    /* add those in */
+    prrte_pointer_array_add(&mca_types, "pmix");
 
     /* push all the types found by autogen */
     for (i=0; NULL != prrte_frameworks[i]; i++) {

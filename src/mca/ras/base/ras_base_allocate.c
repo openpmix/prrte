@@ -54,7 +54,7 @@
 
 #include "src/mca/ras/base/ras_private.h"
 
-static char *flag_string(prrte_node_t *node)
+char *prrte_ras_base_flag_string(prrte_node_t *node)
 {
     char *tmp, *t2;
 
@@ -132,7 +132,7 @@ void prrte_ras_base_display_alloc(prrte_job_t *jdata)
                      (int)alloc->slots, (int)alloc->slots_max, (int)alloc->slots_inuse);
         } else {
             /* build the flags string */
-            flgs = flag_string(alloc);
+            flgs = prrte_ras_base_flag_string(alloc);
             prrte_asprintf(&tmp2, "\t%s: slots=%d max_slots=%d slots_inuse=%d state=%s\n\t%s\n",
                      (NULL == alloc->name) ? "UNKNOWN" : alloc->name,
                      (int)alloc->slots, (int)alloc->slots_max, (int)alloc->slots_inuse,

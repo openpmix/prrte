@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2013 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -213,21 +213,9 @@ static int prrte_rmaps_rr_map(prrte_job_t *jdata)
                 rc = prrte_rmaps_rr_byslot(jdata, app, &node_list, num_slots,
                                           app->num_procs);
             }
-        } else if (PRRTE_MAPPING_BYSOCKET == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        } else if (PRRTE_MAPPING_BYPACKAGE == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
             rc = prrte_rmaps_rr_byobj(jdata, app, &node_list, num_slots,
-                                     app->num_procs, HWLOC_OBJ_SOCKET, 0);
-            if (PRRTE_ERR_NOT_FOUND == rc) {
-                /* if the mapper couldn't map by this object because
-                 * it isn't available, but the error allows us to try
-                 * byslot, then do so
-                 */
-                PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYSLOT);
-                rc = prrte_rmaps_rr_byslot(jdata, app, &node_list, num_slots,
-                                          app->num_procs);
-            }
-        } else if (PRRTE_MAPPING_BYNUMA == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
-            rc = prrte_rmaps_rr_byobj(jdata, app, &node_list, num_slots,
-                                     app->num_procs, HWLOC_OBJ_NODE, 0);
+                                     app->num_procs, HWLOC_OBJ_PACKAGE, 0);
             if (PRRTE_ERR_NOT_FOUND == rc) {
                 /* if the mapper couldn't map by this object because
                  * it isn't available, but the error allows us to try
@@ -357,18 +345,8 @@ static int prrte_rmaps_rr_assign_locations(prrte_job_t *jdata)
             PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYSLOT);
             rc = prrte_rmaps_rr_assign_root_level(jdata);
         }
-    } else if (PRRTE_MAPPING_BYSOCKET == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
-        rc = prrte_rmaps_rr_assign_byobj(jdata, HWLOC_OBJ_SOCKET, 0);
-        if (PRRTE_ERR_NOT_FOUND == rc) {
-            /* if the mapper couldn't map by this object because
-             * it isn't available, but the error allows us to try
-             * byslot, then do so
-             */
-            PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYSLOT);
-            rc = prrte_rmaps_rr_assign_root_level(jdata);
-        }
-    } else if (PRRTE_MAPPING_BYNUMA == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
-        rc = prrte_rmaps_rr_assign_byobj(jdata, HWLOC_OBJ_NODE, 0);
+    } else if (PRRTE_MAPPING_BYPACKAGE == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        rc = prrte_rmaps_rr_assign_byobj(jdata, HWLOC_OBJ_PACKAGE, 0);
         if (PRRTE_ERR_NOT_FOUND == rc) {
             /* if the mapper couldn't map by this object because
              * it isn't available, but the error allows us to try

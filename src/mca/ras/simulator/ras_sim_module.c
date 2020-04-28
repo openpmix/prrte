@@ -3,7 +3,7 @@
  * Copyright (c) 2012      Los Alamos National Security, LLC. All rights reserved
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -62,8 +62,12 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
     char **node_cnt=NULL;
     char **slot_cnt=NULL;
     char **max_slot_cnt=NULL;
-    char *tmp;
+    char *tmp, *job_cpuset;
     char prefix[6];
+    bool use_hwthread_cpus = false;
+    hwloc_obj_t root;
+    prrte_hwloc_topo_data_t *rdata;
+    hwloc_cpuset_t available, mycpus;
 
     node_cnt = prrte_argv_split(prrte_ras_simulator_component.num_nodes, ',');
     if (NULL != prrte_ras_simulator_component.slots) {
@@ -102,6 +106,17 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
 
     /* setup the prefix to the node names */
     snprintf(prefix, 6, "nodeA");
+
+    /* see if this job has a "soft" cgroup assignment */
+    job_cpuset = NULL;
+    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&job_cpuset, PRRTE_STRING);
+
+    /* see if they want are using hwthreads as cpus */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
+    }
 
     /* process the request */
     for (n=0; NULL != node_cnt[n]; n++) {
@@ -247,6 +262,22 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
             prrte_pointer_array_add(prrte_node_topologies, t);
         }
 
+        /* get the available processors on this node */
+        root = hwloc_get_root_obj(topo);
+        if (NULL == root->userdata) {
+            /* incorrect */
+            PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+            return PRRTE_ERR_BAD_PARAM;
+        }
+        rdata = (prrte_hwloc_topo_data_t*)root->userdata;
+        available = hwloc_bitmap_dup(rdata->available);
+
+        if (NULL != job_cpuset) {
+            mycpus = prrte_hwloc_base_generate_cpuset(topo, use_hwthread_cpus, job_cpuset);
+            hwloc_bitmap_and(available, mycpus, available);
+            hwloc_bitmap_free(mycpus);
+        }
+
         for (i=0; i < num_nodes; i++) {
             node = PRRTE_NEW(prrte_node_t);
             prrte_asprintf(&node->name, "%s%0*d", prefix, dig, i);
@@ -256,13 +287,13 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
                 node->slots_max = 0;
             } else {
                 obj = hwloc_get_root_obj(t->topo);
-                node->slots_max = prrte_hwloc_base_get_npus(t->topo, obj);
+                node->slots_max = prrte_hwloc_base_get_npus(t->topo, use_hwthread_cpus, available, obj);
             }
             if (NULL == slot_cnt || NULL == slot_cnt[n]) {
                 node->slots = 0;
             } else {
                 obj = hwloc_get_root_obj(t->topo);
-                node->slots = prrte_hwloc_base_get_npus(t->topo, obj);
+                node->slots = prrte_hwloc_base_get_npus(t->topo, use_hwthread_cpus, available, obj);
             }
             PRRTE_RETAIN(t);
             node->topology = t;
@@ -271,6 +302,7 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
                                 node->name, node->slots, node->slots_max);
             prrte_list_append(nodes, &node->super);
         }
+        hwloc_bitmap_free(available);
     }
 
     /* record the number of allocated nodes */
@@ -288,6 +320,9 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
     if (NULL != topos) {
         prrte_argv_free(topos);
     }
+    if (NULL != job_cpuset) {
+        free(job_cpuset);
+    }
     return PRRTE_SUCCESS;
 
 error_silent:
@@ -299,6 +334,9 @@ error_silent:
     }
     if (NULL != node_cnt) {
         prrte_argv_free(node_cnt);
+    }
+    if (NULL != job_cpuset) {
+        free(job_cpuset);
     }
     return PRRTE_ERR_SILENT;
 

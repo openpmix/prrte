@@ -552,12 +552,14 @@ int pmix_server_init(void)
         prrte_list_append(&ilist, &kv->super);
     }
 
+#ifdef PMIX_HOSTNAME_KEEP_FQDN
     /* tell the server what we are doing with FQDN */
     kv = PRRTE_NEW(prrte_value_t);
     kv->key = strdup(PMIX_HOSTNAME_KEEP_FQDN);
     kv->type = PRRTE_BOOL;
     kv->data.flag = prrte_keep_fqdn_hostnames;
     prrte_list_append(&ilist, &kv->super);
+#endif
 
     /* convert to an info array */
     ninfo = prrte_list_get_size(&ilist) + 2;

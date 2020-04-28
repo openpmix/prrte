@@ -713,27 +713,6 @@ int prrte_dt_unpack_map(prrte_buffer_t *buffer, void *dest,
             PRRTE_ERROR_LOG(rc);
             return rc;
         }
-        /* unpack the ppr */
-        n = 1;
-        if (PRRTE_SUCCESS != (rc = prrte_dss_unpack_buffer(buffer,
-                                                         &(maps[i]->ppr), &n, PRRTE_STRING))) {
-            PRRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        /* unpack the cpus/rank */
-        n = 1;
-        if (PRRTE_SUCCESS != (rc = prrte_dss_unpack_buffer(buffer,
-                                                         &(maps[i]->cpus_per_rank), &n, PRRTE_INT16))) {
-            PRRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        /* unpack the display map flag */
-        n = 1;
-        if (PRRTE_SUCCESS != (rc = prrte_dss_unpack_buffer(buffer,
-                                                         &(maps[i]->display_map), &n, PRRTE_BOOL))) {
-            PRRTE_ERROR_LOG(rc);
-            return rc;
-        }
         /* unpack the number of nodes involved in the job */
         n = 1;
         if (PRRTE_SUCCESS != (rc = prrte_dss_unpack_buffer(buffer,
