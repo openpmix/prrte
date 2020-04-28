@@ -1078,7 +1078,7 @@ if test "$PRRTE_TOP_BUILDDIR" != "$PRRTE_TOP_SRCDIR"; then
     # rather than have successive assignments to these shell
     # variables, lest the $(foo) names try to get evaluated here.
     # Yuck!
-    cpp_includes="$PRRTE_TOP_SRCDIR $PRRTE_TOP_BUILDDIR $PRRTE_TOP_SRCDIR/src/include $PRRTE_TOP_BUILDDIR/src/include"
+    cpp_includes="$PRRTE_TOP_BUILDDIR $PRRTE_TOP_SRCDIR $PRRTE_TOP_BUILDDIR/src/include $PRRTE_TOP_SRCDIR/src/include"
 else
     cpp_includes="$PRRTE_TOP_SRCDIR $PRRTE_TOP_SRCDIR/src/include"
 fi
