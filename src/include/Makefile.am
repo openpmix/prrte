@@ -11,7 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -19,8 +19,7 @@
 # $HEADER$
 #
 
-headers = prrte_config.h \
-		  constants.h \
+headers = constants.h \
 		  types.h \
 		  frameworks.h \
 		  hash_string.h \
@@ -34,6 +33,7 @@ headers = prrte_config.h \
 		  align.h
 
 nodist_headers = \
+		  prrte_config.h \
 		  version.h
 
 EXTRA_DIST = $(headers)
