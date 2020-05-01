@@ -138,6 +138,7 @@ static PRRTE_CLASS_INSTANCE(prrte_pmix_app_t,
 
 typedef struct {
     prrte_pmix_lock_t lock;
+    pmix_status_t status;
     pmix_info_t *info;
     size_t ninfo;
 } mylock_t;
@@ -431,6 +432,7 @@ static void setupcbfunc(pmix_status_t status,
         mylock->info = NULL;
         mylock->ninfo = 0;
     }
+    mylock->status = status;
 
     /* release the caller */
     if (NULL != cbfunc) {
@@ -1239,13 +1241,19 @@ int main(int argc, char *argv[])
     PRRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
     ret = PMIx_server_setup_application(prrte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc, &mylock);
     if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
+        prrte_output(0, "Error setting up application: %s", PMIx_Error_string(ret));
         PRRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
         PRRTE_UPDATE_EXIT_STATUS(ret);
         goto DONE;
     }
     PRRTE_PMIX_WAIT_THREAD(&mylock.lock);
     PMIX_INFO_FREE(iptr, ninfo);
+    if (PMIX_SUCCESS != mylock.status) {
+        prrte_output(0, "Error setting up application: %s", PMIx_Error_string(mylock.status));
+        PRRTE_UPDATE_EXIT_STATUS(mylock.status);
+        PRRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
+        goto DONE;
+    }
     PRRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
     /* transfer any returned ENVARS to the job_info */
     if (NULL != mylock.info) {
