@@ -503,13 +503,6 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
             prrte_list_append(pmap, &kv->super);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
-            /* numa rank */
-            if (PRRTE_LOCAL_RANK_INVALID != pptr->numa_rank) {
-                kv = PRRTE_NEW(prrte_info_item_t);
-                PMIX_INFO_LOAD(&kv->info, PMIX_NUMA_RANK, &pptr->numa_rank, PMIX_UINT16);
-                prrte_list_append(pmap, &kv->super);
-            }
-
             /* reincarnation number */
             ui32 = 0;  // we are starting this proc for the first time
             kv = PRRTE_NEW(prrte_info_item_t);
