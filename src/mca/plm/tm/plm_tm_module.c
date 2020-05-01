@@ -295,7 +295,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     env = prrte_argv_copy(prrte_launch_environ);
 
     /* enable local launch by the orteds */
-    (void) mca_base_var_env_name ("plm", &var);
+    (void) prrte_mca_base_var_env_name ("plm", &var);
     prrte_setenv(var, "rsh", true, &env);
     free(var);
 
