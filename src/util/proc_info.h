@@ -42,7 +42,10 @@
 
 #include "src/dss/dss_types.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/pmix/pmix-internal.h"
+#include PRRTE_PMIX_HEADER
+#if ! PRRTE_PMIX_HEADER_GIVEN
+#include <pmix_common.h>
+#endif
 
 BEGIN_C_DECLS
 

@@ -339,14 +339,8 @@ int prrte_util_convert_string_to_vpid(prrte_vpid_t *vpid, const char* vpidstring
 int prrte_util_convert_string_to_process_name(prrte_process_name_t *name,
                                              const char* name_string)
 {
-    char *temp, *token;
-    prrte_jobid_t job;
-    prrte_vpid_t vpid;
+    char *p;
     int rc;
-
-    /* set default */
-    name->jobid = PRRTE_JOBID_INVALID;
-    name->vpid = PRRTE_VPID_INVALID;
 
     /* check for NULL string - error */
     if (NULL == name_string) {
@@ -354,29 +348,17 @@ int prrte_util_convert_string_to_process_name(prrte_process_name_t *name,
         return PRRTE_ERR_BAD_PARAM;
     }
 
-    temp = strdup(name_string);  /** copy input string as the strtok process is destructive */
-    token = strchr(temp, PRRTE_SCHEMA_DELIMITER_CHAR); /** get first field -> jobid */
+    p = strrchr(name_string, PRRTE_SCHEMA_DELIMITER_CHAR); /** get last field -> vpid */
 
     /* check for error */
-    if (NULL == token) {
+    if (NULL == p) {
         PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
-        free(temp);
         return PRRTE_ERR_BAD_PARAM;
     }
-    *token = '\0';
-    token++;
+    p++;
 
-    PRRTE_PMIX_CONVERT_NSPACE(rc, &job, temp);
-    if (PRRTE_SUCCESS != rc) {
-        free(temp);
-        return rc;
-    }
-    vpid = strtoul(token, NULL, 10);
-
-    name->jobid = job;
-    name->vpid = vpid;
-
-    free(temp);
+    name->jobid = PRRTE_PROC_MY_NAME->jobid;
+    name->vpid = strtoul(p, NULL, 10);
 
     return PRRTE_SUCCESS;
 }

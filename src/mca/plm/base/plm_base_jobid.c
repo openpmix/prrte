@@ -47,10 +47,8 @@ int prrte_plm_base_set_hnp_name(void)
         PMIX_LOAD_PROCID(&prrte_process_info.myproc, evar, 0);
         /* setup the corresponding numerical jobid and add the
          * job to the hash table */
-        PRRTE_PMIX_CONVERT_NSPACE(rc, &PRRTE_PROC_MY_NAME->jobid, evar);
-        if (PRRTE_SUCCESS != rc) {
-            return rc;
-        }
+        PRRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRRTE_PROC_MY_NAME->jobid, evar);
+
         if (NULL != (evar = getenv("PMIX_SERVER_RANK"))) {
             PRRTE_PROC_MY_NAME->vpid = strtoul(evar, NULL, 10);
         } else {

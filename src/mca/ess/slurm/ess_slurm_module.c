@@ -106,7 +106,6 @@ static int rte_finalize(void)
 static int slurm_set_name(void)
 {
     int slurm_nodeid;
-    prrte_jobid_t jobid;
     prrte_vpid_t vpid;
     char *tmp;
     int rc;
@@ -119,12 +118,8 @@ static int slurm_set_name(void)
         return PRRTE_ERR_NOT_FOUND;
     }
 
-    PRRTE_PMIX_CONVERT_NSPACE(rc, &jobid, prrte_ess_base_nspace);
-    if (PRRTE_SUCCESS != rc) {
-        return rc;
-    }
+    PRRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRRTE_PROC_MY_NAME->jobid, prrte_ess_base_nspace);
     PMIX_LOAD_NSPACE(prrte_process_info.myproc.nspace, prrte_ess_base_nspace);
-    PRRTE_PROC_MY_NAME->jobid = jobid;
 
     if (NULL == prrte_ess_base_vpid) {
         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
