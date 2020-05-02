@@ -83,6 +83,10 @@ void prrte_oob_base_send_nb(int fd, short args, void *cbdata)
                                                                      ui64, (void**)&pr) ||
                     NULL == pr) {
                     /* that is just plain wrong */
+                    prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
+                                        "%s oob:base:send addressee unknown %s",
+                                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                                        PRRTE_NAME_PRINT(&msg->dst));
                     PRRTE_ERROR_LOG(PRRTE_ERR_ADDRESSEE_UNKNOWN);
                     msg->status = PRRTE_ERR_ADDRESSEE_UNKNOWN;
                     PRRTE_RML_SEND_COMPLETE(msg);
@@ -298,6 +302,10 @@ static void process_uri(char *uri)
     int rc;
     uint64_t ui64;
     prrte_oob_base_peer_t *pr;
+
+    prrte_output_verbose(5, prrte_oob_base_framework.framework_output,
+                        "%s:set_addr processing uri %s",
+                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), uri);
 
     /* find the first semi-colon in the string */
     cptr = strchr(uri, ';');

@@ -25,9 +25,10 @@
 #include "src/mca/mca.h"
 #include "src/event/event-internal.h"
 #include "src/dss/dss.h"
-#include "src/util/printf.h"
 #include "src/util/error.h"
 #include "src/util/name_fns.h"
+#include "src/util/printf.h"
+#include "src/util/proc_info.h"
 #include "src/include/hash_string.h"
 
 #include PRRTE_PMIX_HEADER
@@ -75,20 +76,20 @@ typedef struct {
 
 #define prrte_pmix_condition_wait(a,b)   pthread_cond_wait(a, &(b)->m_lock_pthread)
 
-#define PRRTE_PMIX_CONSTRUCT_LOCK(l)                     \
+#define PRRTE_PMIX_CONSTRUCT_LOCK(l)                    \
     do {                                                \
-        PRRTE_CONSTRUCT(&(l)->mutex, prrte_mutex_t);       \
+        PRRTE_CONSTRUCT(&(l)->mutex, prrte_mutex_t);    \
         pthread_cond_init(&(l)->cond, NULL);            \
         (l)->active = true;                             \
         (l)->status = 0;                                \
         (l)->msg = NULL;                                \
-        PRRTE_POST_OBJECT((l));                          \
+        PRRTE_POST_OBJECT((l));                         \
     } while(0)
 
-#define PRRTE_PMIX_DESTRUCT_LOCK(l)          \
+#define PRRTE_PMIX_DESTRUCT_LOCK(l)         \
     do {                                    \
-        PRRTE_ACQUIRE_OBJECT((l));           \
-        PRRTE_DESTRUCT(&(l)->mutex);          \
+        PRRTE_ACQUIRE_OBJECT((l));          \
+        PRRTE_DESTRUCT(&(l)->mutex);        \
         pthread_cond_destroy(&(l)->cond);   \
         if (NULL != (l)->msg) {             \
             free((l)->msg);                 \
@@ -97,28 +98,28 @@ typedef struct {
 
 
 #if PRRTE_ENABLE_DEBUG
-#define PRRTE_PMIX_ACQUIRE_THREAD(lck)                               \
+#define PRRTE_PMIX_ACQUIRE_THREAD(lck)                              \
     do {                                                            \
-        prrte_mutex_lock(&(lck)->mutex);                             \
-        if (prrte_debug_threads) {                                   \
-            prrte_output(0, "Waiting for thread %s:%d",              \
+        prrte_mutex_lock(&(lck)->mutex);                            \
+        if (prrte_debug_threads) {                                  \
+            prrte_output(0, "Waiting for thread %s:%d",             \
                         __FILE__, __LINE__);                        \
         }                                                           \
         while ((lck)->active) {                                     \
-            prrte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex);  \
+            prrte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex); \
         }                                                           \
-        if (prrte_debug_threads) {                                   \
-            prrte_output(0, "Thread obtained %s:%d",                 \
+        if (prrte_debug_threads) {                                  \
+            prrte_output(0, "Thread obtained %s:%d",                \
                         __FILE__, __LINE__);                        \
         }                                                           \
         (lck)->active = true;                                       \
     } while(0)
 #else
-#define PRRTE_PMIX_ACQUIRE_THREAD(lck)                               \
+#define PRRTE_PMIX_ACQUIRE_THREAD(lck)                              \
     do {                                                            \
-        prrte_mutex_lock(&(lck)->mutex);                             \
+        prrte_mutex_lock(&(lck)->mutex);                            \
         while ((lck)->active) {                                     \
-            prrte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex);  \
+            prrte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex); \
         }                                                           \
         (lck)->active = true;                                       \
     } while(0)
@@ -126,65 +127,65 @@ typedef struct {
 
 
 #if PRRTE_ENABLE_DEBUG
-#define PRRTE_PMIX_WAIT_THREAD(lck)                                  \
+#define PRRTE_PMIX_WAIT_THREAD(lck)                                 \
     do {                                                            \
-        prrte_mutex_lock(&(lck)->mutex);                             \
-        if (prrte_debug_threads) {                                   \
-            prrte_output(0, "Waiting for thread %s:%d",              \
+        prrte_mutex_lock(&(lck)->mutex);                            \
+        if (prrte_debug_threads) {                                  \
+            prrte_output(0, "Waiting for thread %s:%d",             \
                         __FILE__, __LINE__);                        \
         }                                                           \
         while ((lck)->active) {                                     \
-            prrte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex);  \
+            prrte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex); \
         }                                                           \
-        if (prrte_debug_threads) {                                   \
-            prrte_output(0, "Thread obtained %s:%d",                 \
+        if (prrte_debug_threads) {                                  \
+            prrte_output(0, "Thread obtained %s:%d",                \
                         __FILE__, __LINE__);                        \
         }                                                           \
-        PRRTE_ACQUIRE_OBJECT(&lck);                                  \
-        prrte_mutex_unlock(&(lck)->mutex);                           \
+        PRRTE_ACQUIRE_OBJECT(&lck);                                 \
+        prrte_mutex_unlock(&(lck)->mutex);                          \
     } while(0)
 #else
-#define PRRTE_PMIX_WAIT_THREAD(lck)                                  \
+#define PRRTE_PMIX_WAIT_THREAD(lck)                                 \
     do {                                                            \
-        prrte_mutex_lock(&(lck)->mutex);                             \
+        prrte_mutex_lock(&(lck)->mutex);                            \
         while ((lck)->active) {                                     \
-            prrte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex);  \
+            prrte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex); \
         }                                                           \
-        PRRTE_ACQUIRE_OBJECT(lck);                                   \
-        prrte_mutex_unlock(&(lck)->mutex);                           \
+        PRRTE_ACQUIRE_OBJECT(lck);                                  \
+        prrte_mutex_unlock(&(lck)->mutex);                          \
     } while(0)
 #endif
 
 
 #if PRRTE_ENABLE_DEBUG
-#define PRRTE_PMIX_RELEASE_THREAD(lck)                   \
+#define PRRTE_PMIX_RELEASE_THREAD(lck)                  \
     do {                                                \
-        if (prrte_debug_threads) {                       \
-            prrte_output(0, "Releasing thread %s:%d",    \
+        if (prrte_debug_threads) {                      \
+            prrte_output(0, "Releasing thread %s:%d",   \
                         __FILE__, __LINE__);            \
         }                                               \
         (lck)->active = false;                          \
         pthread_cond_broadcast(&(lck)->cond);           \
-        prrte_mutex_unlock(&(lck)->mutex);               \
+        prrte_mutex_unlock(&(lck)->mutex);              \
     } while(0)
 #else
-#define PRRTE_PMIX_RELEASE_THREAD(lck)                   \
-    do {                                                \
-        assert(0 != prrte_mutex_trylock(&(lck)->mutex)); \
-        (lck)->active = false;                          \
-        pthread_cond_broadcast(&(lck)->cond);           \
-        prrte_mutex_unlock(&(lck)->mutex);               \
+#define PRRTE_PMIX_RELEASE_THREAD(lck)                      \
+    do {                                                    \
+        assert(0 != prrte_mutex_trylock(&(lck)->mutex));    \
+        (lck)->active = false;                              \
+        pthread_cond_broadcast(&(lck)->cond);               \
+        prrte_mutex_unlock(&(lck)->mutex);                  \
     } while(0)
 #endif
 
 
-#define PRRTE_PMIX_WAKEUP_THREAD(lck)                    \
-    do {                                                \
-        prrte_mutex_lock(&(lck)->mutex);                 \
-        (lck)->active = false;                          \
-        PRRTE_POST_OBJECT(lck);                          \
-        pthread_cond_broadcast(&(lck)->cond);           \
-        prrte_mutex_unlock(&(lck)->mutex);               \
+#define PRRTE_PMIX_WAKEUP_THREAD(lck)           \
+    do {                                        \
+        prrte_mutex_lock(&(lck)->mutex);        \
+        (lck)->active = false;                  \
+        PRRTE_POST_OBJECT(lck);                 \
+        pthread_cond_broadcast(&(lck)->cond);   \
+        prrte_mutex_unlock(&(lck)->mutex);      \
     } while(0)
 
 /*
@@ -205,12 +206,12 @@ typedef struct {
  * d - pointer to the data object being posted
  * t - the type of the data
  */
-#define PRRTE_MODEX_SEND_VALUE(r, sc, s, d, t)   \
+#define PRRTE_MODEX_SEND_VALUE(r, sc, s, d, t)  \
     do {                                        \
         pmix_value_t _kv;                       \
         PMIX_VALUE_LOAD(&_kv, (d), (t));        \
         (r) = PMIx_Put((sc), (s), &(_kv));      \
-                PRRTE_ERROR_LOG((r));            \
+                PRRTE_ERROR_LOG((r));           \
     } while(0);
 
 /**
@@ -223,7 +224,7 @@ typedef struct {
  * d - the data object being posted
  * sz - the number of bytes in the data object
  */
-#define PRRTE_MODEX_SEND_STRING(r, sc, s, d, sz)     \
+#define PRRTE_MODEX_SEND_STRING(r, sc, s, d, sz)    \
     do {                                            \
         pmix_value_t _kv;                           \
         _kv.type = PMIX_BYTE_OBJECT;                \
@@ -242,11 +243,11 @@ typedef struct {
  * d - the data object being posted
  * sz - the number of bytes in the data object
  */
-#define PRRTE_MODEX_SEND(r, sc, s, d, sz)                        \
+#define PRRTE_MODEX_SEND(r, sc, s, d, sz)                       \
     do {                                                        \
         char *_key;                                             \
-        _key = prrte_mca_base_component_to_string((s));               \
-        PRRTE_MODEX_SEND_STRING((r), (sc), _key, (d), (sz));     \
+        _key = prrte_mca_base_component_to_string((s));         \
+        PRRTE_MODEX_SEND_STRING((r), (sc), _key, (d), (sz));    \
         free(_key);                                             \
     } while(0);
 
@@ -269,16 +270,12 @@ typedef struct {
         pmix_value_t *_kv = NULL;                                                       \
         pmix_info_t _info;                                                              \
         size_t _sz;                                                                     \
-        int _rc;                                                                        \
         PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                             \
                             "%s[%s:%d] MODEX RECV VALUE OPTIONAL FOR PROC %s KEY %s",   \
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),                       \
                             __FILE__, __LINE__,                                         \
                             PRRTE_NAME_PRINT((p)), (s)));                               \
-        PRRTE_PMIX_CONVERT_NAME(_rc, &_proc, (p));                                      \
-        if (PRRTE_SUCCESS != _rc) {                                                     \
-            PRRTE_ERROR_LOG(_rc);                                                       \
-        }                                                                               \
+        PMIX_LOAD_PROCID(&(_proc), prrte_process_info.myproc.nspace, (p)->vpid);        \
         PMIX_INFO_LOAD(&_info, PMIX_OPTIONAL, NULL, PMIX_BOOL);                         \
         (r) = PMIx_Get(&(_proc), (s), &(_info), 1, &(_kv));                             \
         if (NULL == _kv) {                                                              \
@@ -314,16 +311,12 @@ typedef struct {
         pmix_value_t *_kv = NULL;                                                       \
         pmix_info_t _info;                                                              \
         size_t _sz;                                                                     \
-        int _rc;                                                                        \
         PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                             \
                             "%s[%s:%d] MODEX RECV VALUE OPTIONAL FOR PROC %s KEY %s",   \
                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),                       \
                             __FILE__, __LINE__,                                         \
                             PRRTE_NAME_PRINT((p)), (s)));                               \
-        PRRTE_PMIX_CONVERT_NAME(_rc, &_proc, (p));                                      \
-        if (PRRTE_SUCCESS != _rc) {                                                     \
-            PRRTE_ERROR_LOG(_rc);                                                       \
-        }                                                                               \
+        PMIX_LOAD_PROCID(&(_proc), prrte_process_info.myproc.nspace, (p)->vpid);        \
         PMIX_INFO_LOAD(&_info, PMIX_IMMEDIATE, NULL, PMIX_BOOL);                        \
         (r) = PMIx_Get(&(_proc), (s), &(_info), 1, &(_kv));                             \
         if (NULL == _kv) {                                                              \
@@ -350,32 +343,28 @@ typedef struct {
  *     is to be returned
  * t - the expected data type
  */
-#define PRRTE_MODEX_RECV_VALUE(r, s, p, d, t)                                   \
-    do {                                                                        \
-        pmix_proc_t _proc;                                                      \
-        pmix_value_t *_kv = NULL;                                               \
-        size_t _sz;                                                             \
-        int _rc;                                                                \
-        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                     \
-                            "%s[%s:%d] MODEX RECV VALUE FOR PROC %s KEY %s",    \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),               \
-                            __FILE__, __LINE__,                                 \
-                            PRRTE_NAME_PRINT((p)), (s)));                       \
-        PRRTE_PMIX_CONVERT_NAME(_rc, &_proc, (p));                              \
-        if (PRRTE_SUCCESS != _rc) {                                             \
-            PRRTE_ERROR_LOG(_rc);                                               \
-        }                                                                       \
-        (r) = PMIx_Get(&(_proc), (s), NULL, 0, &(_kv));                         \
-        if (NULL == _kv) {                                                      \
-            (r) = PMIX_ERR_NOT_FOUND;                                           \
-        } else if (_kv->type != (t)) {                                          \
-            (r) = PMIX_ERR_TYPE_MISMATCH;                                       \
-        } else if (PMIX_SUCCESS == (r)) {                                       \
-            PMIX_VALUE_UNLOAD((r), _kv, (void**)(d), &_sz);                     \
-        }                                                                       \
-        if (NULL != _kv) {                                                      \
-            PMIX_VALUE_RELEASE(_kv);                                            \
-        }                                                                       \
+#define PRRTE_MODEX_RECV_VALUE(r, s, p, d, t)                                       \
+    do {                                                                            \
+        pmix_proc_t _proc;                                                          \
+        pmix_value_t *_kv = NULL;                                                   \
+        size_t _sz;                                                                 \
+        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                         \
+                            "%s[%s:%d] MODEX RECV VALUE FOR PROC %s KEY %s",        \
+                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),                   \
+                            __FILE__, __LINE__,                                     \
+                            PRRTE_NAME_PRINT((p)), (s)));                           \
+        PMIX_LOAD_PROCID(&(_proc), prrte_process_info.myproc.nspace, (p)->vpid);    \
+        (r) = PMIx_Get(&(_proc), (s), NULL, 0, &(_kv));                             \
+        if (NULL == _kv) {                                                          \
+            (r) = PMIX_ERR_NOT_FOUND;                                               \
+        } else if (_kv->type != (t)) {                                              \
+            (r) = PMIX_ERR_TYPE_MISMATCH;                                           \
+        } else if (PMIX_SUCCESS == (r)) {                                           \
+            PMIX_VALUE_UNLOAD((r), _kv, (void**)(d), &_sz);                         \
+        }                                                                           \
+        if (NULL != _kv) {                                                          \
+            PMIX_VALUE_RELEASE(_kv);                                                \
+        }                                                                           \
     } while(0);
 
 /**
@@ -391,33 +380,29 @@ typedef struct {
  * sz - pointer to a location wherein the number of bytes
  *     in the data object can be returned (size_t)
  */
-#define PRRTE_MODEX_RECV_STRING(r, s, p, d, sz)                                 \
-    do {                                                                        \
-        pmix_proc_t _proc;                                                      \
-        pmix_value_t *_kv = NULL;                                               \
-        int _rc;                                                                \
-        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                     \
-                            "%s[%s:%d] MODEX RECV STRING FOR PROC %s KEY %s",   \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),               \
-                            __FILE__, __LINE__,                                 \
-                            PRRTE_NAME_PRINT((p)), (s)));                       \
-        *(d) = NULL;                                                            \
-        *(sz) = 0;                                                              \
-        PRRTE_PMIX_CONVERT_NAME(_rc, &_proc, (p));                              \
-        if (PRRTE_SUCCESS != _rc) {                                             \
-            PRRTE_ERROR_LOG(_rc);                                               \
-        }                                                                       \
-        (r) = PMIx_Get(&(_proc), (s), NULL, 0, &(_kv));                         \
-        if (NULL == _kv) {                                                      \
-            (r) = PMIX_ERR_NOT_FOUND;                                           \
-        } else if (PMIX_SUCCESS == (r)) {                                       \
-            *(d) = _kv->data.bo.bytes;                                          \
-            *(sz) = _kv->data.bo.size;                                          \
-            _kv->data.bo.bytes = NULL; /* protect the data */                   \
-        }                                                                       \
-        if (NULL != _kv) {                                                      \
-            PMIX_VALUE_RELEASE(_kv);                                            \
-        }                                                                       \
+#define PRRTE_MODEX_RECV_STRING(r, s, p, d, sz)                                     \
+    do {                                                                            \
+        pmix_proc_t _proc;                                                          \
+        pmix_value_t *_kv = NULL;                                                   \
+        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,                         \
+                            "%s[%s:%d] MODEX RECV STRING FOR PROC %s KEY %s",       \
+                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),                   \
+                            __FILE__, __LINE__,                                     \
+                            PRRTE_NAME_PRINT((p)), (s)));                           \
+        *(d) = NULL;                                                                \
+        *(sz) = 0;                                                                  \
+        PMIX_LOAD_PROCID(&(_proc), prrte_process_info.myproc.nspace, (p)->vpid);    \
+        (r) = PMIx_Get(&(_proc), (s), NULL, 0, &(_kv));                             \
+        if (NULL == _kv) {                                                          \
+            (r) = PMIX_ERR_NOT_FOUND;                                               \
+        } else if (PMIX_SUCCESS == (r)) {                                           \
+            *(d) = _kv->data.bo.bytes;                                              \
+            *(sz) = _kv->data.bo.size;                                              \
+            _kv->data.bo.bytes = NULL; /* protect the data */                       \
+        }                                                                           \
+        if (NULL != _kv) {                                                          \
+            PMIX_VALUE_RELEASE(_kv);                                                \
+        }                                                                           \
     } while(0);
 
 /**
@@ -433,20 +418,20 @@ typedef struct {
  * sz - pointer to a location wherein the number of bytes
  *     in the data object can be returned (size_t)
  */
-#define PRRTE_MODEX_RECV(r, s, p, d, sz)                                 \
+#define PRRTE_MODEX_RECV(r, s, p, d, sz)                                \
     do {                                                                \
         char *_key;                                                     \
-        _key = prrte_mca_base_component_to_string((s));                       \
-        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,               \
+        _key = prrte_mca_base_component_to_string((s));                 \
+        PRRTE_OUTPUT_VERBOSE((1, prrte_pmix_verbose_output,             \
                             "%s[%s:%d] MODEX RECV FOR PROC %s KEY %s",  \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),         \
+                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),       \
                             __FILE__, __LINE__,                         \
                             PRRTE_NAME_PRINT((p)), _key));              \
         if (NULL == _key) {                                             \
-            PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);                   \
-            (r) = PRRTE_ERR_OUT_OF_RESOURCE;                             \
+            PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);                 \
+            (r) = PRRTE_ERR_OUT_OF_RESOURCE;                            \
         } else {                                                        \
-            PRRTE_MODEX_RECV_STRING((r), _key, (p), (d), (sz));          \
+            PRRTE_MODEX_RECV_STRING((r), _key, (p), (d), (sz));         \
             free(_key);                                                 \
         }                                                               \
     } while(0);
@@ -462,6 +447,7 @@ PRRTE_EXPORT pmix_status_t prrte_pmix_convert_job_state_to_error(int state);
 PRRTE_EXPORT pmix_status_t prrte_pmix_convert_proc_state_to_error(int state);
 PRRTE_EXPORT int prrte_convert_jobid_to_nspace(pmix_nspace_t nspace, prrte_jobid_t jobid);
 PRRTE_EXPORT int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace_t nspace);
+PRRTE_EXPORT void prrte_convert_daemon_nspace(prrte_jobid_t *jobid, pmix_nspace_t nspace);
 
 #define PRRTE_PMIX_CREATE_NSPACE(n, j)      \
     do {                                    \
@@ -496,6 +482,10 @@ PRRTE_EXPORT int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace
         }                                                       \
     } while(0)
 
+
+/* register the daemon namespace and convert to jobid */
+#define PRRTE_PMIX_REGISTER_DAEMON_NSPACE(j, n)     \
+    prrte_convert_daemon_nspace((j), (n))
 
 /* convert pmix_nspace_t to prrte_jobid_t */
 #define PRRTE_PMIX_CONVERT_NSPACE(r, j, n)       \
