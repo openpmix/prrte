@@ -340,7 +340,6 @@ int prrte_util_convert_string_to_process_name(prrte_process_name_t *name,
                                              const char* name_string)
 {
     char *p;
-    int rc;
 
     /* check for NULL string - error */
     if (NULL == name_string) {

@@ -128,7 +128,6 @@ static int rte_finalize(void)
 
 static int env_set_name(void)
 {
-    int rc;
     prrte_vpid_t vpid;
 
     if (NULL == prrte_ess_base_nspace) {

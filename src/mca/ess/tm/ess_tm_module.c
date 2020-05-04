@@ -109,7 +109,6 @@ static int rte_finalize(void)
 
 static int tm_set_name(void)
 {
-    int rc;
     prrte_vpid_t vpid;
 
     PRRTE_OUTPUT_VERBOSE((1, prrte_ess_base_framework.framework_output,
