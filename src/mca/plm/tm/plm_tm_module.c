@@ -285,6 +285,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
         connected = true;
     }
 
+    /* protect against launchers that forward the entire environment */
+    if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
+        unsetenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL");
+    }
+    if (NULL != getenv("PMIX_LAUNCHER_RENDEZVOUS_FILE")) {
+        unsetenv("PMIX_LAUNCHER_RENDEZVOUS_FILE");
+    }
+
     /* Figure out the basenames for the libdir and bindir.  There is a
        lengthy comment about this in plm_rsh_module.c explaining all
        the rationale for how / why we're doing this. */
