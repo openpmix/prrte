@@ -109,7 +109,6 @@ static int rte_finalize(void)
 
 static int lsf_set_name(void)
 {
-    int rc;
     int lsf_nodeid;
     prrte_vpid_t vpid;
 

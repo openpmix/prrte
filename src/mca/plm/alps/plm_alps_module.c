@@ -255,6 +255,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * ALPS aprun  OPTIONS
      */
 
+    /* protect against launchers that forward the entire environment */
+    if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
+        unsetenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL");
+    }
+    if (NULL != getenv("PMIX_LAUNCHER_RENDEZVOUS_FILE")) {
+        unsetenv("PMIX_LAUNCHER_RENDEZVOUS_FILE");
+    }
+
     /* add the aprun command */
     prrte_argv_append(&argc, &argv, prrte_plm_alps_component.aprun_cmd);
 

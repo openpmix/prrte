@@ -292,6 +292,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     prrte_setenv("SLURM_CPU_BIND", "none", true, &env);
 
+    /* protect against launchers that forward the entire environment */
+    if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
+        unsetenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL");
+    }
+    if (NULL != getenv("PMIX_LAUNCHER_RENDEZVOUS_FILE")) {
+        unsetenv("PMIX_LAUNCHER_RENDEZVOUS_FILE");
+    }
+
 #if SLURM_CRAY_ENV
     /*
      * If in a SLURM/Cray env. make sure that Cray PMI is not pulled in,

@@ -108,7 +108,6 @@ static int slurm_set_name(void)
     int slurm_nodeid;
     prrte_vpid_t vpid;
     char *tmp;
-    int rc;
 
     PRRTE_OUTPUT_VERBOSE((1, prrte_ess_base_framework.framework_output,
                          "ess:slurm setting name"));
