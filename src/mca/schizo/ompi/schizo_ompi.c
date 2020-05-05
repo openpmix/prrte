@@ -1059,6 +1059,38 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
         }
     }
 
+/*
+ *  As an example, the above handles
+ *  % mpirun -mca coll_sync_barrier_after 10 ...
+ *  But
+ *  % env OMPI_MCA_coll_sync_barrier_after=10 mpirun ...
+ *  isn't noticed.
+ *
+ *  Not sure if the above isn't supposed to be a method of
+ *  passing MCA settings to OMPI, but I'd like to allow it
+ *  and think the env should be walked for OMPI_MCA_* and the
+ *  same steps taken as if it had been an --mca on the cmdline
+ */
+    for (j = 0; NULL != environ[j]; ++j) {
+        if (0 == strncmp("OMPI_MCA_", environ[j], strlen("OMPI_MCA_"))) {
+            p1 = strdup(environ[j]);
+            if (!p1) { continue; }
+            p2 = strchr(p1, '=');
+            if (!p2) { continue; }
+            *p2 = '\0';
+            ++p2;
+            if (!*p2) { continue; }
+            rc = check_cache(&cache, &cachevals, p1, p2);
+            free(p1);
+            if (PRRTE_SUCCESS != rc) {
+                prrte_argv_free(cache);
+                prrte_argv_free(cachevals);
+                prrte_argv_free(envlist);
+                return rc;
+            }
+        }
+    }
+
     /* process the resulting cache into the dstenv */
     if (NULL != cache) {
         for (i=0; NULL != cache[i]; i++) {
