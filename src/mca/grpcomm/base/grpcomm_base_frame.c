@@ -82,6 +82,8 @@ static int prte_grpcomm_base_close(void)
 
     if (recv_issued) {
         prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
+        prrte_rml.recv_cancel(PRRTE_NAME_WILDCARD, PRRTE_RML_TAG_RBCAST);
+        prrte_rml.recv_cancel(PRRTE_NAME_WILDCARD, PRRTE_RML_TAG_BMGXCAST);
         recv_issued = false;
     }
 

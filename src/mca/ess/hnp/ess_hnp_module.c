@@ -377,6 +377,12 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
+    /* setup the propagate */
+    if (PRRTE_SUCCESS != (ret = prrte_propagate_base_select())) {
+        error = "prrte_propagate_base_select";
+        goto error;
+    }
+
     /* get the job data object for the daemons */
     jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
 

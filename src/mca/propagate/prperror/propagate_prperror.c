@@ -240,7 +240,7 @@ static int prrte_propagate_prperror(prrte_jobid_t *job, prrte_process_name_t *so
 
         node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, errorproc->vpid);
 
-        cnt=node->num_procs;
+        cnt=node->num_procs /2 ; //prrte issue, num_procs value is not correct
         if (PRRTE_SUCCESS != (rc = prrte_dss.pack(&prperror_buffer, &cnt, 1, PRRTE_INT))) {
             PRRTE_ERROR_LOG(rc);
             PRRTE_DESTRUCT(&prperror_buffer);
@@ -261,7 +261,7 @@ static int prrte_propagate_prperror(prrte_jobid_t *job, prrte_process_name_t *so
     pmix_info_t *pinfo;
     PMIX_INFO_CREATE(pinfo, 1+cnt);
 
-    PRRTE_PMIX_CONVERT_NAME(&pname, errorproc);
+    PRRTE_PMIX_CONVERT_NAME(rc, &pname, errorproc);
     PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
 
     if(daemon_error_flag) {
@@ -280,7 +280,7 @@ static int prrte_propagate_prperror(prrte_jobid_t *job, prrte_process_name_t *so
                     PRRTE_DESTRUCT(&prperror_buffer);
                     return rc;
                 }
-                PRRTE_PMIX_CONVERT_NAME(&pname, &pptr->name);
+                PRRTE_PMIX_CONVERT_NAME(rc, &pname, &pptr->name);
                 PMIX_INFO_LOAD(&pinfo[i+1], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
 
                 alert = PRRTE_NEW(prrte_buffer_t);
@@ -410,7 +410,7 @@ static int _prrte_propagate_prperror(prrte_jobid_t *job, prrte_process_name_t *s
     }
     PMIX_INFO_CREATE(pinfo, 1+num_affected);
 
-    PRRTE_PMIX_CONVERT_NAME(&pname, errorproc);
+    PRRTE_PMIX_CONVERT_NAME(rc, &pname, errorproc);
     PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
 
     prrte_process_name_t ename;
@@ -421,7 +421,7 @@ static int _prrte_propagate_prperror(prrte_jobid_t *job, prrte_process_name_t *s
             PRRTE_ERROR_LOG(rc);
             return rc;
         }
-        PRRTE_PMIX_CONVERT_NAME(&pname, &ename);
+        PRRTE_PMIX_CONVERT_NAME(rc, &pname, &ename);
         PMIX_INFO_LOAD(&pinfo[i+1], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
     }
     /* notify this error locally, only from rbcast dont have a source id */

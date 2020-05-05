@@ -1516,6 +1516,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
     prte_job_t *jobdat;
     prte_proc_state_t state=PRTE_PROC_STATE_WAITPID_FIRED;
     prte_proc_t *cptr;
+    int rc;
 
     prte_output_verbose(5, prte_odls_base_framework.framework_output,
                         "%s odls:wait_local_proc child process %s pid %ld terminated",
@@ -1712,8 +1713,8 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         /* register an event handler for the PRRTE_ERR_PROC_ABORTED event */
         pmix_proc_t pname, psource;
         pmix_status_t pcode = prrte_pmix_convert_rc(PRRTE_ERR_PROC_ABORTED);
-        PRRTE_PMIX_CONVERT_NAME(&pname, &proc->name);
-        PRRTE_PMIX_CONVERT_NAME(&psource, PRRTE_PROC_MY_NAME);
+        PRRTE_PMIX_CONVERT_NAME(rc, &pname, &proc->name);
+        PRRTE_PMIX_CONVERT_NAME(rc, &psource, PRRTE_PROC_MY_NAME);
         pmix_info_t *pinfo;
         PMIX_INFO_CREATE(pinfo, 1);
         PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );

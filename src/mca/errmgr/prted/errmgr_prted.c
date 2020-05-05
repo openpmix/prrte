@@ -72,7 +72,8 @@ prte_errmgr_base_module_t prte_errmgr_prted_module = {
     .finalize = finalize,
     .logfn = prte_errmgr_base_log,
     .abort = prted_abort,
-    .abort_peers = prte_errmgr_base_abort_peers
+    .abort_peers = prte_errmgr_base_abort_peers,
+    NULL
 };
 
 /* Local functions */

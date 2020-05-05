@@ -32,7 +32,7 @@
 #include "src/util/proc_info.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/errmgr/detector/errmgr_detector.h"
-#include "src/mca/compress/compress.h"
+#include "src/mca/prtecompress/prtecompress.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "grpcomm_bmg.h"
 
@@ -119,7 +119,7 @@ static int rbcast(prrte_buffer_t *buf)
     int rc = false;
 
     /* number of "daemons" equal 1hnp + num of daemons, so here pass ndmns -1 */
-    int nprocs = prrte_process_info.num_procs;// -1;
+    int nprocs = prrte_process_info.num_daemons;// -1;
     int vpid;
     int i, d;
     prrte_process_name_t daemon;

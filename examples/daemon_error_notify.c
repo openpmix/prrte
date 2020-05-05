@@ -104,6 +104,7 @@ int main(int argc, char **argv)
     PMIX_PROC_CONSTRUCT(&proc);
     (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
+    sleep(3);
     if (PMIX_SUCCESS != (rc = PMIx_Fence(&proc, 1, NULL, 0))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Fence failed: %d\n", myproc.nspace, myproc.rank, rc);
         goto done;
@@ -112,30 +113,7 @@ int main(int argc, char **argv)
     if ( myproc.rank == 3 ) {
         fprintf(stderr, "\nClient ns %s:%d kill its host \n", myproc.nspace, myproc.rank);
         completed = true;
-
-        FILE* procfile = fopen("/proc/self/status", "r");
-        long to_read = 8192;
-        char buffer[to_read];
-        if( !fread(buffer, sizeof(char), to_read, procfile) ) {
-            printf("Read proc/self/status error");
-            return -1;
-        }
-        fclose(procfile);
-        char* search_result;
-        /* Look through proc status contents line by line */
-        char delims[] = "\n";
-        char* line = strtok(buffer, delims);
-        while (line != NULL ) {
-            search_result = strstr(line, "PPid:");
-            if (search_result != NULL) {
-                sscanf(line, "%*s %d", &pid);
-            }
-            line = strtok(NULL, delims);
-        }
-    }
-    if (PMIX_SUCCESS != (rc = PMIx_Fence(&proc, 1, NULL, 0))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Fence failed: %d\n", myproc.nspace, myproc.rank, rc);
-        goto done;
+        pid = getppid();
     }
     gettimeofday(&start, NULL);
     if ( myproc.rank == 3 ) {

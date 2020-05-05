@@ -58,8 +58,10 @@ prte_errmgr_base_module_t prte_errmgr_default_fns = {
     .finalize = NULL, /* finalize */
     .logfn = prte_errmgr_base_log,
     .abort = prte_errmgr_base_abort,
-    .abort_peers = prte_errmgr_base_abort_peers
+    .abort_peers = prte_errmgr_base_abort_peers,
+    NULL
 };
+
 /* NOTE: ABSOLUTELY MUST initialize this
  * struct to include the log function as it
  * gets called even if the errmgr hasn't been

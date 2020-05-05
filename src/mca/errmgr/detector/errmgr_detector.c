@@ -331,7 +331,7 @@ int prrte_errmgr_enable_detector(bool enable_flag)
         prrte_propagate.register_cb();
 
         /* num of daemon in this jobid */
-        ndmns = prrte_process_info.num_procs-1;
+        ndmns = prrte_process_info.num_daemons - 1;
         vpid = prrte_process_info.my_name.vpid;
         /*  we observing somebody {n,1,2,...n-1}, the ring */
         if( 0 != (vpid - 1) )
@@ -381,7 +381,7 @@ static int fd_heartbeat_request(prrte_errmgr_detector_t* detector) {
         return PRRTE_SUCCESS;
     }
 
-    ndmns = prrte_process_info.num_procs-1;
+    ndmns = prrte_process_info.num_daemons-1;
 
     prrte_buffer_t *buffer = NULL;
     prrte_process_name_t daemon;
@@ -488,7 +488,7 @@ static void fd_event_cb(int fd, short flags, void* pdetector) {
         /* if first time detected */
         if (errmgr_get_daemon_status(temp_proc_name)){
             PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
-                        "errmgr:detector %d observing %d",
+                        "errmgr:detector %d detected daemon %d failed, heartbeat delay",
                         prrte_process_info.my_name.vpid, detector->hb_observing));
             prrte_propagate.prp(&temp_proc_name.jobid, NULL, &temp_proc_name,PRRTE_ERR_PROC_ABORTED );
 

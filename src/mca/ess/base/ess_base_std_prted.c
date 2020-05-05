@@ -571,7 +571,6 @@ int prte_ess_base_prted_finalize(void)
     (void) prte_mca_base_framework_close(&prte_iof_base_framework);
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
-    prte_errmgr.finalize();
     (void) prte_mca_base_framework_close(&prte_plm_base_framework);
     /* make sure our local procs are dead */
     prte_odls.kill_local_procs(NULL);
