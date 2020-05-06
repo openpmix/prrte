@@ -545,6 +545,18 @@ int main(int argc, char *argv[])
                 prrte_process_info.nodename);
     }
 
+    /* add the DVM master's URI to our info */
+    PMIX_VALUE_LOAD(&val, prrte_process_info.my_hnp_uri, PRRTE_STRING);
+    PMIX_LOAD_NSPACE(proc.nspace, prrte_process_info.myproc.nspace);
+    proc.rank = PRRTE_PROC_MY_HNP->vpid;
+    if (PMIX_SUCCESS != (prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
+        PMIX_ERROR_LOG(prc);
+        PMIX_VALUE_DESTRUCT(&val);
+        ret = PRRTE_ERROR;
+        goto DONE;
+    }
+    PMIX_VALUE_DESTRUCT(&val);
+
     /* If I have a parent, then save his contact info so
      * any messages we send can flow thru him.
      */
