@@ -152,6 +152,9 @@ static int check_modifiers(char *modifier, char **checks, prrte_schizo_conflicts
 {
     int n, m, k;
 
+    if (NULL == conflicts) {
+        return PRRTE_SUCCESS;
+    }
     for (n=0; 0 != strlen(conflicts[n].name); n++) {
         if (0 == strcasecmp(conflicts[n].name, modifier)) {
             for (m=0; NULL != checks[m]; m++) {
@@ -175,7 +178,7 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
     int j, k, cnt, rc;
     char **pargs = *argv;
     char **tmp, **tmp2, *output;
-    prrte_schizo_conflicts_t *modifiers;
+    prrte_schizo_conflicts_t *modifiers = NULL;
 
     /* pick the modifiers to be checked */
     if (NULL != modifier) {

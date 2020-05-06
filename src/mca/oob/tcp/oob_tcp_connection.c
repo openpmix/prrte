@@ -162,7 +162,7 @@ static int tcp_peer_create_socket(prrte_oob_tcp_peer_t* peer, sa_family_t family
 void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
 {
     prrte_list_t *local_list = &prrte_oob_tcp_component.local_ifs, *remote_list;
-    int rc, i, j, local_if_count, remote_if_count, best, best_i, best_j;
+    int rc, i, j, local_if_count, remote_if_count, best, best_i=0, best_j=0;
     prrte_oob_tcp_conn_op_t *op = (prrte_oob_tcp_conn_op_t*)cbdata;
     prrte_reachable_t *results = NULL;
     volatile prrte_list_item_t *ptr;
