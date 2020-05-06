@@ -1111,7 +1111,7 @@ static int allow_run_as_root(prrte_cmd_line_t *cmd_line)
     /* we always run last */
     char *r1, *r2;
 
-    if (prrte_cmd_line_is_taken(cmd_line, "allow_run_as_root")) {
+    if (prrte_cmd_line_is_taken(cmd_line, "allow-run-as-root")) {
         return PRRTE_SUCCESS;
     }
 
