@@ -544,6 +544,8 @@ static int check_modifiers(char *ck, prrte_job_t *jdata,
     char **ck2, *ptr;
     int i;
     bool found = false;
+    bool oversubscribe_given = false;
+    bool nooversubscribe_given = false;
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "%s rmaps:base check modifiers with %s",
@@ -556,56 +558,101 @@ static int check_modifiers(char *ck, prrte_job_t *jdata,
 
     ck2 = prrte_argv_split(ck, ',');
     for (i=0; NULL != ck2[i]; i++) {
-        if (0 == strncasecmp(ck2[i], "span", strlen(ck2[i]))) {
+        if (0 == strcasecmp(ck2[i], "SPAN")) {
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_SPAN);
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_GIVEN);
-            found = true;
-        } else if (0 == strncasecmp(ck2[i], "pe", strlen("pe"))) {
-            /* break this at the = sign to get the number */
-            if (NULL == (ptr = strchr(ck2[i], '='))) {
-                /* missing the value */
-                prrte_show_help("help-prrte-rmaps-base.txt", "missing-value", true, "pe", ck2[i]);
+
+        } else if (0 == strcasecmp(ck2[i], "OVERSUBSCRIBE")) {
+            if (nooversubscribe_given) {
+                /* conflicting directives */
+                prrte_show_help("help-prrte-rmaps-base.txt", "conflicting-directives", true,
+                                "OVERSUBSCRIBE", "NOOVERSUBSCRIBE");
                 prrte_argv_free(ck2);
                 return PRRTE_ERR_SILENT;
             }
-            ptr++;
-            prrte_rmaps_base.cpus_per_rank = strtol(ptr, NULL, 10);
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                "%s rmaps:base setting pe/rank to %d",
-                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                prrte_rmaps_base.cpus_per_rank);
-            found = true;
-        } else if (0 == strncasecmp(ck2[i], "OVERSUBSCRIBE", strlen(ck2[i]))) {
             PRRTE_UNSET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_NO_OVERSUBSCRIBE);
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_SUBSCRIBE_GIVEN);
-            found = true;
-        } else if (0 == strncasecmp(ck2[i], "NOOVERSUBSCRIBE", strlen(ck2[i]))) {
+            oversubscribe_given = true;
+
+        } else if (0 == strcasecmp(ck2[i], "NOOVERSUBSCRIBE")) {
+            if (oversubscribe_given) {
+                /* conflicting directives */
+                prrte_show_help("help-prrte-rmaps-base.txt", "conflicting-directives", true,
+                                "OVERSUBSCRIBE", "NOOVERSUBSCRIBE");
+                prrte_argv_free(ck2);
+                return PRRTE_ERR_SILENT;
+            }
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_NO_OVERSUBSCRIBE);
             PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_SUBSCRIBE_GIVEN);
-            found = true;
-        } else if (0 == strncasecmp(ck2[i], "DISPLAY", strlen(ck2[i]))) {
+            nooversubscribe_given = true;
+
+        } else if (0 == strcasecmp(ck2[i], "DISPLAY")) {
+            if (NULL == jdata) {
+                prrte_show_help("help-prrte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                "mapping policy", ck2[i]);
+                return PRRTE_ERR_SILENT;
+            }
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_MAP, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
-        } else if (0 == strncasecmp(ck2[i], "DISPLAYDEVEL", strlen(ck2[i]))) {
+
+        } else if (0 == strcasecmp(ck2[i], "DISPLAYDEVEL")) {
+            if (NULL == jdata) {
+                prrte_show_help("help-prrte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                "mapping policy", ck2[i]);
+                return PRRTE_ERR_SILENT;
+            }
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
-        } else if (0 == strncasecmp(ck2[i], "DISPLAYTOPO", strlen(ck2[i]))) {
+
+        } else if (0 == strcasecmp(ck2[i], "DISPLAYTOPO")) {
+            if (NULL == jdata) {
+                prrte_show_help("help-prrte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                "mapping policy", ck2[i]);
+                return PRRTE_ERR_SILENT;
+            }
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_TOPO, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
-        } else if (0 == strncasecmp(ck2[i], "DISPLAYDIFF", strlen(ck2[i]))) {
+
+        } else if (0 == strcasecmp(ck2[i], "DISPLAYDIFF")) {
+            if (NULL == jdata) {
+                prrte_show_help("help-prrte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                "mapping policy", ck2[i]);
+                return PRRTE_ERR_SILENT;
+            }
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
-        } else if (0 == strncasecmp(ck2[i], "DISPLAYALLOC", strlen(ck2[i]))) {
+
+        } else if (0 == strcasecmp(ck2[i], "DISPLAYALLOC")) {
+            if (NULL == jdata) {
+                prrte_show_help("help-prrte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                "mapping policy", ck2[i]);
+                return PRRTE_ERR_SILENT;
+            }
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_ALLOC, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
-        } else if (0 == strncasecmp(ck2[i], "DONOTLAUNCH", strlen(ck2[i]))) {
+
+        } else if (0 == strcasecmp(ck2[i], "DONOTLAUNCH")) {
+            if (NULL == jdata) {
+                prrte_show_help("help-prrte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                "mapping policy", ck2[i]);
+                return PRRTE_ERR_SILENT;
+            }
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
-        } else if (0 == strncasecmp(ck2[i], "NOLOCAL", strlen(ck2[i]))) {
-            PRRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRRTE_MAPPING_NO_USE_LOCAL);
-        } else if (0 == strncasecmp(ck2[i], "XMLOUTPUT", strlen(ck2[i]))) {
+
+        } else if (0 == strcasecmp(ck2[i], "NOLOCAL")) {
+            PRRTE_SET_MAPPING_DIRECTIVE(*tmp, PRRTE_MAPPING_NO_USE_LOCAL);
+
+        } else if (0 == strcasecmp(ck2[i], "XMLOUTPUT")) {
+            if (NULL == jdata) {
+                prrte_show_help("help-prrte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                "mapping policy", ck2[i]);
+                return PRRTE_ERR_SILENT;
+            }
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, PRRTE_ATTR_GLOBAL,
                                 NULL, PRRTE_BOOL);
+
+
         } else if (0 == strncasecmp(ck2[i], "PE-LIST", strlen(ck2[i]))) {
             if (NULL == (ptr = strchr(ck2[i], '='))) {
                 /* missing the value */
@@ -616,9 +663,15 @@ static int check_modifiers(char *ck, prrte_job_t *jdata,
             ptr++;
             prrte_set_attribute(&jdata->attributes, PRRTE_JOB_CPU_LIST, PRRTE_ATTR_GLOBAL,
                                 ptr, PRRTE_STRING);
-        } else if (0 == strncasecmp(ck2[i], "INHERIT", strlen(ck2[i]))) {
-            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_INHERIT, PRRTE_ATTR_GLOBAL,
-                                NULL, PRRTE_BOOL);
+
+        } else if (0 == strcasecmp(ck2[i], "INHERIT")) {
+            if (NULL == jdata) {
+                prrte_rmaps_base.inherit = true;
+            } else {
+                prrte_set_attribute(&jdata->attributes, PRRTE_JOB_INHERIT, PRRTE_ATTR_GLOBAL,
+                                    NULL, PRRTE_BOOL);
+            }
+
         } else {
             /* unrecognized modifier */
             prrte_argv_free(ck2);
