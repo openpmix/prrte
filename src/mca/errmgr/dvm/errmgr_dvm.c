@@ -28,6 +28,9 @@
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
 #endif
+#include <pmix.h>
+#include <pmix_server.h>
+#include "src/pmix/pmix-internal.h"
 
 #include "src/util/output.h"
 #include "src/util/printf.h"
@@ -76,10 +79,11 @@ prte_errmgr_base_module_t prte_errmgr_dvm_module = {
     .finalize = finalize,
     .logfn = prte_errmgr_base_log,
     .abort = prte_errmgr_base_abort,
-    .abort_peers = prte_errmgr_base_abort_peers
+    .abort_peers = prte_errmgr_base_abort_peers,
+    NULL
 };
 
-
+bool prp_regflag = 1;
 /*
  * Local functions
  */
@@ -221,7 +225,13 @@ static int init(void)
     prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors, PRTE_MSG_PRI);
 
     /* setup state machine to trap proc errors */
-    prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors, PRTE_ERROR_PRI);
+    pmix_status_t pcode = prrte_pmix_convert_rc(PRRTE_ERR_PROC_ABORTED);
+
+    PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
+                "%s errmgr:dvm: register evhandler in errmgr",
+                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+    PMIx_Register_event_handler(&pcode, 1, NULL, 0, error_notify_cbfunc, register_cbfunc, NULL);
+    prte_state.add_proc_state(PRRTE_PROC_STATE_ERROR, proc_errors, PRRTE_ERROR_PRI);
 
     return PRTE_SUCCESS;
 }
@@ -560,8 +570,11 @@ static void proc_errors(int fd, short args, void *cbdata)
             PRTE_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
-            /* kill the job */
-            _terminate_job(jdata->jobid);
+            /* do not kill the job if ft prrte is enabled */
+            if(!prrte_errmgr_detector_enable_flag)
+            {
+                _terminate_job(jdata->jobid);
+            }
         }
         break;
 
@@ -707,7 +720,11 @@ static void proc_errors(int fd, short args, void *cbdata)
          * hosed - so just exit out
          */
         if (PRTE_PROC_MY_NAME->jobid == proc->jobid) {
-            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+            /* do not kill the job if ft prrte is enabled, with newly spawned process the jobid could be different */
+            if(!prrte_errmgr_detector_enable_flag)
+            {
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+            }
             break;
         }
         break;

@@ -776,7 +776,12 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
             /* if this was an abnormal term, notify the other procs of the termination */
             parent.jobid = jdata->jobid;
             parent.vpid = PRTE_VPID_WILDCARD;
-            _send_notification(PRTE_ERR_PROC_ABORTED, pdata->state, &pdata->name, &parent);
+
+            /* do not kill send the msg if ft prrte is enabled */
+            if(!prrte_errmgr_detector_enable_flag)
+            {
+                _send_notification(PRTE_ERR_PROC_ABORTED, pdata->state, &pdata->name, &parent);
+            }
         }
     }
 
