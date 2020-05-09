@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006-2018 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2006-2008 Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2006-2017 Los Alamos National Security, LLC.  All rights
 #                         reserved.
@@ -66,10 +66,6 @@ PRRTE_LOAD_PLATFORM
 # Start it up
 #
 
-AC_CHECK_PROG([PERL],[perl],[perl],[no])
-AS_IF([test "X$PERL" = "Xno"],
-      [AC_MSG_ERROR(["PRRTE requires perl. Aborting"])])
-
 PRRTE_CONFIGURE_SETUP
 
 prrte_show_title "Configuring PRRTE"
@@ -79,6 +75,10 @@ prrte_show_title "Configuring PRRTE"
 #
 
 prrte_show_subtitle "Startup tests"
+
+AC_CHECK_PROG([PERL],[perl],[perl],[no])
+AS_IF([test "X$PERL" = "Xno"],
+      [AC_MSG_ERROR(["PRRTE requires perl. Aborting"])])
 
 AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
