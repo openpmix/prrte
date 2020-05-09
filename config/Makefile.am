@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006-2018 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2010      Oracle and/or its affiliates.  All rights
 #                         reserved.
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
@@ -29,7 +29,8 @@ EXTRA_DIST = \
         ltmain_pgi_tp.diff \
         prrte_mca_priority_sort.pl \
         find_common_syms \
-        make_manpage.pl
+        make_manpage.pl \
+        md2nroff.pl
 
 maintainer-clean-local:
 	rm -f prrte_get_version.sh

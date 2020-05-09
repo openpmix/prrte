@@ -834,10 +834,15 @@ if test -z "$LEX" || \
         AC_MSG_WARN([*** Could not find Flex on your system.])
         AC_MSG_WARN([*** Flex is required for developer builds of PRTE.])
         AC_MSG_WARN([*** Other versions of Lex are not supported.])
-        AC_MSG_WARN([*** YOU DO NOT NEED FLEX WHEN BUILDING DISTRIBUTION TARBALLS!])
+        AC_MSG_WARN([*** NOTE: If you are building from a tarball downloaded from the PRRTE web site, you do not need Flex.])
         AC_MSG_ERROR([Cannot continue])
     fi
 fi
+
+#
+# Setup Pandoc for man pages
+#
+PRRTE_SETUP_MAN_PAGES
 
 #
 # Look for ps command and arguments

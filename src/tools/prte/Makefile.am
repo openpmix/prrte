@@ -21,13 +21,16 @@
 
 include $(top_srcdir)/Makefile.prrte-rules
 
-man_pages = prte.1
-EXTRA_DIST = $(man_pages:.1=.1in)
+MD_FILES = prte.1.md
+man_pages_from_md = $(MD_FILES:.1.md=.1)
+EXTRA_DIST = $(MD_FILES) $(man_pages_from_md)
 AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS) $(prrte_hwloc_LDFLAGS) $(prrte_libevent_LDFLAGS) $(prrte_pmix_LDFLAGS)
 
 bin_PROGRAMS = prte
 
-nodist_man_MANS = $(man_pages)
+if PRRTE_ENABLE_MAN_PAGES
+man_MANS = $(man_pages_from_md)
+endif
 
 # Ensure that the man pages are rebuilt if the prrte_config.h file
 # changes; a "good enough" way to know if configure was run again (and
@@ -43,6 +46,3 @@ prte_LDADD = \
     $(prrte_hwloc_LIBS) \
     $(prrte_pmix_LIBS) \
 	$(top_builddir)/src/libprrte.la
-
-distclean-local:
-	rm -f $(man_pages)
