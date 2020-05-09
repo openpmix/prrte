@@ -72,7 +72,7 @@ AS_IF([test "X$PERL" = "Xno"],
 
 PRRTE_CONFIGURE_SETUP
 
-prrte_show_title "Configuring project_name_long"
+prrte_show_title "Configuring PRRTE"
 
 #
 # Setup some things that must be done before AM-INIT-AUTOMAKE

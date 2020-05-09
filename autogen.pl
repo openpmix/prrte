@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 #
-# Copyright (c) 2009-2016 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
@@ -603,8 +603,8 @@ if (!$ok || $help_arg) {
 #---------------------------------------------------------------------------
 
 # Check for project existence
-my $project_name_long = "PRRTE";
-my $project_name_short = "PRRTE";
+my $project_name_long = "prrte";
+my $project_name_short = "prrte";
 
 #---------------------------------------------------------------------------
 
