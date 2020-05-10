@@ -24,16 +24,12 @@
 # This makefile.am does not stand on its own - it is included from
 # src/Makefile.am
 
-SUBDIRS += \
-	tools/prted \
-	tools/prun \
+tools_subdirs = \
+    tools/prted \
+    tools/prun \
     tools/prte_info \
     tools/prte \
     tools/pterm
 
-DIST_SUBDIRS += \
-	tools/prted \
-	tools/prun \
-    tools/prte_info \
-    tools/prte \
-    tools/pterm
+SUBDIRS += $(tools_subdirs)
+DIST_SUBDIRS += $(tools_subdirs)
