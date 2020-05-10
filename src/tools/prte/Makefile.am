@@ -32,11 +32,6 @@ if PRRTE_ENABLE_MAN_PAGES
 man_MANS = $(man_pages_from_md)
 endif
 
-# Ensure that the man pages are rebuilt if the prrte_config.h file
-# changes; a "good enough" way to know if configure was run again (and
-# therefore the release date or version may have changed)
-$(nodist_man_MANS): $(top_builddir)/src/include/prrte_config.h
-
 prte_SOURCES = \
         prte.c
 
