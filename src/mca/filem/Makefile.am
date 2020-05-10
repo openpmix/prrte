@@ -30,13 +30,14 @@ headers = filem.h
 libmca_filem_la_SOURCES += $(headers)
 
 # Manual pages
-nodist_man_MANS = prrte_filem.7
-EXTRA_DIST = $(nodist_man_MANS:.7=.7in)
+MD_FILES = prrte_filem.7.md
+man_pages_from_md = $(MD_FILES:.7.md=.7)
 
-# Ensure that the man pages are rebuilt if the prrte_config.h file
-# changes; a "good enough" way to know if configure was run again (and
-# therefore the release date or version may have changed)
-$(nodist_man_MANS): $(top_builddir)/src/include/prrte_config.h
+EXTRA_DIST = $(MD_FILES) $(man_pages_from_md)
+
+if PRRTE_ENABLE_MAN_PAGES
+man_MANS = $(man_pages_from_md)
+endif
 
 # Conditionally install the header files
 if WANT_INSTALL_HEADERS
@@ -48,4 +49,3 @@ include base/Makefile.am
 
 distclean-local:
 	rm -f base/static-components.h
-	rm -f $(nodist_man_MANS)

@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006-2018 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2006-2008 Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2006-2017 Los Alamos National Security, LLC.  All rights
 #                         reserved.
@@ -66,19 +66,19 @@ PRRTE_LOAD_PLATFORM
 # Start it up
 #
 
-AC_CHECK_PROG([PERL],[perl],[perl],[no])
-AS_IF([test "X$PERL" = "Xno"],
-      [AC_MSG_ERROR(["PRRTE requires perl. Aborting"])])
-
 PRRTE_CONFIGURE_SETUP
 
-prrte_show_title "Configuring project_name_long"
+prrte_show_title "Configuring PRRTE"
 
 #
 # Setup some things that must be done before AM-INIT-AUTOMAKE
 #
 
 prrte_show_subtitle "Startup tests"
+
+AC_CHECK_PROG([PERL],[perl],[perl],[no])
+AS_IF([test "X$PERL" = "Xno"],
+      [AC_MSG_ERROR(["PRRTE requires perl. Aborting"])])
 
 AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
@@ -834,10 +834,15 @@ if test -z "$LEX" || \
         AC_MSG_WARN([*** Could not find Flex on your system.])
         AC_MSG_WARN([*** Flex is required for developer builds of PRTE.])
         AC_MSG_WARN([*** Other versions of Lex are not supported.])
-        AC_MSG_WARN([*** YOU DO NOT NEED FLEX WHEN BUILDING DISTRIBUTION TARBALLS!])
+        AC_MSG_WARN([*** NOTE: If you are building from a tarball downloaded from the PRRTE web site, you do not need Flex.])
         AC_MSG_ERROR([Cannot continue])
     fi
 fi
+
+#
+# Setup Pandoc for man pages
+#
+PRRTE_SETUP_MAN_PAGES
 
 #
 # Look for ps command and arguments

@@ -46,19 +46,17 @@ AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS) $(prrte_hwloc_LDFLAGS) $(prrte_libevent_
 
 include $(top_srcdir)/Makefile.prrte-rules
 
-man_pages = prte_info.1
-EXTRA_DIST = $(man_pages:.1=.1in)
+MD_FILES = prte_info.1.md
+man_pages_from_md = $(MD_FILES:.1.md=.1)
+EXTRA_DIST = $(MD_FILES) $(man_pages_from_md)
 
 bin_PROGRAMS = prte_info
 
 dist_prrtedata_DATA = help-prrte-info.txt
 
-nodist_man_MANS = $(man_pages)
-
-# Ensure that the man pages are rebuilt if the prrte_config.h file
-# changes; a "good enough" way to know if configure was run again (and
-# therefore the release date or version may have changed)
-$(nodist_man_MANS): $(top_builddir)/src/include/prrte_config.h
+if PRRTE_ENABLE_MAN_PAGES
+man_MANS = $(man_pages_from_md)
+endif
 
 prte_info_SOURCES = \
         pinfo.h \
@@ -77,6 +75,3 @@ prte_info_LDADD = \
 
 clean-local:
 	test -z "$(PRRTE_CXX_TEMPLATE_REPOSITORY)" || rm -rf $(PRRTE_CXX_TEMPLATE_REPOSITORY)
-
-distclean-local:
-	rm -f $(man_pages)
