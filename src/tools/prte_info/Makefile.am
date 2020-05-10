@@ -72,6 +72,3 @@ prte_info_LDADD = \
     $(prrte_hwloc_LIBS) \
     $(prrte_pmix_LIBS) \
 	$(top_builddir)/src/libprrte.la
-
-clean-local:
-	test -z "$(PRRTE_CXX_TEMPLATE_REPOSITORY)" || rm -rf $(PRRTE_CXX_TEMPLATE_REPOSITORY)
