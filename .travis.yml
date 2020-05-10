@@ -34,7 +34,6 @@ addons:
             - librdmacm-dev
             - libhwloc-dev
             - libevent-dev
-            - cython
             - pandoc
         sources:
             - ubuntu-toolchain-r-test
