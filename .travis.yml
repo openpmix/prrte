@@ -42,9 +42,12 @@ addons:
 env:
     global:
         - AM_MAKEFLAGS="-j4"
-        - CPPFLAGS="-I$HOME/bogus/include"
-        - LDFLAGS="-L$HOME/bogus/lib"
-        - LD_LIBRARY_PATH="$HOME/bogus/lib"
+        - PMIX_PREFIX="$HOME/bogus"
+        - PMIX_BASE_CONFIGURE_ARGS="--prefix=$PMIX_PREFIX --enable-prrterun-prefix-by-default"
+        - DISTCHECK_CONFIGURE_FLAGS="$PMIX_CONFIGURE_ARGS"
+        - CPPFLAGS="-I$PMIX_PREFIX/include"
+        - LDFLAGS="-L$PMIX_PREFIX/bogus/lib"
+        - LD_LIBRARY_PATH="$PMIX_PREFIX/lib"
     matrix:
         - GCC_VERSION=default
         - GCC_VERSION=7
@@ -52,27 +55,24 @@ env:
 before_install:
     - env
     - if [[ "GCC_VERSION" == "7" ]]; then COMPILERS="CC=gcc-7 CXX=g++-7 FC=gfortran-7"; elif [[ "$CC" == "clang" ]]; then COMPILERS="CC=`which clang`"; fi
-    - export CONFIGURE_ARGS="--prefix=$HOME/bogus --enable-prrterun-prefix-by-default $COMPILERS" DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_ARGS"
-    - export DISTCHECK_CONFIGURE_FLAGS="$CONFIGURE_ARGS"
+    - export PMIX_CONFIGURE_ARGS="$PMIX_BASE_CONFIGURE_ARGS $COMPILERS"
+    - export DISTCHECK_CONFIGURE_FLAGS="$PMIX_CONFIGURE_ARGS"
     - if [[ "$GCC_VERSION" == "6" ]] ; then sudo apt-get --assume-yes install gcc-6 g++-6 gfortran-6; elif [[ "$GCC_VERSION" == "7" ]] ; then sudo apt-get --assume-yes install gcc-7 g++-7 gfortran-7; fi
     - echo COMPILERS=$COMPILERS
     - ./contrib/travis/install-pmix.sh $COMPILERS
 
-
-# Note that we use "make -k" to do the entire build, even if there was a
-# build error in there somewhere.  This prevents us from needing to submit
-# to Travis, see the first error, fix that first error, submit again, ...etc.
 install:
     - m4 --version
     - autoconf --version
     - automake --version
     - libtool --version
     - ./autogen.pl
-    - ./configure $CONFIGURE_ARGS
-    - make -k
+    - ./configure $PMIX_CONFIGURE_ARGS
+    - make
     - make install
 
 script:
+    - make distcheck
     - make check
 #   - ./contrib/travis/test_client.sh
 
