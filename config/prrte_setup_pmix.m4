@@ -164,6 +164,11 @@ AC_DEFUN([PRRTE_CHECK_PMIX],[
                                    AC_MSG_WARN([that was dead on arrival])
                                    AC_MSG_ERROR([Please select another version and configure again])])])
 
+        # restore the global flags
+        CPPFLAGS=$prrte_external_pmix_save_CPPFLAGS
+        LDFLAGS=$prrte_external_pmix_save_LDFLAGS
+        LIBS=$prrte_external_pmix_save_LIBS
+
         AS_IF([test "$prrte_external_pmix_version_found" = "0"],
               [AC_MSG_WARN([PRTE does not support PMIx versions])
                AC_MSG_WARN([less than v3.0 as only PMIx-based tools can])
@@ -179,17 +184,17 @@ AC_DEFUN([PRRTE_CHECK_PMIX],[
               [prrte_pmix_CPPFLAGS="-I$pmix_ext_install_dir/include"
                prrte_pmix_LDFLAGS="-L$pmix_ext_install_libdir"])
 
-        PRRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prrte_pmix_CPPFLAGS)
+        PRRTE_FLAGS_APPEND_UNIQ(PRRTE_FINAL_CPPFLAGS, $prrte_pmix_CPPFLAGS)
         PRRTE_WRAPPER_FLAGS_ADD([CPPFLAGS], [$prrte_pmix_CPPFLAGS])
 
         AS_IF([test "$enable_pmix_devel_support" = "yes"],
               [PRRTE_WRAPPER_FLAGS_ADD([CPPFLAGS], [-I$pmix_ext_install_dir/include/pmix -I$pmix_ext_install_dir/include/pmix/src -I$pmix_ext_install_dir/include/pmix/src/include])])
 
-        PRRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prrte_pmix_LDFLAGS)
+        PRRTE_FLAGS_APPEND_UNIQ(PRRTE_FINAL_LDFLAGS, $prrte_pmix_LDFLAGS)
         PRRTE_WRAPPER_FLAGS_ADD([LDFLAGS], [$prrte_pmix_LDFLAGS])
 
         prrte_pmix_LIBS=-lpmix
-        PRRTE_FLAGS_APPEND_UNIQ(LIBS, $prrte_pmix_LIBS)
+        PRRTE_FLAGS_APPEND_UNIQ(PRRTE_FINAL_LIBS, $prrte_pmix_LIBS)
         PRRTE_WRAPPER_FLAGS_ADD(LIBS, $prrte_pmix_LIBS)
     fi
 
