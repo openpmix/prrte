@@ -1088,7 +1088,9 @@ else
     cpp_includes="$PRRTE_TOP_SRCDIR $PRRTE_TOP_SRCDIR/src/include"
 fi
 CPP_INCLUDES="$(echo $cpp_includes | $SED 's/[[^ \]]* */'"$prrte_cc_iquote"'&/g')"
-CPPFLAGS="$CPP_INCLUDES $CPPFLAGS"
+CPPFLAGS="$CPP_INCLUDES $CPPFLAGS $PRRTE_FINAL_CPPFLAGS"
+LDFLAGS="$LDFLAGS $PRRTE_FINAL_LDFLAGS"
+LIBS="$LIBS $PRRTE_FINAL_LIBS"
 
 #
 # Delayed the substitution of CFLAGS and CXXFLAGS until now because

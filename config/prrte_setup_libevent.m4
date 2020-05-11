@@ -15,7 +15,7 @@
 # MCA_libevent_CONFIG([action-if-found], [action-if-not-found])
 # --------------------------------------------------------------------
 AC_DEFUN([PRRTE_LIBEVENT_CONFIG],[
-    PRRTE_VAR_SCOPE_PUSH([prrte_event_dir prrte_event_libdir prrte_event_defaults])
+    PRRTE_VAR_SCOPE_PUSH([prrte_event_dir prrte_event_libdir prrte_event_defaults prrte_check_libevent_save_CPPFLAGS prrte_check_libevent_save_LDFLAGS prrte_check_libevent_save_LIBS])
 
     AC_ARG_WITH([libevent],
                 [AC_HELP_STRING([--with-libevent=DIR],
@@ -29,6 +29,7 @@ AC_DEFUN([PRRTE_LIBEVENT_CONFIG],[
                                 [Search for libevent libraries in DIR ])])
 
     prrte_libevent_support=0
+    prrte_event_defaults=yes
 
     prrte_check_libevent_save_CPPFLAGS="$CPPFLAGS"
     prrte_check_libevent_save_LDFLAGS="$LDFLAGS"
@@ -91,6 +92,8 @@ AC_DEFUN([PRRTE_LIBEVENT_CONFIG],[
                                [prrte_libevent_support=1],
                                [prrte_libevent_support=0])
 
+            # need to add resulting flags to global ones so we can
+            # test for thread support
             AS_IF([test "$prrte_event_defaults" = "no"],
                   [PRRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prrte_libevent_CPPFLAGS)
                    PRRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prrte_libevent_LDFLAGS)])
@@ -117,20 +120,20 @@ AC_DEFUN([PRRTE_LIBEVENT_CONFIG],[
             fi
         fi
         prrte_libevent_source=$prrte_event_dir
-        AS_IF([test "$prrte_event_defaults" = "no"],
-              [PRRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prrte_libevent_CPPFLAGS)
-               PRRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prrte_libevent_CPPFLAGS)
-               PRRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prrte_libevent_LDFLAGS)
-               PRRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prrte_libevent_LDFLAGS)])
-        PRRTE_FLAGS_APPEND_UNIQ(LIBS, $prrte_libevent_LIBS)
-        PRRTE_WRAPPER_FLAGS_ADD(LIBS, $prrte_libevent_LIBS)
-        PRRTE_EVENT_HEADER="<event.h>"
-        PRRTE_EVENT2_THREAD_HEADER="<event2/thread.h>"
     fi
 
     AC_MSG_CHECKING([will libevent support be built])
     if test $prrte_libevent_support -eq 1; then
         AC_MSG_RESULT([yes])
+        AS_IF([test "$prrte_event_defaults" = "no"],
+              [PRRTE_FLAGS_APPEND_UNIQ(PRRTE_FINAL_CPPFLAGS, $prrte_libevent_CPPFLAGS)
+               PRRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prrte_libevent_CPPFLAGS)
+               PRRTE_FLAGS_APPEND_UNIQ(PRRTE_FINAL_LDFLAGS, $prrte_libevent_LDFLAGS)
+               PRRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prrte_libevent_LDFLAGS)])
+        PRRTE_FLAGS_APPEND_UNIQ(PRRTE_FINAL_LIBS, $prrte_libevent_LIBS)
+        PRRTE_WRAPPER_FLAGS_ADD(LIBS, $prrte_libevent_LIBS)
+        PRRTE_EVENT_HEADER="<event.h>"
+        PRRTE_EVENT2_THREAD_HEADER="<event2/thread.h>"
         # Set output variables
         AC_DEFINE_UNQUOTED([PRRTE_EVENT_HEADER], [$PRRTE_EVENT_HEADER],
                            [Location of event.h])
@@ -139,10 +142,12 @@ AC_DEFUN([PRRTE_LIBEVENT_CONFIG],[
         PRRTE_SUMMARY_ADD([[Required Packages]],[[Libevent]], [prrte_libevent], [yes ($prrte_libevent_source)])
     else
         AC_MSG_RESULT([no])
-        CPPFLAGS="$prrte_check_libevent_save_CPPFLAGS"
-        LDFLAGS="$prrte_check_libevent_save_LDFLAGS"
-        LIBS="$prrte_check_libevent_save_LIBS"
     fi
+
+    # restore global flags
+    CPPFLAGS="$prrte_check_libevent_save_CPPFLAGS"
+    LDFLAGS="$prrte_check_libevent_save_LDFLAGS"
+    LIBS="$prrte_check_libevent_save_LIBS"
 
     AC_DEFINE_UNQUOTED([PRRTE_HAVE_LIBEVENT], [$prrte_libevent_support], [Whether we are building against libevent])
 

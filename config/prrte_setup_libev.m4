@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
-# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
@@ -15,7 +15,7 @@
 # MCA_libev_CONFIG([action-if-found], [action-if-not-found])
 # --------------------------------------------------------------------
 AC_DEFUN([PRRTE_LIBEV_CONFIG],[
-    PRRTE_VAR_SCOPE_PUSH([prrte_libev_dir prrte_libev_libdir prrte_libev_standard_header_location prrte_libev_standard_lib_location])
+    PRRTE_VAR_SCOPE_PUSH([prrte_libev_dir prrte_libev_libdir prrte_libev_standard_header_location prrte_libev_standard_lib_location prrte_check_libev_save_CPPFLAGS prrte_check_libev_save_LDFLAGS prrte_check_libev_save_LIBS])
 
     AC_ARG_WITH([libev],
                 [AC_HELP_STRING([--with-libev=DIR],
@@ -32,7 +32,7 @@ AC_DEFUN([PRRTE_LIBEV_CONFIG],[
     AS_IF([test -n "$with_libev" && test "$with_libev" != "no"],
           [AC_MSG_CHECKING([for libev in])
            prrte_check_libev_save_CPPFLAGS="$CPPFLAGS"
-           prrte_check_libeve_save_LDFLAGS="$LDFLAGS"
+           prrte_check_libev_save_LDFLAGS="$LDFLAGS"
            prrte_check_libev_save_LIBS="$LIBS"
            if test "$with_libev" != "yes"; then
                prrte_libev_dir=$with_libev/include
@@ -72,14 +72,14 @@ AC_DEFUN([PRRTE_LIBEV_CONFIG],[
            LIBS="$prrte_check_libev_save_LIBS"])
 
     AS_IF([test $prrte_libev_support -eq 1],
-          [LIBS="$LIBS $prrte_libev_LIBS"
+          [PRRTE_FLAGS_APPEND_UNIQ(PRRTE_FINAL_LIBS, $prrte_libev_LIBS)
            PRRTE_WRAPPER_FLAGS_ADD(LIBS, $prrte_libev_LIBS)
 
            AS_IF([test "$prrte_libev_standard_header_location" != "yes"],
-                 [CPPFLAGS="$CPPFLAGS $prrte_libev_CPPFLAGS"]
-                  PRRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prrte_libev_CPPFLAGS))
+                 [PRRTE_FLAGS_APPEND_UNIQ(PRRTE_FINAL_CPPFLAGS, $prrte_libev_CPPFLAGS)
+                  PRRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prrte_libev_CPPFLAGS)])
            AS_IF([test "$prrte_libev_standard_lib_location" != "yes"],
-                 [LDFLAGS="$LDFLAGS $prrte_libev_LDFLAGS"
+                 [PRRTE_FLAGS_APPEND_UNIQ(PRRTE_FINAL_LDFLAGS $prrte_libev_LDFLAGS)
                   PRRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prrte_libev_LDFLAGS)])])
 
     AC_MSG_CHECKING([will libev support be built])
