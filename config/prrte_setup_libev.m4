@@ -61,7 +61,7 @@ AC_DEFUN([PRRTE_LIBEV_CONFIG],[
            PRRTE_CHECK_PACKAGE([prrte_libev],
                               [event.h],
                               [ev],
-                              [event_base_new],
+                              [ev_async_init],
                               [],
                               [$prrte_libev_dir],
                               [$prrte_libev_libdir],
@@ -91,6 +91,10 @@ AC_DEFUN([PRRTE_LIBEV_CONFIG],[
         PRRTE_SUMMARY_ADD([[Required Packages]],[[libev]],[libev],[$prrte_libev_dir])
     else
         AC_MSG_RESULT([no])
+        # if they asked us to use it, then this is an error
+        AS_IF([test -n "$with_libev" && test "$with_libev" != "no"],
+              [AC_MSG_WARN([LIBEV SUPPORT REQUESTED AND NOT FOUND])
+               AC_MSG_ERROR([CANNOT CONTINUE])])
     fi
 
     AC_DEFINE_UNQUOTED([PRRTE_HAVE_LIBEV], [$prrte_libev_support], [Whether we are building against libev])
