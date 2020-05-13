@@ -5,6 +5,7 @@
 # Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
+# Copyright (c) 2020      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -84,9 +85,9 @@ AC_DEFUN([PRRTE_LIBEVENT_CONFIG],[
 
             PRRTE_CHECK_PACKAGE([prrte_libevent],
                                [event.h],
-                               [event],
+                               [event_core],
                                [event_config_new],
-                               [-levent -levent_pthreads],
+                               [-levent_pthreads],
                                [$prrte_event_dir],
                                [$prrte_event_libdir],
                                [prrte_libevent_support=1],
@@ -103,7 +104,7 @@ AC_DEFUN([PRRTE_LIBEVENT_CONFIG],[
                 # Ensure that this libevent has the symbol
                 # "evthread_set_lock_callbacks", which will only exist if
                 # libevent was configured with thread support.
-                AC_CHECK_LIB([event], [evthread_set_lock_callbacks],
+                AC_CHECK_LIB([event_core], [evthread_set_lock_callbacks],
                              [],
                              [AC_MSG_WARN([libevent does not have thread support])
                               AC_MSG_WARN([PRRTE requires libevent to be compiled with])
