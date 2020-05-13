@@ -16,7 +16,7 @@ dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 dnl                         reserved.
 dnl Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
-dnl Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -172,7 +172,7 @@ AC_DEFUN([PRRTE_CHECK_LSF],[
                 [AC_MSG_WARN([===================================================================])
                  AC_MSG_WARN([Conflicting libevent.so libraries detected on the system.])
                  AC_MSG_WARN([])
-                 AC_MSG_WARN([A system-installed Libevent library was detected and the Open MPI])
+                 AC_MSG_WARN([A system-installed Libevent library was detected and the PRRTE])
                  AC_MSG_WARN([build system chose to use the 'external' component expecting to])
                  AC_MSG_WARN([link against the Libevent in the linker search path.])
                  AC_MSG_WARN([LSF provides a libevent.so that is not from Libevent in its])
