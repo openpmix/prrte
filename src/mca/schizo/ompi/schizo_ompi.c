@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2011 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -100,8 +100,10 @@ static char *frameworks[] = {
     "rcache",
     "reachable",
     "shmem",
+    "threads",
     "timer",
     /* OMPI frameworks */
+    "mpi", /* global options set in runtime/ompi_mpi_params.c */
     "bml",
     "coll",
     "crcp",
@@ -606,7 +608,8 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
             return PRRTE_ERR_NOT_FOUND;
         }
         while (NULL != (line = schizo_getline(fp))) {
-            opts = prrte_argv_split(line, ' ');
+            if('\0' == line[0]) continue; /* skip empty lines */
+            opts = prrte_argv_split_with_empty(line, ' ');
             if (NULL == opts) {
                 prrte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
                 free(line);
@@ -619,6 +622,10 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 return PRRTE_ERR_BAD_PARAM;
             }
             for (n=0; NULL != opts[n]; n++) {
+                if ('\0' == opts[n][0] || '#' == opts[n][0]) {
+                    /* the line is only spaces, or a comment, ignore */
+                    break;
+                }
                 if (0 == strcmp(opts[n], "-x")) {
                     /* the next value must be the envar */
                     if (NULL == opts[n+1]) {
@@ -760,7 +767,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
 
     if (NULL != cache) {
         /* add the results into dstenv */
-        for (n=0; NULL != cache[n]; n++) {
+        for (i=0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
                 prrte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
                 prrte_setenv(p1, cachevals[i], true, dstenv);
