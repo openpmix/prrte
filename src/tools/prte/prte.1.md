@@ -99,6 +99,17 @@ useful to most PRTE users:
 
 There may be other options listed with `prte --help`.
 
+## Items from `prun` that may need to be added here (JJH RETURN HERE)
+
+`-max-vm-size, --max-vm-size <size>`
+
+:   Number of processes to run.
+
+`-novm, --novm`
+
+:   Execute without creating an allocation-spanning virtual machine
+    (only start daemons on nodes hosting application procs).
+
 # DESCRIPTION
 
 `prte` starts a Distributed Virtual Machine (DVM) by launching a
