@@ -30,7 +30,9 @@ AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS) $(prrte_hwloc_LDFLAGS) $(prrte_libevent_
 
 bin_PROGRAMS = pcc
 
-man_MANS = $(man_pages_from_md)
+if PRRTE_ENABLE_MAN_PAGES
+_man_MANS = $(man_pages_from_md)
+endif
 
 nodist_prrtedata_DATA = pcc-wrapper-data.txt
 
