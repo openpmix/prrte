@@ -469,16 +469,12 @@ int prrte_show_help_norender(const char *filename, const char *topic,
      * or ROUTED has not been setup,
      * or we weren't given an HNP, then all we can do is process this locally
      */
-    if (PRRTE_PROC_IS_MASTER) {
+    if (PRRTE_PROC_IS_MASTER ||
+        NULL == prrte_rml.send_buffer_nb ||
+        NULL == prrte_routed.get_route ||
+        NULL == prrte_process_info.my_hnp_uri) {
         rc = show_help(filename, topic, output, PRRTE_PROC_MY_NAME);
         goto CLEANUP;
-    } else {
-        if (NULL == prrte_rml.send_buffer_nb ||
-            NULL == prrte_routed.get_route ||
-            NULL == prrte_process_info.my_hnp_uri) {
-            rc = show_help(filename, topic, output, PRRTE_PROC_MY_NAME);
-            goto CLEANUP;
-        }
     }
 
     /* otherwise, we relay the output message to
@@ -505,37 +501,16 @@ int prrte_show_help_norender(const char *filename, const char *topic,
         /* pack the resulting string */
         prrte_dss.pack(buf, &output, 1, PRRTE_STRING);
 
-        /* if we are a daemon, then send it via RML to the HNP */
-        if (PRRTE_PROC_IS_DAEMON) {
-            /* send it to the HNP */
-            if (PRRTE_SUCCESS != (rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_HNP, buf,
-                                                              PRRTE_RML_TAG_SHOW_HELP,
-                                                              prrte_rml_send_callback, NULL))) {
-                PRRTE_RELEASE(buf);
-                /* okay, that didn't work, output locally  */
-                prrte_output(output_stream, "%s", output);
-            } else {
-                rc = PRRTE_SUCCESS;
-            }
-        } else {
-            /* if we are not a daemon (i.e., we are an app) and if PMIx
-             * support for "log" is available, then use that channel */
-            pmix_status_t ret;
-            pmix_info_t info;
-            pmix_byte_object_t pbo;
-            int32_t nsize;
+        /* send it via RML to the HNP */
 
-            prrte_dss.unload(buf, (void**)&pbo.bytes, &nsize);
-            pbo.size = nsize;
-            PMIX_INFO_LOAD(&info, PRRTE_PMIX_SHOW_HELP, &pbo, PMIX_BYTE_OBJECT);
-            ret = PMIx_Log(&info, 1, NULL, 0);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-            }
-            PMIX_INFO_DESTRUCT(&info);
+        if (PRRTE_SUCCESS != (rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_HNP, buf,
+                                                          PRRTE_RML_TAG_SHOW_HELP,
+                                                          prrte_rml_send_callback, NULL))) {
             PRRTE_RELEASE(buf);
+            /* okay, that didn't work, output locally  */
+            prrte_output(output_stream, "%s", output);
+        } else {
             rc = PRRTE_SUCCESS;
-            goto CLEANUP;
         }
         am_inside = false;
     }
@@ -548,6 +523,8 @@ int prrte_show_help_suppress(const char *filename, const char *topic)
 {
     int rc = PRRTE_SUCCESS;
     int8_t have_output = 0;
+    prrte_buffer_t *buf;
+    static bool am_inside = false;
 
     if (prrte_execute_quiet) {
         return PRRTE_SUCCESS;
@@ -561,43 +538,40 @@ int prrte_show_help_suppress(const char *filename, const char *topic)
         NULL == prrte_routed.get_route ||
         NULL == prrte_process_info.my_hnp_uri) {
         rc = show_help(filename, topic, NULL, PRRTE_PROC_MY_NAME);
+        return rc;
     }
 
     /* otherwise, we relay the output message to
      * the HNP for processing
      */
-    else {
-        prrte_buffer_t *buf;
-        static bool am_inside = false;
 
-        /* JMS Note that we *may* have a recursion situation here where
-           the RML could call show_help.  Need to think about this
-           properly, but put a safeguard in here for sure for the time
-           being. */
-        if (am_inside) {
-            rc = show_help(filename, topic, NULL, PRRTE_PROC_MY_NAME);
-        } else {
-            am_inside = true;
+    /* JMS Note that we *may* have a recursion situation here where
+       the RML could call show_help.  Need to think about this
+       properly, but put a safeguard in here for sure for the time
+       being. */
+    if (am_inside) {
+        rc = show_help(filename, topic, NULL, PRRTE_PROC_MY_NAME);
+    } else {
+        am_inside = true;
 
-            /* build the message to the HNP */
-            buf = PRRTE_NEW(prrte_buffer_t);
-            /* pack the filename of the show_help text file */
-            prrte_dss.pack(buf, &filename, 1, PRRTE_STRING);
-            /* pack the topic tag */
-            prrte_dss.pack(buf, &topic, 1, PRRTE_STRING);
-            /* pack the flag that we DO NOT have a string */
-            prrte_dss.pack(buf, &have_output, 1, PRRTE_INT8);
-            /* send it to the HNP */
-            if (PRRTE_SUCCESS != (rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_HNP, buf,
-                                                              PRRTE_RML_TAG_SHOW_HELP,
-                                                              prrte_rml_send_callback, NULL))) {
-                PRRTE_ERROR_LOG(rc);
-                PRRTE_RELEASE(buf);
-                /* okay, that didn't work, just process locally error, just ignore return  */
-                show_help(filename, topic, NULL, PRRTE_PROC_MY_NAME);
-            }
-            am_inside = false;
+        /* build the message to the HNP */
+        buf = PRRTE_NEW(prrte_buffer_t);
+        /* pack the filename of the show_help text file */
+        prrte_dss.pack(buf, &filename, 1, PRRTE_STRING);
+        /* pack the topic tag */
+        prrte_dss.pack(buf, &topic, 1, PRRTE_STRING);
+        /* pack the flag that we DO NOT have a string */
+        prrte_dss.pack(buf, &have_output, 1, PRRTE_INT8);
+        /* send it to the HNP */
+        if (PRRTE_SUCCESS != (rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_HNP, buf,
+                                                          PRRTE_RML_TAG_SHOW_HELP,
+                                                          prrte_rml_send_callback, NULL))) {
+            PRRTE_ERROR_LOG(rc);
+            PRRTE_RELEASE(buf);
+            /* okay, that didn't work, just process locally error, just ignore return  */
+            show_help(filename, topic, NULL, PRRTE_PROC_MY_NAME);
         }
+        am_inside = false;
     }
 
     return PRRTE_SUCCESS;

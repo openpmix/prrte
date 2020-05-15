@@ -182,13 +182,13 @@ hwloc_cpuset_t prrte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
 
 hwloc_cpuset_t prrte_hwloc_base_setup_summary(hwloc_topology_t topo)
 {
-    hwloc_obj_t root;
     hwloc_cpuset_t avail = NULL;
-
-    root = hwloc_get_root_obj(topo);
 
     /* get the root available cpuset */
 #if HWLOC_API_VERSION < 0x20000
+    hwloc_obj_t root;
+    root = hwloc_get_root_obj(topo);
+
     if (NULL == root->online_cpuset && NULL == root->allowed_cpuset) {
         /* we are hosed */
         return NULL;
