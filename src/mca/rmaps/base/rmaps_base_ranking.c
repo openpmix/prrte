@@ -531,26 +531,11 @@ int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata)
      * However, if this was the default ranking policy (as opposed to
      * something given by the user), then fall back to rank-by slot
      */
-    if (PRRTE_RANK_BY_NUMA == PRRTE_GET_RANKING_POLICY(map->ranking)) {
+    if (PRRTE_RANK_BY_PACKAGE == PRRTE_GET_RANKING_POLICY(map->ranking)) {
         prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                            "mca:rmaps: computing ranks by NUMA for job %s",
+                            "mca:rmaps: computing ranks by package for job %s",
                             PRRTE_JOBID_PRINT(jdata->jobid));
-        if (PRRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_NODE, 0))) {
-            if (PRRTE_ERR_NOT_SUPPORTED == rc &&
-                !(PRRTE_RANKING_GIVEN & PRRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
-                PRRTE_SET_RANKING_POLICY(map->ranking, PRRTE_RANK_BY_SLOT);
-                goto rankbyslot;
-            }
-            PRRTE_ERROR_LOG(rc);
-        }
-        return rc;
-    }
-
-    if (PRRTE_RANK_BY_SOCKET == PRRTE_GET_RANKING_POLICY(map->ranking)) {
-        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                            "mca:rmaps: computing ranks by socket for job %s",
-                            PRRTE_JOBID_PRINT(jdata->jobid));
-        if (PRRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_SOCKET, 0))) {
+        if (PRRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_PACKAGE, 0))) {
             if (PRRTE_ERR_NOT_SUPPORTED == rc &&
                 !(PRRTE_RANKING_GIVEN & PRRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
                 PRRTE_SET_RANKING_POLICY(map->ranking, PRRTE_RANK_BY_SLOT);
@@ -639,8 +624,7 @@ int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata)
         return rc;
     }
 
-    if (PRRTE_RANK_BY_NODE == PRRTE_GET_RANKING_POLICY(map->ranking) ||
-        PRRTE_RANK_BY_BOARD == PRRTE_GET_RANKING_POLICY(map->ranking)) {
+    if (PRRTE_RANK_BY_NODE == PRRTE_GET_RANKING_POLICY(map->ranking)) {
         prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                             "mca:rmaps:base: computing vpids by node for job %s",
                             PRRTE_JOBID_PRINT(jdata->jobid));

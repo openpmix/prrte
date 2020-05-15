@@ -52,7 +52,7 @@ prrte_rmaps_base_module_t prrte_rmaps_ppr_module = {
 typedef enum {
     PRRTE_HWLOC_NODE_LEVEL=0,
     PRRTE_HWLOC_NUMA_LEVEL,
-    PRRTE_HWLOC_SOCKET_LEVEL,
+    PRRTE_HWLOC_PACKAGE_LEVEL,
     PRRTE_HWLOC_L3CACHE_LEVEL,
     PRRTE_HWLOC_L2CACHE_LEVEL,
     PRRTE_HWLOC_L1CACHE_LEVEL,
@@ -87,7 +87,7 @@ static int ppr_mapper(prrte_job_t *jdata)
     prrte_list_item_t *item;
     prrte_std_cntr_t num_slots;
     prrte_app_idx_t idx;
-    char **ppr_req, **ck;
+    char **ppr_req, **ck, *jobppr=NULL;
     size_t len;
     bool initial_map=true;
 
@@ -108,20 +108,25 @@ static int ppr_mapper(prrte_job_t *jdata)
                             PRRTE_JOBID_PRINT(jdata->jobid));
         return PRRTE_ERR_TAKE_NEXT_OPTION;
     }
-    if (NULL == jdata->map->ppr ||
+
+    if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PPR, (void**)&jobppr, PRRTE_STRING) ||
+        NULL == jobppr ||
         PRRTE_MAPPING_PPR != PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         /* not for us */
         prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                             "mca:rmaps:ppr: job %s not using ppr mapper PPR %s policy %s",
                             PRRTE_JOBID_PRINT(jdata->jobid),
-                            (NULL == jdata->map->ppr) ? "NULL" : jdata->map->ppr,
+                            (NULL == jobppr) ? "NULL" : jobppr,
                             (PRRTE_MAPPING_PPR == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) ? "PPRSET" : "PPR NOTSET");
+        if (NULL != jobppr) {
+            free(jobppr);
+        }
         return PRRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps:ppr: mapping job %s with ppr %s",
-                        PRRTE_JOBID_PRINT(jdata->jobid), jdata->map->ppr);
+                        PRRTE_JOBID_PRINT(jdata->jobid), jobppr);
 
     /* flag that I did the mapping */
     if (NULL != jdata->map->last_mapper) {
@@ -134,15 +139,16 @@ static int ppr_mapper(prrte_job_t *jdata)
 
     /* parse option */
     n=0;
-    ppr_req = prrte_argv_split(jdata->map->ppr, ',');
+    ppr_req = prrte_argv_split(jobppr, ',');
     for (j=0; NULL != ppr_req[j]; j++) {
         /* split on the colon */
         ck = prrte_argv_split(ppr_req[j], ':');
         if (2 != prrte_argv_count(ck)) {
             /* must provide a specification */
-            prrte_show_help("help-prrte-rmaps-ppr.txt", "invalid-ppr", true, jdata->map->ppr);
+            prrte_show_help("help-prrte-rmaps-ppr.txt", "invalid-ppr", true, jobppr);
             prrte_argv_free(ppr_req);
             prrte_argv_free(ck);
+            free(jobppr);
             return PRRTE_ERR_SILENT;
         }
         len = strlen(ck[1]);
@@ -164,12 +170,12 @@ static int ppr_mapper(prrte_job_t *jdata)
                 PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYCORE);
             }
             n++;
-        } else if (0 == strncasecmp(ck[1], "socket", len) ||
+        } else if (0 == strncasecmp(ck[1], "package", len) ||
                    0 == strncasecmp(ck[1], "skt", len)) {
-            ppr[PRRTE_HWLOC_SOCKET_LEVEL] = strtol(ck[0], NULL, 10);
-            if (start < PRRTE_HWLOC_SOCKET_LEVEL) {
-                start = PRRTE_HWLOC_SOCKET_LEVEL;
-                PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYSOCKET);
+            ppr[PRRTE_HWLOC_PACKAGE_LEVEL] = strtol(ck[0], NULL, 10);
+            if (start < PRRTE_HWLOC_PACKAGE_LEVEL) {
+                start = PRRTE_HWLOC_PACKAGE_LEVEL;
+                PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYPACKAGE);
             }
             n++;
         } else if (0 == strncasecmp(ck[1], "l1cache", len)) {
@@ -196,18 +202,12 @@ static int ppr_mapper(prrte_job_t *jdata)
                 PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYL3CACHE);
             }
             n++;
-        } else if (0 == strncasecmp(ck[1], "numa", len)) {
-            ppr[PRRTE_HWLOC_NUMA_LEVEL] = strtol(ck[0], NULL, 10);
-            if (start < PRRTE_HWLOC_NUMA_LEVEL) {
-                start = PRRTE_HWLOC_NUMA_LEVEL;
-                PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYNUMA);
-            }
-            n++;
         } else {
             /* unknown spec */
-            prrte_show_help("help-prrte-rmaps-ppr.txt", "unrecognized-ppr-option", true, ck[1], jdata->map->ppr);
+            prrte_show_help("help-prrte-rmaps-ppr.txt", "unrecognized-ppr-option", true, ck[1], jobppr);
             prrte_argv_free(ppr_req);
             prrte_argv_free(ck);
+            free(jobppr);
             return PRRTE_ERR_SILENT;
         }
         prrte_argv_free(ck);
@@ -216,6 +216,7 @@ static int ppr_mapper(prrte_job_t *jdata)
     /* if nothing was given, that's an error */
     if (0 == n) {
         prrte_output(0, "NOTHING GIVEN");
+        free(jobppr);
         return PRRTE_ERR_SILENT;
     }
     /* if more than one level was specified, then pruning will be reqd */
@@ -361,13 +362,15 @@ static int ppr_mapper(prrte_job_t *jdata)
                             prrte_show_help("help-prrte-rmaps-base.txt", "prrte-rmaps-base:alloc-error",
                                            true, app->num_procs, app->app);
                             PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-                            return PRRTE_ERR_SILENT;
+                            rc = PRRTE_ERR_SILENT;
+                            goto error;
                         } else if (PRRTE_MAPPING_NO_OVERSUBSCRIBE & PRRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                             /* if we were explicitly told not to oversubscribe, then don't */
                             prrte_show_help("help-prrte-rmaps-base.txt", "prrte-rmaps-base:alloc-error",
                                            true, app->num_procs, app->app);
                             PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-                            return PRRTE_ERR_SILENT;
+                            rc = PRRTE_ERR_SILENT;
+                            goto error;
                         }
                     }
                 }
@@ -386,7 +389,7 @@ static int ppr_mapper(prrte_job_t *jdata)
         if (PRRTE_VPID_MAX != total_procs && nprocs_mapped < total_procs) {
             /* couldn't map them all */
             prrte_show_help("help-prrte-rmaps-ppr.txt", "ppr-too-many-procs",
-                           true, app->app, app->num_procs, nprocs_mapped, total_procs, jdata->map->ppr);
+                           true, app->app, app->num_procs, nprocs_mapped, total_procs, jobppr);
             rc = PRRTE_ERR_SILENT;
             goto error;
         }
@@ -397,18 +400,14 @@ static int ppr_mapper(prrte_job_t *jdata)
          */
         jdata->num_procs += app->num_procs;
 
-        while (NULL != (item = prrte_list_remove_first(&node_list))) {
-            PRRTE_RELEASE(item);
-        }
-        PRRTE_DESTRUCT(&node_list);
+        PRRTE_LIST_DESTRUCT(&node_list);
     }
+    free(jobppr);
     return PRRTE_SUCCESS;
 
   error:
-    while (NULL != (item = prrte_list_remove_first(&node_list))) {
-        PRRTE_RELEASE(item);
-    }
-    PRRTE_DESTRUCT(&node_list);
+    PRRTE_LIST_DESTRUCT(&node_list);
+    free(jobppr);
     return rc;
 }
 
@@ -626,7 +625,7 @@ static int assign_locations(prrte_job_t *jdata)
     hwloc_obj_t obj;
     unsigned int cache_level=0;
     int ppr, cnt, nobjs, nprocs_mapped;
-    char **ppr_req, **ck;
+    char **ppr_req, **ck, *jobppr;
 
     if (NULL == jdata->map->last_mapper ||
         0 != strcasecmp(jdata->map->last_mapper, c->mca_component_name)) {
@@ -638,9 +637,11 @@ static int assign_locations(prrte_job_t *jdata)
         return PRRTE_ERR_TAKE_NEXT_OPTION;
     }
 
+    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PPR, (void**)&jobppr, PRRTE_STRING);
+
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps:ppr: assigning locations for job %s with ppr %s policy %s",
-                        PRRTE_JOBID_PRINT(jdata->jobid), jdata->map->ppr,
+                        PRRTE_JOBID_PRINT(jdata->jobid), jobppr,
                         prrte_rmaps_base_print_mapping(jdata->map->mapping));
 
     /* pickup the object level */
@@ -650,8 +651,8 @@ static int assign_locations(prrte_job_t *jdata)
         level = HWLOC_OBJ_PU;
     } else if (PRRTE_MAPPING_BYCORE == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         level = HWLOC_OBJ_CORE;
-    } else if (PRRTE_MAPPING_BYSOCKET == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
-        level = HWLOC_OBJ_SOCKET;
+    } else if (PRRTE_MAPPING_BYPACKAGE == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        level = HWLOC_OBJ_PACKAGE;
     } else if (PRRTE_MAPPING_BYL1CACHE == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         level = HWLOC_OBJ_L1CACHE;
         cache_level = 1;
@@ -661,15 +662,13 @@ static int assign_locations(prrte_job_t *jdata)
     } else if (PRRTE_MAPPING_BYL3CACHE == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         level = HWLOC_OBJ_L3CACHE;
         cache_level = 3;
-    } else if (PRRTE_MAPPING_BYNUMA == PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
-        level = HWLOC_OBJ_NUMANODE;
     } else {
         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
         return PRRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     /* get the ppr value */
-    ppr_req = prrte_argv_split(jdata->map->ppr, ',');
+    ppr_req = prrte_argv_split(jobppr, ',');
     ck = prrte_argv_split(ppr_req[0], ':');
     ppr = strtol(ck[0], NULL, 10);
     prrte_argv_free(ck);

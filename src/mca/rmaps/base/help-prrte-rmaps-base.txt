@@ -107,10 +107,10 @@ Please revise the conflict and try again.
 #
 [too-many-cpus-per-rank]
 Your job has requested more cpus per process(rank) than there
-are cpus in a socket:
+are cpus in a package:
 
   Cpus/rank: %d
-  #cpus/socket: %d
+  #cpus/package: %d
 
 Please correct one or both of these values and try again.
 #
@@ -133,12 +133,9 @@ The specified %s policy is not recognized:
 Please check for a typo or ensure that the option is a supported
 one.
 #
-[redefining-policy]
-Conflicting directives for %s policy are causing the policy
-to be redefined:
-
-  New policy:   %s
-  Prior policy:  %s
+[oversubscribe-conflict]
+Conflicting directives for the default oversubscription policy were
+given stating that oversubscription was both allowed and not allowed.
 
 Please check that only one policy is defined.
 #
@@ -455,3 +452,52 @@ available cpus:
 
 Please adjust either the number of processes per node or
 the list of cpus.
+#
+[unsupported-default-modifier]
+A %s modifier was provided that is not supported as a default value:
+
+  Modifier:  %s
+
+You can provide this modifier on a per-job basis, but it cannot
+be the default setting.
+#
+[unsupported-default-policy]
+A %s policy was provided that is not supported as a default value:
+
+  Policy:  %s
+
+You can provide this policy on a per-job basis, but it cannot
+be the default setting.
+#
+[missing-value]
+A %s was given that requires a value, but no value for it was given
+or the value is missing the required '=' sign:
+
+  Policy:  %s
+  Given:   %s
+
+Please provide a value for this policy, or remove it.
+#
+[insufficient-cpus]
+An insufficient number of CPUs was found while attempting to map the job
+using the given request:
+
+  Mapping policy:  %s
+  Default cpuset:  %s
+  CPU list:        %s
+  Available CPUs:  %s
+
+Please modify either the external limit set by the resource manager (e.g.,
+cgroup), the default cpuset specified, or the cpu list provided as the
+mapping policy modifier.
+#
+[insufficient-cpus-per-proc]
+A request was made to bind a given number of cpus to each process, but
+not enough cpus are available to meet the request:
+
+  Binding policy:  %s
+  Node:            %s
+  CPU envelope:    %s
+  CPUs per proc:   %d
+
+Please adjust your request and try again.

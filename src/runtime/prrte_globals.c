@@ -843,9 +843,6 @@ static void prrte_job_map_construct(prrte_job_map_t* map)
     map->mapping = 0;
     map->ranking = 0;
     map->binding = 0;
-    map->ppr = NULL;
-    map->cpus_per_rank = 0;
-    map->display_map = false;
     map->num_new_daemons = 0;
     map->daemon_vpid_start = PRRTE_VPID_INVALID;
     map->num_nodes = 0;
@@ -866,9 +863,6 @@ static void prrte_job_map_destruct(prrte_job_map_t* map)
     }
     if (NULL != map->last_mapper) {
         free(map->last_mapper);
-    }
-    if (NULL != map->ppr) {
-        free(map->ppr);
     }
     for (i=0; i < map->nodes->size; i++) {
         if (NULL != (node = (prrte_node_t*)prrte_pointer_array_get_item(map->nodes, i))) {

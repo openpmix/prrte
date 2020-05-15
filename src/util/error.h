@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
- * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,9 +27,14 @@
 
 BEGIN_C_DECLS
 
-#define PRRTE_ERROR_LOG(r) \
-    prrte_output(0, "PRRTE ERROR: %s in file %s at line %d", \
-                prrte_strerror((r)), __FILE__, __LINE__);
+#define PRRTE_ERROR_LOG(r)                                          \
+    do {                                                            \
+        if (PRRTE_ERR_SILENT != (r)) {                              \
+            prrte_output(0, "PRRTE ERROR: %s in file %s at line %d", \
+                         prrte_strerror((r)), __FILE__, __LINE__);      \
+        }                                                               \
+    } while(0)
+
 /**
  * Return string for given error message
  *

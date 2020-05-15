@@ -358,8 +358,8 @@ const char *prrte_attr_key_to_str(prrte_attribute_key_t key)
             return "JOB-LAUNCHED-DAEMONS";
         case PRRTE_JOB_REPORT_BINDINGS:
             return "JOB-REPORT-BINDINGS";
-        case PRRTE_JOB_CPU_LIST:
-            return "JOB-CPU-LIST";
+        case PRRTE_JOB_CPUSET:
+            return "JOB-CPUSET";
         case PRRTE_JOB_NOTIFICATIONS:
             return "JOB-NOTIFICATIONS";
         case PRRTE_JOB_ROOM_NUM:
@@ -438,6 +438,18 @@ const char *prrte_attr_key_to_str(prrte_attribute_key_t key)
             return "JOB_TRACE_TIMEOUT_EVENT";
         case PRRTE_JOB_INHERIT:
             return "JOB_INHERIT";
+        case PRRTE_JOB_PES_PER_PROC:
+            return "JOB_PES_PER_PROC";
+        case PRRTE_JOB_DIST_DEVICE:
+            return "JOB_DIST_DEVICE";
+        case PRRTE_JOB_HWT_CPUS:
+            return "JOB_HWT_CPUS";
+        case PRRTE_JOB_CORE_CPUS:
+            return "JOB_CORE_CPUS";
+        case PRRTE_JOB_PPR:
+            return "JOB_PPR";
+        case PRRTE_JOB_NOINHERIT:
+            return "JOB_NOINHERIT";
 
         case PRRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

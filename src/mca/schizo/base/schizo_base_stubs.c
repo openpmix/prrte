@@ -347,10 +347,23 @@ static int process_deprecated_cli(prrte_cmd_line_t *cmdline,
             for (n=0; NULL != cv->options[n]; n++) {
                 if (0 == strcmp(pargs[i], cv->options[n])) {
                     rc = cv->convert(cv->options[n], argv, i);
-                    if (PRRTE_SUCCESS != rc && PRRTE_ERR_SILENT != rc) {
+                    if (PRRTE_SUCCESS != rc &&
+                        PRRTE_ERR_SILENT != rc &&
+                        PRRTE_ERR_TAKE_NEXT_OPTION != rc &&
+                        PRRTE_OPERATION_SUCCEEDED != rc) {
                         return rc;
                     }
-                    --i;
+                    if (PRRTE_ERR_TAKE_NEXT_OPTION == rc) {
+                        /* we did the conversion but don't want
+                         * to deprecate i */
+                        rc = PRRTE_SUCCESS;
+                    } else if (PRRTE_OPERATION_SUCCEEDED == rc) {
+                        /* we did not do a conversion but don't
+                         * want to deprecate i */
+                        rc = PRRTE_ERR_SILENT;
+                    } else {
+                        --i;
+                    }
                     found = true;
                     if (PRRTE_ERR_SILENT != rc) {
                         ret = PRRTE_OPERATION_SUCCEEDED;

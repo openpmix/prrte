@@ -53,14 +53,18 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prrte_state_caddy_t *caddy = (prrte_state_caddy_t*)cbdata;
     prrte_job_t *jdata;
     prrte_node_t *node;
-    int rc, i, ppx = 0;
-    bool did_map, pernode = false, persocket = false;
+    int rc, i;
+    bool did_map, pernode = false, perpackage = false;
     prrte_rmaps_base_selected_module_t *mod;
     prrte_job_t *parent = NULL;
     prrte_vpid_t nprocs;
     prrte_app_context_t *app;
     bool inherit = false;
     prrte_process_name_t name, *nptr;
+    char *tmp, *p;
+    uint16_t u16 = 0;
+    uint16_t *u16ptr = &u16, cpus_per_rank;
+    bool use_hwthreads = false;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -75,10 +79,15 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
      * request inheritance, then don't inherit the launch directives */
     nptr = &name;
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PRRTE_NAME)) {
-        if (NULL != (parent = prrte_get_job_data_object(name.jobid)) &&
-            !PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
+        if (NULL != (parent = prrte_get_job_data_object(name.jobid))) {
             if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_INHERIT, NULL, PRRTE_BOOL)) {
                 inherit = true;
+            } else if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_NOINHERIT, NULL, PRRTE_BOOL)) {
+                inherit = false;
+            } else if (PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
+                /* ensure we inherit the defaults as this is equivalent to an initial launch */
+                inherit = true;
+                parent = NULL;
             } else {
                 inherit = prrte_rmaps_base.inherit;
             }
@@ -86,13 +95,13 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
                                 "mca:rmaps: dynamic job %s %s inherit launch directives - parent %s is %s",
                                 PRRTE_JOBID_PRINT(jdata->jobid),
                                 inherit ? "will" : "will not",
-                                PRRTE_JOBID_PRINT((parent->jobid)),
+                                (NULL == parent) ? "N/A" : PRRTE_JOBID_PRINT((parent->jobid)),
                                 (NULL == parent) ? "NULL" : ((PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL) ? "TOOL" : "NON-TOOL")));
         } else {
             inherit = true;
         }
     } else {
-        /* initial launch always takes on default MCA params or non-specified policies */
+        /* initial launch always takes on default MCA params for non-specified policies */
         inherit = true;
     }
 
@@ -100,35 +109,71 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
         jdata->map = PRRTE_NEW(prrte_job_map_t);
     }
 
-    if (inherit) {
-        if (NULL == jdata->map->ppr) {
+    if (inherit && NULL != parent) {
+        /* if not already assigned, inherit the parent's ppr */
+        if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PPR, NULL, PRRTE_STRING)) {
             /* get the parent job's ppr, if it had one */
-            if (NULL != parent && NULL != parent->map && NULL != parent->map->ppr) {
-                jdata->map->ppr = strdup(parent->map->ppr);
-            } else if (NULL != prrte_rmaps_base.ppr) {
-                /* if it didn't, then inherit the default one if there is one */
-                jdata->map->ppr = strdup(prrte_rmaps_base.ppr);
+            if (prrte_get_attribute(&parent->attributes, PRRTE_JOB_PPR, (void**)&tmp, PRRTE_STRING)) {
+                prrte_set_attribute(&jdata->attributes, PRRTE_ATTR_GLOBAL, PRRTE_JOB_PPR, tmp, PRRTE_STRING);
+                free(tmp);
             }
         }
-        if (0 == jdata->map->cpus_per_rank) {
-            if (NULL != parent && NULL != parent->map) {
-                jdata->map->cpus_per_rank = parent->map->cpus_per_rank;
+        /* if not already assigned, inherit the parent's pes/proc */
+        if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, NULL, PRRTE_UINT16)) {
+            /* get the parent job's pes/proc, if it had one */
+            if (prrte_get_attribute(&parent->attributes, PRRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRRTE_UINT16)) {
+                prrte_set_attribute(&jdata->attributes, PRRTE_ATTR_GLOBAL, PRRTE_JOB_PES_PER_PROC, u16ptr, PRRTE_UINT16);
+
+            }
+        }
+        /* if not already assigned, inherit the parent's cpu designation */
+        if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL) &&
+            !prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CORE_CPUS, NULL, PRRTE_BOOL)) {
+            /* get the parent job's designation, if it had one */
+            if (prrte_get_attribute(&parent->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+                prrte_set_attribute(&jdata->attributes, PRRTE_ATTR_GLOBAL, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL);
+            } else if (prrte_get_attribute(&parent->attributes, PRRTE_JOB_CORE_CPUS, NULL, PRRTE_BOOL)) {
+                prrte_set_attribute(&jdata->attributes, PRRTE_ATTR_GLOBAL, PRRTE_JOB_CORE_CPUS, NULL, PRRTE_BOOL);
             } else {
-                jdata->map->cpus_per_rank = prrte_rmaps_base.cpus_per_rank;
+                /* default */
+                if (prrte_rmaps_base.hwthread_cpus) {
+                    prrte_set_attribute(&jdata->attributes, PRRTE_ATTR_GLOBAL, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL);
+                } else {
+                    prrte_set_attribute(&jdata->attributes, PRRTE_ATTR_GLOBAL, PRRTE_JOB_CORE_CPUS, NULL, PRRTE_BOOL);
+                }
             }
         }
     }
-    if (NULL != jdata->map->ppr) {
-        /* get the procs/object */
-        ppx = strtoul(jdata->map->ppr, NULL, 10);
-        if (NULL != strstr(jdata->map->ppr, "node")) {
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PPR, (void**)&tmp, PRRTE_STRING)) {
+        if (NULL != strcasestr(tmp, "node")) {
             pernode = true;
-        } else if (NULL != strstr(jdata->map->ppr, "socket")) {
-            persocket = true;
+            /* get the ppn */
+            if (NULL == (p = strchr(tmp, ':'))) {
+                /* should never happen */
+                PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+                jdata->exit_code = PRRTE_ERR_BAD_PARAM;
+                PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
+            }
+            ++p;  // step over the colon
+            u16 = strtoul(p, NULL, 10);
+        } else if (NULL != strcasestr(tmp, "package")) {
+            perpackage = true;
+            /* get the ppn */
+            if (NULL == (p = strchr(tmp, ':'))) {
+                /* should never happen */
+                PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+                jdata->exit_code = PRRTE_ERR_BAD_PARAM;
+                PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
+            }
+            ++p;  // step over the colon
+            u16 = strtoul(p, NULL, 10);
         }
+        free(tmp);
     }
 
-    /* compute the number of procs and check validity */
+    /* estimate the number of procs for assigning default mapping/ranking policies */
     nprocs = 0;
     for (i=0; i < jdata->apps->size; i++) {
         if (NULL != (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, i))) {
@@ -138,12 +183,12 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 PRRTE_CONSTRUCT(&nodes, prrte_list_t);
                 prrte_rmaps_base_get_target_nodes(&nodes, &slots, app, PRRTE_MAPPING_BYNODE, true, true);
                 if (pernode) {
-                    slots = ppx * prrte_list_get_size(&nodes);
-                } else if (persocket) {
-                    /* add in #sockets for each node */
+                    slots = u16 * prrte_list_get_size(&nodes);
+                } else if (perpackage) {
+                    /* add in #packages for each node */
                     PRRTE_LIST_FOREACH(node, &nodes, prrte_node_t) {
-                        slots += ppx * prrte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                          HWLOC_OBJ_SOCKET, 0,
+                        slots += u16 * prrte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                          HWLOC_OBJ_PACKAGE, 0,
                                                                           PRRTE_HWLOC_AVAILABLE);
                     }
                 }
@@ -154,26 +199,38 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
     }
 
+    /* set some convenience params */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRRTE_UINT16)) {
+        cpus_per_rank = u16;
+    } else {
+        cpus_per_rank = 1;
+    }
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthreads = true;
+    }
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps: setting mapping policies for job %s nprocs %d",
                         PRRTE_JOBID_PRINT(jdata->jobid), (int)nprocs);
 
-    if (inherit && !jdata->map->display_map) {
-        jdata->map->display_map = prrte_rmaps_base.display_map;
-    }
-
     /* set the default mapping policy IFF it wasn't provided */
     if (!PRRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
-        if (inherit && (PRRTE_MAPPING_GIVEN & PRRTE_GET_MAPPING_DIRECTIVE(prrte_rmaps_base.mapping))) {
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                "mca:rmaps mapping given by MCA param");
-            jdata->map->mapping = prrte_rmaps_base.mapping;
-            jdata->map->ranking = prrte_rmaps_base.ranking;
-        } else {
+        did_map = false;
+        if (inherit) {
+            if (NULL != parent) {
+                jdata->map->mapping = parent->map->mapping;
+                did_map = true;
+            } else if (PRRTE_MAPPING_GIVEN & PRRTE_GET_MAPPING_DIRECTIVE(prrte_rmaps_base.mapping)) {
+                prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps mapping given by MCA param");
+                jdata->map->mapping = prrte_rmaps_base.mapping;
+                did_map = true;
+            }
+        }
+        if (!did_map) {
             /* default based on number of procs */
             if (nprocs <= 2) {
-                if (1 < prrte_rmaps_base.cpus_per_rank) {
+                if (1 < cpus_per_rank) {
                     /* assigning multiple cpus to a rank requires that we map to
                      * objects that have multiple cpus in them, so default
                      * to byslot if nothing else was specified by the user.
@@ -181,7 +238,7 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                         "mca:rmaps[%d] mapping not given - using byslot", __LINE__);
                     PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYSLOT);
-                } else if (prrte_hwloc_use_hwthreads_as_cpus) {
+                } else if (use_hwthreads) {
                     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                         "mca:rmaps[%d] mapping not given - using byhwthread", __LINE__);
                     PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYHWTHREAD);
@@ -191,23 +248,18 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYCORE);
                 }
             } else {
-                /* if NUMA is available, map by that */
-                if (NULL != hwloc_get_obj_by_type(prrte_hwloc_topology, HWLOC_OBJ_NODE, 0)) {
+                /* if package is available, map by that */
+                if (NULL != hwloc_get_obj_by_type(prrte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
                     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] mapping not set by user - using bynuma", __LINE__);
-                    PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYNUMA);
-                } else if (NULL != hwloc_get_obj_by_type(prrte_hwloc_topology, HWLOC_OBJ_SOCKET, 0)) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] mapping not set by user and no NUMA - using bysocket", __LINE__);
-                    PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYSOCKET);
+                                        "mca:rmaps[%d] mapping not set by user - using bypackage", __LINE__);
+                    PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYPACKAGE);
                 } else {
                     /* if we have neither, then just do by slot */
                     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] mapping not given and no NUMA or sockets - using byslot", __LINE__);
+                                        "mca:rmaps[%d] mapping not given and no packages - using byslot", __LINE__);
                     PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYSLOT);
                 }
             }
-            PRRTE_SET_RANKING_POLICY(prrte_rmaps_base.ranking, PRRTE_RANK_BY_SLOT);
         }
     }
 
@@ -233,131 +285,142 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
     }
 
-    /* we don't have logic to determine default rank policy, so
-     * just inherit it if they didn't give us one */
+    /* set the default ranking policy IFF it wasn't provided */
     if (!PRRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
-        jdata->map->ranking = prrte_rmaps_base.ranking;
+        did_map = false;
+        if (inherit) {
+            if (NULL != parent) {
+                jdata->map->ranking = parent->map->ranking;
+                did_map = true;
+            } else if (PRRTE_RANKING_GIVEN & PRRTE_GET_RANKING_DIRECTIVE(prrte_rmaps_base.ranking)) {
+                prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                     "mca:rmaps ranking given by MCA param");
+                jdata->map->ranking = prrte_rmaps_base.ranking;
+                did_map = true;
+            }
+        }
+        if (!did_map) {
+            PRRTE_SET_RANKING_POLICY(jdata->map->ranking, PRRTE_RANK_BY_SLOT);
+        }
     }
 
     /* define the binding policy for this job - if the user specified one
      * already (e.g., during the call to comm_spawn), then we don't
      * override it */
     if (!PRRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
-        if (inherit && PRRTE_BINDING_POLICY_IS_SET(prrte_hwloc_binding_policy)) {
-            /* if the user specified a default binding policy via
-             * MCA param, then we use it - this can include a directive
-             * to overload */
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                            "mca:rmaps[%d] binding policy given", __LINE__);
-            jdata->map->binding = prrte_hwloc_binding_policy;
-        } else if (0 < jdata->map->cpus_per_rank) {
-            /* bind to cpus */
-            if (prrte_hwloc_use_hwthreads_as_cpus) {
-                /* if we are using hwthread cpus, then bind to those */
+        did_map = false;
+        if (inherit) {
+            if (NULL != parent) {
+                jdata->map->binding = parent->map->binding;
+                did_map = true;
+            } else if (PRRTE_BINDING_POLICY_IS_SET(prrte_hwloc_default_binding_policy)) {
+                /* if the user specified a default binding policy via
+                 * MCA param, then we use it - this can include a directive
+                 * to overload */
                 prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
-                PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_HWTHREAD);
-            } else {
-                /* bind to core */
-                prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                "mca:rmaps[%d] binding not given - using bycore", __LINE__);
-                PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_CORE);
+                                "mca:rmaps[%d] default binding policy given", __LINE__);
+                jdata->map->binding = prrte_hwloc_default_binding_policy;
+                did_map = true;
             }
-        } else {
-            /* if the user explicitly mapped-by some object, then we default
-             * to binding to that object */
-            prrte_mapping_policy_t mpol;
-            mpol = PRRTE_GET_MAPPING_POLICY(jdata->map->mapping);
-            if (PRRTE_MAPPING_GIVEN & PRRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                if (PRRTE_MAPPING_BYHWTHREAD == mpol) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
-                    PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_HWTHREAD);
-                } else if (PRRTE_MAPPING_BYCORE == mpol) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] binding not given - using bycore", __LINE__);
-                    PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_CORE);
-                } else if (PRRTE_MAPPING_BYL1CACHE == mpol) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] binding not given - using byL1", __LINE__);
-                    PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_L1CACHE);
-                } else if (PRRTE_MAPPING_BYL2CACHE == mpol) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] binding not given - using byL2", __LINE__);
-                    PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_L2CACHE);
-                } else if (PRRTE_MAPPING_BYL3CACHE == mpol) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] binding not given - using byL3", __LINE__);
-                    PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_L3CACHE);
-                } else if (PRRTE_MAPPING_BYSOCKET == mpol) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] binding not given - using bysocket", __LINE__);
-                    PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_SOCKET);
-                } else if (PRRTE_MAPPING_BYNUMA == mpol) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] binding not given - using bynuma", __LINE__);
-                    PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_NUMA);
-                } else {
-                    /* we are mapping by node or some other non-object method */
-                    if (nprocs <= 2) {
-                        if (prrte_hwloc_use_hwthreads_as_cpus) {
-                            /* if we are using hwthread cpus, then bind to those */
-                            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
-                            PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_HWTHREAD);
-                        } else {
-                            /* for performance, bind to core */
-                            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps[%d] binding not given - using bycore", __LINE__);
-                            PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_CORE);
-                        }
-                    } else {
-                        if (NULL != hwloc_get_obj_by_type(prrte_hwloc_topology, HWLOC_OBJ_NODE, 0)) {
-                            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                                "mca:rmaps[%d] binding not given - using bynuma", __LINE__);
-                            PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_NUMA);
-                        } else if (NULL != hwloc_get_obj_by_type(prrte_hwloc_topology, HWLOC_OBJ_SOCKET, 0)) {
-                            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                                "mca:rmaps[%d] binding not given and no NUMA - using bysocket", __LINE__);
-                            PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_SOCKET);
-                        } else {
-                            /* if we have neither, then just don't bind */
-                            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                                "mca:rmaps[%d] binding not given and no NUMA or sockets - not binding", __LINE__);
-                            PRRTE_SET_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_NONE);
-                        }
-                    }
-                }
-            } else if (nprocs <= 2) {
-                if (prrte_hwloc_use_hwthreads_as_cpus) {
+        }
+        if (!did_map) {
+            if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, NULL, PRRTE_UINT16)) {
+                /* bind to cpus */
+                if (use_hwthreads) {
                     /* if we are using hwthread cpus, then bind to those */
                     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                     "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
                     PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_HWTHREAD);
                 } else {
-                    /* for performance, bind to core */
+                    /* bind to core */
                     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                     "mca:rmaps[%d] binding not given - using bycore", __LINE__);
                     PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_CORE);
                 }
             } else {
-                /* for performance, bind to NUMA, if available */
-                if (NULL != hwloc_get_obj_by_type(prrte_hwloc_topology, HWLOC_OBJ_NODE, 0)) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given - using bynuma", __LINE__);
-                    PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_NUMA);
-                } else if (NULL != hwloc_get_obj_by_type(prrte_hwloc_topology, HWLOC_OBJ_SOCKET, 0)) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given and no NUMA - using bysocket", __LINE__);
-                    PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_SOCKET);
+                /* if the user explicitly mapped-by some object, then we default
+                 * to binding to that object */
+                prrte_mapping_policy_t mpol;
+                mpol = PRRTE_GET_MAPPING_POLICY(jdata->map->mapping);
+                if (PRRTE_MAPPING_GIVEN & PRRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
+                    if (PRRTE_MAPPING_BYHWTHREAD == mpol) {
+                        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
+                        PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_HWTHREAD);
+                    } else if (PRRTE_MAPPING_BYCORE == mpol) {
+                        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] binding not given - using bycore", __LINE__);
+                        PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_CORE);
+                    } else if (PRRTE_MAPPING_BYL1CACHE == mpol) {
+                        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] binding not given - using byL1", __LINE__);
+                        PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_L1CACHE);
+                    } else if (PRRTE_MAPPING_BYL2CACHE == mpol) {
+                        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] binding not given - using byL2", __LINE__);
+                        PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_L2CACHE);
+                    } else if (PRRTE_MAPPING_BYL3CACHE == mpol) {
+                        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] binding not given - using byL3", __LINE__);
+                        PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_L3CACHE);
+                    } else if (PRRTE_MAPPING_BYPACKAGE == mpol) {
+                        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
+                        PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_PACKAGE);
+                    } else {
+                        /* we are mapping by node or some other non-object method */
+                        if (nprocs <= 2) {
+                            if (use_hwthreads) {
+                                /* if we are using hwthread cpus, then bind to those */
+                                prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                                "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
+                                PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_HWTHREAD);
+                            } else {
+                                /* for performance, bind to core */
+                                prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                                "mca:rmaps[%d] binding not given - using bycore", __LINE__);
+                                PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_CORE);
+                            }
+                        } else {
+                            if (NULL != hwloc_get_obj_by_type(prrte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
+                                prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                                    "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
+                                PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_PACKAGE);
+                            } else {
+                                /* if we have neither, then just don't bind */
+                                prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                                    "mca:rmaps[%d] binding not given and no NUMA or packages - not binding", __LINE__);
+                                PRRTE_SET_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_NONE);
+                            }
+                        }
+                    }
+                } else if (nprocs <= 2) {
+                    if (use_hwthreads) {
+                        /* if we are using hwthread cpus, then bind to those */
+                        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
+                        PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_HWTHREAD);
+                    } else {
+                        /* for performance, bind to core */
+                        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] binding not given - using bycore", __LINE__);
+                        PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_CORE);
+                    }
                 } else {
-                    /* if we have neither, then just don't bind */
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given and no NUMA or sockets - not binding", __LINE__);
-                    PRRTE_SET_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_NONE);
+                    /* for performance, bind to package, if available */
+                    if (NULL != hwloc_get_obj_by_type(prrte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
+                        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                            "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
+                        PRRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_PACKAGE);
+                    } else {
+                        /* just don't bind */
+                        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                            "mca:rmaps[%d] binding not given and no packages - not binding", __LINE__);
+                        PRRTE_SET_BINDING_POLICY(jdata->map->binding, PRRTE_BIND_TO_NONE);
+                    }
                 }
             }
-            if (PRRTE_BIND_OVERLOAD_ALLOWED(prrte_hwloc_binding_policy)) {
+            if (PRRTE_BIND_OVERLOAD_ALLOWED(prrte_hwloc_default_binding_policy)) {
                 jdata->map->binding |= PRRTE_BIND_ALLOW_OVERLOAD;
             }
         }
@@ -465,13 +528,6 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
             PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
-        /* compute and save location assignments */
-        if (PRRTE_SUCCESS != (rc = prrte_rmaps_base_assign_locations(jdata))) {
-            PRRTE_ERROR_LOG(rc);
-            jdata->exit_code = rc;
-            PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_MAP_FAILED);
-            goto cleanup;
-        }
         /* compute and save bindings */
         if (PRRTE_SUCCESS != (rc = prrte_rmaps_base_compute_bindings(jdata))) {
             PRRTE_ERROR_LOG(rc);
@@ -479,15 +535,7 @@ void prrte_rmaps_base_map_job(int fd, short args, void *cbdata)
             PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
-    } else if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_FULLY_DESCRIBED, NULL, PRRTE_BOOL)) {
-        /* compute and save location assignments */
-        if (PRRTE_SUCCESS != (rc = prrte_rmaps_base_assign_locations(jdata))) {
-            PRRTE_ERROR_LOG(rc);
-            jdata->exit_code = rc;
-            PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_MAP_FAILED);
-            goto cleanup;
-        }
-    } else {
+    } else if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_FULLY_DESCRIBED, NULL, PRRTE_BOOL)) {
         /* compute and save local ranks */
         if (PRRTE_SUCCESS != (rc = prrte_rmaps_base_compute_local_ranks(jdata))) {
             PRRTE_ERROR_LOG(rc);
@@ -556,7 +604,7 @@ void prrte_rmaps_base_display_map(prrte_job_t *jdata)
     int i, j, cnt;
     prrte_node_t *node;
     prrte_proc_t *proc;
-    char tmp1[1024];
+    char *tmp1;
     hwloc_obj_t bd=NULL;;
     prrte_hwloc_locality_t locality;
     prrte_proc_t *p0;
@@ -593,22 +641,20 @@ void prrte_rmaps_base_display_map(prrte_job_t *jdata)
                 if (proc->job != jdata) {
                     continue;
                 }
-                memset(tmp1, 0, sizeof(tmp1));
                 if (prrte_get_attribute(&proc->attributes, PRRTE_PROC_HWLOC_BOUND, (void**)&bd, PRRTE_PTR)) {
                     if (NULL == bd) {
-                        (void)prrte_string_copy(tmp1, "UNBOUND", sizeof(tmp1));
+                        tmp1 = strdup("UNBOUND");
                     } else {
-                        if (PRRTE_ERR_NOT_BOUND == prrte_hwloc_base_cset2mapstr(tmp1, sizeof(tmp1), node->topology->topo, bd->cpuset)) {
-                            (void)prrte_string_copy(tmp1, "UNBOUND", sizeof(tmp1));
-                        }
+                        tmp1 = prrte_hwloc_base_cset2str(bd->cpuset, false, node->topology->topo);
                     }
                 } else {
-                    (void)prrte_string_copy(tmp1, "UNBOUND", sizeof(tmp1));
+                    tmp1 = strdup("UNBOUND");
                 }
                 prrte_output(prrte_clean_output, "\t\t<process rank=%s app_idx=%ld local_rank=%lu node_rank=%lu binding=%s>",
                             PRRTE_VPID_PRINT(proc->name.vpid),  (long)proc->app_idx,
                             (unsigned long)proc->local_rank,
                             (unsigned long)proc->node_rank, tmp1);
+                free(tmp1);
             }
             prrte_output(prrte_clean_output, "\t</host>");
             fflush(stderr);
@@ -654,9 +700,6 @@ void prrte_rmaps_base_display_map(prrte_job_t *jdata)
             }
         }
     } else {
-        prrte_output(prrte_clean_output, " Data for JOB %s offset %s Total slots allocated %lu",
-                    PRRTE_JOBID_PRINT(jdata->jobid), PRRTE_VPID_PRINT(jdata->offset),
-                    (long unsigned)jdata->total_slots_alloc);
         prrte_print_map(&output, jdata);
         if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, NULL, PRRTE_BOOL)) {
             fprintf(prrte_xml_fp, "%s\n", output);
@@ -675,6 +718,8 @@ static void prrte_print_map(char **output, prrte_job_t *jdata)
     prrte_node_t *node;
     prrte_proc_t *proc;
     prrte_job_map_t *src = jdata->map;
+    uint16_t u16, *u16ptr = &u16;
+    char *ppr, *cpus_per_rank, *cpu_type, *cpuset=NULL;
 
     /* set default result */
     *output = NULL;
@@ -717,18 +762,40 @@ static void prrte_print_map(char **output, prrte_job_t *jdata)
 
     }
 
+    if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PPR, (void**)&ppr, PRRTE_STRING)) {
+        ppr = strdup("N/A");
+    }
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRRTE_UINT16)) {
+        prrte_asprintf(&cpus_per_rank, "%d", (int)u16);
+    } else {
+        cpus_per_rank = strdup("N/A");
+    }
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        cpu_type = "HWT";
+    } else {
+        cpu_type = "CORE";
+    }
+    if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&cpuset, PRRTE_STRING)) {
+        if (NULL == prrte_hwloc_default_cpu_list) {
+            cpuset = strdup("N/A");
+        } else {
+            cpuset = strdup(prrte_hwloc_default_cpu_list);
+        }
+    }
+
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL)) {
-        prrte_asprintf(&tmp, "\n========================   JOB MAP   ========================\n"
+        prrte_asprintf(&tmp, "\n=================================   JOB MAP   =================================\n"
+                       "Data for JOB %s offset %s Total slots allocated %lu\n"
                        "Mapper requested: %s  Last mapper: %s  Mapping policy: %s  Ranking policy: %s\n"
-                       "Binding policy: %s  Cpu set: %s  PPR: %s  Cpus-per-rank: %d",
+                       "Binding policy: %s  Cpu set: %s  PPR: %s  Cpus-per-rank: %s  Cpu Type: %s",
+                       PRRTE_JOBID_PRINT(jdata->jobid), PRRTE_VPID_PRINT(jdata->offset),
+                       (long unsigned)jdata->total_slots_alloc,
                        (NULL == src->req_mapper) ? "NULL" : src->req_mapper,
                        (NULL == src->last_mapper) ? "NULL" : src->last_mapper,
                        prrte_rmaps_base_print_mapping(src->mapping),
                        prrte_rmaps_base_print_ranking(src->ranking),
                        prrte_hwloc_base_print_binding(src->binding),
-                       (NULL == prrte_hwloc_base_cpu_list) ? "NULL" : prrte_hwloc_base_cpu_list,
-                       (NULL == src->ppr) ? "NULL" : src->ppr,
-                       (int)src->cpus_per_rank);
+                       cpuset, ppr, cpus_per_rank, cpu_type);
 
         if (PRRTE_VPID_INVALID == src->daemon_vpid_start) {
             prrte_asprintf(&tmp2, "%s\nNum new daemons: %ld\tNew daemon starting vpid INVALID\nNum nodes: %ld",
@@ -742,8 +809,20 @@ static void prrte_print_map(char **output, prrte_job_t *jdata)
         tmp = tmp2;
     } else {
         /* this is being printed for a user, so let's make it easier to see */
-        prrte_asprintf(&tmp, "\n========================   JOB MAP   ========================");
+        prrte_asprintf(&tmp, "\n========================   JOB MAP   ========================\n"
+                       "Data for JOB %s offset %s Total slots allocated %lu\n"
+                       "    Mapping policy: %s  Ranking policy: %s Binding policy: %s\n"
+                       "    Cpu set: %s  PPR: %s  Cpus-per-rank: %s  Cpu Type: %s\n",
+                       PRRTE_JOBID_PRINT(jdata->jobid), PRRTE_VPID_PRINT(jdata->offset),
+                       (long unsigned)jdata->total_slots_alloc,
+                       prrte_rmaps_base_print_mapping(src->mapping),
+                       prrte_rmaps_base_print_ranking(src->ranking),
+                       prrte_hwloc_base_print_binding(src->binding),
+                       cpuset, ppr, cpus_per_rank, cpu_type);
     }
+    free(ppr);
+    free(cpus_per_rank);
+    free(cpuset);
 
 
     for (i=0; i < src->nodes->size; i++) {
@@ -772,7 +851,7 @@ static void prrte_print_node(char **output,
                              prrte_job_t *jdata,
                              prrte_node_t *src)
 {
-    char *tmp, *tmp2, *tmp3, *pfx2 = "\t", *pfx3;
+    char *tmp, *tmp2, *tmp3, *pfx2 = "    ", *pfx3;
     int32_t i;
     prrte_proc_t *proc;
     char **alias;
@@ -805,56 +884,26 @@ static void prrte_print_node(char **output,
 
     if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL)) {
         /* just provide a simple output for users */
-        if (0 == src->num_procs) {
-            /* no procs mapped yet, so just show allocation */
-            prrte_asprintf(&tmp, "\n%sData for node: %s\tNum slots: %ld\tMax slots: %ld",
-                           pfx2, (NULL == src->name) ? "UNKNOWN" : src->name,
-                           (long)src->slots, (long)src->slots_max);
-            /* does this node have any aliases? */
-            tmp3 = NULL;
-            if (prrte_get_attribute(&src->attributes, PRRTE_NODE_ALIAS, (void**)&tmp3, PRRTE_STRING)) {
-                alias = prrte_argv_split(tmp3, ',');
-                for (i=0; NULL != alias[i]; i++) {
-                    prrte_asprintf(&tmp2, "%s%s\tresolved from %s\n", tmp, pfx2, alias[i]);
-                    free(tmp);
-                    tmp = tmp2;
-                }
-                prrte_argv_free(alias);
-            }
-            if (NULL != tmp3) {
-                free(tmp3);
-            }
-            *output = tmp;
-            return;
-        }
         prrte_asprintf(&tmp, "\n%sData for node: %s\tNum slots: %ld\tMax slots: %ld\tNum procs: %ld",
                        pfx2, (NULL == src->name) ? "UNKNOWN" : src->name,
                        (long)src->slots, (long)src->slots_max, (long)src->num_procs);
-        /* does this node have any aliases? */
-        tmp3 = NULL;
-        if (prrte_get_attribute(&src->attributes, PRRTE_NODE_ALIAS, (void**)&tmp3, PRRTE_STRING)) {
-            alias = prrte_argv_split(tmp3, ',');
-            for (i=0; NULL != alias[i]; i++) {
-                prrte_asprintf(&tmp2, "%s%s\tresolved from %s\n", tmp, pfx2, alias[i]);
-                free(tmp);
-                tmp = tmp2;
-            }
-            prrte_argv_free(alias);
-        }
-        if (NULL != tmp3) {
-            free(tmp3);
+        if (0 == src->num_procs) {
+            *output = tmp;
+            return;
         }
         goto PRINT_PROCS;
     }
 
-    prrte_asprintf(&tmp, "\n%sData for node: %s\tState: %0x\tFlags: %02x",
-             pfx2, (NULL == src->name) ? "UNKNOWN" : src->name, src->state, src->flags);
+    tmp3 = prrte_ras_base_flag_string(src);
+    prrte_asprintf(&tmp, "\n%sData for node: %s\tState: %0x\tFlags: %s",
+             pfx2, (NULL == src->name) ? "UNKNOWN" : src->name, src->state, tmp3);
+    free(tmp3);
     /* does this node have any aliases? */
     tmp3 = NULL;
     if (prrte_get_attribute(&src->attributes, PRRTE_NODE_ALIAS, (void**)&tmp3, PRRTE_STRING)) {
         alias = prrte_argv_split(tmp3, ',');
         for (i=0; NULL != alias[i]; i++) {
-            prrte_asprintf(&tmp2, "%s%s\tresolved from %s\n", tmp, pfx2, alias[i]);
+            prrte_asprintf(&tmp2, "%s\n%s                resolved from %s", tmp, pfx2, alias[i]);
             free(tmp);
             tmp = tmp2;
         }
@@ -864,31 +913,26 @@ static void prrte_print_node(char **output,
         free(tmp3);
     }
 
-    if (NULL == src->daemon) {
-        prrte_asprintf(&tmp2, "%s\n%s\tDaemon: %s\tDaemon launched: %s", tmp, pfx2,
-                 "Not defined", PRRTE_FLAG_TEST(src, PRRTE_NODE_FLAG_DAEMON_LAUNCHED) ? "True" : "False");
-    } else {
-        prrte_asprintf(&tmp2, "%s\n%s\tDaemon: %s\tDaemon launched: %s", tmp, pfx2,
-                 PRRTE_NAME_PRINT(&(src->daemon->name)),
-                 PRRTE_FLAG_TEST(src, PRRTE_NODE_FLAG_DAEMON_LAUNCHED) ? "True" : "False");
-    }
+    prrte_asprintf(&tmp2, "%s\n%s        Daemon: %s\tDaemon launched: %s", tmp, pfx2,
+             (NULL == src->daemon) ? "Not defined" : PRRTE_NAME_PRINT(&(src->daemon->name)),
+             PRRTE_FLAG_TEST(src, PRRTE_NODE_FLAG_DAEMON_LAUNCHED) ? "True" : "False");
     free(tmp);
     tmp = tmp2;
 
-    prrte_asprintf(&tmp2, "%s\n%s\tNum slots: %ld\tSlots in use: %ld\tOversubscribed: %s", tmp, pfx2,
+    prrte_asprintf(&tmp2, "%s\n%s            Num slots: %ld\tSlots in use: %ld\tOversubscribed: %s", tmp, pfx2,
              (long)src->slots, (long)src->slots_inuse,
              PRRTE_FLAG_TEST(src, PRRTE_NODE_FLAG_OVERSUBSCRIBED) ? "TRUE" : "FALSE");
     free(tmp);
     tmp = tmp2;
 
-    prrte_asprintf(&tmp2, "%s\n%s\tNum slots allocated: %ld\tMax slots: %ld", tmp, pfx2,
+    prrte_asprintf(&tmp2, "%s\n%s            Num slots allocated: %ld\tMax slots: %ld", tmp, pfx2,
              (long)src->slots, (long)src->slots_max);
     free(tmp);
     tmp = tmp2;
 
     tmp3 = NULL;
     if (prrte_get_attribute(&src->attributes, PRRTE_NODE_USERNAME, (void**)&tmp3, PRRTE_STRING)) {
-        prrte_asprintf(&tmp2, "%s\n%s\tUsername on node: %s", tmp, pfx2, tmp3);
+        prrte_asprintf(&tmp2, "%s\n%s            Username on node: %s", tmp, pfx2, tmp3);
         free(tmp3);
         free(tmp);
         tmp = tmp2;
@@ -896,13 +940,13 @@ static void prrte_print_node(char **output,
 
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_TOPO, NULL, PRRTE_BOOL)
         && NULL != src->topology) {
-        prrte_asprintf(&tmp2, "%s\n%s\tDetected Resources:\n", tmp, pfx2);
+        prrte_asprintf(&tmp2, "%s\n%s            Detected Resources:\n", tmp, pfx2);
         free(tmp);
         tmp = tmp2;
 
         tmp2 = NULL;
-        prrte_asprintf(&pfx3, "%s\t\t", pfx2);
-        prrte_dss.print(&tmp2, pfx3, src->topology, PRRTE_HWLOC_TOPO);
+        prrte_asprintf(&pfx3, "%s                ", pfx2);
+        prrte_dss.print(&tmp2, pfx3, src->topology->topo, PRRTE_HWLOC_TOPO);
         free(pfx3);
         prrte_asprintf(&tmp3, "%s%s", tmp, tmp2);
         free(tmp);
@@ -910,7 +954,7 @@ static void prrte_print_node(char **output,
         tmp = tmp3;
     }
 
-    prrte_asprintf(&tmp2, "%s\n%s\tNum procs: %ld\tNext node_rank: %ld", tmp, pfx2,
+    prrte_asprintf(&tmp2, "%s\n%s            Num procs: %ld\tNext node_rank: %ld", tmp, pfx2,
              (long)src->num_procs, (long)src->next_node_rank);
     free(tmp);
     tmp = tmp2;
@@ -940,15 +984,22 @@ static void prrte_print_proc(char **output,
                              prrte_job_t *jdata,
                              prrte_proc_t *src)
 {
-    char *tmp, *tmp3, *pfx2 = "\t\t";
+    char *tmp, *tmp3, *tmp4, *pfx2 = "        ";
     hwloc_obj_t loc=NULL;
-    char locale[1024], tmp1[1024], tmp2[1024];
+    char *locale, *tmp2;
     hwloc_cpuset_t mycpus;
     char *str, *cpu_bitmap=NULL;
-
+    bool use_hwthread_cpus;
 
     /* set default result */
     *output = NULL;
+
+    /* check for type of cpu being used */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
+    }
 
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_XML_OUTPUT, NULL, PRRTE_BOOL)) {
         /* need to create the output in XML format */
@@ -967,11 +1018,8 @@ static void prrte_print_proc(char **output,
             NULL != cpu_bitmap && NULL != src->node->topology && NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
             hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
-            if (PRRTE_ERR_NOT_BOUND == prrte_hwloc_base_cset2str(tmp1, sizeof(tmp1), src->node->topology->topo, mycpus)) {
+            if (NULL == (str = prrte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, src->node->topology->topo))) {
                 str = strdup("UNBOUND");
-            } else {
-                prrte_hwloc_base_cset2mapstr(tmp2, sizeof(tmp2), src->node->topology->topo, mycpus);
-                prrte_asprintf(&str, "%s:%s", tmp1, tmp2);
             }
             hwloc_bitmap_free(mycpus);
             prrte_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: %s", pfx2,
@@ -993,40 +1041,40 @@ static void prrte_print_proc(char **output,
 
     prrte_asprintf(&tmp, "\n%sData for proc: %s", pfx2, PRRTE_NAME_PRINT(&src->name));
 
-    prrte_asprintf(&tmp3, "%s\n%s\tPid: %ld\tLocal rank: %lu\tNode rank: %lu\tApp rank: %d", tmp, pfx2,
+    prrte_asprintf(&tmp3, "%s\n%s        Pid: %ld\tLocal rank: %lu\tNode rank: %lu\tApp rank: %d", tmp, pfx2,
              (long)src->pid, (unsigned long)src->local_rank, (unsigned long)src->node_rank, src->app_rank);
     free(tmp);
     tmp = tmp3;
 
     if (prrte_get_attribute(&src->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&loc, PRRTE_PTR)) {
         if (NULL != loc) {
-            if (PRRTE_ERR_NOT_BOUND == prrte_hwloc_base_cset2mapstr(locale, sizeof(locale), src->node->topology->topo, loc->cpuset)) {
-                strcpy(locale, "NODE");
-            }
+            locale = prrte_hwloc_base_cset2str(loc->cpuset, use_hwthread_cpus, src->node->topology->topo);
         } else {
-            strcpy(locale, "UNKNOWN");
+            locale = strdup("UNKNOWN");
         }
     } else {
-        strcpy(locale, "UNKNOWN");
+        locale = strdup("UNKNOWN");
     }
     if (prrte_get_attribute(&src->attributes, PRRTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, PRRTE_STRING) &&
         NULL != src->node->topology && NULL != src->node->topology->topo) {
         mycpus = hwloc_bitmap_alloc();
         hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
-        prrte_hwloc_base_cset2mapstr(tmp2, sizeof(tmp2), src->node->topology->topo, mycpus);
+        tmp2 = prrte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, src->node->topology->topo);
         hwloc_bitmap_free(mycpus);
     } else {
-        snprintf(tmp2, sizeof(tmp2), "UNBOUND");
+        tmp2 = strdup("UNBOUND");
     }
-    prrte_asprintf(&tmp3, "%s\n%s\tState: %s\tApp_context: %ld\n%s\tLocale:  %s\n%s\tBinding: %s", tmp, pfx2,
-                   prrte_proc_state_to_str(src->state), (long)src->app_idx, pfx2, locale, pfx2,  tmp2);
+    prrte_asprintf(&tmp4, "%s\n%s        State: %s\tApp_context: %ld\n%s\tMapped:  %s\n%s\tBinding: %s", tmp, pfx2,
+                   prrte_proc_state_to_str(src->state), (long)src->app_idx, pfx2, locale, pfx2, tmp2);
+    free(locale);
     free(tmp);
+    free(tmp2);
     if (NULL != cpu_bitmap) {
         free(cpu_bitmap);
     }
 
     /* set the return */
-    *output = tmp3;
+    *output = tmp4;
 
     return;
 }

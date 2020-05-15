@@ -286,7 +286,7 @@ int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                         free(help_str);
                         return PRRTE_ERR_BAD_PARAM;
                     }
-                    prrte_asprintf(&p2, "%s,%s", pargs[j+1], modifier);
+                    prrte_asprintf(&p2, "%s:%s", pargs[j+1], modifier);
                 }
                 free(pargs[j+1]);
                 pargs[j+1] = p2;

@@ -65,6 +65,8 @@ PRRTE_EXPORT void prrte_ras_base_allocate(int fd, short args, void *cbdata);
 
 PRRTE_EXPORT int prrte_ras_base_add_hosts(prrte_job_t *jdata);
 
+PRRTE_EXPORT char *prrte_ras_base_flag_string(prrte_node_t *node);
+
 END_C_DECLS
 
 #endif

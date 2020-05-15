@@ -226,7 +226,20 @@ void prrte_plm_base_recv(int status, prrte_process_name_t* sender,
 
         /* get the parent's job object */
         if (NULL != (parent = prrte_get_job_data_object(name.jobid))) {
-            if (!PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
+            /* link the spawned job to the spawner */
+            PRRTE_RETAIN(jdata);
+            prrte_list_append(&parent->children, &jdata->super);
+            /* connect the launcher as well */
+            if (PRRTE_JOBID_INVALID == parent->launcher) {
+                /* we are an original spawn */
+                jdata->launcher = name.jobid;
+            } else {
+                jdata->launcher = parent->launcher;
+            }
+            if (PRRTE_FLAG_TEST(parent, PRRTE_JOB_FLAG_TOOL)) {
+                /* don't use the parent for anything more */
+                parent = NULL;
+            } else {
                 /* if the prefix was set in the parent's job, we need to transfer
                  * that prefix to the child's app_context so any further launch of
                  * orteds can find the correct binary. There always has to be at
@@ -246,16 +259,6 @@ void prrte_plm_base_recv(int status, prrte_process_name_t* sender,
                         free(prefix_dir);
                     }
                 }
-            }
-            /* link the spawned job to the spawner */
-            PRRTE_RETAIN(jdata);
-            prrte_list_append(&parent->children, &jdata->super);
-            /* connect the launcher as well */
-            if (PRRTE_JOBID_INVALID == parent->launcher) {
-                /* we are an original spawn */
-                jdata->launcher = name.jobid;
-            } else {
-                jdata->launcher = parent->launcher;
             }
         }
 

@@ -132,7 +132,7 @@ void prrte_plm_base_daemons_reported(int fd, short args, void *cbdata)
 
     /* if we are not launching, then we just assume that all
      * daemons share our topology */
-    if (prrte_get_attribute(&caddy->jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL)) {
+    if (prrte_do_not_launch || prrte_get_attribute(&caddy->jdata->attributes, PRRTE_JOB_DO_NOT_LAUNCH, NULL, PRRTE_BOOL)) {
         node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, 0);
         t = node->topology;
         for (i=1; i < prrte_node_pool->size; i++) {
@@ -187,6 +187,14 @@ void prrte_plm_base_allocation_complete(int fd, short args, void *cbdata)
     prrte_state_caddy_t *caddy = (prrte_state_caddy_t*)cbdata;
 
     PRRTE_ACQUIRE_OBJECT(caddy);
+
+    /* if we are not launching and this is the daemon job, then
+     * we are done */
+    if (prrte_do_not_launch && PRRTE_PROC_MY_NAME->jobid == caddy->jdata->jobid) {
+        PRRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRRTE_JOB_STATE_VM_READY);
+        PRRTE_RELEASE(caddy);
+        return;
+    }
 
     /* if we don't want to launch, then we at least want
      * to map so we can see where the procs would have
@@ -541,7 +549,7 @@ void prrte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
             prrte_output(0, "LAUNCH MSG RAW SIZE: %d", (int)jdata->launch_msg.bytes_used);
         }
         prrte_never_launched = true;
-        PRRTE_FORCED_TERMINATE(0);
+        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_ALL_JOBS_COMPLETE);
         PRRTE_RELEASE(caddy);
         return;
     }
@@ -1098,12 +1106,7 @@ void prrte_plm_base_daemon_topology(int status, prrte_process_name_t* sender,
     root = hwloc_get_root_obj(topo);
     root->userdata = (void*)PRRTE_NEW(prrte_hwloc_topo_data_t);
     sum = (prrte_hwloc_topo_data_t*)root->userdata;
-    #if HWLOC_API_VERSION < 0x20000
-        sum->available = hwloc_bitmap_alloc();
-        hwloc_bitmap_and(sum->available, root->online_cpuset, root->allowed_cpuset);
-    #else
-        sum->available = hwloc_bitmap_dup(hwloc_topology_get_allowed_cpuset(topo));
-    #endif
+    sum->available = prrte_hwloc_base_setup_summary(topo);
 
     /* unpack any coprocessors */
     idx=1;
@@ -1222,6 +1225,8 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
     pmix_proc_t pproc;
     char *alias, **atmp;
     uint8_t naliases, ni;
+    hwloc_obj_t root;
+    prrte_hwloc_topo_data_t *sum;
 
     /* get the daemon job, if necessary */
     if (NULL == jdatorted) {
@@ -1451,6 +1456,12 @@ void prrte_plm_base_daemon_callback(int status, prrte_process_name_t* sender,
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
+            /* setup the summary data for this topology as we will need
+             * it when we go to map/bind procs to it */
+            root = hwloc_get_root_obj(topo);
+            root->userdata = (void*)PRRTE_NEW(prrte_hwloc_topo_data_t);
+            sum = (prrte_hwloc_topo_data_t*)root->userdata;
+            sum->available = prrte_hwloc_base_setup_summary(topo);
         }
 
         /* see if they provided their inventory */

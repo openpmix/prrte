@@ -81,7 +81,9 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     prrte_list_t local_procs;
     prrte_namelist_t *nm;
     size_t nmsize;
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     pmix_server_pset_t *pset;
+#endif
     prrte_value_t *val;
     uint32_t ui32;
 
@@ -192,6 +194,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
             kv = PRRTE_NEW(prrte_info_item_t);
             PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, node->name, PMIX_STRING);
             prrte_list_append(&iarray->infolist, &kv->super);
+#ifdef PMIX_HOSTNAME_ALIASES
             /* add any aliases */
             if (prrte_get_attribute(&node->attributes, PRRTE_NODE_ALIAS, (void**)&regex, PRRTE_STRING) &&
                 NULL != regex) {
@@ -200,6 +203,7 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
                 prrte_list_append(&iarray->infolist, &kv->super);
                 free(regex);
             }
+#endif
             /* pass the node ID */
             kv = PRRTE_NEW(prrte_info_item_t);
             PMIX_INFO_LOAD(&kv->info, PMIX_NODEID, &node->index, PMIX_UINT32);
@@ -332,10 +336,12 @@ int prrte_pmix_server_register_nspace(prrte_job_t *jdata)
     PMIX_INFO_LOAD(&kv->info, PMIX_BINDTO, prrte_hwloc_base_print_binding(jdata->map->binding), PMIX_STRING);
     prrte_list_append(info, &kv->super);
 
+#ifdef PMIX_HOSTNAME_KEEP_FQDN
     /* tell the user what we did with FQDN */
     kv = PRRTE_NEW(prrte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME_KEEP_FQDN, &prrte_keep_fqdn_hostnames, PMIX_BOOL);
     prrte_list_append(info, &kv->super);
+#endif
 
     /* pass the top-level session directory - this is our jobfam session dir */
     kv = PRRTE_NEW(prrte_info_item_t);

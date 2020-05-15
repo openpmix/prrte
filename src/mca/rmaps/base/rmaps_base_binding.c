@@ -52,28 +52,22 @@
 #include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/base/base.h"
 
-#define RMAPS_MAX_NUMAS  1024
-
-static prrte_local_rank_t numa_ranks[RMAPS_MAX_NUMAS] = {0};
 static bool membind_warned=false;
 
-static int get_numa(prrte_node_t *node,
-                    hwloc_bitmap_t cpuset)
-{
-    int idx=0, depth;
-    hwloc_obj_t obj = NULL;
+/* CRITICAL NOTE: the hwloc topology tree is in a shared memory
+ * region that is passed to the applications for their use. HWLOC
+ * does NOT provide any locking support in this shmem region. Thus,
+ * it is critical that the topology tree information itself remain
+ * unmodified.
+ *
+ * We can, however, fiddle with the userdata attached to an object
+ * in the topology tree because the applications that might also
+ * be attached to the shared memory region don't have visibility
+ * into the userdata. They also cannot conflict with us as they
+ * cannot write into the shared memory region. So we leave the
+ * topology itself untouched (critical!) and confine ourselves
+ * to recording usage etc in the userdata object */
 
-    depth = hwloc_get_type_depth(node->topology->topo, HWLOC_OBJ_NODE);
-    while (idx < RMAPS_MAX_NUMAS &&
-           NULL != (obj = hwloc_get_next_obj_by_depth(node->topology->topo, depth, obj))) {
-        if (hwloc_bitmap_intersects(cpuset, obj->cpuset)) {
-            return idx;
-        }
-        ++idx;
-    }
-
-    return -1;
-}
 
 static void reset_usage(prrte_node_t *node, prrte_jobid_t jobid)
 {
@@ -87,9 +81,9 @@ static void reset_usage(prrte_node_t *node, prrte_jobid_t jobid)
                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
                         node->name, node->num_procs);
 
-    /* start by clearing any existing info */
+    /* start by clearing any existing proc binding
+     * records from the userdata in this topo */
     prrte_hwloc_base_clear_usage(node->topology->topo);
-    memset(numa_ranks, 0, RMAPS_MAX_NUMAS * sizeof(prrte_local_rank_t));
 
     /* cycle thru the procs on the node and record
      * their usage in the topology
@@ -107,6 +101,7 @@ static void reset_usage(prrte_node_t *node, prrte_jobid_t jobid)
             continue;
         }
         bound = NULL;
+        /* get the object to which this proc is bound */
         if (!prrte_get_attribute(&proc->attributes, PRRTE_PROC_HWLOC_BOUND, (void**)&bound, PRRTE_PTR) ||
             NULL == bound) {
             /* this proc isn't bound - ignore it */
@@ -116,11 +111,13 @@ static void reset_usage(prrte_node_t *node, prrte_jobid_t jobid)
                                 PRRTE_NAME_PRINT(&proc->name));
             continue;
         }
+        /* get the userdata struct for this object - create it if necessary */
         data = (prrte_hwloc_obj_data_t*)bound->userdata;
         if (NULL == data) {
             data = PRRTE_NEW(prrte_hwloc_obj_data_t);
             bound->userdata = data;
         }
+        /* count that this proc is bound to this object */
         data->num_bound++;
         prrte_output_verbose(10, prrte_rmaps_base_framework.framework_output,
                             "%s reset_usage: proc %s is bound - total %d",
@@ -147,19 +144,22 @@ static int bind_generic(prrte_job_t *jdata,
                         prrte_node_t *node,
                         int target_depth)
 {
-    int j, rc;
+    int j;
     prrte_job_map_t *map;
     prrte_proc_t *proc;
     hwloc_obj_t trg_obj, tmp_obj, nxt_obj;
     unsigned int ncpus;
     prrte_hwloc_obj_data_t *data;
-    int total_cpus, idx;
-    hwloc_cpuset_t totalcpuset;
+    int total_cpus, cpus_per_rank;
+    hwloc_cpuset_t totalcpuset, available, mycpus;
     hwloc_obj_t locale;
-    char *cpu_bitmap;
+    char *cpu_bitmap, *job_cpuset;
     unsigned min_bound;
-    bool dobind;
+    bool dobind, use_hwthread_cpus;
     struct hwloc_topology_support *support;
+    hwloc_obj_t root;
+    prrte_hwloc_topo_data_t *rdata;
+    uint16_t u16, *u16ptr = &u16;
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind downward for job %s with bindings %s",
@@ -178,6 +178,39 @@ static int bind_generic(prrte_job_t *jdata,
     }
     /* reset usage */
     reset_usage(node, jdata->jobid);
+
+    /* get the available processors on this node */
+    root = hwloc_get_root_obj(node->topology->topo);
+    if (NULL == root->userdata) {
+        /* incorrect */
+        PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+        return PRRTE_ERR_BAD_PARAM;
+    }
+    rdata = (prrte_hwloc_topo_data_t*)root->userdata;
+    available = hwloc_bitmap_dup(rdata->available);
+
+    /* see if they want multiple cpus/rank */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRRTE_UINT16)) {
+        cpus_per_rank = u16;
+    } else {
+        cpus_per_rank = 1;
+    }
+
+    /* check for type of cpu being used */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
+    }
+
+    /* see if this job has a "soft" cgroup assignment */
+    job_cpuset = NULL;
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&job_cpuset, PRRTE_STRING) &&
+        NULL != job_cpuset) {
+        mycpus = prrte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
+        hwloc_bitmap_and(available, mycpus, available);
+        hwloc_bitmap_free(mycpus);
+    }
 
     /* cycle thru the procs */
     for (j=0; j < node->procs->size; j++) {
@@ -211,6 +244,10 @@ static int bind_generic(prrte_job_t *jdata,
                 }
                 prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:cpubind-not-supported", true, node->name);
                 hwloc_bitmap_free(totalcpuset);
+                hwloc_bitmap_free(available);
+                if (NULL != job_cpuset) {
+                    free(job_cpuset);
+                }
                 return PRRTE_ERR_SILENT;
             }
             /* check if topology supports membind - have to be careful here
@@ -230,6 +267,10 @@ static int bind_generic(prrte_job_t *jdata,
                 } else if (PRRTE_HWLOC_BASE_MBFA_ERROR == prrte_hwloc_base_mbfa) {
                     prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:membind-not-supported-fatal", true, node->name);
                     hwloc_bitmap_free(totalcpuset);
+                    hwloc_bitmap_free(available);
+                    if (NULL != job_cpuset) {
+                        free(job_cpuset);
+                    }
                     return PRRTE_ERR_SILENT;
                 }
             }
@@ -241,6 +282,10 @@ static int bind_generic(prrte_job_t *jdata,
             NULL == locale) {
             prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:no-locale", true, PRRTE_NAME_PRINT(&proc->name));
             hwloc_bitmap_free(totalcpuset);
+            hwloc_bitmap_free(available);
+            if (NULL != job_cpuset) {
+                free(job_cpuset);
+            }
             return PRRTE_ERR_SILENT;
         }
 
@@ -249,16 +294,11 @@ static int bind_generic(prrte_job_t *jdata,
         trg_obj = NULL;
         min_bound = UINT_MAX;
         while (NULL != (tmp_obj = hwloc_get_next_obj_by_depth(node->topology->topo, target_depth, tmp_obj))) {
-            hwloc_obj_t root;
-            prrte_hwloc_topo_data_t *rdata;
-            root = hwloc_get_root_obj(node->topology->topo);
-            rdata = (prrte_hwloc_topo_data_t*)root->userdata;
-
             if (!hwloc_bitmap_intersects(locale->cpuset, tmp_obj->cpuset))
                 continue;
 
             /* if there are no available cpus under this object, then ignore it */
-            if (NULL != rdata && NULL != rdata->available && !hwloc_bitmap_intersects(rdata->available, tmp_obj->cpuset))
+            if (!hwloc_bitmap_intersects(available, tmp_obj->cpuset))
                 continue;
 
             data = (prrte_hwloc_obj_data_t*)tmp_obj->userdata;
@@ -275,6 +315,10 @@ static int bind_generic(prrte_job_t *jdata,
             /* there aren't any such targets under this object */
             prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
             hwloc_bitmap_free(totalcpuset);
+            hwloc_bitmap_free(available);
+            if (NULL != job_cpuset) {
+                free(job_cpuset);
+            }
             return PRRTE_ERR_SILENT;
         }
         /* record the location */
@@ -289,14 +333,16 @@ static int bind_generic(prrte_job_t *jdata,
                 /* could not find enough cpus to meet request */
                 prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
                 hwloc_bitmap_free(totalcpuset);
+                hwloc_bitmap_free(available);
+                if (NULL != job_cpuset) {
+                    free(job_cpuset);
+                }
                 return PRRTE_ERR_SILENT;
             }
             trg_obj = nxt_obj;
-            /* get the number of cpus under this location */
-            ncpus = prrte_hwloc_base_get_npus(node->topology->topo, trg_obj);
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                "%s GOT %d CPUS",
-                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), ncpus);
+            /* get the number of available cpus under this location */
+            ncpus = prrte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
+                                              available, trg_obj);
             /* track the number bound */
             if (NULL == (data = (prrte_hwloc_obj_data_t*)trg_obj->userdata)) {
                 data = PRRTE_NEW(prrte_hwloc_obj_data_t);
@@ -317,12 +363,36 @@ static int bind_generic(prrte_job_t *jdata,
                                    prrte_hwloc_base_print_binding(map->binding), node->name,
                                    data->num_bound, ncpus);
                     hwloc_bitmap_free(totalcpuset);
+                    hwloc_bitmap_free(available);
+                    if (NULL != job_cpuset) {
+                        free(job_cpuset);
+                    }
+                    return PRRTE_ERR_SILENT;
+                } else if (1 < cpus_per_rank) {
+                    /* if the user specified cpus/proc, then we weren't able
+                     * to meet that request - this constitutes an error that
+                     * must be reported */
+                    prrte_show_help("help-prrte-rmaps-base.txt", "insufficient-cpus-per-proc", true,
+                                   prrte_hwloc_base_print_binding(map->binding), node->name,
+                                   (NULL != job_cpuset) ? job_cpuset : (NULL == prrte_hwloc_default_cpu_list) ? "FULL" : prrte_hwloc_default_cpu_list,
+                                   cpus_per_rank);
+                    hwloc_bitmap_free(available);
+                    if (NULL != job_cpuset) {
+                        free(job_cpuset);
+                    }
                     return PRRTE_ERR_SILENT;
                 } else {
                     /* if we have the default binding policy, then just don't bind */
+                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                        "%s NOT ENOUGH CPUS TO COMPLETE BINDING - BINDING NOT REQUIRED, REVERTING TO NOT BINDING",
+                                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
                     PRRTE_SET_BINDING_POLICY(map->binding, PRRTE_BIND_TO_NONE);
                     unbind_procs(jdata);
-                    hwloc_bitmap_zero(totalcpuset);
+                    hwloc_bitmap_free(totalcpuset);
+                    hwloc_bitmap_free(available);
+                    if (NULL != job_cpuset) {
+                        free(job_cpuset);
+                    }
                     return PRRTE_SUCCESS;
                 }
             }
@@ -332,7 +402,7 @@ static int bind_generic(prrte_job_t *jdata,
             total_cpus += ncpus;
             /* move to the next location, in case we need it */
             nxt_obj = trg_obj->next_cousin;
-        } while (total_cpus < prrte_rmaps_base.cpus_per_rank);
+        } while (total_cpus < cpus_per_rank);
         hwloc_bitmap_list_asprintf(&cpu_bitmap, totalcpuset);
         prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                             "%s PROC %s BITMAP %s",
@@ -340,35 +410,23 @@ static int bind_generic(prrte_job_t *jdata,
                             PRRTE_NAME_PRINT(&proc->name), cpu_bitmap);
         prrte_set_attribute(&proc->attributes, PRRTE_PROC_CPU_BITMAP, PRRTE_ATTR_GLOBAL, cpu_bitmap, PRRTE_STRING);
         if (NULL != cpu_bitmap) {
-            idx = get_numa(node, totalcpuset);
-            if (0 <= idx) {
-                proc->numa_rank = numa_ranks[idx];
-                ++numa_ranks[idx];
-            }
             free(cpu_bitmap);
         }
         if (4 < prrte_output_get_verbosity(prrte_rmaps_base_framework.framework_output)) {
-            char tmp1[1024], tmp2[1024];
-            if (PRRTE_ERR_NOT_BOUND == prrte_hwloc_base_cset2str(tmp1, sizeof(tmp1),
-                                                               node->topology->topo, totalcpuset)) {
-                prrte_output(prrte_rmaps_base_framework.framework_output,
-                            "%s PROC %s ON %s IS NOT BOUND",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                            PRRTE_NAME_PRINT(&proc->name), node->name);
-            } else {
-                rc = prrte_hwloc_base_cset2mapstr(tmp2, sizeof(tmp2), node->topology->topo, totalcpuset);
-                if (PRRTE_SUCCESS != rc) {
-                    PRRTE_ERROR_LOG(rc);
-                }
-                prrte_output(prrte_rmaps_base_framework.framework_output,
-                            "%s BOUND PROC %s[%s] TO %s: %s",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                            PRRTE_NAME_PRINT(&proc->name), node->name,
-                            tmp1, tmp2);
-            }
+            char *tmp1;
+            tmp1 = prrte_hwloc_base_cset2str(totalcpuset, use_hwthread_cpus, node->topology->topo);
+            prrte_output(prrte_rmaps_base_framework.framework_output,
+                        "%s BOUND PROC %s[%s] TO %s",
+                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                        PRRTE_NAME_PRINT(&proc->name), node->name, tmp1);
+            free(tmp1);
         }
     }
     hwloc_bitmap_free(totalcpuset);
+    hwloc_bitmap_free(available);
+    if (NULL != job_cpuset) {
+        free(job_cpuset);
+    }
 
     return PRRTE_SUCCESS;
 }
@@ -389,10 +447,14 @@ static int bind_in_place(prrte_job_t *jdata,
     struct hwloc_topology_support *support;
     prrte_hwloc_obj_data_t *data;
     hwloc_obj_t locale, sib;
-    char *cpu_bitmap;
-    bool found;
+    char *cpu_bitmap, *job_cpuset;
+    bool found, use_hwthread_cpus;
     bool dobind;
-    int indx;
+    int cpus_per_rank;
+    hwloc_cpuset_t available, mycpus;
+    hwloc_obj_t root;
+    prrte_hwloc_topo_data_t *rdata;
+    uint16_t u16, *u16ptr = &u16;
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind in place for job %s with bindings %s",
@@ -407,6 +469,24 @@ static int bind_in_place(prrte_job_t *jdata,
         prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL) ||
         prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, NULL, PRRTE_BOOL)) {
         dobind = true;
+    }
+
+    /* see if this job has a "soft" cgroup assignment */
+    job_cpuset = NULL;
+    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&job_cpuset, PRRTE_STRING);
+
+    /* see if they want multiple cpus/rank */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRRTE_UINT16)) {
+        cpus_per_rank = u16;
+    } else {
+        cpus_per_rank = 1;
+    }
+
+    /* check for type of cpu being used */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
     }
 
     for (i=0; i < map->nodes->size; i++) {
@@ -434,6 +514,9 @@ static int bind_in_place(prrte_job_t *jdata,
                     continue;
                 }
                 prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:cpubind-not-supported", true, node->name);
+                if (NULL != job_cpuset) {
+                    free(job_cpuset);
+                }
                 return PRRTE_ERR_SILENT;
             }
             /* check if topology supports membind - have to be careful here
@@ -452,6 +535,9 @@ static int bind_in_place(prrte_job_t *jdata,
                     membind_warned = true;
                 } else if (PRRTE_HWLOC_BASE_MBFA_ERROR == prrte_hwloc_base_mbfa) {
                     prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:membind-not-supported-fatal", true, node->name);
+                    if (NULL != job_cpuset) {
+                        free(job_cpuset);
+                    }
                     return PRRTE_ERR_SILENT;
                 }
             }
@@ -475,6 +561,23 @@ static int bind_in_place(prrte_job_t *jdata,
          * our own current state
          */
         reset_usage(node, jdata->jobid);
+        /* get the available processors on this node */
+        root = hwloc_get_root_obj(node->topology->topo);
+        if (NULL == root->userdata) {
+            /* incorrect */
+            PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+            if (NULL != job_cpuset) {
+                free(job_cpuset);
+            }
+            return PRRTE_ERR_BAD_PARAM;
+        }
+        rdata = (prrte_hwloc_topo_data_t*)root->userdata;
+        available = hwloc_bitmap_dup(rdata->available);
+        if (NULL != job_cpuset) {
+            mycpus = prrte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
+            hwloc_bitmap_and(available, mycpus, available);
+            hwloc_bitmap_free(mycpus);
+        }
 
         /* cycle thru the procs */
         for (j=0; j < node->procs->size; j++) {
@@ -489,16 +592,29 @@ static int bind_in_place(prrte_job_t *jdata,
             locale = NULL;
             if (!prrte_get_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRRTE_PTR)) {
                 prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:no-locale", true, PRRTE_NAME_PRINT(&proc->name));
+                hwloc_bitmap_free(available);
+                if (NULL != job_cpuset) {
+                    free(job_cpuset);
+                }
                 return PRRTE_ERR_SILENT;
             }
             /* get the index of this location */
             if (UINT_MAX == (idx = prrte_hwloc_base_get_obj_idx(node->topology->topo, locale, PRRTE_HWLOC_AVAILABLE))) {
                 PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+                hwloc_bitmap_free(available);
+                if (NULL != job_cpuset) {
+                    free(job_cpuset);
+                }
                 return PRRTE_ERR_SILENT;
             }
             /* get the number of cpus under this location */
-            if (0 == (ncpus = prrte_hwloc_base_get_npus(node->topology->topo, locale))) {
+            if (0 == (ncpus = prrte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
+                                                        available, locale))) {
                 prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
+                hwloc_bitmap_free(available);
+                if (NULL != job_cpuset) {
+                    free(job_cpuset);
+                }
                 return PRRTE_ERR_SILENT;
             }
             data = (prrte_hwloc_obj_data_t*)locale->userdata;
@@ -509,20 +625,22 @@ static int bind_in_place(prrte_job_t *jdata,
             /* if we don't have enough cpus to support this additional proc, try
              * shifting the location to a cousin that can support it - the important
              * thing is that we maintain the same level in the topology */
-            if (ncpus < (data->num_bound+1)) {
+            if (ncpus < (data->num_bound+cpus_per_rank)) {
                 prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                                     "%s bind_in_place: searching right",
                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
                 sib = locale;
                 found = false;
                 while (NULL != (sib = sib->next_cousin)) {
-                    ncpus = prrte_hwloc_base_get_npus(node->topology->topo, sib);
+                    ncpus = prrte_hwloc_base_get_npus(node->topology->topo,
+                                                      use_hwthread_cpus,
+                                                      available, sib);
                     data = (prrte_hwloc_obj_data_t*)sib->userdata;
                     if (NULL == data) {
                         data = PRRTE_NEW(prrte_hwloc_obj_data_t);
                         sib->userdata = data;
                     }
-                    if (data->num_bound < ncpus) {
+                    if ((data->num_bound+cpus_per_rank) <= ncpus) {
                         found = true;
                         locale = sib;
                         break;
@@ -535,13 +653,15 @@ static int bind_in_place(prrte_job_t *jdata,
                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
                     sib = locale;
                     while (NULL != (sib = sib->prev_cousin)) {
-                        ncpus = prrte_hwloc_base_get_npus(node->topology->topo, sib);
+                        ncpus = prrte_hwloc_base_get_npus(node->topology->topo,
+                                                          use_hwthread_cpus,
+                                                          available, sib);
                         data = (prrte_hwloc_obj_data_t*)sib->userdata;
                         if (NULL == data) {
                             data = PRRTE_NEW(prrte_hwloc_obj_data_t);
                             sib->userdata = data;
                         }
-                        if (data->num_bound < ncpus) {
+                        if ((data->num_bound+cpus_per_rank) <= ncpus) {
                             found = true;
                             locale = sib;
                             break;
@@ -559,12 +679,35 @@ static int bind_in_place(prrte_job_t *jdata,
                             prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:binding-overload", true,
                                            prrte_hwloc_base_print_binding(map->binding), node->name,
                                            data->num_bound, ncpus);
+                            hwloc_bitmap_free(available);
+                            if (NULL != job_cpuset) {
+                                free(job_cpuset);
+                            }
+                            return PRRTE_ERR_SILENT;
+                        } else if (1 < cpus_per_rank) {
+                            /* if the user specified cpus/proc, then we weren't able
+                             * to meet that request - this constitutes an error that
+                             * must be reported */
+                            prrte_show_help("help-prrte-rmaps-base.txt", "insufficient-cpus-per-proc", true,
+                                           prrte_hwloc_base_print_binding(map->binding), node->name,
+                                           (NULL != job_cpuset) ? job_cpuset : (NULL == prrte_hwloc_default_cpu_list) ? "FULL" : prrte_hwloc_default_cpu_list,
+                                           cpus_per_rank);
+                            hwloc_bitmap_free(available);
+                            if (NULL != job_cpuset) {
+                                free(job_cpuset);
+                            }
                             return PRRTE_ERR_SILENT;
                         } else {
                             /* if we have the default binding policy, then just don't bind */
-                            PRRTE_SET_BINDING_POLICY(map->binding, PRRTE_BIND_TO_NONE);
+                            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                                                "%s NOT ENOUGH CPUS TO COMPLETE BINDING - BINDING NOT REQUIRED, REVERTING TO NOT BINDING",
+                                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
                             unbind_procs(jdata);
-                            return PRRTE_SUCCESS;
+                            hwloc_bitmap_free(available);
+                            if (NULL != job_cpuset) {
+                                free(job_cpuset);
+                            }
+                           return PRRTE_SUCCESS;
                         }
                     }
                 }
@@ -580,8 +723,11 @@ static int bind_in_place(prrte_job_t *jdata,
                                 "BINDING PROC %s TO %s NUMBER %u",
                                 PRRTE_NAME_PRINT(&proc->name),
                                 hwloc_obj_type_string(locale->type), idx);
-            /* bind the proc here */
-            hwloc_bitmap_list_asprintf(&cpu_bitmap, locale->cpuset);
+            /* bind the proc here, masking it to any "soft" cgroup the user provided */
+            mycpus = hwloc_bitmap_alloc();
+            hwloc_bitmap_and(mycpus, available, locale->cpuset);
+            hwloc_bitmap_list_asprintf(&cpu_bitmap, mycpus);
+            hwloc_bitmap_free(mycpus);
             prrte_set_attribute(&proc->attributes, PRRTE_PROC_CPU_BITMAP, PRRTE_ATTR_GLOBAL, cpu_bitmap, PRRTE_STRING);
             /* update the location, in case it changed */
             prrte_set_attribute(&proc->attributes, PRRTE_PROC_HWLOC_BOUND, PRRTE_ATTR_LOCAL, locale, PRRTE_PTR);
@@ -592,14 +738,13 @@ static int bind_in_place(prrte_job_t *jdata,
                                 cpu_bitmap, hwloc_obj_type_string(locale->type),
                                 idx, node->name);
             if (NULL != cpu_bitmap) {
-                indx = get_numa(node, locale->cpuset);
-                if (0 <= indx) {
-                    proc->numa_rank = numa_ranks[indx];
-                    ++numa_ranks[indx];
-                }
                 free(cpu_bitmap);
             }
         }
+        hwloc_bitmap_free(available);
+    }
+    if (NULL != job_cpuset) {
+        free(job_cpuset);
     }
 
     return PRRTE_SUCCESS;
@@ -615,17 +760,24 @@ static int bind_to_cpuset(prrte_job_t *jdata)
     struct hwloc_topology_support *support;
     prrte_hwloc_topo_data_t *sum;
     hwloc_obj_t root;
-    char *cpu_bitmap;
+    char *cpu_bitmap, *job_cpuset;
     unsigned id;
     prrte_local_rank_t lrank;
-    hwloc_bitmap_t mycpuset, tset;
-    bool dobind;
-    int idx;
+    hwloc_bitmap_t mycpuset, tset, mycpus;
+    bool dobind, use_hwthread_cpus;
+    uint16_t u16, *u16ptr = &u16, ncpus, cpus_per_rank;
+
+    /* see if this job has a "soft" cgroup assignment */
+    job_cpuset = NULL;
+    if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&job_cpuset, PRRTE_STRING) ||
+        NULL == job_cpuset) {
+        return PRRTE_ERR_BAD_PARAM;
+    }
 
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind job %s to cpus %s",
-                        PRRTE_JOBID_PRINT(jdata->jobid),
-                        prrte_hwloc_base_cpu_list);
+                        PRRTE_JOBID_PRINT(jdata->jobid), job_cpuset);
+
     /* initialize */
     map = jdata->map;
     mycpuset = hwloc_bitmap_alloc();
@@ -636,6 +788,21 @@ static int bind_to_cpuset(prrte_job_t *jdata)
         prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRRTE_BOOL) ||
         prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_DIFF, NULL, PRRTE_BOOL)) {
         dobind = true;
+    }
+
+
+    /* see if they want multiple cpus/rank */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRRTE_UINT16)) {
+        cpus_per_rank = u16;
+    } else {
+        cpus_per_rank = 1;
+    }
+
+    /* see if they want are using hwthreads as cpus */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
     }
 
     for (i=0; i < map->nodes->size; i++) {
@@ -657,11 +824,12 @@ static int bind_to_cpuset(prrte_job_t *jdata)
              */
             if (!support->cpubind->set_thisproc_cpubind &&
                 !support->cpubind->set_thisthread_cpubind) {
-                if (!PRRTE_BINDING_REQUIRED(prrte_hwloc_binding_policy)) {
+                if (!PRRTE_BINDING_REQUIRED(jdata->map->binding)) {
                     /* we are not required to bind, so ignore this */
                     continue;
                 }
                 prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:cpubind-not-supported", true, node->name);
+                free(job_cpuset);
                 hwloc_bitmap_free(mycpuset);
                 return PRRTE_ERR_SILENT;
             }
@@ -679,6 +847,7 @@ static int bind_to_cpuset(prrte_job_t *jdata)
                     membind_warned = true;
                 } else if (PRRTE_HWLOC_BASE_MBFA_ERROR == prrte_hwloc_base_mbfa) {
                     prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:membind-not-supported-fatal", true, node->name);
+                    free(job_cpuset);
                     hwloc_bitmap_free(mycpuset);
                     return PRRTE_ERR_SILENT;
                 }
@@ -688,6 +857,7 @@ static int bind_to_cpuset(prrte_job_t *jdata)
         if (NULL == root->userdata) {
             /* something went wrong */
             PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+            free(job_cpuset);
             hwloc_bitmap_free(mycpuset);
             return PRRTE_ERR_NOT_FOUND;
         }
@@ -695,12 +865,17 @@ static int bind_to_cpuset(prrte_job_t *jdata)
         if (NULL == sum->available) {
             /* another error */
             PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+            free(job_cpuset);
             hwloc_bitmap_free(mycpuset);
             return PRRTE_ERR_NOT_FOUND;
         }
         reset_usage(node, jdata->jobid);
-        /* the cpu list in sum->available has already been filtered
-         * to include _only_ the cpus defined by the user */
+        hwloc_bitmap_zero(mycpuset);
+
+        /* filter the node-available cpus against the specified "soft" cgroup */
+        mycpus = prrte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
+        hwloc_bitmap_and(mycpus, mycpus, sum->available);
+
         for (j=0; j < node->procs->size; j++) {
             if (NULL == (proc = (prrte_proc_t*)prrte_pointer_array_get_item(node->procs, j))) {
                 continue;
@@ -712,10 +887,16 @@ static int bind_to_cpuset(prrte_job_t *jdata)
             if (PRRTE_BIND_ORDERED_REQUESTED(jdata->map->binding)) {
                 /* assign each proc, in local rank order, to
                  * the corresponding cpu in the list */
-                id = hwloc_bitmap_first(sum->available);
+                id = hwloc_bitmap_first(mycpus);
                 lrank = 0;
                 while (lrank != proc->local_rank) {
-                    id = hwloc_bitmap_next(sum->available, id);
+                    ncpus = 0;
+                    while ((unsigned)-1 != id && ncpus < cpus_per_rank) {
+                        id = hwloc_bitmap_next(mycpus, id);
+                        /* set the bit of interest */
+                        hwloc_bitmap_only(mycpuset, id);
+                        ++ncpus;
+                    }
                     if ((unsigned)-1 == id) {
                         break;
                     }
@@ -724,30 +905,27 @@ static int bind_to_cpuset(prrte_job_t *jdata)
                 if ((unsigned)-1 ==id) {
                     /* ran out of cpus - that's an error */
                     prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:insufficient-cpus", true,
-                                   node->name, (int)proc->local_rank, prrte_hwloc_base_cpu_list);
+                                   node->name, (int)proc->local_rank, job_cpuset);
+                    free(job_cpuset);
                     hwloc_bitmap_free(mycpuset);
+                    hwloc_bitmap_free(mycpus);
                     return PRRTE_ERR_OUT_OF_RESOURCE;
                 }
-                 /* set the bit of interest */
-                hwloc_bitmap_only(mycpuset, id);
                 tset = mycpuset;
             } else {
                 /* bind the proc to all assigned cpus */
-                tset = sum->available;
+                tset = mycpus;
             }
             hwloc_bitmap_list_asprintf(&cpu_bitmap, tset);
             prrte_set_attribute(&proc->attributes, PRRTE_PROC_CPU_BITMAP, PRRTE_ATTR_GLOBAL, cpu_bitmap, PRRTE_STRING);
             if (NULL != cpu_bitmap) {
-                idx = get_numa(node, tset);
-                if (0 <= idx) {
-                    proc->numa_rank = numa_ranks[idx];
-                    ++numa_ranks[idx];
-                }
                 free(cpu_bitmap);
             }
+            hwloc_bitmap_free(mycpus);
         }
     }
     hwloc_bitmap_free(mycpuset);
+    free(job_cpuset);
     return PRRTE_SUCCESS;
 }
 
@@ -776,32 +954,23 @@ int prrte_rmaps_base_compute_bindings(prrte_job_t *jdata)
         return PRRTE_SUCCESS;
     }
 
-    if (PRRTE_BIND_TO_CPUSET == bind) {
-        int rc;
-        /* cpuset was given - setup the bindings */
-        if (PRRTE_SUCCESS != (rc = bind_to_cpuset(jdata))) {
-            PRRTE_ERROR_LOG(rc);
+    if (PRRTE_BIND_TO_NONE == bind) {
+        rc = PRRTE_SUCCESS;
+        if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, NULL, PRRTE_STRING)) {
+            /* "soft" cgroup was given but no other
+             * binding directive was provided, so bind
+             * to those specific cpus */
+            if (PRRTE_SUCCESS != (rc = bind_to_cpuset(jdata))) {
+                PRRTE_ERROR_LOG(rc);
+            }
         }
         return rc;
     }
 
-    if (PRRTE_BIND_TO_NONE == bind) {
-        /* no binding requested */
-        return PRRTE_SUCCESS;
-    }
-
-    if (PRRTE_BIND_TO_BOARD == bind) {
-        /* doesn't do anything at this time */
-        return PRRTE_SUCCESS;
-    }
-
     /* binding requested - convert the binding level to the hwloc obj type */
     switch (bind) {
-    case PRRTE_BIND_TO_NUMA:
-        hwb = HWLOC_OBJ_NODE;
-        break;
-    case PRRTE_BIND_TO_SOCKET:
-        hwb = HWLOC_OBJ_SOCKET;
+    case PRRTE_BIND_TO_PACKAGE:
+        hwb = HWLOC_OBJ_PACKAGE;
         break;
     case PRRTE_BIND_TO_L3CACHE:
         PRRTE_HWLOC_MAKE_OBJ_CACHE(3, hwb, clvl);
@@ -837,24 +1006,8 @@ int prrte_rmaps_base_compute_bindings(prrte_job_t *jdata)
      */
 
     if (PRRTE_MAPPING_BYDIST == map) {
-        int rc = PRRTE_SUCCESS;
-        if (PRRTE_BIND_TO_NUMA == bind) {
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
-                                "mca:rmaps: bindings for job %s - dist to numa",
-                                PRRTE_JOBID_PRINT(jdata->jobid));
-            if (PRRTE_SUCCESS != (rc = bind_in_place(jdata, HWLOC_OBJ_NODE, 0))) {
-                PRRTE_ERROR_LOG(rc);
-            }
-        } else if (PRRTE_BIND_TO_NUMA < bind) {
-            /* bind every proc downwards */
-            goto execute;
-        }
-        /* if the binding policy is less than numa, then we are unbound - so
-         * just ignore this and return (should have been caught in prior
-         * tests anyway as only options meeting that criteria are "none"
-         * and "board")
-         */
-        return rc;
+        /* bind every proc downwards */
+        goto execute;
     }
 
     /* now deal with the remaining binding policies based on hardware */

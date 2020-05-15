@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -444,7 +444,7 @@ int prrte_dt_print_proc(char **output, char *prefix, prrte_proc_t *src, prrte_da
 {
     char *tmp, *tmp3, *pfx2;
     hwloc_obj_t loc=NULL;
-    char locale[1024], tmp1[1024], tmp2[1024];
+    char *locale, *tmp2;
     hwloc_cpuset_t mycpus;
     char *str=NULL, *cpu_bitmap=NULL;
 
@@ -477,14 +477,11 @@ int prrte_dt_print_proc(char **output, char *prefix, prrte_proc_t *src, prrte_da
             NULL != src->node->topology && NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
             hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
-            if (PRRTE_ERR_NOT_BOUND == prrte_hwloc_base_cset2str(tmp1, sizeof(tmp1), src->node->topology->topo, mycpus)) {
+            if (NULL == (str = prrte_hwloc_base_cset2str(mycpus, false, src->node->topology->topo))) {
                 str = strdup("UNBOUND");
-            } else {
-                prrte_hwloc_base_cset2mapstr(tmp2, sizeof(tmp2), src->node->topology->topo, mycpus);
-                prrte_asprintf(&str, "%s:%s", tmp1, tmp2);
             }
             hwloc_bitmap_free(mycpus);
-            prrte_asprintf(&tmp, "\n%sProcess OMPI jobid: %s App: %ld Process rank: %s Bound: %s", pfx2,
+            prrte_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: %s", pfx2,
                      PRRTE_JOBID_PRINT(src->name.jobid), (long)src->app_idx,
                      PRRTE_VPID_PRINT(src->name.vpid), (NULL == str) ? "N/A" : str);
             if (NULL != str) {
@@ -495,7 +492,7 @@ int prrte_dt_print_proc(char **output, char *prefix, prrte_proc_t *src, prrte_da
             }
         } else {
             /* just print a very simple output for users */
-            prrte_asprintf(&tmp, "\n%sProcess OMPI jobid: %s App: %ld Process rank: %s Bound: N/A", pfx2,
+            prrte_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: N/A", pfx2,
                      PRRTE_JOBID_PRINT(src->name.jobid), (long)src->app_idx,
                      PRRTE_VPID_PRINT(src->name.vpid));
         }
@@ -515,26 +512,26 @@ int prrte_dt_print_proc(char **output, char *prefix, prrte_proc_t *src, prrte_da
 
     if (prrte_get_attribute(&src->attributes, PRRTE_PROC_HWLOC_LOCALE, (void**)&loc, PRRTE_PTR)) {
         if (NULL != loc) {
-            if (PRRTE_ERR_NOT_BOUND == prrte_hwloc_base_cset2mapstr(locale, sizeof(locale), src->node->topology->topo, loc->cpuset)) {
-                strcpy(locale, "NODE");
-            }
+            locale = prrte_hwloc_base_cset2str(loc->cpuset, false, src->node->topology->topo);
         } else {
-            strcpy(locale, "UNKNOWN");
+            locale = strdup("UNKNOWN");
         }
     } else {
-        strcpy(locale, "UNKNOWN");
+        locale = strdup("UNKNOWN");
     }
     if (prrte_get_attribute(&src->attributes, PRRTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, PRRTE_STRING) &&
         NULL != src->node->topology && NULL != src->node->topology->topo) {
         mycpus = hwloc_bitmap_alloc();
         hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
-        prrte_hwloc_base_cset2mapstr(tmp2, sizeof(tmp2), src->node->topology->topo, mycpus);
+        tmp2 = prrte_hwloc_base_cset2str(mycpus, false, src->node->topology->topo);
     } else {
-        snprintf(tmp2, sizeof(tmp2), "UNBOUND");
+        tmp2 = strdup("UNBOUND");
     }
     prrte_asprintf(&tmp3, "%s\n%s\tState: %s\tApp_context: %ld\n%s\tLocale:  %s\n%s\tBinding: %s", tmp, pfx2,
              prrte_proc_state_to_str(src->state), (long)src->app_idx, pfx2, locale, pfx2,  tmp2);
+    free(locale);
     free(tmp);
+    free(tmp2);
     if (NULL != str) {
         free(str);
     }
@@ -672,15 +669,12 @@ int prrte_dt_print_map(char **output, char *prefix, prrte_job_map_t *src, prrte_
     prrte_asprintf(&pfx, "%s\t", pfx2);
 
     if (prrte_devel_level_output) {
-        prrte_asprintf(&tmp, "\n%sMapper requested: %s  Last mapper: %s  Mapping policy: %s  Ranking policy: %s\n%sBinding policy: %s  Cpu set: %s  PPR: %s  Cpus-per-rank: %d",
+        prrte_asprintf(&tmp, "\n%sMapper requested: %s  Last mapper: %s  Mapping policy: %s  Ranking policy: %s\n%sBinding policy: %s",
                  pfx2, (NULL == src->req_mapper) ? "NULL" : src->req_mapper,
                  (NULL == src->last_mapper) ? "NULL" : src->last_mapper,
                  prrte_rmaps_base_print_mapping(src->mapping),
                  prrte_rmaps_base_print_ranking(src->ranking),
-                 pfx2, prrte_hwloc_base_print_binding(src->binding),
-                 (NULL == prrte_hwloc_base_cpu_list) ? "NULL" : prrte_hwloc_base_cpu_list,
-                 (NULL == src->ppr) ? "NULL" : src->ppr,
-                 (int)src->cpus_per_rank);
+                 pfx2, prrte_hwloc_base_print_binding(src->binding));
 
         if (PRRTE_VPID_INVALID == src->daemon_vpid_start) {
             prrte_asprintf(&tmp2, "%s\n%sNum new daemons: %ld\tNew daemon starting vpid INVALID\n%sNum nodes: %ld",
@@ -747,88 +741,104 @@ int prrte_dt_print_attr(char **output, char *prefix,
     }
 
     switch (src->type) {
+    case PRRTE_BOOL:
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_BOOL\tValue: %s",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL",
+                 src->data.flag ? "TRUE" : "FALSE");
+        break;
     case PRRTE_STRING:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_STRING\tKey: %s\tValue: %s",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), src->data.string);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_STRING\tValue: %s",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", src->data.string);
         break;
     case PRRTE_SIZE:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_SIZE\tKey: %s\tValue: %lu",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), (unsigned long)src->data.size);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_SIZE\tValue: %lu",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", (unsigned long)src->data.size);
         break;
     case PRRTE_PID:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_PID\tKey: %s\tValue: %lu",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), (unsigned long)src->data.pid);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_PID\tValue: %lu",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", (unsigned long)src->data.pid);
         break;
     case PRRTE_INT:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_INT\tKey: %s\tValue: %d",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), src->data.integer);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_INT\tValue: %d",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", src->data.integer);
         break;
     case PRRTE_INT8:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_INT8\tKey: %s\tValue: %d",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), (int)src->data.int8);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_INT8\tValue: %d",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", (int)src->data.int8);
         break;
     case PRRTE_INT16:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_INT16\tKey: %s\tValue: %d",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), (int)src->data.int16);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_INT16\tValue: %d",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", (int)src->data.int16);
         break;
     case PRRTE_INT32:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_INT32\tKey: %s\tValue: %d",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), src->data.int32);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_INT32\tValue: %d",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", src->data.int32);
         break;
     case PRRTE_INT64:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_INT64\tKey: %s\tValue: %d",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), (int)src->data.int64);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_INT64\tValue: %d",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", (int)src->data.int64);
         break;
     case PRRTE_UINT:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_UINT\tKey: %s\tValue: %u",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), (unsigned int)src->data.uint);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_UINT\tValue: %u",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", (unsigned int)src->data.uint);
         break;
     case PRRTE_UINT8:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_UINT8\tKey: %s\tValue: %u",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), (unsigned int)src->data.uint8);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_UINT8\tValue: %u",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", (unsigned int)src->data.uint8);
         break;
     case PRRTE_UINT16:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_UINT16\tKey: %s\tValue: %u",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), (unsigned int)src->data.uint16);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_UINT16\tValue: %u",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", (unsigned int)src->data.uint16);
         break;
     case PRRTE_UINT32:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_UINT32\tKey: %s\tValue: %u",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), src->data.uint32);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_UINT32\tValue: %u",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", src->data.uint32);
         break;
     case PRRTE_UINT64:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_UINT64\tKey: %s\tValue: %lu",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), (unsigned long)src->data.uint64);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_UINT64\tValue: %lu",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", (unsigned long)src->data.uint64);
         break;
     case PRRTE_BYTE_OBJECT:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_BYTE_OBJECT\tKey: %s\tValue: UNPRINTABLE",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key));
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_BYTE_OBJECT\tValue: UNPRINTABLE",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL");
         break;
     case PRRTE_BUFFER:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_BUFFER\tKey: %s\tValue: UNPRINTABLE",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key));
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_BUFFER\tValue: UNPRINTABLE",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL");
         break;
     case PRRTE_FLOAT:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_FLOAT\tKey: %s\tValue: %f",
-                 prefx, src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), src->data.fval);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_FLOAT\tValue: %f",
+                 prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", src->data.fval);
         break;
     case PRRTE_TIMEVAL:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_TIMEVAL\tKey: %s\tValue: %ld.%06ld", prefx,
-                 src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key), (long)src->data.tv.tv_sec, (long)src->data.tv.tv_usec);
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_TIMEVAL\tValue: %ld.%06ld", prefx,
+                 prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL",
+                 (long)src->data.tv.tv_sec, (long)src->data.tv.tv_usec);
         break;
     case PRRTE_PTR:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_PTR\tKey: %s", prefx,
-                 src->local ? "LOCAL" : "GLOBAL", prrte_attr_key_to_str(src->key));
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_PTR", prefx,
+                 prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL");
         break;
     case PRRTE_VPID:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_VPID\tKey: %s\tValue: %s", prefx, src->local ? "LOCAL" : "GLOBAL",
-                 prrte_attr_key_to_str(src->key), PRRTE_VPID_PRINT(src->data.vpid));
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_VPID\tValue: %s", prefx,
+                 prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", PRRTE_VPID_PRINT(src->data.vpid));
         break;
     case PRRTE_JOBID:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: PRRTE_JOBID\tKey: %s\tValue: %s", prefx, src->local ? "LOCAL" : "GLOBAL",
-                 prrte_attr_key_to_str(src->key), PRRTE_JOBID_PRINT(src->data.jobid));
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_JOBID\tValue: %s", prefx,
+                 prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", PRRTE_JOBID_PRINT(src->data.jobid));
+        break;
+    case PRRTE_NAME:
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_NAME\tValue: %s", prefx,
+                 prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL", PRRTE_NAME_PRINT(&src->data.name));
+        break;
+    case PRRTE_ENVAR:
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: PRRTE_ENVAR\tEnvar: %s\tValue: %s", prefx,
+                 prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL",
+                 (NULL == src->data.envar.envar) ? "NULL" : src->data.envar.envar,
+                 (NULL == src->data.envar.value) ? "NULL" : src->data.envar.value);
         break;
     default:
-        prrte_asprintf(output, "%sPRRTE_ATTR: %s Data type: UNKNOWN\tKey: %s\tValue: UNPRINTABLE",
+        prrte_asprintf(output, "%sKey: %s\tPRRTE_ATTR: %s Data type: UNKNOWN\tValue: UNPRINTABLE",
                  prefx, prrte_attr_key_to_str(src->key), src->local ? "LOCAL" : "GLOBAL");
         break;
     }

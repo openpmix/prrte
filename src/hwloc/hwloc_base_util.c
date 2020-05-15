@@ -70,8 +70,8 @@ static bool topo_in_shmem = false;
  * but with PUs instead of COREs.
  */
 hwloc_obj_t prrte_hwloc_base_get_pu(hwloc_topology_t topo,
-                                   int lid,
-                                   prrte_hwloc_resource_type_t rtype)
+                                    bool use_hwthread_cpus,
+                                    int lid)
 {
     hwloc_obj_type_t obj_type = HWLOC_OBJ_CORE;
     hwloc_obj_t obj;
@@ -89,25 +89,8 @@ hwloc_obj_t prrte_hwloc_base_get_pu(hwloc_topology_t topo,
        So first we have to see if we can find *any* cores by looking
        for the 0th core.  If we find it, then try to find the Nth
        core.  Otherwise, try to find the Nth PU. */
-    if (prrte_hwloc_use_hwthreads_as_cpus || (NULL == hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0))) {
+    if (use_hwthread_cpus || (NULL == hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0))) {
         obj_type = HWLOC_OBJ_PU;
-    }
-
-    if (PRRTE_HWLOC_PHYSICAL == rtype) {
-        /* find the pu - note that we can only find physical PUs
-         * as cores do not have unique physical numbers (they are
-         * numbered within their sockets instead). So we find the
-         * specified PU, and then return the core object that contains it */
-        obj = hwloc_get_pu_obj_by_os_index(topo, lid);
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
-                             "physical cpu %d %s found in cpuset %s",
-                             lid, (NULL == obj) ? "not" : "is",
-                             (NULL == prrte_hwloc_base_cpu_list) ? "None" : prrte_hwloc_base_cpu_list));
-        /* we now need to shift upward to the core including this PU */
-        if (NULL != obj && HWLOC_OBJ_CORE == obj_type) {
-            obj = obj->parent;
-        }
-        return obj;
     }
 
     prrte_output_verbose(5, prrte_hwloc_base_output,
@@ -116,65 +99,57 @@ hwloc_obj_t prrte_hwloc_base_get_pu(hwloc_topology_t topo,
     /* Now do the actual lookup. */
     obj = hwloc_get_obj_by_type(topo, obj_type, lid);
     PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
-                         "logical cpu %d %s found in cpuset %s",
-                         lid, (NULL == obj) ? "not" : "is",
-                         (NULL == prrte_hwloc_base_cpu_list) ? "None" : prrte_hwloc_base_cpu_list));
+                         "logical cpu %d %s found",
+                         lid, (NULL == obj) ? "not" : "is"));
 
     /* Found the right core (or PU). Return the object */
     return obj;
 }
 
-/* determine the node-level available cpuset based on
- * online vs allowed vs user-specified cpus
- */
-int prrte_hwloc_base_filter_cpus(hwloc_topology_t topo)
+hwloc_cpuset_t prrte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
+                                                bool use_hwthread_cpus,
+                                                char *cpulist)
 {
-    hwloc_obj_t root, pu;
     hwloc_cpuset_t avail = NULL, pucpus, res;
-    prrte_hwloc_topo_data_t *sum;
-    prrte_hwloc_obj_data_t *data;
     char **ranges=NULL, **range=NULL;
     int idx, cpu, start, end;
+    prrte_hwloc_obj_data_t *data;
+    hwloc_obj_t pu;
 
-    root = hwloc_get_root_obj(topo);
-
-    if (NULL == root->userdata) {
-        root->userdata = (void*)PRRTE_NEW(prrte_hwloc_topo_data_t);
-    }
-    sum = (prrte_hwloc_topo_data_t*)root->userdata;
-
-    /* should only ever enter here once, but check anyway */
-    if (NULL != sum->available) {
-        return PRRTE_SUCCESS;
-    }
-
-    /* process any specified default cpu set against this topology */
-    if (NULL == prrte_hwloc_base_cpu_list) {
-        /* get the root available cpuset */
-        #if HWLOC_API_VERSION < 0x20000
-            avail = hwloc_bitmap_alloc();
-            hwloc_bitmap_and(avail, root->online_cpuset, root->allowed_cpuset);
-        #else
-            avail = hwloc_bitmap_dup(hwloc_topology_get_allowed_cpuset(topo));
-        #endif
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
-                             "hwloc:base: no cpus specified - using root available cpuset"));
-    } else {
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
-                             "hwloc:base: filtering cpuset"));
-        /* find the specified logical cpus */
-        ranges = prrte_argv_split(prrte_hwloc_base_cpu_list, ',');
-        avail = hwloc_bitmap_alloc();
-        hwloc_bitmap_zero(avail);
-        res = hwloc_bitmap_alloc();
-        pucpus = hwloc_bitmap_alloc();
-        for (idx=0; idx < prrte_argv_count(ranges); idx++) {
-            range = prrte_argv_split(ranges[idx], '-');
-            switch (prrte_argv_count(range)) {
-            case 1:
-                /* only one cpu given - get that object */
-                cpu = strtoul(range[0], NULL, 10);
-                if (NULL != (pu = prrte_hwloc_base_get_pu(topo, cpu, PRRTE_HWLOC_LOGICAL))) {
+    /* find the specified logical cpus */
+    ranges = prrte_argv_split(cpulist, ',');
+    avail = hwloc_bitmap_alloc();
+    hwloc_bitmap_zero(avail);
+    res = hwloc_bitmap_alloc();
+    pucpus = hwloc_bitmap_alloc();
+    for (idx=0; idx < prrte_argv_count(ranges); idx++) {
+        range = prrte_argv_split(ranges[idx], '-');
+        switch (prrte_argv_count(range)) {
+        case 1:
+            /* only one cpu given - get that object */
+            cpu = strtoul(range[0], NULL, 10);
+            if (NULL != (pu = prrte_hwloc_base_get_pu(topo, use_hwthread_cpus, cpu))) {
+                #if HWLOC_API_VERSION < 0x20000
+                    hwloc_bitmap_and(pucpus, pu->online_cpuset, pu->allowed_cpuset);
+                #else
+                    hwloc_bitmap_and(pucpus, pu->cpuset, hwloc_topology_get_allowed_cpuset(topo));
+                #endif
+                hwloc_bitmap_or(res, avail, pucpus);
+                hwloc_bitmap_copy(avail, res);
+                data = (prrte_hwloc_obj_data_t*)pu->userdata;
+                if (NULL == data) {
+                    pu->userdata = (void*)PRRTE_NEW(prrte_hwloc_obj_data_t);
+                    data = (prrte_hwloc_obj_data_t*)pu->userdata;
+                }
+                data->npus++;
+            }
+            break;
+        case 2:
+            /* range given */
+            start = strtoul(range[0], NULL, 10);
+            end = strtoul(range[1], NULL, 10);
+            for (cpu=start; cpu <= end; cpu++) {
+                if (NULL != (pu = prrte_hwloc_base_get_pu(topo, use_hwthread_cpus, cpu))) {
                     #if HWLOC_API_VERSION < 0x20000
                         hwloc_bitmap_and(pucpus, pu->online_cpuset, pu->allowed_cpuset);
                     #else
@@ -189,39 +164,84 @@ int prrte_hwloc_base_filter_cpus(hwloc_topology_t topo)
                     }
                     data->npus++;
                 }
-                break;
-            case 2:
-                /* range given */
-                start = strtoul(range[0], NULL, 10);
-                end = strtoul(range[1], NULL, 10);
-                for (cpu=start; cpu <= end; cpu++) {
-                    if (NULL != (pu = prrte_hwloc_base_get_pu(topo, cpu, PRRTE_HWLOC_LOGICAL))) {
-                        #if HWLOC_API_VERSION < 0x20000
-                            hwloc_bitmap_and(pucpus, pu->online_cpuset, pu->allowed_cpuset);
-                        #else
-                            hwloc_bitmap_and(pucpus, pu->cpuset, hwloc_topology_get_allowed_cpuset(topo));
-                        #endif
-                        hwloc_bitmap_or(res, avail, pucpus);
-                        hwloc_bitmap_copy(avail, res);
-                        data = (prrte_hwloc_obj_data_t*)pu->userdata;
-                        if (NULL == data) {
-                            pu->userdata = (void*)PRRTE_NEW(prrte_hwloc_obj_data_t);
-                            data = (prrte_hwloc_obj_data_t*)pu->userdata;
-                        }
-                        data->npus++;
-                    }
-                }
-                break;
-            default:
-                break;
             }
-            prrte_argv_free(range);
+            break;
+        default:
+            break;
         }
-        if (NULL != ranges) {
-            prrte_argv_free(ranges);
-        }
-        hwloc_bitmap_free(res);
-        hwloc_bitmap_free(pucpus);
+        prrte_argv_free(range);
+    }
+    if (NULL != ranges) {
+        prrte_argv_free(ranges);
+    }
+    hwloc_bitmap_free(res);
+    hwloc_bitmap_free(pucpus);
+
+    return avail;
+}
+
+hwloc_cpuset_t prrte_hwloc_base_setup_summary(hwloc_topology_t topo)
+{
+    hwloc_obj_t root;
+    hwloc_cpuset_t avail = NULL;
+
+    root = hwloc_get_root_obj(topo);
+
+    /* get the root available cpuset */
+#if HWLOC_API_VERSION < 0x20000
+    if (NULL == root->online_cpuset && NULL == root->allowed_cpuset) {
+        /* we are hosed */
+        return NULL;
+    }
+    if (NULL == root->online_cpuset) {
+        avail = hwloc_bitmap_dup(root->allowed_cpuset);
+    } else if (NULL == root->allowed_cpuset) {
+        avail = hwloc_bitmap_dup(root->online_cpuset);
+    } else {
+        avail = hwloc_bitmap_alloc();
+        hwloc_bitmap_and(avail, root->online_cpuset, root->allowed_cpuset);
+    }
+#else
+    avail = hwloc_bitmap_dup(hwloc_topology_get_allowed_cpuset(topo));
+#endif
+
+    return avail;
+}
+
+/* determine the node-level available cpuset based on
+ * online vs allowed vs user-specified cpus
+ */
+int prrte_hwloc_base_filter_cpus(hwloc_topology_t topo)
+{
+    hwloc_obj_t root;
+    hwloc_cpuset_t avail = NULL;
+    prrte_hwloc_topo_data_t *sum;
+
+    root = hwloc_get_root_obj(topo);
+
+    if (NULL == root->userdata) {
+        root->userdata = (void*)PRRTE_NEW(prrte_hwloc_topo_data_t);
+    }
+    sum = (prrte_hwloc_topo_data_t*)root->userdata;
+
+    /* should only ever enter here once, but check anyway */
+    if (NULL != sum->available) {
+        return PRRTE_SUCCESS;
+    }
+
+    /* process any specified default cpu set against this topology */
+    if (NULL == prrte_hwloc_default_cpu_list) {
+        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+                             "hwloc:base: no cpus specified - using root available cpuset"));
+        avail = prrte_hwloc_base_setup_summary(topo);
+    } else {
+        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+                             "hwloc:base: filtering cpuset"));
+        avail = prrte_hwloc_base_generate_cpuset(topo, prrte_hwloc_default_use_hwthread_cpus,
+                                                 prrte_hwloc_default_cpu_list);
+    }
+    if (NULL == avail) {
+        return PRRTE_ERR_NOT_SUPPORTED;
     }
 
     /* cache this info */
@@ -232,11 +252,11 @@ int prrte_hwloc_base_filter_cpus(hwloc_topology_t topo)
 
 static void fill_cache_line_size(void)
 {
+    bool found = false;
+    unsigned size=0;
     int i = 0, cache_level = 2;
-    unsigned size;
     unsigned int cache_object = HWLOC_OBJ_L2CACHE;
     hwloc_obj_t obj;
-    bool found = false;
 
     /* Look for the smallest L2 cache size */
     size = 4096;
@@ -429,7 +449,17 @@ void prrte_hwloc_base_get_local_cpuset(void)
             /* we are not bound - use the root's available cpuset */
             #if HWLOC_API_VERSION < 0x20000
                 root = hwloc_get_root_obj(prrte_hwloc_topology);
-                hwloc_bitmap_and(prrte_hwloc_my_cpuset, root->online_cpuset, root->allowed_cpuset);
+                if (NULL == root->online_cpuset && NULL == root->allowed_cpuset) {
+                    /* we are hosed */
+                    PRRTE_ERROR_LOG(PRRTE_ERR_NOT_SUPPORTED);
+                }
+                if (NULL == root->online_cpuset) {
+                    hwloc_bitmap_copy(prrte_hwloc_my_cpuset, root->allowed_cpuset);
+                } else if (NULL == root->allowed_cpuset) {
+                    hwloc_bitmap_copy(prrte_hwloc_my_cpuset, root->online_cpuset);
+                } else {
+                    hwloc_bitmap_and(prrte_hwloc_my_cpuset, root->online_cpuset, root->allowed_cpuset);
+                }
             #else
                 hwloc_bitmap_copy(prrte_hwloc_my_cpuset, hwloc_topology_get_allowed_cpuset(prrte_hwloc_topology));
             #endif
@@ -488,52 +518,42 @@ bool prrte_hwloc_base_single_cpu(hwloc_cpuset_t cpuset)
 
 /* get the number of pu's under a given hwloc object */
 unsigned int prrte_hwloc_base_get_npus(hwloc_topology_t topo,
-                                      hwloc_obj_t obj)
+                                       bool use_hwthread_cpus,
+                                       hwloc_cpuset_t envelope,
+                                       hwloc_obj_t obj)
 {
-    prrte_hwloc_obj_data_t *data;
     unsigned int cnt = 0;
+    hwloc_cpuset_t avail;
 
-    data = (prrte_hwloc_obj_data_t*)obj->userdata;
-    if (NULL == data || !data->npus_calculated) {
-        if (!prrte_hwloc_use_hwthreads_as_cpus) {
-            /* if we are treating cores as cpus, then we really
-             * want to know how many cores are in this object.
-             * hwloc sets a bit for each "pu", so we can't just
-             * count bits in this case as there may be more than
-             * one hwthread/core. Instead, find the number of cores
-             * in the system
-             */
-            cnt = hwloc_get_nbobjs_inside_cpuset_by_type(topo, obj->cpuset, HWLOC_OBJ_CORE);
-        } else {
-            hwloc_cpuset_t cpuset;
-
-            /* if we are treating cores as cpus, or the system can't detect
-             * "cores", then get the available cpuset for this object - this will
-             * create and store the data
-             */
-            if (NULL == (cpuset = obj->cpuset)) {
-                return 0;
-            }
-            /* count the number of bits that are set - there is
-             * one bit for each available pu. We could just
-             * subtract the first and last indices, but there
-             * may be "holes" in the bitmap corresponding to
-             * offline or unallowed cpus - so we count them with
-             * the bitmap "weight" (a.k.a. population count) function
-             */
-            cnt = hwloc_bitmap_weight(cpuset);
-        }
-        /* cache the info */
-        data = (prrte_hwloc_obj_data_t*)obj->userdata;  // in case it was added
-        if (NULL == data) {
-            data = PRRTE_NEW(prrte_hwloc_obj_data_t);
-            obj->userdata = (void*)data;
-        }
-        data->npus = cnt;
-        data->npus_calculated = true;
+    if (NULL == obj->cpuset) {
+        return 0;
     }
 
-    return data->npus;
+    avail = hwloc_bitmap_alloc();
+    hwloc_bitmap_and(avail, obj->cpuset, envelope);
+
+    if (!use_hwthread_cpus) {
+        /* if we are treating cores as cpus, then we really
+         * want to know how many cores are in this object.
+         * hwloc sets a bit for each "pu", so we can't just
+         * count bits in this case as there may be more than
+         * one hwthread/core. Instead, find the number of cores
+         * in the system
+         */
+        cnt = hwloc_get_nbobjs_inside_cpuset_by_type(topo, avail, HWLOC_OBJ_CORE);
+    } else {
+        /* count the number of bits that are set - there is
+         * one bit for each available pu. We could just
+         * subtract the first and last indices, but there
+         * may be "holes" in the bitmap corresponding to
+         * offline or unallowed cpus - so we count them with
+         * the bitmap "weight" (a.k.a. population count) function
+         */
+        cnt = hwloc_bitmap_weight(avail);
+    }
+    hwloc_bitmap_free(avail);
+
+    return cnt;
 }
 
 unsigned int prrte_hwloc_base_get_obj_idx(hwloc_topology_t topo,
@@ -636,7 +656,7 @@ static hwloc_obj_t df_search(hwloc_topology_t topo,
          * can do to tell you how many PHYSICAL objects are in the system.
          *
          * NOTE: if the last PHYSICAL object is not present (e.g., the last
-         * socket on the node is empty), then the count we return will
+         * package on the node is empty), then the count we return will
          * be wrong!
          */
         hwloc_obj_t found = NULL;
@@ -814,11 +834,11 @@ void prrte_hwloc_base_clear_usage(hwloc_topology_t topo)
 }
 
 /* The current slot_list notation only goes to the core level - i.e., the location
- * is specified as socket:core. Thus, the code below assumes that all locations
+ * is specified as package:core. Thus, the code below assumes that all locations
  * are to be parsed under that notation.
  */
 
-static int socket_to_cpu_set(char *cpus,
+static int package_to_cpu_set(char *cpus,
                              hwloc_topology_t topo,
                              prrte_hwloc_resource_type_t rtype,
                              hwloc_bitmap_t cpumask)
@@ -826,11 +846,11 @@ static int socket_to_cpu_set(char *cpus,
     char **range;
     int range_cnt;
     int lower_range, upper_range;
-    int socket_id;
+    int package_id;
     hwloc_obj_t obj;
 
     if ('*' == cpus[0]) {
-        /* requesting cpumask for ALL sockets */
+        /* requesting cpumask for ALL packages */
         obj = hwloc_get_root_obj(topo);
         /* set to all available processors - essentially,
          * this specification equates to unbound
@@ -842,20 +862,20 @@ static int socket_to_cpu_set(char *cpus,
     range = prrte_argv_split(cpus,'-');
     range_cnt = prrte_argv_count(range);
     switch (range_cnt) {
-    case 1:  /* no range was present, so just one socket given */
-        socket_id = atoi(range[0]);
-        obj = prrte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0, socket_id, rtype);
-        /* get the available cpus for this socket */
+    case 1:  /* no range was present, so just one package given */
+        package_id = atoi(range[0]);
+        obj = prrte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id, rtype);
+        /* get the available cpus for this package */
         hwloc_bitmap_or(cpumask, cpumask, obj->cpuset);
         break;
 
-    case 2:  /* range of sockets was given */
+    case 2:  /* range of packages was given */
         lower_range = atoi(range[0]);
         upper_range = atoi(range[1]);
-        /* cycle across the range of sockets */
-        for (socket_id=lower_range; socket_id<=upper_range; socket_id++) {
-            obj = prrte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0, socket_id, rtype);
-            /* set the available cpus for this socket bits in the bitmask */
+        /* cycle across the range of packages */
+        for (package_id=lower_range; package_id<=upper_range; package_id++) {
+            obj = prrte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id, rtype);
+            /* set the available cpus for this package bits in the bitmask */
             hwloc_bitmap_or(cpumask, cpumask, obj->cpuset);
         }
         break;
@@ -868,27 +888,27 @@ static int socket_to_cpu_set(char *cpus,
     return PRRTE_SUCCESS;
 }
 
-static int socket_core_to_cpu_set(char *socket_core_list,
+static int package_core_to_cpu_set(char *package_core_list,
                                   hwloc_topology_t topo,
                                   prrte_hwloc_resource_type_t rtype,
                                   hwloc_bitmap_t cpumask)
 {
     int rc=PRRTE_SUCCESS, i, j;
-    char **socket_core, *corestr;
+    char **package_core, *corestr;
     char **range, **list;
     int range_cnt;
     int lower_range, upper_range;
-    int socket_id, core_id;
-    hwloc_obj_t socket, core;
+    int package_id, core_id;
+    hwloc_obj_t package, core;
     hwloc_obj_type_t obj_type = HWLOC_OBJ_CORE;
 
-    socket_core = prrte_argv_split(socket_core_list, ':');
-    socket_id = atoi(socket_core[0]);
+    package_core = prrte_argv_split(package_core_list, ':');
+    package_id = atoi(package_core[0]);
 
-    /* get the object for this socket id */
-    if (NULL == (socket = prrte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0,
-                                                          socket_id, rtype))) {
-        prrte_argv_free(socket_core);
+    /* get the object for this package id */
+    if (NULL == (package = prrte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0,
+                                                          package_id, rtype))) {
+        prrte_argv_free(package_core);
         return PRRTE_ERR_NOT_FOUND;
     }
 
@@ -900,16 +920,16 @@ static int socket_core_to_cpu_set(char *socket_core_list,
         obj_type = HWLOC_OBJ_PU;
     }
 
-    for (i=1; NULL != socket_core[i]; i++) {
-        if ('C' == socket_core[i][0] ||
-            'c' == socket_core[i][0]) {
-            corestr = &socket_core[i][1];
+    for (i=1; NULL != package_core[i]; i++) {
+        if ('C' == package_core[i][0] ||
+            'c' == package_core[i][0]) {
+            corestr = &package_core[i][1];
         } else {
-            corestr = socket_core[i];
+            corestr = package_core[i];
         }
         if ('*' == corestr[0]) {
-            /* set to all cpus on this socket */
-            hwloc_bitmap_or(cpumask, cpumask, socket->cpuset);
+            /* set to all cpus on this package */
+            hwloc_bitmap_or(cpumask, cpumask, package->cpuset);
             /* we are done - already assigned all cores! */
             rc = PRRTE_SUCCESS;
             break;
@@ -923,12 +943,12 @@ static int socket_core_to_cpu_set(char *socket_core_list,
                 for (j=0; NULL != list[j]; j++) {
                     core_id = atoi(list[j]);
                     /* get that object */
-                    if (NULL == (core = df_search(topo, socket, obj_type, 0,
+                    if (NULL == (core = df_search(topo, package, obj_type, 0,
                                                   core_id, PRRTE_HWLOC_AVAILABLE,
                                                   NULL))) {
                         prrte_argv_free(list);
                         prrte_argv_free(range);
-                        prrte_argv_free(socket_core);
+                        prrte_argv_free(package_core);
                         return PRRTE_ERR_NOT_FOUND;
                     }
                     /* get the cpus */
@@ -945,11 +965,11 @@ static int socket_core_to_cpu_set(char *socket_core_list,
                 upper_range = atoi(range[1]);
                 for (core_id=lower_range; core_id <= upper_range; core_id++) {
                     /* get that object */
-                    if (NULL == (core = df_search(topo, socket, obj_type, 0,
+                    if (NULL == (core = df_search(topo, package, obj_type, 0,
                                                   core_id, PRRTE_HWLOC_AVAILABLE,
                                                   NULL))) {
                         prrte_argv_free(range);
-                        prrte_argv_free(socket_core);
+                        prrte_argv_free(package_core);
                         return PRRTE_ERR_NOT_FOUND;
                     }
                     /* get the cpus add them into the result */
@@ -959,13 +979,13 @@ static int socket_core_to_cpu_set(char *socket_core_list,
 
             default:
                 prrte_argv_free(range);
-                prrte_argv_free(socket_core);
+                prrte_argv_free(package_core);
                 return PRRTE_ERROR;
             }
             prrte_argv_free(range);
         }
     }
-    prrte_argv_free(socket_core);
+    prrte_argv_free(package_core);
 
     return rc;
 }
@@ -1004,22 +1024,22 @@ int prrte_hwloc_base_cpu_list_parse(const char *slot_str,
         prrte_output_verbose(5, prrte_hwloc_base_output,
                             "working assignment %s",
                             item[i]);
-        /* if they specified "socket" by starting with an S/s,
-         * or if they use socket:core notation, then parse the
-         * socket/core info
+        /* if they specified "package" by starting with an S/s,
+         * or if they use package:core notation, then parse the
+         * package/core info
          */
         if ('S' == item[i][0] ||
             's' == item[i][0] ||
             NULL != strchr(item[i], ':')) {
-            /* specified a socket */
+            /* specified a package */
             if (NULL == strchr(item[i], ':')) {
-                /* binding just to the socket level, though
-                 * it could specify multiple sockets
+                /* binding just to the package level, though
+                 * it could specify multiple packages
                  * Skip the S and look for a ranges
                  */
                 rngs = prrte_argv_split(&item[i][1], ',');
                 for (j=0; NULL != rngs[j]; j++) {
-                    if (PRRTE_SUCCESS != (rc = socket_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
+                    if (PRRTE_SUCCESS != (rc = package_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
                         prrte_argv_free(rngs);
                         prrte_argv_free(item);
                         return rc;
@@ -1027,12 +1047,12 @@ int prrte_hwloc_base_cpu_list_parse(const char *slot_str,
                 }
                 prrte_argv_free(rngs);
             } else {
-                /* binding to a socket/whatever specification */
+                /* binding to a package/whatever specification */
                 if ('S' == item[i][0] ||
                     's' == item[i][0]) {
                     rngs = prrte_argv_split(&item[i][1], ',');
                     for (j=0; NULL != rngs[j]; j++) {
-                        if (PRRTE_SUCCESS != (rc = socket_core_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
+                        if (PRRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
                             prrte_argv_free(rngs);
                             prrte_argv_free(item);
                             return rc;
@@ -1042,7 +1062,7 @@ int prrte_hwloc_base_cpu_list_parse(const char *slot_str,
                 } else {
                     rngs = prrte_argv_split(item[i], ',');
                     for (j=0; NULL != rngs[j]; j++) {
-                        if (PRRTE_SUCCESS != (rc = socket_core_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
+                        if (PRRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
                             prrte_argv_free(rngs);
                             prrte_argv_free(item);
                             return rc;
@@ -1132,11 +1152,8 @@ static void prrte_hwloc_base_get_relative_locality_by_depth(hwloc_topology_t top
         if (sect1 && sect2) {
             *shared = true;
             switch(obj->type) {
-            case HWLOC_OBJ_NODE:
-                *locality |= PRRTE_PROC_ON_NUMA;
-                break;
-            case HWLOC_OBJ_SOCKET:
-                *locality |= PRRTE_PROC_ON_SOCKET;
+            case HWLOC_OBJ_PACKAGE:
+                *locality |= PRRTE_PROC_ON_PACKAGE;
                 break;
 #if HWLOC_API_VERSION < 0x20000
             case HWLOC_OBJ_CACHE:
@@ -1214,7 +1231,7 @@ prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t t
         type = hwloc_get_depth_type(topo, d);
         /* if it isn't one of interest, then ignore it */
         if (HWLOC_OBJ_NODE != type &&
-            HWLOC_OBJ_SOCKET != type &&
+            HWLOC_OBJ_PACKAGE != type &&
 #if HWLOC_API_VERSION < 0x20000
             HWLOC_OBJ_CACHE != type &&
 #else
@@ -1382,14 +1399,8 @@ char* prrte_hwloc_base_print_binding(prrte_binding_policy_t binding)
     case PRRTE_BIND_TO_NONE:
         bind = "NONE";
         break;
-    case PRRTE_BIND_TO_BOARD:
-        bind = "BOARD";
-        break;
-    case PRRTE_BIND_TO_NUMA:
-        bind = "NUMA";
-        break;
-    case PRRTE_BIND_TO_SOCKET:
-        bind = "SOCKET";
+    case PRRTE_BIND_TO_PACKAGE:
+        bind = "PACKAGE";
         break;
     case PRRTE_BIND_TO_L3CACHE:
         bind = "L3CACHE";
@@ -1405,9 +1416,6 @@ char* prrte_hwloc_base_print_binding(prrte_binding_policy_t binding)
         break;
     case PRRTE_BIND_TO_HWTHREAD:
         bind = "HWTHREAD";
-        break;
-    case PRRTE_BIND_TO_CPUSET:
-        bind = "CPUSET";
         break;
     default:
         bind = "UNKNOWN";
@@ -1439,500 +1447,124 @@ char* prrte_hwloc_base_print_binding(prrte_binding_policy_t binding)
     return ret;
 }
 
-/*
- * Turn an int bitmap to a "a-b,c" range kind of string
- */
-static char *bitmap2rangestr(int bitmap)
+static void build_map(hwloc_topology_t topo,
+                      hwloc_cpuset_t avail,
+                      bool use_hwthread_cpus,
+                      hwloc_bitmap_t coreset)
 {
-    size_t i;
-    int range_start, range_end;
-    bool first, isset;
-    char tmp[BUFSIZ-1];
-    const int stmp = sizeof(tmp) - 1;
-    static char ret[BUFSIZ];
+    unsigned k, obj_index, core_index;
+    hwloc_obj_t pu, core;
 
-    memset(ret, 0, sizeof(ret));
-
-    first = true;
-    range_start = -999;
-    for (i = 0; i < sizeof(int) * 8; ++i) {
-        isset = (bitmap & (1 << i));
-
-        /* Do we have a running range? */
-        if (range_start >= 0) {
-            if (isset) {
-                continue;
-            } else {
-                /* A range just ended; output it */
-                if (!first) {
-                    strncat(ret, ",", sizeof(ret) - strlen(ret) - 1);
-                } else {
-                    first = false;
-                }
-
-                range_end = i - 1;
-                if (range_start == range_end) {
-                    snprintf(tmp, stmp, "%d", range_start);
-                } else {
-                    snprintf(tmp, stmp, "%d-%d", range_start, range_end);
-                }
-                strncat(ret, tmp, sizeof(ret) - strlen(ret) - 1);
-
-                range_start = -999;
-            }
-        }
-
-        /* No running range */
-        else {
-            if (isset) {
-                range_start = i;
-            }
-        }
-    }
-
-    /* If we ended the bitmap with a range open, output it */
-    if (range_start >= 0) {
-        if (!first) {
-            strncat(ret, ",", sizeof(ret) - strlen(ret) - 1);
-            first = false;
-        }
-
-        range_end = i - 1;
-        if (range_start == range_end) {
-            snprintf(tmp, stmp, "%d", range_start);
+    /* the bits in the cpuset _always_ represent hwthreads, so
+     * we have to manually determine which core each bit is under
+     * so we can report the cpus in terms of "cores" */
+    /* start with the first set bit */
+    hwloc_bitmap_zero(coreset);
+    k= hwloc_bitmap_first(avail);
+    obj_index = 0;
+    while (k != (unsigned)-1) {
+        if (use_hwthread_cpus) {
+            /* mark this thread as occupied */
+            hwloc_bitmap_set(coreset, k);
         } else {
-            snprintf(tmp, stmp, "%d-%d", range_start, range_end);
+            /* Go upward and find the core this PU belongs to */
+            pu = hwloc_get_obj_inside_cpuset_by_type(topo, avail,
+                                                     HWLOC_OBJ_PU,
+                                                     obj_index);
+            core = pu;
+            while (NULL != core && core->type != HWLOC_OBJ_CORE) {
+                core = core->parent;
+            }
+            core_index = 0;
+            if (NULL != core) {
+                core_index = core->logical_index;
+            }
+            /* mark everything since the last place as
+             * being empty */
+            hwloc_bitmap_set(coreset, core_index);
         }
-        strncat(ret, tmp, sizeof(ret) - strlen(ret) - 1);
+        /* move to the next set bit */
+        k = hwloc_bitmap_next(avail, k);
+        ++obj_index;
     }
-
-    return ret;
-}
-
-/*
- * Make a map of socket/core/hwthread tuples
- */
-static int build_map(int *num_sockets_arg, int *num_cores_arg,
-                     hwloc_cpuset_t cpuset, int ***map, hwloc_topology_t topo)
-{
-    int num_sockets, num_cores;
-    int socket_index, core_index, pu_index;
-    hwloc_obj_t socket, core, pu;
-    int **data;
-
-    /* Find out how many sockets we have */
-    num_sockets = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_SOCKET);
-    /* some systems (like the iMac) only have one
-     * socket and so don't report a socket
-     */
-    if (0 == num_sockets) {
-        num_sockets = 1;
-    }
-    /* Lazy: take the total number of cores that we have in the
-       topology; that'll be more than the max number of cores
-       under any given socket */
-    num_cores = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
-    *num_sockets_arg = num_sockets;
-    *num_cores_arg = num_cores;
-
-    /* Alloc a 2D array: sockets x cores. */
-    data = malloc(num_sockets * sizeof(int *));
-    if (NULL == data) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
-    }
-    data[0] = calloc(num_sockets * num_cores, sizeof(int));
-    if (NULL == data[0]) {
-        free(data);
-        return PRRTE_ERR_OUT_OF_RESOURCE;
-    }
-    for (socket_index = 1; socket_index < num_sockets; ++socket_index) {
-        data[socket_index] = data[socket_index - 1] + num_cores;
-    }
-
-    /* Iterate the PUs in this cpuset; fill in the data[][] array with
-       the socket/core/pu triples */
-    for (pu_index = 0,
-             pu = hwloc_get_obj_inside_cpuset_by_type(topo,
-                                                      cpuset, HWLOC_OBJ_PU,
-                                                      pu_index);
-         NULL != pu;
-         pu = hwloc_get_obj_inside_cpuset_by_type(topo,
-                                                  cpuset, HWLOC_OBJ_PU,
-                                                  ++pu_index)) {
-        /* Go upward and find the core this PU belongs to */
-        core = pu;
-        while (NULL != core && core->type != HWLOC_OBJ_CORE) {
-            core = core->parent;
-        }
-        core_index = 0;
-        if (NULL != core) {
-            core_index = core->logical_index;
-        }
-
-        /* Go upward and find the socket this PU belongs to */
-        socket = pu;
-        while (NULL != socket && socket->type != HWLOC_OBJ_SOCKET) {
-            socket = socket->parent;
-        }
-        socket_index = 0;
-        if (NULL != socket) {
-            socket_index = socket->logical_index;
-        }
-
-        /* Save this socket/core/pu combo.  LAZY: Assuming that we
-           won't have more PU's per core than (sizeof(int)*8). */
-        data[socket_index][core_index] |= (1 << pu->sibling_rank);
-    }
-
-    *map = data;
-    return PRRTE_SUCCESS;
 }
 
 /*
  * Make a prettyprint string for a hwloc_cpuset_t
  */
-int prrte_hwloc_base_cset2str(char *str, int len,
-                             hwloc_topology_t topo,
-                             hwloc_cpuset_t cpuset)
+char* prrte_hwloc_base_cset2str(hwloc_cpuset_t cpuset,
+                                bool use_hwthread_cpus,
+                                hwloc_topology_t topo)
 {
-    bool first;
-    int num_sockets, num_cores;
-    int ret, socket_index, core_index;
-    char tmp[2048];
-    const int stmp = sizeof(tmp) - 1;
-    int **map=NULL;
-    hwloc_obj_t root;
-    prrte_hwloc_topo_data_t *sum;
+    int n, npkgs, npus, ncores;
+    char tmp[2048], ans[4096];
+    hwloc_cpuset_t avail, coreset = NULL;
+    char **output = NULL, *result;
+    hwloc_obj_t pkg;
+    bool bits_as_cores = false;
 
-    str[0] = tmp[stmp] = '\0';
-
-    /* if the cpuset is all zero, then not bound */
+    /* if the cpuset is all zero, then something is wrong */
     if (hwloc_bitmap_iszero(cpuset)) {
-        return PRRTE_ERR_NOT_BOUND;
+        return strdup("NOT MAPPED");
     }
 
-    /* if the cpuset includes all available cpus, then we are unbound */
-    root = hwloc_get_root_obj(topo);
-    if (NULL != root->userdata) {
-        sum = (prrte_hwloc_topo_data_t*)root->userdata;
-        if (NULL == sum->available) {
-           return PRRTE_ERROR;
+    /* if the cpuset includes all available cpus, then we are unbound
+     * or bound to all available cpus - the caller will know the diff */
+    if (hwloc_bitmap_isfull(cpuset)) {
+        return strdup("UNBOUND/BOUND TO ALL");
+    }
+
+    /* get the number of packages in the topology */
+    npkgs = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
+    avail = hwloc_bitmap_alloc();
+
+    npus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
+    ncores = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
+    if (npus == ncores) {
+        /* the bits in this bitmap represent cores */
+        bits_as_cores = true;
+    }
+    if (!use_hwthread_cpus && !bits_as_cores) {
+        coreset = hwloc_bitmap_alloc();
+    }
+
+    for (n=0; n < npkgs; n++) {
+        pkg = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, n);
+        /* see if we have any here */
+        hwloc_bitmap_and(avail, cpuset, pkg->cpuset);
+        if (hwloc_bitmap_iszero(avail)) {
+            continue;
         }
-        if (0 != hwloc_bitmap_isincluded(sum->available, cpuset)) {
-            return PRRTE_ERR_NOT_BOUND;
-        }
-    }
-
-    if (PRRTE_SUCCESS != (ret = build_map(&num_sockets, &num_cores, cpuset, &map, topo))) {
-        return ret;
-    }
-    /* Iterate over the data matrix and build up the string */
-    first = true;
-    for (socket_index = 0; socket_index < num_sockets; ++socket_index) {
-        for (core_index = 0; core_index < num_cores; ++core_index) {
-            if (map[socket_index][core_index] > 0) {
-                if (!first) {
-                    strncat(str, ", ", len - strlen(str) - 1);
-                }
-                first = false;
-
-                snprintf(tmp, stmp, "socket %d[core %d[hwt %s]]",
-                         socket_index, core_index,
-                         bitmap2rangestr(map[socket_index][core_index]));
-                strncat(str, tmp, len - strlen(str) - 1);
-            }
-        }
-    }
-    if (NULL != map) {
-        if (NULL != map[0]) {
-            free(map[0]);
-        }
-        free(map);
-    }
-
-    return PRRTE_SUCCESS;
-}
-
-
-/* given an input obj somewhere in the hwloc tree, look for a
- * numa object that contains it
- */
-static hwloc_obj_t find_my_numa(hwloc_obj_t obj)
-{
-    hwloc_obj_t p;
-
-#if HWLOC_API_VERSION >= 0x20000
-    size_t i;
-    hwloc_obj_t numa;
-
-    p = obj;
-    while (NULL != p && 0 == p->memory_arity) {
-        p = p->parent;
-    }
-    // p should have either found a level that contains numas or reached NULL
-    if (NULL == p) {
-        return NULL;
-    }
-    for (i=0; i < p->memory_arity; ++i) {
-        numa = &(p->memory_first_child[i]);
-
-        if (hwloc_bitmap_isincluded(obj->complete_cpuset, numa->complete_cpuset)) {
-            return numa;
-        }
-    }
-#else
-    p = obj;
-    while (NULL != p && HWLOC_OBJ_NUMANODE != p->type) {
-        p = p->parent;
-    }
-    // p should have either found a level that contains numas or reached NULL
-    if (NULL == p) {
-        return NULL;
-    }
-    if (hwloc_bitmap_isincluded(obj->complete_cpuset, p->complete_cpuset)) {
-        return p;
-    }
-#endif
-    return NULL;
-}
-
-/* which level from the set {socket, core, pu} has
- * the first descendent underneath the lowest numa level.
- * returns MACHINE if there is no numa level
- *
- * Eg if an hwloc tree had numas containing sockets like this
- *   <[../..][../..]><[../..][../..]>
- * the tree would be
- *   mach               +memory_children: n n
- *   s   s   s   s
- *   c c c c c c c c
- *   pppppppppppppppp
- * so this should return SOCKET
- */
-static hwloc_obj_type_t first_type_under_a_numa(hwloc_topology_t topo)
-{
-    hwloc_obj_t p;
-
-    p = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PU, 0);
-#if HWLOC_API_VERSION >= 0x20000
-    hwloc_obj_type_t type = HWLOC_OBJ_MACHINE;
-
-    /* climb the ladder */
-    while (NULL != p && 0 == p->memory_arity) {
-        if (HWLOC_OBJ_PU == p->type||
-            HWLOC_OBJ_CORE == p->type ||
-            HWLOC_OBJ_SOCKET == p->type) {
-            type = p->type;
-        }
-        p = p->parent;
-    }
-    if (NULL != p && 0 < p->memory_arity) {
-        return type;
-    }
-#else
-    /* climb the ladder */
-    while (NULL != p) {
-        if (NULL == p->parent) {
-            /* we are at the top and have not
-             * found a NUMANODE, so the entire
-             * object must be one big NUMANODE */
-            return HWLOC_OBJ_MACHINE;
-        }
-        if (HWLOC_OBJ_NUMANODE == p->parent->type) {
-            return p->type;
-        }
-        p = p->parent;
-    }
-#endif
-    return HWLOC_OBJ_MACHINE;
-}
-
-/*
- * Make a prettyprint string for a cset in a map format with NUMA markers.
- * Example: [B./..]
- * Key:  [] - signifies socket
- *       <> - signifies numa
- *        / - divider between cores
- *        . - signifies PU a process not bound to
- *        B - signifies PU a process is bound to
- *        ~ - signifies PU that is disallowed, eg not in our cgroup:
- */
-int prrte_hwloc_base_cset2mapstr(char *str, int len,
-                                hwloc_topology_t topo,
-                                hwloc_cpuset_t cpuset)
-{
-    char tmp[BUFSIZ];
-    int core_index, pu_index;
-    hwloc_obj_t socket, core, pu;
-    hwloc_obj_t root;
-    prrte_hwloc_topo_data_t *sum;
-    bool fake_on_first_socket;
-    bool fake_on_first_core;
-    hwloc_cpuset_t cpuset_for_socket;
-    hwloc_cpuset_t cpuset_for_core;
-    hwloc_obj_t prev_numa = NULL;
-    hwloc_obj_t cur_numa = NULL;
-    hwloc_obj_type_t type_under_numa;
-    bool a_numa_marker_is_open = false;
-
-   /* if the cpuset is all zero, then not bound */
-    if (hwloc_bitmap_iszero(cpuset)) {
-        return PRRTE_ERR_NOT_BOUND;
-    }
-
-    str[0] = '\0';
-    memset(tmp, 0, BUFSIZ);
-
-     /* if the cpuset includes all available cpus, then we are unbound */
-    root = hwloc_get_root_obj(topo);
-    if (NULL == root->userdata) {
-        /* this should never happen */
-        return PRRTE_ERROR;
-    }
-    sum = (prrte_hwloc_topo_data_t*)root->userdata;
-    if (NULL == sum->available) {
-        /* again, should never happen */
-       return PRRTE_ERROR;
-    }
-    if (0 != hwloc_bitmap_isincluded(sum->available, cpuset)) {
-        return PRRTE_ERR_NOT_BOUND;
-    }
-
-    /* hwloc trees aren't required to have sockets and cores,
-     * just a MACHINE at the top and PU at the bottom. The 'fake_*' vars make
-     * the loops always iterate at least once, even if the initial socket = ...
-     * etc lookup is NULL. So we have to take a little extra care here in
-     * case we are in a no-socket or no-core scenario. Thankfully, everyone
-     * still has NUMA regions! */
-    type_under_numa = first_type_under_a_numa(topo);
-
-    /* Iterate over all existing sockets */
-    fake_on_first_socket = true;
-    socket = hwloc_get_obj_by_type(topo, HWLOC_OBJ_SOCKET, 0);
-    do {
-        fake_on_first_socket = false;
-        strncat(str, "[", len - strlen(str) - 1);
-
-        // if numas contain sockets, example output <[../..][../..]><[../..][../..]>
-        if (HWLOC_OBJ_SOCKET == type_under_numa) {
-            prev_numa = cur_numa;
-            cur_numa = find_my_numa(socket);
-            if (cur_numa && cur_numa != prev_numa) {
-                if (a_numa_marker_is_open) {
-                    strncat(str, ">", len - strlen(str) - 1);
-                }
-                strncat(str, "<", len - strlen(str) - 1);
-                a_numa_marker_is_open = true;
-            }
-        }
-        if (NULL != socket) {
-            strncat(str, "[", len - strlen(str) - 1);
-            cpuset_for_socket = socket->complete_cpuset;
+        if (bits_as_cores) {
+            /* can just use the hwloc fn directly */
+            hwloc_bitmap_list_snprintf(tmp, 2048, avail);
+            snprintf(ans, 4096, "package[%d][core:%s]", n, tmp);
+        } else if (use_hwthread_cpus) {
+            /* can just use the hwloc fn directly */
+            hwloc_bitmap_list_snprintf(tmp, 2048, avail);
+            snprintf(ans, 4096, "package[%d][hwt:%s]", n, tmp);
         } else {
-            cpuset_for_socket = root->complete_cpuset;
+            build_map(topo, avail, use_hwthread_cpus | bits_as_cores, coreset);
+            /* now print out the string */
+            hwloc_bitmap_list_snprintf(tmp, 2048, coreset);
+            snprintf(ans, 4096, "package[%d][core:%s]", n, tmp);
         }
-
-        /* Iterate over all existing cores in this socket */
-        fake_on_first_core = true;
-        core_index = 0;
-        core = hwloc_get_obj_inside_cpuset_by_type(topo,
-                                                   cpuset_for_socket,
-                                                   HWLOC_OBJ_CORE, core_index);
-        while (NULL != core || fake_on_first_core) {
-            fake_on_first_core = false;
-
-            /* if numas contain cores and are contained by sockets,
-             * example output [<../..><../..>][<../../../..>]
-             */
-            if (HWLOC_OBJ_CORE == type_under_numa) {
-                prev_numa = cur_numa;
-                cur_numa = find_my_numa(core);
-                if (cur_numa && cur_numa != prev_numa) {
-                    if (a_numa_marker_is_open) {
-                        strncat(str, ">", len - strlen(str) - 1);
-                    }
-                    strncat(str, "<", len - strlen(str) - 1);
-                    a_numa_marker_is_open = true;
-                }
-            }
-
-
-            if (0 < core_index) {
-                strncat(str, "/", len - strlen(str) - 1);
-            }
-
-            if (NULL != core) {
-                cpuset_for_core = core->complete_cpuset;
-            } else {
-                cpuset_for_core = cpuset_for_socket;
-            }
-
-            /* Iterate over all existing PUs in this core */
-            pu_index = 0;
-            pu = hwloc_get_obj_inside_cpuset_by_type(topo,
-                                                     cpuset_for_core,
-                                                     HWLOC_OBJ_PU, pu_index);
-            while (NULL != pu) {
-                /* if numas contain PU and are contained by cores (seems unlikely)
-                 * example output [<..../....>/<..../....>/<..../....>/<..../....>]
-                 */
-                if (HWLOC_OBJ_PU == type_under_numa) {
-                    prev_numa = cur_numa;
-                    cur_numa = find_my_numa(pu);
-                    if (cur_numa && cur_numa != prev_numa) {
-                        if (a_numa_marker_is_open) {
-                            strncat(str, ">", len - strlen(str) - 1);
-                        }
-                        strncat(str, "<", len - strlen(str) - 1);
-                        a_numa_marker_is_open = true;
-                    }
-                }
-
-                /* Is this PU in the cpuset? */
-                if (hwloc_bitmap_isset(cpuset, pu->os_index)) {
-                    strncat(str, "B", len - strlen(str) - 1);
-                } else {
-                    if (hwloc_bitmap_isset(sum->available, pu->os_index)) {
-                        strncat(str, ".", len - strlen(str) - 1);
-                    } else {
-                        strncat(str, "~", len - strlen(str) - 1);
-                    }
-                }
-                pu = hwloc_get_obj_inside_cpuset_by_type(topo,
-                                                          cpuset_for_core,
-                                                          HWLOC_OBJ_PU, ++pu_index);
-            }  /* end while pu */
-            if (HWLOC_OBJ_PU == type_under_numa) {
-                if (a_numa_marker_is_open) {
-                    strncat(str, ">", len - strlen(str) - 1);
-                    a_numa_marker_is_open = false;
-                }
-            }
-            core = hwloc_get_obj_inside_cpuset_by_type(topo,
-                                                        cpuset_for_socket,
-                                                        HWLOC_OBJ_CORE, ++core_index);
-        } /* end while core */
-        if (HWLOC_OBJ_CORE == type_under_numa) {
-            if (a_numa_marker_is_open) {
-                strncat(str, ">", len - strlen(str) - 1);
-                a_numa_marker_is_open = false;
-            }
-        }
-        if (NULL != socket) {
-            strncat(str, "]", len - strlen(str) - 1);
-            socket = socket->next_cousin;
-        }
-    } while (NULL != socket || fake_on_first_socket);
-
-    if (HWLOC_OBJ_SOCKET == type_under_numa) {
-        if (a_numa_marker_is_open) {
-            strncat(str, ">", len - strlen(str) - 1);
-            a_numa_marker_is_open = false;
-        }
+        prrte_argv_append_nosize(&output, ans);
     }
 
-    return PRRTE_SUCCESS;
+    if (NULL != output) {
+        result = prrte_argv_join(output, ' ');
+        prrte_argv_free(output);
+    } else {
+        result = NULL;
+    }
+    hwloc_bitmap_free(avail);
+    if (NULL != coreset) {
+        hwloc_bitmap_free(coreset);
+    }
+    return result;
 }
+
 
 static int dist_cmp_fn (prrte_list_item_t **a, prrte_list_item_t **b)
 {
@@ -2133,14 +1765,14 @@ int prrte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char* device_name, p
 
 char* prrte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
 {
-    int nnuma, nsocket, nl3, nl2, nl1, ncore, nhwt;
+    int nnuma, npackage, nl3, nl2, nl1, ncore, nhwt;
     char *sig=NULL, *arch = NULL, *endian, *pus, *cpus;
     hwloc_obj_t obj;
     unsigned i;
     hwloc_bitmap_t complete, allowed;
 
     nnuma = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NODE, 0, PRRTE_HWLOC_AVAILABLE);
-    nsocket = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_SOCKET, 0, PRRTE_HWLOC_AVAILABLE);
+    npackage = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE, 0, PRRTE_HWLOC_AVAILABLE);
     nl3 = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE, 3, PRRTE_HWLOC_AVAILABLE);
     nl2 = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE, 2, PRRTE_HWLOC_AVAILABLE);
     nl1 = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L1CACHE, 1, PRRTE_HWLOC_AVAILABLE);
@@ -2193,7 +1825,7 @@ char* prrte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
         }
     }
     prrte_asprintf(&sig, "%dN:%dS:%dL3:%dL2:%dL1:%dC:%dH:%s:%s:%s:%s",
-             nnuma, nsocket, nl3, nl2, nl1, ncore, nhwt, pus, cpus, arch, endian);
+             nnuma, npackage, nl3, nl2, nl1, ncore, nhwt, pus, cpus, arch, endian);
     free(pus);
     free(cpus);
     return sig;
@@ -2262,7 +1894,7 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
         type = hwloc_get_depth_type(topo, d);
         /* if it isn't one of interest, then ignore it */
         if (HWLOC_OBJ_NODE != type &&
-            HWLOC_OBJ_SOCKET != type &&
+            HWLOC_OBJ_PACKAGE != type &&
 #if HWLOC_API_VERSION < 0x20000
             HWLOC_OBJ_CACHE != type &&
 #else
@@ -2291,7 +1923,7 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
                     }
                     locality = t2;
                     break;
-                case HWLOC_OBJ_SOCKET:
+                case HWLOC_OBJ_PACKAGE:
                     prrte_asprintf(&t2, "%sSK%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
@@ -2414,7 +2046,7 @@ char* prrte_hwloc_base_get_location(char *locality,
         case HWLOC_OBJ_NODE:
             srch = "NM";
             break;
-        case HWLOC_OBJ_SOCKET:
+        case HWLOC_OBJ_PACKAGE:
             srch = "SK";
             break;
 #if HWLOC_API_VERSION < 0x20000
@@ -2494,10 +2126,8 @@ prrte_hwloc_locality_t prrte_hwloc_compute_relative_locality(char *loc1, char *l
                 /* see if they intersect */
                 if (hwloc_bitmap_intersects(bit1, bit2)) {
                     /* set the corresponding locality bit */
-                    if (0 == strncmp(set1[n1], "NM", 2)) {
-                        locality |= PRRTE_PROC_ON_NUMA;
-                    } else if (0 == strncmp(set1[n1], "SK", 2)) {
-                        locality |= PRRTE_PROC_ON_SOCKET;
+                    if (0 == strncmp(set1[n1], "SK", 2)) {
+                        locality |= PRRTE_PROC_ON_PACKAGE;
                     } else if (0 == strncmp(set1[n1], "L3", 2)) {
                         locality |= PRRTE_PROC_ON_L3CACHE;
                     } else if (0 == strncmp(set1[n1], "L2", 2)) {
@@ -2525,7 +2155,7 @@ prrte_hwloc_locality_t prrte_hwloc_compute_relative_locality(char *loc1, char *l
 }
 
 int prrte_hwloc_base_topology_export_xmlbuffer(hwloc_topology_t topology, char **xmlpath, int *buflen) {
-#if HWLOC_API_VERSION < 0x20000
+#if HWLOC_API_VERSION < 0x00020000
     return hwloc_topology_export_xmlbuffer(topology, xmlpath, buflen);
 #else
     return hwloc_topology_export_xmlbuffer(topology, xmlpath, buflen, 0);
@@ -2534,11 +2164,19 @@ int prrte_hwloc_base_topology_export_xmlbuffer(hwloc_topology_t topology, char *
 
 int prrte_hwloc_base_topology_set_flags (hwloc_topology_t topology, unsigned long flags, bool io) {
     if (io) {
-#if HWLOC_API_VERSION < 0x20000
+#if HWLOC_API_VERSION < 0x00020000
+        flags |= HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM;
         flags |= HWLOC_TOPOLOGY_FLAG_IO_DEVICES;
 #else
         int ret = hwloc_topology_set_io_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
-        if (0 != ret) return ret;
+        if (0 != ret) {
+            return ret;
+        }
+#if HWLOC_API_VERSION < 0x00020100
+        flags |= HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM;
+#else
+        flags |= HWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED;
+#endif
 #endif
     }
     return hwloc_topology_set_flags(topology, flags);

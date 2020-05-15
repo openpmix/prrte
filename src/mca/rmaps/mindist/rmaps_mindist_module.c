@@ -12,7 +12,7 @@
  * Copyright (c) 2006-2011 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2018 Mellanox Technologies, Inc.
@@ -81,6 +81,11 @@ static int mindist_map(prrte_job_t *jdata)
     bool add_one=false;
     bool oversubscribed=false;
     int ret;
+    bool use_hwthread_cpus;
+    char *job_cpuset;
+    hwloc_cpuset_t available, mycpus;
+    prrte_hwloc_topo_data_t *rdata;
+    char *device;
 
     /* this mapper can only handle initial launch
      * when mindist mapping is desired
@@ -142,6 +147,27 @@ static int mindist_map(prrte_job_t *jdata)
 
     /* start at the beginning... */
     jdata->num_procs = 0;
+
+    /* check for type of cpu being used */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
+    }
+
+    /* see if this job has a "soft" cgroup assignment */
+    job_cpuset = NULL;
+    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&job_cpuset, PRRTE_STRING);
+
+    /* get the target device */
+    device = NULL;
+    if (!prrte_get_attribute(&jdata->attributes, PRRTE_JOB_DIST_DEVICE, (void**)device, PRRTE_STRING) ||
+        NULL == device) {
+        if (NULL == job_cpuset) {
+            free(job_cpuset);
+        }
+        return PRRTE_ERR_BAD_PARAM;
+    }
 
     /* cycle through the app_contexts, mapping them sequentially */
     for(i=0; i < jdata->apps->size; i++) {
@@ -254,13 +280,23 @@ static int mindist_map(prrte_job_t *jdata)
                 }
 
                 num_nodes++;
+                /* get the available processors on this node */
+                if (NULL == obj->userdata) {
+                    /* incorrect */
+                    PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+                    return PRRTE_ERR_BAD_PARAM;
+                }
+                rdata = (prrte_hwloc_topo_data_t*)obj->userdata;
+                available = hwloc_bitmap_dup(rdata->available);
+                if (NULL != job_cpuset) {
+                    mycpus = prrte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
+                    hwloc_bitmap_and(available, mycpus, available);
+                    hwloc_bitmap_free(mycpus);
+                }
 
                 /* get the number of available pus */
-                if (prrte_hwloc_use_hwthreads_as_cpus) {
-                    total_npus = prrte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PU, 0, PRRTE_HWLOC_AVAILABLE);
-                } else {
-                    total_npus = prrte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_CORE, 0, PRRTE_HWLOC_AVAILABLE);
-                }
+                total_npus = prrte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
+                                                       available, obj);
 
                 if (bynode) {
                     if (oversubscribed) {
@@ -358,7 +394,8 @@ static int mindist_map(prrte_job_t *jdata)
                             PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
                             return PRRTE_ERR_NOT_FOUND;
                         }
-                        npus = prrte_hwloc_base_get_npus(node->topology->topo, obj);
+                        npus = prrte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
+                                                         available, obj);
                         if (bynode) {
                             required = num_procs_to_assign;
                         } else {
@@ -390,7 +427,7 @@ static int mindist_map(prrte_job_t *jdata)
                                 j, node->name);
                     }
                 } else {
-                    if (hwloc_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_SOCKET) > 1) {
+                    if (hwloc_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE) > 1) {
                         /* don't have info about pci locality */
                         prrte_show_help("help-prrte-rmaps-md.txt", "prrte-rmaps-mindist:no-pci-locality-info",
                                 true, node->name);
@@ -422,21 +459,19 @@ static int mindist_map(prrte_job_t *jdata)
         /* cleanup the node list - it can differ from one app_context
          * to another, so we have to get it every time
          */
-        while (NULL != (item = prrte_list_remove_first(&node_list))) {
-            PRRTE_RELEASE(item);
-        }
-        PRRTE_DESTRUCT(&node_list);
+        PRRTE_LIST_DESTRUCT(&node_list);
     }
-    free(prrte_rmaps_base.device);
+    if (NULL != device) {
+        free(device);
+    }
 
     return PRRTE_SUCCESS;
 
 error:
-    while(NULL != (item = prrte_list_remove_first(&node_list))) {
-        PRRTE_RELEASE(item);
+    PRRTE_LIST_DESTRUCT(&node_list);
+    if (NULL != device) {
+        free(device);
     }
-    PRRTE_DESTRUCT(&node_list);
-
     return rc;
 }
 
@@ -451,6 +486,10 @@ static int assign_locations(prrte_job_t *jdata)
     int rc;
     prrte_list_t numa_list;
     prrte_rmaps_numa_node_t *numa;
+    bool use_hwthread_cpus;
+    char *job_cpuset;
+    hwloc_cpuset_t available, mycpus;
+    prrte_hwloc_topo_data_t *rdata;
 
     if (NULL == jdata->map->last_mapper||
         0 != strcasecmp(jdata->map->last_mapper, c->mca_component_name)) {
@@ -464,6 +503,17 @@ static int assign_locations(prrte_job_t *jdata)
     prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps:mindist: assign locations for job %s",
                         PRRTE_JOBID_PRINT(jdata->jobid));
+
+    /* check for type of cpu being used */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
+    }
+
+    /* see if this job has a "soft" cgroup assignment */
+    job_cpuset = NULL;
+    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&job_cpuset, PRRTE_STRING);
 
     /* start assigning procs to objects, filling each object as we go until
      * all procs are assigned. If one pass doesn't catch all the required procs,
@@ -481,6 +531,14 @@ static int assign_locations(prrte_job_t *jdata)
                 prrte_show_help("help-prrte-rmaps-ppr.txt", "ppr-topo-missing",
                                true, node->name);
                 return PRRTE_ERR_SILENT;
+            }
+
+            rdata = (prrte_hwloc_topo_data_t*)obj->userdata;
+            available = hwloc_bitmap_dup(rdata->available);
+            if (NULL != job_cpuset) {
+                mycpus = prrte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
+                hwloc_bitmap_and(available, mycpus, available);
+                hwloc_bitmap_free(mycpus);
             }
 
             /* first we need to fill summary object for root with information about nodes
@@ -509,7 +567,8 @@ static int assign_locations(prrte_job_t *jdata)
                     PRRTE_LIST_DESTRUCT(&numa_list);
                     return PRRTE_ERR_NOT_FOUND;
                 }
-                npus = prrte_hwloc_base_get_npus(node->topology->topo, obj);
+                npus = prrte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
+                                                 available, obj);
                 /* fill the numa region with procs from this job until we either
                  * have assigned everyone or the region is full */
                 for (k = j; k < node->procs->size && 0 < npus; k++) {
@@ -527,7 +586,11 @@ static int assign_locations(prrte_job_t *jdata)
                 }
             }
             PRRTE_LIST_DESTRUCT(&numa_list);
+            hwloc_bitmap_free(available);
         }
+    }
+    if (NULL != job_cpuset) {
+        free(job_cpuset);
     }
 
     return PRRTE_SUCCESS;

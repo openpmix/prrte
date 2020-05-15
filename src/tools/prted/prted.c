@@ -429,7 +429,7 @@ int main(int argc, char *argv[])
 
     /* bind ourselves if so directed */
     if (NULL != prrte_daemon_cores) {
-        char **cores=NULL, tmp[128];
+        char **cores=NULL, *tmp;
         hwloc_obj_t pu;
         hwloc_cpuset_t ours, res;
         int core;
@@ -461,9 +461,10 @@ int main(int argc, char *argv[])
             if (!hwloc_bitmap_iszero(ours)) {
                 (void)hwloc_set_cpubind(prrte_hwloc_topology, ours, 0);
                 if (prrte_debug_daemons_flag) {
-                    prrte_hwloc_base_cset2mapstr(tmp, sizeof(tmp), prrte_hwloc_topology, ours);
+                    tmp = prrte_hwloc_base_cset2str(ours, false, prrte_hwloc_topology);
                     prrte_output(0, "Daemon %s is bound to cores %s",
                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), tmp);
+                    free(tmp);
                 }
             }
             /* cleanup */

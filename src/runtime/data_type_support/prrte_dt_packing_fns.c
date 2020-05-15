@@ -643,21 +643,6 @@ int prrte_dt_pack_map(prrte_buffer_t *buffer, const void *src,
             PRRTE_ERROR_LOG(rc);
             return rc;
         }
-        /* pack any ppr */
-        if (PRRTE_SUCCESS != (rc = prrte_dss_pack_buffer(buffer, &(maps[i]->ppr), 1, PRRTE_STRING))) {
-            PRRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        /* pack the cpus/rank */
-        if (PRRTE_SUCCESS != (rc = prrte_dss_pack_buffer(buffer, &(maps[i]->cpus_per_rank), 1, PRRTE_INT16))) {
-            PRRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        /* pack the display map flag */
-        if (PRRTE_SUCCESS != (rc = prrte_dss_pack_buffer(buffer, &(maps[i]->display_map), 1, PRRTE_BOOL))) {
-            PRRTE_ERROR_LOG(rc);
-            return rc;
-        }
         /* pack the number of nodes involved in the job */
         if (PRRTE_SUCCESS != (rc = prrte_dss_pack_buffer(buffer, &(maps[i]->num_nodes), 1, PRRTE_UINT32))) {
             PRRTE_ERROR_LOG(rc);

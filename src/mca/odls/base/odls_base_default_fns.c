@@ -726,6 +726,7 @@ int prrte_odls_base_default_construct_child_list(prrte_buffer_t *buffer,
             PRRTE_FLAG_SET(app, PRRTE_APP_FLAG_USED_ON_NODE);
         }
     }
+
     if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_FULLY_DESCRIBED, NULL, PRRTE_BOOL)) {
         /* reset the mapped flags */
         for (n=0; n < jdata->map->nodes->size; n++) {
@@ -741,11 +742,6 @@ int prrte_odls_base_default_construct_child_list(prrte_buffer_t *buffer,
             PRRTE_ERROR_LOG(rc);
             goto REPORT_ERROR;
         }
-    }
-
-    /* if we wanted to see the map, now is the time to display it */
-    if (jdata->map->display_map) {
-        prrte_rmaps_base_display_map(jdata);
     }
 
     /* register this job with the PMIx server - need to wait until after we

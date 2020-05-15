@@ -194,6 +194,7 @@ static void interim(int sd, short args, void *cbdata)
     bool flag;
     size_t m, n;
     prrte_value_t *kv;
+    uint16_t u16;
 
     prrte_output_verbose(2, prrte_pmix_server_globals.output,
                         "%s spawn called from proc %s",
@@ -343,7 +344,10 @@ static void interim(int sd, short args, void *cbdata)
 
         /***   DISPLAY MAP   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {
-            jdata->map->display_map = PMIX_INFO_TRUE(info);
+            if (PMIX_INFO_TRUE(info)) {
+                prrte_set_attribute(&jdata->attributes, PRRTE_JOB_DISPLAY_MAP, PRRTE_ATTR_GLOBAL,
+                                    NULL, PRRTE_BOOL);
+            }
 
         /***   PPR (PROCS-PER-RESOURCE)   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
@@ -356,35 +360,34 @@ static void interim(int sd, short args, void *cbdata)
                 goto complete;
             }
             PRRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRRTE_MAPPING_PPR);
-            jdata->map->ppr = strdup(info->value.data.string);
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_PPR, PRRTE_ATTR_GLOBAL,
+                                info->value.data.string, PRRTE_STRING);
 
         /***   MAP-BY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
-            rc = prrte_rmaps_base_set_mapping_policy(jdata, &jdata->map->mapping,
-                                                     NULL, info->value.data.string);
+            rc = prrte_rmaps_base_set_mapping_policy(jdata, info->value.data.string);
             if (PRRTE_SUCCESS != rc) {
                 goto complete;
             }
         /***   RANK-BY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_RANKBY)) {
-            rc = prrte_rmaps_base_set_ranking_policy(&jdata->map->ranking,
-                                                    jdata->map->mapping,
-                                                    info->value.data.string);
+            rc = prrte_rmaps_base_set_ranking_policy(jdata, info->value.data.string);
             if (PRRTE_SUCCESS != rc) {
                 goto complete;
             }
 
         /***   BIND-TO   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_BINDTO)) {
-            rc = prrte_hwloc_base_set_binding_policy(jdata, &jdata->map->binding,
-                                                    info->value.data.string);
+            rc = prrte_hwloc_base_set_binding_policy(jdata, info->value.data.string);
             if (PRRTE_SUCCESS != rc) {
                 goto complete;
             }
 
         /***   CPUS/RANK   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_CPUS_PER_PROC)) {
-            jdata->map->cpus_per_rank = info->value.data.uint32;
+            u16 = info->value.data.uint32;
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, PRRTE_ATTR_GLOBAL,
+                                &u16, PRRTE_UINT16);
 
         /***   NO USE LOCAL   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_NO_PROCS_ON_HEAD)) {
@@ -416,8 +419,8 @@ static void interim(int sd, short args, void *cbdata)
 
         /***   CPU LIST  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_CPU_LIST)) {
-            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_CPU_LIST,
-                               PRRTE_ATTR_GLOBAL, info->value.data.string, PRRTE_BOOL);
+            prrte_set_attribute(&jdata->attributes, PRRTE_JOB_CPUSET,
+                               PRRTE_ATTR_GLOBAL, info->value.data.string, PRRTE_STRING);
 
         /***   RECOVERABLE  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_JOB_RECOVERABLE)) {

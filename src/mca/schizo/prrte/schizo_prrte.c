@@ -297,37 +297,37 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
 {
     int rc = PRRTE_SUCCESS;
     char **pargs = *argv;
-    char *p2;
+    char *p2, *tmp, *tmp2, *output;
 
-    /* --display-devel-map  ->  PRRTE_MCA_rmaps_base_display_devel_map */
+    /* --display-devel-map  ->  map-by :displaydevel */
     if (0 == strcmp(option, "--display-devel-map")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDEVEL");
     }
-    /* --display-map  ->  PRRTE_MCA_rmaps_base_display_map */
+    /* --display-map  ->  --map-by :display */
     else if (0 == strcmp(option, "--display-map")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAY");
     }
-    /* --display-topo  ->  PRRTE_MCA_rmaps_base_display_topo_with_map */
+    /* --display-topo  ->  --map-by :displaytopo */
     else if (0 == strcmp(option, "--display-topo")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYTOPO");
     }
-    /* --display-diffable-map  ->  PRRTE_MCA_rmaps_base_display_diffable_map */
+    /* --display-diffable-map  ->  --map-by :displaydiff */
     else if (0 == strcmp(option, "--display-diff")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDIFF");
     }
-    /* --report-bindings  ->  PRRTE_MCA_hwloc_base_report_bindings */
+    /* --report-bindings  ->  --bind-to :report */
     else if (0 == strcmp(option, "--report-bindings")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--bind-to", NULL, "REPORT");
     }
-    /* --display-allocation  ->  PRRTE_MCA_prrte_display_alloc */
+    /* --display-allocation  ->  --map-by :displayalloc */
     else if (0 == strcmp(option, "--display-allocation")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYALLOC");
     }
-    /* --do-not-launch  ->   */
+    /* --do-not-launch  ->   --map-by :donotlaunch*/
     else if (0 == strcmp(option, "--do-not-launch")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DONOTLAUNCH");
     }
-    /* --xml-output  ->   */
+    /* --xml-output  ->  --map-by :xmloutput */
     else if (0 == strcmp(option, "--xml-output")) {
         rc = prrte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "XMLOUTPUT");
     }
@@ -336,6 +336,90 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
         prrte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
         rc = prrte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
         free(p2);
+    }
+    /* --map-by socket ->  --map-by package */
+    else if (0 == strcmp(option, "--map-by")) {
+        /* check the value of the option for "socket" */
+        if (0 == strncasecmp(pargs[i+1], "socket", strlen("socket"))) {
+            /* replace "socket" with "package" */
+            if (NULL == (p2 = strchr(pargs[i+1], ':'))) {
+                /* no modifiers */
+                tmp = strdup("package");
+            } else {
+                *p2 = '\0';
+                ++p2;
+                prrte_asprintf(&tmp, "package:%s", p2);
+            }
+            prrte_asprintf(&p2, "%s %s", option, pargs[i+1]);
+            prrte_asprintf(&tmp2, "%s %s", option, tmp);
+            /* can't just call show_help as we want every instance to be reported */
+            output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                                            p2, tmp2);
+            fprintf(stderr, "%s\n", output);
+            free(output);
+            free(p2);
+            free(tmp2);
+            free(pargs[i+1]);
+            pargs[i+1] = tmp;
+            return PRRTE_ERR_TAKE_NEXT_OPTION;
+        }
+        rc = PRRTE_OPERATION_SUCCEEDED;
+    }
+    /* --rank-by socket ->  --rank-by package */
+    else if (0 == strcmp(option, "--rank-by")) {
+        /* check the value of the option for "socket" */
+        if (0 == strncasecmp(pargs[i+1], "socket", strlen("socket"))) {
+            /* replace "socket" with "package" */
+            if (NULL == (p2 = strchr(pargs[i+1], ':'))) {
+                /* no modifiers */
+                tmp = strdup("package");
+            } else {
+                *p2 = '\0';
+                ++p2;
+                prrte_asprintf(&tmp, "package:%s", p2);
+            }
+            prrte_asprintf(&p2, "%s %s", option, pargs[i+1]);
+            prrte_asprintf(&tmp2, "%s %s", option, tmp);
+            /* can't just call show_help as we want every instance to be reported */
+            output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                                            p2, tmp2);
+            fprintf(stderr, "%s\n", output);
+            free(output);
+            free(p2);
+            free(tmp2);
+            free(pargs[i+1]);
+            pargs[i+1] = tmp;
+            return PRRTE_ERR_TAKE_NEXT_OPTION;
+        }
+        rc = PRRTE_OPERATION_SUCCEEDED;
+    }
+    /* --bind-to socket ->  --bind-to package */
+    else if (0 == strcmp(option, "--bind-to")) {
+        /* check the value of the option for "socket" */
+        if (0 == strncasecmp(pargs[i+1], "socket", strlen("socket"))) {
+            /* replace "socket" with "package" */
+            if (NULL == (p2 = strchr(pargs[i+1], ':'))) {
+                /* no modifiers */
+                tmp = strdup("package");
+            } else {
+                *p2 = '\0';
+                ++p2;
+                prrte_asprintf(&tmp, "package:%s", p2);
+            }
+            prrte_asprintf(&p2, "%s %s", option, pargs[i+1]);
+            prrte_asprintf(&tmp2, "%s %s", option, tmp);
+            /* can't just call show_help as we want every instance to be reported */
+            output = prrte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                                            p2, tmp2);
+            fprintf(stderr, "%s\n", output);
+            free(output);
+            free(p2);
+            free(tmp2);
+            free(pargs[i+1]);
+            pargs[i+1] = tmp;
+            return PRRTE_ERR_TAKE_NEXT_OPTION;
+        }
+        rc = PRRTE_OPERATION_SUCCEEDED;
     }
 
     return rc;
@@ -354,6 +438,9 @@ static void register_deprecated_cli(prrte_list_t *convertors)
         "--do-not-launch",
         "--xml-output",
         "-N",
+        "--map-by",
+        "--rank-by",
+        "--bind-to",
         NULL
     };
 

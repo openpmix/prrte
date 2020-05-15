@@ -85,21 +85,10 @@ int prrte_rmaps_rr_byslot(prrte_job_t *jdata,
                                 node->name);
             continue;
         }
-        if (prrte_rmaps_base_pernode) {
-            num_procs_to_assign = 1;
-        } else if (0 < prrte_rmaps_base_n_pernode) {
-            num_procs_to_assign = prrte_rmaps_base_n_pernode;
-        } else if (0 < prrte_rmaps_base_n_persocket) {
-            if (NULL == node->topology) {
-                prrte_show_help("help-prrte-rmaps-ppr.txt", "ppr-topo-missing",
-                               true, node->name);
-                return PRRTE_ERR_SILENT;
-            }
-            num_procs_to_assign = prrte_rmaps_base_n_persocket * prrte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, 0, PRRTE_HWLOC_AVAILABLE);
-        } else {
-            /* assign a number of procs equal to the number of available slots */
-            num_procs_to_assign = node->slots - node->slots_inuse;
-        }
+
+        /* assign a number of procs equal to the number of available slots */
+        num_procs_to_assign = node->slots - node->slots_inuse;
+
         prrte_output_verbose(2, prrte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:slot assigning %d procs to node %s",
                             (int)num_procs_to_assign, node->name);
@@ -312,13 +301,7 @@ int prrte_rmaps_rr_bynode(prrte_job_t *jdata,
                 prrte_pointer_array_add(jdata->map->nodes, node);
                 ++(jdata->map->num_nodes);
             }
-            if (prrte_rmaps_base_pernode) {
-                num_procs_to_assign = 1;
-            } else if (0 < prrte_rmaps_base_n_pernode) {
-                num_procs_to_assign = prrte_rmaps_base_n_pernode;
-            } else if (0 < prrte_rmaps_base_n_persocket) {
-                num_procs_to_assign = prrte_rmaps_base_n_persocket * prrte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, 0, PRRTE_HWLOC_AVAILABLE);
-            } else  if (oversubscribed) {
+            if (oversubscribed) {
                 /* compute the number of procs to go on this node */
                 if (add_one) {
                     if (0 == nxtra_nodes) {
@@ -471,12 +454,17 @@ int prrte_rmaps_rr_byobj(prrte_job_t *jdata,
 {
     int i, nmapped, nprocs_mapped;
     prrte_node_t *node;
-    int nprocs, start;
-    hwloc_obj_t obj=NULL;
+    int nprocs, start, cpus_per_rank, npus;
+    hwloc_obj_t obj=NULL, root;
     unsigned int nobjs;
     bool add_one;
-    bool second_pass;
+    bool second_pass, use_hwthread_cpus;
     prrte_proc_t *proc;
+    uint16_t u16, *u16ptr = &u16;
+    char *job_cpuset;
+    prrte_hwloc_topo_data_t *rdata;
+    hwloc_cpuset_t available, mycpus;
+    bool found_obj;
 
     /* there are two modes for mapping by object: span and not-span. The
      * span mode essentially operates as if there was just a single
@@ -513,6 +501,24 @@ int prrte_rmaps_rr_byobj(prrte_job_t *jdata,
         }
     }
 
+    /* see if this job has a "soft" cgroup assignment */
+    job_cpuset = NULL;
+    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&job_cpuset, PRRTE_STRING);
+
+    /* see if they want multiple cpus/rank */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRRTE_UINT16)) {
+        cpus_per_rank = u16;
+    } else {
+        cpus_per_rank = 1;
+    }
+
+    /* check for type of cpu being used */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
+    }
+
     /* we know we have enough slots, or that oversubscrption is allowed, so
      * start mapping procs onto objects, filling each object as we go until
      * all procs are mapped. If one pass doesn't catch all the required procs,
@@ -545,19 +551,7 @@ int prrte_rmaps_rr_byobj(prrte_job_t *jdata,
                 start = (jdata->bkmark_obj + 1) % nobjs;
             }
             /* compute the number of procs to go on this node */
-            if (prrte_rmaps_base_pernode) {
-                nprocs = 1;
-            } else if (0 < prrte_rmaps_base_n_pernode) {
-                nprocs = prrte_rmaps_base_n_pernode;
-            } else if (0 < prrte_rmaps_base_n_persocket) {
-                if (HWLOC_OBJ_PACKAGE == target) {
-                    nprocs = prrte_rmaps_base_n_persocket * nobjs;
-                } else {
-                    nprocs = prrte_rmaps_base_n_persocket * prrte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, 0, PRRTE_HWLOC_AVAILABLE);
-                }
-            } else {
-                nprocs = node->slots - node->slots_inuse;
-            }
+            nprocs = node->slots - node->slots_inuse;
             prrte_output_verbose(2, prrte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rr: calculated nprocs %d", nprocs);
             if (nprocs < 1) {
@@ -574,6 +568,22 @@ int prrte_rmaps_rr_byobj(prrte_job_t *jdata,
                     continue;
                 }
             }
+            /* get the available processors on this node */
+            root = hwloc_get_root_obj(node->topology->topo);
+            if (NULL == root->userdata) {
+                /* incorrect */
+                PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+                return PRRTE_ERR_BAD_PARAM;
+            }
+            rdata = (prrte_hwloc_topo_data_t*)root->userdata;
+            available = hwloc_bitmap_dup(rdata->available);
+            if (NULL != job_cpuset) {
+                /* deal with any "soft" cgroup specification */
+                mycpus = prrte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
+                  hwloc_bitmap_and(available, mycpus, available);
+                hwloc_bitmap_free(mycpus);
+            }
+
             /* add this node to the map, if reqd */
             if (!PRRTE_FLAG_TEST(node, PRRTE_NODE_FLAG_MAPPED)) {
                 PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_MAPPED);
@@ -584,23 +594,43 @@ int prrte_rmaps_rr_byobj(prrte_job_t *jdata,
             nmapped = 0;
             prrte_output_verbose(2, prrte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rr: assigning nprocs %d", nprocs);
+
             do {
+                found_obj = false;
                 /* loop through the number of objects */
                 for (i=0; i < (int)nobjs && nmapped < nprocs && nprocs_mapped < (int)app->num_procs; i++) {
-                    prrte_output_verbose(20, prrte_rmaps_base_framework.framework_output,
+                    prrte_output_verbose(10, prrte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:rr: assigning proc to object %d", (i+start) % nobjs);
                     /* get the hwloc object */
                     if (NULL == (obj = prrte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, (i+start) % nobjs, PRRTE_HWLOC_AVAILABLE))) {
                         PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+                        hwloc_bitmap_free(available);
+                        if (NULL != job_cpuset) {
+                            free(job_cpuset);
+                        }
                         return PRRTE_ERR_NOT_FOUND;
                     }
-                    if (prrte_rmaps_base.cpus_per_rank > (int)prrte_hwloc_base_get_npus(node->topology->topo, obj)) {
+                    npus = prrte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
+                                                     available, obj);
+                    if (0 == npus) {
+                        continue;
+                    }
+                    found_obj = true;
+                    if (cpus_per_rank > npus) {
                         prrte_show_help("help-prrte-rmaps-base.txt", "mapping-too-low", true,
-                                       prrte_rmaps_base.cpus_per_rank, prrte_hwloc_base_get_npus(node->topology->topo, obj),
+                                       cpus_per_rank, npus,
                                        prrte_rmaps_base_print_mapping(prrte_rmaps_base.mapping));
+                        hwloc_bitmap_free(available);
+                        if (NULL != job_cpuset) {
+                            free(job_cpuset);
+                        }
                         return PRRTE_ERR_SILENT;
                     }
                     if (NULL == (proc = prrte_rmaps_base_setup_proc(jdata, node, app->idx))) {
+                        hwloc_bitmap_free(available);
+                        if (NULL != job_cpuset) {
+                            free(job_cpuset);
+                        }
                         return PRRTE_ERR_OUT_OF_RESOURCE;
                     }
                     nprocs_mapped++;
@@ -609,7 +639,22 @@ int prrte_rmaps_rr_byobj(prrte_job_t *jdata,
                      /* track the bookmark */
                     jdata->bkmark_obj = (i + start) % nobjs;
                }
-            } while (nmapped < nprocs && nprocs_mapped < (int)app->num_procs);
+            } while (found_obj && nmapped < nprocs && nprocs_mapped < (int)app->num_procs);
+            if (!found_obj) {
+                char *err;
+                hwloc_bitmap_list_asprintf(&err, available);
+                prrte_show_help("help-prrte-rmaps-base.txt", "insufficient-cpus", true,
+                               prrte_rmaps_base_print_mapping(prrte_rmaps_base.mapping),
+                               (NULL == prrte_hwloc_default_cpu_list) ? "N/A" : prrte_hwloc_default_cpu_list,
+                               (NULL == job_cpuset) ? "N/A" : job_cpuset, err);
+                hwloc_bitmap_free(available);
+                free(err);
+                if (NULL != job_cpuset) {
+                    free(job_cpuset);
+                }
+                return PRRTE_ERR_SILENT;
+            }
+            hwloc_bitmap_free(available);
             add_one = true;
             /* not all nodes are equal, so only set oversubscribed for
              * this node if it is in that state
@@ -629,12 +674,18 @@ int prrte_rmaps_rr_byobj(prrte_job_t *jdata,
                         prrte_show_help("help-prrte-rmaps-base.txt", "prrte-rmaps-base:alloc-error",
                                        true, app->num_procs, app->app, prrte_process_info.nodename);
                         PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERROR_DEFAULT_EXIT_CODE);
+                        if (NULL != job_cpuset) {
+                            free(job_cpuset);
+                        }
                         return PRRTE_ERR_SILENT;
                     } else if (PRRTE_MAPPING_NO_OVERSUBSCRIBE & PRRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                         /* if we were explicitly told not to oversubscribe, then don't */
                         prrte_show_help("help-prrte-rmaps-base.txt", "prrte-rmaps-base:alloc-error",
                                        true, app->num_procs, app->app, prrte_process_info.nodename);
                         PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERROR_DEFAULT_EXIT_CODE);
+                        if (NULL != job_cpuset) {
+                            free(job_cpuset);
+                        }
                         return PRRTE_ERR_SILENT;
                     }
                 }
@@ -646,6 +697,10 @@ int prrte_rmaps_rr_byobj(prrte_job_t *jdata,
         }
         second_pass = true;
     } while (add_one && nprocs_mapped < app->num_procs);
+
+    if (NULL != job_cpuset) {
+        free(job_cpuset);
+    }
 
     if (nprocs_mapped < app->num_procs) {
         /* usually means there were no objects of the requested type */
@@ -664,10 +719,15 @@ static int byobj_span(prrte_job_t *jdata,
 {
     int i, j, nprocs_mapped, navg;
     prrte_node_t *node;
-    int nprocs, nxtra_objs;
-    hwloc_obj_t obj=NULL;
+    int nprocs, nxtra_objs, npus, cpus_per_rank;
+    hwloc_obj_t obj=NULL, root;
     unsigned int nobjs;
     prrte_proc_t *proc;
+    uint16_t u16, *u16ptr = &u16;
+    char *job_cpuset;
+    prrte_hwloc_topo_data_t *rdata;
+    hwloc_cpuset_t available, mycpus;
+    bool use_hwthread_cpus;
 
     prrte_output_verbose(2, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping span by %s for job %s slots %d num_procs %lu",
@@ -703,6 +763,24 @@ static int byobj_span(prrte_job_t *jdata,
         return PRRTE_ERR_NOT_FOUND;
     }
 
+    /* see if this job has a "soft" cgroup assignment */
+    job_cpuset = NULL;
+    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&job_cpuset, PRRTE_STRING);
+
+    /* see if they want multiple cpus/rank */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRRTE_UINT16)) {
+        cpus_per_rank = u16;
+    } else {
+        cpus_per_rank = 1;
+    }
+
+    /* check for type of cpu being used */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
+    }
+
     /* divide the procs evenly across all objects */
     navg = app->num_procs / nobjs;
     if (0 == navg) {
@@ -731,6 +809,24 @@ static int byobj_span(prrte_job_t *jdata,
             prrte_pointer_array_add(jdata->map->nodes, node);
             ++(jdata->map->num_nodes);
         }
+        /* get the available processors on this node */
+        root = hwloc_get_root_obj(node->topology->topo);
+        if (NULL == root->userdata) {
+            /* incorrect */
+            PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+            if (NULL != job_cpuset) {
+                free(job_cpuset);
+            }
+            return PRRTE_ERR_BAD_PARAM;
+        }
+        rdata = (prrte_hwloc_topo_data_t*)root->userdata;
+        available = hwloc_bitmap_dup(rdata->available);
+        if (NULL != job_cpuset) {
+            /* deal with any "soft" cgroup specification */
+            mycpus = prrte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
+            hwloc_bitmap_and(available, mycpus, available);
+            hwloc_bitmap_free(mycpus);
+        }
         /* get the number of objects of this type on this node */
         nobjs = prrte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target, cache_level, PRRTE_HWLOC_AVAILABLE);
         prrte_output_verbose(2, prrte_rmaps_base_framework.framework_output,
@@ -740,28 +836,26 @@ static int byobj_span(prrte_job_t *jdata,
             /* get the hwloc object */
             if (NULL == (obj = prrte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, i, PRRTE_HWLOC_AVAILABLE))) {
                 PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+                hwloc_bitmap_free(available);
+                if (NULL != job_cpuset) {
+                    free(job_cpuset);
+                }
                 return PRRTE_ERR_NOT_FOUND;
             }
-            if (prrte_rmaps_base.cpus_per_rank > (int)prrte_hwloc_base_get_npus(node->topology->topo, obj)) {
+            npus = prrte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
+                                             available, obj);
+            if (cpus_per_rank > npus) {
                 prrte_show_help("help-prrte-rmaps-base.txt", "mapping-too-low", true,
-                               prrte_rmaps_base.cpus_per_rank, prrte_hwloc_base_get_npus(node->topology->topo, obj),
+                               cpus_per_rank, npus,
                                prrte_rmaps_base_print_mapping(prrte_rmaps_base.mapping));
+                hwloc_bitmap_free(available);
+                if (NULL != job_cpuset) {
+                    free(job_cpuset);
+                }
                 return PRRTE_ERR_SILENT;
             }
             /* determine how many to map */
-            if (prrte_rmaps_base_pernode) {
-                nprocs = 1;
-            } else if (0 < prrte_rmaps_base_n_pernode) {
-                nprocs = prrte_rmaps_base_n_pernode;
-            } else if (0 < prrte_rmaps_base_n_persocket) {
-                if (HWLOC_OBJ_PACKAGE == target) {
-                    nprocs = prrte_rmaps_base_n_persocket * nobjs;
-                } else {
-                    nprocs = prrte_rmaps_base_n_persocket * prrte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, 0, PRRTE_HWLOC_AVAILABLE);
-                }
-            } else {
-                nprocs = navg;
-            }
+            nprocs = navg;
             if (0 < nxtra_objs) {
                 nprocs++;
                 nxtra_objs--;
@@ -791,6 +885,10 @@ static int byobj_span(prrte_job_t *jdata,
             /* we are done */
             break;
         }
+        hwloc_bitmap_free(available);
+    }
+    if (NULL != job_cpuset) {
+        free(job_cpuset);
     }
 
     return PRRTE_SUCCESS;

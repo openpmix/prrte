@@ -55,10 +55,8 @@ enum {
     PRRTE_PROC_ON_CLUSTER        = 0x0001,
     PRRTE_PROC_ON_CU             = 0x0002,
     PRRTE_PROC_ON_HOST           = 0x0004,
-    PRRTE_PROC_ON_BOARD          = 0x0008,
-    PRRTE_PROC_ON_NODE           = 0x000c,   // same host and board
-    PRRTE_PROC_ON_NUMA           = 0x0010,
-    PRRTE_PROC_ON_SOCKET         = 0x0020,
+    PRRTE_PROC_ON_NODE           = 0x000c,   // same host
+    PRRTE_PROC_ON_PACKAGE        = 0x0020,
     PRRTE_PROC_ON_L3CACHE        = 0x0040,
     PRRTE_PROC_ON_L2CACHE        = 0x0080,
     PRRTE_PROC_ON_L1CACHE        = 0x0100,
@@ -71,10 +69,8 @@ enum {
 #define PRRTE_PROC_ON_LOCAL_CLUSTER(n)   (!!((n) & PRRTE_PROC_ON_CLUSTER))
 #define PRRTE_PROC_ON_LOCAL_CU(n)        (!!((n) & PRRTE_PROC_ON_CU))
 #define PRRTE_PROC_ON_LOCAL_HOST(n)      (!!((n) & PRRTE_PROC_ON_HOST))
-#define PRRTE_PROC_ON_LOCAL_BOARD(n)     (!!((n) & PRRTE_PROC_ON_BOARD))
-#define PRRTE_PROC_ON_LOCAL_NODE(n)      (PRRTE_PROC_ON_LOCAL_HOST(n) && PRRTE_PROC_ON_LOCAL_BOARD(n))
-#define PRRTE_PROC_ON_LOCAL_NUMA(n)      (!!((n) & PRRTE_PROC_ON_NUMA))
-#define PRRTE_PROC_ON_LOCAL_SOCKET(n)    (!!((n) & PRRTE_PROC_ON_SOCKET))
+#define PRRTE_PROC_ON_LOCAL_NODE(n)      (!!((n) & PRRTE_PROC_ON_LOCAL_HOST(n)))
+#define PRRTE_PROC_ON_LOCAL_PACKAGE(n)   (!!((n) & PRRTE_PROC_ON_PACKAGE))
 #define PRRTE_PROC_ON_LOCAL_L3CACHE(n)   (!!((n) & PRRTE_PROC_ON_L3CACHE))
 #define PRRTE_PROC_ON_LOCAL_L2CACHE(n)   (!!((n) & PRRTE_PROC_ON_L2CACHE))
 #define PRRTE_PROC_ON_LOCAL_L1CACHE(n)   (!!((n) & PRRTE_PROC_ON_L1CACHE))
@@ -155,24 +151,21 @@ typedef uint16_t prrte_binding_policy_t;
  * values must be reflected in prrte/mca/rmaps/rmaps.h
  */
 #define PRRTE_BIND_TO_NONE           1
-#define PRRTE_BIND_TO_BOARD          2
-#define PRRTE_BIND_TO_NUMA           3
-#define PRRTE_BIND_TO_SOCKET         4
-#define PRRTE_BIND_TO_L3CACHE        5
-#define PRRTE_BIND_TO_L2CACHE        6
-#define PRRTE_BIND_TO_L1CACHE        7
-#define PRRTE_BIND_TO_CORE           8
-#define PRRTE_BIND_TO_HWTHREAD       9
-#define PRRTE_BIND_TO_CPUSET         10
+#define PRRTE_BIND_TO_PACKAGE        2
+#define PRRTE_BIND_TO_L3CACHE        3
+#define PRRTE_BIND_TO_L2CACHE        4
+#define PRRTE_BIND_TO_L1CACHE        5
+#define PRRTE_BIND_TO_CORE           6
+#define PRRTE_BIND_TO_HWTHREAD       7
 #define PRRTE_GET_BINDING_POLICY(pol) \
     ((pol) & 0x0fff)
 #define PRRTE_SET_BINDING_POLICY(target, pol) \
     (target) = (pol) | (((target) & 0x2000) | PRRTE_BIND_GIVEN)
-#define PRRTE_SET_DEFAULT_BINDING_POLICY(target, pol)            \
+#define PRRTE_SET_DEFAULT_BINDING_POLICY(target, pol)           \
     do {                                                        \
-        if (!PRRTE_BINDING_POLICY_IS_SET((target))) {            \
+        if (!PRRTE_BINDING_POLICY_IS_SET((target))) {           \
             (target) = (pol) | (((target) & 0xf000) |           \
-                                PRRTE_BIND_IF_SUPPORTED);        \
+                                PRRTE_BIND_IF_SUPPORTED);       \
         }                                                       \
     } while(0);
 
@@ -191,17 +184,17 @@ typedef uint16_t prrte_binding_policy_t;
 
 /* some global values */
 PRRTE_EXPORT extern hwloc_topology_t prrte_hwloc_topology;
-PRRTE_EXPORT extern prrte_binding_policy_t prrte_hwloc_binding_policy;
+PRRTE_EXPORT extern prrte_binding_policy_t prrte_hwloc_default_binding_policy;
 PRRTE_EXPORT extern hwloc_cpuset_t prrte_hwloc_my_cpuset;
 PRRTE_EXPORT extern hwloc_obj_type_t prrte_hwloc_levels[];
-PRRTE_EXPORT extern bool prrte_hwloc_use_hwthreads_as_cpus;
+PRRTE_EXPORT extern char *prrte_hwloc_default_cpu_list;
+PRRTE_EXPORT extern bool prrte_hwloc_default_use_hwthread_cpus;
 
 #if HWLOC_API_VERSION < 0x20000
 #define HWLOC_OBJ_L3CACHE HWLOC_OBJ_CACHE
 #define HWLOC_OBJ_L2CACHE HWLOC_OBJ_CACHE
 #define HWLOC_OBJ_L1CACHE HWLOC_OBJ_CACHE
 #if HWLOC_API_VERSION < 0x10a00
-#define HWLOC_OBJ_NUMANODE HWLOC_OBJ_NODE
 #define HWLOC_OBJ_PACKAGE HWLOC_OBJ_SOCKET
 #endif
 #define HAVE_DECL_HWLOC_OBJ_OSDEV_COPROC 0
@@ -216,7 +209,6 @@ PRRTE_EXPORT extern bool prrte_hwloc_use_hwthreads_as_cpus;
  */
 PRRTE_EXPORT extern int prrte_hwloc_base_output;
 PRRTE_EXPORT extern bool prrte_hwloc_base_inited;
-PRRTE_EXPORT extern bool prrte_hwloc_topology_inited;
 
 /* we always must have some minimal locality support */
 #define PRRTE_HWLOC_PRINT_MAX_SIZE   50
@@ -229,8 +221,6 @@ prrte_hwloc_print_buffers_t *prrte_hwloc_get_print_buffer(void);
 extern char* prrte_hwloc_print_null;
 PRRTE_EXPORT char* prrte_hwloc_base_print_locality(prrte_hwloc_locality_t locality);
 
-PRRTE_EXPORT extern char *prrte_hwloc_base_cpu_list;
-PRRTE_EXPORT extern hwloc_cpuset_t prrte_hwloc_base_given_cpus;
 PRRTE_EXPORT extern char *prrte_hwloc_base_topo_file;
 
 /* convenience macro for debugging */
@@ -270,8 +260,7 @@ PRRTE_EXPORT extern char *prrte_hwloc_base_topo_file;
 PRRTE_EXPORT prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t topo,
                                                                           char *cpuset1, char *cpuset2);
 
-PRRTE_EXPORT int prrte_hwloc_base_set_binding_policy(void *jdata,
-                                                     prrte_binding_policy_t *policy, char *spec);
+PRRTE_EXPORT int prrte_hwloc_base_set_binding_policy(void *jdata, char *spec);
 
 /**
  * Loads prrte_hwloc_my_cpuset (global variable in
@@ -324,11 +313,16 @@ PRRTE_EXPORT extern prrte_hwloc_base_mbfa_t prrte_hwloc_base_mbfa;
  * hwloc_topology_load()).
  */
 PRRTE_EXPORT int prrte_hwloc_base_get_topology(void);
+PRRTE_EXPORT hwloc_cpuset_t prrte_hwloc_base_setup_summary(hwloc_topology_t topo);
 
 /**
  * Set the hwloc topology to that from the given topo file
  */
 PRRTE_EXPORT int prrte_hwloc_base_set_topology(char *topofile);
+
+PRRTE_EXPORT hwloc_cpuset_t prrte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
+                                                             bool use_hwthread_cpus,
+                                                             char *cpulist);
 
 PRRTE_EXPORT int prrte_hwloc_base_filter_cpus(hwloc_topology_t topo);
 
@@ -359,6 +353,8 @@ PRRTE_EXPORT int prrte_hwloc_get_sorted_numa_list(hwloc_topology_t topo,
  * Get the number of pu's under a given hwloc object.
  */
 PRRTE_EXPORT unsigned int prrte_hwloc_base_get_npus(hwloc_topology_t topo,
+                                                    bool use_hwthread_cpus,
+                                                    hwloc_cpuset_t envelope,
                                                     hwloc_obj_t target);
 PRRTE_EXPORT char* prrte_hwloc_base_print_binding(prrte_binding_policy_t binding);
 
@@ -426,29 +422,18 @@ PRRTE_EXPORT int prrte_hwloc_print(char **output, char *prefix,
                                    prrte_data_type_t type);
 
 /**
- * Make a prettyprint string for a hwloc_cpuset_t (e.g., "socket
+ * Make a prettyprint string for a hwloc_cpuset_t (e.g., "package
  * 2[core 3]").
  */
-PRRTE_EXPORT int prrte_hwloc_base_cset2str(char *str, int len,
-                                           hwloc_topology_t topo,
-                                           hwloc_cpuset_t cpuset);
+PRRTE_EXPORT char* prrte_hwloc_base_cset2str(hwloc_cpuset_t cpuset,
+                                             bool use_hwthread_cpus,
+                                             hwloc_topology_t topo);
 
-/**
- * Make a prettyprint string for a cset in a map format.
- * Example: [B./..]
- * Key:  [] - signifies socket
- *        / - divider between cores
- *        . - signifies PU a process not bound to
- *        B - signifies PU a process is bound to
- */
-PRRTE_EXPORT int prrte_hwloc_base_cset2mapstr(char *str, int len,
-                                              hwloc_topology_t topo,
-                                              hwloc_cpuset_t cpuset);
 
 /* get the hwloc object that corresponds to the given processor id  and type */
 PRRTE_EXPORT hwloc_obj_t prrte_hwloc_base_get_pu(hwloc_topology_t topo,
-                                                 int lid,
-                                                 prrte_hwloc_resource_type_t rtype);
+                                                 bool use_hwthread_cpus,
+                                                 int lid);
 
 /* get the topology "signature" so we can check for differences - caller
  * if responsible for freeing the returned string */

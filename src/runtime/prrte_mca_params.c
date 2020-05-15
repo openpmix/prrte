@@ -692,11 +692,6 @@ int prrte_register_params(void)
                                   PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                   &prrte_max_vm_size);
 
-    if (prrte_hwloc_use_hwthreads_as_cpus) {
-        prrte_set_slots = "hwthreads";
-    } else {
-        prrte_set_slots = "cores";
-    }
     (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "set_default_slots",
                                   "Set the number of slots on nodes that lack such info to the"
                                   " number of specified objects [a number, \"cores\" (default),"

@@ -65,7 +65,7 @@ int prrte_convert_jobid_to_nspace(pmix_nspace_t nspace, prrte_jobid_t jobid)
 void prrte_convert_daemon_nspace(prrte_jobid_t *jobid, pmix_nspace_t nspace)
 {
     prrte_job_t *jdata;
-    uint32_t hash32, localjob = 0;
+    uint32_t hash32;
     uint16_t jobfam;
 
     jdata = PRRTE_NEW(prrte_job_t);

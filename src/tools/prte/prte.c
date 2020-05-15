@@ -225,13 +225,14 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "timeout", 1, PRRTE_CMD_LINE_TYPE_INT,
       "Timeout the job after the specified number of seconds",
       PRRTE_CMD_LINE_OTYPE_DEBUG },
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     { '\0', "report-state-on-timeout", 0, PRRTE_CMD_LINE_TYPE_BOOL,
       "Report all job and process states upon timeout",
       PRRTE_CMD_LINE_OTYPE_DEBUG },
     { '\0', "get-stack-traces", 0, PRRTE_CMD_LINE_TYPE_BOOL,
       "Get stack traces of all application procs on timeout",
       PRRTE_CMD_LINE_OTYPE_DEBUG },
-
+#endif
 
     /* Conventional options - for historical compatibility, support
      * both single and multi dash versions */
@@ -370,19 +371,28 @@ static prrte_cmd_line_init_t cmd_line_init[] = {
 
     /* Mapping options */
     { '\0', "map-by", 1, PRRTE_CMD_LINE_TYPE_STRING,
-      "Mapping Policy [slot | hwthread | core (default:np<=2) | l1cache | l2cache | l3cache | socket | numa (default:np>2) | board | node | seq | dist | ppr(:N:RESOURCE) | rankfile(:FILENAME)], with allowed modifiers :PE=y:PE-LIST=a,b:SPAN:OVERSUBSCRIBE:NOOVERSUBSCRIBE:NOLOCAL",
+      "Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache | "
+      "l2cache | l3cache | socket (default:np>2) | node | seq | dist | ppr],"
+      " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
+      "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
+      "DEVICE(for dist policy), INHERIT, NOINHERIT, PE-LIST=a,b (comma-delimited "
+      "ranges of cpus to use for this job)",
       PRRTE_CMD_LINE_OTYPE_MAPPING },
 
 
       /* Ranking options */
     { '\0', "rank-by", 1, PRRTE_CMD_LINE_TYPE_STRING,
-      "Ranking Policy [slot (default) | hwthread | core | socket | numa | board | node], with allowed modifiers :SPAN",
+      "Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache "
+      "| l2cache | l3cache | socket (default:np>2) | node], with modifier :SPAN or :FILL",
       PRRTE_CMD_LINE_OTYPE_RANKING },
 
 
       /* Binding options */
     { '\0', "bind-to", 1, PRRTE_CMD_LINE_TYPE_STRING,
-      "Policy for binding processes [none (default:oversubscribed), hwthread, core (default:np<=2), l1cache, l2cache, l3cache, socket, numa] Allowed qualifiers: OVERLOAD:IF-SUPPORTED",
+      "Binding policy for job. Allowed values: none, hwthread, core, l1cache, l2cache, "
+      "l3cache, socket, (\"none\" is the default when oversubscribed, \"core\" is "
+      "the default when np<=2, and \"socket\" is the default when np>2). Allowed colon-delimited qualifiers: "
+      "overload-allowed, if-supported",
       PRRTE_CMD_LINE_OTYPE_BINDING },
 
 
@@ -1203,6 +1213,7 @@ int main(int argc, char *argv[])
         PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT, &i, PMIX_INT);
         prrte_list_append(&job_info, &ds->super);
     }
+#if PMIX_NUMERIC_VERSION >= 0x00040000
     if (prrte_cmd_line_is_taken(prrte_cmd_line, "get-stack-traces")) {
         ds = PRRTE_NEW(prrte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
@@ -1217,6 +1228,7 @@ int main(int argc, char *argv[])
         PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT_REPORT_STATE, &flag, PMIX_BOOL);
         prrte_list_append(&job_info, &ds->super);
     }
+#endif
 
     /* give the schizo components a chance to add to the job info */
     prrte_schizo.job_info(prrte_cmd_line, &job_info);

@@ -72,9 +72,9 @@ typedef enum {
 #define PRRTE_VAR_IS_SETTABLE(var) (!!((var).mbv_flags & PRRTE_MCA_BASE_VAR_FLAG_SETTABLE))
 #define PRRTE_VAR_IS_DEPRECATED(var) (!!((var).mbv_flags & PRRTE_MCA_BASE_VAR_FLAG_DEPRECATED))
 
-extern const char *prrte_var_type_names[];
-extern const size_t prrte_var_type_sizes[];
-extern bool prrte_mca_base_var_initialized;
+PRRTE_EXPORT extern const char *prrte_var_type_names[];
+PRRTE_EXPORT extern const size_t prrte_var_type_sizes[];
+PRRTE_EXPORT extern bool prrte_mca_base_var_initialized;
 
 /**
  * \internal

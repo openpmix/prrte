@@ -59,3 +59,29 @@ additional information may be of help:
 
   Message:     %s
   Cache level: %d
+#
+[missing-cpulist]
+The following binding modifier was given but lacks a required value:
+
+  Modifier: %s
+
+Please check for a typo or ensure that the option is a supported
+one.
+#
+[bad-processor-type]
+The default CPU list contains an invalid modifier:
+
+  Default CPU list:  %s
+  Modifier:  %s
+
+The modifier should indicate the type of CPU being used in the
+list - the only valid values are HWTCPUS (for use of hwthreads
+as independent CPUs) or CORECPUS (for use of cores as independent
+CPUs). Please correct the input.
+#
+[unrecognized-modifier]
+The binding request contains an unrecognized modifier:
+
+  Request: %s
+
+Please check your request and try again.

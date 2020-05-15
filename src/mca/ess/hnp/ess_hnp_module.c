@@ -198,7 +198,6 @@ static int rte_init(int argc, char **argv)
         }
     }
     signals_set = true;
-
     /* get the local topology */
     if (NULL == prrte_hwloc_topology) {
         if (PRRTE_SUCCESS != (ret = prrte_hwloc_base_get_topology())) {
@@ -417,6 +416,7 @@ static int rte_init(int argc, char **argv)
     PRRTE_RETAIN(node);  /* keep accounting straight */
     proc->node = node;
     prrte_pointer_array_set_item(jdata->procs, proc->name.vpid, proc);
+
     /* record that the daemon (i.e., us) is on this node
      * NOTE: we do not add the proc object to the node's
      * proc array because we are not an application proc.

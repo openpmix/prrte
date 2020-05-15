@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2008      Voltaire. All rights reserved
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
@@ -108,9 +108,7 @@ static int prrte_rmaps_rank_file_register(void)
 static int prrte_rmaps_rank_file_open(void)
 {
     /* ensure we flag mapping by user */
-    if ((PRRTE_BIND_TO_CPUSET == PRRTE_GET_BINDING_POLICY(prrte_hwloc_binding_policy) &&
-        !PRRTE_BIND_ORDERED_REQUESTED(prrte_hwloc_binding_policy)) ||
-         NULL != prrte_rankfile) {
+    if (NULL != prrte_rankfile) {
         if (PRRTE_MAPPING_GIVEN & PRRTE_GET_MAPPING_DIRECTIVE(prrte_rmaps_base.mapping)) {
             /* if a non-default mapping is already specified, then we
              * have an error
@@ -122,8 +120,6 @@ static int prrte_rmaps_rank_file_open(void)
         }
         PRRTE_SET_MAPPING_POLICY(prrte_rmaps_base.mapping, PRRTE_MAPPING_BYUSER);
         PRRTE_SET_MAPPING_DIRECTIVE(prrte_rmaps_base.mapping, PRRTE_MAPPING_GIVEN);
-        /* we are going to bind to cpuset since the user is specifying the cpus */
-        PRRTE_SET_BINDING_POLICY(prrte_hwloc_binding_policy, PRRTE_BIND_TO_CPUSET);
         /* make us first */
         my_priority = 10000;
     }

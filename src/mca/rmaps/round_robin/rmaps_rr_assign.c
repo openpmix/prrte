@@ -45,6 +45,7 @@ int prrte_rmaps_rr_assign_root_level(prrte_job_t *jdata)
     hwloc_obj_t obj=NULL;
 
     prrte_output_verbose(2, prrte_rmaps_base_framework.framework_output,
+
                         "mca:rmaps:rr: assigning procs to root level for job %s",
                         PRRTE_JOBID_PRINT(jdata->jobid));
 
@@ -87,18 +88,40 @@ int prrte_rmaps_rr_assign_byobj(prrte_job_t *jdata,
                                hwloc_obj_type_t target,
                                unsigned cache_level)
 {
-    int start, j, m, n;
+    int start, j, m, n, npus, cpus_per_rank;
     prrte_app_context_t *app;
     prrte_node_t *node;
     prrte_proc_t *proc;
-    hwloc_obj_t obj=NULL;
+    hwloc_obj_t obj=NULL, root;
     unsigned int nobjs;
+    uint16_t u16, *u16ptr = &u16;
+    char *job_cpuset;
+    prrte_hwloc_topo_data_t *rdata;
+    hwloc_cpuset_t available, mycpus;
+    bool use_hwthread_cpus;
 
     prrte_output_verbose(2, prrte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: assigning locations by %s for job %s",
                         hwloc_obj_type_string(target),
                         PRRTE_JOBID_PRINT(jdata->jobid));
 
+    /* see if this job has a "soft" cgroup assignment */
+    job_cpuset = NULL;
+    prrte_get_attribute(&jdata->attributes, PRRTE_JOB_CPUSET, (void**)&job_cpuset, PRRTE_STRING);
+
+    /* see if they want multiple cpus/rank */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRRTE_UINT16)) {
+        cpus_per_rank = u16;
+    } else {
+        cpus_per_rank = 1;
+    }
+
+    /* check for type of cpu being used */
+    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
+    }
 
     /* start mapping procs onto objects, filling each object as we go until
      * all procs are mapped. If one pass doesn't catch all the required procs,
@@ -122,6 +145,26 @@ int prrte_rmaps_rr_assign_byobj(prrte_job_t *jdata,
             if (0 == nobjs) {
                 continue;
             }
+
+            /* get the available processors on this node */
+            root = hwloc_get_root_obj(node->topology->topo);
+            if (NULL == root->userdata) {
+                /* incorrect */
+                PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+                if (NULL != job_cpuset) {
+                    free(job_cpuset);
+                }
+                return PRRTE_ERR_BAD_PARAM;
+            }
+            rdata = (prrte_hwloc_topo_data_t*)root->userdata;
+            available = hwloc_bitmap_dup(rdata->available);
+            if (NULL != job_cpuset) {
+                /* deal with any "soft" cgroup specification */
+                mycpus = prrte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
+                hwloc_bitmap_and(available, mycpus, available);
+                hwloc_bitmap_free(mycpus);
+            }
+
             prrte_output_verbose(2, prrte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rr: found %u %s objects on node %s",
                                 nobjs, hwloc_obj_type_string(target), node->name);
@@ -150,25 +193,39 @@ int prrte_rmaps_rr_assign_byobj(prrte_job_t *jdata,
                 if (proc->app_idx != app->idx) {
                     continue;
                 }
+
                 prrte_output_verbose(20, prrte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr: assigning proc to object %d", (j + start) % nobjs);
                 /* get the hwloc object */
                 if (NULL == (obj = prrte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, (j + start) % nobjs, PRRTE_HWLOC_AVAILABLE))) {
                     PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
+                    hwloc_bitmap_free(available);
+                    if (NULL != job_cpuset) {
+                        free(job_cpuset);
+                    }
                     return PRRTE_ERR_NOT_FOUND;
                 }
-                if (prrte_rmaps_base.cpus_per_rank > (int)prrte_hwloc_base_get_npus(node->topology->topo, obj)) {
+                npus = prrte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
+                                                 available, obj);
+                if (cpus_per_rank > npus) {
                     prrte_show_help("help-prrte-rmaps-base.txt", "mapping-too-low", true,
-                                   prrte_rmaps_base.cpus_per_rank, prrte_hwloc_base_get_npus(node->topology->topo, obj),
+                                   cpus_per_rank, npus,
                                    prrte_rmaps_base_print_mapping(prrte_rmaps_base.mapping));
+                    hwloc_bitmap_free(available);
+                    if (NULL != job_cpuset) {
+                        free(job_cpuset);
+                    }
                     return PRRTE_ERR_SILENT;
                 }
                 prrte_set_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE, PRRTE_ATTR_LOCAL, obj, PRRTE_PTR);
                 /* track the bookmark */
                 jdata->bkmark_obj = (j + start) % nobjs;
             }
+            hwloc_bitmap_free(available);
         }
     }
-
+    if (NULL != job_cpuset) {
+        free(job_cpuset);
+    }
     return PRRTE_SUCCESS;
 }

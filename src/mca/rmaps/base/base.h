@@ -12,7 +12,7 @@
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,34 +60,21 @@ PRRTE_EXPORT    int prrte_rmaps_base_select(void);
 typedef struct {
     /* list of selected modules */
     prrte_list_t selected_modules;
-    /* default ppr */
-    char *ppr;
-    /* cpus per rank */
-    int cpus_per_rank;
-    /* display the map after it is computed */
-    bool display_map;
-    /* slot list, if provided by user */
-    char *slot_list;
-    /* default mapping directives */
+    /* default mapping/ranking directives */
     prrte_mapping_policy_t mapping;
     prrte_ranking_policy_t ranking;
-    /* device specification for min distance mapping */
+    /* default device for dist mapping */
     char *device;
-    /* whether or not child jobs should inherit launch directives */
+    /* whether or not child jobs should inherit mapping/ranking/binding directives from their parent by default */
     bool inherit;
+    /* whether or not we are using hwthreads as independent cpus by default */
+    bool hwthread_cpus;
 } prrte_rmaps_base_t;
 
 /**
  * Global instance of rmaps-wide framework data
  */
 PRRTE_EXPORT extern prrte_rmaps_base_t prrte_rmaps_base;
-
-/**
- * Global MCA variables
- */
-PRRTE_EXPORT extern bool prrte_rmaps_base_pernode;
-PRRTE_EXPORT extern int prrte_rmaps_base_n_pernode;
-PRRTE_EXPORT extern int prrte_rmaps_base_n_persocket;
 
 /**
  * Select an rmaps component / module
@@ -111,9 +98,11 @@ PRRTE_EXPORT int prrte_rmaps_base_assign_locations(prrte_job_t *jdata);
  */
 
 PRRTE_EXPORT int prrte_rmaps_base_get_vpid_range(prrte_jobid_t jobid,
-    prrte_vpid_t *start, prrte_vpid_t *range);
+                                                 prrte_vpid_t *start,
+                                                 prrte_vpid_t *range);
 PRRTE_EXPORT int prrte_rmaps_base_set_vpid_range(prrte_jobid_t jobid,
-    prrte_vpid_t start, prrte_vpid_t range);
+                                                 prrte_vpid_t start,
+                                                 prrte_vpid_t range);
 
 /* pretty-print functions */
 PRRTE_EXPORT char* prrte_rmaps_base_print_mapping(prrte_mapping_policy_t mapping);
@@ -125,12 +114,8 @@ PRRTE_EXPORT int prrte_rmaps_base_filter_nodes(prrte_app_context_t *app,
                                                prrte_list_t *nodes,
                                                bool remove);
 
-PRRTE_EXPORT int prrte_rmaps_base_set_mapping_policy(prrte_job_t *jdata,
-                                                     prrte_mapping_policy_t *policy,
-                                                     char **device, char *spec);
-PRRTE_EXPORT int prrte_rmaps_base_set_ranking_policy(prrte_ranking_policy_t *policy,
-                                                     prrte_mapping_policy_t mapping,
-                                                     char *spec);
+PRRTE_EXPORT int prrte_rmaps_base_set_mapping_policy(prrte_job_t *jdata, char *spec);
+PRRTE_EXPORT int prrte_rmaps_base_set_ranking_policy(prrte_job_t *jdata, char *spec);
 
 PRRTE_EXPORT void prrte_rmaps_base_display_map(prrte_job_t *jdata);
 
