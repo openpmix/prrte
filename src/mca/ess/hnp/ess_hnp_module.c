@@ -349,6 +349,11 @@ static int rte_init(int argc, char **argv)
     /* it is now safe to start the pmix server */
     pmix_server_start();
 
+    /* and register our show_help recv */
+    prrte_rml.recv_buffer_nb(PRRTE_NAME_WILDCARD,
+                             PRRTE_RML_TAG_SHOW_HELP,
+                             PRRTE_RML_PERSISTENT,
+                             prrte_show_help_recv, NULL);
     /*
      * Group communications
      */
