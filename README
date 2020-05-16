@@ -62,8 +62,8 @@ Quick start
 In many cases, PRRTE can be built and installed by simply
 indicating the installation directory on the command line:
 
-$ tar xf prte-<version>.tar.bz2
-$ cd prte-<version>
+$ tar xf prrte-<version>.tar.bz2
+$ cd prrte-<version>
 $ ./configure --prefix=<path> |& tee config.out
 ...lots of output...
 $ make -j 8 |& tee make.out
@@ -85,8 +85,8 @@ $ sudo make install |& tee install.out
 
 Finally, note that VPATH builds are fully supported.  For example:
 
-$ tar xf prte-<version>.tar.bz2
-$ cd prte-<version>
+$ tar xf prrte-<version>.tar.bz2
+$ cd prrte-<version>
 $ mkdir build
 $ cd build
 $ ../configure --prefix=<path> |& tee config.out
