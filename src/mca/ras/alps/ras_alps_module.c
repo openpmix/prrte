@@ -566,7 +566,7 @@ prrte_ras_alps_read_appinfo_file(prrte_list_t *nodes, char *filename,
             prrte_set_attribute(&node->attributes, PRRTE_NODE_LAUNCH_ID, PRRTE_ATTR_LOCAL, &apNodes[ix].nid, PRRTE_INT32);
             node->slots_inuse = 0;
             node->slots_max = 0;
-            if (prrte_hwloc_use_hwthreads_as_cpus) {
+            if (prrte_hwloc_default_use_hwthread_cpus) {
                 node->slots = apNodes[ix].cpuCnt;
             } else {
                 node->slots = apNodes[ix].numPEs;
