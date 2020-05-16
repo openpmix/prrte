@@ -214,7 +214,7 @@ sub mca_process_framework {
                      next;
                 }
 
-                verbose "--- Found prte / $framework / $d component: src/mca/$framework/$d\n";
+                verbose "--- Found PRRTE / $framework / $d component: src/mca/$framework/$d\n";
 
                 # Skip if specifically excluded
                 if (exists($exclude_list->{$framework}) &&
@@ -626,24 +626,24 @@ $dnl_line\n\n";
 
 # Verify that we're in the PRTE root directory by checking for a token file.
 
-my_die "Not at the root directory of an PRTE source tree"
+my_die "Not at the root directory of a PRRTE source tree"
     if (! -f "config/prte_mca.m4");
 
 $force_arg = 1;
 
-my_die "autogen.pl has been invoked in the source tree of a PRTE distribution tarball; aborting...
+my_die "autogen.pl has been invoked in the source tree of a PRRTE distribution tarball; aborting...
 You likely do not need to invoke \"autogen.pl\" -- you can probably run \"configure\" directly.
 If you really know what you are doing, and really need to run autogen.pl, use the \"--force\" flag."
     if (!$force_arg && in_tarball());
 
-# Now that we've verified that we're in the top-level OMPI directory,
+# Now that we've verified that we're in the top-level PRRTE directory,
 # set the sentinel file to remove if we abort.
 $sentinel = Cwd::cwd() . "/configure";
 
 #---------------------------------------------------------------------------
 
 my $step = 1;
-verbose "PRTE autogen (buckle up!)
+verbose "PRRTE autogen (buckle up!)
 
 $step. Checking tool versions\n\n";
 
@@ -697,9 +697,9 @@ verbose "\n$step. Searching for MCA frameworks and components\n";
 
 my $ret;
 
-# Figure out if we're at the top level of the PRTE tree or not.
+# Figure out if we're at the top level of the PRRTE tree or not.
 if (! (-f "VERSION" && -f "configure.ac" && -f $topdir_file)) {
-    print("\n\nYou must run this script from the top-level directory of the PRTE tree.\n\n");
+    print("\n\nYou must run this script from the top-level directory of the PRRTE tree.\n\n");
     my_exit(1);
 }
 
@@ -747,7 +747,7 @@ safe_system($cmd);
 
 verbose "
 ================================================
-PRTE autogen: completed successfully.  w00t!
+PRRTE autogen: completed successfully.  w00t!
 ================================================\n\n";
 
 # Done!
