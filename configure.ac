@@ -129,8 +129,8 @@ PRTE_SAVE_VERSION([PRTE], [PMIx Reference Run-Time Environment],
 # Get shared library version numbers
 . $srcdir/VERSION
 
-AC_SUBST(libprte_so_version)
-AC_SUBST(libprte_common_alps_so_version)
+AC_SUBST(libprrte_so_version)
+AC_SUBST(libprrte_common_alps_so_version)
 
 #
 # Get the versions of the autotools that were used to bootstrap us

@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
-# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 #                         reserved.
 # Copyright (c) 2016      Research Organization for Information Science
@@ -34,7 +34,7 @@ dist_prtedata_DATA = help-prte-util.txt \
 AM_LFLAGS = -Pprte_show_help_yy
 LEX_OUTPUT_ROOT = lex.prte_show_help_yy
 
-noinst_LTLIBRARIES = libprteutil.la
+noinst_LTLIBRARIES = libprrteutil.la
 
 AM_CPPFLAGS = $(LTDLINCL)
 
@@ -86,7 +86,7 @@ headers = \
         sys_limits.h \
         uri.h
 
-libprteutil_la_SOURCES = \
+libprrteutil_la_SOURCES = \
         $(headers) \
         alfg.c \
         arch.c \
@@ -131,12 +131,12 @@ libprteutil_la_SOURCES = \
         sys_limits.c \
         uri.c
 
-libprteutil_la_LIBADD = \
-        keyval/libprteutilkeyval.la \
-	hostfile/libprteutilhostfile.la
-libprteutil_la_DEPENDENCIES = \
-        keyval/libprteutilkeyval.la \
-	hostfile/libprteutilhostfile.la
+libprrteutil_la_LIBADD = \
+        keyval/libprrteutilkeyval.la \
+	hostfile/libprrteutilhostfile.la
+libprrteutil_la_DEPENDENCIES = \
+        keyval/libprrteutilkeyval.la \
+	hostfile/libprrteutilhostfile.la
 
 # Conditionally install the header files
 

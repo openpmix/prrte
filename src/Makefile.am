@@ -14,7 +14,7 @@
 #                         reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -42,21 +42,21 @@ DIST_SUBDIRS = \
 
 # Build the main PRTE library
 
-lib_LTLIBRARIES = libprte.la
-libprte_la_SOURCES =
-libprte_la_LIBADD = \
-        mca/base/libprte_mca_base.la \
-		util/libprteutil.la \
+lib_LTLIBRARIES = libprrte.la
+libprrte_la_SOURCES =
+libprrte_la_LIBADD = \
+        mca/base/libprrte_mca_base.la \
+		util/libprrteutil.la \
 		$(MCA_prte_FRAMEWORK_LIBS) \
 		$(PRTE_EXTRA_LIB)
-libprte_la_DEPENDENCIES = $(libprte_la_LIBADD)
-libprte_la_LDFLAGS = -version-info $(libprte_so_version)
+libprrte_la_DEPENDENCIES = $(libprrte_la_LIBADD)
+libprrte_la_LDFLAGS = -version-info $(libprrte_so_version)
 
 # included subdirectory Makefile.am's and appended-to variables
 headers =
 noinst_LTLIBRARIES =
 dist_prtedata_DATA =
-libprte_la_SOURCES += $(headers)
+libprrte_la_SOURCES += $(headers)
 
 # Conditionally install the header files
 

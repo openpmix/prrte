@@ -12,7 +12,7 @@
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -43,7 +43,7 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_rmaps_mindist_la_SOURCES = $(sources)
 mca_rmaps_mindist_la_LDFLAGS = -module -avoid-version
-mca_rmaps_mindist_la_LIBADD = $(top_builddir)/src/libprte.la
+mca_rmaps_mindist_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_rmaps_mindist_la_SOURCES =$(sources)

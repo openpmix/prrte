@@ -12,7 +12,7 @@
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      Los Alamos National Security, LLC. All rights
 #                         reseved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -42,7 +42,7 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_ess_hnp_la_SOURCES = $(sources)
 mca_ess_hnp_la_LDFLAGS = -module -avoid-version
-mca_ess_hnp_la_LIBADD = $(top_builddir)/src/libprte.la
+mca_ess_hnp_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_ess_hnp_la_SOURCES =$(sources)

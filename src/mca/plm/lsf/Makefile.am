@@ -13,7 +13,7 @@
 # Copyright (c) 2008      Institut National de Recherche en Informatique
 #                         et Automatique. All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -47,7 +47,7 @@ mcacomponent_LTLIBRARIES = $(component_install)
 mca_plm_lsf_la_SOURCES = $(sources)
 mca_plm_lsf_la_LDFLAGS = -module -avoid-version $(plm_lsf_LDFLAGS)
 mca_plm_lsf_la_LIBADD = $(plm_lsf_LIBS) \
-                        $(top_builddir)/src/libprte.la
+                        $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_plm_lsf_la_SOURCES = $(sources)

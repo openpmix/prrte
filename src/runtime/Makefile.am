@@ -13,7 +13,7 @@
 # Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2012      Los Alamos National Security, LLC.
 #                         All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -36,7 +36,7 @@ headers += \
         runtime/prte_data_server.h \
         runtime/prte_progress_threads.h
 
-libprte_la_SOURCES += \
+libprrte_la_SOURCES += \
         runtime/prte_finalize.c \
         runtime/prte_init.c \
         runtime/prte_locks.c \

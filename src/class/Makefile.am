@@ -13,7 +13,7 @@
 # Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2014-2018 Los Alamos National Security, LLC. All rights
 #                         reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -39,7 +39,7 @@ headers += \
         class/prte_value_array.h \
         class/prte_ring_buffer.h
 
-libprte_la_SOURCES += \
+libprrte_la_SOURCES += \
         class/prte_bitmap.c \
         class/prte_hash_table.c \
         class/prte_hotel.c \

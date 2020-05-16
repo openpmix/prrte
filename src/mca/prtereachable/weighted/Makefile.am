@@ -30,7 +30,7 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_prtereachable_weighted_la_SOURCES = $(sources)
 mca_prtereachable_weighted_la_LDFLAGS = -module -avoid-version
-mca_prtereachable_weighted_la_LIBADD = $(top_builddir)/src/libprte.la
+mca_prtereachable_weighted_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_prtereachable_weighted_la_SOURCES =$(sources)

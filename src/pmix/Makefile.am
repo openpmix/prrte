@@ -13,7 +13,7 @@
 # Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -27,5 +27,5 @@
 headers += \
         pmix/pmix-internal.h
 
-libprte_la_SOURCES += \
+libprrte_la_SOURCES += \
         pmix/pmix.c

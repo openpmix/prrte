@@ -24,7 +24,7 @@
 AM_CPPFLAGS = \
 	$(LTDLINCL)
 
-noinst_LTLIBRARIES = libprte_mca_base.la
+noinst_LTLIBRARIES = libprrte_mca_base.la
 
 dist_prtedata_DATA = help-prte-mca-base.txt help-prte-mca-var.txt
 
@@ -41,7 +41,7 @@ headers = \
 
 # Library
 
-libprte_mca_base_la_SOURCES = \
+libprrte_mca_base_la_SOURCES = \
         $(headers) \
         prte_mca_base_close.c \
         prte_mca_base_component_compare.c \

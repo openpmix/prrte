@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
@@ -30,7 +30,7 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_schizo_slurm_la_SOURCES = $(sources)
 mca_schizo_slurm_la_LDFLAGS = -module -avoid-version
-mca_schizo_slurm_la_LIBADD = $(top_builddir)/src/libprte.la
+mca_schizo_slurm_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_schizo_slurm_la_SOURCES = $(sources)

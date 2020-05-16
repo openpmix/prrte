@@ -13,7 +13,7 @@
 # Copyright (c) 2014      Los Alamos National Security, LLC.  All rights
 #                         reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
@@ -49,7 +49,7 @@ mca_odls_alps_la_SOURCES = $(sources)
 mca_odls_alps_la_CPPFLAGS = $(odls_alps_CPPFLAGS)
 mca_odls_alps_la_LDFLAGS = -module -avoid-version $(odls_alps_LDFLAGS)
 mca_odls_alps_la_LIBADD = $(odls_alps_LIBS) \
-    $(top_builddir)/src/libprte.la  \
+    $(top_builddir)/src/libprrte.la  \
     $(PRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
 
 noinst_LTLIBRARIES = $(component_noinst)

@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2016      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
@@ -24,11 +24,11 @@
 AM_LFLAGS = -Pprte_util_keyval_yy
 LEX_OUTPUT_ROOT = lex.prte_util_keyval_yy
 
-noinst_LTLIBRARIES = libprteutilkeyval.la
+noinst_LTLIBRARIES = libprrteutilkeyval.la
 
 # Source code files
 
-libprteutilkeyval_la_SOURCES = \
+libprrteutilkeyval_la_SOURCES = \
 	keyval_lex.h \
         keyval_lex.l
 

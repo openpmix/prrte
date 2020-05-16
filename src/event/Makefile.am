@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -25,5 +25,5 @@
 headers += \
         event/event-internal.h
 
-libprte_la_SOURCES += \
+libprrte_la_SOURCES += \
         event/event.c

@@ -27,7 +27,7 @@ dist_prtedata_DATA += prted/help-prted.txt
 headers += \
 	prted/prted.h
 
-libprte_la_SOURCES += \
+libprrte_la_SOURCES += \
         prted/prted_comm.c
 
 include prted/pmix/Makefile.am

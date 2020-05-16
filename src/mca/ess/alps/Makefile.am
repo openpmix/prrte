@@ -10,7 +10,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2019      Triad National Security, LLC. All rights
 #                         reserved.
@@ -47,7 +47,7 @@ mca_ess_alps_la_SOURCES = $(sources)
 mca_ess_alps_la_CPPFLAGS = $(ess_alps_CPPFLAGS)
 mca_ess_alps_la_LDFLAGS = -module -avoid-version $(ess_alps_LDFLAGS)
 mca_ess_alps_la_LIBADD = $(ess_alps_LIBS) \
-                         $(top_builddir)/src/libprte.la \
+                         $(top_builddir)/src/libprrte.la \
                          $(PRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
 
 

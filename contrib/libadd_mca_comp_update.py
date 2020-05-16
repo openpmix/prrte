@@ -1,17 +1,14 @@
 #!/usr/bin/env python
 
 # Copyright (c) 2017      IBM Corporation. All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 
 import glob, os, re, shutil
 
-projects= {'opal' : ["$(top_builddir)/opal/libprteopen-pal.la"],
-           'prte' : ["$(top_builddir)/prte/libprteopen-rte.la"],
-           'ompi' : ["$(top_builddir)/ompi/lib@OMPI_LIBMPI_NAME@.la"],
-           'oshmem' : ["$(top_builddir)/oshmem/liboshmem.la"],
+projects= { 'prte' : ["$(top_builddir)/src/libprrte.la"],
           }
 
 no_anchor_file = []

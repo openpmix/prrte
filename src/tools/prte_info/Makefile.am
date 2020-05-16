@@ -71,4 +71,4 @@ prte_info_LDADD = \
     $(prte_libevent_LIBS) \
     $(prte_hwloc_LIBS) \
     $(prte_pmix_LIBS) \
-	$(top_builddir)/src/libprte.la
+	$(top_builddir)/src/libprrte.la

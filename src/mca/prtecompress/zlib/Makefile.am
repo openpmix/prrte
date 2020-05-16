@@ -34,7 +34,7 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_prtecompress_zlib_la_SOURCES = $(sources)
 mca_prtecompress_zlib_la_LDFLAGS = -module -avoid-version $(prtecompress_zlib_LDFLAGS)
-mca_prtecompress_zlib_la_LIBADD = $(top_builddir)/src/libprte.la $(prtecompress_zlib_LIBS)
+mca_prtecompress_zlib_la_LIBADD = $(top_builddir)/src/libprrte.la $(prtecompress_zlib_LIBS)
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_prtecompress_zlib_la_SOURCES = $(sources)

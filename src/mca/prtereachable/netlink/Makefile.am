@@ -39,7 +39,7 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_prtereachable_netlink_la_SOURCES = $(sources)
 mca_prtereachable_netlink_la_LDFLAGS = -module -avoid-version
-mca_prtereachable_netlink_la_LIBADD = $(top_builddir)/src/libprte.la \
+mca_prtereachable_netlink_la_LIBADD = $(top_builddir)/src/libprrte.la \
 	$(prte_reachable_netlink_LIBS)
 
 noinst_LTLIBRARIES = $(component_noinst)
