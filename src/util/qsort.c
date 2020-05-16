@@ -31,9 +31,9 @@
  * SUCH DAMAGE.
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
-#if PRRTE_HAVE_BROKEN_QSORT
+#if PRTE_HAVE_BROKEN_QSORT
 
 #include <stdlib.h>
 
@@ -95,7 +95,7 @@ med3(char *a, char *b, char *c, cmp_t *cmp, void *thunk)
 
 #define thunk NULL
 void
-prrte_qsort(void *a, size_t n, size_t es, cmp_t *cmp)
+prte_qsort(void *a, size_t n, size_t es, cmp_t *cmp)
 {
 	char *pa, *pb, *pc, *pd, *pl, *pm, *pn;
 	int d, r, swaptype, swap_cnt;
@@ -165,7 +165,7 @@ loop:	SWAPINIT(a, es);
 	r = (int) (min((char*) (pd - pc), (char*) (pn - pd - es)));
 	vecswap(pb, pn - r, r);
 	if ((size_t) (r = pb - pa) > es)
-		prrte_qsort(a, r / es, es, cmp);
+		prte_qsort(a, r / es, es, cmp);
 	if ((size_t) (r = pd - pc) > es) {
 		/* Iterate rather than recurse to save stack space */
 		a = pn - r;
@@ -175,4 +175,4 @@ loop:	SWAPINIT(a, es);
 /*		qsort(pn - r, r / es, es, cmp);*/
 }
 
-#endif /* PRRTE_HAVE_BROKEN_QSORT */
+#endif /* PRTE_HAVE_BROKEN_QSORT */

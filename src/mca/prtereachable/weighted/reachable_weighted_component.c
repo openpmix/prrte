@@ -7,6 +7,7 @@
  *                         reserved.
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,7 +21,7 @@
  * entire components just to query their version and parameters.
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/include/constants.h"
 #include "src/util/proc_info.h"
@@ -30,15 +31,15 @@
 /*
  * Public string showing the reachable weighted component version number
  */
-const char *prrte_prteeachable_weighted_component_version_string =
-    "PRRTE weighted reachable MCA component version " PRRTE_VERSION;
+const char *prte_prteeachable_weighted_component_version_string =
+    "PRTE weighted reachable MCA component version " PRTE_VERSION;
 
 /*
  * Local function
  */
 static int reachable_weighted_open(void);
 static int reachable_weighted_close(void);
-static int reachable_weighted_component_query(prrte_mca_base_module_t **module, int *priority);
+static int reachable_weighted_component_query(prte_mca_base_module_t **module, int *priority);
 static int component_register(void);
 
 
@@ -47,7 +48,7 @@ static int component_register(void);
  * and pointers to our public functions in it
  */
 
-prrte_prtereachable_weighted_component_t prrte_prtereachable_weighted_component = {
+prte_prtereachable_weighted_component_t prte_prtereachable_weighted_component = {
     {
 
         /* First, the mca_component_t struct containing meta information
@@ -57,13 +58,13 @@ prrte_prtereachable_weighted_component_t prrte_prtereachable_weighted_component 
             /* Indicate that we are a reachable v1.1.0 component (which also
                implies a specific MCA version) */
 
-            PRRTE_REACHABLE_BASE_VERSION_2_0_0,
+            PRTE_REACHABLE_BASE_VERSION_2_0_0,
 
             /* Component name and version */
 
             .mca_component_name = "weighted",
-            PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                        PRRTE_RELEASE_VERSION),
+            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                        PRTE_RELEASE_VERSION),
 
             /* Component open and close functions */
 
@@ -75,7 +76,7 @@ prrte_prtereachable_weighted_component_t prrte_prtereachable_weighted_component 
         /* Next the MCA v1.0.0 component meta data */
         .base_data = {
             /* The component is checkpoint ready */
-            PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
         },
     }
 };
@@ -84,22 +85,22 @@ static int reachable_weighted_open(void)
 {
     /* construct the component fields */
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int reachable_weighted_close(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int component_register(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-static int reachable_weighted_component_query(prrte_mca_base_module_t **module, int *priority)
+static int reachable_weighted_component_query(prte_mca_base_module_t **module, int *priority)
 {
     *priority = 1;
-    *module = (prrte_mca_base_module_t *)&prrte_prtereachable_weighted_module;
-    return PRRTE_SUCCESS;
+    *module = (prte_mca_base_module_t *)&prte_prtereachable_weighted_module;
+    return PRTE_SUCCESS;
 }

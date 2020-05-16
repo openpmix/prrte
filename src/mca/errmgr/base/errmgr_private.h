@@ -13,6 +13,7 @@
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,13 +23,13 @@
 /** @file:
  */
 
-#ifndef PRRTE_MCA_ERRMGR_PRIVATE_H
-#define PRRTE_MCA_ERRMGR_PRIVATE_H
+#ifndef PRTE_MCA_ERRMGR_PRIVATE_H
+#define PRTE_MCA_ERRMGR_PRIVATE_H
 
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 #include "types.h"
 
@@ -38,7 +39,7 @@
 
 #include "src/dss/dss_types.h"
 #include "src/mca/plm/plm_types.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/errmgr/errmgr.h"
 
@@ -49,23 +50,23 @@ BEGIN_C_DECLS
 
 /* define a struct to hold framework-global values */
 typedef struct {
-    prrte_list_t error_cbacks;
-} prrte_errmgr_base_t;
+    prte_list_t error_cbacks;
+} prte_errmgr_base_t;
 
-PRRTE_EXPORT extern prrte_errmgr_base_t prrte_errmgr_base;
+PRTE_EXPORT extern prte_errmgr_base_t prte_errmgr_base;
 
 /* declare the base default module */
-PRRTE_EXPORT extern prrte_errmgr_base_module_t prrte_errmgr_default_fns;
+PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr_default_fns;
 
 /*
  * Base functions
  */
-PRRTE_EXPORT void prrte_errmgr_base_log(int error_code, char *filename, int line);
+PRTE_EXPORT void prte_errmgr_base_log(int error_code, char *filename, int line);
 
-PRRTE_EXPORT void prrte_errmgr_base_abort(int error_code, char *fmt, ...)
-    __prrte_attribute_format__(__printf__, 2, 3);
-PRRTE_EXPORT int prrte_errmgr_base_abort_peers(prrte_process_name_t *procs,
-                                               prrte_std_cntr_t num_procs,
+PRTE_EXPORT void prte_errmgr_base_abort(int error_code, char *fmt, ...)
+    __prte_attribute_format__(__printf__, 2, 3);
+PRTE_EXPORT int prte_errmgr_base_abort_peers(prte_process_name_t *procs,
+                                               prte_std_cntr_t num_procs,
                                                int error_code);
 
 END_C_DECLS

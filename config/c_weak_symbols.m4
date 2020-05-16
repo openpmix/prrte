@@ -12,7 +12,7 @@ dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright (c) 2014      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
-dnl Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
+dnl Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2019      Intel, Inc.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
@@ -21,9 +21,9 @@ dnl
 dnl $HEADER$
 dnl
 
-# _PRRTE_C_WEAK_SYMBOLS(action_if_found, [action_if_not_found])
+# _PRTE_C_WEAK_SYMBOLS(action_if_found, [action_if_not_found])
 # ------------------------------------------------------------
-AC_DEFUN([_PRRTE_C_WEAK_SYMBOLS],[
+AC_DEFUN([_PRTE_C_WEAK_SYMBOLS],[
     # need two files because icc will incorrectly not create the
     # symbols if they are not used in the object file in which they
     # are defined.  Blah!
@@ -45,39 +45,39 @@ int main() { return fake(3); }
 EOF
 
 # Try the compile
-PRRTE_LOG_COMMAND(
+PRTE_LOG_COMMAND(
     [$CC $CFLAGS  -c conftest_weak.c],
-    [PRRTE_LOG_COMMAND(
+    [PRTE_LOG_COMMAND(
         [$CC $CFLAGS  conftest.c conftest_weak.o -o conftest $LDFLAGS $LIBS],
-        [prrte_c_weak_symbols_happy=1],
-        [prrte_c_weak_symbols_happy=0])],
-    [prrte_c_weak_symbols_happy=0])
+        [prte_c_weak_symbols_happy=1],
+        [prte_c_weak_symbols_happy=0])],
+    [prte_c_weak_symbols_happy=0])
 
-    AS_IF([test "$prrte_c_weak_symbols_happy" = "1"], [$1], [$2])
+    AS_IF([test "$prte_c_weak_symbols_happy" = "1"], [$1], [$2])
 
-    unset prrte_c_weak_symbols_happy
+    unset prte_c_weak_symbols_happy
     rm -f conftest_weak.h conftest_weak.c conftest.c conftest
 ])
 
 
-# PRRTE_C_WEAK_SYMBOLS()
+# PRTE_C_WEAK_SYMBOLS()
 # ---------------------
-# sets PRRTE_C_HAVE_WEAK_SYMBOLS=1 if C compiler has support for weak symbols
-AC_DEFUN([PRRTE_C_WEAK_SYMBOLS],[
+# sets PRTE_C_HAVE_WEAK_SYMBOLS=1 if C compiler has support for weak symbols
+AC_DEFUN([PRTE_C_WEAK_SYMBOLS],[
     AC_CACHE_CHECK([for weak symbol support],
-                   [prrte_cv_c_weak_symbols],
-                   [_PRRTE_C_WEAK_SYMBOLS([prrte_cv_c_weak_symbols="yes"],
-                                         [prrte_cv_c_weak_symbols="no"])])
+                   [prte_cv_c_weak_symbols],
+                   [_PRTE_C_WEAK_SYMBOLS([prte_cv_c_weak_symbols="yes"],
+                                         [prte_cv_c_weak_symbols="no"])])
 
-    AS_IF([test "$prrte_cv_c_weak_symbols" = "yes"],
-          [PRRTE_C_HAVE_WEAK_SYMBOLS=1], [PRRTE_C_HAVE_WEAK_SYMBOLS=0])
+    AS_IF([test "$prte_cv_c_weak_symbols" = "yes"],
+          [PRTE_C_HAVE_WEAK_SYMBOLS=1], [PRTE_C_HAVE_WEAK_SYMBOLS=0])
 ]) dnl
 
 ########################################################################
 
-# _PRRTE_C_MACRO_WEAK_SYMBOLS(action_if_found, [action_if_not_found])
+# _PRTE_C_MACRO_WEAK_SYMBOLS(action_if_found, [action_if_not_found])
 # ------------------------------------------------------------
-AC_DEFUN([_PRRTE_C_MACRO_WEAK_SYMBOLS],[
+AC_DEFUN([_PRTE_C_MACRO_WEAK_SYMBOLS],[
     # need two files because icc will incorrectly not create the
     # symbols if they are not used in the object file in which they
     # are defined.  Blah!
@@ -105,31 +105,31 @@ int main() { return fake1(3) + fake2(3); }
 EOF
 
 # Try the compile
-PRRTE_LOG_COMMAND(
+PRTE_LOG_COMMAND(
     [$CC $CFLAGS  -c conftest_weak.c],
-    [PRRTE_LOG_COMMAND(
+    [PRTE_LOG_COMMAND(
         [$CC $CFLAGS  conftest.c conftest_weak.o -o conftest $LDFLAGS $LIBS],
-        [prrte_c_macro_weak_symbols_happy=1],
-        [prrte_c_macro_weak_symbols_happy=0])],
-    [prrte_c_macro_weak_symbols_happy=0])
+        [prte_c_macro_weak_symbols_happy=1],
+        [prte_c_macro_weak_symbols_happy=0])],
+    [prte_c_macro_weak_symbols_happy=0])
 
-    AS_IF([test "$prrte_c_macro_weak_symbols_happy" = "1"], [$1], [$2])
+    AS_IF([test "$prte_c_macro_weak_symbols_happy" = "1"], [$1], [$2])
 
-    unset prrte_c_macro_weak_symbols_happy
+    unset prte_c_macro_weak_symbols_happy
     rm -f conftest_weak.h conftest_weak.c conftest.c conftest
 ])
 
-# PRRTE_C_MACRO_WEAK_SYMBOLS
+# PRTE_C_MACRO_WEAK_SYMBOLS
 # ---------------------
-# Sets PRRTE_C_HAVE_MACRO_WEAK_SYMBOLS=1 if C compiler has support for weak
+# Sets PRTE_C_HAVE_MACRO_WEAK_SYMBOLS=1 if C compiler has support for weak
 # symbols
-AC_DEFUN([PRRTE_C_MACRO_WEAK_SYMBOLS],[
+AC_DEFUN([PRTE_C_MACRO_WEAK_SYMBOLS],[
     AC_CACHE_CHECK([for macro weak symbol support],
-                   [prrte_cv_c_macro_weak_symbols],
-                   [_PRRTE_C_MACRO_WEAK_SYMBOLS([prrte_cv_c_macro_weak_symbols="yes"],
-                                               [prrte_cv_c_macro_weak_symbols="no"])])
+                   [prte_cv_c_macro_weak_symbols],
+                   [_PRTE_C_MACRO_WEAK_SYMBOLS([prte_cv_c_macro_weak_symbols="yes"],
+                                               [prte_cv_c_macro_weak_symbols="no"])])
 
-    AS_IF([test "$prrte_cv_c_macro_weak_symbols" = "yes"],
-          [PRRTE_C_HAVE_MACRO_WEAK_SYMBOLS=1],
-          [PRRTE_C_HAVE_MACRO_WEAK_SYMBOLS=0])
+    AS_IF([test "$prte_cv_c_macro_weak_symbols" = "yes"],
+          [PRTE_C_HAVE_MACRO_WEAK_SYMBOLS=1],
+          [PRTE_C_HAVE_MACRO_WEAK_SYMBOLS=0])
 ]) dnl

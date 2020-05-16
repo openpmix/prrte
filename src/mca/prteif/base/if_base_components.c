@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2013 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -11,7 +11,7 @@
  *
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "constants.h"
 #include "src/util/output.h"
@@ -21,76 +21,76 @@
 #include "src/mca/prteif/base/static-components.h"
 
 /* instantiate the global list of interfaces */
-prrte_list_t prrte_if_list = {{0}};
-bool prrte_if_do_not_resolve = false;
-bool prrte_if_retain_loopback = false;
+prte_list_t prte_if_list = {{0}};
+bool prte_if_do_not_resolve = false;
+bool prte_if_retain_loopback = false;
 
-static int prrte_if_base_register (prrte_mca_base_register_flag_t flags);
-static int prrte_if_base_open (prrte_mca_base_open_flag_t flags);
-static int prrte_if_base_close(void);
-static void prrte_if_construct(prrte_if_t *obj);
+static int prte_if_base_register (prte_mca_base_register_flag_t flags);
+static int prte_if_base_open (prte_mca_base_open_flag_t flags);
+static int prte_if_base_close(void);
+static void prte_if_construct(prte_if_t *obj);
 
 static bool frameopen = false;
 
-/* instance the prrte_if_t object */
-PRRTE_CLASS_INSTANCE(prrte_if_t, prrte_list_item_t, prrte_if_construct, NULL);
+/* instance the prte_if_t object */
+PRTE_CLASS_INSTANCE(prte_if_t, prte_list_item_t, prte_if_construct, NULL);
 
-PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, prteif, NULL, prrte_if_base_register,
-                                 prrte_if_base_open, prrte_if_base_close,
-                                 prrte_prteif_base_static_components, 0);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prteif, NULL, prte_if_base_register,
+                                 prte_if_base_open, prte_if_base_close,
+                                 prte_prteif_base_static_components, 0);
 
-static int prrte_if_base_register (prrte_mca_base_register_flag_t flags)
+static int prte_if_base_register (prte_mca_base_register_flag_t flags)
 {
-    prrte_if_do_not_resolve = false;
-    (void) prrte_mca_base_framework_var_register (&prrte_prteif_base_framework, "do_not_resolve",
+    prte_if_do_not_resolve = false;
+    (void) prte_mca_base_framework_var_register (&prte_prteif_base_framework, "do_not_resolve",
                                                   "If nonzero, do not attempt to resolve interfaces",
-                                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRRTE_MCA_BASE_VAR_FLAG_SETTABLE,
-                                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_ALL_EQ,
-                                                  &prrte_if_do_not_resolve);
+                                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE,
+                                                  PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ,
+                                                  &prte_if_do_not_resolve);
 
-    prrte_if_retain_loopback = false;
-    (void) prrte_mca_base_framework_var_register (&prrte_prteif_base_framework, "retain_loopback",
+    prte_if_retain_loopback = false;
+    (void) prte_mca_base_framework_var_register (&prte_prteif_base_framework, "retain_loopback",
                                                   "If nonzero, retain loopback interfaces",
-                                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRRTE_MCA_BASE_VAR_FLAG_SETTABLE,
-                                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_ALL_EQ,
-                                                  &prrte_if_retain_loopback);
+                                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE,
+                                                  PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ,
+                                                  &prte_if_retain_loopback);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-static int prrte_if_base_open (prrte_mca_base_open_flag_t flags)
+static int prte_if_base_open (prte_mca_base_open_flag_t flags)
 {
     if (frameopen) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
     frameopen = true;
 
     /* setup the global list */
-    PRRTE_CONSTRUCT(&prrte_if_list, prrte_list_t);
+    PRTE_CONSTRUCT(&prte_if_list, prte_list_t);
 
-    return prrte_mca_base_framework_components_open(&prrte_prteif_base_framework, flags);
+    return prte_mca_base_framework_components_open(&prte_prteif_base_framework, flags);
 }
 
 
-static int prrte_if_base_close(void)
+static int prte_if_base_close(void)
 {
-    prrte_list_item_t *item;
+    prte_list_item_t *item;
 
     if (!frameopen) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
     frameopen = false;
 
-    while (NULL != (item = prrte_list_remove_first(&prrte_if_list))) {
-        PRRTE_RELEASE(item);
+    while (NULL != (item = prte_list_remove_first(&prte_if_list))) {
+        PRTE_RELEASE(item);
     }
-    PRRTE_DESTRUCT(&prrte_if_list);
+    PRTE_DESTRUCT(&prte_if_list);
 
-    return prrte_mca_base_framework_components_close(&prrte_prteif_base_framework, NULL);
+    return prte_mca_base_framework_components_close(&prte_prteif_base_framework, NULL);
 }
 
-static void prrte_if_construct(prrte_if_t *obj)
+static void prte_if_construct(prte_if_t *obj)
 {
     memset(obj->if_name, 0, sizeof(obj->if_name));
     obj->if_index = -1;

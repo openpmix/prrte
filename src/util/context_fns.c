@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
- * Copyright (c) 2008-2010 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -20,7 +20,7 @@
  *
  * $HEADER$
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <string.h>
@@ -47,13 +47,13 @@
 
 #include "src/util/basename.h"
 #include "src/util/path.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/util/context_fns.h"
 
-int prrte_util_check_context_cwd(prrte_app_context_t *context,
+int prte_util_check_context_cwd(prte_app_context_t *context,
                                 bool want_chdir)
 {
     bool good = true;
@@ -71,16 +71,16 @@ int prrte_util_check_context_cwd(prrte_app_context_t *context,
         /* See if the directory was a user-specified directory.  If it
         was, barf because they specifically asked for something we
         can't provide. */
-        if (prrte_get_attribute(&context->attributes, PRRTE_APP_USER_CWD,
-                               NULL, PRRTE_BOOL)) {
-            return PRRTE_ERR_WDIR_NOT_FOUND;
+        if (prte_get_attribute(&context->attributes, PRTE_APP_USER_CWD,
+                               NULL, PRTE_BOOL)) {
+            return PRTE_ERR_WDIR_NOT_FOUND;
         }
 
         /* If the user didn't specifically ask for it, then it
         was a system-supplied default directory, so it's ok
         to not go there.  Try to go to the $HOME directory
         instead. */
-        tmp = prrte_home_directory();
+        tmp = prte_home_directory();
         if (NULL != tmp) {
             /* Try $HOME.  Same test as above. */
             good = true;
@@ -88,7 +88,7 @@ int prrte_util_check_context_cwd(prrte_app_context_t *context,
                 good = false;
             }
             if (!good) {
-                return PRRTE_ERR_WDIR_NOT_FOUND;
+                return PRTE_ERR_WDIR_NOT_FOUND;
             }
 
             /* Reset the pwd in this local copy of the
@@ -103,10 +103,10 @@ int prrte_util_check_context_cwd(prrte_app_context_t *context,
     }
 
     /* All happy */
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_util_check_context_app(prrte_app_context_t *context, char **env)
+int prte_util_check_context_app(prte_app_context_t *context, char **env)
 {
     char *tmp;
 
@@ -130,24 +130,24 @@ int prrte_util_check_context_app(prrte_app_context_t *context, char **env)
         bproc, for example, does not use the fork pls for launching, so
         it does this same work over there. */
 
-    tmp = prrte_basename(context->app);
+    tmp = prte_basename(context->app);
     if (strlen(tmp) == strlen(context->app)) {
         /* If this is a naked executable -- no relative or absolute
         pathname -- then search the PATH for it */
         free(tmp);
-        tmp = prrte_path_findv(context->app, X_OK, env, context->cwd);
+        tmp = prte_path_findv(context->app, X_OK, env, context->cwd);
         if (NULL == tmp) {
-            return PRRTE_ERR_EXE_NOT_FOUND;
+            return PRTE_ERR_EXE_NOT_FOUND;
         }
         free(context->app);
         context->app = tmp;
     } else {
         free(tmp);
         if (0 != access(context->app, X_OK)) {
-            return PRRTE_ERR_EXE_NOT_ACCESSIBLE;
+            return PRTE_ERR_EXE_NOT_ACCESSIBLE;
         }
     }
 
     /* All was good */
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

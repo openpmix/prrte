@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,7 +18,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "src/util/numtostr.h"
 #include "src/util/printf.h"
 #include <stdio.h>
@@ -25,7 +26,7 @@
 
 
 char*
-prrte_ltostr(long num)
+prte_ltostr(long num)
 {
     /* waste a little bit of space, but always have a big enough buffer */
     int buflen = sizeof(long) * 8;
@@ -46,7 +47,7 @@ prrte_ltostr(long num)
 
 
 char*
-prrte_dtostr(double num)
+prte_dtostr(double num)
 {
     /* waste a little bit of space, but always have a big enough buffer */
     int buflen = sizeof(long) * 8;

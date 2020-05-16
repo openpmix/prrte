@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
  *
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -20,7 +20,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #ifdef HAVE_UNISTD_H
@@ -40,14 +40,14 @@
 
 static int init(void);
 static int query(pid_t pid,
-                 prrte_pstats_t *stats,
-                 prrte_node_stats_t *nstats);
+                 prte_pstats_t *stats,
+                 prte_node_stats_t *nstats);
 static int fini(void);
 
 /*
  * Test pstat module
  */
-const prrte_pstat_base_module_t prrte_pstat_test_module = {
+const prte_pstat_base_module_t prte_pstat_test_module = {
     init,
     query,
     fini
@@ -55,17 +55,17 @@ const prrte_pstat_base_module_t prrte_pstat_test_module = {
 
 static int init(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int fini(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int query(pid_t pid,
-                 prrte_pstats_t *stats,
-                 prrte_node_stats_t *nstats)
+                 prte_pstats_t *stats,
+                 prte_node_stats_t *nstats)
 {
     double dtime;
 
@@ -85,10 +85,10 @@ static int query(pid_t pid,
     }
 
     if (NULL != stats) {
-        prrte_string_copy(stats->node, prrte_process_info.nodename, PRRTE_PSTAT_MAX_STRING_LEN);
+        prte_string_copy(stats->node, prte_process_info.nodename, PRTE_PSTAT_MAX_STRING_LEN);
 
         stats->pid = pid;
-        prrte_string_copy(stats->cmd, "UNKNOWN", PRRTE_PSTAT_MAX_STRING_LEN);
+        prte_string_copy(stats->cmd, "UNKNOWN", PRTE_PSTAT_MAX_STRING_LEN);
         stats->state[0] = 'R';
         stats->priority = 2;
         stats->num_threads = 1;
@@ -121,5 +121,5 @@ static int query(pid_t pid,
         nstats->la15 = 0.12;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

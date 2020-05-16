@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2009-2018 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
@@ -26,7 +26,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -43,7 +43,7 @@
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
-#include "src/include/prrte_socket_errno.h"
+#include "src/include/prte_socket_errno.h"
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
@@ -55,26 +55,26 @@
 #endif
 
 #include "types.h"
-#include "prrte_stdint.h"
+#include "prte_stdint.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
-#include "src/mca/base/prrte_mca_base_var.h"
+#include "src/mca/base/prte_mca_base_var.h"
 #include "src/util/output.h"
 #include "src/util/net.h"
 #include "src/util/fd.h"
 #include "src/util/error.h"
 #include "src/util/show_help.h"
-#include "src/class/prrte_hash_table.h"
+#include "src/class/prte_hash_table.h"
 #include "src/event/event-internal.h"
 
 #include "src/util/name_fns.h"
 #include "src/util/show_help.h"
 #include "src/threads/threads.h"
 #include "src/mca/state/state.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/routed/routed.h"
-#include "src/runtime/prrte_wait.h"
+#include "src/runtime/prte_wait.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/mca/prtereachable/base/base.h"
 
@@ -87,47 +87,47 @@
 #include "oob_tcp_common.h"
 #include "oob_tcp_connection.h"
 
-static void tcp_peer_event_init(prrte_oob_tcp_peer_t* peer);
-static int  tcp_peer_send_connect_ack(prrte_oob_tcp_peer_t* peer);
-static int tcp_peer_send_connect_nack(int sd, prrte_process_name_t name);
+static void tcp_peer_event_init(prte_oob_tcp_peer_t* peer);
+static int  tcp_peer_send_connect_ack(prte_oob_tcp_peer_t* peer);
+static int tcp_peer_send_connect_nack(int sd, prte_process_name_t name);
 static int tcp_peer_send_blocking(int sd, void* data, size_t size);
-static bool tcp_peer_recv_blocking(prrte_oob_tcp_peer_t* peer, int sd,
+static bool tcp_peer_recv_blocking(prte_oob_tcp_peer_t* peer, int sd,
                                    void* data, size_t size);
-static void tcp_peer_connected(prrte_oob_tcp_peer_t* peer);
+static void tcp_peer_connected(prte_oob_tcp_peer_t* peer);
 
-static int tcp_peer_create_socket(prrte_oob_tcp_peer_t* peer, sa_family_t family)
+static int tcp_peer_create_socket(prte_oob_tcp_peer_t* peer, sa_family_t family)
 {
     int flags;
 
     if (peer->sd >= 0) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_oob_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_oob_base_framework.framework_output,
                          "%s oob:tcp:peer creating socket to %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         PRRTE_NAME_PRINT(&(peer->name))));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(&(peer->name))));
     peer->sd = socket(family, SOCK_STREAM, 0);
     if (peer->sd < 0) {
-        prrte_output(0, "%s-%s tcp_peer_create_socket: socket() failed: %s (%d)\n",
-                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                    PRRTE_NAME_PRINT(&(peer->name)),
-                    strerror(prrte_socket_errno),
-                    prrte_socket_errno);
-        return PRRTE_ERR_UNREACH;
+        prte_output(0, "%s-%s tcp_peer_create_socket: socket() failed: %s (%d)\n",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    PRTE_NAME_PRINT(&(peer->name)),
+                    strerror(prte_socket_errno),
+                    prte_socket_errno);
+        return PRTE_ERR_UNREACH;
     }
 
     /* Set this fd to be close-on-exec so that any subsequent children don't see it */
-    if (prrte_fd_set_cloexec(peer->sd) != PRRTE_SUCCESS) {
-        prrte_output(0, "%s unable to set socket to CLOEXEC",
-                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+    if (prte_fd_set_cloexec(peer->sd) != PRTE_SUCCESS) {
+        prte_output(0, "%s unable to set socket to CLOEXEC",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         close(peer->sd);
         peer->sd = -1;
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     /* setup socket options */
-    prrte_oob_tcp_set_socket_options(peer->sd);
+    prte_oob_tcp_set_socket_options(peer->sd);
 
     /* setup event callbacks */
     tcp_peer_event_init(peer);
@@ -135,23 +135,23 @@ static int tcp_peer_create_socket(prrte_oob_tcp_peer_t* peer, sa_family_t family
     /* setup the socket as non-blocking */
     if (peer->sd >= 0) {
         if((flags = fcntl(peer->sd, F_GETFL, 0)) < 0) {
-            prrte_output(0, "%s-%s tcp_peer_connect: fcntl(F_GETFL) failed: %s (%d)\n",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&(peer->name)),
-                        strerror(prrte_socket_errno),
-                        prrte_socket_errno);
+            prte_output(0, "%s-%s tcp_peer_connect: fcntl(F_GETFL) failed: %s (%d)\n",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&(peer->name)),
+                        strerror(prte_socket_errno),
+                        prte_socket_errno);
         } else {
             flags |= O_NONBLOCK;
             if(fcntl(peer->sd, F_SETFL, flags) < 0)
-                prrte_output(0, "%s-%s tcp_peer_connect: fcntl(F_SETFL) failed: %s (%d)\n",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                            PRRTE_NAME_PRINT(&(peer->name)),
-                            strerror(prrte_socket_errno),
-                            prrte_socket_errno);
+                prte_output(0, "%s-%s tcp_peer_connect: fcntl(F_SETFL) failed: %s (%d)\n",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(&(peer->name)),
+                            strerror(prte_socket_errno),
+                            prte_socket_errno);
         }
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
@@ -159,37 +159,37 @@ static int tcp_peer_create_socket(prrte_oob_tcp_peer_t* peer, sa_family_t family
  * Try connecting to a peer - cycle across all known addresses
  * until one succeeds.
  */
-void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
+void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
 {
-    prrte_list_t *local_list = &prrte_oob_tcp_component.local_ifs, *remote_list;
+    prte_list_t *local_list = &prte_oob_tcp_component.local_ifs, *remote_list;
     int rc, i, j, local_if_count, remote_if_count, best, best_i=0, best_j=0;
-    prrte_oob_tcp_conn_op_t *op = (prrte_oob_tcp_conn_op_t*)cbdata;
-    prrte_reachable_t *results = NULL;
-    volatile prrte_list_item_t *ptr;
-    prrte_socklen_t addrlen = 0;
-    prrte_oob_tcp_peer_t *peer;
-    prrte_oob_tcp_addr_t *addr;
-    prrte_oob_tcp_send_t *snd;
+    prte_oob_tcp_conn_op_t *op = (prte_oob_tcp_conn_op_t*)cbdata;
+    prte_reachable_t *results = NULL;
+    volatile prte_list_item_t *ptr;
+    prte_socklen_t addrlen = 0;
+    prte_oob_tcp_peer_t *peer;
+    prte_oob_tcp_addr_t *addr;
+    prte_oob_tcp_send_t *snd;
     bool connected = false;
-    prrte_if_t *interface;
+    prte_if_t *interface;
     char *host;
 
-    remote_list = PRRTE_NEW(prrte_list_t);
+    remote_list = PRTE_NEW(prte_list_t);
     if (NULL == remote_list) {
-        prrte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-        PRRTE_FORCED_TERMINATE(1);
+        prte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        PRTE_FORCED_TERMINATE(1);
         return;
     }
 
-    PRRTE_ACQUIRE_OBJECT(op);
+    PRTE_ACQUIRE_OBJECT(op);
     peer = op->peer;
 
-    /* Construct a list of remote prrte_if_t from peer */
-    PRRTE_LIST_FOREACH(addr, &peer->addrs, prrte_oob_tcp_addr_t) {
-        interface = PRRTE_NEW(prrte_if_t);
+    /* Construct a list of remote prte_if_t from peer */
+    PRTE_LIST_FOREACH(addr, &peer->addrs, prte_oob_tcp_addr_t) {
+        interface = PRTE_NEW(prte_if_t);
         if (NULL == interface) {
-            prrte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-            PRRTE_FORCED_TERMINATE(1);
+            prte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+            PRTE_FORCED_TERMINATE(1);
             goto cleanup;
         }
         interface->af_family = addr->addr.ss_family;
@@ -199,25 +199,25 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * zero value
          */
         interface->if_bandwidth = 1;
-        prrte_list_append(remote_list, &(interface->super));
+        prte_list_append(remote_list, &(interface->super));
     }
-    local_if_count = prrte_list_get_size(local_list);
-    remote_if_count = prrte_list_get_size(remote_list);
+    local_if_count = prte_list_get_size(local_list);
+    remote_if_count = prte_list_get_size(remote_list);
 
-    results = prrte_reachable.reachable(local_list, remote_list);
+    results = prte_reachable.reachable(local_list, remote_list);
 
     /* Find match, bind socket. If connect attempt failed, move to next */
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                        "%s prrte_tcp_peer_try_connect: "
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                        "%s prte_tcp_peer_try_connect: "
                         "attempting to connect to proc %s",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&(peer->name)));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&(peer->name)));
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                        "%s prrte_tcp_peer_try_connect: "
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                        "%s prte_tcp_peer_try_connect: "
                         "attempting to connect to proc %s on socket %d",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&(peer->name)), peer->sd);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&(peer->name)), peer->sd);
 
     /* Loops over the reachable bitmap. This should only run once, but
      * if a connection does fail even after being declared as reachable,
@@ -248,41 +248,41 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * the next best connection
          */
         results->weights[best_i][best_j] = 0;
-        ptr = peer->addrs.prrte_list_sentinel.prrte_list_next;
+        ptr = peer->addrs.prte_list_sentinel.prte_list_next;
         for (j = 0; j < best_j; j++) {
-            ptr = ptr->prrte_list_next;
+            ptr = ptr->prte_list_next;
         }
         /* Record the peer address we are using */
-        peer->active_addr = (prrte_oob_tcp_addr_t *)ptr;
+        peer->active_addr = (prte_oob_tcp_addr_t *)ptr;
         addr = peer->active_addr;
         /* Grab the local address we are using to bind the socket with */
-        ptr = prrte_oob_tcp_component.local_ifs.prrte_list_sentinel.prrte_list_next;
+        ptr = prte_oob_tcp_component.local_ifs.prte_list_sentinel.prte_list_next;
         for (i = 0; i < best_i; i++) {
-            ptr = ptr->prrte_list_next;
+            ptr = ptr->prte_list_next;
         }
-        interface = (prrte_if_t *)ptr;
-        prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                             "%s prrte_tcp_peer_try_connect: "
+        interface = (prte_if_t *)ptr;
+        prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                             "%s prte_tcp_peer_try_connect: "
                              "attempting to connect to proc %s on %s:%d - %d retries",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                             PRRTE_NAME_PRINT(&(peer->name)),
-                             prrte_net_get_hostname((struct sockaddr*)&addr->addr),
-                             prrte_net_get_port((struct sockaddr*)&addr->addr),
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_NAME_PRINT(&(peer->name)),
+                             prte_net_get_hostname((struct sockaddr*)&addr->addr),
+                             prte_net_get_port((struct sockaddr*)&addr->addr),
                              addr->retries);
         if (MCA_OOB_TCP_FAILED == addr->state) {
-            prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                                 "%s prrte_tcp_peer_try_connect: %s:%d is down",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                 prrte_net_get_hostname((struct sockaddr*)&addr->addr),
-                                 prrte_net_get_port((struct sockaddr*)&addr->addr));
+            prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                                 "%s prte_tcp_peer_try_connect: %s:%d is down",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 prte_net_get_hostname((struct sockaddr*)&addr->addr),
+                                 prte_net_get_port((struct sockaddr*)&addr->addr));
             continue;
         }
-        if (prrte_oob_tcp_component.max_retries < addr->retries) {
-            prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                                 "%s prrte_tcp_peer_try_connect: %s:%d retries exceeded",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                 prrte_net_get_hostname((struct sockaddr*)&addr->addr),
-                                 prrte_net_get_port((struct sockaddr*)&addr->addr));
+        if (prte_oob_tcp_component.max_retries < addr->retries) {
+            prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                                 "%s prte_tcp_peer_try_connect: %s:%d retries exceeded",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 prte_net_get_hostname((struct sockaddr*)&addr->addr),
+                                 prte_net_get_port((struct sockaddr*)&addr->addr));
             continue;
         }
         addrlen = addr->addr.ss_family == AF_INET6 ? sizeof(struct sockaddr_in6)
@@ -298,7 +298,7 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         }
         rc = tcp_peer_create_socket(peer, addr->addr.ss_family);
 
-        if (PRRTE_SUCCESS != rc) {
+        if (PRTE_SUCCESS != rc) {
             /* FIXME: we cannot create a TCP socket - this spans
              * all interfaces, so all we can do is report
              * back to the component that this peer is
@@ -308,8 +308,8 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
              * so we also need to mark any queued messages
              * and return them as "unreachable"
              */
-            prrte_output(0, "%s CANNOT CREATE SOCKET", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-            PRRTE_FORCED_TERMINATE(1);
+            prte_output(0, "%s CANNOT CREATE SOCKET", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+            PRTE_FORCED_TERMINATE(1);
             goto cleanup;
         }
 
@@ -319,7 +319,7 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
              * for this address from the reachable table to no connection
              * and try a new connection.
              */
-            if( (EADDRINUSE == prrte_socket_errno) || (EADDRNOTAVAIL == prrte_socket_errno) ) {
+            if( (EADDRINUSE == prte_socket_errno) || (EADDRNOTAVAIL == prte_socket_errno) ) {
                 for (j = 0; j < remote_if_count; j++) {
                     results->weights[best_i][j] = 0;
                 }
@@ -328,13 +328,13 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
             /* If we have another bind issue, something has gone horribly
              * wrong.
              */
-            prrte_output(0, "%s bind() failed, can't recover : %s (%d)",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         strerror(prrte_socket_errno),
-                         prrte_socket_errno );
+            prte_output(0, "%s bind() failed, can't recover : %s (%d)",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         strerror(prte_socket_errno),
+                         prte_socket_errno );
 
             CLOSE_THE_SOCKET(peer->sd);
-            PRRTE_FORCED_TERMINATE(1);
+            PRTE_FORCED_TERMINATE(1);
             goto cleanup;
         }
 
@@ -344,17 +344,17 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         rc = connect(peer->sd, (struct sockaddr*) &addr->addr, addrlen);
         if (rc < 0) {
             /* non-blocking so wait for completion */
-            if (prrte_socket_errno == EINPROGRESS || prrte_socket_errno == EWOULDBLOCK) {
-                prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+            if (prte_socket_errno == EINPROGRESS || prte_socket_errno == EWOULDBLOCK) {
+                prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                      "%s waiting for connect completion to %s - activating send event",
-                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                     PRRTE_NAME_PRINT(&peer->name));
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                     PRTE_NAME_PRINT(&peer->name));
                 /* just ensure the send_event is active */
                 if (!peer->send_ev_active) {
-                    prrte_event_add(&peer->send_event, 0);
+                    prte_event_add(&peer->send_event, 0);
                     peer->send_ev_active = true;
                 }
-                PRRTE_RELEASE(op);
+                PRTE_RELEASE(op);
                 goto out;
             }
 
@@ -364,12 +364,12 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
              * connection.  Handle that case in a semi-rational
              * way by trying twice before giving up
              */
-            if (ECONNABORTED == prrte_socket_errno) {
-                if (addr->retries < prrte_oob_tcp_component.max_retries) {
-                    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+            if (ECONNABORTED == prte_socket_errno) {
+                if (addr->retries < prte_oob_tcp_component.max_retries) {
+                    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                          "%s connection aborted by OS to %s - retrying",
-                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                         PRRTE_NAME_PRINT(&peer->name));
+                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                         PRTE_NAME_PRINT(&peer->name));
                     goto retry_connect;
                 } else {
                     /* We were unsuccessful in establishing this connection, and are
@@ -393,34 +393,34 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         /* it could be that the intended recipient just hasn't
          * started yet. if requested, wait awhile and try again
          * unless/until we hit the maximum number of retries */
-        if (0 < prrte_oob_tcp_component.retry_delay) {
-            if (prrte_oob_tcp_component.max_recon_attempts < 0 ||
-                peer->num_retries < prrte_oob_tcp_component.max_recon_attempts) {
+        if (0 < prte_oob_tcp_component.retry_delay) {
+            if (prte_oob_tcp_component.max_recon_attempts < 0 ||
+                peer->num_retries < prte_oob_tcp_component.max_recon_attempts) {
                 struct timeval tv;
                 /* close the current socket */
                 CLOSE_THE_SOCKET(peer->sd);
                 /* reset the addr states */
-                PRRTE_LIST_FOREACH(addr, &peer->addrs, prrte_oob_tcp_addr_t) {
+                PRTE_LIST_FOREACH(addr, &peer->addrs, prte_oob_tcp_addr_t) {
                     addr->state = MCA_OOB_TCP_UNCONNECTED;
                     addr->retries = 0;
                 }
                 /* give it awhile and try again */
-                tv.tv_sec = prrte_oob_tcp_component.retry_delay;
+                tv.tv_sec = prte_oob_tcp_component.retry_delay;
                 tv.tv_usec = 0;
                 ++peer->num_retries;
-                PRRTE_RETRY_TCP_CONN_STATE(peer, prrte_oob_tcp_peer_try_connect, &tv);
+                PRTE_RETRY_TCP_CONN_STATE(peer, prte_oob_tcp_peer_try_connect, &tv);
                 goto cleanup;
             }
         }
         /* no address succeeded, so we cannot reach this peer */
         peer->state = MCA_OOB_TCP_FAILED;
-        host = prrte_get_proc_hostname(&(peer->name));
+        host = prte_get_proc_hostname(&(peer->name));
         if (NULL == host && NULL != peer->active_addr) {
-            host = prrte_net_get_hostname((struct sockaddr*)&(peer->active_addr->addr));
+            host = prte_net_get_hostname((struct sockaddr*)&(peer->active_addr->addr));
         }
-        /* use an prrte_output here instead of show_help as we may well
+        /* use an prte_output here instead of show_help as we may well
          * not be connected to the HNP at this point */
-        prrte_output(prrte_clean_output,
+        prte_output(prte_clean_output,
                     "------------------------------------------------------------\n"
                     "A process or daemon was unable to complete a TCP connection\n"
                     "to another process:\n"
@@ -430,7 +430,7 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                     "check that any firewall (e.g., iptables) has been disabled and\n"
                     "try again.\n"
                     "------------------------------------------------------------",
-                    prrte_process_info.nodename,
+                    prte_process_info.nodename,
                     (NULL == host) ? "<unknown>" : host);
         /* close the socket */
         CLOSE_THE_SOCKET(peer->sd);
@@ -440,41 +440,41 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * an event in the component event base, and so it will fire async
          * from us if we are in our own progress thread
          */
-        PRRTE_ACTIVATE_TCP_CMP_OP(peer, prrte_oob_tcp_component_failed_to_connect);
+        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_oob_tcp_component_failed_to_connect);
         /* FIXME: post any messages in the send queue back to the OOB
          * level for reassignment
          */
         if (NULL != peer->send_msg) {
         }
-        while (NULL != (snd = (prrte_oob_tcp_send_t*)prrte_list_remove_first(&peer->send_queue))) {
+        while (NULL != (snd = (prte_oob_tcp_send_t*)prte_list_remove_first(&peer->send_queue))) {
         }
         goto cleanup;
     }
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                        "%s prrte_tcp_peer_try_connect: "
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                        "%s prte_tcp_peer_try_connect: "
                         "Connection to proc %s succeeded",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&peer->name));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&peer->name));
 
     /* setup our recv to catch the return ack call */
     if (!peer->recv_ev_active) {
-        prrte_event_add(&peer->recv_event, 0);
+        prte_event_add(&peer->recv_event, 0);
         peer->recv_ev_active = true;
     }
 
     /* send our globally unique process identifier to the peer */
-    if (PRRTE_SUCCESS == (rc = tcp_peer_send_connect_ack(peer))) {
+    if (PRTE_SUCCESS == (rc = tcp_peer_send_connect_ack(peer))) {
         peer->state = MCA_OOB_TCP_CONNECT_ACK;
-    } else if (PRRTE_ERR_UNREACH == rc) {
+    } else if (PRTE_ERR_UNREACH == rc) {
         /* this could happen if we are in a race condition where both
          * we and the peer are trying to connect at the same time. If I
          * am the higher vpid, then retry the connection - otherwise,
          * step aside for now */
-        int cmpval = prrte_util_compare_name_fields(PRRTE_NS_CMP_ALL, PRRTE_PROC_MY_NAME, &peer->name);
-        if (PRRTE_VALUE1_GREATER == cmpval) {
+        int cmpval = prte_util_compare_name_fields(PRTE_NS_CMP_ALL, PRTE_PROC_MY_NAME, &peer->name);
+        if (PRTE_VALUE1_GREATER == cmpval) {
             peer->state = MCA_OOB_TCP_CONNECTING;
-            PRRTE_ACTIVATE_TCP_CONN_STATE(peer, prrte_oob_tcp_peer_try_connect);
+            PRTE_ACTIVATE_TCP_CONN_STATE(peer, prte_oob_tcp_peer_try_connect);
         } else {
             peer->state = MCA_OOB_TCP_UNCONNECTED;
         }
@@ -482,28 +482,28 @@ void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         CLOSE_THE_SOCKET(peer->sd);
         goto out;
     } else {
-        prrte_output(0,
-                    "%s prrte_tcp_peer_try_connect: "
+        prte_output(0,
+                    "%s prte_tcp_peer_try_connect: "
                     "tcp_peer_send_connect_ack to proc %s on %s:%d failed: %s (%d)",
-                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                    PRRTE_NAME_PRINT(&(peer->name)),
-                    prrte_net_get_hostname((struct sockaddr*)&addr->addr),
-                    prrte_net_get_port((struct sockaddr*)&addr->addr),
-                    prrte_strerror(rc),
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    PRTE_NAME_PRINT(&(peer->name)),
+                    prte_net_get_hostname((struct sockaddr*)&addr->addr),
+                    prte_net_get_port((struct sockaddr*)&addr->addr),
+                    prte_strerror(rc),
                     rc);
         /* close the socket */
         CLOSE_THE_SOCKET(peer->sd);
-        PRRTE_FORCED_TERMINATE(1);
+        PRTE_FORCED_TERMINATE(1);
     }
 
 cleanup:
-    PRRTE_RELEASE(op);
+    PRTE_RELEASE(op);
 out:
     if (NULL != results) {
         free(results);
     }
     if (NULL != remote_list) {
-        PRRTE_RELEASE(remote_list);
+        PRTE_RELEASE(remote_list);
     }
 }
 
@@ -511,33 +511,33 @@ out:
  * version string, and a security token to ensure we are talking
  * to another OMPI process
  */
-static int tcp_peer_send_connect_ack(prrte_oob_tcp_peer_t* peer)
+static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t* peer)
 {
     char *msg;
-    prrte_oob_tcp_hdr_t hdr;
+    prte_oob_tcp_hdr_t hdr;
     uint16_t ack_flag = htons(1);
     size_t sdsize, offset = 0;
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                        "%s SEND CONNECT ACK", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                        "%s SEND CONNECT ACK", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* load the header */
-    hdr.origin = *PRRTE_PROC_MY_NAME;
+    hdr.origin = *PRTE_PROC_MY_NAME;
     hdr.dst = peer->name;
     hdr.type = MCA_OOB_TCP_IDENT;
     hdr.tag = 0;
     hdr.seq_num = 0;
-    memset(hdr.routed, 0, PRRTE_MAX_RTD_SIZE+1);
+    memset(hdr.routed, 0, PRTE_MAX_RTD_SIZE+1);
 
     /* payload size */
-    sdsize = sizeof(ack_flag) + strlen(prrte_version_string) + 1;
+    sdsize = sizeof(ack_flag) + strlen(prte_version_string) + 1;
     hdr.nbytes = sdsize;
     MCA_OOB_TCP_HDR_HTON(&hdr);
 
     /* create a space for our message */
     sdsize += sizeof(hdr);
     if (NULL == (msg = (char*)malloc(sdsize))) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
     memset(msg, 0, sdsize);
 
@@ -546,43 +546,43 @@ static int tcp_peer_send_connect_ack(prrte_oob_tcp_peer_t* peer)
     offset += sizeof(hdr);
     memcpy(msg + offset, &ack_flag, sizeof(ack_flag));
     offset += sizeof(ack_flag);
-    memcpy(msg + offset, prrte_version_string, strlen(prrte_version_string) + 1);
-    offset += strlen(prrte_version_string)+1;
+    memcpy(msg + offset, prte_version_string, strlen(prte_version_string) + 1);
+    offset += strlen(prte_version_string)+1;
 
     /* send it */
-    if (PRRTE_SUCCESS != tcp_peer_send_blocking(peer->sd, msg, sdsize)) {
+    if (PRTE_SUCCESS != tcp_peer_send_blocking(peer->sd, msg, sdsize)) {
         free(msg);
         peer->state = MCA_OOB_TCP_FAILED;
-        prrte_oob_tcp_peer_close(peer);
-        return PRRTE_ERR_UNREACH;
+        prte_oob_tcp_peer_close(peer);
+        return PRTE_ERR_UNREACH;
     }
     free(msg);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /* send a handshake that includes our process identifier, our
  * version string, and a security token to ensure we are talking
  * to another OMPI process
  */
-static int tcp_peer_send_connect_nack(int sd, prrte_process_name_t name)
+static int tcp_peer_send_connect_nack(int sd, prte_process_name_t name)
 {
     char *msg;
-    prrte_oob_tcp_hdr_t hdr;
+    prte_oob_tcp_hdr_t hdr;
     uint16_t ack_flag = htons(0);
-    int rc = PRRTE_SUCCESS;
+    int rc = PRTE_SUCCESS;
     size_t sdsize, offset = 0;
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                        "%s SEND CONNECT NACK", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                        "%s SEND CONNECT NACK", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* load the header */
-    hdr.origin = *PRRTE_PROC_MY_NAME;
+    hdr.origin = *PRTE_PROC_MY_NAME;
     hdr.dst = name;
     hdr.type = MCA_OOB_TCP_IDENT;
     hdr.tag = 0;
     hdr.seq_num = 0;
-    memset(hdr.routed, 0, PRRTE_MAX_RTD_SIZE+1);
+    memset(hdr.routed, 0, PRTE_MAX_RTD_SIZE+1);
 
     /* payload size */
     sdsize = sizeof(ack_flag);
@@ -592,7 +592,7 @@ static int tcp_peer_send_connect_nack(int sd, prrte_process_name_t name)
     /* create a space for our message */
     sdsize += sizeof(hdr);
     if (NULL == (msg = (char*)malloc(sdsize))) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
     memset(msg, 0, sdsize);
 
@@ -603,11 +603,11 @@ static int tcp_peer_send_connect_nack(int sd, prrte_process_name_t name)
     offset += sizeof(ack_flag);
 
     /* send it */
-    if (PRRTE_SUCCESS != tcp_peer_send_blocking(sd, msg, sdsize)) {
+    if (PRTE_SUCCESS != tcp_peer_send_blocking(sd, msg, sdsize)) {
         /* it's ok if it fails - remote side may already
          * identifiet the collision and closed the connection
          */
-        rc = PRRTE_SUCCESS;
+        rc = PRTE_SUCCESS;
     }
     free(msg);
     return rc;
@@ -616,31 +616,31 @@ static int tcp_peer_send_connect_nack(int sd, prrte_process_name_t name)
 /*
  * Initialize events to be used by the peer instance for TCP select/poll callbacks.
  */
-static void tcp_peer_event_init(prrte_oob_tcp_peer_t* peer)
+static void tcp_peer_event_init(prte_oob_tcp_peer_t* peer)
 {
     if (peer->sd >= 0) {
         assert(!peer->send_ev_active && !peer->recv_ev_active);
-        prrte_event_set(prrte_event_base,
+        prte_event_set(prte_event_base,
                        &peer->recv_event,
                        peer->sd,
-                       PRRTE_EV_READ|PRRTE_EV_PERSIST,
-                       prrte_oob_tcp_recv_handler,
+                       PRTE_EV_READ|PRTE_EV_PERSIST,
+                       prte_oob_tcp_recv_handler,
                        peer);
-        prrte_event_set_priority(&peer->recv_event, PRRTE_MSG_PRI);
+        prte_event_set_priority(&peer->recv_event, PRTE_MSG_PRI);
         if (peer->recv_ev_active) {
-            prrte_event_del(&peer->recv_event);
+            prte_event_del(&peer->recv_event);
             peer->recv_ev_active = false;
         }
 
-        prrte_event_set(prrte_event_base,
+        prte_event_set(prte_event_base,
                        &peer->send_event,
                        peer->sd,
-                       PRRTE_EV_WRITE|PRRTE_EV_PERSIST,
-                       prrte_oob_tcp_send_handler,
+                       PRTE_EV_WRITE|PRTE_EV_PERSIST,
+                       prte_oob_tcp_send_handler,
                        peer);
-        prrte_event_set_priority(&peer->send_event, PRRTE_MSG_PRI);
+        prte_event_set_priority(&peer->send_event, PRTE_MSG_PRI);
         if (peer->send_ev_active) {
-            prrte_event_del(&peer->send_event);
+            prte_event_del(&peer->send_event);
             peer->send_ev_active = false;
         }
     }
@@ -651,80 +651,80 @@ static void tcp_peer_event_init(prrte_oob_tcp_peer_t* peer)
  * later. Otherwise, send this processes identifier to the peer on the
  * newly connected socket.
  */
-void prrte_oob_tcp_peer_complete_connect(prrte_oob_tcp_peer_t *peer)
+void prte_oob_tcp_peer_complete_connect(prte_oob_tcp_peer_t *peer)
 {
     int so_error = 0;
-    prrte_socklen_t so_length = sizeof(so_error);
+    prte_socklen_t so_length = sizeof(so_error);
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s:tcp:complete_connect called for peer %s on socket %d",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&peer->name), peer->sd);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&peer->name), peer->sd);
 
     /* check connect completion status */
     if (getsockopt(peer->sd, SOL_SOCKET, SO_ERROR, (char *)&so_error, &so_length) < 0) {
-        prrte_output(0, "%s tcp_peer_complete_connect: getsockopt() to %s failed: %s (%d)\n",
-                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                    PRRTE_NAME_PRINT(&(peer->name)),
-                    strerror(prrte_socket_errno),
-                    prrte_socket_errno);
+        prte_output(0, "%s tcp_peer_complete_connect: getsockopt() to %s failed: %s (%d)\n",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    PRTE_NAME_PRINT(&(peer->name)),
+                    strerror(prte_socket_errno),
+                    prte_socket_errno);
         peer->state = MCA_OOB_TCP_FAILED;
-        prrte_oob_tcp_peer_close(peer);
+        prte_oob_tcp_peer_close(peer);
         return;
     }
 
     if (so_error == EINPROGRESS) {
-        prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+        prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s:tcp:send:handler still in progress",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         return;
     } else if (so_error == ECONNREFUSED || so_error == ETIMEDOUT) {
-        prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+        prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s-%s tcp_peer_complete_connect: connection failed: %s (%d)",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                            PRRTE_NAME_PRINT(&(peer->name)),
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(&(peer->name)),
                             strerror(so_error),
                             so_error);
-        prrte_oob_tcp_peer_close(peer);
+        prte_oob_tcp_peer_close(peer);
         return;
     } else if (so_error != 0) {
         /* No need to worry about the return code here - we return regardless
            at this point, and if an error did occur a message has already been
            printed for the user */
-        prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+        prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s-%s tcp_peer_complete_connect: "
                             "connection failed with error %d",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                            PRRTE_NAME_PRINT(&(peer->name)), so_error);
-        prrte_oob_tcp_peer_close(peer);
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(&(peer->name)), so_error);
+        prte_oob_tcp_peer_close(peer);
         return;
     }
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp_peer_complete_connect: "
                         "sending ack to %s",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&(peer->name)));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&(peer->name)));
 
-    if (tcp_peer_send_connect_ack(peer) == PRRTE_SUCCESS) {
+    if (tcp_peer_send_connect_ack(peer) == PRTE_SUCCESS) {
         peer->state = MCA_OOB_TCP_CONNECT_ACK;
-        prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+        prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s tcp_peer_complete_connect: "
                             "setting read event on connection to %s",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                            PRRTE_NAME_PRINT(&(peer->name)));
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(&(peer->name)));
 
         if (!peer->recv_ev_active) {
             peer->recv_ev_active = true;
-            PRRTE_POST_OBJECT(peer);
-            prrte_event_add(&peer->recv_event, 0);
+            PRTE_POST_OBJECT(peer);
+            prte_event_add(&peer->recv_event, 0);
         }
     } else {
-        prrte_output(0, "%s tcp_peer_complete_connect: unable to send connect ack to %s",
-                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                    PRRTE_NAME_PRINT(&(peer->name)));
+        prte_output(0, "%s tcp_peer_complete_connect: unable to send connect ack to %s",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    PRTE_NAME_PRINT(&(peer->name)));
         peer->state = MCA_OOB_TCP_FAILED;
-        prrte_oob_tcp_peer_close(peer);
+        prte_oob_tcp_peer_close(peer);
     }
 }
 
@@ -738,33 +738,33 @@ static int tcp_peer_send_blocking(int sd, void* data, size_t size)
     size_t cnt = 0;
     int retval;
 
-    PRRTE_ACQUIRE_OBJECT(ptr);
+    PRTE_ACQUIRE_OBJECT(ptr);
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s send blocking of %"PRIsize_t" bytes to socket %d",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         size, sd);
 
     while (cnt < size) {
         retval = send(sd, (char*)ptr+cnt, size-cnt, 0);
         if (retval < 0) {
-            if (prrte_socket_errno != EINTR && prrte_socket_errno != EAGAIN && prrte_socket_errno != EWOULDBLOCK) {
-                prrte_output(0, "%s tcp_peer_send_blocking: send() to socket %d failed: %s (%d)\n",
-                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), sd,
-                    strerror(prrte_socket_errno),
-                    prrte_socket_errno);
-                return PRRTE_ERR_UNREACH;
+            if (prte_socket_errno != EINTR && prte_socket_errno != EAGAIN && prte_socket_errno != EWOULDBLOCK) {
+                prte_output(0, "%s tcp_peer_send_blocking: send() to socket %d failed: %s (%d)\n",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sd,
+                    strerror(prte_socket_errno),
+                    prte_socket_errno);
+                return PRTE_ERR_UNREACH;
             }
             continue;
         }
         cnt += retval;
     }
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s blocking send complete to socket %d",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), sd);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sd);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /*
@@ -772,46 +772,46 @@ static int tcp_peer_send_blocking(int sd, void* data, size_t size)
  *  connected socket and verify the expected response. If so, move the
  *  socket to a connected state.
  */
-static bool retry(prrte_oob_tcp_peer_t* peer, int sd, bool fatal)
+static bool retry(prte_oob_tcp_peer_t* peer, int sd, bool fatal)
 {
     int cmpval;
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s SIMUL CONNECTION WITH %s",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&peer->name));
-    cmpval = prrte_util_compare_name_fields(PRRTE_NS_CMP_ALL, &peer->name, PRRTE_PROC_MY_NAME);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&peer->name));
+    cmpval = prte_util_compare_name_fields(PRTE_NS_CMP_ALL, &peer->name, PRTE_PROC_MY_NAME);
     if (fatal) {
         if (peer->send_ev_active) {
-            prrte_event_del(&peer->send_event);
+            prte_event_del(&peer->send_event);
             peer->send_ev_active = false;
         }
         if (peer->recv_ev_active) {
-            prrte_event_del(&peer->recv_event);
+            prte_event_del(&peer->recv_event);
             peer->recv_ev_active = false;
         }
         if (0 <= peer->sd) {
             CLOSE_THE_SOCKET(peer->sd);
             peer->sd = -1;
         }
-        if (PRRTE_VALUE1_GREATER == cmpval) {
+        if (PRTE_VALUE1_GREATER == cmpval) {
             /* force the other end to retry the connection */
             peer->state = MCA_OOB_TCP_UNCONNECTED;
         } else {
             /* retry the connection */
             peer->state = MCA_OOB_TCP_CONNECTING;
-            PRRTE_ACTIVATE_TCP_CONN_STATE(peer, prrte_oob_tcp_peer_try_connect);
+            PRTE_ACTIVATE_TCP_CONN_STATE(peer, prte_oob_tcp_peer_try_connect);
         }
         return true;
     } else {
-        if (PRRTE_VALUE1_GREATER == cmpval) {
+        if (PRTE_VALUE1_GREATER == cmpval) {
             /* The other end will retry the connection */
             if (peer->send_ev_active) {
-                prrte_event_del(&peer->send_event);
+                prte_event_del(&peer->send_event);
                 peer->send_ev_active = false;
             }
             if (peer->recv_ev_active) {
-                prrte_event_del(&peer->recv_event);
+                prte_event_del(&peer->recv_event);
                 peer->recv_ev_active = false;
             }
             CLOSE_THE_SOCKET(peer->sd);
@@ -827,52 +827,52 @@ static bool retry(prrte_oob_tcp_peer_t* peer, int sd, bool fatal)
 }
 
 
-int prrte_oob_tcp_peer_recv_connect_ack(prrte_oob_tcp_peer_t* pr,
-                                      int sd, prrte_oob_tcp_hdr_t *dhdr)
+int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t* pr,
+                                      int sd, prte_oob_tcp_hdr_t *dhdr)
 {
     char *msg;
     char *version;
     size_t offset = 0;
-    prrte_oob_tcp_hdr_t hdr;
-    prrte_oob_tcp_peer_t *peer;
+    prte_oob_tcp_hdr_t hdr;
+    prte_oob_tcp_peer_t *peer;
     uint64_t *ui64;
     uint16_t ack_flag;
     bool is_new = (NULL == pr);
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s RECV CONNECT ACK FROM %s ON SOCKET %d",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        (NULL == pr) ? "UNKNOWN" : PRRTE_NAME_PRINT(&pr->name), sd);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        (NULL == pr) ? "UNKNOWN" : PRTE_NAME_PRINT(&pr->name), sd);
 
     peer = pr;
     /* get the header */
-    if (tcp_peer_recv_blocking(peer, sd, &hdr, sizeof(prrte_oob_tcp_hdr_t))) {
+    if (tcp_peer_recv_blocking(peer, sd, &hdr, sizeof(prte_oob_tcp_hdr_t))) {
         if (NULL != peer) {
             /* If the peer state is CONNECT_ACK, then we were waiting for
              * the connection to be ack'd
              */
             if (peer->state != MCA_OOB_TCP_CONNECT_ACK) {
                 /* handshake broke down - abort this connection */
-                prrte_output(0, "%s RECV CONNECT BAD HANDSHAKE (%d) FROM %s ON SOCKET %d",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), peer->state,
-                            PRRTE_NAME_PRINT(&(peer->name)), sd);
-                prrte_oob_tcp_peer_close(peer);
-                return PRRTE_ERR_UNREACH;
+                prte_output(0, "%s RECV CONNECT BAD HANDSHAKE (%d) FROM %s ON SOCKET %d",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), peer->state,
+                            PRTE_NAME_PRINT(&(peer->name)), sd);
+                prte_oob_tcp_peer_close(peer);
+                return PRTE_ERR_UNREACH;
             }
         }
     } else {
         /* unable to complete the recv */
-        prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+        prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s unable to complete recv of connect-ack from %s ON SOCKET %d",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                            (NULL == peer) ? "UNKNOWN" : PRRTE_NAME_PRINT(&peer->name), sd);
-        return PRRTE_ERR_UNREACH;
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            (NULL == peer) ? "UNKNOWN" : PRTE_NAME_PRINT(&peer->name), sd);
+        return PRTE_ERR_UNREACH;
     }
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s connect-ack recvd from %s",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        (NULL == peer) ? "UNKNOWN" : PRRTE_NAME_PRINT(&peer->name));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        (NULL == peer) ? "UNKNOWN" : PRTE_NAME_PRINT(&peer->name));
 
     /* convert the header */
     MCA_OOB_TCP_HDR_NTOH(&hdr);
@@ -885,75 +885,75 @@ int prrte_oob_tcp_peer_recv_connect_ack(prrte_oob_tcp_peer_t* pr,
         /* send a header back */
         hdr.type = MCA_OOB_TCP_PROBE;
         hdr.dst = hdr.origin;
-        hdr.origin = *PRRTE_PROC_MY_NAME;
+        hdr.origin = *PRTE_PROC_MY_NAME;
         MCA_OOB_TCP_HDR_HTON(&hdr);
-        tcp_peer_send_blocking(sd, &hdr, sizeof(prrte_oob_tcp_hdr_t));
+        tcp_peer_send_blocking(sd, &hdr, sizeof(prte_oob_tcp_hdr_t));
         CLOSE_THE_SOCKET(sd);
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     if (hdr.type != MCA_OOB_TCP_IDENT) {
-        prrte_output(0, "tcp_peer_recv_connect_ack: invalid header type: %d\n",
+        prte_output(0, "tcp_peer_recv_connect_ack: invalid header type: %d\n",
                     hdr.type);
         if (NULL != peer) {
             peer->state = MCA_OOB_TCP_FAILED;
-            prrte_oob_tcp_peer_close(peer);
+            prte_oob_tcp_peer_close(peer);
         } else {
             CLOSE_THE_SOCKET(sd);
         }
-        return PRRTE_ERR_COMM_FAILURE;
+        return PRTE_ERR_COMM_FAILURE;
     }
 
     /* if we don't already have it, get the peer */
     if (NULL == peer) {
-        peer = prrte_oob_tcp_peer_lookup(&hdr.origin);
+        peer = prte_oob_tcp_peer_lookup(&hdr.origin);
         if (NULL == peer) {
-            prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
-                                "%s prrte_oob_tcp_recv_connect: connection from new peer",
-                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-            peer = PRRTE_NEW(prrte_oob_tcp_peer_t);
+            prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                                "%s prte_oob_tcp_recv_connect: connection from new peer",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+            peer = PRTE_NEW(prte_oob_tcp_peer_t);
             peer->name = hdr.origin;
             peer->state = MCA_OOB_TCP_ACCEPTING;
             ui64 = (uint64_t*)(&peer->name);
-            if (PRRTE_SUCCESS != prrte_hash_table_set_value_uint64(&prrte_oob_tcp_component.peers, (*ui64), peer)) {
-                PRRTE_RELEASE(peer);
+            if (PRTE_SUCCESS != prte_hash_table_set_value_uint64(&prte_oob_tcp_component.peers, (*ui64), peer)) {
+                PRTE_RELEASE(peer);
                 CLOSE_THE_SOCKET(sd);
-                return PRRTE_ERR_OUT_OF_RESOURCE;
+                return PRTE_ERR_OUT_OF_RESOURCE;
             }
         }
     } else {
         /* compare the peers name to the expected value */
-        if (PRRTE_EQUAL != prrte_util_compare_name_fields(PRRTE_NS_CMP_ALL, &peer->name, &hdr.origin)) {
-            prrte_output(0, "%s tcp_peer_recv_connect_ack: "
+        if (PRTE_EQUAL != prte_util_compare_name_fields(PRTE_NS_CMP_ALL, &peer->name, &hdr.origin)) {
+            prte_output(0, "%s tcp_peer_recv_connect_ack: "
                         "received unexpected process identifier %s from %s\n",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&(hdr.origin)),
-                        PRRTE_NAME_PRINT(&(peer->name)));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&(hdr.origin)),
+                        PRTE_NAME_PRINT(&(peer->name)));
             peer->state = MCA_OOB_TCP_FAILED;
-            prrte_oob_tcp_peer_close(peer);
-            return PRRTE_ERR_CONNECTION_REFUSED;
+            prte_oob_tcp_peer_close(peer);
+            return PRTE_ERR_CONNECTION_REFUSED;
         }
     }
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s connect-ack header from %s is okay",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&peer->name));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&peer->name));
 
     /* get the authentication and version payload */
     if (NULL == (msg = (char*)malloc(hdr.nbytes))) {
         peer->state = MCA_OOB_TCP_FAILED;
-        prrte_oob_tcp_peer_close(peer);
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        prte_oob_tcp_peer_close(peer);
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
     if (!tcp_peer_recv_blocking(peer, sd, msg, hdr.nbytes)) {
         /* unable to complete the recv but should never happen */
-        prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+        prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s unable to complete recv of connect-ack from %s ON SOCKET %d",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                            PRRTE_NAME_PRINT(&peer->name), peer->sd);
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            PRTE_NAME_PRINT(&peer->name), peer->sd);
         free(msg);
-        return PRRTE_ERR_UNREACH;
+        return PRTE_ERR_UNREACH;
     }
 
     /* Check the type of acknowledgement */
@@ -973,11 +973,11 @@ int prrte_oob_tcp_peer_recv_connect_ack(prrte_oob_tcp_peer_t* pr,
 
             /* unregister active events */
             if (peer->recv_ev_active) {
-                prrte_event_del(&peer->recv_event);
+                prte_event_del(&peer->recv_event);
                 peer->recv_ev_active = false;
             }
             if (peer->send_ev_active) {
-                prrte_event_del(&peer->send_event);
+                prte_event_del(&peer->send_event);
                 peer->send_ev_active = false;
             }
 
@@ -989,10 +989,10 @@ int prrte_oob_tcp_peer_recv_connect_ack(prrte_oob_tcp_peer_t* pr,
             /* FIXME: this shouldn't happen. We need to force next address
              * to be tried.
              */
-            prrte_oob_tcp_peer_close(peer);
+            prte_oob_tcp_peer_close(peer);
         }
         free(msg);
-        return PRRTE_ERR_UNREACH;
+        return PRTE_ERR_UNREACH;
     }
 
     /* check for a race condition - if I was in the process of
@@ -1007,68 +1007,68 @@ int prrte_oob_tcp_peer_recv_connect_ack(prrte_oob_tcp_peer_t* pr,
          MCA_OOB_TCP_CONNECT_ACK == peer->state ) ) {
         if (retry(peer, sd, false)) {
             free(msg);
-            return PRRTE_ERR_UNREACH;
+            return PRTE_ERR_UNREACH;
         }
     }
 
     /* check that this is from a matching version */
     version = (char*)((char*)msg + offset);
     offset += strlen(version) + 1;
-    if (0 != strcmp(version, prrte_version_string)) {
-        prrte_show_help("help-oob-tcp.txt", "version mismatch",
+    if (0 != strcmp(version, prte_version_string)) {
+        prte_show_help("help-oob-tcp.txt", "version mismatch",
                        true,
-                       prrte_process_info.nodename,
-                       PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                       prrte_version_string,
-                       prrte_fd_get_peer_name(peer->sd),
-                       PRRTE_NAME_PRINT(&(peer->name)),
+                       prte_process_info.nodename,
+                       PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                       prte_version_string,
+                       prte_fd_get_peer_name(peer->sd),
+                       PRTE_NAME_PRINT(&(peer->name)),
                        version);
 
         peer->state = MCA_OOB_TCP_FAILED;
-        prrte_oob_tcp_peer_close(peer);
+        prte_oob_tcp_peer_close(peer);
         free(msg);
-        return PRRTE_ERR_CONNECTION_REFUSED;
+        return PRTE_ERR_CONNECTION_REFUSED;
     }
     free(msg);
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s connect-ack version from %s matches ours",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&peer->name));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&peer->name));
 
     /* if the requestor wanted the header returned, then they
      * will complete their processing
      */
     if (NULL != dhdr) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* set the peer into the component and OOB-level peer tables to indicate
      * that we know this peer and we will be handling him
      */
-    PRRTE_ACTIVATE_TCP_CMP_OP(peer, prrte_oob_tcp_component_set_module);
+    PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_oob_tcp_component_set_module);
 
     /* connected */
     tcp_peer_connected(peer);
-    if (OOB_TCP_DEBUG_CONNECT <= prrte_output_get_verbosity(prrte_oob_base_framework.framework_output)) {
-        prrte_oob_tcp_peer_dump(peer, "connected");
+    if (OOB_TCP_DEBUG_CONNECT <= prte_output_get_verbosity(prte_oob_base_framework.framework_output)) {
+        prte_oob_tcp_peer_dump(peer, "connected");
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /*
  *  Setup peer state to reflect that connection has been established,
  *  and start any pending sends.
  */
-static void tcp_peer_connected(prrte_oob_tcp_peer_t* peer)
+static void tcp_peer_connected(prte_oob_tcp_peer_t* peer)
 {
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s-%s tcp_peer_connected on socket %d",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&(peer->name)), peer->sd);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&(peer->name)), peer->sd);
 
     if (peer->timer_ev_active) {
-        prrte_event_del(&peer->timer_event);
+        prte_event_del(&peer->timer_event);
         peer->timer_ev_active = false;
     }
     peer->state = MCA_OOB_TCP_CONNECTED;
@@ -1077,17 +1077,17 @@ static void tcp_peer_connected(prrte_oob_tcp_peer_t* peer)
     }
 
     /* update the route */
-    prrte_routed.update_route(&peer->name, &peer->name);
+    prte_routed.update_route(&peer->name, &peer->name);
 
     /* initiate send of first message on queue */
     if (NULL == peer->send_msg) {
-        peer->send_msg = (prrte_oob_tcp_send_t*)
-            prrte_list_remove_first(&peer->send_queue);
+        peer->send_msg = (prte_oob_tcp_send_t*)
+            prte_list_remove_first(&peer->send_queue);
     }
     if (NULL != peer->send_msg && !peer->send_ev_active) {
         peer->send_ev_active = true;
-        PRRTE_POST_OBJECT(peer);
-        prrte_event_add(&peer->send_event, 0);
+        PRTE_POST_OBJECT(peer);
+        prte_event_add(&peer->send_event, 0);
     }
 }
 
@@ -1096,13 +1096,13 @@ static void tcp_peer_connected(prrte_oob_tcp_peer_t* peer)
  * and update the peer state to reflect the connection has
  * been closed.
  */
-void prrte_oob_tcp_peer_close(prrte_oob_tcp_peer_t *peer)
+void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
 {
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp_peer_close for %s sd %d state %s",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&(peer->name)),
-                        peer->sd, prrte_oob_tcp_state_print(peer->state));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&(peer->name)),
+                        peer->sd, prte_oob_tcp_state_print(peer->state));
 
     /* release the socket */
     close(peer->sd);
@@ -1114,7 +1114,7 @@ void prrte_oob_tcp_peer_close(prrte_oob_tcp_peer_t *peer)
         if (NULL != peer->active_addr) {
             peer->active_addr->state = MCA_OOB_TCP_FAILED;
         }
-        PRRTE_ACTIVATE_TCP_CONN_STATE(peer, prrte_oob_tcp_peer_try_connect);
+        PRTE_ACTIVATE_TCP_CONN_STATE(peer, prte_oob_tcp_peer_try_connect);
         return;
     }
 
@@ -1125,20 +1125,20 @@ void prrte_oob_tcp_peer_close(prrte_oob_tcp_peer_t *peer)
 
     /* unregister active events */
     if (peer->recv_ev_active) {
-        prrte_event_del(&peer->recv_event);
+        prte_event_del(&peer->recv_event);
         peer->recv_ev_active = false;
     }
     if (peer->send_ev_active) {
-        prrte_event_del(&peer->send_event);
+        prte_event_del(&peer->send_event);
         peer->send_ev_active = false;
     }
 
     /* inform the component-level that we have lost a connection so
      * it can decide what to do about it.
      */
-    PRRTE_ACTIVATE_TCP_CMP_OP(peer, prrte_oob_tcp_component_lost_connection);
+    PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_oob_tcp_component_lost_connection);
 
-    if (prrte_prteds_term_ordered || prrte_finalizing || prrte_abnormal_term_ordered) {
+    if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
         /* nothing more to do */
         return;
     }
@@ -1152,7 +1152,7 @@ void prrte_oob_tcp_peer_close(prrte_oob_tcp_peer_t *peer)
     /*
     if (NULL != peer->send_msg) {
     }
-    while (NULL != (snd = (prrte_oob_tcp_send_t*)prrte_list_remove_first(&peer->send_queue))) {
+    while (NULL != (snd = (prte_oob_tcp_send_t*)prte_list_remove_first(&peer->send_queue))) {
     }
     */
 }
@@ -1161,30 +1161,30 @@ void prrte_oob_tcp_peer_close(prrte_oob_tcp_peer_t *peer)
  * A blocking recv on a non-blocking socket. Used to receive the small amount of connection
  * information that identifies the peers endpoint.
  */
-static bool tcp_peer_recv_blocking(prrte_oob_tcp_peer_t* peer, int sd,
+static bool tcp_peer_recv_blocking(prte_oob_tcp_peer_t* peer, int sd,
                                    void* data, size_t size)
 {
     unsigned char* ptr = (unsigned char*)data;
     size_t cnt = 0;
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s waiting for connect ack from %s",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        (NULL == peer) ? "UNKNOWN" : PRRTE_NAME_PRINT(&(peer->name)));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        (NULL == peer) ? "UNKNOWN" : PRTE_NAME_PRINT(&(peer->name)));
 
     while (cnt < size) {
         int retval = recv(sd, (char *)ptr+cnt, size-cnt, 0);
 
         /* remote closed connection */
         if (retval == 0) {
-            prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+            prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                 "%s-%s tcp_peer_recv_blocking: "
                                 "peer closed connection: peer state %d",
-                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                (NULL == peer) ? "UNKNOWN" : PRRTE_NAME_PRINT(&(peer->name)),
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                (NULL == peer) ? "UNKNOWN" : PRTE_NAME_PRINT(&(peer->name)),
                                 (NULL == peer) ? 0 : peer->state);
             if (NULL != peer) {
-                prrte_oob_tcp_peer_close(peer);
+                prte_oob_tcp_peer_close(peer);
             } else {
                 CLOSE_THE_SOCKET(sd);
             }
@@ -1193,9 +1193,9 @@ static bool tcp_peer_recv_blocking(prrte_oob_tcp_peer_t* peer, int sd,
 
         /* socket is non-blocking so handle errors */
         if (retval < 0) {
-            if (prrte_socket_errno != EINTR &&
-                prrte_socket_errno != EAGAIN &&
-                prrte_socket_errno != EWOULDBLOCK) {
+            if (prte_socket_errno != EINTR &&
+                prte_socket_errno != EAGAIN &&
+                prte_socket_errno != EWOULDBLOCK) {
                 if (NULL == peer) {
                     /* protect against things like port scanners */
                     CLOSE_THE_SOCKET(sd);
@@ -1215,22 +1215,22 @@ static bool tcp_peer_recv_blocking(prrte_oob_tcp_peer_t* peer, int sd,
                        CONNECT_ACK and propogate the error up to
                        recv_connect_ack, who will try to establish the
                        connection again */
-                    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+                    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                         "%s connect ack received error %s from %s",
-                                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                        strerror(prrte_socket_errno),
-                                        PRRTE_NAME_PRINT(&(peer->name)));
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                        strerror(prte_socket_errno),
+                                        PRTE_NAME_PRINT(&(peer->name)));
                     return false;
                 } else {
-                    prrte_output(0,
+                    prte_output(0,
                                 "%s tcp_peer_recv_blocking: "
                                 "recv() failed for %s: %s (%d)\n",
-                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                PRRTE_NAME_PRINT(&(peer->name)),
-                                strerror(prrte_socket_errno),
-                                prrte_socket_errno);
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                PRTE_NAME_PRINT(&(peer->name)),
+                                strerror(prte_socket_errno),
+                                prte_socket_errno);
                     peer->state = MCA_OOB_TCP_FAILED;
-                    prrte_oob_tcp_peer_close(peer);
+                    prte_oob_tcp_peer_close(peer);
                     return false;
                 }
             }
@@ -1239,53 +1239,53 @@ static bool tcp_peer_recv_blocking(prrte_oob_tcp_peer_t* peer, int sd,
         cnt += retval;
     }
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s connect ack received from %s",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        (NULL == peer) ? "UNKNOWN" : PRRTE_NAME_PRINT(&(peer->name)));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        (NULL == peer) ? "UNKNOWN" : PRTE_NAME_PRINT(&(peer->name)));
     return true;
 }
 
 /*
  * Routine for debugging to print the connection state and socket options
  */
-void prrte_oob_tcp_peer_dump(prrte_oob_tcp_peer_t* peer, const char* msg)
+void prte_oob_tcp_peer_dump(prte_oob_tcp_peer_t* peer, const char* msg)
 {
     char src[64];
     char dst[64];
     char buff[255];
     int sndbuf,rcvbuf,nodelay,flags;
     struct sockaddr_storage inaddr;
-    prrte_socklen_t addrlen = sizeof(struct sockaddr_storage);
-    prrte_socklen_t optlen;
+    prte_socklen_t addrlen = sizeof(struct sockaddr_storage);
+    prte_socklen_t optlen;
 
     if (getsockname(peer->sd, (struct sockaddr*)&inaddr, &addrlen) < 0) {
-        prrte_output(0, "tcp_peer_dump: getsockname: %s (%d)\n",
-                    strerror(prrte_socket_errno),
-                    prrte_socket_errno);
+        prte_output(0, "tcp_peer_dump: getsockname: %s (%d)\n",
+                    strerror(prte_socket_errno),
+                    prte_socket_errno);
     } else {
-        snprintf(src, sizeof(src), "%s", prrte_net_get_hostname((struct sockaddr*) &inaddr));
+        snprintf(src, sizeof(src), "%s", prte_net_get_hostname((struct sockaddr*) &inaddr));
     }
     if (getpeername(peer->sd, (struct sockaddr*)&inaddr, &addrlen) < 0) {
-        prrte_output(0, "tcp_peer_dump: getpeername: %s (%d)\n",
-                    strerror(prrte_socket_errno),
-                    prrte_socket_errno);
+        prte_output(0, "tcp_peer_dump: getpeername: %s (%d)\n",
+                    strerror(prte_socket_errno),
+                    prte_socket_errno);
     } else {
-        snprintf(dst, sizeof(dst), "%s", prrte_net_get_hostname((struct sockaddr*) &inaddr));
+        snprintf(dst, sizeof(dst), "%s", prte_net_get_hostname((struct sockaddr*) &inaddr));
     }
 
     if ((flags = fcntl(peer->sd, F_GETFL, 0)) < 0) {
-        prrte_output(0, "tcp_peer_dump: fcntl(F_GETFL) failed: %s (%d)\n",
-                    strerror(prrte_socket_errno),
-                    prrte_socket_errno);
+        prte_output(0, "tcp_peer_dump: fcntl(F_GETFL) failed: %s (%d)\n",
+                    strerror(prte_socket_errno),
+                    prte_socket_errno);
     }
 
 #if defined(SO_SNDBUF)
     optlen = sizeof(sndbuf);
     if(getsockopt(peer->sd, SOL_SOCKET, SO_SNDBUF, (char *)&sndbuf, &optlen) < 0) {
-        prrte_output(0, "tcp_peer_dump: SO_SNDBUF option: %s (%d)\n",
-                    strerror(prrte_socket_errno),
-                    prrte_socket_errno);
+        prte_output(0, "tcp_peer_dump: SO_SNDBUF option: %s (%d)\n",
+                    strerror(prte_socket_errno),
+                    prte_socket_errno);
     }
 #else
     sndbuf = -1;
@@ -1293,9 +1293,9 @@ void prrte_oob_tcp_peer_dump(prrte_oob_tcp_peer_t* peer, const char* msg)
 #if defined(SO_RCVBUF)
     optlen = sizeof(rcvbuf);
     if (getsockopt(peer->sd, SOL_SOCKET, SO_RCVBUF, (char *)&rcvbuf, &optlen) < 0) {
-        prrte_output(0, "tcp_peer_dump: SO_RCVBUF option: %s (%d)\n",
-                    strerror(prrte_socket_errno),
-                    prrte_socket_errno);
+        prte_output(0, "tcp_peer_dump: SO_RCVBUF option: %s (%d)\n",
+                    strerror(prte_socket_errno),
+                    prte_socket_errno);
     }
 #else
     rcvbuf = -1;
@@ -1303,68 +1303,68 @@ void prrte_oob_tcp_peer_dump(prrte_oob_tcp_peer_t* peer, const char* msg)
 #if defined(TCP_NODELAY)
     optlen = sizeof(nodelay);
     if (getsockopt(peer->sd, IPPROTO_TCP, TCP_NODELAY, (char *)&nodelay, &optlen) < 0) {
-        prrte_output(0, "tcp_peer_dump: TCP_NODELAY option: %s (%d)\n",
-                    strerror(prrte_socket_errno),
-                    prrte_socket_errno);
+        prte_output(0, "tcp_peer_dump: TCP_NODELAY option: %s (%d)\n",
+                    strerror(prte_socket_errno),
+                    prte_socket_errno);
     }
 #else
     nodelay = 0;
 #endif
 
     snprintf(buff, sizeof(buff), "%s-%s %s: %s - %s nodelay %d sndbuf %d rcvbuf %d flags %08x\n",
-        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-        PRRTE_NAME_PRINT(&(peer->name)),
+        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+        PRTE_NAME_PRINT(&(peer->name)),
         msg, src, dst, nodelay, sndbuf, rcvbuf, flags);
-    prrte_output(0, "%s", buff);
+    prte_output(0, "%s", buff);
 }
 
 /*
  * Accept incoming connection - if not already connected
  */
 
-bool prrte_oob_tcp_peer_accept(prrte_oob_tcp_peer_t* peer)
+bool prte_oob_tcp_peer_accept(prte_oob_tcp_peer_t* peer)
 {
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:peer_accept called for peer %s in state %s on socket %d",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&peer->name),
-                        prrte_oob_tcp_state_print(peer->state), peer->sd);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&peer->name),
+                        prte_oob_tcp_state_print(peer->state), peer->sd);
 
     if (peer->state != MCA_OOB_TCP_CONNECTED) {
 
         tcp_peer_event_init(peer);
 
-        if (tcp_peer_send_connect_ack(peer) != PRRTE_SUCCESS) {
-            prrte_output(0, "%s-%s tcp_peer_accept: "
+        if (tcp_peer_send_connect_ack(peer) != PRTE_SUCCESS) {
+            prte_output(0, "%s-%s tcp_peer_accept: "
                         "tcp_peer_send_connect_ack failed\n",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&(peer->name)));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&(peer->name)));
             peer->state = MCA_OOB_TCP_FAILED;
-            prrte_oob_tcp_peer_close(peer);
+            prte_oob_tcp_peer_close(peer);
             return false;
         }
 
         /* set the peer into the component and OOB-level peer tables to indicate
          * that we know this peer and we will be handling him
          */
-        PRRTE_ACTIVATE_TCP_CMP_OP(peer, prrte_oob_tcp_component_set_module);
+        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_oob_tcp_component_set_module);
 
         tcp_peer_connected(peer);
         if (!peer->recv_ev_active) {
             peer->recv_ev_active = true;
-            PRRTE_POST_OBJECT(peer);
-            prrte_event_add(&peer->recv_event, 0);
+            PRTE_POST_OBJECT(peer);
+            prte_event_add(&peer->recv_event, 0);
         }
-        if (OOB_TCP_DEBUG_CONNECT <= prrte_output_get_verbosity(prrte_oob_base_framework.framework_output)) {
-            prrte_oob_tcp_peer_dump(peer, "accepted");
+        if (OOB_TCP_DEBUG_CONNECT <= prte_output_get_verbosity(prte_oob_base_framework.framework_output)) {
+            prte_oob_tcp_peer_dump(peer, "accepted");
         }
         return true;
     }
 
-    prrte_output_verbose(OOB_TCP_DEBUG_CONNECT, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:peer_accept ignored for peer %s in state %s on socket %d",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&peer->name),
-                        prrte_oob_tcp_state_print(peer->state), peer->sd);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&peer->name),
+                        prte_oob_tcp_state_print(peer->state), peer->sd);
     return false;
 }

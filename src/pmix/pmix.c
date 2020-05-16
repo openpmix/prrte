@@ -7,7 +7,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2016      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,7 +16,7 @@
  *
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "src/include/constants.h"
 
 
@@ -28,96 +28,96 @@
 #include <unistd.h>
 #endif
 
-#include "src/class/prrte_hash_table.h"
+#include "src/class/prte_hash_table.h"
 #include "src/threads/threads.h"
 #include "src/util/proc_info.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/pmix/pmix-internal.h"
 
-int prrte_convert_jobid_to_nspace(pmix_nspace_t nspace, prrte_jobid_t jobid)
+int prte_convert_jobid_to_nspace(pmix_nspace_t nspace, prte_jobid_t jobid)
 {
-    prrte_job_t *jdata;
+    prte_job_t *jdata;
 
     /* zero out the nspace */
     PMIX_LOAD_NSPACE(nspace, NULL);
 
     /* if the jobid is WILDCARD, make the nspace so */
-    if (PRRTE_JOBID_WILDCARD == jobid) {
-        PMIX_LOAD_NSPACE(nspace, "PRRTE_JOBID_WILDCARD");
-        return PRRTE_SUCCESS;
+    if (PRTE_JOBID_WILDCARD == jobid) {
+        PMIX_LOAD_NSPACE(nspace, "PRTE_JOBID_WILDCARD");
+        return PRTE_SUCCESS;
     }
-    if (PRRTE_JOBID_INVALID == jobid) {
-        PMIX_LOAD_NSPACE(nspace, "PRRTE_JOBID_INVALID");
-        return PRRTE_SUCCESS;
+    if (PRTE_JOBID_INVALID == jobid) {
+        PMIX_LOAD_NSPACE(nspace, "PRTE_JOBID_INVALID");
+        return PRTE_SUCCESS;
     }
 
-    jdata = prrte_get_job_data_object(jobid);
+    jdata = prte_get_job_data_object(jobid);
     if (NULL != jdata) {
         PMIX_LOAD_NSPACE(nspace, jdata->nspace);
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
-    return PRRTE_ERR_NOT_FOUND;
+    return PRTE_ERR_NOT_FOUND;
 }
 
 
-void prrte_convert_daemon_nspace(prrte_jobid_t *jobid, pmix_nspace_t nspace)
+void prte_convert_daemon_nspace(prte_jobid_t *jobid, pmix_nspace_t nspace)
 {
-    prrte_job_t *jdata;
+    prte_job_t *jdata;
     uint32_t hash32;
     uint16_t jobfam;
 
-    jdata = PRRTE_NEW(prrte_job_t);
+    jdata = PRTE_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, nspace);  // ensure we do this first so create_jobid can use the nspace
-    PRRTE_HASH_STR(nspace, hash32);
+    PRTE_HASH_STR(nspace, hash32);
 
     /* now compress to 16-bits */
     jobfam = (uint16_t)(((0x0000ffff & (0xffff0000 & hash32) >> 16)) ^ (0x0000ffff & hash32));
     jdata->jobid = (0xffff0000 & ((uint32_t)jobfam << 16));
     *jobid = jdata->jobid;
-    prrte_hash_table_set_value_uint32(prrte_job_data, jdata->jobid, jdata);
+    prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, jdata);
 }
 
-int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace_t nspace)
+int prte_convert_nspace_to_jobid(prte_jobid_t *jobid, pmix_nspace_t nspace)
 {
     uint32_t key;
-    prrte_job_t *jdata;
+    prte_job_t *jdata;
     uint32_t hash32, localjob = 0;
     uint16_t jobfam;
     char *p = NULL;
 
     /* set a default */
-    *jobid = PRRTE_JOBID_INVALID;
+    *jobid = PRTE_JOBID_INVALID;
 
     /* if the nspace is empty, there is nothing more to do */
     if (0 == strlen(nspace)) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
     if (NULL != strstr(nspace, "JOBID_WILDCARD")) {
-        *jobid = PRRTE_JOBID_WILDCARD;
-        return PRRTE_SUCCESS;
+        *jobid = PRTE_JOBID_WILDCARD;
+        return PRTE_SUCCESS;
     }
     if (NULL != strstr(nspace, "JOBID_INVALID")) {
-        *jobid = PRRTE_JOBID_INVALID;
-        return PRRTE_SUCCESS;
+        *jobid = PRTE_JOBID_INVALID;
+        return PRTE_SUCCESS;
     }
 
-    PRRTE_HASH_TABLE_FOREACH(key, uint32, jdata, prrte_job_data) {
+    PRTE_HASH_TABLE_FOREACH(key, uint32, jdata, prte_job_data) {
         if (NULL != jdata && PMIX_CHECK_NSPACE(nspace, jdata->nspace)) {
             *jobid = jdata->jobid;
-            return PRRTE_SUCCESS;
+            return PRTE_SUCCESS;
         }
     }
 
     /* if we get here, we don't know this nspace */
-    jdata = PRRTE_NEW(prrte_job_t);
+    jdata = PRTE_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, nspace);  // ensure we do this first so create_jobid can use the nspace
     /* now find the "." at the end that indicates the child job */
     if (NULL != (p = strrchr(nspace, '.'))) {
         *p = '\0';
     }
-    PRRTE_HASH_STR(nspace, hash32);
+    PRTE_HASH_STR(nspace, hash32);
     if (NULL != p) {
         *p = '.';
         ++p;
@@ -128,109 +128,109 @@ int prrte_convert_nspace_to_jobid(prrte_jobid_t *jobid, pmix_nspace_t nspace)
     jobfam = (uint16_t)(((0x0000ffff & (0xffff0000 & hash32) >> 16)) ^ (0x0000ffff & hash32));
     jdata->jobid = (0xffff0000 & ((uint32_t)jobfam << 16)) | (0x0000ffff & localjob);
     *jobid = jdata->jobid;
-    prrte_hash_table_set_value_uint32(prrte_job_data, jdata->jobid, jdata);
+    prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, jdata);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-pmix_status_t prrte_pmix_convert_rc(int rc)
+pmix_status_t prte_pmix_convert_rc(int rc)
 {
     switch (rc) {
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
-    case PRRTE_ERR_HEARTBEAT_ALERT:
-    case PRRTE_ERR_FILE_ALERT:
-    case PRRTE_ERR_HEARTBEAT_LOST:
-    case PRRTE_ERR_SENSOR_LIMIT_EXCEEDED:
+    case PRTE_ERR_HEARTBEAT_ALERT:
+    case PRTE_ERR_FILE_ALERT:
+    case PRTE_ERR_HEARTBEAT_LOST:
+    case PRTE_ERR_SENSOR_LIMIT_EXCEEDED:
         return PMIX_ERR_JOB_SENSOR_BOUND_EXCEEDED;
 
-    case PRRTE_ERR_NO_EXE_SPECIFIED:
-    case PRRTE_ERR_NO_APP_SPECIFIED:
+    case PRTE_ERR_NO_EXE_SPECIFIED:
+    case PRTE_ERR_NO_APP_SPECIFIED:
         return PMIX_ERR_JOB_NO_EXE_SPECIFIED;
 
-    case PRRTE_ERR_FAILED_TO_MAP:
+    case PRTE_ERR_FAILED_TO_MAP:
         return PMIX_ERR_JOB_FAILED_TO_MAP;
 
-    case PRRTE_ERR_JOB_CANCELLED:
+    case PRTE_ERR_JOB_CANCELLED:
         return PMIX_ERR_JOB_CANCELLED;
 #endif
 
-    case PRRTE_ERR_DEBUGGER_RELEASE:
+    case PRTE_ERR_DEBUGGER_RELEASE:
         return PMIX_ERR_DEBUGGER_RELEASE;
 
-    case PRRTE_ERR_HANDLERS_COMPLETE:
+    case PRTE_ERR_HANDLERS_COMPLETE:
         return PMIX_EVENT_ACTION_COMPLETE;
 
-    case PRRTE_ERR_PROC_ABORTED:
+    case PRTE_ERR_PROC_ABORTED:
         return PMIX_ERR_PROC_ABORTED;
 
-    case PRRTE_ERR_PROC_REQUESTED_ABORT:
+    case PRTE_ERR_PROC_REQUESTED_ABORT:
         return PMIX_ERR_PROC_REQUESTED_ABORT;
 
-    case PRRTE_ERR_PROC_ABORTING:
+    case PRTE_ERR_PROC_ABORTING:
         return PMIX_ERR_PROC_ABORTING;
 
-    case PRRTE_ERR_NODE_DOWN:
+    case PRTE_ERR_NODE_DOWN:
         return PMIX_ERR_NODE_DOWN;
 
-    case PRRTE_ERR_NODE_OFFLINE:
+    case PRTE_ERR_NODE_OFFLINE:
         return PMIX_ERR_NODE_OFFLINE;
 
-    case PRRTE_ERR_JOB_TERMINATED:
+    case PRTE_ERR_JOB_TERMINATED:
         return PMIX_ERR_JOB_TERMINATED;
 
-    case PRRTE_ERR_PROC_RESTART:
+    case PRTE_ERR_PROC_RESTART:
         return PMIX_ERR_PROC_RESTART;
 
-    case PRRTE_ERR_PROC_CHECKPOINT:
+    case PRTE_ERR_PROC_CHECKPOINT:
         return PMIX_ERR_PROC_CHECKPOINT;
 
-    case PRRTE_ERR_PROC_MIGRATE:
+    case PRTE_ERR_PROC_MIGRATE:
         return PMIX_ERR_PROC_MIGRATE;
 
-    case PRRTE_ERR_EVENT_REGISTRATION:
+    case PRTE_ERR_EVENT_REGISTRATION:
         return PMIX_ERR_EVENT_REGISTRATION;
 
-    case PRRTE_ERR_NOT_IMPLEMENTED:
-    case PRRTE_ERR_NOT_SUPPORTED:
+    case PRTE_ERR_NOT_IMPLEMENTED:
+    case PRTE_ERR_NOT_SUPPORTED:
         return PMIX_ERR_NOT_SUPPORTED;
 
-    case PRRTE_ERR_NOT_FOUND:
+    case PRTE_ERR_NOT_FOUND:
         return PMIX_ERR_NOT_FOUND;
 
-    case PRRTE_ERR_PERM:
-    case PRRTE_ERR_UNREACH:
-    case PRRTE_ERR_SERVER_NOT_AVAIL:
+    case PRTE_ERR_PERM:
+    case PRTE_ERR_UNREACH:
+    case PRTE_ERR_SERVER_NOT_AVAIL:
         return PMIX_ERR_UNREACH;
 
-    case PRRTE_ERR_BAD_PARAM:
+    case PRTE_ERR_BAD_PARAM:
         return PMIX_ERR_BAD_PARAM;
 
-    case PRRTE_ERR_OUT_OF_RESOURCE:
+    case PRTE_ERR_OUT_OF_RESOURCE:
         return PMIX_ERR_OUT_OF_RESOURCE;
 
-    case PRRTE_ERR_DATA_VALUE_NOT_FOUND:
+    case PRTE_ERR_DATA_VALUE_NOT_FOUND:
         return PMIX_ERR_DATA_VALUE_NOT_FOUND;
 
-    case PRRTE_ERR_TIMEOUT:
+    case PRTE_ERR_TIMEOUT:
         return PMIX_ERR_TIMEOUT;
 
-    case PRRTE_ERR_WOULD_BLOCK:
+    case PRTE_ERR_WOULD_BLOCK:
         return PMIX_ERR_WOULD_BLOCK;
 
-    case PRRTE_EXISTS:
+    case PRTE_EXISTS:
         return PMIX_EXISTS;
 
-    case PRRTE_ERR_PARTIAL_SUCCESS:
+    case PRTE_ERR_PARTIAL_SUCCESS:
         return PMIX_QUERY_PARTIAL_SUCCESS;
 
-    case PRRTE_ERR_MODEL_DECLARED:
+    case PRTE_ERR_MODEL_DECLARED:
         return PMIX_MODEL_DECLARED;
 
-    case PRRTE_ERROR:
+    case PRTE_ERROR:
         return PMIX_ERROR;
-    case PRRTE_SUCCESS:
+    case PRTE_SUCCESS:
         return PMIX_SUCCESS;
 
     default:
@@ -238,100 +238,100 @@ pmix_status_t prrte_pmix_convert_rc(int rc)
     }
 }
 
-int prrte_pmix_convert_status(pmix_status_t status)
+int prte_pmix_convert_status(pmix_status_t status)
 {
     switch (status) {
     case PMIX_ERR_DEBUGGER_RELEASE:
-        return PRRTE_ERR_DEBUGGER_RELEASE;
+        return PRTE_ERR_DEBUGGER_RELEASE;
 
     case PMIX_EVENT_ACTION_COMPLETE:
-        return PRRTE_ERR_HANDLERS_COMPLETE;
+        return PRTE_ERR_HANDLERS_COMPLETE;
 
     case PMIX_ERR_PROC_ABORTED:
-        return PRRTE_ERR_PROC_ABORTED;
+        return PRTE_ERR_PROC_ABORTED;
 
     case PMIX_ERR_PROC_REQUESTED_ABORT:
-        return PRRTE_ERR_PROC_REQUESTED_ABORT;
+        return PRTE_ERR_PROC_REQUESTED_ABORT;
 
     case PMIX_ERR_PROC_ABORTING:
-        return PRRTE_ERR_PROC_ABORTING;
+        return PRTE_ERR_PROC_ABORTING;
 
     case PMIX_ERR_NODE_DOWN:
-        return PRRTE_ERR_NODE_DOWN;
+        return PRTE_ERR_NODE_DOWN;
 
     case PMIX_ERR_NODE_OFFLINE:
-        return PRRTE_ERR_NODE_OFFLINE;
+        return PRTE_ERR_NODE_OFFLINE;
 
     case PMIX_ERR_JOB_TERMINATED:
-        return PRRTE_ERR_JOB_TERMINATED;
+        return PRTE_ERR_JOB_TERMINATED;
 
     case PMIX_ERR_PROC_RESTART:
-        return PRRTE_ERR_PROC_RESTART;
+        return PRTE_ERR_PROC_RESTART;
 
     case PMIX_ERR_PROC_CHECKPOINT:
-        return PRRTE_ERR_PROC_CHECKPOINT;
+        return PRTE_ERR_PROC_CHECKPOINT;
 
     case PMIX_ERR_PROC_MIGRATE:
-        return PRRTE_ERR_PROC_MIGRATE;
+        return PRTE_ERR_PROC_MIGRATE;
 
     case PMIX_ERR_EVENT_REGISTRATION:
-        return PRRTE_ERR_EVENT_REGISTRATION;
+        return PRTE_ERR_EVENT_REGISTRATION;
 
     case PMIX_ERR_NOT_SUPPORTED:
-        return PRRTE_ERR_NOT_SUPPORTED;
+        return PRTE_ERR_NOT_SUPPORTED;
 
     case PMIX_ERR_NOT_FOUND:
-        return PRRTE_ERR_NOT_FOUND;
+        return PRTE_ERR_NOT_FOUND;
 
     case PMIX_ERR_OUT_OF_RESOURCE:
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
 
     case PMIX_ERR_INIT:
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
 
     case PMIX_ERR_BAD_PARAM:
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
 
     case PMIX_ERR_UNREACH:
     case PMIX_ERR_NO_PERMISSIONS:
-        return PRRTE_ERR_UNREACH;
+        return PRTE_ERR_UNREACH;
 
     case PMIX_ERR_TIMEOUT:
-        return PRRTE_ERR_TIMEOUT;
+        return PRTE_ERR_TIMEOUT;
 
     case PMIX_ERR_WOULD_BLOCK:
-        return PRRTE_ERR_WOULD_BLOCK;
+        return PRTE_ERR_WOULD_BLOCK;
 
     case PMIX_ERR_LOST_CONNECTION_TO_SERVER:
     case PMIX_ERR_LOST_PEER_CONNECTION:
     case PMIX_ERR_LOST_CONNECTION_TO_CLIENT:
-        return PRRTE_ERR_COMM_FAILURE;
+        return PRTE_ERR_COMM_FAILURE;
 
     case PMIX_EXISTS:
-        return PRRTE_EXISTS;
+        return PRTE_EXISTS;
 
     case PMIX_QUERY_PARTIAL_SUCCESS:
-        return PRRTE_ERR_PARTIAL_SUCCESS;
+        return PRTE_ERR_PARTIAL_SUCCESS;
 
     case PMIX_MONITOR_HEARTBEAT_ALERT:
-        return PRRTE_ERR_HEARTBEAT_ALERT;
+        return PRTE_ERR_HEARTBEAT_ALERT;
 
     case PMIX_MONITOR_FILE_ALERT:
-        return PRRTE_ERR_FILE_ALERT;
+        return PRTE_ERR_FILE_ALERT;
 
     case PMIX_MODEL_DECLARED:
-        return PRRTE_ERR_MODEL_DECLARED;
+        return PRTE_ERR_MODEL_DECLARED;
 
     case PMIX_ERROR:
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     case PMIX_SUCCESS:
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     default:
         return status;
     }
 }
 
-pmix_proc_state_t prrte_pmix_convert_state(int state)
+pmix_proc_state_t prte_pmix_convert_state(int state)
 {
     switch(state) {
         case 0:
@@ -373,7 +373,7 @@ pmix_proc_state_t prrte_pmix_convert_state(int state)
     }
 }
 
-int prrte_pmix_convert_pstate(pmix_proc_state_t state)
+int prte_pmix_convert_pstate(pmix_proc_state_t state)
 {
     switch(state) {
         case PMIX_PROC_STATE_UNDEF:
@@ -420,45 +420,45 @@ int prrte_pmix_convert_pstate(pmix_proc_state_t state)
     }
 }
 
-pmix_status_t prrte_pmix_convert_job_state_to_error(int state)
+pmix_status_t prte_pmix_convert_job_state_to_error(int state)
 {
     switch(state) {
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
-        case PRRTE_JOB_STATE_ALLOC_FAILED:
+        case PRTE_JOB_STATE_ALLOC_FAILED:
             return PMIX_ERR_JOB_ALLOC_FAILED;
 
-        case PRRTE_JOB_STATE_MAP_FAILED:
+        case PRTE_JOB_STATE_MAP_FAILED:
             return PMIX_ERR_JOB_FAILED_TO_MAP;
 
-        case PRRTE_JOB_STATE_NEVER_LAUNCHED:
+        case PRTE_JOB_STATE_NEVER_LAUNCHED:
             return PMIX_ERR_JOB_NEVER_LAUNCHED;
 
-        case PRRTE_JOB_STATE_FAILED_TO_LAUNCH:
+        case PRTE_JOB_STATE_FAILED_TO_LAUNCH:
             return PMIX_ERR_JOB_FAILED_TO_LAUNCH;
 
-        case PRRTE_JOB_STATE_FAILED_TO_START:
+        case PRTE_JOB_STATE_FAILED_TO_START:
             return PMIX_ERR_JOB_FAILED_TO_START;
 
-        case PRRTE_JOB_STATE_CANNOT_LAUNCH:
+        case PRTE_JOB_STATE_CANNOT_LAUNCH:
             return PMIX_ERR_JOB_CANNOT_LAUNCH;
 
-        case PRRTE_JOB_STATE_KILLED_BY_CMD:
+        case PRTE_JOB_STATE_KILLED_BY_CMD:
             return PMIX_ERR_JOB_CANCELLED;
 
-        case PRRTE_JOB_STATE_ABORTED:
-        case PRRTE_JOB_STATE_CALLED_ABORT:
-        case PRRTE_JOB_STATE_SILENT_ABORT:
+        case PRTE_JOB_STATE_ABORTED:
+        case PRTE_JOB_STATE_CALLED_ABORT:
+        case PRTE_JOB_STATE_SILENT_ABORT:
             return PMIX_ERR_JOB_ABORTED;
 
-        case PRRTE_JOB_STATE_ABORTED_BY_SIG:
+        case PRTE_JOB_STATE_ABORTED_BY_SIG:
             return PMIX_ERR_JOB_ABORTED_BY_SIG;
 
-        case PRRTE_JOB_STATE_ABORTED_WO_SYNC:
+        case PRTE_JOB_STATE_ABORTED_WO_SYNC:
             return PMIX_ERR_JOB_TERM_WO_SYNC;
 #endif
 
-        case PRRTE_JOB_STATE_TERMINATED:
+        case PRTE_JOB_STATE_TERMINATED:
             return PMIX_ERR_JOB_TERMINATED;
 
         default:
@@ -466,7 +466,7 @@ pmix_status_t prrte_pmix_convert_job_state_to_error(int state)
     }
 }
 
-pmix_status_t prrte_pmix_convert_proc_state_to_error(int state)
+pmix_status_t prte_pmix_convert_proc_state_to_error(int state)
 {
     switch(state) {
         default:
@@ -474,28 +474,28 @@ pmix_status_t prrte_pmix_convert_proc_state_to_error(int state)
     }
 }
 
-void prrte_pmix_value_load(pmix_value_t *v,
-                           prrte_value_t *kv)
+void prte_pmix_value_load(pmix_value_t *v,
+                           prte_value_t *kv)
 {
-    prrte_list_t *list;
-    prrte_value_t *val;
+    prte_list_t *list;
+    prte_value_t *val;
     pmix_info_t *info;
     size_t n;
     int rc;
 
     switch(kv->type) {
-        case PRRTE_UNDEF:
+        case PRTE_UNDEF:
             v->type = PMIX_UNDEF;
             break;
-        case PRRTE_BOOL:
+        case PRTE_BOOL:
             v->type = PMIX_BOOL;
             memcpy(&(v->data.flag), &kv->data.flag, 1);
             break;
-        case PRRTE_BYTE:
+        case PRTE_BYTE:
             v->type = PMIX_BYTE;
             memcpy(&(v->data.byte), &kv->data.byte, 1);
             break;
-        case PRRTE_STRING:
+        case PRTE_STRING:
             v->type = PMIX_STRING;
             if (NULL != kv->data.string) {
                 v->data.string = strdup(kv->data.string);
@@ -503,96 +503,96 @@ void prrte_pmix_value_load(pmix_value_t *v,
                 v->data.string = NULL;
             }
             break;
-        case PRRTE_SIZE:
+        case PRTE_SIZE:
             v->type = PMIX_SIZE;
             memcpy(&(v->data.size), &kv->data.size, sizeof(size_t));
             break;
-        case PRRTE_PID:
+        case PRTE_PID:
             v->type = PMIX_PID;
             memcpy(&(v->data.pid), &kv->data.pid, sizeof(pid_t));
             break;
-        case PRRTE_INT:
+        case PRTE_INT:
             v->type = PMIX_INT;
             memcpy(&(v->data.integer), &kv->data.integer, sizeof(int));
             break;
-        case PRRTE_INT8:
+        case PRTE_INT8:
             v->type = PMIX_INT8;
             memcpy(&(v->data.int8), &kv->data.int8, 1);
             break;
-        case PRRTE_INT16:
+        case PRTE_INT16:
             v->type = PMIX_INT16;
             memcpy(&(v->data.int16), &kv->data.int16, 2);
             break;
-        case PRRTE_INT32:
+        case PRTE_INT32:
             v->type = PMIX_INT32;
             memcpy(&(v->data.int32), &kv->data.int32, 4);
             break;
-        case PRRTE_INT64:
+        case PRTE_INT64:
             v->type = PMIX_INT64;
             memcpy(&(v->data.int64), &kv->data.int64, 8);
             break;
-        case PRRTE_UINT:
+        case PRTE_UINT:
             v->type = PMIX_UINT;
             memcpy(&(v->data.uint), &kv->data.uint, sizeof(int));
             break;
-        case PRRTE_UINT8:
+        case PRTE_UINT8:
             v->type = PMIX_UINT8;
             memcpy(&(v->data.uint8), &kv->data.uint8, 1);
             break;
-        case PRRTE_UINT16:
+        case PRTE_UINT16:
             v->type = PMIX_UINT16;
             memcpy(&(v->data.uint16), &kv->data.uint16, 2);
             break;
-        case PRRTE_UINT32:
+        case PRTE_UINT32:
             v->type = PMIX_UINT32;
             memcpy(&(v->data.uint32), &kv->data.uint32, 4);
             break;
-        case PRRTE_UINT64:
+        case PRTE_UINT64:
             v->type = PMIX_UINT64;
             memcpy(&(v->data.uint64), &kv->data.uint64, 8);
             break;
-        case PRRTE_FLOAT:
+        case PRTE_FLOAT:
             v->type = PMIX_FLOAT;
             memcpy(&(v->data.fval), &kv->data.fval, sizeof(float));
             break;
-        case PRRTE_DOUBLE:
+        case PRTE_DOUBLE:
             v->type = PMIX_DOUBLE;
             memcpy(&(v->data.dval), &kv->data.dval, sizeof(double));
             break;
-        case PRRTE_TIMEVAL:
+        case PRTE_TIMEVAL:
             v->type = PMIX_TIMEVAL;
             memcpy(&(v->data.tv), &kv->data.tv, sizeof(struct timeval));
             break;
-        case PRRTE_TIME:
+        case PRTE_TIME:
             v->type = PMIX_TIME;
             memcpy(&(v->data.time), &kv->data.time, sizeof(time_t));
             break;
-        case PRRTE_STATUS:
+        case PRTE_STATUS:
             v->type = PMIX_STATUS;
-            v->data.status = prrte_pmix_convert_rc(kv->data.status);
+            v->data.status = prte_pmix_convert_rc(kv->data.status);
             break;
-        case PRRTE_JOBID:
+        case PRTE_JOBID:
             v->type = PMIX_PROC;
             /* have to stringify the jobid */
             PMIX_PROC_CREATE(v->data.proc, 1);
-            PRRTE_PMIX_CONVERT_JOBID(rc, v->data.proc->nspace, kv->data.name.jobid);
-            if (PRRTE_SUCCESS != rc) {
-                PRRTE_ERROR_LOG(rc);
+            PRTE_PMIX_CONVERT_JOBID(rc, v->data.proc->nspace, kv->data.name.jobid);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
             }
             /* leave the rank as invalid */
             break;
-        case PRRTE_VPID:
+        case PRTE_VPID:
             v->type = PMIX_PROC_RANK;
-            PRRTE_PMIX_CONVERT_VPID(v->data.rank, kv->data.name.vpid);
+            PRTE_PMIX_CONVERT_VPID(v->data.rank, kv->data.name.vpid);
             break;
-        case PRRTE_NAME:
+        case PRTE_NAME:
             v->type = PMIX_PROC;
             /* have to stringify the jobid */
             PMIX_PROC_CREATE(v->data.proc, 1);
-            PRRTE_PMIX_CONVERT_JOBID(rc, v->data.proc->nspace, kv->data.name.jobid);
-            PRRTE_PMIX_CONVERT_VPID(v->data.proc->rank, kv->data.name.vpid);
+            PRTE_PMIX_CONVERT_JOBID(rc, v->data.proc->nspace, kv->data.name.jobid);
+            PRTE_PMIX_CONVERT_VPID(v->data.proc->rank, kv->data.name.vpid);
             break;
-        case PRRTE_BYTE_OBJECT:
+        case PRTE_BYTE_OBJECT:
             v->type = PMIX_BYTE_OBJECT;
             if (NULL != kv->data.bo.bytes) {
                 v->data.bo.bytes = (char*)malloc(kv->data.bo.size);
@@ -603,57 +603,57 @@ void prrte_pmix_value_load(pmix_value_t *v,
                 v->data.bo.size = 0;
             }
             break;
-        case PRRTE_PERSIST:
+        case PRTE_PERSIST:
             v->type = PMIX_PERSIST;
             v->data.persist = (pmix_persistence_t)kv->data.uint8;
             break;
-        case PRRTE_SCOPE:
+        case PRTE_SCOPE:
             v->type = PMIX_SCOPE;
             v->data.scope = (pmix_scope_t)kv->data.uint8;
             break;
-        case PRRTE_DATA_RANGE:
+        case PRTE_DATA_RANGE:
             v->type = PMIX_DATA_RANGE;
             v->data.range = (pmix_data_range_t)kv->data.uint8;
             break;
-        case PRRTE_PROC_STATE:
+        case PRTE_PROC_STATE:
             v->type = PMIX_PROC_STATE;
-            /* the PRRTE layer doesn't have any concept of proc state,
-             * so the PRRTE layer is responsible for converting it */
+            /* the PRTE layer doesn't have any concept of proc state,
+             * so the PRTE layer is responsible for converting it */
             memcpy(&v->data.state, &kv->data.uint8, sizeof(uint8_t));
             break;
-        case PRRTE_PTR:
+        case PRTE_PTR:
             v->type = PMIX_POINTER;
             v->data.ptr = kv->data.ptr;
             break;
-         case PRRTE_LIST:
-            list = (prrte_list_t*)kv->data.ptr;
+         case PRTE_LIST:
+            list = (prte_list_t*)kv->data.ptr;
             v->type = PMIX_DATA_ARRAY;
             v->data.darray = (pmix_data_array_t*)malloc(sizeof(pmix_data_array_t));
             v->data.darray->type = PMIX_INFO;
-            v->data.darray->size = (NULL == list)?0:prrte_list_get_size(list);
+            v->data.darray->size = (NULL == list)?0:prte_list_get_size(list);
             if (0 < v->data.darray->size) {
                 PMIX_INFO_CREATE(info, v->data.darray->size);
                 v->data.darray->array = info;
                 n=0;
-                PRRTE_LIST_FOREACH(val, list, prrte_value_t) {
+                PRTE_LIST_FOREACH(val, list, prte_value_t) {
                     if (NULL != val->key) {
                         (void)strncpy(info[n].key, val->key, PMIX_MAX_KEYLEN);
                     }
-                    prrte_pmix_value_load(&info[n].value, val);
+                    prte_pmix_value_load(&info[n].value, val);
                     ++n;
                 }
             } else {
                 v->data.darray->array = NULL;
             }
             break;
-        case PRRTE_PROC_INFO:
+        case PRTE_PROC_INFO:
             v->type = PMIX_PROC_INFO;
             PMIX_PROC_INFO_CREATE(v->data.pinfo, 1);
-            PRRTE_PMIX_CONVERT_JOBID(rc, v->data.pinfo->proc.nspace, kv->data.pinfo.name.jobid);
-            if (PRRTE_SUCCESS != rc) {
-                PRRTE_ERROR_LOG(rc);
+            PRTE_PMIX_CONVERT_JOBID(rc, v->data.pinfo->proc.nspace, kv->data.pinfo.name.jobid);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
             }
-            PRRTE_PMIX_CONVERT_VPID(v->data.pinfo->proc.rank, kv->data.pinfo.name.vpid);
+            PRTE_PMIX_CONVERT_VPID(v->data.pinfo->proc.rank, kv->data.pinfo.name.vpid);
             if (NULL != kv->data.pinfo.hostname) {
                 v->data.pinfo->hostname = strdup(kv->data.pinfo.hostname);
             }
@@ -662,9 +662,9 @@ void prrte_pmix_value_load(pmix_value_t *v,
             }
             v->data.pinfo->pid = kv->data.pinfo.pid;
             v->data.pinfo->exit_code = kv->data.pinfo.exit_code;
-            v->data.pinfo->state = prrte_pmix_convert_state(kv->data.pinfo.state);
+            v->data.pinfo->state = prte_pmix_convert_state(kv->data.pinfo.state);
             break;
-        case PRRTE_ENVAR:
+        case PRTE_ENVAR:
             v->type = PMIX_ENVAR;
             PMIX_ENVAR_CONSTRUCT(&v->data.envar);
             if (NULL != kv->data.envar.envar) {
@@ -681,111 +681,111 @@ void prrte_pmix_value_load(pmix_value_t *v,
     }
 }
 
-int prrte_pmix_value_unload(prrte_value_t *kv,
+int prte_pmix_value_unload(prte_value_t *kv,
                            const pmix_value_t *v)
 {
-    int rc=PRRTE_SUCCESS;
-    prrte_list_t *lt;
-    prrte_value_t *ival;
+    int rc=PRTE_SUCCESS;
+    prte_list_t *lt;
+    prte_value_t *ival;
     size_t n;
 
     switch(v->type) {
     case PMIX_UNDEF:
-        kv->type = PRRTE_UNDEF;
+        kv->type = PRTE_UNDEF;
         break;
     case PMIX_BOOL:
-        kv->type = PRRTE_BOOL;
+        kv->type = PRTE_BOOL;
         memcpy(&kv->data.flag, &(v->data.flag), 1);
         break;
     case PMIX_BYTE:
-        kv->type = PRRTE_BYTE;
+        kv->type = PRTE_BYTE;
         memcpy(&kv->data.byte, &(v->data.byte), 1);
         break;
     case PMIX_STRING:
-        kv->type = PRRTE_STRING;
+        kv->type = PRTE_STRING;
         if (NULL != v->data.string) {
             kv->data.string = strdup(v->data.string);
         }
         break;
     case PMIX_SIZE:
-        kv->type = PRRTE_SIZE;
+        kv->type = PRTE_SIZE;
         memcpy(&kv->data.size, &(v->data.size), sizeof(size_t));
         break;
     case PMIX_PID:
-        kv->type = PRRTE_PID;
+        kv->type = PRTE_PID;
         memcpy(&kv->data.pid, &(v->data.pid), sizeof(pid_t));
         break;
     case PMIX_INT:
-        kv->type = PRRTE_INT;
+        kv->type = PRTE_INT;
         memcpy(&kv->data.integer, &(v->data.integer), sizeof(int));
         break;
     case PMIX_INT8:
-        kv->type = PRRTE_INT8;
+        kv->type = PRTE_INT8;
         memcpy(&kv->data.int8, &(v->data.int8), 1);
         break;
     case PMIX_INT16:
-        kv->type = PRRTE_INT16;
+        kv->type = PRTE_INT16;
         memcpy(&kv->data.int16, &(v->data.int16), 2);
         break;
     case PMIX_INT32:
-        kv->type = PRRTE_INT32;
+        kv->type = PRTE_INT32;
         memcpy(&kv->data.int32, &(v->data.int32), 4);
         break;
     case PMIX_INT64:
-        kv->type = PRRTE_INT64;
+        kv->type = PRTE_INT64;
         memcpy(&kv->data.int64, &(v->data.int64), 8);
         break;
     case PMIX_UINT:
-        kv->type = PRRTE_UINT;
+        kv->type = PRTE_UINT;
         memcpy(&kv->data.uint, &(v->data.uint), sizeof(int));
         break;
     case PMIX_UINT8:
-        kv->type = PRRTE_UINT8;
+        kv->type = PRTE_UINT8;
         memcpy(&kv->data.uint8, &(v->data.uint8), 1);
         break;
     case PMIX_UINT16:
-        kv->type = PRRTE_UINT16;
+        kv->type = PRTE_UINT16;
         memcpy(&kv->data.uint16, &(v->data.uint16), 2);
         break;
     case PMIX_UINT32:
-        kv->type = PRRTE_UINT32;
+        kv->type = PRTE_UINT32;
         memcpy(&kv->data.uint32, &(v->data.uint32), 4);
         break;
     case PMIX_UINT64:
-        kv->type = PRRTE_UINT64;
+        kv->type = PRTE_UINT64;
         memcpy(&kv->data.uint64, &(v->data.uint64), 8);
         break;
     case PMIX_FLOAT:
-        kv->type = PRRTE_FLOAT;
+        kv->type = PRTE_FLOAT;
         memcpy(&kv->data.fval, &(v->data.fval), sizeof(float));
         break;
     case PMIX_DOUBLE:
-        kv->type = PRRTE_DOUBLE;
+        kv->type = PRTE_DOUBLE;
         memcpy(&kv->data.dval, &(v->data.dval), sizeof(double));
         break;
     case PMIX_TIMEVAL:
-        kv->type = PRRTE_TIMEVAL;
+        kv->type = PRTE_TIMEVAL;
         memcpy(&kv->data.tv, &(v->data.tv), sizeof(struct timeval));
         break;
     case PMIX_TIME:
-        kv->type = PRRTE_TIME;
+        kv->type = PRTE_TIME;
         memcpy(&kv->data.time, &(v->data.time), sizeof(time_t));
         break;
     case PMIX_STATUS:
-        kv->type = PRRTE_STATUS;
-        kv->data.status = prrte_pmix_convert_status(v->data.status);
+        kv->type = PRTE_STATUS;
+        kv->data.status = prte_pmix_convert_status(v->data.status);
         break;
     case PMIX_PROC_RANK:
-        kv->type = PRRTE_VPID;
-        PRRTE_PMIX_CONVERT_RANK(kv->data.name.vpid, v->data.rank);
+        kv->type = PRTE_VPID;
+        PRTE_PMIX_CONVERT_RANK(kv->data.name.vpid, v->data.rank);
         break;
     case PMIX_PROC:
-        kv->type = PRRTE_NAME;
-        PRRTE_PMIX_CONVERT_NSPACE(rc, &kv->data.name.jobid, v->data.proc->nspace);
-        PRRTE_PMIX_CONVERT_RANK(kv->data.name.vpid, v->data.proc->rank);
+        kv->type = PRTE_NAME;
+        PRTE_PMIX_CONVERT_NSPACE(rc, &kv->data.name.jobid, v->data.proc->nspace);
+        PRTE_PMIX_CONVERT_RANK(kv->data.name.vpid, v->data.proc->rank);
         break;
     case PMIX_BYTE_OBJECT:
-        kv->type = PRRTE_BYTE_OBJECT;
+        kv->type = PRTE_BYTE_OBJECT;
         if (NULL != v->data.bo.bytes && 0 < v->data.bo.size) {
             kv->data.bo.bytes = (uint8_t*)malloc(v->data.bo.size);
             memcpy(kv->data.bo.bytes, v->data.bo.bytes, v->data.bo.size);
@@ -796,23 +796,23 @@ int prrte_pmix_value_unload(prrte_value_t *kv,
         }
         break;
     case PMIX_PERSIST:
-        kv->type = PRRTE_PERSIST;
+        kv->type = PRTE_PERSIST;
         kv->data.uint8 = v->data.persist;
         break;
     case PMIX_SCOPE:
-        kv->type = PRRTE_SCOPE;
+        kv->type = PRTE_SCOPE;
         kv->data.uint8 = v->data.scope;
         break;
     case PMIX_DATA_RANGE:
-        kv->type = PRRTE_DATA_RANGE;
+        kv->type = PRTE_DATA_RANGE;
         kv->data.uint8 = v->data.range;
         break;
     case PMIX_PROC_STATE:
-        kv->type = PRRTE_PROC_STATE;
-        kv->data.integer = prrte_pmix_convert_pstate(v->data.state);
+        kv->type = PRTE_PROC_STATE;
+        kv->data.integer = prte_pmix_convert_pstate(v->data.state);
         break;
     case PMIX_POINTER:
-        kv->type = PRRTE_PTR;
+        kv->type = PRTE_PTR;
         kv->data.ptr = v->data.ptr;
         break;
     case PMIX_DATA_ARRAY:
@@ -820,22 +820,22 @@ int prrte_pmix_value_unload(prrte_value_t *kv,
             kv->data.ptr = NULL;
             break;
         }
-        lt = PRRTE_NEW(prrte_list_t);
-        kv->type = PRRTE_PTR;
+        lt = PRTE_NEW(prte_list_t);
+        kv->type = PRTE_PTR;
         kv->data.ptr = (void*)lt;
         for (n=0; n < v->data.darray->size; n++) {
-            ival = PRRTE_NEW(prrte_value_t);
-            prrte_list_append(lt, &ival->super);
+            ival = PRTE_NEW(prte_value_t);
+            prte_list_append(lt, &ival->super);
             /* handle the various types */
             if (PMIX_INFO == v->data.darray->type) {
                 pmix_info_t *iptr = (pmix_info_t*)v->data.darray->array;
                 if (0 < strlen(iptr[n].key)) {
                     ival->key = strdup(iptr[n].key);
                 }
-                rc = prrte_pmix_value_unload(ival, &iptr[n].value);
-                if (PRRTE_SUCCESS != rc) {
-                    PRRTE_LIST_RELEASE(lt);
-                    kv->type = PRRTE_UNDEF;
+                rc = prte_pmix_value_unload(ival, &iptr[n].value);
+                if (PRTE_SUCCESS != rc) {
+                    PRTE_LIST_RELEASE(lt);
+                    kv->type = PRTE_UNDEF;
                     kv->data.ptr = NULL;
                     break;
                 }
@@ -843,13 +843,13 @@ int prrte_pmix_value_unload(prrte_value_t *kv,
         }
         break;
     case PMIX_PROC_INFO:
-        kv->type = PRRTE_PROC_INFO;
+        kv->type = PRTE_PROC_INFO;
         if (NULL == v->data.pinfo) {
-            rc = PRRTE_ERR_BAD_PARAM;
+            rc = PRTE_ERR_BAD_PARAM;
             break;
         }
-        PRRTE_PMIX_CONVERT_NSPACE(rc, &kv->data.pinfo.name.jobid, v->data.pinfo->proc.nspace);
-        PRRTE_PMIX_CONVERT_RANK(kv->data.pinfo.name.vpid, v->data.pinfo->proc.rank);
+        PRTE_PMIX_CONVERT_NSPACE(rc, &kv->data.pinfo.name.jobid, v->data.pinfo->proc.nspace);
+        PRTE_PMIX_CONVERT_RANK(kv->data.pinfo.name.vpid, v->data.pinfo->proc.rank);
         if (NULL != v->data.pinfo->hostname) {
             kv->data.pinfo.hostname = strdup(v->data.pinfo->hostname);
         }
@@ -858,11 +858,11 @@ int prrte_pmix_value_unload(prrte_value_t *kv,
         }
         kv->data.pinfo.pid = v->data.pinfo->pid;
         kv->data.pinfo.exit_code = v->data.pinfo->exit_code;
-        kv->data.pinfo.state = prrte_pmix_convert_pstate(v->data.pinfo->state);
+        kv->data.pinfo.state = prte_pmix_convert_pstate(v->data.pinfo->state);
         break;
     case PMIX_ENVAR:
-        kv->type = PRRTE_ENVAR;
-        PRRTE_CONSTRUCT(&kv->data.envar, prrte_envar_t);
+        kv->type = PRTE_ENVAR;
+        PRTE_CONSTRUCT(&kv->data.envar, prte_envar_t);
         if (NULL != v->data.envar.envar) {
             kv->data.envar.envar = strdup(v->data.envar.envar);
         }
@@ -873,7 +873,7 @@ int prrte_pmix_value_unload(prrte_value_t *kv,
         break;
     default:
         /* silence warnings */
-        rc = PRRTE_ERROR;
+        rc = PRTE_ERROR;
         break;
     }
     return rc;
@@ -885,9 +885,9 @@ static void cleanup_cbfunc(pmix_status_t status,
                            pmix_release_cbfunc_t release_fn,
                            void *release_cbdata)
 {
-    prrte_pmix_lock_t *lk = (prrte_pmix_lock_t*)cbdata;
+    prte_pmix_lock_t *lk = (prte_pmix_lock_t*)cbdata;
 
-    PRRTE_POST_OBJECT(lk);
+    PRTE_POST_OBJECT(lk);
 
     /* let the library release the data and cleanup from
      * the operation */
@@ -897,18 +897,18 @@ static void cleanup_cbfunc(pmix_status_t status,
 
     /* release the block */
     lk->status = status;
-    PRRTE_PMIX_WAKEUP_THREAD(lk);
+    PRTE_PMIX_WAKEUP_THREAD(lk);
 }
 
-int prrte_pmix_register_cleanup(char *path, bool directory, bool ignore, bool jobscope)
+int prte_pmix_register_cleanup(char *path, bool directory, bool ignore, bool jobscope)
 {
-    prrte_pmix_lock_t lk;
+    prte_pmix_lock_t lk;
     pmix_info_t pinfo[3];
     size_t n, ninfo=0;
     pmix_status_t rc, ret;
     pmix_proc_t proc;
 
-    PRRTE_PMIX_CONSTRUCT_LOCK(&lk);
+    PRTE_PMIX_CONSTRUCT_LOCK(&lk);
 
     if (ignore) {
         /* they want this path ignored */
@@ -934,8 +934,8 @@ int prrte_pmix_register_cleanup(char *path, bool directory, bool ignore, bool jo
     } else {
         /* only applies to us */
         (void)snprintf(proc.nspace, PMIX_MAX_NSLEN, "%s",
-                       PRRTE_JOBID_PRINT(PRRTE_PROC_MY_NAME->jobid));
-        proc.rank = PRRTE_PROC_MY_NAME->vpid;
+                       PRTE_JOBID_PRINT(PRTE_PROC_MY_NAME->jobid));
+        proc.rank = PRTE_PROC_MY_NAME->vpid;
         rc = PMIx_Job_control_nb(&proc, 1, pinfo, ninfo, cleanup_cbfunc, (void*)&lk);
     }
     if (PMIX_SUCCESS != rc) {
@@ -946,10 +946,10 @@ int prrte_pmix_register_cleanup(char *path, bool directory, bool ignore, bool jo
          * being called, so assumes the everything went well and avoid a deadlock. */
         cleanup_cbfunc(PMIX_SUCCESS, NULL, 0, (void *)&lk, NULL, NULL);
 #endif
-        PRRTE_PMIX_WAIT_THREAD(&lk);
+        PRTE_PMIX_WAIT_THREAD(&lk);
         ret = lk.status;
     }
-    PRRTE_PMIX_DESTRUCT_LOCK(&lk);
+    PRTE_PMIX_DESTRUCT_LOCK(&lk);
     for (n=0; n < ninfo; n++) {
         PMIX_INFO_DESTRUCT(&pinfo[n]);
     }
@@ -958,36 +958,36 @@ int prrte_pmix_register_cleanup(char *path, bool directory, bool ignore, bool jo
 
 
 /* CLASS INSTANTIATIONS */
-static void dsicon(prrte_ds_info_t *p)
+static void dsicon(prte_ds_info_t *p)
 {
     PMIX_PROC_CONSTRUCT(&p->source);
     p->info = NULL;
     p->persistence = PMIX_PERSIST_INVALID;
 }
-PRRTE_EXPORT PRRTE_CLASS_INSTANCE(prrte_ds_info_t,
-                                  prrte_list_item_t,
+PRTE_EXPORT PRTE_CLASS_INSTANCE(prte_ds_info_t,
+                                  prte_list_item_t,
                                   dsicon, NULL);
 
-static void infoitmcon(prrte_info_item_t *p)
+static void infoitmcon(prte_info_item_t *p)
 {
     PMIX_INFO_CONSTRUCT(&p->info);
 }
-static void infoitdecon(prrte_info_item_t *p)
+static void infoitdecon(prte_info_item_t *p)
 {
     PMIX_INFO_DESTRUCT(&p->info);
 }
-PRRTE_EXPORT PRRTE_CLASS_INSTANCE(prrte_info_item_t,
-                                  prrte_list_item_t,
+PRTE_EXPORT PRTE_CLASS_INSTANCE(prte_info_item_t,
+                                  prte_list_item_t,
                                   infoitmcon, infoitdecon);
 
-static void arritmcon(prrte_info_array_item_t *p)
+static void arritmcon(prte_info_array_item_t *p)
 {
-    PRRTE_CONSTRUCT(&p->infolist, prrte_list_t);
+    PRTE_CONSTRUCT(&p->infolist, prte_list_t);
 }
-static void arritdecon(prrte_info_array_item_t *p)
+static void arritdecon(prte_info_array_item_t *p)
 {
-    PRRTE_LIST_DESTRUCT(&p->infolist);
+    PRTE_LIST_DESTRUCT(&p->infolist);
 }
-PRRTE_EXPORT PRRTE_CLASS_INSTANCE(prrte_info_array_item_t,
-                                  prrte_list_item_t,
+PRTE_EXPORT PRTE_CLASS_INSTANCE(prte_info_array_item_t,
+                                  prte_list_item_t,
                                   arritmcon, arritdecon);

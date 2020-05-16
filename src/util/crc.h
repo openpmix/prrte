@@ -13,6 +13,7 @@
  * Copyright (c) 2009      Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,10 +21,10 @@
  * $HEADER$
  */
 
-#ifndef _PRRTE_CRC_H_
-#define _PRRTE_CRC_H_
+#ifndef _PRTE_CRC_H_
+#define _PRTE_CRC_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stddef.h>
 
@@ -33,16 +34,16 @@ BEGIN_C_DECLS
 #define CRC_INITIAL_REGISTER ((unsigned int)0xffffffff)
 
 
-#define PRRTE_CSUM( SRC, LEN )  prrte_uicsum( SRC, LEN )
-#define PRRTE_CSUM_PARTIAL( SRC, LEN, UI1, UI2 ) \
-    prrte_uicsum_partial( SRC, LEN, UI1, UI2 )
-#define PRRTE_CSUM_BCOPY_PARTIAL( SRC, DST, LEN1, LEN2, UI1, UI2 ) \
-    prrte_bcopy_uicsum_partial( SRC, DST, LEN1, LEN2, UI1, UI2 )
-#define PRRTE_CSUM_ZERO  0
+#define PRTE_CSUM( SRC, LEN )  prte_uicsum( SRC, LEN )
+#define PRTE_CSUM_PARTIAL( SRC, LEN, UI1, UI2 ) \
+    prte_uicsum_partial( SRC, LEN, UI1, UI2 )
+#define PRTE_CSUM_BCOPY_PARTIAL( SRC, DST, LEN1, LEN2, UI1, UI2 ) \
+    prte_bcopy_uicsum_partial( SRC, DST, LEN1, LEN2, UI1, UI2 )
+#define PRTE_CSUM_ZERO  0
 
 
-PRRTE_EXPORT unsigned long
-prrte_bcopy_csum_partial(
+PRTE_EXPORT unsigned long
+prte_bcopy_csum_partial(
     const void *  source,
     void *  destination,
     size_t copylen,
@@ -52,7 +53,7 @@ prrte_bcopy_csum_partial(
     );
 
 static inline unsigned long
-prrte_bcopy_csum (
+prte_bcopy_csum (
     const void *  source,
     void *  destination,
     size_t copylen,
@@ -61,11 +62,11 @@ prrte_bcopy_csum (
 {
     unsigned long plong = 0;
     size_t plength = 0;
-    return prrte_bcopy_csum_partial(source, destination, copylen, csumlen, &plong, &plength);
+    return prte_bcopy_csum_partial(source, destination, copylen, csumlen, &plong, &plength);
 }
 
-PRRTE_EXPORT unsigned int
-prrte_bcopy_uicsum_partial (
+PRTE_EXPORT unsigned int
+prte_bcopy_uicsum_partial (
     const void *  source,
     void *  destination,
     size_t copylen,
@@ -75,7 +76,7 @@ prrte_bcopy_uicsum_partial (
     );
 
 static inline unsigned int
-prrte_bcopy_uicsum (
+prte_bcopy_uicsum (
     const void *  source,
     void *  destination,
     size_t copylen,
@@ -84,11 +85,11 @@ prrte_bcopy_uicsum (
 {
     unsigned int pint = 0;
     size_t plength = 0;
-    return prrte_bcopy_uicsum_partial(source, destination, copylen, csumlen, &pint, &plength);
+    return prte_bcopy_uicsum_partial(source, destination, copylen, csumlen, &pint, &plength);
 }
 
-PRRTE_EXPORT unsigned long
-prrte_csum_partial (
+PRTE_EXPORT unsigned long
+prte_csum_partial (
     const void *  source,
     size_t csumlen,
     unsigned long*  lastPartialLong,
@@ -97,17 +98,17 @@ prrte_csum_partial (
 
 
 static inline unsigned long
-prrte_csum(const void *  source, size_t csumlen)
+prte_csum(const void *  source, size_t csumlen)
 {
     unsigned long lastPartialLong = 0;
     size_t lastPartialLength = 0;
-    return prrte_csum_partial(source, csumlen, &lastPartialLong, &lastPartialLength);
+    return prte_csum_partial(source, csumlen, &lastPartialLong, &lastPartialLength);
 }
 /*
  * The buffer passed to this function is assumed to be 16-bit aligned
  */
 static inline uint16_t
-prrte_csum16 (const void *  source, size_t csumlen)
+prte_csum16 (const void *  source, size_t csumlen)
 {
     uint16_t *src = (uint16_t *) source;
     register uint32_t csum = 0;
@@ -126,8 +127,8 @@ prrte_csum16 (const void *  source, size_t csumlen)
     return csum;
 }
 
-PRRTE_EXPORT unsigned int
-prrte_uicsum_partial (
+PRTE_EXPORT unsigned int
+prte_uicsum_partial (
     const void *  source,
     size_t csumlen,
     unsigned int *  lastPartialInt,
@@ -135,21 +136,21 @@ prrte_uicsum_partial (
     );
 
 static inline unsigned int
-prrte_uicsum(const void *  source, size_t csumlen)
+prte_uicsum(const void *  source, size_t csumlen)
 {
     unsigned int lastPartialInt = 0;
     size_t lastPartialLength = 0;
-    return prrte_uicsum_partial(source, csumlen, &lastPartialInt, &lastPartialLength);
+    return prte_uicsum_partial(source, csumlen, &lastPartialInt, &lastPartialLength);
 }
 
 /*
  * CRC Support
  */
 
-void prrte_initialize_crc_table(void);
+void prte_initialize_crc_table(void);
 
-PRRTE_EXPORT unsigned int
-prrte_bcopy_uicrc_partial(
+PRTE_EXPORT unsigned int
+prte_bcopy_uicrc_partial(
     const void *  source,
     void *  destination,
     size_t copylen,
@@ -157,26 +158,26 @@ prrte_bcopy_uicrc_partial(
     unsigned int partial_crc);
 
 static inline unsigned int
-prrte_bcopy_uicrc(
+prte_bcopy_uicrc(
     const void *  source,
     void *  destination,
     size_t copylen,
     size_t crclen)
 {
-    return prrte_bcopy_uicrc_partial(source, destination, copylen, crclen, CRC_INITIAL_REGISTER);
+    return prte_bcopy_uicrc_partial(source, destination, copylen, crclen, CRC_INITIAL_REGISTER);
 }
 
-PRRTE_EXPORT unsigned int
-prrte_uicrc_partial(
+PRTE_EXPORT unsigned int
+prte_uicrc_partial(
     const void *  source,
     size_t crclen,
     unsigned int partial_crc);
 
 
 static inline unsigned int
-prrte_uicrc(const void *  source, size_t crclen)
+prte_uicrc(const void *  source, size_t crclen)
 {
-    return prrte_uicrc_partial(source, crclen, CRC_INITIAL_REGISTER);
+    return prte_uicrc_partial(source, crclen, CRC_INITIAL_REGISTER);
 }
 
 END_C_DECLS

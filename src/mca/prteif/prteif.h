@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2010-2013 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
@@ -13,10 +13,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_MCA_IF_IF_H
-#define PRRTE_MCA_IF_IF_H
+#ifndef PRTE_MCA_IF_IF_H
+#define PRTE_MCA_IF_IF_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <string.h>
 #ifdef HAVE_UNISTD_H
@@ -73,9 +73,9 @@ BEGIN_C_DECLS
 #define MAX_IFCONF_SIZE 10 * 1024 * 1024
 
 
-typedef struct prrte_if_t {
-    prrte_list_item_t     super;
-    char                if_name[PRRTE_IF_NAMESIZE];
+typedef struct prte_if_t {
+    prte_list_item_t     super;
+    char                if_name[PRTE_IF_NAMESIZE];
     int                 if_index;
     uint16_t            if_kernel_index;
     uint16_t            af_family;
@@ -87,37 +87,37 @@ typedef struct prrte_if_t {
     uint8_t             if_mac[6];
     int                 ifmtu; /* Can't use if_mtu because of a
                                   #define collision on some BSDs */
-} prrte_if_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_if_t);
+} prte_if_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_if_t);
 
 
 /* "global" list of available interfaces */
-PRRTE_EXPORT extern prrte_list_t prrte_if_list;
+PRTE_EXPORT extern prte_list_t prte_if_list;
 
 /* global flags */
-PRRTE_EXPORT extern bool prrte_if_do_not_resolve;
-PRRTE_EXPORT extern bool prrte_if_retain_loopback;
+PRTE_EXPORT extern bool prte_if_do_not_resolve;
+PRTE_EXPORT extern bool prte_if_retain_loopback;
 
 /**
  * Structure for if components.
  */
-struct prrte_if_base_component_2_0_0_t {
+struct prte_if_base_component_2_0_0_t {
     /** MCA base component */
-    prrte_mca_base_component_t component;
+    prte_mca_base_component_t component;
     /** MCA base data */
-    prrte_mca_base_component_data_t component_data;
+    prte_mca_base_component_data_t component_data;
 };
 /**
  * Convenience typedef
  */
-typedef struct prrte_if_base_component_2_0_0_t prrte_if_base_component_t;
+typedef struct prte_if_base_component_2_0_0_t prte_if_base_component_t;
 
 /*
  * Macro for use in components that are of type if
  */
-#define PRRTE_IF_BASE_VERSION_2_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("if", 2, 0, 0)
+#define PRTE_IF_BASE_VERSION_2_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("if", 2, 0, 0)
 
 END_C_DECLS
 
-#endif /* PRRTE_MCA_IF_IF_H */
+#endif /* PRTE_MCA_IF_IF_H */

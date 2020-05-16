@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2006 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -18,10 +18,10 @@
  *
  * $HEADER$
  */
-#ifndef PRRTE_ARCH_H_HAS_BEEN_INCLUDED
-#define PRRTE_ARCH_H_HAS_BEEN_INCLUDED
+#ifndef PRTE_ARCH_H_HAS_BEEN_INCLUDED
+#define PRTE_ARCH_H_HAS_BEEN_INCLUDED
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <float.h>
 #include <assert.h>
@@ -194,56 +194,56 @@
 
 /* These masks implement the specification above above */
 
-#define PRRTE_ARCH_HEADERMASK      0x03000000 /* set the fields for the header */
-#define PRRTE_ARCH_HEADERMASK2     0x00000003 /* other end, needed for checks */
-#define PRRTE_ARCH_UNUSEDMASK      0xfc000000 /* mark the unused fields */
+#define PRTE_ARCH_HEADERMASK      0x03000000 /* set the fields for the header */
+#define PRTE_ARCH_HEADERMASK2     0x00000003 /* other end, needed for checks */
+#define PRTE_ARCH_UNUSEDMASK      0xfc000000 /* mark the unused fields */
 
 /* BYTE 1 */
-#define PRRTE_ARCH_ISBIGENDIAN     0x00000008
+#define PRTE_ARCH_ISBIGENDIAN     0x00000008
 
 /* BYTE 2 */
-#define PRRTE_ARCH_LONGISxx        0x0000c000  /* mask for sizeof long */
-#define PRRTE_ARCH_LONGIS64        0x00001000
-#define PRRTE_ARCH_LONGLONGISxx    0x00003000  /* mask for sizeof long long */
+#define PRTE_ARCH_LONGISxx        0x0000c000  /* mask for sizeof long */
+#define PRTE_ARCH_LONGIS64        0x00001000
+#define PRTE_ARCH_LONGLONGISxx    0x00003000  /* mask for sizeof long long */
 
-#define PRRTE_ARCH_BOOLISxx        0x00000c00  /* mask for sizeof bool */
-#define PRRTE_ARCH_BOOLIS8         0x00000000  /* bool is 8 bits */
-#define PRRTE_ARCH_BOOLIS16        0x00000400  /* bool is 16 bits */
-#define PRRTE_ARCH_BOOLIS32        0x00000800  /* bool is 32 bits */
+#define PRTE_ARCH_BOOLISxx        0x00000c00  /* mask for sizeof bool */
+#define PRTE_ARCH_BOOLIS8         0x00000000  /* bool is 8 bits */
+#define PRTE_ARCH_BOOLIS16        0x00000400  /* bool is 16 bits */
+#define PRTE_ARCH_BOOLIS32        0x00000800  /* bool is 32 bits */
 
-#define PRRTE_ARCH_LOGICALISxx     0x00000300  /* mask for sizeof Fortran logical */
-#define PRRTE_ARCH_LOGICALIS8      0x00000000  /* logical is 8 bits */
-#define PRRTE_ARCH_LOGICALIS16     0x00000100  /* logical is 16 bits */
-#define PRRTE_ARCH_LOGICALIS32     0x00000200  /* logical is 32 bits */
+#define PRTE_ARCH_LOGICALISxx     0x00000300  /* mask for sizeof Fortran logical */
+#define PRTE_ARCH_LOGICALIS8      0x00000000  /* logical is 8 bits */
+#define PRTE_ARCH_LOGICALIS16     0x00000100  /* logical is 16 bits */
+#define PRTE_ARCH_LOGICALIS32     0x00000200  /* logical is 32 bits */
 
 /* BYTE 3 */
-#define PRRTE_ARCH_LONGDOUBLEIS96  0x00020000
-#define PRRTE_ARCH_LONGDOUBLEIS128 0x00010000
+#define PRTE_ARCH_LONGDOUBLEIS96  0x00020000
+#define PRTE_ARCH_LONGDOUBLEIS128 0x00010000
 
-#define PRRTE_ARCH_LDEXPSIZEIS15   0x00080000
+#define PRTE_ARCH_LDEXPSIZEIS15   0x00080000
 
-#define PRRTE_ARCH_LDMANTDIGIS64   0x00400000
-#define PRRTE_ARCH_LDMANTDIGIS105  0x00200000
-#define PRRTE_ARCH_LDMANTDIGIS106  0x00600000
-#define PRRTE_ARCH_LDMANTDIGIS107  0x00100000
-#define PRRTE_ARCH_LDMANTDIGIS113  0x00500000
+#define PRTE_ARCH_LDMANTDIGIS64   0x00400000
+#define PRTE_ARCH_LDMANTDIGIS105  0x00200000
+#define PRTE_ARCH_LDMANTDIGIS106  0x00600000
+#define PRTE_ARCH_LDMANTDIGIS107  0x00100000
+#define PRTE_ARCH_LDMANTDIGIS113  0x00500000
 
-#define PRRTE_ARCH_LDISINTEL       0x00800000
+#define PRTE_ARCH_LDISINTEL       0x00800000
 
 BEGIN_C_DECLS
 
 /* Local Architecture */
-PRRTE_EXPORT extern uint32_t prrte_local_arch;
+PRTE_EXPORT extern uint32_t prte_local_arch;
 
 /* Initialize architecture and determine all but fortran logical fields */
-PRRTE_EXPORT int prrte_arch_init(void);
+PRTE_EXPORT int prte_arch_init(void);
 
-PRRTE_EXPORT int32_t prrte_arch_checkmask ( uint32_t *var, uint32_t mask );
+PRTE_EXPORT int32_t prte_arch_checkmask ( uint32_t *var, uint32_t mask );
 
-/* Set fortran logical fields after init, to keep fortran out of prrte... */
-PRRTE_EXPORT int prrte_arch_set_fortran_logical_size(uint32_t size);
+/* Set fortran logical fields after init, to keep fortran out of prte... */
+PRTE_EXPORT int prte_arch_set_fortran_logical_size(uint32_t size);
 
 END_C_DECLS
 
-#endif  /* PRRTE_ARCH_H_HAS_BEEN_INCLUDED */
+#endif  /* PRTE_ARCH_H_HAS_BEEN_INCLUDED */
 

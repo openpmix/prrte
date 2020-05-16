@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2018      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -18,7 +18,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <string.h>
 #ifdef HAVE_UNISTD_H
@@ -32,9 +32,9 @@
 
 #include "src/util/os_path.h"
 
-static const char *path_sep = PRRTE_PATH_SEP;
+static const char *path_sep = PRTE_PATH_SEP;
 
-char *prrte_os_path(int relative, ...)
+char *prte_os_path(int relative, ...)
 {
     va_list ap;
     char *element, *path;
@@ -71,7 +71,7 @@ char *prrte_os_path(int relative, ...)
         total_length++;
     }
 
-    if (total_length > PRRTE_PATH_MAX) {  /* path length is too long - reject it */
+    if (total_length > PRTE_PATH_MAX) {  /* path length is too long - reject it */
     	return(NULL);
     }
 
@@ -99,5 +99,5 @@ char *prrte_os_path(int relative, ...)
     }
 
     va_end(ap);
-    return prrte_make_filename_os_friendly(path);
+    return prte_make_filename_os_friendly(path);
 }

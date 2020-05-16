@@ -135,11 +135,11 @@ src/mca/base/mca_base_parse_paramfile_lex.c
 
 src/mca/prteinstalldirs/config/install_dirs.h
 
-src/include/prrte_config.h
-src/include/prrte_config.h.in
+src/include/prte_config.h
+src/include/prte_config.h.in
 src/include/version.h
 src/include/frameworks.h
-src/include/prrte_config.h
+src/include/prte_config.h
 
 src/mca/rmaps/rank_file/rmaps_rank_file_lex.c
 src/mca/rmaps/rank_file/rankfile_lex.c

@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +19,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #ifdef HAVE_STDIO_H
 #include <stdio.h>
 #endif /* HAVE_STDIO_H */
@@ -33,17 +34,17 @@
 #include "src/util/crc.h"
 
 
-#if (PRRTE_ALIGNMENT_LONG == 8)
-#define PRRTE_CRC_WORD_MASK_ 0x7
-#elif (PRRTE_ALIGNMENT_LONG == 4)
-#define PRRTE_CRC_WORD_MASK_ 0x3
+#if (PRTE_ALIGNMENT_LONG == 8)
+#define PRTE_CRC_WORD_MASK_ 0x7
+#elif (PRTE_ALIGNMENT_LONG == 4)
+#define PRTE_CRC_WORD_MASK_ 0x3
 #else
-#define PRRTE_CRC_WORD_MASK_ 0xFFFF
+#define PRTE_CRC_WORD_MASK_ 0xFFFF
 #endif
 
 
 #define WORDALIGNED(v) \
-    (((intptr_t)v & PRRTE_CRC_WORD_MASK_) ? false : true)
+    (((intptr_t)v & PRTE_CRC_WORD_MASK_) ? false : true)
 
 
 #define INTALIGNED(v) \
@@ -60,7 +61,7 @@
  */
 
 unsigned long
-prrte_bcopy_csum_partial (
+prte_bcopy_csum_partial (
     const void *  source,
     void *  destination,
     size_t copylen,
@@ -407,7 +408,7 @@ prrte_bcopy_csum_partial (
 }
 
 unsigned int
-prrte_bcopy_uicsum_partial (
+prte_bcopy_uicsum_partial (
     const void *  source,
     void *  destination,
     size_t copylen,
@@ -764,7 +765,7 @@ prrte_bcopy_uicsum_partial (
  */
 
 unsigned long
-prrte_csum_partial (
+prte_csum_partial (
     const void *  source,
     size_t csumlen,
     unsigned long*  lastPartialLong,
@@ -914,7 +915,7 @@ prrte_csum_partial (
 }
 
 unsigned int
-prrte_uicsum_partial (
+prte_uicsum_partial (
     const void *  source,
     size_t csumlen,
     unsigned int*  lastPartialInt,
@@ -1065,14 +1066,14 @@ prrte_uicsum_partial (
 
 /* globals for CRC32 bcopy and calculation routines */
 
-static bool _prrte_crc_table_initialized = false;
-static unsigned int _prrte_crc_table[256];
+static bool _prte_crc_table_initialized = false;
+static unsigned int _prte_crc_table[256];
 
 /* CRC32 table generation routine - thanks to Charles Michael Heard for his
  * optimized CRC32 code...
  */
 
-void prrte_initialize_crc_table(void)
+void prte_initialize_crc_table(void)
 {
     register int i,j;
     register unsigned int crc_accum;
@@ -1085,15 +1086,15 @@ void prrte_initialize_crc_table(void)
             else
                 crc_accum = (crc_accum << 1);
         }
-        _prrte_crc_table[i] = crc_accum;
+        _prte_crc_table[i] = crc_accum;
     }
 
     /* set global bool to true to do this work once! */
-    _prrte_crc_table_initialized = true;
+    _prte_crc_table_initialized = true;
     return;
 }
 
-unsigned int prrte_bcopy_uicrc_partial(
+unsigned int prte_bcopy_uicrc_partial(
     const void *  source,
     void *  destination,
     size_t copylen,
@@ -1105,8 +1106,8 @@ unsigned int prrte_bcopy_uicrc_partial(
     register unsigned char t;
     unsigned int tmp;
 
-    if (!_prrte_crc_table_initialized) {
-        prrte_initialize_crc_table();
+    if (!_prte_crc_table_initialized) {
+        prte_initialize_crc_table();
     }
 
     if (INTALIGNED(source) && INTALIGNED(destination)) {
@@ -1120,7 +1121,7 @@ unsigned int prrte_bcopy_uicrc_partial(
             ts = (unsigned char *)&tmp;
             for (j = 0; j < (int)sizeof(unsigned int); j++) {
                 i = ((partial_crc >> 24) ^ *ts++) & 0xff;
-                partial_crc = (partial_crc << 8) ^ _prrte_crc_table[i];
+                partial_crc = (partial_crc << 8) ^ _prte_crc_table[i];
             }
             copylen -= sizeof(unsigned int);
         }
@@ -1131,12 +1132,12 @@ unsigned int prrte_bcopy_uicrc_partial(
             t = *ts++;
             *td++ = t;
             i = ((partial_crc >> 24) ^ t) & 0xff;
-            partial_crc = (partial_crc << 8) ^ _prrte_crc_table[i];
+            partial_crc = (partial_crc << 8) ^ _prte_crc_table[i];
         }
         /* calculate CRC over remaining bytes... */
         while (crclenresidue--) {
             i = ((partial_crc >> 24) ^ *ts++) & 0xff;
-            partial_crc = (partial_crc << 8) ^ _prrte_crc_table[i];
+            partial_crc = (partial_crc << 8) ^ _prte_crc_table[i];
         }
     }
     else {
@@ -1146,11 +1147,11 @@ unsigned int prrte_bcopy_uicrc_partial(
             t = *src++;
             *dst++ = t;
             i = ((partial_crc >> 24) ^ t) & 0xff;
-            partial_crc = (partial_crc << 8) ^ _prrte_crc_table[i];
+            partial_crc = (partial_crc << 8) ^ _prte_crc_table[i];
         }
         while (crclenresidue--) {
             i = ((partial_crc >> 24) ^ *src++) & 0xff;
-            partial_crc = (partial_crc << 8) ^ _prrte_crc_table[i];
+            partial_crc = (partial_crc << 8) ^ _prte_crc_table[i];
         }
     }
 
@@ -1158,15 +1159,15 @@ unsigned int prrte_bcopy_uicrc_partial(
 }
 
 
-unsigned int prrte_uicrc_partial(
+unsigned int prte_uicrc_partial(
     const void *  source, size_t crclen, unsigned int partial_crc)
 {
     register int i, j;
     register unsigned char * t;
     unsigned int tmp;
 
-    if (!_prrte_crc_table_initialized) {
-        prrte_initialize_crc_table();
+    if (!_prte_crc_table_initialized) {
+        prte_initialize_crc_table();
     }
 
     if (INTALIGNED(source)) {
@@ -1176,21 +1177,21 @@ unsigned int prrte_uicrc_partial(
             t = (unsigned char *)&tmp;
             for (j = 0; j < (int)sizeof(unsigned int); j++) {
                 i = ((partial_crc >> 24) ^ *t++) & 0xff;
-                partial_crc = (partial_crc << 8) ^ _prrte_crc_table[i];
+                partial_crc = (partial_crc << 8) ^ _prte_crc_table[i];
             }
             crclen -= sizeof(unsigned int);
         }
         t = (unsigned char *)src;
         while (crclen--) {
             i = ((partial_crc >> 24) ^ *t++) & 0xff;
-            partial_crc = (partial_crc << 8) ^ _prrte_crc_table[i];
+            partial_crc = (partial_crc << 8) ^ _prte_crc_table[i];
         }
     }
     else {
         register unsigned char *  src = (unsigned char *)source;
         while (crclen--) {
             i = ((partial_crc >> 24) ^ *src++) & 0xff;
-            partial_crc = (partial_crc << 8) ^ _prrte_crc_table[i];
+            partial_crc = (partial_crc << 8) ^ _prte_crc_table[i];
         }
     }
 

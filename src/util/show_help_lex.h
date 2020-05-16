@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2006      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -18,10 +18,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_SHOW_HELP_LEX_H
-#define PRRTE_SHOW_HELP_LEX_H
+#ifndef PRTE_SHOW_HELP_LEX_H
+#define PRTE_SHOW_HELP_LEX_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef malloc
 #undef malloc
@@ -35,14 +35,14 @@
 
 #include <stdio.h>
 BEGIN_C_DECLS
-int prrte_show_help_yylex(void);
-int prrte_show_help_init_buffer(FILE *file);
-int prrte_show_help_yylex_destroy(void);
+int prte_show_help_yylex(void);
+int prte_show_help_init_buffer(FILE *file);
+int prte_show_help_yylex_destroy(void);
 
-extern FILE *prrte_show_help_yyin;
-extern bool prrte_show_help_parse_done;
-extern char *prrte_show_help_yytext;
-extern int prrte_show_help_yynewlines;
+extern FILE *prte_show_help_yyin;
+extern bool prte_show_help_parse_done;
+extern char *prte_show_help_yytext;
+extern int prte_show_help_yynewlines;
 
 /*
  * Make lex-generated files not issue compiler warnings
@@ -55,13 +55,13 @@ extern int prrte_show_help_yynewlines;
 #define YY_SKIP_YYWRAP 1
 
 enum {
-    PRRTE_SHOW_HELP_PARSE_DONE,
-    PRRTE_SHOW_HELP_PARSE_ERROR,
+    PRTE_SHOW_HELP_PARSE_DONE,
+    PRTE_SHOW_HELP_PARSE_ERROR,
 
-    PRRTE_SHOW_HELP_PARSE_TOPIC,
-    PRRTE_SHOW_HELP_PARSE_MESSAGE,
+    PRTE_SHOW_HELP_PARSE_TOPIC,
+    PRTE_SHOW_HELP_PARSE_MESSAGE,
 
-    PRRTE_SHOW_HELP_PARSE_MAX
+    PRTE_SHOW_HELP_PARSE_MAX
 };
 END_C_DECLS
 #endif

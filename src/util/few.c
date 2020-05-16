@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +19,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -35,13 +36,13 @@
 #include "src/util/argv.h"
 #include "constants.h"
 
-int prrte_few(char *argv[], int *status)
+int prte_few(char *argv[], int *status)
 {
 #if defined(HAVE_FORK) && defined(HAVE_EXECVE) && defined(HAVE_WAITPID)
     pid_t pid, ret;
 
     if ((pid = fork()) < 0) {
-      return PRRTE_ERR_IN_ERRNO;
+      return PRTE_ERR_IN_ERRNO;
     }
 
     /* Child execs.  If it fails to exec, exit. */
@@ -70,15 +71,15 @@ int prrte_few(char *argv[], int *status)
 
           /* Otherwise, some bad juju happened -- need to quit */
 
-          return PRRTE_ERR_IN_ERRNO;
+          return PRTE_ERR_IN_ERRNO;
         }
       } while (true);
     }
 
     /* Return the status to the caller */
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 #else
-    return PRRTE_ERR_NOT_SUPPORTED;
+    return PRTE_ERR_NOT_SUPPORTED;
 #endif
 }

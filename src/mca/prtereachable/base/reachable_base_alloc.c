@@ -2,6 +2,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -9,21 +10,21 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
-#include "src/class/prrte_object.h"
+#include "src/class/prte_object.h"
 
 #include "src/mca/prtereachable/prtereachable.h"
 #include "src/mca/prtereachable/base/base.h"
 
 
-static void prrte_reachable_construct(prrte_reachable_t *reachable)
+static void prte_reachable_construct(prte_reachable_t *reachable)
 {
     reachable->weights = NULL;
 }
 
 
-static void prrte_reachable_destruct(prrte_reachable_t * reachable)
+static void prte_reachable_destruct(prte_reachable_t * reachable)
 {
     if (NULL != reachable->memory) {
         free(reachable->memory);
@@ -31,12 +32,12 @@ static void prrte_reachable_destruct(prrte_reachable_t * reachable)
 }
 
 
-prrte_reachable_t * prrte_reachable_allocate(unsigned int num_local,
+prte_reachable_t * prte_reachable_allocate(unsigned int num_local,
                                              unsigned int num_remote)
 {
     char *memory;
     unsigned int i;
-    prrte_reachable_t *reachable = PRRTE_NEW(prrte_reachable_t);
+    prte_reachable_t *reachable = PRTE_NEW(prte_reachable_t);
 
     reachable->num_local = num_local;
     reachable->num_remote = num_remote;
@@ -59,9 +60,9 @@ prrte_reachable_t * prrte_reachable_allocate(unsigned int num_local,
     return reachable;
 }
 
-PRRTE_CLASS_INSTANCE(
-    prrte_reachable_t,
-    prrte_object_t,
-    prrte_reachable_construct,
-    prrte_reachable_destruct
+PRTE_CLASS_INSTANCE(
+    prte_reachable_t,
+    prte_object_t,
+    prte_reachable_construct,
+    prte_reachable_destruct
 );

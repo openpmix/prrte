@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -37,10 +37,10 @@
  *
  */
 
-#ifndef PRRTE_IOF_HNP_H
-#define PRRTE_IOF_HNP_H
+#ifndef PRTE_IOF_HNP_H
+#define PRTE_IOF_HNP_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -61,28 +61,28 @@ BEGIN_C_DECLS
 /**
  * IOF HNP Component
  */
-struct prrte_iof_hnp_component_t {
-    prrte_iof_base_component_t super;
-    prrte_list_t procs;
-    prrte_iof_read_event_t *stdinev;
-    prrte_event_t stdinsig;
+struct prte_iof_hnp_component_t {
+    prte_iof_base_component_t super;
+    prte_list_t procs;
+    prte_iof_read_event_t *stdinev;
+    prte_event_t stdinsig;
 };
-typedef struct prrte_iof_hnp_component_t prrte_iof_hnp_component_t;
+typedef struct prte_iof_hnp_component_t prte_iof_hnp_component_t;
 
-PRRTE_MODULE_EXPORT extern prrte_iof_hnp_component_t prrte_iof_hnp_component;
-extern prrte_iof_base_module_t prrte_iof_hnp_module;
+PRTE_MODULE_EXPORT extern prte_iof_hnp_component_t prte_iof_hnp_component;
+extern prte_iof_base_module_t prte_iof_hnp_module;
 
-void prrte_iof_hnp_recv(int status, prrte_process_name_t* sender,
-                       prrte_buffer_t* buffer, prrte_rml_tag_t tag,
+void prte_iof_hnp_recv(int status, prte_process_name_t* sender,
+                       prte_buffer_t* buffer, prte_rml_tag_t tag,
                        void* cbdata);
 
-void prrte_iof_hnp_read_local_handler(int fd, short event, void *cbdata);
-void prrte_iof_hnp_stdin_cb(int fd, short event, void *cbdata);
-bool prrte_iof_hnp_stdin_check(int fd);
+void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata);
+void prte_iof_hnp_stdin_cb(int fd, short event, void *cbdata);
+bool prte_iof_hnp_stdin_check(int fd);
 
-int prrte_iof_hnp_send_data_to_endpoint(prrte_process_name_t *host,
-                                       prrte_process_name_t *target,
-                                       prrte_iof_tag_t tag,
+int prte_iof_hnp_send_data_to_endpoint(prte_process_name_t *host,
+                                       prte_process_name_t *target,
+                                       prte_iof_tag_t tag,
                                        unsigned char *data, int numbytes);
 
 END_C_DECLS

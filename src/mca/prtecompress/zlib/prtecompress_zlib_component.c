@@ -7,6 +7,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,7 +15,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "constants.h"
 #include "src/mca/prtecompress/prtecompress.h"
@@ -24,52 +25,52 @@
 /*
  * Public string for version number
  */
-const char *prrte_prtecompress_zlib_component_version_string =
-"PRRTE COMPRESS zlib MCA component version " PRRTE_VERSION;
+const char *prte_prtecompress_zlib_component_version_string =
+"PRTE COMPRESS zlib MCA component version " PRTE_VERSION;
 /*
  * Instantiate the public struct with all of our public information
  * and pointer to our public functions in it
  */
-prrte_prtecompress_base_component_t prrte_prtecompress_zlib_component = {
+prte_prtecompress_base_component_t prte_prtecompress_zlib_component = {
     /* Handle the general mca_component_t struct containing
      *  meta information about the component itzlib
      */
     .base_version = {
-        PRRTE_COMPRESS_BASE_VERSION_2_0_0,
+        PRTE_COMPRESS_BASE_VERSION_2_0_0,
 
         /* Component name and version */
         .mca_component_name = "zlib",
-        PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                    PRRTE_RELEASE_VERSION),
+        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                    PRTE_RELEASE_VERSION),
 
-        .mca_query_component = prrte_prtecompress_zlib_component_query,
+        .mca_query_component = prte_prtecompress_zlib_component_query,
     },
     .base_data = {
         /* The component is checkpoint ready */
-        PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
     }
 };
 
 /*
  * Zlib module
  */
-static prrte_prtecompress_base_module_t loc_module = {
+static prte_prtecompress_base_module_t loc_module = {
     /** Initialization Function */
-    .init = prrte_prtecompress_zlib_module_init,
+    .init = prte_prtecompress_zlib_module_init,
     /** Finalization Function */
-    .finalize = prrte_prtecompress_zlib_module_finalize,
+    .finalize = prte_prtecompress_zlib_module_finalize,
 
     /** Compress Function */
-    .compress_block = prrte_prtecompress_zlib_compress_block,
+    .compress_block = prte_prtecompress_zlib_compress_block,
 
     /** Deprtecompress Function */
-    .decompress_block = prrte_prtecompress_zlib_uncompress_block,
+    .decompress_block = prte_prtecompress_zlib_uncompress_block,
 };
 
-int prrte_prtecompress_zlib_component_query(prrte_mca_base_module_t **module, int *priority)
+int prte_prtecompress_zlib_component_query(prte_mca_base_module_t **module, int *priority)
 {
-    *module   = (prrte_mca_base_module_t *)&loc_module;
+    *module   = (prte_mca_base_module_t *)&loc_module;
     *priority = 10;
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2009 Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  *
@@ -13,10 +13,10 @@
 
 /* @file */
 
-#ifndef PRRTE_UTIL_FD_H_
-#define PRRTE_UTIL_FD_H_
+#ifndef PRTE_UTIL_FD_H_
+#define PRTE_UTIL_FD_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 BEGIN_C_DECLS
 
@@ -27,14 +27,14 @@ BEGIN_C_DECLS
  * @param len Number of bytes to read
  * @param buffer Pre-allocated buffer (large enough to hold len bytes)
  *
- * @returns PRRTE_SUCCESS upon success.
- * @returns PRRTE_ERR_TIMEOUT if the fd closes before reading the full amount.
- * @returns PRRTE_ERR_IN_ERRNO otherwise.
+ * @returns PRTE_SUCCESS upon success.
+ * @returns PRTE_ERR_TIMEOUT if the fd closes before reading the full amount.
+ * @returns PRTE_ERR_IN_ERRNO otherwise.
  *
  * Loop over reading from the fd until len bytes are read or an error
  * occurs.  EAGAIN and EINTR are transparently handled.
  */
-PRRTE_EXPORT int prrte_fd_read(int fd, int len, void *buffer);
+PRTE_EXPORT int prte_fd_read(int fd, int len, void *buffer);
 
 /**
  * Write a complete buffer to a file descriptor.
@@ -43,27 +43,27 @@ PRRTE_EXPORT int prrte_fd_read(int fd, int len, void *buffer);
  * @param len Number of bytes to write
  * @param buffer Buffer to write from
  *
- * @returns PRRTE_SUCCESS upon success.
- * @returns PRRTE_ERR_IN_ERRNO otherwise.
+ * @returns PRTE_SUCCESS upon success.
+ * @returns PRTE_ERR_IN_ERRNO otherwise.
  *
  * Loop over writing to the fd until len bytes are written or an error
  * occurs.  EAGAIN and EINTR are transparently handled.
  */
-PRRTE_EXPORT int prrte_fd_write(int fd, int len, const void *buffer);
+PRTE_EXPORT int prte_fd_write(int fd, int len, const void *buffer);
 
 /**
  * Convenience function to set a file descriptor to be close-on-exec.
  *
  * @param fd File descriptor
  *
- * @returns PRRTE_SUCCESS upon success (or if the system does not
+ * @returns PRTE_SUCCESS upon success (or if the system does not
  * support close-on-exec behavior).
- * @returns PRRTE_ERR_IN_ERRNO otherwise.
+ * @returns PRTE_ERR_IN_ERRNO otherwise.
  *
  * This is simply a convenience function because there's a few steps
  * to setting a file descriptor to be close-on-exec.
  */
-PRRTE_EXPORT int prrte_fd_set_cloexec(int fd);
+PRTE_EXPORT int prte_fd_set_cloexec(int fd);
 
 /**
  * Convenience function to check if fd point to an accessible regular file.
@@ -73,7 +73,7 @@ PRRTE_EXPORT int prrte_fd_set_cloexec(int fd);
  * @returns true if "fd" points to a regular file.
  * @returns false otherwise.
  */
-PRRTE_EXPORT bool prrte_fd_is_regular(int fd);
+PRTE_EXPORT bool prte_fd_is_regular(int fd);
 
 /**
  * Convenience function to check if fd point to an accessible character device.
@@ -83,7 +83,7 @@ PRRTE_EXPORT bool prrte_fd_is_regular(int fd);
  * @returns true if "fd" points to a regular file.
  * @returns false otherwise.
  */
-PRRTE_EXPORT bool prrte_fd_is_chardev(int fd);
+PRTE_EXPORT bool prte_fd_is_chardev(int fd);
 
 /**
  * Convenience function to check if fd point to an accessible block device.
@@ -93,7 +93,7 @@ PRRTE_EXPORT bool prrte_fd_is_chardev(int fd);
  * @returns true if "fd" points to a regular file.
  * @returns false otherwise.
  */
-PRRTE_EXPORT bool prrte_fd_is_blkdev(int fd);
+PRTE_EXPORT bool prte_fd_is_blkdev(int fd);
 
 /**
  * Convenience function to get a string name of the peer on the other
@@ -103,13 +103,13 @@ PRRTE_EXPORT bool prrte_fd_is_blkdev(int fd);
  *
  * @returns resolvable IP name, or "a.b.c.d".  This string must be freed by the caller.
  */
-PRRTE_EXPORT const char *prrte_fd_get_peer_name(int fd);
+PRTE_EXPORT const char *prte_fd_get_peer_name(int fd);
 
 /**
  * Close all open sockets other than stdin/out/err prior to
  * exec'ing a new binary
  */
-PRRTE_EXPORT void prrte_close_open_file_descriptors(int protected_fd);
+PRTE_EXPORT void prte_close_open_file_descriptors(int protected_fd);
 
 END_C_DECLS
 

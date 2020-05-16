@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2013 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2013      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
@@ -14,7 +14,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -30,17 +30,17 @@ static int if_posix_open(void);
 /* Supports all flavors of posix except those
  * BSD-flavors supported elsewhere
  */
-prrte_if_base_component_t prrte_prteif_posix_ipv4_component = {
+prte_if_base_component_t prte_prteif_posix_ipv4_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     {
-        PRRTE_IF_BASE_VERSION_2_0_0,
+        PRTE_IF_BASE_VERSION_2_0_0,
 
         /* Component name and version */
         "posix_ipv4",
-        PRRTE_MAJOR_VERSION,
-        PRRTE_MINOR_VERSION,
-        PRRTE_RELEASE_VERSION,
+        PRTE_MAJOR_VERSION,
+        PRTE_MINOR_VERSION,
+        PRTE_RELEASE_VERSION,
 
         /* Component open and close functions */
         if_posix_open,
@@ -48,7 +48,7 @@ prrte_if_base_component_t prrte_prteif_posix_ipv4_component = {
     },
     {
         /* This component is checkpointable */
-        PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
     },
 };
 
@@ -84,9 +84,9 @@ static int if_posix_open(void)
        using AF_UNSPEC or AF_INET6 will cause everything to
        fail. */
     if ((sd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        prrte_output(0, "prrte_ifinit: socket() failed with errno=%d\n",
+        prte_output(0, "prte_ifinit: socket() failed with errno=%d\n",
                     errno);
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     /*
@@ -113,7 +113,7 @@ static int if_posix_open(void)
         ifconf.ifc_req = malloc(ifc_len);
         if (NULL == ifconf.ifc_req) {
             close(sd);
-            return PRRTE_ERROR;
+            return PRTE_ERROR;
         }
 
         /* initialize the memory so valgrind and purify won't
@@ -127,12 +127,12 @@ static int if_posix_open(void)
                space.  so we'll fall down and try to expand our
                space */
             if (errno != EINVAL && lastlen != 0) {
-                prrte_output(0, "prrte_ifinit: ioctl(SIOCGIFCONF) \
+                prte_output(0, "prte_ifinit: ioctl(SIOCGIFCONF) \
                             failed with errno=%d",
                             errno);
                 free(ifconf.ifc_req);
                 close(sd);
-                return PRRTE_ERROR;
+                return PRTE_ERROR;
             }
         } else {
             /* if ifc_len is 0 or different than what we set it to
@@ -152,9 +152,9 @@ static int if_posix_open(void)
         ifc_len = (ifc_len == 0) ? 1 : ifc_len * 2;
     } while (ifc_len < MAX_IFCONF_SIZE);
     if (!successful_locate) {
-        prrte_output(0, "prrte_ifinit: unable to find network interfaces.");
+        prte_output(0, "prte_ifinit: unable to find network interfaces.");
         close(sd);
-        return PRRTE_ERR_FATAL;
+        return PRTE_ERR_FATAL;
     }
 
     /*
@@ -166,7 +166,7 @@ static int if_posix_open(void)
     /* loop through all interfaces */
     while (rem > 0) {
         struct ifreq* ifr = (struct ifreq*) ptr;
-        prrte_if_t *intf;
+        prte_if_t *intf;
         int length;
 
         /* compute offset for entries */
@@ -191,7 +191,7 @@ static int if_posix_open(void)
         }
 
         if (ioctl(sd, SIOCGIFFLAGS, ifr) < 0) {
-            prrte_output(0, "prrte_ifinit: ioctl(SIOCGIFFLAGS) failed with errno=%d", errno);
+            prte_output(0, "prte_ifinit: ioctl(SIOCGIFFLAGS) failed with errno=%d", errno);
             continue;
         }
         if ((ifr->ifr_flags & IFF_UP) == 0) {
@@ -205,29 +205,29 @@ static int if_posix_open(void)
         }
 #endif
 #if 0
-        if (!prrte_if_retain_loopback && (ifr->ifr_flags & IFF_LOOPBACK) != 0) {
+        if (!prte_if_retain_loopback && (ifr->ifr_flags & IFF_LOOPBACK) != 0) {
             continue;
         }
 #endif
 
-        intf = PRRTE_NEW(prrte_if_t);
+        intf = PRTE_NEW(prte_if_t);
         if (NULL == intf) {
-            prrte_output(0, "prrte_ifinit: unable to allocated %lu bytes\n", (unsigned long)sizeof(prrte_if_t));
+            prte_output(0, "prte_ifinit: unable to allocated %lu bytes\n", (unsigned long)sizeof(prte_if_t));
             free(ifconf.ifc_req);
             close(sd);
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
         intf->af_family = AF_INET;
 
         /* copy entry over into our data structure */
         memset(intf->if_name, 0, sizeof(intf->if_name));
-        prrte_string_copy(intf->if_name, ifr->ifr_name, sizeof(intf->if_name));
+        prte_string_copy(intf->if_name, ifr->ifr_name, sizeof(intf->if_name));
         intf->if_flags = ifr->ifr_flags;
 
         /* every new address gets its own internal if_index */
-        intf->if_index = prrte_list_get_size(&prrte_if_list)+1;
+        intf->if_index = prte_list_get_size(&prte_if_list)+1;
 
-        prrte_output_verbose(1, prrte_prteif_base_framework.framework_output,
+        prte_output_verbose(1, prte_prteif_base_framework.framework_output,
                             "found interface %s", intf->if_name);
 
         /* assign the kernel index to distinguish different NICs */
@@ -235,8 +235,8 @@ static int if_posix_open(void)
         intf->if_kernel_index = intf->if_index;
 #else
         if (ioctl(sd, SIOCGIFINDEX, ifr) < 0) {
-            prrte_output(0,"prrte_ifinit: ioctl(SIOCGIFINDEX) failed with errno=%d", errno);
-            PRRTE_RELEASE(intf);
+            prte_output(0,"prte_ifinit: ioctl(SIOCGIFINDEX) failed with errno=%d", errno);
+            PRTE_RELEASE(intf);
             continue;
         }
 #if defined(ifr_ifindex)
@@ -251,12 +251,12 @@ static int if_posix_open(void)
         /* This call returns IPv4 addresses only. Use SIOCGLIFADDR
            instead */
         if (ioctl(sd, SIOCGIFADDR, ifr) < 0) {
-            prrte_output(0, "prrte_ifinit: ioctl(SIOCGIFADDR) failed with errno=%d", errno);
-            PRRTE_RELEASE(intf);
+            prte_output(0, "prte_ifinit: ioctl(SIOCGIFADDR) failed with errno=%d", errno);
+            PRTE_RELEASE(intf);
             break;
         }
         if (AF_INET != ifr->ifr_addr.sa_family) {
-            PRRTE_RELEASE(intf);
+            PRTE_RELEASE(intf);
             continue;
         }
 
@@ -264,8 +264,8 @@ static int if_posix_open(void)
         memcpy(&intf->if_addr, &ifr->ifr_addr, sizeof(struct sockaddr_in));
 
         if (ioctl(sd, SIOCGIFNETMASK, ifr) < 0) {
-            prrte_output(0, "prrte_ifinit: ioctl(SIOCGIFNETMASK) failed with errno=%d", errno);
-            PRRTE_RELEASE(intf);
+            prte_output(0, "prte_ifinit: ioctl(SIOCGIFNETMASK) failed with errno=%d", errno);
+            PRTE_RELEASE(intf);
             continue;
         }
 
@@ -275,7 +275,7 @@ static int if_posix_open(void)
 #if defined(SIOCGIFHWADDR) && defined(HAVE_STRUCT_IFREQ_IFR_HWADDR)
         /* get the MAC address */
         if (ioctl(sd, SIOCGIFHWADDR, ifr) < 0) {
-            prrte_output(0, "prrte_ifinit: ioctl(SIOCGIFHWADDR) failed with errno=%d", errno);
+            prte_output(0, "prte_ifinit: ioctl(SIOCGIFHWADDR) failed with errno=%d", errno);
             break;
         }
         memcpy(intf->if_mac, ifr->ifr_hwaddr.sa_data, 6);
@@ -284,18 +284,18 @@ static int if_posix_open(void)
 #if defined(SIOCGIFMTU) && defined(HAVE_STRUCT_IFREQ_IFR_MTU)
         /* get the MTU */
         if (ioctl(sd, SIOCGIFMTU, ifr) < 0) {
-            prrte_output(0, "prrte_ifinit: ioctl(SIOCGIFMTU) failed with errno=%d", errno);
+            prte_output(0, "prte_ifinit: ioctl(SIOCGIFMTU) failed with errno=%d", errno);
             break;
         }
         intf->ifmtu = ifr->ifr_mtu;
 #endif
 
-        prrte_list_append(&prrte_if_list, &(intf->super));
+        prte_list_append(&prte_if_list, &(intf->super));
     }
     free(ifconf.ifc_req);
     close(sd);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 

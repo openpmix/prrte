@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2007-2015 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
 # Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2016      Los Alamos National Security, LLC. All rights
@@ -26,15 +26,15 @@
 
 SUBDIRS = keyval hostfile
 
-dist_prrtedata_DATA = help-prrte-util.txt \
+dist_prtedata_DATA = help-prte-util.txt \
                       help-regex.txt \
                       hostfile/help-hostfile.txt \
                       dash_host/help-dash-host.txt
 
-AM_LFLAGS = -Pprrte_show_help_yy
-LEX_OUTPUT_ROOT = lex.prrte_show_help_yy
+AM_LFLAGS = -Pprte_show_help_yy
+LEX_OUTPUT_ROOT = lex.prte_show_help_yy
 
-noinst_LTLIBRARIES = libprrteutil.la
+noinst_LTLIBRARIES = libprteutil.la
 
 AM_CPPFLAGS = $(LTDLINCL)
 
@@ -74,9 +74,9 @@ headers = \
         path.h \
         printf.h \
         proc_info.h \
-        prrte_environ.h \
-        prrte_getcwd.h \
-        prrte_pty.h \
+        prte_environ.h \
+        prte_getcwd.h \
+        prte_pty.h \
         qsort.h \
         session_dir.h \
         show_help_lex.h \
@@ -86,7 +86,7 @@ headers = \
         sys_limits.h \
         uri.h
 
-libprrteutil_la_SOURCES = \
+libprteutil_la_SOURCES = \
         $(headers) \
         alfg.c \
         arch.c \
@@ -119,9 +119,9 @@ libprrteutil_la_SOURCES = \
         path.c \
         printf.c \
         proc_info.c \
-        prrte_environ.c \
-        prrte_getcwd.c \
-        prrte_pty.c \
+        prte_environ.c \
+        prte_getcwd.c \
+        prte_pty.c \
         qsort.c \
         session_dir.c \
         show_help.c \
@@ -131,18 +131,18 @@ libprrteutil_la_SOURCES = \
         sys_limits.c \
         uri.c
 
-libprrteutil_la_LIBADD = \
-        keyval/libprrteutilkeyval.la \
-	hostfile/libprrteutilhostfile.la
-libprrteutil_la_DEPENDENCIES = \
-        keyval/libprrteutilkeyval.la \
-	hostfile/libprrteutilhostfile.la
+libprteutil_la_LIBADD = \
+        keyval/libprteutilkeyval.la \
+	hostfile/libprteutilhostfile.la
+libprteutil_la_DEPENDENCIES = \
+        keyval/libprteutilkeyval.la \
+	hostfile/libprteutilhostfile.la
 
 # Conditionally install the header files
 
 if WANT_INSTALL_HEADERS
-prrtedir = $(prrteincludedir)/$(subdir)
-prrte_HEADERS = $(headers)
+prtedir = $(prteincludedir)/$(subdir)
+prte_HEADERS = $(headers)
 endif
 
 maintainer-clean-local:

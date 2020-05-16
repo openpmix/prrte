@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
@@ -15,7 +15,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdlib.h>
 #include <dlfcn.h>
@@ -53,7 +53,7 @@ static void do_dlopen(const char *fname, int flags,
 
 
 static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
-                       prrte_dl_handle_t **handle, char **err_msg)
+                       prte_dl_handle_t **handle, char **err_msg)
 {
     assert(handle);
 
@@ -74,14 +74,14 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
         int i;
         char *ext;
 
-        for (i = 0, ext = prrte_prtedl_dlopen_component.filename_suffixes[i];
+        for (i = 0, ext = prte_prtedl_dlopen_component.filename_suffixes[i];
              NULL != ext;
-             ext = prrte_prtedl_dlopen_component.filename_suffixes[++i]) {
+             ext = prte_prtedl_dlopen_component.filename_suffixes[++i]) {
             char *name;
 
-            prrte_asprintf(&name, "%s%s", fname, ext);
+            prte_asprintf(&name, "%s%s", fname, ext);
             if (NULL == name) {
-                return PRRTE_ERR_IN_ERRNO;
+                return PRTE_ERR_IN_ERRNO;
             }
 
             /* Does the file exist? */
@@ -109,10 +109,10 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
     }
 
     if (NULL != local_handle) {
-        *handle = calloc(1, sizeof(prrte_dl_handle_t));
+        *handle = calloc(1, sizeof(prte_dl_handle_t));
         (*handle)->dlopen_handle = local_handle;
 
-#if PRRTE_ENABLE_DEBUG
+#if PRTE_ENABLE_DEBUG
         if( NULL != fname ) {
             (*handle)->filename = strdup(fname);
         }
@@ -121,11 +121,11 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
         }
 #endif
     }
-    return (NULL != local_handle) ? PRRTE_SUCCESS : PRRTE_ERROR;
+    return (NULL != local_handle) ? PRTE_SUCCESS : PRTE_ERROR;
 }
 
 
-static int dlopen_lookup(prrte_dl_handle_t *handle, const char *symbol,
+static int dlopen_lookup(prte_dl_handle_t *handle, const char *symbol,
                          void **ptr, char **err_msg)
 {
     assert(handle);
@@ -135,24 +135,24 @@ static int dlopen_lookup(prrte_dl_handle_t *handle, const char *symbol,
 
     *ptr = dlsym(handle->dlopen_handle, symbol);
     if (NULL != *ptr) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     if (NULL != err_msg) {
         *err_msg = dlerror();
     }
-    return PRRTE_ERROR;
+    return PRTE_ERROR;
 }
 
 
-static int dlopen_close(prrte_dl_handle_t *handle)
+static int dlopen_close(prte_dl_handle_t *handle)
 {
     assert(handle);
 
     int ret;
     ret = dlclose(handle->dlopen_handle);
 
-#if PRRTE_ENABLE_DEBUG
+#if PRTE_ENABLE_DEBUG
     free(handle->filename);
 #endif
     free(handle);
@@ -173,12 +173,12 @@ static int dlopen_foreachfile(const char *search_path,
     char **dirs = NULL;
     char **good_files = NULL;
 
-    dirs = prrte_argv_split(search_path, PRRTE_ENV_SEP);
+    dirs = prte_argv_split(search_path, PRTE_ENV_SEP);
     for (int i = 0; NULL != dirs && NULL != dirs[i]; ++i) {
 
         dp = opendir(dirs[i]);
         if (NULL == dp) {
-            ret = PRRTE_ERR_IN_ERRNO;
+            ret = PRTE_ERR_IN_ERRNO;
             goto error;
         }
 
@@ -187,9 +187,9 @@ static int dlopen_foreachfile(const char *search_path,
 
             /* Make the absolute path name */
             char *abs_name = NULL;
-            prrte_asprintf(&abs_name, "%s/%s", dirs[i], de->d_name);
+            prte_asprintf(&abs_name, "%s/%s", dirs[i], de->d_name);
             if (NULL == abs_name) {
-                ret = PRRTE_ERR_IN_ERRNO;
+                ret = PRTE_ERR_IN_ERRNO;
                 goto error;
             }
 
@@ -197,7 +197,7 @@ static int dlopen_foreachfile(const char *search_path,
             struct stat buf;
             if (stat(abs_name, &buf) < 0) {
                 free(abs_name);
-                ret = PRRTE_ERR_IN_ERRNO;
+                ret = PRTE_ERR_IN_ERRNO;
                 goto error;
             }
 
@@ -233,7 +233,7 @@ static int dlopen_foreachfile(const char *search_path,
             }
 
             if (!found) {
-                prrte_argv_append_nosize(&good_files, abs_name);
+                prte_argv_append_nosize(&good_files, abs_name);
             }
             free(abs_name);
         }
@@ -245,23 +245,23 @@ static int dlopen_foreachfile(const char *search_path,
     if (NULL != good_files) {
         for (int i = 0; NULL != good_files[i]; ++i) {
             ret = func(good_files[i], data);
-            if (PRRTE_SUCCESS != ret) {
+            if (PRTE_SUCCESS != ret) {
                 goto error;
             }
         }
     }
 
-    ret = PRRTE_SUCCESS;
+    ret = PRTE_SUCCESS;
 
  error:
     if (NULL != dp) {
         closedir(dp);
     }
     if (NULL != dirs) {
-        prrte_argv_free(dirs);
+        prte_argv_free(dirs);
     }
     if (NULL != good_files) {
-        prrte_argv_free(good_files);
+        prte_argv_free(good_files);
     }
 
     return ret;
@@ -271,7 +271,7 @@ static int dlopen_foreachfile(const char *search_path,
 /*
  * Module definition
  */
-prrte_prtedl_base_module_t prrte_prtedl_dlopen_module = {
+prte_prtedl_base_module_t prte_prtedl_dlopen_module = {
     .open = dlopen_open,
     .lookup = dlopen_lookup,
     .close = dlopen_close,

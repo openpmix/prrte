@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,10 +22,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_MCA_BACKTRACE_BACKTRACE_H
-#define PRRTE_MCA_BACKTRACE_BACKTRACE_H
+#ifndef PRTE_MCA_BACKTRACE_BACKTRACE_H
+#define PRTE_MCA_BACKTRACE_BACKTRACE_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
@@ -43,11 +44,11 @@ BEGIN_C_DECLS
  * Print back trace to FILE file with a prefix for each line.
  * First strip lines are not printed.
  * If 'file' is NULL then the component should try to use the file descriptor
- * saved in prrte_stacktrace_output_fileno
+ * saved in prte_stacktrace_output_fileno
  *
  * \note some attempts made to be signal safe.
  */
-PRRTE_EXPORT int prrte_backtrace_print(FILE *file, char *prefix, int strip);
+PRTE_EXPORT int prte_backtrace_print(FILE *file, char *prefix, int strip);
 
 /*
  * Return back trace in buffer.  buffer will be allocated by the
@@ -56,29 +57,29 @@ PRRTE_EXPORT int prrte_backtrace_print(FILE *file, char *prefix, int strip);
  * \note Probably bad to call this from a signal handler.
  *
  */
-PRRTE_EXPORT int prrte_backtrace_buffer(char*** messages, int *len);
+PRTE_EXPORT int prte_backtrace_buffer(char*** messages, int *len);
 
 
 /**
  * Structure for backtrace components.
  */
-struct prrte_backtrace_base_component_2_0_0_t {
+struct prte_backtrace_base_component_2_0_0_t {
     /** MCA base component */
-    prrte_mca_base_component_t backtracec_version;
+    prte_mca_base_component_t backtracec_version;
     /** MCA base data */
-    prrte_mca_base_component_data_t backtracec_data;
+    prte_mca_base_component_data_t backtracec_data;
 };
 /**
  * Convenience typedef
  */
-typedef struct prrte_backtrace_base_component_2_0_0_t prrte_backtrace_base_component_2_0_0_t;
+typedef struct prte_backtrace_base_component_2_0_0_t prte_backtrace_base_component_2_0_0_t;
 
 /*
  * Macro for use in components that are of type backtrace
  */
-#define PRRTE_BACKTRACE_BASE_VERSION_2_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("backtrace", 2, 0, 0)
+#define PRTE_BACKTRACE_BASE_VERSION_2_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("backtrace", 2, 0, 0)
 
 END_C_DECLS
 
-#endif /* PRRTE_MCA_BACKTRACE_BACKTRACE_H */
+#endif /* PRTE_MCA_BACKTRACE_BACKTRACE_H */

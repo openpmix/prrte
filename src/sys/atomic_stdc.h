@@ -6,6 +6,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2019      Google, LLC. All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -13,7 +14,7 @@
  * $HEADER$
  */
 
-/* This file provides shims between the prrte atomics interface and the C11 atomics interface. It
+/* This file provides shims between the prte atomics interface and the C11 atomics interface. It
  * is intended as the first step in moving to using C11 atomics across the entire codebase. Once
  * all officially supported compilers offer C11 atomic (GCC 4.9.0+, icc 2018+, pgi, xlc, etc) then
  * this shim will go away and the codebase will be updated to use C11's atomic support
@@ -22,251 +23,251 @@
  * atomic_impl.h when using C11 atomics. It would require alot of #ifdefs to avoid duplicate
  * definitions to be worthwhile. */
 
-#if !defined(PRRTE_ATOMIC_STDC_H)
-#define PRRTE_ATOMIC_STDC_H
+#if !defined(PRTE_ATOMIC_STDC_H)
+#define PRTE_ATOMIC_STDC_H
 
 #include <stdatomic.h>
 #include <stdint.h>
-#include "prrte_stdint.h"
+#include "prte_stdint.h"
 
-#define PRRTE_HAVE_ATOMIC_MEM_BARRIER 1
+#define PRTE_HAVE_ATOMIC_MEM_BARRIER 1
 
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_32 1
-#define PRRTE_HAVE_ATOMIC_SWAP_32 1
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_32 1
+#define PRTE_HAVE_ATOMIC_SWAP_32 1
 
-#define PRRTE_HAVE_ATOMIC_MATH_32 1
-#define PRRTE_HAVE_ATOMIC_ADD_32 1
-#define PRRTE_HAVE_ATOMIC_AND_32 1
-#define PRRTE_HAVE_ATOMIC_OR_32 1
-#define PRRTE_HAVE_ATOMIC_XOR_32 1
-#define PRRTE_HAVE_ATOMIC_SUB_32 1
+#define PRTE_HAVE_ATOMIC_MATH_32 1
+#define PRTE_HAVE_ATOMIC_ADD_32 1
+#define PRTE_HAVE_ATOMIC_AND_32 1
+#define PRTE_HAVE_ATOMIC_OR_32 1
+#define PRTE_HAVE_ATOMIC_XOR_32 1
+#define PRTE_HAVE_ATOMIC_SUB_32 1
 
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_64 1
-#define PRRTE_HAVE_ATOMIC_SWAP_64 1
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_64 1
+#define PRTE_HAVE_ATOMIC_SWAP_64 1
 
-#define PRRTE_HAVE_ATOMIC_MATH_64 1
-#define PRRTE_HAVE_ATOMIC_ADD_64 1
-#define PRRTE_HAVE_ATOMIC_AND_64 1
-#define PRRTE_HAVE_ATOMIC_OR_64 1
-#define PRRTE_HAVE_ATOMIC_XOR_64 1
-#define PRRTE_HAVE_ATOMIC_SUB_64 1
+#define PRTE_HAVE_ATOMIC_MATH_64 1
+#define PRTE_HAVE_ATOMIC_ADD_64 1
+#define PRTE_HAVE_ATOMIC_AND_64 1
+#define PRTE_HAVE_ATOMIC_OR_64 1
+#define PRTE_HAVE_ATOMIC_XOR_64 1
+#define PRTE_HAVE_ATOMIC_SUB_64 1
 
-#define PRRTE_HAVE_ATOMIC_LLSC_32 0
-#define PRRTE_HAVE_ATOMIC_LLSC_64 0
-#define PRRTE_HAVE_ATOMIC_LLSC_PTR 0
+#define PRTE_HAVE_ATOMIC_LLSC_32 0
+#define PRTE_HAVE_ATOMIC_LLSC_64 0
+#define PRTE_HAVE_ATOMIC_LLSC_PTR 0
 
-#define PRRTE_HAVE_ATOMIC_MIN_32 1
-#define PRRTE_HAVE_ATOMIC_MAX_32 1
+#define PRTE_HAVE_ATOMIC_MIN_32 1
+#define PRTE_HAVE_ATOMIC_MAX_32 1
 
-#define PRRTE_HAVE_ATOMIC_MIN_64 1
-#define PRRTE_HAVE_ATOMIC_MAX_64 1
+#define PRTE_HAVE_ATOMIC_MIN_64 1
+#define PRTE_HAVE_ATOMIC_MAX_64 1
 
-#define PRRTE_HAVE_ATOMIC_SPINLOCKS 1
+#define PRTE_HAVE_ATOMIC_SPINLOCKS 1
 
-static inline void prrte_atomic_mb (void)
+static inline void prte_atomic_mb (void)
 {
     atomic_thread_fence (memory_order_seq_cst);
 }
 
-static inline void prrte_atomic_wmb (void)
+static inline void prte_atomic_wmb (void)
 {
     atomic_thread_fence (memory_order_release);
 }
 
-static inline void prrte_atomic_rmb (void)
+static inline void prte_atomic_rmb (void)
 {
-#if PRRTE_ASSEMBLY_ARCH == PRRTE_X86_64
+#if PRTE_ASSEMBLY_ARCH == PRTE_X86_64
     /* work around a bug in older gcc versions (observed in gcc 6.x)
      * where acquire seems to get treated as a no-op instead of being
      * equivalent to __asm__ __volatile__("": : :"memory") on x86_64 */
-    prrte_atomic_mb ();
+    prte_atomic_mb ();
 #else
     atomic_thread_fence (memory_order_acquire);
 #endif
 }
 
-#define prrte_atomic_compare_exchange_strong_32(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_relaxed, memory_order_relaxed)
-#define prrte_atomic_compare_exchange_strong_64(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_relaxed, memory_order_relaxed)
-#define prrte_atomic_compare_exchange_strong_ptr(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_relaxed, memory_order_relaxed)
-#define prrte_atomic_compare_exchange_strong_acq_32(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_acquire, memory_order_relaxed)
-#define prrte_atomic_compare_exchange_strong_acq_64(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_acquire, memory_order_relaxed)
-#define prrte_atomic_compare_exchange_strong_acq_ptr(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_acquire, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_32(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_relaxed, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_64(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_relaxed, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_ptr(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_relaxed, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_acq_32(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_acquire, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_acq_64(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_acquire, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_acq_ptr(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_acquire, memory_order_relaxed)
 
-#define prrte_atomic_compare_exchange_strong_rel_32(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_release, memory_order_relaxed)
-#define prrte_atomic_compare_exchange_strong_rel_64(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_release, memory_order_relaxed)
-#define prrte_atomic_compare_exchange_strong_rel_ptr(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_release, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_rel_32(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_release, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_rel_64(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_release, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_rel_ptr(addr, compare, value) atomic_compare_exchange_strong_explicit (addr, compare, value, memory_order_release, memory_order_relaxed)
 
-#define prrte_atomic_compare_exchange_strong(addr, oldval, newval) atomic_compare_exchange_strong_explicit (addr, oldval, newval, memory_order_relaxed, memory_order_relaxed)
-#define prrte_atomic_compare_exchange_strong_acq(addr, oldval, newval)  atomic_compare_exchange_strong_explicit (addr, oldval, newval, memory_order_acquire, memory_order_relaxed)
-#define prrte_atomic_compare_exchange_strong_rel(addr, oldval, newval)  atomic_compare_exchange_strong_explicit (addr, oldval, newval, memory_order_release, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong(addr, oldval, newval) atomic_compare_exchange_strong_explicit (addr, oldval, newval, memory_order_relaxed, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_acq(addr, oldval, newval)  atomic_compare_exchange_strong_explicit (addr, oldval, newval, memory_order_acquire, memory_order_relaxed)
+#define prte_atomic_compare_exchange_strong_rel(addr, oldval, newval)  atomic_compare_exchange_strong_explicit (addr, oldval, newval, memory_order_release, memory_order_relaxed)
 
-#define prrte_atomic_swap_32(addr, value) atomic_exchange_explicit (addr, value, memory_order_relaxed)
-#define prrte_atomic_swap_64(addr, value) atomic_exchange_explicit (addr, value, memory_order_relaxed)
-#define prrte_atomic_swap_ptr(addr, value) atomic_exchange_explicit (addr, value, memory_order_relaxed)
+#define prte_atomic_swap_32(addr, value) atomic_exchange_explicit (addr, value, memory_order_relaxed)
+#define prte_atomic_swap_64(addr, value) atomic_exchange_explicit (addr, value, memory_order_relaxed)
+#define prte_atomic_swap_ptr(addr, value) atomic_exchange_explicit (addr, value, memory_order_relaxed)
 
-#define PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(op, bits, type, operator)      \
-    static inline type prrte_atomic_fetch_ ## op ##_## bits (prrte_atomic_ ## type *addr, type value) \
+#define PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(op, bits, type, operator)      \
+    static inline type prte_atomic_fetch_ ## op ##_## bits (prte_atomic_ ## type *addr, type value) \
     {                                                                   \
         return atomic_fetch_ ## op ## _explicit (addr, value, memory_order_relaxed); \
     }                                                                   \
                                                                         \
-    static inline type prrte_atomic_## op ## _fetch_ ## bits (prrte_atomic_ ## type *addr, type value) \
+    static inline type prte_atomic_## op ## _fetch_ ## bits (prte_atomic_ ## type *addr, type value) \
     {                                                                   \
         return atomic_fetch_ ## op ## _explicit (addr, value, memory_order_relaxed) operator value; \
     }
 
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(add, 32, int32_t, +)
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(add, 64, int64_t, +)
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(add, size_t, size_t, +)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(add, 32, int32_t, +)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(add, 64, int64_t, +)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(add, size_t, size_t, +)
 
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(sub, 32, int32_t, -)
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(sub, 64, int64_t, -)
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(sub, size_t, size_t, -)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(sub, 32, int32_t, -)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(sub, 64, int64_t, -)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(sub, size_t, size_t, -)
 
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(or, 32, int32_t, |)
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(or, 64, int64_t, |)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(or, 32, int32_t, |)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(or, 64, int64_t, |)
 
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(xor, 32, int32_t, ^)
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(xor, 64, int64_t, ^)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(xor, 32, int32_t, ^)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(xor, 64, int64_t, ^)
 
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(and, 32, int32_t, &)
-PRRTE_ATOMIC_STDC_DEFINE_FETCH_OP(and, 64, int64_t, &)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(and, 32, int32_t, &)
+PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(and, 64, int64_t, &)
 
-#define prrte_atomic_add(addr, value) (void) atomic_fetch_add_explicit (addr, value, memory_order_relaxed)
+#define prte_atomic_add(addr, value) (void) atomic_fetch_add_explicit (addr, value, memory_order_relaxed)
 
-static inline int32_t prrte_atomic_fetch_min_32 (prrte_atomic_int32_t *addr, int32_t value)
+static inline int32_t prte_atomic_fetch_min_32 (prte_atomic_int32_t *addr, int32_t value)
 {
     int32_t old = *addr;
     do {
         if (old <= value) {
             break;
         }
-    } while (!prrte_atomic_compare_exchange_strong_32 (addr, &old, value));
+    } while (!prte_atomic_compare_exchange_strong_32 (addr, &old, value));
 
     return old;
 }
 
-static inline int32_t prrte_atomic_fetch_max_32 (prrte_atomic_int32_t *addr, int32_t value)
+static inline int32_t prte_atomic_fetch_max_32 (prte_atomic_int32_t *addr, int32_t value)
 {
     int32_t old = *addr;
     do {
         if (old >= value) {
             break;
         }
-    } while (!prrte_atomic_compare_exchange_strong_32 (addr, &old, value));
+    } while (!prte_atomic_compare_exchange_strong_32 (addr, &old, value));
 
     return old;
 }
 
-static inline int64_t prrte_atomic_fetch_min_64 (prrte_atomic_int64_t *addr, int64_t value)
+static inline int64_t prte_atomic_fetch_min_64 (prte_atomic_int64_t *addr, int64_t value)
 {
     int64_t old = *addr;
     do {
         if (old <= value) {
             break;
         }
-    } while (!prrte_atomic_compare_exchange_strong_64 (addr, &old, value));
+    } while (!prte_atomic_compare_exchange_strong_64 (addr, &old, value));
 
     return old;
 }
 
-static inline int64_t prrte_atomic_fetch_max_64 (prrte_atomic_int64_t *addr, int64_t value)
+static inline int64_t prte_atomic_fetch_max_64 (prte_atomic_int64_t *addr, int64_t value)
 {
     int64_t old = *addr;
     do {
         if (old >= value) {
             break;
         }
-    } while (!prrte_atomic_compare_exchange_strong_64 (addr, &old, value));
+    } while (!prte_atomic_compare_exchange_strong_64 (addr, &old, value));
 
     return old;
 }
 
-static inline int32_t prrte_atomic_min_fetch_32 (prrte_atomic_int32_t *addr, int32_t value)
+static inline int32_t prte_atomic_min_fetch_32 (prte_atomic_int32_t *addr, int32_t value)
 {
-    int32_t old = prrte_atomic_fetch_min_32 (addr, value);
+    int32_t old = prte_atomic_fetch_min_32 (addr, value);
     return old <= value ? old : value;
 }
 
-static inline int32_t prrte_atomic_max_fetch_32 (prrte_atomic_int32_t *addr, int32_t value)
+static inline int32_t prte_atomic_max_fetch_32 (prte_atomic_int32_t *addr, int32_t value)
 {
-    int32_t old = prrte_atomic_fetch_max_32 (addr, value);
+    int32_t old = prte_atomic_fetch_max_32 (addr, value);
     return old >= value ? old : value;
 }
 
-static inline int64_t prrte_atomic_min_fetch_64 (prrte_atomic_int64_t *addr, int64_t value)
+static inline int64_t prte_atomic_min_fetch_64 (prte_atomic_int64_t *addr, int64_t value)
 {
-    int64_t old = prrte_atomic_fetch_min_64 (addr, value);
+    int64_t old = prte_atomic_fetch_min_64 (addr, value);
     return old <= value ? old : value;
 }
 
-static inline int64_t prrte_atomic_max_fetch_64 (prrte_atomic_int64_t *addr, int64_t value)
+static inline int64_t prte_atomic_max_fetch_64 (prte_atomic_int64_t *addr, int64_t value)
 {
-    int64_t old = prrte_atomic_fetch_max_64 (addr, value);
+    int64_t old = prte_atomic_fetch_max_64 (addr, value);
     return old >= value ? old : value;
 }
 
-#define PRRTE_ATOMIC_LOCK_UNLOCKED false
-#define PRRTE_ATOMIC_LOCK_LOCKED true
+#define PRTE_ATOMIC_LOCK_UNLOCKED false
+#define PRTE_ATOMIC_LOCK_LOCKED true
 
-#define PRRTE_ATOMIC_LOCK_INIT ATOMIC_FLAG_INIT
+#define PRTE_ATOMIC_LOCK_INIT ATOMIC_FLAG_INIT
 
-typedef atomic_flag prrte_atomic_lock_t;
+typedef atomic_flag prte_atomic_lock_t;
 
 /*
  * Lock initialization function. It set the lock to UNLOCKED.
  */
-static inline void prrte_atomic_lock_init (prrte_atomic_lock_t *lock, bool value)
+static inline void prte_atomic_lock_init (prte_atomic_lock_t *lock, bool value)
 {
     atomic_flag_clear (lock);
 }
 
 
-static inline int prrte_atomic_trylock (prrte_atomic_lock_t *lock)
+static inline int prte_atomic_trylock (prte_atomic_lock_t *lock)
 {
     return (int) atomic_flag_test_and_set (lock);
 }
 
 
-static inline void prrte_atomic_lock(prrte_atomic_lock_t *lock)
+static inline void prte_atomic_lock(prte_atomic_lock_t *lock)
 {
-    while (prrte_atomic_trylock (lock)) {
+    while (prte_atomic_trylock (lock)) {
     }
 }
 
 
-static inline void prrte_atomic_unlock (prrte_atomic_lock_t *lock)
+static inline void prte_atomic_unlock (prte_atomic_lock_t *lock)
 {
     atomic_flag_clear (lock);
 }
 
 
-#if PRRTE_HAVE_C11_CSWAP_INT128
+#if PRTE_HAVE_C11_CSWAP_INT128
 
 /* the C11 atomic compare-exchange is lock free so use it */
-#define prrte_atomic_compare_exchange_strong_128 atomic_compare_exchange_strong
+#define prte_atomic_compare_exchange_strong_128 atomic_compare_exchange_strong
 
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 1
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 1
 
-#elif PRRTE_HAVE_SYNC_BUILTIN_CSWAP_INT128
+#elif PRTE_HAVE_SYNC_BUILTIN_CSWAP_INT128
 
 /* fall back on the __sync builtin if available since it will emit the expected instruction on x86_64 (cmpxchng16b) */
-__prrte_attribute_always_inline__
-static inline bool prrte_atomic_compare_exchange_strong_128 (prrte_atomic_int128_t *addr,
-                                                            prrte_int128_t *oldval, prrte_int128_t newval)
+__prte_attribute_always_inline__
+static inline bool prte_atomic_compare_exchange_strong_128 (prte_atomic_int128_t *addr,
+                                                            prte_int128_t *oldval, prte_int128_t newval)
 {
-    prrte_int128_t prev = __sync_val_compare_and_swap (addr, *oldval, newval);
+    prte_int128_t prev = __sync_val_compare_and_swap (addr, *oldval, newval);
     bool ret = prev == *oldval;
     *oldval = prev;
     return ret;
 }
 
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 1
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 1
 
 #else
 
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 0
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 0
 
 #endif
 
-#endif /* !defined(PRRTE_ATOMIC_STDC_H) */
+#endif /* !defined(PRTE_ATOMIC_STDC_H) */

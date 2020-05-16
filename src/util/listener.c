@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
@@ -29,7 +29,7 @@
  * are returned by these functions under UNIX/Linux environments
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 #include "types.h"
 
@@ -57,23 +57,23 @@
 
 #include "src/util/error.h"
 #include "src/util/output.h"
-#include "src/include/prrte_socket_errno.h"
+#include "src/include/prte_socket_errno.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/fd.h"
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/util/name_fns.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/show_help.h"
 
 #include "src/util/listener.h"
 
-static void* listen_thread_fn(prrte_object_t *obj);
-static prrte_list_t mylisteners;
+static void* listen_thread_fn(prte_object_t *obj);
+static prte_list_t mylisteners;
 static bool initialized = false;
-static prrte_thread_t listen_thread;
+static prte_thread_t listen_thread;
 static volatile bool listen_thread_active = false;
 static struct timeval listen_thread_tv;
 static int stop_thread[2];
@@ -86,29 +86,29 @@ static int stop_thread[2];
     } while(0)
 
 
-int prrte_register_listener(struct sockaddr* address, prrte_socklen_t addrlen,
-                           prrte_event_base_t *evbase,
-                           prrte_listener_callback_fn_t handler)
+int prte_register_listener(struct sockaddr* address, prte_socklen_t addrlen,
+                           prte_event_base_t *evbase,
+                           prte_listener_callback_fn_t handler)
 {
-    prrte_listener_t *conn;
+    prte_listener_t *conn;
     int flags;
     int sd = -1;
 
     if (!initialized) {
-        PRRTE_CONSTRUCT(&mylisteners, prrte_list_t);
-        PRRTE_CONSTRUCT(&listen_thread, prrte_thread_t);
+        PRTE_CONSTRUCT(&mylisteners, prte_list_t);
+        PRTE_CONSTRUCT(&listen_thread, prte_thread_t);
         if (0 > pipe(stop_thread)) {
-            PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
         /* Make sure the pipe FDs are set to close-on-exec so that
            they don't leak into children */
-        if (prrte_fd_set_cloexec(stop_thread[0]) != PRRTE_SUCCESS ||
-            prrte_fd_set_cloexec(stop_thread[1]) != PRRTE_SUCCESS) {
+        if (prte_fd_set_cloexec(stop_thread[0]) != PRTE_SUCCESS ||
+            prte_fd_set_cloexec(stop_thread[1]) != PRTE_SUCCESS) {
             close(stop_thread[0]);
             close(stop_thread[1]);
-            PRRTE_ERROR_LOG(PRRTE_ERR_IN_ERRNO);
-            return PRRTE_ERR_IN_ERRNO;
+            PRTE_ERROR_LOG(PRTE_ERR_IN_ERRNO);
+            return PRTE_ERR_IN_ERRNO;
         }
         listen_thread_tv.tv_sec = 3600;
         listen_thread_tv.tv_usec = 0;
@@ -118,63 +118,63 @@ int prrte_register_listener(struct sockaddr* address, prrte_socklen_t addrlen,
     /* create a listen socket for incoming connection attempts */
     sd = socket(PF_UNIX, SOCK_STREAM, 0);
     if (sd < 0) {
-        if (EAFNOSUPPORT != prrte_socket_errno) {
-            prrte_output(0,"pmix_server_start_listening: socket() failed: %s (%d)",
-                        strerror(prrte_socket_errno), prrte_socket_errno);
+        if (EAFNOSUPPORT != prte_socket_errno) {
+            prte_output(0,"pmix_server_start_listening: socket() failed: %s (%d)",
+                        strerror(prte_socket_errno), prte_socket_errno);
         }
-        return PRRTE_ERR_IN_ERRNO;
+        return PRTE_ERR_IN_ERRNO;
     }
     /* Set the socket to close-on-exec so that no children inherit
        this FD */
-    if (prrte_fd_set_cloexec(sd) != PRRTE_SUCCESS) {
-        prrte_output(0, "pmix_server: unable to set the "
+    if (prte_fd_set_cloexec(sd) != PRTE_SUCCESS) {
+        prte_output(0, "pmix_server: unable to set the "
                     "listening socket to CLOEXEC (%s:%d)\n",
-                    strerror(prrte_socket_errno), prrte_socket_errno);
+                    strerror(prte_socket_errno), prte_socket_errno);
         CLOSE_THE_SOCKET(sd);
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
 
     if (bind(sd, (struct sockaddr*)address, addrlen) < 0) {
-        prrte_output(0, "%s bind() failed on error %s (%d)",
-                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                    strerror(prrte_socket_errno),
-                    prrte_socket_errno );
+        prte_output(0, "%s bind() failed on error %s (%d)",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    strerror(prte_socket_errno),
+                    prte_socket_errno );
         CLOSE_THE_SOCKET(sd);
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     /* setup listen backlog to maximum allowed by kernel */
     if (listen(sd, SOMAXCONN) < 0) {
-        prrte_output(0, "prrte_listener: listen() failed: %s (%d)",
-                    strerror(prrte_socket_errno), prrte_socket_errno);
+        prte_output(0, "prte_listener: listen() failed: %s (%d)",
+                    strerror(prte_socket_errno), prte_socket_errno);
         CLOSE_THE_SOCKET(sd);
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     /* set socket up to be non-blocking, otherwise accept could block */
     if ((flags = fcntl(sd, F_GETFL, 0)) < 0) {
-        prrte_output(0, "prrte_listener: fcntl(F_GETFL) failed: %s (%d)",
-                    strerror(prrte_socket_errno), prrte_socket_errno);
+        prte_output(0, "prte_listener: fcntl(F_GETFL) failed: %s (%d)",
+                    strerror(prte_socket_errno), prte_socket_errno);
         CLOSE_THE_SOCKET(sd);
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
     flags |= O_NONBLOCK;
     if (fcntl(sd, F_SETFL, flags) < 0) {
-        prrte_output(0, "prrte_listener: fcntl(F_SETFL) failed: %s (%d)",
-                    strerror(prrte_socket_errno), prrte_socket_errno);
+        prte_output(0, "prte_listener: fcntl(F_SETFL) failed: %s (%d)",
+                    strerror(prte_socket_errno), prte_socket_errno);
         CLOSE_THE_SOCKET(sd);
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     /* add this port to our connections */
-    conn = PRRTE_NEW(prrte_listener_t);
+    conn = PRTE_NEW(prte_listener_t);
     conn->sd = sd;
     conn->evbase = evbase;
     conn->handler = handler;
-    prrte_list_append(&mylisteners, &conn->item);
+    prte_list_append(&mylisteners, &conn->item);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /*
@@ -188,29 +188,29 @@ int prrte_register_listener(struct sockaddr* address, prrte_socklen_t addrlen,
  * should use the tcp_avaiable_devices list.  This is a change from
  * previous versions of this component.
  */
-int prrte_start_listening(void)
+int prte_start_listening(void)
 {
     int rc;
 
     /* if we aren't initialized, or have nothing
      * registered, or are already listening, then return SUCCESS */
-    if (!initialized || 0 == prrte_list_get_size(&mylisteners) ||
+    if (!initialized || 0 == prte_list_get_size(&mylisteners) ||
         listen_thread_active) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* start our listener thread */
     listen_thread_active = true;
     listen_thread.t_run = listen_thread_fn;
     listen_thread.t_arg = NULL;
-    if (PRRTE_SUCCESS != (rc = prrte_thread_start(&listen_thread))) {
-        PRRTE_ERROR_LOG(rc);
-        prrte_output(0, "%s Unable to start listen thread", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+    if (PRTE_SUCCESS != (rc = prte_thread_start(&listen_thread))) {
+        PRTE_ERROR_LOG(rc);
+        prte_output(0, "%s Unable to start listen thread", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     }
     return rc;
 }
 
-void prrte_stop_listening(void)
+void prte_stop_listening(void)
 {
     int i=0;
 
@@ -223,30 +223,30 @@ void prrte_stop_listening(void)
     if (-1 == write(stop_thread[1], &i, sizeof(int))) {
         return;
     }
-    prrte_thread_join(&listen_thread, NULL);
-    PRRTE_DESTRUCT(&listen_thread);
-    PRRTE_LIST_DESTRUCT(&mylisteners);
+    prte_thread_join(&listen_thread, NULL);
+    PRTE_DESTRUCT(&listen_thread);
+    PRTE_LIST_DESTRUCT(&mylisteners);
 }
 
 /*
  * The listen thread accepts incoming connections and places them
  * in a queue for further processing
  *
- * Runs until prrte_listener_shutdown is set to true.
+ * Runs until prte_listener_shutdown is set to true.
  */
-static void* listen_thread_fn(prrte_object_t *obj)
+static void* listen_thread_fn(prte_object_t *obj)
 {
     int rc, max, accepted_connections, sd;
-    prrte_socklen_t addrlen = sizeof(struct sockaddr_storage);
-    prrte_pending_connection_t *pending_connection;
+    prte_socklen_t addrlen = sizeof(struct sockaddr_storage);
+    prte_pending_connection_t *pending_connection;
     struct timeval timeout;
     fd_set readfds;
-    prrte_listener_t *listener;
+    prte_listener_t *listener;
 
     while (listen_thread_active) {
         FD_ZERO(&readfds);
         max = -1;
-        PRRTE_LIST_FOREACH(listener, &mylisteners, prrte_listener_t) {
+        PRTE_LIST_FOREACH(listener, &mylisteners, prte_listener_t) {
             FD_SET(listener->sd, &readfds);
             max = (listener->sd > max) ? listener->sd : max;
         }
@@ -267,7 +267,7 @@ static void* listen_thread_fn(prrte_object_t *obj)
             goto done;
         }
         if (rc < 0) {
-            if (EAGAIN != prrte_socket_errno && EINTR != prrte_socket_errno) {
+            if (EAGAIN != prte_socket_errno && EINTR != prte_socket_errno) {
                 perror("select");
             }
             continue;
@@ -279,7 +279,7 @@ static void* listen_thread_fn(prrte_object_t *obj)
          */
         do {
             accepted_connections = 0;
-            PRRTE_LIST_FOREACH(listener, &mylisteners, prrte_listener_t) {
+            PRTE_LIST_FOREACH(listener, &mylisteners, prte_listener_t) {
                 sd = listener->sd;
 
                 /* according to the man pages, select replaces the given descriptor
@@ -300,34 +300,34 @@ static void* listen_thread_fn(prrte_object_t *obj)
                  * process the connection here as it takes too long, and so the
                  * OS might start rejecting connections due to timeout.
                  */
-                pending_connection = PRRTE_NEW(prrte_pending_connection_t);
-                prrte_event_set(listener->evbase, &pending_connection->ev, -1,
-                               PRRTE_EV_WRITE, listener->handler, pending_connection);
-                prrte_event_set_priority(&pending_connection->ev, PRRTE_MSG_PRI);
+                pending_connection = PRTE_NEW(prte_pending_connection_t);
+                prte_event_set(listener->evbase, &pending_connection->ev, -1,
+                               PRTE_EV_WRITE, listener->handler, pending_connection);
+                prte_event_set_priority(&pending_connection->ev, PRTE_MSG_PRI);
                 pending_connection->fd = accept(sd,
                                                 (struct sockaddr*)&(pending_connection->addr),
                                                 &addrlen);
                 if (pending_connection->fd < 0) {
-                    PRRTE_RELEASE(pending_connection);
+                    PRTE_RELEASE(pending_connection);
 
                     /* Non-fatal errors */
-                    if (EAGAIN == prrte_socket_errno ||
-                        EWOULDBLOCK == prrte_socket_errno) {
+                    if (EAGAIN == prte_socket_errno ||
+                        EWOULDBLOCK == prte_socket_errno) {
                         continue;
                     }
 
                     /* If we run out of file descriptors, log an extra
                        warning (so that the user can know to fix this
                        problem) and abandon all hope. */
-                    else if (EMFILE == prrte_socket_errno) {
+                    else if (EMFILE == prte_socket_errno) {
                         CLOSE_THE_SOCKET(sd);
-                        PRRTE_ERROR_LOG(PRRTE_ERR_SYS_LIMITS_SOCKETS);
-                        prrte_show_help("help-oob-tcp.txt",
+                        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_SOCKETS);
+                        prte_show_help("help-oob-tcp.txt",
                                        "accept failed",
                                        true,
-                                       prrte_process_info.nodename,
-                                       prrte_socket_errno,
-                                       strerror(prrte_socket_errno),
+                                       prte_process_info.nodename,
+                                       prte_socket_errno,
+                                       strerror(prte_socket_errno),
                                        "Out of file descriptors");
                         goto done;
                     }
@@ -336,19 +336,19 @@ static void* listen_thread_fn(prrte_object_t *obj)
                        warning but try to continue */
                     else {
                         CLOSE_THE_SOCKET(sd);
-                        prrte_show_help("help-oob-tcp.txt",
+                        prte_show_help("help-oob-tcp.txt",
                                        "accept failed",
                                        true,
-                                       prrte_process_info.nodename,
-                                       prrte_socket_errno,
-                                       strerror(prrte_socket_errno),
+                                       prte_process_info.nodename,
+                                       prte_socket_errno,
+                                       strerror(prte_socket_errno),
                                        "Unknown cause; job will try to continue");
                         continue;
                     }
                 }
 
                 /* activate the event */
-                prrte_event_active(&pending_connection->ev, PRRTE_EV_WRITE, 1);
+                prte_event_active(&pending_connection->ev, PRTE_EV_WRITE, 1);
                 accepted_connections++;
             }
         } while (accepted_connections > 0);
@@ -362,23 +362,23 @@ static void* listen_thread_fn(prrte_object_t *obj)
 
 
 /* INSTANTIATE CLASSES */
-static void lcons(prrte_listener_t *p)
+static void lcons(prte_listener_t *p)
 {
     p->sd = -1;
     p->evbase = NULL;
     p->handler = NULL;
 }
-static void ldes(prrte_listener_t *p)
+static void ldes(prte_listener_t *p)
 {
     if (0 <= p->sd) {
         CLOSE_THE_SOCKET(p->sd);
     }
 }
-PRRTE_CLASS_INSTANCE(prrte_listener_t,
-                   prrte_list_item_t,
+PRTE_CLASS_INSTANCE(prte_listener_t,
+                   prte_list_item_t,
                    lcons, ldes);
 
-PRRTE_CLASS_INSTANCE(prrte_pending_connection_t,
-                   prrte_object_t,
+PRTE_CLASS_INSTANCE(prte_pending_connection_t,
+                   prte_object_t,
                    NULL,
                    NULL);

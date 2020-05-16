@@ -4,6 +4,7 @@
 # Copyright (c) 2018      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -11,7 +12,7 @@
 # $HEADER$
 #
 
-dist_prrtedata_DATA += base/help-state-base.txt
+dist_prtedata_DATA += base/help-state-base.txt
 
 headers += \
         base/state_private.h \

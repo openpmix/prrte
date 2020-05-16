@@ -11,6 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -102,7 +103,7 @@ INLINE_INHERITED_MEMB  = NO
 
 # If the FULL_PATH_NAMES tag is set to YES then Doxygen will prepend the full
 # path before files name in the file list and in the header files. If set
-# to NO the shprrtest path that makes the file name unique will be used.
+# to NO the shprtest path that makes the file name unique will be used.
 
 FULL_PATH_NAMES        = YES
 
@@ -113,7 +114,7 @@ FULL_PATH_NAMES        = YES
 
 STRIP_FROM_PATH        =
 
-# If the SHORT_NAMES tag is set to YES, doxygen will generate much shprrter
+# If the SHORT_NAMES tag is set to YES, doxygen will generate much shprter
 # (but less readable) file names. This can be useful is your file systems
 # doesn't support long names like on DOS, Mac, or CD-ROM.
 
@@ -381,7 +382,7 @@ WARN_LOGFILE           =
 # directories like "/usr/src/myproject". Separate the files or directories
 # with spaces.
 
-INPUT                  = opal prrte ompi
+INPUT                  = opal prte ompi
 
 # If the value of the INPUT tag contains directories, you can use the
 # FILE_PATTERNS tag to specify one or more wildcard pattern (like *.cpp

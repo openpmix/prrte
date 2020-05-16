@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,8 +18,8 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_BIT_OPS_H
-#define PRRTE_BIT_OPS_H
+#ifndef PRTE_BIT_OPS_H
+#define PRTE_BIT_OPS_H
 
 #include "prefetch.h"
 
@@ -40,15 +41,15 @@
  * of 17 cycles (on average value, with start=32)
  * compared to the loop-version (on Intel Nehalem -- with icc-12.1.0 -O2).
  */
-static inline int prrte_hibit(int value, int start)
+static inline int prte_hibit(int value, int start)
 {
     unsigned int mask;
 
-#if PRRTE_C_HAVE_BUILTIN_CLZ
+#if PRTE_C_HAVE_BUILTIN_CLZ
     /* Only look at the part that the caller wanted looking at */
     mask = value & ((1 << start) - 1);
 
-    if (PRRTE_UNLIKELY (0 == mask)) {
+    if (PRTE_UNLIKELY (0 == mask)) {
         return -1;
     }
 
@@ -83,12 +84,12 @@ static inline int prrte_hibit(int value, int start)
  * Using __builtin_clz (count-leading-zeros) uses 3 cycles instead of 50 cycles
  * compared to the loop-version (on Intel Nehalem -- with icc-12.1.0 -O2).
  */
-static inline int prrte_cube_dim(int value)
+static inline int prte_cube_dim(int value)
 {
     int dim, size;
 
-#if PRRTE_C_HAVE_BUILTIN_CLZ
-    if (PRRTE_UNLIKELY (1 >= value)) {
+#if PRTE_C_HAVE_BUILTIN_CLZ
+    if (PRTE_UNLIKELY (1 >= value)) {
         return 0;
     }
     size = 8 * sizeof(int);
@@ -113,12 +114,12 @@ static inline int prrte_cube_dim(int value)
  * Using __builtin_clz (count-leading-zeros) uses 4 cycles instead of 77
  * compared to the loop-version (on Intel Nehalem -- with icc-12.1.0 -O2).
  */
-static inline int prrte_next_poweroftwo(int value)
+static inline int prte_next_poweroftwo(int value)
 {
     int power2;
 
-#if PRRTE_C_HAVE_BUILTIN_CLZ
-    if (PRRTE_UNLIKELY (0 == value)) {
+#if PRTE_C_HAVE_BUILTIN_CLZ
+    if (PRTE_UNLIKELY (0 == value)) {
         return 1;
     }
     power2 = 1 << (8 * sizeof (int) - __builtin_clz(value));
@@ -142,12 +143,12 @@ static inline int prrte_next_poweroftwo(int value)
  * Using __builtin_clz (count-leading-zeros) uses 4 cycles instead of 56
  * compared to the loop-version (on Intel Nehalem -- with icc-12.1.0 -O2).
  */
-static inline int prrte_next_poweroftwo_inclusive(int value)
+static inline int prte_next_poweroftwo_inclusive(int value)
 {
     int power2;
 
-#if PRRTE_C_HAVE_BUILTIN_CLZ
-    if (PRRTE_UNLIKELY (1 >= value)) {
+#if PRTE_C_HAVE_BUILTIN_CLZ
+    if (PRTE_UNLIKELY (1 >= value)) {
         return 1;
     }
     power2 = 1 << (8 * sizeof (int) - __builtin_clz(value - 1));
@@ -159,5 +160,5 @@ static inline int prrte_next_poweroftwo_inclusive(int value)
 }
 
 
-#endif /* PRRTE_BIT_OPS_H */
+#endif /* PRTE_BIT_OPS_H */
 

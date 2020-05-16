@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011-2012 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -21,7 +21,7 @@
  *
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <sys/types.h>
@@ -63,8 +63,8 @@
 #include "src/util/name_fns.h"
 
 #include "src/runtime/runtime.h"
-#include "src/runtime/prrte_wait.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_wait.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/ess/ess.h"
 #include "src/mca/ess/base/base.h"
@@ -75,7 +75,7 @@ static int env_set_name(void);
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
-prrte_ess_base_module_t prrte_ess_env_module = {
+prte_ess_base_module_t prte_ess_env_module = {
     rte_init,
     rte_finalize,
     NULL,
@@ -88,8 +88,8 @@ static int rte_init(int argc, char **argv)
     char *error = NULL;
 
     /* run the prolog */
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_std_prolog())) {
-        error = "prrte_ess_base_std_prolog";
+    if (PRTE_SUCCESS != (ret = prte_ess_base_std_prolog())) {
+        error = "prte_ess_base_std_prolog";
         goto error;
     }
 
@@ -99,18 +99,18 @@ static int rte_init(int argc, char **argv)
     /* if I am a daemon, complete my setup using the
      * default procedure
      */
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_prted_setup())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_ess_base_prted_setup";
+    if (PRTE_SUCCESS != (ret = prte_ess_base_prted_setup())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_ess_base_prted_setup";
         goto error;
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 
  error:
-    if (PRRTE_ERR_SILENT != ret && !prrte_report_silent_errors) {
-        prrte_show_help("help-prrte-runtime.txt",
-                       "prrte_init:startup:internal-failure",
-                       true, error, PRRTE_ERROR_NAME(ret), ret);
+    if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
+        prte_show_help("help-prte-runtime.txt",
+                       "prte_init:startup:internal-failure",
+                       true, error, PRTE_ERROR_NAME(ret), ret);
     }
 
     return ret;
@@ -120,36 +120,36 @@ static int rte_finalize(void)
 {
     int ret;
 
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_prted_finalize())) {
-        PRRTE_ERROR_LOG(ret);
+    if (PRTE_SUCCESS != (ret = prte_ess_base_prted_finalize())) {
+        PRTE_ERROR_LOG(ret);
     }
     return ret;
 }
 
 static int env_set_name(void)
 {
-    prrte_vpid_t vpid;
+    prte_vpid_t vpid;
 
-    if (NULL == prrte_ess_base_nspace) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+    if (NULL == prte_ess_base_nspace) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
 
-    PRRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRRTE_PROC_MY_NAME->jobid, prrte_ess_base_nspace);
-    PMIX_LOAD_NSPACE(prrte_process_info.myproc.nspace, prrte_ess_base_nspace);
+    PRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRTE_PROC_MY_NAME->jobid, prte_ess_base_nspace);
+    PMIX_LOAD_NSPACE(prte_process_info.myproc.nspace, prte_ess_base_nspace);
 
-    if (NULL == prrte_ess_base_vpid) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+    if (NULL == prte_ess_base_vpid) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
-    vpid = strtoul(prrte_ess_base_vpid, NULL, 10);
-    prrte_process_info.myproc.rank = vpid;
-    PRRTE_PROC_MY_NAME->vpid = vpid;
+    vpid = strtoul(prte_ess_base_vpid, NULL, 10);
+    prte_process_info.myproc.rank = vpid;
+    PRTE_PROC_MY_NAME->vpid = vpid;
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_ess_base_framework.framework_output,
-                         "ess:env set name to %s", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
+                         "ess:env set name to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    prrte_process_info.num_daemons = prrte_ess_base_num_procs;
+    prte_process_info.num_daemons = prte_ess_base_num_procs;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

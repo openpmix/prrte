@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,7 +18,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <stdio.h>
@@ -29,27 +30,27 @@
 
 #include "src/mca/ras/base/ras_private.h"
 
-int prrte_ras_base_finalize(void)
+int prte_ras_base_finalize(void)
 {
-    if (NULL != prrte_ras_base.active_module) {
-        prrte_ras_base.active_module->finalize();
+    if (NULL != prte_ras_base.active_module) {
+        prte_ras_base.active_module->finalize();
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-int prrte_ras_base_close(void)
+int prte_ras_base_close(void)
 {
     /* Close all remaining available components (may be one if this is a
-       PRRTE program, or [possibly] multiple if this is ompi_info) */
+       PRTE program, or [possibly] multiple if this is ompi_info) */
 
-    mca_base_components_close(prrte_ras_base_framework.framework_output,
-                              &prrte_ras_base.ras_opened, NULL);
+    mca_base_components_close(prte_ras_base_framework.framework_output,
+                              &prte_ras_base.ras_opened, NULL);
 
     /* Close the framework output */
-    prrte_output_close (prrte_ras_base_framework.framework_output);
-    prrte_ras_base_framework.framework_output = -1;
+    prte_output_close (prte_ras_base_framework.framework_output);
+    prte_ras_base_framework.framework_output = -1;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

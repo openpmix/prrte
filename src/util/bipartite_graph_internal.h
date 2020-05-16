@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -19,11 +19,11 @@
 #ifndef BIPARTITE_GRAPH_INTERNAL
 #define BIPARTITE_GRAPH_INTERNAL 1
 
-struct prrte_bp_graph_edge_t {
-    prrte_object_t super;
+struct prte_bp_graph_edge_t {
+    prte_object_t super;
 
-    prrte_list_item_t outbound_li;
-    prrte_list_item_t inbound_li;
+    prte_list_item_t outbound_li;
+    prte_list_item_t inbound_li;
 
     /** source of this edge */
     int source;
@@ -44,7 +44,7 @@ struct prrte_bp_graph_edge_t {
     void *e_data;
 };
 
-struct prrte_bp_graph_vertex_t {
+struct prte_bp_graph_vertex_t {
     /** index in the graph's array of vertices */
     int v_index;
 
@@ -52,18 +52,18 @@ struct prrte_bp_graph_vertex_t {
     void *v_data;
 
     /** linked list of edges for which this vertex is a source */
-    prrte_list_t out_edges;
+    prte_list_t out_edges;
 
     /** linked list of edges for which this vertex is a target */
-    prrte_list_t in_edges;
+    prte_list_t in_edges;
 };
 
-struct prrte_bp_graph_t {
+struct prte_bp_graph_t {
     /** number of vertices currently in this graph */
     int num_vertices;
 
     /** vertices in this graph (with number of set elements == num_vertices) */
-    prrte_pointer_array_t vertices;
+    prte_pointer_array_t vertices;
 
     /** index of the source vertex, or -1 if not present */
     int source_idx;
@@ -72,27 +72,27 @@ struct prrte_bp_graph_t {
     int sink_idx;
 
     /** user callback to clean up the v_data */
-    prrte_bp_graph_cleanup_fn_t v_data_cleanup_fn;
+    prte_bp_graph_cleanup_fn_t v_data_cleanup_fn;
 
     /** user callback to clean up the e_data */
-    prrte_bp_graph_cleanup_fn_t e_data_cleanup_fn;
+    prte_bp_graph_cleanup_fn_t e_data_cleanup_fn;
 };
 
 
 #define LIST_FOREACH_CONTAINED(item, list, type, member)		\
-    for (item = container_of( (list)->prrte_list_sentinel.prrte_list_next, type, member ); \
-	 &item->member != &(list)->prrte_list_sentinel;			\
+    for (item = container_of( (list)->prte_list_sentinel.prte_list_next, type, member ); \
+	 &item->member != &(list)->prte_list_sentinel;			\
 	 item = container_of(						\
-			     ((prrte_list_item_t *) (&item->member))->prrte_list_next, type, member ))
+			     ((prte_list_item_t *) (&item->member))->prte_list_next, type, member ))
 
 #define LIST_FOREACH_SAFE_CONTAINED(item, next, list, type, member)	\
-    for (item = container_of( (list)->prrte_list_sentinel.prrte_list_next, type, member ), \
+    for (item = container_of( (list)->prte_list_sentinel.prte_list_next, type, member ), \
 	     next = container_of(					\
-				 ((prrte_list_item_t *) (&item->member))->prrte_list_next, type, member ); \
-	 &item->member != &(list)->prrte_list_sentinel;			\
+				 ((prte_list_item_t *) (&item->member))->prte_list_next, type, member ); \
+	 &item->member != &(list)->prte_list_sentinel;			\
 	 item = next,							\
 	     next = container_of(					\
-				 ((prrte_list_item_t *) (&item->member))->prrte_list_next, type, member ))
+				 ((prte_list_item_t *) (&item->member))->prte_list_next, type, member ))
 
 #define NUM_VERTICES(g) (g->num_vertices)
 
@@ -100,26 +100,26 @@ struct prrte_bp_graph_t {
     do {					\
         if ((v) < 0 ||				\
             (v) >= NUM_VERTICES(g)) {		\
-            return PRRTE_ERR_BAD_PARAM;		\
+            return PRTE_ERR_BAD_PARAM;		\
         }					\
     } while (0)
 
-/* cast away any constness of &g->vertices b/c the prrte_pointer_array API is
+/* cast away any constness of &g->vertices b/c the prte_pointer_array API is
  * not const-correct */
 #define V_ID_TO_PTR(g, v_id)						\
-    ((prrte_bp_graph_vertex_t *)						\
-     prrte_pointer_array_get_item((prrte_pointer_array_t *)&g->vertices, v_id))
+    ((prte_bp_graph_vertex_t *)						\
+     prte_pointer_array_get_item((prte_pointer_array_t *)&g->vertices, v_id))
 
 #define FOREACH_OUT_EDGE(g,v_id,e_ptr)				\
     LIST_FOREACH_CONTAINED(e_ptr,				\
                            &(V_ID_TO_PTR(g, v_id)->out_edges),	\
-                           prrte_bp_graph_edge_t,		\
+                           prte_bp_graph_edge_t,		\
                            outbound_li)
 
 #define FOREACH_IN_EDGE(g,v_id,e_ptr)				\
     LIST_FOREACH_CONTAINED(e_ptr,				\
                            &(V_ID_TO_PTR(g, v_id)->in_edges),	\
-                           prrte_bp_graph_edge_t,		\
+                           prte_bp_graph_edge_t,		\
                            inbound_li)
 
 
@@ -131,11 +131,11 @@ struct prrte_bp_graph_t {
     for (u = pred[sink], v = sink; u != -1; v = u, u = pred[u])
 
 
-bool prrte_bp_graph_bellman_ford(prrte_bp_graph_t *gx,
+bool prte_bp_graph_bellman_ford(prte_bp_graph_t *gx,
 				int source,
 				int target,
 				int *pred);
 
-int prrte_bp_graph_bipartite_to_flow(prrte_bp_graph_t *g);
+int prte_bp_graph_bipartite_to_flow(prte_bp_graph_t *g);
 
 #endif

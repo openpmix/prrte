@@ -14,6 +14,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,7 +23,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include "src/util/output.h"
@@ -37,7 +38,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * module's public prrte_mca_base_module_t struct.
+ * module's public prte_mca_base_module_t struct.
  */
 
 #include "src/mca/plm/base/static-components.h"
@@ -45,63 +46,63 @@
 /*
  * Global variables for use within PLM frameworks
  */
-prrte_plm_globals_t prrte_plm_globals = {0};
+prte_plm_globals_t prte_plm_globals = {0};
 
 /*
  * The default module
  */
-prrte_plm_base_module_t prrte_plm = {0};
+prte_plm_base_module_t prte_plm = {0};
 
 
-static int mca_plm_base_register(prrte_mca_base_register_flag_t flags)
+static int mca_plm_base_register(prte_mca_base_register_flag_t flags)
 {
-    prrte_plm_globals.node_regex_threshold = 1024;
-    (void) prrte_mca_base_framework_var_register (&prrte_plm_base_framework, "node_regex_threshold",
+    prte_plm_globals.node_regex_threshold = 1024;
+    (void) prte_mca_base_framework_var_register (&prte_plm_base_framework, "node_regex_threshold",
                                                   "Only pass the node regex on the orted command line if smaller than this threshold",
-                                                  PRRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0,
-                                                  PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                                  PRRTE_INFO_LVL_9,
-                                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                                  &prrte_plm_globals.node_regex_threshold);
-    return PRRTE_SUCCESS;
+                                                  PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0,
+                                                  PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
+                                                  PRTE_INFO_LVL_9,
+                                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                  &prte_plm_globals.node_regex_threshold);
+    return PRTE_SUCCESS;
 }
 
-static int prrte_plm_base_close(void)
+static int prte_plm_base_close(void)
 {
     int rc;
 
     /* Close the selected component */
-    if( NULL != prrte_plm.finalize ) {
-        prrte_plm.finalize();
+    if( NULL != prte_plm.finalize ) {
+        prte_plm.finalize();
     }
 
    /* if we are the HNP, then stop our receive */
-    if (PRRTE_PROC_IS_MASTER) {
-        if (PRRTE_SUCCESS != (rc = prrte_plm_base_comm_stop())) {
-            PRRTE_ERROR_LOG(rc);
+    if (PRTE_PROC_IS_MASTER) {
+        if (PRTE_SUCCESS != (rc = prte_plm_base_comm_stop())) {
+            PRTE_ERROR_LOG(rc);
             return rc;
         }
     }
 
-    return prrte_mca_base_framework_components_close(&prrte_plm_base_framework, NULL);
+    return prte_mca_base_framework_components_close(&prte_plm_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components,
  * or the one that was specifically requested via a MCA parameter.
  */
-static int prrte_plm_base_open(prrte_mca_base_open_flag_t flags)
+static int prte_plm_base_open(prte_mca_base_open_flag_t flags)
 {
     /* init the next jobid */
-    prrte_plm_globals.next_jobid = 1;
+    prte_plm_globals.next_jobid = 1;
 
     /* default to assigning daemons to nodes at launch */
-    prrte_plm_globals.daemon_nodes_assigned_at_launch = true;
+    prte_plm_globals.daemon_nodes_assigned_at_launch = true;
 
      /* Open up all available components */
-    return prrte_mca_base_framework_components_open(&prrte_plm_base_framework, flags);
+    return prte_mca_base_framework_components_open(&prte_plm_base_framework, flags);
 }
 
-PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, plm, NULL, mca_plm_base_register,
-                                 prrte_plm_base_open, prrte_plm_base_close,
-                                 prrte_plm_base_static_components, 0);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, plm, NULL, mca_plm_base_register,
+                                 prte_plm_base_open, prte_plm_base_close,
+                                 prte_plm_base_static_components, 0);

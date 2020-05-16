@@ -42,7 +42,7 @@ env:
     global:
         - AM_MAKEFLAGS="-j4"
         - PMIX_PREFIX="$HOME/bogus"
-        - PMIX_BASE_CONFIGURE_ARGS="--prefix=$PMIX_PREFIX --enable-prrterun-prefix-by-default"
+        - PMIX_BASE_CONFIGURE_ARGS="--prefix=$PMIX_PREFIX --enable-prterun-prefix-by-default"
         - DISTCHECK_CONFIGURE_FLAGS="$PMIX_CONFIGURE_ARGS"
         - CPPFLAGS="-I$PMIX_PREFIX/include"
         - LDFLAGS="-L$PMIX_PREFIX/bogus/lib"

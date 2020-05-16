@@ -1,5 +1,6 @@
 #
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -17,8 +18,8 @@ libmca_rtc_la_SOURCES += $(headers)
 
 # Conditionally install the header files
 if WANT_INSTALL_HEADERS
-prrtedir = $(prrteincludedir)/$(subdir)
-nobase_prrte_HEADERS = $(headers)
+prtedir = $(prteincludedir)/$(subdir)
+nobase_prte_HEADERS = $(headers)
 endif
 
 include base/Makefile.am

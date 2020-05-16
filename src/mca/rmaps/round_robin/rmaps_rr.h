@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2017      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -24,41 +24,41 @@
  *
  * Resource Mapping
  */
-#ifndef PRRTE_RMAPS_RR_H
-#define PRRTE_RMAPS_RR_H
+#ifndef PRTE_RMAPS_RR_H
+#define PRTE_RMAPS_RR_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 
 #include "src/mca/rmaps/rmaps.h"
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_rmaps_base_component_t prrte_rmaps_round_robin_component;
-extern prrte_rmaps_base_module_t prrte_rmaps_round_robin_module;
+PRTE_MODULE_EXPORT extern prte_rmaps_base_component_t prte_rmaps_round_robin_component;
+extern prte_rmaps_base_module_t prte_rmaps_round_robin_module;
 
-PRRTE_MODULE_EXPORT int prrte_rmaps_rr_bynode(prrte_job_t *jdata,
-                                              prrte_app_context_t *app,
-                                              prrte_list_t *node_list,
-                                              prrte_std_cntr_t num_slots,
-                                              prrte_vpid_t nprocs);
-PRRTE_MODULE_EXPORT int prrte_rmaps_rr_byslot(prrte_job_t *jdata,
-                                              prrte_app_context_t *app,
-                                              prrte_list_t *node_list,
-                                              prrte_std_cntr_t num_slots,
-                                              prrte_vpid_t nprocs);
+PRTE_MODULE_EXPORT int prte_rmaps_rr_bynode(prte_job_t *jdata,
+                                              prte_app_context_t *app,
+                                              prte_list_t *node_list,
+                                              prte_std_cntr_t num_slots,
+                                              prte_vpid_t nprocs);
+PRTE_MODULE_EXPORT int prte_rmaps_rr_byslot(prte_job_t *jdata,
+                                              prte_app_context_t *app,
+                                              prte_list_t *node_list,
+                                              prte_std_cntr_t num_slots,
+                                              prte_vpid_t nprocs);
 
-PRRTE_MODULE_EXPORT int prrte_rmaps_rr_byobj(prrte_job_t *jdata, prrte_app_context_t *app,
-                                             prrte_list_t *node_list,
-                                             prrte_std_cntr_t num_slots,
-                                             prrte_vpid_t num_procs,
+PRTE_MODULE_EXPORT int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
+                                             prte_list_t *node_list,
+                                             prte_std_cntr_t num_slots,
+                                             prte_vpid_t num_procs,
                                              hwloc_obj_type_t target, unsigned cache_level);
 
-PRRTE_MODULE_EXPORT int prrte_rmaps_rr_assign_root_level(prrte_job_t *jdata);
+PRTE_MODULE_EXPORT int prte_rmaps_rr_assign_root_level(prte_job_t *jdata);
 
-PRRTE_MODULE_EXPORT int prrte_rmaps_rr_assign_byobj(prrte_job_t *jdata,
+PRTE_MODULE_EXPORT int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
                                                     hwloc_obj_type_t target,
                                                     unsigned cache_level);
 

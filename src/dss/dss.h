@@ -12,6 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2012      Los Alamos National Security, Inc. All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,19 +25,19 @@
  * Data packing subsystem.
  */
 
-#ifndef PRRTE_DSS_H_
-#define PRRTE_DSS_H_
+#ifndef PRTE_DSS_H_
+#define PRTE_DSS_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/dss/dss_types.h"
 
 BEGIN_C_DECLS
 
-/* Provide a macro for determining the bool value of an prrte_value_t */
-#define PRRTE_CHECK_BOOL(v, p)           \
+/* Provide a macro for determining the bool value of an prte_value_t */
+#define PRTE_CHECK_BOOL(v, p)           \
     do {                                \
-        if (PRRTE_UNDEF == (v)->type) {  \
+        if (PRTE_UNDEF == (v)->type) {  \
             (p) = true;                 \
         } else {                        \
             (p) = (v)->data.flag;       \
@@ -45,21 +46,21 @@ BEGIN_C_DECLS
 
 /* A non-API function for something that happens in a number
  * of places throughout the code base - loading a value into
- * an prrte_value_t structure
+ * an prte_value_t structure
  */
-PRRTE_EXPORT int prrte_value_load(prrte_value_t *kv,
-                                  void *data, prrte_data_type_t type);
-PRRTE_EXPORT int prrte_value_unload(prrte_value_t *kv,
-                                    void **data, prrte_data_type_t type);
-PRRTE_EXPORT int prrte_value_xfer(prrte_value_t *dest,
-                                  prrte_value_t *src);
+PRTE_EXPORT int prte_value_load(prte_value_t *kv,
+                                  void *data, prte_data_type_t type);
+PRTE_EXPORT int prte_value_unload(prte_value_t *kv,
+                                    void **data, prte_data_type_t type);
+PRTE_EXPORT int prte_value_xfer(prte_value_t *dest,
+                                  prte_value_t *src);
 /**
  * Top-level interface function to pack one or more values into a
  * buffer.
  *
  * The pack function packs one or more values of a specified type into
  * the specified buffer.  The buffer must have already been
- * initialized via an PRRTE_NEW or PRRTE_CONSTRUCT call - otherwise, the
+ * initialized via an PRTE_NEW or PRTE_CONSTRUCT call - otherwise, the
  * pack_value function will return an error. Providing an unsupported
  * type flag will likewise be reported as an error.
  *
@@ -91,22 +92,22 @@ PRRTE_EXPORT int prrte_value_xfer(prrte_value_t *dest,
  * @param type The type of the data to be packed - must be one of the
  * DSS defined data types.
  *
- * @retval PRRTE_SUCCESS The data was packed as requested.
+ * @retval PRTE_SUCCESS The data was packed as requested.
  *
- * @retval PRRTE_ERROR(s) An appropriate PRRTE error code indicating the
+ * @retval PRTE_ERROR(s) An appropriate PRTE error code indicating the
  * problem encountered. This error code should be handled
  * appropriately.
  *
  * @code
- * prrte_buffer_t *buffer;
+ * prte_buffer_t *buffer;
  * int32_t src;
  *
- * status_code = prrte_dss.pack(buffer, &src, 1, PRRTE_INT32);
+ * status_code = prte_dss.pack(buffer, &src, 1, PRTE_INT32);
  * @endcode
  */
-typedef int (*prrte_dss_pack_fn_t)(prrte_buffer_t *buffer, const void *src,
+typedef int (*prte_dss_pack_fn_t)(prte_buffer_t *buffer, const void *src,
                                   int32_t num_values,
-                                  prrte_data_type_t type);
+                                  prte_data_type_t type);
 
 /**
  * Unpack values from a buffer.
@@ -114,8 +115,8 @@ typedef int (*prrte_dss_pack_fn_t)(prrte_buffer_t *buffer, const void *src,
  * The unpack function unpacks the next value (or values) of a
  * specified type from the specified buffer.
  *
- * The buffer must have already been initialized via an PRRTE_NEW or
- * PRRTE_CONSTRUCT call (and assumedly filled with some data) -
+ * The buffer must have already been initialized via an PRTE_NEW or
+ * PRTE_CONSTRUCT call (and assumedly filled with some data) -
  * otherwise, the unpack_value function will return an
  * error. Providing an unsupported type flag will likewise be reported
  * as an error, as will specifying a data type that DOES NOT match the
@@ -137,7 +138,7 @@ typedef int (*prrte_dss_pack_fn_t)(prrte_buffer_t *buffer, const void *src,
  * same buffer.
  *
  * Warning: The caller is responsible for providing adequate memory
- * storage for the requested data. The prrte_dss_peek() function is
+ * storage for the requested data. The prte_dss_peek() function is
  * provided to assist in meeting this requirement. As noted below, the user
  * must provide a parameter indicating the maximum number of values that
  * can be unpacked into the allocated memory. If more values exist in the
@@ -184,10 +185,10 @@ typedef int (*prrte_dss_pack_fn_t)(prrte_buffer_t *buffer, const void *src,
  * available, the buffer will be in an unpackable state - the dss will
  * return an error code to warn of this condition.
  *
- * @retval PRRTE_SUCCESS The next item in the buffer was successfully
+ * @retval PRTE_SUCCESS The next item in the buffer was successfully
  * unpacked.
  *
- * @retval PRRTE_ERROR(s) The unpack function returns an error code
+ * @retval PRTE_ERROR(s) The unpack function returns an error code
  * under one of several conditions: (a) the number of values in the
  * item exceeds the max num provided by the caller; (b) the type of
  * the next item in the buffer does not match the type specified by
@@ -195,23 +196,23 @@ typedef int (*prrte_dss_pack_fn_t)(prrte_buffer_t *buffer, const void *src,
  * buffer or an attempt to read past the end of the buffer.
  *
  * @code
- * prrte_buffer_t *buffer;
+ * prte_buffer_t *buffer;
  * int32_t dest;
  * char **string_array;
  * int32_t num_values;
  *
  * num_values = 1;
- * status_code = prrte_dss.unpack(buffer, (void*)&dest, &num_values, PRRTE_INT32);
+ * status_code = prte_dss.unpack(buffer, (void*)&dest, &num_values, PRTE_INT32);
  *
  * num_values = 5;
  * string_array = malloc(num_values*sizeof(char *));
- * status_code = prrte_dss.unpack(buffer, (void*)(string_array), &num_values, PRRTE_STRING);
+ * status_code = prte_dss.unpack(buffer, (void*)(string_array), &num_values, PRTE_STRING);
  *
  * @endcode
  */
-typedef int (*prrte_dss_unpack_fn_t)(prrte_buffer_t *buffer, void *dest,
+typedef int (*prte_dss_unpack_fn_t)(prte_buffer_t *buffer, void *dest,
                                     int32_t *max_num_values,
-                                    prrte_data_type_t type);
+                                    prte_data_type_t type);
 
 /**
  * Get the type and number of values of the next item in the buffer.
@@ -223,7 +224,7 @@ typedef int (*prrte_dss_unpack_fn_t)(prrte_buffer_t *buffer, void *dest,
  *
  * @param buffer A pointer to the buffer in question.
  *
- * @param type A pointer to an prrte_data_type_t variable where the
+ * @param type A pointer to an prte_data_type_t variable where the
  * type of the next item in the buffer is to be stored. Caller must
  * have memory backing this location.
  *
@@ -231,14 +232,14 @@ typedef int (*prrte_dss_unpack_fn_t)(prrte_buffer_t *buffer, void *dest,
  * data values in the next item is to be stored. Caller must have
  * memory backing this location.
  *
- * @retval PRRTE_SUCCESS Requested info was successfully returned.
- * @retval PRRTE_ERROR(s) An appropriate error code indicating the
+ * @retval PRTE_SUCCESS Requested info was successfully returned.
+ * @retval PRTE_ERROR(s) An appropriate error code indicating the
  * problem will be returned. This should be handled appropriately by
  * the caller.
  *
  */
-typedef int (*prrte_dss_peek_next_item_fn_t)(prrte_buffer_t *buffer,
-                                            prrte_data_type_t *type,
+typedef int (*prte_dss_peek_next_item_fn_t)(prte_buffer_t *buffer,
+                                            prte_data_type_t *type,
                                             int32_t *number);
 
 /**
@@ -252,7 +253,7 @@ typedef int (*prrte_dss_peek_next_item_fn_t)(prrte_buffer_t *buffer,
  * @note This is a destructive operation. While the payload is
  * undisturbed, the function will clear the buffer's pointers to the
  * payload. Thus, the buffer and the payload are completely separated,
- * leaving the caller free to PRRTE_RELEASE the buffer.
+ * leaving the caller free to PRTE_RELEASE the buffer.
  *
  * @param buffer A pointer to the buffer whose payload is to be
  * unloaded.
@@ -262,22 +263,22 @@ typedef int (*prrte_dss_peek_next_item_fn_t)(prrte_buffer_t *buffer,
  *
  * @param size The size (in bytes) of the data payload in the buffer.
  *
- * @retval PRRTE_SUCCESS The request was succesfully completed.
+ * @retval PRTE_SUCCESS The request was succesfully completed.
  *
- * @retval PRRTE_ERROR(s) An appropriate error code indicating the
+ * @retval PRTE_ERROR(s) An appropriate error code indicating the
  * problem will be returned. This should be handled appropriately by
  * the caller.
  *
  * @code
- * prrte_buffer_t *buffer;
+ * prte_buffer_t *buffer;
  * uint8_t *bytes;
  * int32_t size;
  *
- * status_code = prrte_dss.unload(buffer, (void**)(&bytes), &size);
- * PRRTE_RELEASE(buffer);
+ * status_code = prte_dss.unload(buffer, (void**)(&bytes), &size);
+ * PRTE_RELEASE(buffer);
  * @endcode
  */
-typedef int (*prrte_dss_unload_fn_t)(prrte_buffer_t *buffer,
+typedef int (*prte_dss_unload_fn_t)(prte_buffer_t *buffer,
                                     void **payload,
                                     int32_t *size);
 
@@ -290,7 +291,7 @@ typedef int (*prrte_dss_unload_fn_t)(prrte_buffer_t *buffer,
  * release it, and then replace the data payload with the one provided
  * by the caller.
  *
- * @note The buffer must be allocated in advance via the PRRTE_NEW
+ * @note The buffer must be allocated in advance via the PRTE_NEW
  * function call - failing to do so will cause the load function to
  * return an error code.
  *
@@ -306,22 +307,22 @@ typedef int (*prrte_dss_unload_fn_t)(prrte_buffer_t *buffer,
  *
  * @param size The size (in bytes) of the provided payload.
  *
- * @retval PRRTE_SUCCESS The request was successfully completed
+ * @retval PRTE_SUCCESS The request was successfully completed
  *
- * @retval PRRTE_ERROR(s) An appropriate error code indicating the
+ * @retval PRTE_ERROR(s) An appropriate error code indicating the
  * problem will be returned. This should be handled appropriately by
  * the caller.
  *
  * @code
- * prrte_buffer_t *buffer;
+ * prte_buffer_t *buffer;
  * uint8_t bytes;
  * int32_t size;
  *
- * buffer = PRRTE_NEW(prrte_buffer_t);
- * status_code = prrte_dss.load(buffer, (void*)(&bytes), size);
+ * buffer = PRTE_NEW(prte_buffer_t);
+ * status_code = prte_dss.load(buffer, (void*)(&bytes), size);
  * @endcode
  */
-typedef int (*prrte_dss_load_fn_t)(prrte_buffer_t *buffer,
+typedef int (*prte_dss_load_fn_t)(prte_buffer_t *buffer,
                                   void *payload,
                                   int32_t size);
 
@@ -337,30 +338,30 @@ typedef int (*prrte_dss_load_fn_t)(prrte_buffer_t *buffer,
  * source buffer's payload will remain intact, as will any pre-existing
  * payload in the destination's buffer.
  */
-typedef int (*prrte_dss_copy_payload_fn_t)(prrte_buffer_t *dest,
-                                          prrte_buffer_t *src);
+typedef int (*prte_dss_copy_payload_fn_t)(prte_buffer_t *dest,
+                                          prte_buffer_t *src);
 
 /**
  * DSS register function
  *
  * This function registers variables associated with the DSS system.
  */
-PRRTE_EXPORT int prrte_dss_register_vars (void);
+PRTE_EXPORT int prte_dss_register_vars (void);
 
 /**
  * DSS initialization function.
  *
  * In dynamic libraries, declared objects and functions don't get
- * loaded until called. We need to ensure that the prrte_dss function
+ * loaded until called. We need to ensure that the prte_dss function
  * structure gets loaded, so we provide an "open" call that is
  * executed as part of the program startup.
  */
-PRRTE_EXPORT int prrte_dss_open(void);
+PRTE_EXPORT int prte_dss_open(void);
 
 /**
  * DSS finalize function
  */
-PRRTE_EXPORT int prrte_dss_close(void);
+PRTE_EXPORT int prte_dss_close(void);
 
 
 /**
@@ -381,12 +382,12 @@ PRRTE_EXPORT int prrte_dss_close(void);
  * @param type The type of the data to be copied - must be one of
  * the DSS defined data types.
  *
- * @retval PRRTE_SUCCESS The value was successfully copied.
+ * @retval PRTE_SUCCESS The value was successfully copied.
  *
- * @retval PRRTE_ERROR(s) An appropriate error code.
+ * @retval PRTE_ERROR(s) An appropriate error code.
  *
  */
-typedef int (*prrte_dss_copy_fn_t)(void **dest, void *src, prrte_data_type_t type);
+typedef int (*prte_dss_copy_fn_t)(void **dest, void *src, prte_data_type_t type);
 
 /**
  * Compare two data values.
@@ -401,8 +402,8 @@ typedef int (*prrte_dss_copy_fn_t)(void **dest, void *src, prrte_data_type_t typ
  * @retval 0 Indicates two values are equal
  * @retval +1 Indicates second value is greater than first value
  */
-typedef int (*prrte_dss_compare_fn_t)(const void *value1, const void *value2,
-                                     prrte_data_type_t type);
+typedef int (*prte_dss_compare_fn_t)(const void *value1, const void *value2,
+                                     prte_data_type_t type);
 
 
 /**
@@ -412,11 +413,11 @@ typedef int (*prrte_dss_compare_fn_t)(const void *value1, const void *value2,
  * needs some way to know how to print them (i.e., convert them to a string
  * representation).
  *
- * @retval PRRTE_SUCCESS The value was successfully printed.
+ * @retval PRTE_SUCCESS The value was successfully printed.
  *
- * @retval PRRTE_ERROR(s) An appropriate error code.
+ * @retval PRTE_ERROR(s) An appropriate error code.
  */
-typedef int (*prrte_dss_print_fn_t)(char **output, char *prefix, void *src, prrte_data_type_t type);
+typedef int (*prte_dss_print_fn_t)(char **output, char *prefix, void *src, prte_data_type_t type);
 
 
 /**
@@ -425,25 +426,25 @@ typedef int (*prrte_dss_print_fn_t)(char **output, char *prefix, void *src, prrt
  * Uses the dss.print command to obtain a string version of the data value
  * and prints it to the designated output stream.
  *
- * @retval PRRTE_SUCCESS The value was successfully printed.
+ * @retval PRTE_SUCCESS The value was successfully printed.
  *
- * @retval PRRTE_ERROR(s) An appropriate error code.
+ * @retval PRTE_ERROR(s) An appropriate error code.
  */
-typedef int (*prrte_dss_dump_fn_t)(int output_stream, void *src, prrte_data_type_t type);
+typedef int (*prte_dss_dump_fn_t)(int output_stream, void *src, prte_data_type_t type);
 
 /**
  * Register a set of data handling functions.
  *
  *  * This function registers a set of data type functions for a specific
  * type.  An integer is returned that should be used a an argument to
- * future invocations of prrte_dss.pack(), prrte_dss.unpack(), prrte_dss.copy(),
- * and prrte_dss.compare, which
+ * future invocations of prte_dss.pack(), prte_dss.unpack(), prte_dss.copy(),
+ * and prte_dss.compare, which
  * will trigger calls to the appropriate functions.  This
  * is most useful when extending the datatypes that the dss can
- * handle; pack and unpack functions can nest calls to prrte_dss.pack()
- * / prrte_dss.unpack(), so defining small pack/unpack functions can be
+ * handle; pack and unpack functions can nest calls to prte_dss.pack()
+ * / prte_dss.unpack(), so defining small pack/unpack functions can be
  * used recursively to build larger types (e.g., packing/unpacking
- * structs can use calls to prrte_dss.pack()/unpack() to serialize /
+ * structs can use calls to prte_dss.pack()/unpack() to serialize /
  * deserialize individual members). This is likewise true for the copy
  * and compare functions.
  *
@@ -458,29 +459,29 @@ typedef int (*prrte_dss_dump_fn_t)(int output_stream, void *src, prrte_data_type
  * @param name [IN] String name for this pair (mainly for debugging)
  * @param type [OUT] Type number for this registration
  *
- * @returns PRRTE_SUCCESS upon success
+ * @returns PRTE_SUCCESS upon success
  *
  */
-typedef int (*prrte_dss_register_fn_t)(prrte_dss_pack_fn_t pack_fn,
-                                    prrte_dss_unpack_fn_t unpack_fn,
-                                    prrte_dss_copy_fn_t copy_fn,
-                                    prrte_dss_compare_fn_t compare_fn,
-                                    prrte_dss_print_fn_t print_fn,
+typedef int (*prte_dss_register_fn_t)(prte_dss_pack_fn_t pack_fn,
+                                    prte_dss_unpack_fn_t unpack_fn,
+                                    prte_dss_copy_fn_t copy_fn,
+                                    prte_dss_compare_fn_t compare_fn,
+                                    prte_dss_print_fn_t print_fn,
                                     bool structured,
-                                    const char *name, prrte_data_type_t *type);
+                                    const char *name, prte_data_type_t *type);
 /*
  * This function looks up the string name corresponding to the identified
  * data type - used for debugging messages.
  */
-typedef char* (*prrte_dss_lookup_data_type_fn_t)(prrte_data_type_t type);
+typedef char* (*prte_dss_lookup_data_type_fn_t)(prte_data_type_t type);
 
 /*
  * Dump the data type list - used for debugging to see what has been registered
  */
-typedef void (*prrte_dss_dump_data_types_fn_t)(int output);
+typedef void (*prte_dss_dump_data_types_fn_t)(int output);
 
 /* return true if the data type is structured */
-typedef bool (*prrte_dss_structured_fn_t)(prrte_data_type_t type);
+typedef bool (*prte_dss_structured_fn_t)(prte_data_type_t type);
 
 /**
  * Base structure for the DSS
@@ -488,26 +489,26 @@ typedef bool (*prrte_dss_structured_fn_t)(prrte_data_type_t type);
  * Base module structure for the DSS - presents the required function
  * pointers to the calling interface.
  */
-struct prrte_dss_t {
-    prrte_dss_pack_fn_t              pack;
-    prrte_dss_unpack_fn_t            unpack;
-    prrte_dss_copy_fn_t              copy;
-    prrte_dss_compare_fn_t           compare;
-    prrte_dss_print_fn_t             print;
-    prrte_dss_structured_fn_t        structured;
-    prrte_dss_peek_next_item_fn_t    peek;
-    prrte_dss_unload_fn_t            unload;
-    prrte_dss_load_fn_t              load;
-    prrte_dss_copy_payload_fn_t      copy_payload;
-    prrte_dss_register_fn_t          register_type;
-    prrte_dss_lookup_data_type_fn_t  lookup_data_type;
-    prrte_dss_dump_data_types_fn_t   dump_data_types;
-    prrte_dss_dump_fn_t              dump;
+struct prte_dss_t {
+    prte_dss_pack_fn_t              pack;
+    prte_dss_unpack_fn_t            unpack;
+    prte_dss_copy_fn_t              copy;
+    prte_dss_compare_fn_t           compare;
+    prte_dss_print_fn_t             print;
+    prte_dss_structured_fn_t        structured;
+    prte_dss_peek_next_item_fn_t    peek;
+    prte_dss_unload_fn_t            unload;
+    prte_dss_load_fn_t              load;
+    prte_dss_copy_payload_fn_t      copy_payload;
+    prte_dss_register_fn_t          register_type;
+    prte_dss_lookup_data_type_fn_t  lookup_data_type;
+    prte_dss_dump_data_types_fn_t   dump_data_types;
+    prte_dss_dump_fn_t              dump;
 };
-typedef struct prrte_dss_t prrte_dss_t;
+typedef struct prte_dss_t prte_dss_t;
 
-PRRTE_EXPORT extern prrte_dss_t prrte_dss;  /* holds dss function pointers */
+PRTE_EXPORT extern prte_dss_t prte_dss;  /* holds dss function pointers */
 
 END_C_DECLS
 
-#endif /* PRRTE_DSS_H */
+#endif /* PRTE_DSS_H */

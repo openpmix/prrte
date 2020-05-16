@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2017 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2009-2018 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2017 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2017      UT-Battelle, LLC. All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
@@ -26,7 +26,7 @@
  *
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
 #ifdef HAVE_UNISTD_H
@@ -35,7 +35,7 @@
 #include <ctype.h>
 
 #include "src/util/argv.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/show_help.h"
 
@@ -45,23 +45,23 @@
 #include "src/util/name_fns.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/schizo/base/base.h"
 #include "schizo_pmix.h"
 
-static int define_cli(prrte_cmd_line_t *cli);
+static int define_cli(prte_cmd_line_t *cli);
 static int parse_cli(int argc, int start, char **argv,
                      char *personality, char ***target);
-static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
+static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
                             char ***argv);
-static int parse_env(prrte_cmd_line_t *cmd_line,
+static int parse_env(prte_cmd_line_t *cmd_line,
                      char **srcenv,
                      char ***dstenv,
                      bool cmdline);
 static void wrap_args(char **args);
 
-prrte_schizo_base_module_t prrte_schizo_pmix_module = {
+prte_schizo_base_module_t prte_schizo_pmix_module = {
     .define_cli = define_cli,
     .parse_cli = parse_cli,
     .parse_proxy_cli = parse_proxy_cli,
@@ -70,21 +70,21 @@ prrte_schizo_base_module_t prrte_schizo_pmix_module = {
 };
 
 
-/* Cmd-line options common to PRRTE master/daemons/tools */
-static prrte_cmd_line_init_t cmd_line_init[] = {
+/* Cmd-line options common to PRTE master/daemons/tools */
+static prte_cmd_line_init_t cmd_line_init[] = {
     /* setup MCA parameters */
-    { '\0', "pmixmca", 2, PRRTE_CMD_LINE_TYPE_STRING,
+    { '\0', "pmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
       "Pass context-specific PMIx MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "gpmixmca", 2, PRRTE_CMD_LINE_TYPE_STRING,
+      PRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "gpmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
       "Pass global PMIx MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "pmixam", 1, PRRTE_CMD_LINE_TYPE_STRING,
+      PRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "pmixam", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Aggregate PMIx MCA parameter set file list",
-      PRRTE_CMD_LINE_OTYPE_LAUNCH },
+      PRTE_CMD_LINE_OTYPE_LAUNCH },
 
     /* End of list */
-    { '\0', NULL, 0, PRRTE_CMD_LINE_TYPE_NULL, NULL }
+    { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
 };
 
 static char *frameworks[] = {
@@ -108,26 +108,26 @@ static char *frameworks[] = {
 };
 
 
-static int define_cli(prrte_cmd_line_t *cli)
+static int define_cli(prte_cmd_line_t *cli)
 {
     int rc;
 
-    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
-                        "%s schizo:prrte: define_cli",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                        "%s schizo:prte: define_cli",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* protect against bozo error */
     if (NULL == cli) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
 
     /* we always are used, so just add ours to the end */
-    rc = prrte_cmd_line_add(cli, cmd_line_init);
-    if (PRRTE_SUCCESS != rc){
+    rc = prte_cmd_line_add(cli, cmd_line_init);
+    if (PRTE_SUCCESS != rc){
         return rc;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int parse_cli(int argc, int start, char **argv,
@@ -137,13 +137,13 @@ static int parse_cli(int argc, int start, char **argv,
     bool ignore;
     char *p1, *p2, *param;
 
-    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:pmix: parse_cli",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     if (NULL != personality &&
         NULL != strstr(personality, "pmix")) {
-        return PRRTE_ERR_TAKE_NEXT_OPTION;
+        return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     for (i = 0; i < (argc-start); ++i) {
@@ -152,7 +152,7 @@ static int parse_cli(int argc, int start, char **argv,
             0 == strcmp("--gpmixmca", argv[i])) {
             if (NULL == argv[i+1] || NULL == argv[i+2]) {
                 /* this is an error */
-                return PRRTE_ERR_FATAL;
+                return PRTE_ERR_FATAL;
             }
             /* strip any quotes around the args */
             if ('\"' == argv[i+1][0]) {
@@ -174,20 +174,20 @@ static int parse_cli(int argc, int start, char **argv,
             if (NULL == target) {
                 /* push it into our environment */
                 asprintf(&param, "PMIX_MCA_%s", p1);
-                prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                      "%s schizo:pmix:parse_cli pushing %s into environment",
-                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param);
-                prrte_setenv(param, p2, true, &environ);
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                prte_setenv(param, p2, true, &environ);
             } else {
-                prrte_argv_append_nosize(target, argv[i]);
-                prrte_argv_append_nosize(target, p1);
-                prrte_argv_append_nosize(target, p2);
+                prte_argv_append_nosize(target, argv[i]);
+                prte_argv_append_nosize(target, p1);
+                prte_argv_append_nosize(target, p2);
             }
         } else if (0 == strcmp("--mca", argv[i]) ||
                    0 == strcmp("--gmca", argv[i])) {
             if (NULL == argv[i+1] || NULL == argv[i+2]) {
                 /* this is an error */
-                return PRRTE_ERR_FATAL;
+                return PRTE_ERR_FATAL;
             }
             /* strip any quotes around the args */
             if ('\"' == argv[i+1][0]) {
@@ -223,23 +223,23 @@ static int parse_cli(int argc, int start, char **argv,
                 if (NULL == target) {
                     /* push it into our environment */
                     asprintf(&param, "PMIX_MCA_%s", p1);
-                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                          "%s schizo:pmix:parse_cli pushing %s into environment",
-                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param);
-                    prrte_setenv(param, p2, true, &environ);
+                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                    prte_setenv(param, p2, true, &environ);
                 } else {
-                    prrte_argv_append_nosize(target, "--pmixmca");
-                    prrte_argv_append_nosize(target, p1);
-                    prrte_argv_append_nosize(target, p2);
+                    prte_argv_append_nosize(target, "--pmixmca");
+                    prte_argv_append_nosize(target, p1);
+                    prte_argv_append_nosize(target, p2);
                 }
             }
             i += 2;
         }
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-static int parse_env(prrte_cmd_line_t *cmd_line,
+static int parse_env(prte_cmd_line_t *cmd_line,
                      char **srcenv,
                      char ***dstenv,
                      bool cmdline)
@@ -249,9 +249,9 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
     char *value;
     char **env = *dstenv;
 
-    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:pmix: parse_env",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     for (i = 0; NULL != srcenv[i]; ++i) {
         if (0 == strncmp("PMIX_MCA_", srcenv[i], strlen("PMIX_MCA_"))) {
@@ -274,30 +274,30 @@ static int parse_env(prrte_cmd_line_t *cmd_line,
                         goto next;
                     }
                 }
-                prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                      "%s schizo:pmix:parse_env adding %s %s to cmd line",
-                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), p1, value);
-                prrte_argv_append_nosize(dstenv, "--pmixmca");
-                prrte_argv_append_nosize(dstenv, p1);
-                prrte_argv_append_nosize(dstenv, value);
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1, value);
+                prte_argv_append_nosize(dstenv, "--pmixmca");
+                prte_argv_append_nosize(dstenv, p1);
+                prte_argv_append_nosize(dstenv, value);
             } else {
                 if (environ != srcenv) {
                     /* push it into our environment */
-                    prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                          "%s schizo:pmix:parse_env pushing %s=%s into my environment",
-                                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param, value);
-                    prrte_setenv(param, value, true, &environ);
+                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param, value);
+                    prte_setenv(param, value, true, &environ);
                 }
-                prrte_output_verbose(1, prrte_schizo_base_framework.framework_output,
+                prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                      "%s schizo:pmix:parse_env pushing %s=%s into dest environment",
-                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), param, value);
-                prrte_setenv(param, value, true, dstenv);
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param, value);
+                prte_setenv(param, value, true, dstenv);
             }
           next:
             env = *dstenv;
         }
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static void wrap_args(char **args)
@@ -318,14 +318,14 @@ static void wrap_args(char **args)
             if ('\"' == args[i][0]) {
                 continue;
             }
-            prrte_asprintf(&tstr, "\"%s\"", args[i]);
+            prte_asprintf(&tstr, "\"%s\"", args[i]);
             free(args[i]);
             args[i] = tstr;
         }
     }
 }
 
-static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
+static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
                             char ***argv)
 {
     int i;
@@ -351,9 +351,9 @@ static void parse_proxy_cli(prrte_cmd_line_t *cmd_line,
             }
             *value = '\0';
             value++;
-            prrte_argv_append_nosize(argv, "--pmixmca");
-            prrte_argv_append_nosize(argv, ptr);
-            prrte_argv_append_nosize(argv, value);
+            prte_argv_append_nosize(argv, "--pmixmca");
+            prte_argv_append_nosize(argv, ptr);
+            prte_argv_append_nosize(argv, value);
             free(param);
         }
     }

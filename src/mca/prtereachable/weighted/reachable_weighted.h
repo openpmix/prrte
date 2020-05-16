@@ -2,6 +2,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -9,10 +10,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_MCA_REACHABLE_WEIGHTED_H
-#define PRRTE_MCA_REACHABLE_WEIGHTED_H
+#ifndef PRTE_MCA_REACHABLE_WEIGHTED_H
+#define PRTE_MCA_REACHABLE_WEIGHTED_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
@@ -29,12 +30,12 @@
 BEGIN_C_DECLS
 
 typedef struct {
-    prrte_reachable_base_component_t super;
-} prrte_prtereachable_weighted_component_t;
+    prte_reachable_base_component_t super;
+} prte_prtereachable_weighted_component_t;
 
-PRRTE_EXPORT extern prrte_prtereachable_weighted_component_t prrte_prtereachable_weighted_component;
+PRTE_EXPORT extern prte_prtereachable_weighted_component_t prte_prtereachable_weighted_component;
 
-PRRTE_EXPORT extern const prrte_reachable_base_module_t prrte_prtereachable_weighted_module;
+PRTE_EXPORT extern const prte_reachable_base_module_t prte_prtereachable_weighted_module;
 
 
 END_C_DECLS

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -11,22 +12,22 @@
  * schizo framework base functionality.
  */
 
-#ifndef PRRTE_MCA_SCHIZO_BASE_H
-#define PRRTE_MCA_SCHIZO_BASE_H
+#ifndef PRTE_MCA_SCHIZO_BASE_H
+#define PRTE_MCA_SCHIZO_BASE_H
 
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prrte_list.h"
-#include "src/mca/base/prrte_mca_base_framework.h"
+#include "src/class/prte_list.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 #include "src/util/cmd_line.h"
 #include "src/util/printf.h"
 #include "src/mca/mca.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/schizo/schizo.h"
 
@@ -35,68 +36,68 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_schizo_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_schizo_base_framework;
 /* select all components */
-PRRTE_EXPORT    int prrte_schizo_base_select(void);
+PRTE_EXPORT    int prte_schizo_base_select(void);
 
 /**
  * Struct to hold data global to the schizo framework
  */
 typedef struct {
     /* list of active modules */
-    prrte_list_t active_modules;
+    prte_list_t active_modules;
     char **personalities;
     bool test_proxy_launch;
-} prrte_schizo_base_t;
+} prte_schizo_base_t;
 
 /**
  * Global instance of schizo-wide framework data
  */
-PRRTE_EXPORT extern prrte_schizo_base_t prrte_schizo_base;
+PRTE_EXPORT extern prte_schizo_base_t prte_schizo_base;
 
 /**
  * Active schizo component / module
  */
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     int pri;
-    prrte_schizo_base_module_t *module;
-    prrte_mca_base_component_t *component;
-} prrte_schizo_base_active_module_t;
-PRRTE_CLASS_DECLARATION(prrte_schizo_base_active_module_t);
+    prte_schizo_base_module_t *module;
+    prte_mca_base_component_t *component;
+} prte_schizo_base_active_module_t;
+PRTE_CLASS_DECLARATION(prte_schizo_base_active_module_t);
 
 /* base support functions */
-PRRTE_EXPORT int prrte_schizo_base_convert(char ***argv, int idx, int ntodelete,
+PRTE_EXPORT int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                                            char *option, char *directive, char *modifier);
 
 /* the base stub functions */
-PRRTE_EXPORT int prrte_schizo_base_define_cli(prrte_cmd_line_t *cli);
-PRRTE_EXPORT int prrte_schizo_base_parse_cli(int argc, int start, char **argv,
+PRTE_EXPORT int prte_schizo_base_define_cli(prte_cmd_line_t *cli);
+PRTE_EXPORT int prte_schizo_base_parse_cli(int argc, int start, char **argv,
                                              char *personality, char ***target);
-PRRTE_EXPORT int prrte_schizo_base_parse_deprecated_cli(prrte_cmd_line_t *cmdline,
+PRTE_EXPORT int prte_schizo_base_parse_deprecated_cli(prte_cmd_line_t *cmdline,
                                                         int *argc, char ***argv);
 
-PRRTE_EXPORT void prrte_schizo_base_parse_proxy_cli(prrte_cmd_line_t *cmd_line,
+PRTE_EXPORT void prte_schizo_base_parse_proxy_cli(prte_cmd_line_t *cmd_line,
                                                     char ***argv);
-PRRTE_EXPORT int prrte_schizo_base_parse_env(prrte_cmd_line_t *cmd_line,
+PRTE_EXPORT int prte_schizo_base_parse_env(prte_cmd_line_t *cmd_line,
                                              char **srcenv,
                                              char ***dstenv,
                                              bool cmdline);
-PRRTE_EXPORT int prrte_schizo_base_detect_proxy(char **argv);
-PRRTE_EXPORT int prrte_schizo_base_define_session_dir(char **tmpdir);
+PRTE_EXPORT int prte_schizo_base_detect_proxy(char **argv);
+PRTE_EXPORT int prte_schizo_base_define_session_dir(char **tmpdir);
 
-PRRTE_EXPORT int prrte_schizo_base_allow_run_as_root(prrte_cmd_line_t *cmd_line);
-PRRTE_EXPORT void prrte_schizo_base_wrap_args(char **args);
-PRRTE_EXPORT int prrte_schizo_base_setup_app(prrte_app_context_t *app);
-PRRTE_EXPORT int prrte_schizo_base_setup_fork(prrte_job_t *jdata,
-                                              prrte_app_context_t *context);
-PRRTE_EXPORT int prrte_schizo_base_setup_child(prrte_job_t *jobdat,
-                                               prrte_proc_t *child,
-                                               prrte_app_context_t *app,
+PRTE_EXPORT int prte_schizo_base_allow_run_as_root(prte_cmd_line_t *cmd_line);
+PRTE_EXPORT void prte_schizo_base_wrap_args(char **args);
+PRTE_EXPORT int prte_schizo_base_setup_app(prte_app_context_t *app);
+PRTE_EXPORT int prte_schizo_base_setup_fork(prte_job_t *jdata,
+                                              prte_app_context_t *context);
+PRTE_EXPORT int prte_schizo_base_setup_child(prte_job_t *jobdat,
+                                               prte_proc_t *child,
+                                               prte_app_context_t *app,
                                                char ***env);
-PRRTE_EXPORT void prrte_schizo_base_job_info(prrte_cmd_line_t *cmdline, prrte_list_t *jobinfo);
-PRRTE_EXPORT int prrte_schizo_base_get_remaining_time(uint32_t *timeleft);
-PRRTE_EXPORT void prrte_schizo_base_finalize(void);
+PRTE_EXPORT void prte_schizo_base_job_info(prte_cmd_line_t *cmdline, prte_list_t *jobinfo);
+PRTE_EXPORT int prte_schizo_base_get_remaining_time(uint32_t *timeleft);
+PRTE_EXPORT void prte_schizo_base_finalize(void);
 
 END_C_DECLS
 

@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2015      Research Organization for Information Science
@@ -26,20 +26,20 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_MCA_BASE_H
-#define PRRTE_MCA_BASE_H
+#ifndef PRTE_MCA_BASE_H
+#define PRTE_MCA_BASE_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
-#include "src/class/prrte_object.h"
-#include "src/class/prrte_list.h"
+#include "src/class/prte_object.h"
+#include "src/class/prte_list.h"
 
 /*
  * These units are large enough to warrant their own .h files
  */
 #include "src/mca/mca.h"
-#include "src/mca/base/prrte_mca_base_var.h"
-#include "src/mca/base/prrte_mca_base_framework.h"
+#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 #include "src/util/cmd_line.h"
 #include "src/util/output.h"
 
@@ -48,57 +48,57 @@ BEGIN_C_DECLS
 /*
  * Structure for making plain lists of components
  */
-struct prrte_mca_base_component_list_item_t {
-    prrte_list_item_t super;
-    const prrte_mca_base_component_t *cli_component;
+struct prte_mca_base_component_list_item_t {
+    prte_list_item_t super;
+    const prte_mca_base_component_t *cli_component;
 };
-typedef struct prrte_mca_base_component_list_item_t prrte_mca_base_component_list_item_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_mca_base_component_list_item_t);
+typedef struct prte_mca_base_component_list_item_t prte_mca_base_component_list_item_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_component_list_item_t);
 
 /*
  * Structure for making priority lists of components
  */
-struct prrte_mca_base_component_priority_list_item_t {
-    prrte_mca_base_component_list_item_t super;
+struct prte_mca_base_component_priority_list_item_t {
+    prte_mca_base_component_list_item_t super;
     int cpli_priority;
 };
-typedef struct prrte_mca_base_component_priority_list_item_t
-    prrte_mca_base_component_priority_list_item_t;
+typedef struct prte_mca_base_component_priority_list_item_t
+    prte_mca_base_component_priority_list_item_t;
 
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_mca_base_component_priority_list_item_t);
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_component_priority_list_item_t);
 
 /*
  * Public variables
  */
-PRRTE_EXPORT extern char *prrte_mca_base_component_path;
-PRRTE_EXPORT extern bool prrte_mca_base_component_show_load_errors;
-PRRTE_EXPORT extern bool prrte_mca_base_component_track_load_errors;
-PRRTE_EXPORT extern bool prrte_mca_base_component_disable_dlopen;
-PRRTE_EXPORT extern char *prrte_mca_base_system_default_path;
-PRRTE_EXPORT extern char *prrte_mca_base_user_default_path;
+PRTE_EXPORT extern char *prte_mca_base_component_path;
+PRTE_EXPORT extern bool prte_mca_base_component_show_load_errors;
+PRTE_EXPORT extern bool prte_mca_base_component_track_load_errors;
+PRTE_EXPORT extern bool prte_mca_base_component_disable_dlopen;
+PRTE_EXPORT extern char *prte_mca_base_system_default_path;
+PRTE_EXPORT extern char *prte_mca_base_user_default_path;
 
 /*
  * Standard verbosity levels
  */
 enum {
     /** total silence */
-    PRRTE_MCA_BASE_VERBOSE_NONE  = -1,
+    PRTE_MCA_BASE_VERBOSE_NONE  = -1,
     /** only errors are printed */
-    PRRTE_MCA_BASE_VERBOSE_ERROR = 0,
+    PRTE_MCA_BASE_VERBOSE_ERROR = 0,
     /** emit messages about component selection, open, and unloading */
-    PRRTE_MCA_BASE_VERBOSE_COMPONENT = 10,
+    PRTE_MCA_BASE_VERBOSE_COMPONENT = 10,
     /** also emit warnings */
-    PRRTE_MCA_BASE_VERBOSE_WARN  = 20,
+    PRTE_MCA_BASE_VERBOSE_WARN  = 20,
     /** also emit general, user-relevant information, such as rationale as to why certain choices
      * or code paths were taken, information gleaned from probing the local system, etc. */
-    PRRTE_MCA_BASE_VERBOSE_INFO  = 40,
+    PRTE_MCA_BASE_VERBOSE_INFO  = 40,
     /** also emit relevant tracing information (e.g., which functions were invoked /
      * call stack entry/exit info) */
-    PRRTE_MCA_BASE_VERBOSE_TRACE = 60,
-    /** also emit PRRTE-developer-level (i.e,. highly detailed) information */
-    PRRTE_MCA_BASE_VERBOSE_DEBUG = 80,
+    PRTE_MCA_BASE_VERBOSE_TRACE = 60,
+    /** also emit PRTE-developer-level (i.e,. highly detailed) information */
+    PRTE_MCA_BASE_VERBOSE_DEBUG = 80,
     /** also output anything else that might be useful */
-    PRRTE_MCA_BASE_VERBOSE_MAX   = 100,
+    PRTE_MCA_BASE_VERBOSE_MAX   = 100,
 };
 
 /*
@@ -108,8 +108,8 @@ enum {
 /**
  * First function called in the MCA.
  *
- * @return PRRTE_SUCCESS Upon success
- * @return PRRTE_ERROR Upon failure
+ * @return PRTE_SUCCESS Upon success
+ * @return PRTE_ERROR Upon failure
  *
  * This function starts up the entire MCA.  It initializes a bunch
  * of built-in MCA parameters, and initialized the MCA component
@@ -119,13 +119,13 @@ enum {
  * invoked during the initialization stage and specifically
  * invoked in the special case of the *_info command.
  */
-PRRTE_EXPORT int prrte_mca_base_open(void);
+PRTE_EXPORT int prte_mca_base_open(void);
 
 /**
  * Last function called in the MCA
  *
- * @return PRRTE_SUCCESS Upon success
- * @return PRRTE_ERROR Upon failure
+ * @return PRTE_SUCCESS Upon success
+ * @return PRTE_ERROR Upon failure
  *
  * This function closes down the entire MCA.  It clears all MCA
  * parameters and closes down the MCA component respository.
@@ -133,16 +133,16 @@ PRRTE_EXPORT int prrte_mca_base_open(void);
  * It must be the last MCA function invoked.  It is normally invoked
  * during the finalize stage.
  */
-PRRTE_EXPORT void prrte_mca_base_close(void);
+PRTE_EXPORT void prte_mca_base_close(void);
 
 /**
  * A generic select function
  *
  */
-PRRTE_EXPORT int prrte_mca_base_select(const char *type_name, int output_id,
-                                  prrte_list_t *components_available,
-                                  prrte_mca_base_module_t **best_module,
-                                  prrte_mca_base_component_t **best_component,
+PRTE_EXPORT int prte_mca_base_select(const char *type_name, int output_id,
+                                  prte_list_t *components_available,
+                                  prte_mca_base_module_t **best_module,
+                                  prte_mca_base_component_t **best_component,
                                   int *priority_out);
 
 /**
@@ -153,31 +153,31 @@ PRRTE_EXPORT int prrte_mca_base_select(const char *type_name, int output_id,
  *            available for selection.
  *
  */
-PRRTE_EXPORT int prrte_mca_base_is_component_required(prrte_list_t *components_available,
-                                                 prrte_mca_base_component_t *component,
+PRTE_EXPORT int prte_mca_base_is_component_required(prte_list_t *components_available,
+                                                 prte_mca_base_component_t *component,
                                                  bool exclusive,
                                                  bool *is_required);
 
-/* prrte_mca_base_component_compare.c */
+/* prte_mca_base_component_compare.c */
 
-PRRTE_EXPORT int prrte_mca_base_component_compare_priority(prrte_mca_base_component_priority_list_item_t *a,
-                                                      prrte_mca_base_component_priority_list_item_t *b);
-PRRTE_EXPORT int prrte_mca_base_component_compare(const prrte_mca_base_component_t *a,
-                                             const prrte_mca_base_component_t *b);
-PRRTE_EXPORT int prrte_mca_base_component_compatible(const prrte_mca_base_component_t *a,
-                                                const prrte_mca_base_component_t *b);
-PRRTE_EXPORT char * prrte_mca_base_component_to_string(const prrte_mca_base_component_t *a);
+PRTE_EXPORT int prte_mca_base_component_compare_priority(prte_mca_base_component_priority_list_item_t *a,
+                                                      prte_mca_base_component_priority_list_item_t *b);
+PRTE_EXPORT int prte_mca_base_component_compare(const prte_mca_base_component_t *a,
+                                             const prte_mca_base_component_t *b);
+PRTE_EXPORT int prte_mca_base_component_compatible(const prte_mca_base_component_t *a,
+                                                const prte_mca_base_component_t *b);
+PRTE_EXPORT char * prte_mca_base_component_to_string(const prte_mca_base_component_t *a);
 
-/* prrte_mca_base_component_find.c */
+/* prte_mca_base_component_find.c */
 
-PRRTE_EXPORT int prrte_mca_base_component_find (const char *directory, prrte_mca_base_framework_t *framework,
+PRTE_EXPORT int prte_mca_base_component_find (const char *directory, prte_mca_base_framework_t *framework,
                                            bool ignore_requested, bool open_dso_components);
 
 /**
- * Parse the requested component string and return an prrte_argv of the requested
+ * Parse the requested component string and return an prte_argv of the requested
  * (or not requested) components.
  */
-int prrte_mca_base_component_parse_requested (const char *requested, bool *include_mode,
+int prte_mca_base_component_parse_requested (const char *requested, bool *include_mode,
                                         char ***requested_component_names);
 
 /**
@@ -190,37 +190,37 @@ int prrte_mca_base_component_parse_requested (const char *requested, bool *inclu
  * May be NULL.
  * @param[in] filter_flags Metadata flags components are required to have set (CR ready)
  *
- * @returns PRRTE_SUCCESS On success
- * @returns PRRTE_ERR_NOT_FOUND If some component in {filter_names} is not found in
+ * @returns PRTE_SUCCESS On success
+ * @returns PRTE_ERR_NOT_FOUND If some component in {filter_names} is not found in
  * {components}. Does not apply to negated filters.
- * @returns prrte error code On other error.
+ * @returns prte error code On other error.
  *
  * This function closes and releases any components that do not match the filter_name and
  * filter flags.
  */
-PRRTE_EXPORT int prrte_mca_base_components_filter (prrte_mca_base_framework_t *framework, uint32_t filter_flags);
+PRTE_EXPORT int prte_mca_base_components_filter (prte_mca_base_framework_t *framework, uint32_t filter_flags);
 
 
 
-/* Safely release some memory allocated by prrte_mca_base_component_find()
+/* Safely release some memory allocated by prte_mca_base_component_find()
    (i.e., is safe to call even if you never called
-   prrte_mca_base_component_find()). */
-PRRTE_EXPORT int prrte_mca_base_component_find_finalize(void);
+   prte_mca_base_component_find()). */
+PRTE_EXPORT int prte_mca_base_component_find_finalize(void);
 
-/* prrte_mca_base_components_register.c */
-PRRTE_EXPORT int prrte_mca_base_framework_components_register (struct prrte_mca_base_framework_t *framework,
-                                                          prrte_mca_base_register_flag_t flags);
+/* prte_mca_base_components_register.c */
+PRTE_EXPORT int prte_mca_base_framework_components_register (struct prte_mca_base_framework_t *framework,
+                                                          prte_mca_base_register_flag_t flags);
 
-/* prrte_mca_base_components_open.c */
-PRRTE_EXPORT int prrte_mca_base_framework_components_open (struct prrte_mca_base_framework_t *framework,
-                                                      prrte_mca_base_open_flag_t flags);
+/* prte_mca_base_components_open.c */
+PRTE_EXPORT int prte_mca_base_framework_components_open (struct prte_mca_base_framework_t *framework,
+                                                      prte_mca_base_open_flag_t flags);
 
-PRRTE_EXPORT int prrte_mca_base_components_open(const char *type_name, int output_id,
-                                           const prrte_mca_base_component_t **static_components,
-                                           prrte_list_t *components_available,
+PRTE_EXPORT int prte_mca_base_components_open(const char *type_name, int output_id,
+                                           const prte_mca_base_component_t **static_components,
+                                           prte_list_t *components_available,
                                            bool open_dso_components);
 
-/* prrte_mca_base_components_close.c */
+/* prte_mca_base_components_close.c */
 /**
  * Close and release a component.
  *
@@ -229,7 +229,7 @@ PRRTE_EXPORT int prrte_mca_base_components_open(const char *type_name, int outpu
  *
  * After calling this function the component may no longer be used.
  */
-PRRTE_EXPORT void prrte_mca_base_component_close (const prrte_mca_base_component_t *component, int output_id);
+PRTE_EXPORT void prte_mca_base_component_close (const prte_mca_base_component_t *component, int output_id);
 
 /**
  * Release a component without closing it.
@@ -238,13 +238,13 @@ PRRTE_EXPORT void prrte_mca_base_component_close (const prrte_mca_base_component
  *
  * After calling this function the component may no longer be used.
  */
-void prrte_mca_base_component_unload (const prrte_mca_base_component_t *component, int output_id);
+void prte_mca_base_component_unload (const prte_mca_base_component_t *component, int output_id);
 
-PRRTE_EXPORT int prrte_mca_base_components_close(int output_id, prrte_list_t *components_available,
-                                            const prrte_mca_base_component_t *skip);
+PRTE_EXPORT int prte_mca_base_components_close(int output_id, prte_list_t *components_available,
+                                            const prte_mca_base_component_t *skip);
 
-PRRTE_EXPORT int prrte_mca_base_framework_components_close (struct prrte_mca_base_framework_t *framework,
-						       const prrte_mca_base_component_t *skip);
+PRTE_EXPORT int prte_mca_base_framework_components_close (struct prte_mca_base_framework_t *framework,
+						       const prte_mca_base_component_t *skip);
 
 END_C_DECLS
 

@@ -3,7 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -14,7 +14,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/mca/prtedl/base/base.h"
 
@@ -24,8 +24,8 @@
 /*
  * Globals
  */
-prrte_prtedl_base_module_t *prrte_prtedl = NULL;
-prrte_prtedl_base_component_t *prrte_prtedl_base_selected_component = NULL;
+prte_prtedl_base_module_t *prte_prtedl = NULL;
+prte_prtedl_base_component_t *prte_prtedl_base_selected_component = NULL;
 
 
 /*
@@ -38,10 +38,10 @@ prrte_prtedl_base_component_t *prrte_prtedl_base_selected_component = NULL;
  * executable code in this file, or some linkers (cough cough OS X
  * cough cough) may not actually link in this .o file.
  */
-int prrte_dl_base_open(prrte_mca_base_open_flag_t flags)
+int prte_dl_base_open(prte_mca_base_open_flag_t flags)
 {
     /* Open up all available components */
-    return prrte_mca_base_framework_components_open(&prrte_prtedl_base_framework, flags);
+    return prte_mca_base_framework_components_open(&prte_prtedl_base_framework, flags);
 }
 
 /* VERY IMPORTANT: This framework is static, and is opened before any
@@ -49,9 +49,9 @@ int prrte_dl_base_open(prrte_mca_base_open_flag_t flags)
    But we must mark this framework is NO_DSO so that the MCA framework
    base doesn't try to open any dynamic components in this
    framework. */
-PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, prtedl, "Dynamic loader framework",
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prtedl, "Dynamic loader framework",
                                  NULL /* register */,
-                                 prrte_dl_base_open /* open */,
+                                 prte_dl_base_open /* open */,
                                  NULL /* close */,
-                                 prrte_prtedl_base_static_components,
-                                 PRRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);
+                                 prte_prtedl_base_static_components,
+                                 PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);

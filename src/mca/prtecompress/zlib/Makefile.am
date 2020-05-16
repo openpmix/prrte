@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2004-2010 The Trustees of Indiana University.
 #                         All rights reserved.
-# Copyright (c) 2014-2015 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
@@ -22,7 +22,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_prtecompress_zlib_DSO
+if MCA_BUILD_prte_prtecompress_zlib_DSO
 component_noinst =
 component_install = mca_prtecompress_zlib.la
 else
@@ -30,11 +30,11 @@ component_noinst = libmca_prtecompress_zlib.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_prtecompress_zlib_la_SOURCES = $(sources)
 mca_prtecompress_zlib_la_LDFLAGS = -module -avoid-version $(prtecompress_zlib_LDFLAGS)
-mca_prtecompress_zlib_la_LIBADD = $(top_builddir)/src/libprrte.la $(prtecompress_zlib_LIBS)
+mca_prtecompress_zlib_la_LIBADD = $(top_builddir)/src/libprte.la $(prtecompress_zlib_LIBS)
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_prtecompress_zlib_la_SOURCES = $(sources)

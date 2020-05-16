@@ -6,18 +6,18 @@
  */
 
 #include <stdio.h>
-#include "prrte/constants.h"
-#include "prrte/runtime/runtime.h"
+#include "prte/constants.h"
+#include "prte/runtime/runtime.h"
 
 int main(int argc, char* argv[])
 {
-    if (PRRTE_SUCCESS != prrte_init(&argc, &argv, PRRTE_PROC_NON_MPI)) {
-        fprintf(stderr, "Failed prrte_init\n");
+    if (PRTE_SUCCESS != prte_init(&argc, &argv, PRTE_PROC_NON_MPI)) {
+        fprintf(stderr, "Failed prte_init\n");
         exit(1);
     }
 
-    if (PRRTE_SUCCESS != prrte_finalize()) {
-        fprintf(stderr, "Failed prrte_finalize\n");
+    if (PRTE_SUCCESS != prte_finalize()) {
+        fprintf(stderr, "Failed prte_finalize\n");
         exit(1);
     }
     return 0;

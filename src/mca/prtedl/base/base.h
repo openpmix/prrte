@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -11,96 +11,96 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_DL_BASE_H
-#define PRRTE_DL_BASE_H
+#ifndef PRTE_DL_BASE_H
+#define PRTE_DL_BASE_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "src/mca/prtedl/prtedl.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 
 #include "src/mca/base/base.h"
-#include "src/mca/base/prrte_mca_base_framework.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 
 BEGIN_C_DECLS
 
 /**
  * Globals
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_prtedl_base_framework;
-PRRTE_EXPORT extern prrte_prtedl_base_component_t
-*prrte_prtedl_base_selected_component;
-PRRTE_EXPORT extern prrte_prtedl_base_module_t *prrte_prtedl;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_prtedl_base_framework;
+PRTE_EXPORT extern prte_prtedl_base_component_t
+*prte_prtedl_base_selected_component;
+PRTE_EXPORT extern prte_prtedl_base_module_t *prte_prtedl;
 
 
 /**
  * Initialize the DL MCA framework
  *
- * @retval PRRTE_SUCCESS Upon success
- * @retval PRRTE_ERROR   Upon failures
+ * @retval PRTE_SUCCESS Upon success
+ * @retval PRTE_ERROR   Upon failures
  *
- * This function is invoked during prrte_init();
+ * This function is invoked during prte_init();
  */
-PRRTE_EXPORT int prrte_dl_base_open(prrte_mca_base_open_flag_t flags);
+PRTE_EXPORT int prte_dl_base_open(prte_mca_base_open_flag_t flags);
 
 /**
  * Select an available component.
  *
- * @retval PRRTE_SUCCESS Upon Success
- * @retval PRRTE_NOT_FOUND If no component can be selected
- * @retval PRRTE_ERROR Upon other failure
+ * @retval PRTE_SUCCESS Upon Success
+ * @retval PRTE_NOT_FOUND If no component can be selected
+ * @retval PRTE_ERROR Upon other failure
  *
  */
-PRRTE_EXPORT int prrte_dl_base_select(void);
+PRTE_EXPORT int prte_dl_base_select(void);
 
 /**
  * Finalize the DL MCA framework
  *
- * @retval PRRTE_SUCCESS Upon success
- * @retval PRRTE_ERROR   Upon failures
+ * @retval PRTE_SUCCESS Upon success
+ * @retval PRTE_ERROR   Upon failures
  *
- * This function is invoked during prrte_finalize();
+ * This function is invoked during prte_finalize();
  */
-PRRTE_EXPORT int prrte_dl_base_close(void);
+PRTE_EXPORT int prte_dl_base_close(void);
 
 /**
  * Open a DSO
  *
- * (see prrte_prtedl_base_module_open_ft_t in src/mca/prtedl/prtedl.h for
+ * (see prte_prtedl_base_module_open_ft_t in src/mca/prtedl/prtedl.h for
  * documentation of this function)
  */
-PRRTE_EXPORT int prrte_dl_open(const char *fname,
+PRTE_EXPORT int prte_dl_open(const char *fname,
                                bool use_ext, bool private_namespace,
-                               prrte_dl_handle_t **handle, char **err_msg);
+                               prte_dl_handle_t **handle, char **err_msg);
 
 /**
  * Lookup a symbol in a DSO
  *
- * (see prrte_prtedl_base_module_lookup_ft_t in src/mca/prtedl/prtedl.h for
+ * (see prte_prtedl_base_module_lookup_ft_t in src/mca/prtedl/prtedl.h for
  * documentation of this function)
  */
-PRRTE_EXPORT int prrte_dl_lookup(prrte_dl_handle_t *handle,
+PRTE_EXPORT int prte_dl_lookup(prte_dl_handle_t *handle,
                                  const char *symbol,
                                  void **ptr, char **err_msg);
 
 /**
  * Close a DSO
  *
- * (see prrte_prtedl_base_module_close_ft_t in src/mca/prtedl/prtedl.h for
+ * (see prte_prtedl_base_module_close_ft_t in src/mca/prtedl/prtedl.h for
  * documentation of this function)
  */
-PRRTE_EXPORT int prrte_dl_close(prrte_dl_handle_t *handle);
+PRTE_EXPORT int prte_dl_close(prte_dl_handle_t *handle);
 
 /**
  * Iterate over files in a path
  *
- * (see prrte_prtedl_base_module_foreachfile_ft_t in src/mca/prtedl/prtedl.h for
+ * (see prte_prtedl_base_module_foreachfile_ft_t in src/mca/prtedl/prtedl.h for
  * documentation of this function)
  */
-PRRTE_EXPORT int prrte_dl_foreachfile(const char *search_path,
+PRTE_EXPORT int prte_dl_foreachfile(const char *search_path,
                                       int (*cb_func)(const char *filename,
                                                      void *context),
                                       void *context);
 
 END_C_DECLS
 
-#endif /* PRRTE_DL_BASE_H */
+#endif /* PRTE_DL_BASE_H */

@@ -11,6 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -33,7 +34,7 @@ Thus, there is no way to determine the proper host to be used.
 
 -host: %s
 
-Please see the prrte_hosts man page for further information.
+Please see the prte_hosts man page for further information.
 #
 [dash-host:relative-node-not-found]
 A relative host was specified, but was not found. The requested host was
@@ -42,7 +43,7 @@ specified with --host as:
 Index: %d
 Syntax given: %s
 
-Please see the prrte_hosts man page for further information.
+Please see the prte_hosts man page for further information.
 #
 [dash-host:relative-node-out-of-bounds]
 A relative host was specified, but the index given is beyond the number
@@ -52,7 +53,7 @@ Index: %d
 #hosts: %d
 
 You could obtain a larger allocation or reduce the relative host index.
-Please see the prrte_hosts man page for further information.
+Please see the prte_hosts man page for further information.
 #
 [dash-host:invalid-relative-node-syntax]
 A relative host was improperly specified - the value provided was.
@@ -60,10 +61,10 @@ A relative host was improperly specified - the value provided was.
 -host: %s
 
 You may have forgotten to preface a node with 'N' or 'n', or used the 'e' or 'E' to indicate
-empty nodes. Please see the prrte_hosts man page for further information.
+empty nodes. Please see the prte_hosts man page for further information.
 #
 [dash-host:not-enough-empty]
 The requested number of empty hosts was not available - the system was short by %d hosts.
 
 Please recheck your allocation - further information is available on the
-prrte_hosts man page.
+prte_hosts man page.

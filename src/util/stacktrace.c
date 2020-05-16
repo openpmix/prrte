@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2006      Sun Microsystems, Inc.  All rights reserved.
- * Copyright (c) 2008-2009 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
@@ -22,7 +22,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #ifdef HAVE_UNISTD_H
@@ -53,7 +53,7 @@
 #include "src/util/argv.h"
 #include "src/util/proc_info.h"
 #include "src/util/error.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #ifndef _NSIG
 #define _NSIG 32
@@ -61,9 +61,9 @@
 
 #define HOSTFORMAT "[%s:%05d] "
 
-int    prrte_stacktrace_output_fileno = -1;
-static char  *prrte_stacktrace_output_filename_base = NULL;
-static size_t prrte_stacktrace_output_filename_max_len = 0;
+int    prte_stacktrace_output_fileno = -1;
+static char  *prte_stacktrace_output_filename_base = NULL;
+static size_t prte_stacktrace_output_filename_max_len = 0;
 static char *unable_to_print_msg = "Unable to print stack trace!\n";
 
 /*
@@ -73,9 +73,9 @@ static char *unable_to_print_msg = "Unable to print stack trace!\n";
  * stacktrace.VPID.PID
  */
 static void set_stacktrace_filename(void) {
-    snprintf(prrte_stacktrace_output_filename, prrte_stacktrace_output_filename_max_len,
+    snprintf(prte_stacktrace_output_filename, prte_stacktrace_output_filename_max_len,
              "%s.%lu.%lu",
-             prrte_stacktrace_output_filename_base, (unsigned long)PRRTE_PROC_MY_NAME->vpid, (unsigned long)getpid());
+             prte_stacktrace_output_filename_base, (unsigned long)PRTE_PROC_MY_NAME->vpid, (unsigned long)getpid());
 
     return;
 }
@@ -94,7 +94,7 @@ static void set_stacktrace_filename(void) {
  *
  * FIXME: Should distinguish for systems, which don't have siginfo...
  */
-#if PRRTE_WANT_PRETTY_PRINT_STACKTRACE
+#if PRTE_WANT_PRETTY_PRINT_STACKTRACE
 static void show_stackframe (int signo, siginfo_t * info, void * p)
 {
     char print_buffer[1024];
@@ -104,7 +104,7 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     char *si_code_str = "";
 
     /* Do not print the stack trace */
-    if( 0 > prrte_stacktrace_output_fileno && 0 == prrte_stacktrace_output_filename_max_len ) {
+    if( 0 > prte_stacktrace_output_fileno && 0 == prte_stacktrace_output_filename_max_len ) {
         /* Raise the signal again, so we don't accidentally mask critical signals.
          * For critical signals, it is preferred that we call 'raise' instead of
          * 'exit' or 'abort' so that the return status is set properly for this
@@ -117,14 +117,14 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     }
 
     /* Update the file name with the RANK, if available */
-    if( 0 < prrte_stacktrace_output_filename_max_len ) {
+    if( 0 < prte_stacktrace_output_filename_max_len ) {
         set_stacktrace_filename();
-        prrte_stacktrace_output_fileno = open(prrte_stacktrace_output_filename,
+        prte_stacktrace_output_fileno = open(prte_stacktrace_output_filename,
                                              O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR);
-        if( 0 > prrte_stacktrace_output_fileno ) {
-            prrte_output(0, "Error: Failed to open the stacktrace output file. Default: stderr\n\tFilename: %s\n\tErrno: %s",
-                        prrte_stacktrace_output_filename, strerror(errno));
-            prrte_stacktrace_output_fileno = fileno(stderr);
+        if( 0 > prte_stacktrace_output_fileno ) {
+            prte_output(0, "Error: Failed to open the stacktrace output file. Default: stderr\n\tFilename: %s\n\tErrno: %s",
+                        prte_stacktrace_output_filename, strerror(errno));
+            prte_stacktrace_output_fileno = fileno(stderr);
         }
     }
 
@@ -132,8 +132,8 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     memset (print_buffer, 0, sizeof (print_buffer));
     ret = snprintf(print_buffer, sizeof(print_buffer),
                    HOSTFORMAT "*** Process received signal ***\n",
-                   prrte_process_info.nodename, getpid());
-    if (-1 == write(prrte_stacktrace_output_fileno, print_buffer, ret)) {
+                   prte_process_info.nodename, getpid());
+    if (-1 == write(prte_stacktrace_output_fileno, print_buffer, ret)) {
         return;
     }
 
@@ -141,10 +141,10 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
 
 #ifdef HAVE_STRSIGNAL
     ret = snprintf (tmp, size, HOSTFORMAT "Signal: %s (%d)\n",
-                    prrte_process_info.nodename, getpid(), strsignal(signo), signo);
+                    prte_process_info.nodename, getpid(), strsignal(signo), signo);
 #else
     ret = snprintf (tmp, size, HOSTFORMAT "Signal: %d\n",
-                    prrte_process_info.nodename, getpid(), signo);
+                    prte_process_info.nodename, getpid(), signo);
 #endif
     size -= ret;
     tmp += ret;
@@ -323,14 +323,14 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
         /* print signal errno information */
         if (0 != info->si_errno) {
             ret = snprintf(tmp, size, HOSTFORMAT "Associated errno: %s (%d)\n",
-                           prrte_process_info.nodename, getpid(),
+                           prte_process_info.nodename, getpid(),
                            strerror (info->si_errno), info->si_errno);
             size -= ret;
             tmp += ret;
         }
 
         ret = snprintf(tmp, size, HOSTFORMAT "Signal code: %s (%d)\n",
-                       prrte_process_info.nodename, getpid(),
+                       prte_process_info.nodename, getpid(),
                        si_code_str, info->si_code);
         size -= ret;
         tmp += ret;
@@ -343,7 +343,7 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
         case SIGBUS:
         {
             ret = snprintf(tmp, size, HOSTFORMAT "Failing at address: %p\n",
-                           prrte_process_info.nodename, getpid(), info->si_addr);
+                           prte_process_info.nodename, getpid(), info->si_addr);
             size -= ret;
             tmp += ret;
             break;
@@ -351,7 +351,7 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
         case SIGCHLD:
         {
             ret = snprintf(tmp, size, HOSTFORMAT "Sending PID: %d, Sending UID: %d, Status: %d\n",
-                           prrte_process_info.nodename, getpid(),
+                           prte_process_info.nodename, getpid(),
                            info->si_pid, info->si_uid, info->si_status);
             size -= ret;
             tmp += ret;
@@ -362,10 +362,10 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
         {
 #ifdef HAVE_SIGINFO_T_SI_FD
             ret = snprintf(tmp, size, HOSTFORMAT "Band event: %ld, File Descriptor : %d\n",
-                           prrte_process_info.nodename, getpid(), (long)info->si_band, info->si_fd);
+                           prte_process_info.nodename, getpid(), (long)info->si_band, info->si_fd);
 #elif HAVE_SIGINFO_T_SI_BAND
             ret = snprintf(tmp, size, HOSTFORMAT "Band event: %ld\n",
-                           prrte_process_info.nodename, getpid(), (long)info->si_band);
+                           prte_process_info.nodename, getpid(), (long)info->si_band);
 #else
             ret = 0;
 #endif
@@ -378,22 +378,22 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     } else {
         ret = snprintf(tmp, size,
                        HOSTFORMAT "siginfo is NULL, additional information unavailable\n",
-                       prrte_process_info.nodename, getpid());
+                       prte_process_info.nodename, getpid());
         size -= ret;
         tmp += ret;
     }
 
     /* write out the signal information generated above */
-    if (-1 == write(prrte_stacktrace_output_fileno, print_buffer, sizeof(print_buffer)-size)) {
+    if (-1 == write(prte_stacktrace_output_fileno, print_buffer, sizeof(print_buffer)-size)) {
         return;
     }
 
     /* print out the stack trace */
     snprintf(print_buffer, sizeof(print_buffer), HOSTFORMAT,
-             prrte_process_info.nodename, getpid());
-    ret = prrte_backtrace_print(NULL, print_buffer, 2);
-    if (PRRTE_SUCCESS != ret) {
-        if (-1 == write(prrte_stacktrace_output_fileno, unable_to_print_msg, strlen(unable_to_print_msg))) {
+             prte_process_info.nodename, getpid());
+    ret = prte_backtrace_print(NULL, print_buffer, 2);
+    if (PRTE_SUCCESS != ret) {
+        if (-1 == write(prte_stacktrace_output_fileno, unable_to_print_msg, strlen(unable_to_print_msg))) {
             return;
         }
     }
@@ -402,21 +402,21 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     memset (print_buffer, 0, sizeof (print_buffer));
     ret = snprintf(print_buffer, sizeof(print_buffer),
                    HOSTFORMAT "*** End of error message ***\n",
-                   prrte_process_info.nodename, getpid());
+                   prte_process_info.nodename, getpid());
     if (ret > 0) {
-        if (-1 == write(prrte_stacktrace_output_fileno, print_buffer, ret)) {
+        if (-1 == write(prte_stacktrace_output_fileno, print_buffer, ret)) {
             return;
         }
     } else {
-        if (-1 == write(prrte_stacktrace_output_fileno, unable_to_print_msg, strlen(unable_to_print_msg))) {
+        if (-1 == write(prte_stacktrace_output_fileno, unable_to_print_msg, strlen(unable_to_print_msg))) {
             return;
 	}
     }
 
-    if( fileno(stdout) != prrte_stacktrace_output_fileno &&
-        fileno(stderr) != prrte_stacktrace_output_fileno ) {
-        close(prrte_stacktrace_output_fileno);
-        prrte_stacktrace_output_fileno = -1;
+    if( fileno(stdout) != prte_stacktrace_output_fileno &&
+        fileno(stderr) != prte_stacktrace_output_fileno ) {
+        close(prte_stacktrace_output_fileno);
+        prte_stacktrace_output_fileno = -1;
     }
 
     /* Raise the signal again, so we don't accidentally mask critical signals.
@@ -428,60 +428,60 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
     raise(signo);
 }
 
-#endif /* PRRTE_WANT_PRETTY_PRINT_STACKTRACE */
+#endif /* PRTE_WANT_PRETTY_PRINT_STACKTRACE */
 
 
-#if PRRTE_WANT_PRETTY_PRINT_STACKTRACE
-void prrte_stackframe_output(int stream)
+#if PRTE_WANT_PRETTY_PRINT_STACKTRACE
+void prte_stackframe_output(int stream)
 {
     int traces_size;
     char **traces;
 
     /* print out the stack trace */
-    if (PRRTE_SUCCESS == prrte_backtrace_buffer(&traces, &traces_size)) {
+    if (PRTE_SUCCESS == prte_backtrace_buffer(&traces, &traces_size)) {
         int i;
         /* since we have the opportunity, strip off the bottom two
            function calls, which will be this function and
-           prrte_backtrace_buffer(). */
+           prte_backtrace_buffer(). */
         for (i = 2; i < traces_size; ++i) {
-            prrte_output(stream, "%s", traces[i]);
+            prte_output(stream, "%s", traces[i]);
         }
     } else {
         /* Do not print the stack trace */
-        if( 0 > prrte_stacktrace_output_fileno && 0 == prrte_stacktrace_output_filename_max_len ) {
+        if( 0 > prte_stacktrace_output_fileno && 0 == prte_stacktrace_output_filename_max_len ) {
             return;
         }
 
         /* Update the file name with the RANK, if available */
-        if( 0 < prrte_stacktrace_output_filename_max_len ) {
+        if( 0 < prte_stacktrace_output_filename_max_len ) {
             set_stacktrace_filename();
-            prrte_stacktrace_output_fileno = open(prrte_stacktrace_output_filename,
+            prte_stacktrace_output_fileno = open(prte_stacktrace_output_filename,
                                                  O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR);
-            if( 0 > prrte_stacktrace_output_fileno ) {
-                prrte_output(0, "Error: Failed to open the stacktrace output file. Default: stderr\n\tFilename: %s\n\tErrno: %s",
-                            prrte_stacktrace_output_filename, strerror(errno));
-                prrte_stacktrace_output_fileno = fileno(stderr);
+            if( 0 > prte_stacktrace_output_fileno ) {
+                prte_output(0, "Error: Failed to open the stacktrace output file. Default: stderr\n\tFilename: %s\n\tErrno: %s",
+                            prte_stacktrace_output_filename, strerror(errno));
+                prte_stacktrace_output_fileno = fileno(stderr);
             }
         }
 
-        prrte_backtrace_print(NULL, NULL, 2);
+        prte_backtrace_print(NULL, NULL, 2);
 
-        if( fileno(stdout) != prrte_stacktrace_output_fileno &&
-            fileno(stderr) != prrte_stacktrace_output_fileno ) {
-            close(prrte_stacktrace_output_fileno);
-            prrte_stacktrace_output_fileno = -1;
+        if( fileno(stdout) != prte_stacktrace_output_fileno &&
+            fileno(stderr) != prte_stacktrace_output_fileno ) {
+            close(prte_stacktrace_output_fileno);
+            prte_stacktrace_output_fileno = -1;
         }
     }
 }
 
-char *prrte_stackframe_output_string(void)
+char *prte_stackframe_output_string(void)
 {
     int traces_size, i;
     size_t len;
     char *output, **traces;
 
     len = 0;
-    if (PRRTE_SUCCESS != prrte_backtrace_buffer(&traces, &traces_size)) {
+    if (PRTE_SUCCESS != prte_backtrace_buffer(&traces, &traces_size)) {
         return NULL;
     }
 
@@ -511,21 +511,21 @@ char *prrte_stackframe_output_string(void)
     return output;
 }
 
-#endif /* PRRTE_WANT_PRETTY_PRINT_STACKTRACE */
+#endif /* PRTE_WANT_PRETTY_PRINT_STACKTRACE */
 
 /**
  * Here we register the show_stackframe function for signals
- * passed to PRRTE by the mpi_signal-parameter passed to mpirun
+ * passed to PRTE by the mpi_signal-parameter passed to mpirun
  * by the user.
  *
- *  @returnvalue PRRTE_SUCCESS
- *  @returnvalue PRRTE_ERR_BAD_PARAM if the value in the signal-list
+ *  @returnvalue PRTE_SUCCESS
+ *  @returnvalue PRTE_ERR_BAD_PARAM if the value in the signal-list
  *    is not a valid signal-number
  *
  */
-int prrte_util_register_stackhandlers (void)
+int prte_util_register_stackhandlers (void)
 {
-#if PRRTE_WANT_PRETTY_PRINT_STACKTRACE
+#if PRTE_WANT_PRETTY_PRINT_STACKTRACE
     struct sigaction act, old;
     char * tmp;
     char * next;
@@ -533,45 +533,45 @@ int prrte_util_register_stackhandlers (void)
 
 
     /* Setup the output stream to use */
-    if( NULL == prrte_stacktrace_output_filename ||
-        0 == strcasecmp(prrte_stacktrace_output_filename, "none") ) {
-        prrte_stacktrace_output_fileno = -1;
+    if( NULL == prte_stacktrace_output_filename ||
+        0 == strcasecmp(prte_stacktrace_output_filename, "none") ) {
+        prte_stacktrace_output_fileno = -1;
     }
-    else if( 0 == strcasecmp(prrte_stacktrace_output_filename, "stdout") ) {
-        prrte_stacktrace_output_fileno = fileno(stdout);
+    else if( 0 == strcasecmp(prte_stacktrace_output_filename, "stdout") ) {
+        prte_stacktrace_output_fileno = fileno(stdout);
     }
-    else if( 0 == strcasecmp(prrte_stacktrace_output_filename, "stderr") ) {
-        prrte_stacktrace_output_fileno = fileno(stderr);
+    else if( 0 == strcasecmp(prte_stacktrace_output_filename, "stderr") ) {
+        prte_stacktrace_output_fileno = fileno(stderr);
     }
-    else if( 0 == strcasecmp(prrte_stacktrace_output_filename, "file" ) ||
-             0 == strcasecmp(prrte_stacktrace_output_filename, "file:") ) {
-        prrte_stacktrace_output_filename_base = strdup("stacktrace");
+    else if( 0 == strcasecmp(prte_stacktrace_output_filename, "file" ) ||
+             0 == strcasecmp(prte_stacktrace_output_filename, "file:") ) {
+        prte_stacktrace_output_filename_base = strdup("stacktrace");
 
-        free(prrte_stacktrace_output_filename);
+        free(prte_stacktrace_output_filename);
         // Magic number: 8 = space for .PID and .RANK (allow 7 digits each)
-        prrte_stacktrace_output_filename_max_len = strlen("stacktrace") + 8 + 8;
-        prrte_stacktrace_output_filename = (char*)malloc(sizeof(char) * prrte_stacktrace_output_filename_max_len);
+        prte_stacktrace_output_filename_max_len = strlen("stacktrace") + 8 + 8;
+        prte_stacktrace_output_filename = (char*)malloc(sizeof(char) * prte_stacktrace_output_filename_max_len);
         set_stacktrace_filename();
-        prrte_stacktrace_output_fileno = -1;
+        prte_stacktrace_output_fileno = -1;
     }
-    else if( 0 == strncasecmp(prrte_stacktrace_output_filename, "file:", 5) ) {
+    else if( 0 == strncasecmp(prte_stacktrace_output_filename, "file:", 5) ) {
         char *filename_cpy = NULL;
-        next = strchr(prrte_stacktrace_output_filename, ':');
+        next = strchr(prte_stacktrace_output_filename, ':');
         next++; // move past the ':' to the filename specified
 
-        prrte_stacktrace_output_filename_base = strdup(next);
+        prte_stacktrace_output_filename_base = strdup(next);
 
-        free(prrte_stacktrace_output_filename);
+        free(prte_stacktrace_output_filename);
         // Magic number: 8 = space for .PID and .RANK (allow 7 digits each)
-        prrte_stacktrace_output_filename_max_len = strlen(prrte_stacktrace_output_filename_base) + 8 + 8;
-        prrte_stacktrace_output_filename = (char*)malloc(sizeof(char) * prrte_stacktrace_output_filename_max_len);
+        prte_stacktrace_output_filename_max_len = strlen(prte_stacktrace_output_filename_base) + 8 + 8;
+        prte_stacktrace_output_filename = (char*)malloc(sizeof(char) * prte_stacktrace_output_filename_max_len);
         set_stacktrace_filename();
-        prrte_stacktrace_output_fileno = -1;
+        prte_stacktrace_output_fileno = -1;
 
         free(filename_cpy);
     }
     else {
-        prrte_stacktrace_output_fileno = fileno(stderr);
+        prte_stacktrace_output_fileno = fileno(stderr);
     }
 
 
@@ -585,7 +585,7 @@ int prrte_util_register_stackhandlers (void)
     act.sa_flags |= SA_RESETHAND;
 #endif
 
-    for (tmp = next = prrte_signal_string ;
+    for (tmp = next = prte_signal_string ;
 	 next != NULL && *next != '\0';
 	 tmp = next + 1)
     {
@@ -600,24 +600,24 @@ int prrte_util_register_stackhandlers (void)
        *  Similarly for any number which is not in the signal-number range
        */
       if (((0 == sig) && (tmp == next)) || (0 > sig) || (_NSIG <= sig)) {
-          prrte_show_help("help-prrte-util.txt",
+          prte_show_help("help-prte-util.txt",
                          "stacktrace bad signal", true,
-                         prrte_signal_string, tmp);
-          return PRRTE_ERR_SILENT;
+                         prte_signal_string, tmp);
+          return PRTE_ERR_SILENT;
       } else if (next == NULL) {
-	 return PRRTE_ERR_BAD_PARAM;
+	 return PRTE_ERR_BAD_PARAM;
       } else if (':' == *next &&
                  0 == strncasecmp(next, ":complain", 9)) {
           complain = true;
           next += 9;
       } else if (',' != *next && '\0' != *next) {
-          return PRRTE_ERR_BAD_PARAM;
+          return PRTE_ERR_BAD_PARAM;
       }
 
       /* Just query first */
       ret = sigaction (sig, NULL, &old);
       if (0 != ret) {
-          return PRRTE_ERR_IN_ERRNO;
+          return PRTE_ERR_IN_ERRNO;
       }
       /* Was there something already there? */
       if (SIG_IGN != old.sa_handler && SIG_DFL != old.sa_handler) {
@@ -625,9 +625,9 @@ int prrte_util_register_stackhandlers (void)
               /* JMS This is icky; there is no error message
                  aggregation here so this message may be repeated for
                  every single MPI process... */
-              prrte_show_help("help-prrte-util.txt",
+              prte_show_help("help-prte-util.txt",
                              "stacktrace signal override",
-                             true, sig, sig, sig, prrte_signal_string);
+                             true, sig, sig, sig, prte_signal_string);
               showed_help = true;
           }
       }
@@ -635,13 +635,13 @@ int prrte_util_register_stackhandlers (void)
       /* Nope, nothing was there, so put in ours */
       else {
           if (0 != sigaction(sig, &act, NULL)) {
-              return PRRTE_ERR_IN_ERRNO;
+              return PRTE_ERR_IN_ERRNO;
           }
       }
     }
 
-#endif /* PRRTE_WANT_PRETTY_PRINT_STACKTRACE */
+#endif /* PRTE_WANT_PRETTY_PRINT_STACKTRACE */
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 

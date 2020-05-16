@@ -21,9 +21,9 @@
 # $HEADER$
 #
 
-include $(top_srcdir)/Makefile.prrte-rules
+include $(top_srcdir)/Makefile.prte-rules
 
-AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS) $(prrte_hwloc_LDFLAGS) $(prrte_libevent_LDFLAGS) $(prrte_pmix_LDFLAGS)
+AM_LDFLAGS = $(PRTE_EXTRA_LIB_LDFLAGS) $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 
 MD_FILES = pterm.1.md
 man_pages_from_md = $(MD_FILES:.1.md=.1)
@@ -31,18 +31,18 @@ EXTRA_DIST = $(MD_FILES) $(man_pages_from_md)
 
 bin_PROGRAMS = pterm
 
-if PRRTE_ENABLE_MAN_PAGES
+if PRTE_ENABLE_MAN_PAGES
 man_MANS = $(man_pages_from_md)
 endif
 
-dist_prrtedata_DATA = help-pterm.txt
+dist_prtedata_DATA = help-pterm.txt
 
 pterm_SOURCES = \
         pterm.c
 
 pterm_LDADD = \
-    $(PRRTE_EXTRA_LTLIB) \
-    $(prrte_libevent_LIBS) \
-    $(prrte_hwloc_LIBS) \
-    $(prrte_pmix_LIBS) \
-	$(top_builddir)/src/libprrte.la
+    $(PRTE_EXTRA_LTLIB) \
+    $(prte_libevent_LIBS) \
+    $(prte_hwloc_LIBS) \
+    $(prte_pmix_LIBS) \
+	$(top_builddir)/src/libprte.la

@@ -1,5 +1,6 @@
 #
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -14,7 +15,7 @@ noinst_LTLIBRARIES = libmca_prtereachable.la
 libmca_prtereachable_la_SOURCES =
 
 # pkgdata setup
-dist_prrtedata_DATA =
+dist_prtedata_DATA =
 
 # local files
 headers = prtereachable.h
@@ -22,8 +23,8 @@ libmca_prtereachable_la_SOURCES += $(headers)
 
 # Conditionally install the header files
 if WANT_INSTALL_HEADERS
-prrtedir = $(prrteincludedir)/$(subdir)
-nobase_prrte_HEADERS = $(headers)
+prtedir = $(prteincludedir)/$(subdir)
+nobase_prte_HEADERS = $(headers)
 endif
 
 include base/Makefile.am

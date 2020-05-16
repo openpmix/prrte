@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2015      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Los Alamos National Security, Inc.  All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
@@ -13,7 +13,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "constants.h"
 #include "src/mca/prtedl/prtedl.h"
@@ -26,8 +26,8 @@
 /*
  * Public string showing the sysinfo ompi_linux component version number
  */
-const char *prrte_prtedl_libltdl_component_version_string =
-    "PRRTE prtedl libltdl MCA component version " PRRTE_VERSION;
+const char *prte_prtedl_libltdl_component_version_string =
+    "PRTE prtedl libltdl MCA component version " PRTE_VERSION;
 
 
 /*
@@ -36,14 +36,14 @@ const char *prrte_prtedl_libltdl_component_version_string =
 static int libltdl_component_register(void);
 static int libltdl_component_open(void);
 static int libltdl_component_close(void);
-static int libltdl_component_query(prrte_mca_base_module_t **module, int *priority);
+static int libltdl_component_query(prte_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
 
-prrte_prtedl_libltdl_component_t prrte_prtedl_libltdl_component = {
+prte_prtedl_libltdl_component_t prte_prtedl_libltdl_component = {
 
     /* Fill in the mca_prtedl_base_component_t */
     .base = {
@@ -51,12 +51,12 @@ prrte_prtedl_libltdl_component_t prrte_prtedl_libltdl_component = {
         /* First, the mca_component_t struct containing meta information
            about the component itself */
         .base_version = {
-            PRRTE_DL_BASE_VERSION_1_0_0,
+            PRTE_DL_BASE_VERSION_1_0_0,
 
             /* Component name and version */
             .mca_component_name = "libltdl",
-            PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                        PRRTE_RELEASE_VERSION),
+            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                        PRTE_RELEASE_VERSION),
 
             /* Component functions */
             .mca_register_component_params = libltdl_component_register,
@@ -67,7 +67,7 @@ prrte_prtedl_libltdl_component_t prrte_prtedl_libltdl_component = {
 
         .base_data = {
             /* The component is checkpoint ready */
-            PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
         },
 
         /* The prtedl framework members */
@@ -82,59 +82,59 @@ static int libltdl_component_register(void)
 {
     /* Register an info param indicating whether we have lt_dladvise
        support or not */
-    bool supported = PRRTE_INT_TO_BOOL(PRRTE_DL_LIBLTDL_HAVE_LT_DLADVISE);
-    prrte_mca_base_component_var_register(&prrte_prtedl_libltdl_component.base.base_version,
+    bool supported = PRTE_INT_TO_BOOL(PRTE_DL_LIBLTDL_HAVE_LT_DLADVISE);
+    prte_mca_base_component_var_register(&prte_prtedl_libltdl_component.base.base_version,
                                     "have_lt_dladvise",
                                     "Whether the version of libltdl that this component is built against supports lt_dladvise functionality or not",
-                                    PRRTE_MCA_BASE_VAR_TYPE_BOOL,
+                                    PRTE_MCA_BASE_VAR_TYPE_BOOL,
                                     NULL,
                                     0,
-                                    PRRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY,
-                                    PRRTE_INFO_LVL_7,
-                                    PRRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
+                                    PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY,
+                                    PRTE_INFO_LVL_7,
+                                    PRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
                                     &supported);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int libltdl_component_open(void)
 {
     if (lt_prtedlinit()) {
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
-#if PRRTE_DL_LIBLTDL_HAVE_LT_DLADVISE
-    prrte_prtedl_libltdl_component_t *c = &prrte_prtedl_libltdl_component;
+#if PRTE_DL_LIBLTDL_HAVE_LT_DLADVISE
+    prte_prtedl_libltdl_component_t *c = &prte_prtedl_libltdl_component;
 
     if (lt_dladvise_init(&c->advise_private_noext)) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     if (lt_dladvise_init(&c->advise_private_ext) ||
         lt_dladvise_ext(&c->advise_private_ext)) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     if (lt_dladvise_init(&c->advise_public_noext) ||
         lt_dladvise_global(&c->advise_public_noext)) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     if (lt_dladvise_init(&c->advise_public_ext) ||
         lt_dladvise_global(&c->advise_public_ext) ||
         lt_dladvise_ext(&c->advise_public_ext)) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
 #endif
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
 static int libltdl_component_close(void)
 {
-#if PRRTE_DL_LIBLTDL_HAVE_LT_DLADVISE
-    prrte_prtedl_libltdl_component_t *c = &prrte_prtedl_libltdl_component;
+#if PRTE_DL_LIBLTDL_HAVE_LT_DLADVISE
+    prte_prtedl_libltdl_component_t *c = &prte_prtedl_libltdl_component;
 
     lt_dladvise_destroy(&c->advise_private_noext);
     lt_dladvise_destroy(&c->advise_private_ext);
@@ -144,17 +144,17 @@ static int libltdl_component_close(void)
 
     lt_prtedlexit();
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-static int libltdl_component_query(prrte_mca_base_module_t **module, int *priority)
+static int libltdl_component_query(prte_mca_base_module_t **module, int *priority)
 {
     /* The priority value is somewhat meaningless here; by
        src/mca/prtedl/configure.m4, there's at most one component
        available. */
-    *priority = prrte_prtedl_libltdl_component.base.priority;
-    *module = &prrte_prtedl_libltdl_module.super;
+    *priority = prte_prtedl_libltdl_component.base.priority;
+    *module = &prte_prtedl_libltdl_module.super;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

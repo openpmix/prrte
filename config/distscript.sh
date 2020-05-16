@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2015      Los Alamos National Security, LLC. All rights
@@ -43,7 +43,7 @@ fi
 # or two corner cases in (but otherwise VPATH builds won't work).
 repo_rev=$OMPI_REPO_REV
 if test -d .git ; then
-    repo_rev=$(config/prrte_get_version.sh VERSION --repo-rev)
+    repo_rev=$(config/prte_get_version.sh VERSION --repo-rev)
 fi
 
 #

@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
@@ -21,7 +21,7 @@
 
 AM_CPPFLAGS = $(plm_tm_CPPFLAGS)
 
-dist_prrtedata_DATA = help-plm-tm.txt
+dist_prtedata_DATA = help-plm-tm.txt
 
 sources = \
         plm_tm.h \
@@ -32,7 +32,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_plm_tm_DSO
+if MCA_BUILD_prte_plm_tm_DSO
 lib =
 lib_sources =
 component = mca_plm_tm.la
@@ -44,12 +44,12 @@ component =
 component_sources =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component)
 mca_plm_tm_la_SOURCES = $(component_sources)
 mca_plm_tm_la_LDFLAGS = -module -avoid-version $(plm_tm_LDFLAGS)
 mca_plm_tm_la_LIBADD = $(plm_tm_LIBS) \
-                       $(top_builddir)/src/libprrte.la
+                       $(top_builddir)/src/libprte.la
 
 noinst_LTLIBRARIES = $(lib)
 libmca_plm_tm_la_SOURCES = $(lib_sources)

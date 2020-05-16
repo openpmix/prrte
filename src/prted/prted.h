@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,37 +18,37 @@
  * $HEADER$
  */
 
-#ifndef PRRTED_H
-#define PRRTED_H
+#ifndef PRTED_H
+#define PRTED_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
 #include <time.h>
 
 #include "src/dss/dss_types.h"
-#include "src/class/prrte_pointer_array.h"
+#include "src/class/prte_pointer_array.h"
 #include "src/mca/rml/rml_types.h"
 
 BEGIN_C_DECLS
 
 /* main orted routine */
-PRRTE_EXPORT int prrte_daemon(int argc, char *argv[]);
+PRTE_EXPORT int prte_daemon(int argc, char *argv[]);
 
 /* orted communication functions */
-PRRTE_EXPORT void prrte_daemon_recv(int status, prrte_process_name_t* sender,
-                      prrte_buffer_t *buffer, prrte_rml_tag_t tag,
+PRTE_EXPORT void prte_daemon_recv(int status, prte_process_name_t* sender,
+                      prte_buffer_t *buffer, prte_rml_tag_t tag,
                       void* cbdata);
 
 /* direct cmd processing entry points */
-PRRTE_EXPORT void prrte_daemon_cmd_processor(int fd, short event, void *data);
-PRRTE_EXPORT int prrte_daemon_process_commands(prrte_process_name_t* sender,
-                                               prrte_buffer_t *buffer,
-                                               prrte_rml_tag_t tag);
+PRTE_EXPORT void prte_daemon_cmd_processor(int fd, short event, void *data);
+PRTE_EXPORT int prte_daemon_process_commands(prte_process_name_t* sender,
+                                               prte_buffer_t *buffer,
+                                               prte_rml_tag_t tag);
 
 END_C_DECLS
 
 /* Local function */
-int send_to_local_applications(prrte_pointer_array_t *dead_names);
+int send_to_local_applications(prte_pointer_array_t *dead_names);
 
-#endif /* PRRTED_H */
+#endif /* PRTED_H */

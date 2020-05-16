@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
- * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -24,7 +24,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <string.h>
@@ -37,7 +37,7 @@
 #include "src/util/basename.h"
 
 #include "src/util/proc_info.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/mca/rml/rml.h"
 
@@ -47,59 +47,59 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prrte_base_component_t struct.
+ * component's public prte_base_component_t struct.
  */
 
 #include "src/mca/iof/base/static-components.h"
 
-prrte_iof_base_module_t prrte_iof = {0};
+prte_iof_base_module_t prte_iof = {0};
 
 
 /*
  * Global variables
  */
 
-prrte_iof_base_t prrte_iof_base = {0};
+prte_iof_base_t prte_iof_base = {0};
 
-static int prrte_iof_base_register(prrte_mca_base_register_flag_t flags)
+static int prte_iof_base_register(prte_mca_base_register_flag_t flags)
 {
     /* check for maximum number of pending output messages */
-    prrte_iof_base.output_limit = (size_t) INT_MAX;
-    (void) prrte_mca_base_var_register("prrte", "iof", "base", "output_limit",
+    prte_iof_base.output_limit = (size_t) INT_MAX;
+    (void) prte_mca_base_var_register("prte", "iof", "base", "output_limit",
                                        "Maximum backlog of output messages [default: unlimited]",
-                                       PRRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0,
-                                       PRRTE_INFO_LVL_9,
-                                       PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                       &prrte_iof_base.output_limit);
+                                       PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0,
+                                       PRTE_INFO_LVL_9,
+                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                       &prte_iof_base.output_limit);
 
     /* Redirect application stderr to stdout (at source) */
-    prrte_iof_base.redirect_app_stderr_to_stdout = false;
-    (void) prrte_mca_base_var_register("prrte", "iof","base", "redirect_app_stderr_to_stdout",
+    prte_iof_base.redirect_app_stderr_to_stdout = false;
+    (void) prte_mca_base_var_register("prte", "iof","base", "redirect_app_stderr_to_stdout",
                                        "Redirect application stderr to stdout at source (default: false)",
-                                       PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                       PRRTE_INFO_LVL_9,
-                                       PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                       &prrte_iof_base.redirect_app_stderr_to_stdout);
+                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                       PRTE_INFO_LVL_9,
+                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                       &prte_iof_base.redirect_app_stderr_to_stdout);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-static int prrte_iof_base_close(void)
+static int prte_iof_base_close(void)
 {
     /* Close the selected component */
-    if (NULL != prrte_iof.finalize) {
-        prrte_iof.finalize();
+    if (NULL != prte_iof.finalize) {
+        prte_iof.finalize();
     }
 
-    if (!PRRTE_PROC_IS_DAEMON) {
-        if (NULL != prrte_iof_base.iof_write_stdout) {
-            PRRTE_RELEASE(prrte_iof_base.iof_write_stdout);
+    if (!PRTE_PROC_IS_DAEMON) {
+        if (NULL != prte_iof_base.iof_write_stdout) {
+            PRTE_RELEASE(prte_iof_base.iof_write_stdout);
         }
-        if (!prrte_xml_output && NULL != prrte_iof_base.iof_write_stderr) {
-            PRRTE_RELEASE(prrte_iof_base.iof_write_stderr);
+        if (!prte_xml_output && NULL != prte_iof_base.iof_write_stderr) {
+            PRTE_RELEASE(prte_iof_base.iof_write_stderr);
         }
     }
-    return prrte_mca_base_framework_components_close(&prrte_iof_base_framework, NULL);
+    return prte_mca_base_framework_components_close(&prte_iof_base_framework, NULL);
 }
 
 
@@ -107,32 +107,32 @@ static int prrte_iof_base_close(void)
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prrte_iof_base_open(prrte_mca_base_open_flag_t flags)
+static int prte_iof_base_open(prte_mca_base_open_flag_t flags)
 {
     int xmlfd;
 
     /* daemons do not need to do this as they do not write out stdout/err */
-    if (!PRRTE_PROC_IS_DAEMON) {
-        if (prrte_xml_output) {
-            if (NULL != prrte_xml_fp) {
+    if (!PRTE_PROC_IS_DAEMON) {
+        if (prte_xml_output) {
+            if (NULL != prte_xml_fp) {
                 /* user wants all xml-formatted output sent to file */
-                xmlfd = fileno(prrte_xml_fp);
+                xmlfd = fileno(prte_xml_fp);
             } else {
                 xmlfd = 1;
             }
             /* setup the stdout event */
-            PRRTE_IOF_SINK_DEFINE(&prrte_iof_base.iof_write_stdout, PRRTE_PROC_MY_NAME,
-                                 xmlfd, PRRTE_IOF_STDOUT, prrte_iof_base_write_handler);
+            PRTE_IOF_SINK_DEFINE(&prte_iof_base.iof_write_stdout, PRTE_PROC_MY_NAME,
+                                 xmlfd, PRTE_IOF_STDOUT, prte_iof_base_write_handler);
             /* don't create a stderr event - all output will go to
              * the stdout channel
              */
         } else {
             /* setup the stdout event */
-            PRRTE_IOF_SINK_DEFINE(&prrte_iof_base.iof_write_stdout, PRRTE_PROC_MY_NAME,
-                                 1, PRRTE_IOF_STDOUT, prrte_iof_base_write_handler);
+            PRTE_IOF_SINK_DEFINE(&prte_iof_base.iof_write_stdout, PRTE_PROC_MY_NAME,
+                                 1, PRTE_IOF_STDOUT, prte_iof_base_write_handler);
             /* setup the stderr event */
-            PRRTE_IOF_SINK_DEFINE(&prrte_iof_base.iof_write_stderr, PRRTE_PROC_MY_NAME,
-                                 2, PRRTE_IOF_STDERR, prrte_iof_base_write_handler);
+            PRTE_IOF_SINK_DEFINE(&prte_iof_base.iof_write_stderr, PRTE_PROC_MY_NAME,
+                                 2, PRTE_IOF_STDERR, prte_iof_base_write_handler);
         }
 
         /* do NOT set these file descriptors to non-blocking. If we do so,
@@ -148,33 +148,33 @@ static int prrte_iof_base_open(prrte_mca_base_open_flag_t flags)
     }
 
     /* Open up all available components */
-    return prrte_mca_base_framework_components_open(&prrte_iof_base_framework, flags);
+    return prte_mca_base_framework_components_open(&prte_iof_base_framework, flags);
 }
 
-PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, iof, "PRRTE I/O Forwarding",
-                                 prrte_iof_base_register, prrte_iof_base_open, prrte_iof_base_close,
-                                 prrte_iof_base_static_components, 0);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, iof, "PRTE I/O Forwarding",
+                                 prte_iof_base_register, prte_iof_base_open, prte_iof_base_close,
+                                 prte_iof_base_static_components, 0);
 
 
 /* class instances */
-static void prrte_iof_job_construct(prrte_iof_job_t *ptr)
+static void prte_iof_job_construct(prte_iof_job_t *ptr)
 {
     ptr->jdata = NULL;
-    PRRTE_CONSTRUCT(&ptr->xoff, prrte_bitmap_t);
+    PRTE_CONSTRUCT(&ptr->xoff, prte_bitmap_t);
 }
-static void prrte_iof_job_destruct(prrte_iof_job_t *ptr)
+static void prte_iof_job_destruct(prte_iof_job_t *ptr)
 {
     if (NULL != ptr->jdata) {
-        PRRTE_RELEASE(ptr->jdata);
+        PRTE_RELEASE(ptr->jdata);
     }
-    PRRTE_DESTRUCT(&ptr->xoff);
+    PRTE_DESTRUCT(&ptr->xoff);
 }
-PRRTE_CLASS_INSTANCE(prrte_iof_job_t,
-                   prrte_object_t,
-                   prrte_iof_job_construct,
-                   prrte_iof_job_destruct);
+PRTE_CLASS_INSTANCE(prte_iof_job_t,
+                   prte_object_t,
+                   prte_iof_job_construct,
+                   prte_iof_job_destruct);
 
-static void prrte_iof_base_proc_construct(prrte_iof_proc_t* ptr)
+static void prte_iof_base_proc_construct(prte_iof_proc_t* ptr)
 {
     ptr->stdinev = NULL;
     ptr->revstdout = NULL;
@@ -182,127 +182,127 @@ static void prrte_iof_base_proc_construct(prrte_iof_proc_t* ptr)
     ptr->subscribers = NULL;
     ptr->copy = true;
 }
-static void prrte_iof_base_proc_destruct(prrte_iof_proc_t* ptr)
+static void prte_iof_base_proc_destruct(prte_iof_proc_t* ptr)
 {
     if (NULL != ptr->stdinev) {
-        PRRTE_RELEASE(ptr->stdinev);
+        PRTE_RELEASE(ptr->stdinev);
     }
     if (NULL != ptr->revstdout) {
-        PRRTE_RELEASE(ptr->revstdout);
+        PRTE_RELEASE(ptr->revstdout);
     }
     if (NULL != ptr->revstderr) {
-        PRRTE_RELEASE(ptr->revstderr);
+        PRTE_RELEASE(ptr->revstderr);
     }
     if (NULL != ptr->subscribers) {
-        PRRTE_LIST_RELEASE(ptr->subscribers);
+        PRTE_LIST_RELEASE(ptr->subscribers);
     }
 }
-PRRTE_CLASS_INSTANCE(prrte_iof_proc_t,
-                   prrte_list_item_t,
-                   prrte_iof_base_proc_construct,
-                   prrte_iof_base_proc_destruct);
+PRTE_CLASS_INSTANCE(prte_iof_proc_t,
+                   prte_list_item_t,
+                   prte_iof_base_proc_construct,
+                   prte_iof_base_proc_destruct);
 
 
-static void prrte_iof_base_sink_construct(prrte_iof_sink_t* ptr)
+static void prte_iof_base_sink_construct(prte_iof_sink_t* ptr)
 {
-    ptr->daemon.jobid = PRRTE_JOBID_INVALID;
-    ptr->daemon.vpid = PRRTE_VPID_INVALID;
-    ptr->wev = PRRTE_NEW(prrte_iof_write_event_t);
+    ptr->daemon.jobid = PRTE_JOBID_INVALID;
+    ptr->daemon.vpid = PRTE_VPID_INVALID;
+    ptr->wev = PRTE_NEW(prte_iof_write_event_t);
     ptr->xoff = false;
     ptr->exclusive = false;
     ptr->closed = false;
 }
-static void prrte_iof_base_sink_destruct(prrte_iof_sink_t* ptr)
+static void prte_iof_base_sink_destruct(prte_iof_sink_t* ptr)
 {
     if (NULL != ptr->wev) {
-        PRRTE_OUTPUT_VERBOSE((20, prrte_iof_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                              "%s iof: closing sink for process %s on fd %d",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                             PRRTE_NAME_PRINT(&ptr->name), ptr->wev->fd));
-        PRRTE_RELEASE(ptr->wev);
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_NAME_PRINT(&ptr->name), ptr->wev->fd));
+        PRTE_RELEASE(ptr->wev);
     }
 }
-PRRTE_CLASS_INSTANCE(prrte_iof_sink_t,
-                   prrte_list_item_t,
-                   prrte_iof_base_sink_construct,
-                   prrte_iof_base_sink_destruct);
+PRTE_CLASS_INSTANCE(prte_iof_sink_t,
+                   prte_list_item_t,
+                   prte_iof_base_sink_construct,
+                   prte_iof_base_sink_destruct);
 
 
-static void prrte_iof_base_read_event_construct(prrte_iof_read_event_t* rev)
+static void prte_iof_base_read_event_construct(prte_iof_read_event_t* rev)
 {
     rev->proc = NULL;
     rev->fd = -1;
     rev->active = false;
-    rev->ev = prrte_event_alloc();
+    rev->ev = prte_event_alloc();
     rev->sink = NULL;
     rev->tv.tv_sec = 0;
     rev->tv.tv_usec = 0;
 }
-static void prrte_iof_base_read_event_destruct(prrte_iof_read_event_t* rev)
+static void prte_iof_base_read_event_destruct(prte_iof_read_event_t* rev)
 {
-    prrte_iof_proc_t *proct = (prrte_iof_proc_t*)rev->proc;
+    prte_iof_proc_t *proct = (prte_iof_proc_t*)rev->proc;
 
     if (0 <= rev->fd) {
-        prrte_event_free(rev->ev);
-        PRRTE_OUTPUT_VERBOSE((20, prrte_iof_base_framework.framework_output,
+        prte_event_free(rev->ev);
+        PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                              "%s iof: closing fd %d for process %s",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), rev->fd,
-                             (NULL == proct) ? "UNKNOWN" : PRRTE_NAME_PRINT(&proct->name)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rev->fd,
+                             (NULL == proct) ? "UNKNOWN" : PRTE_NAME_PRINT(&proct->name)));
         close(rev->fd);
         rev->fd = -1;
     } else {
         free(rev->ev);
     }
     if (NULL != rev->sink) {
-        PRRTE_RELEASE(rev->sink);
+        PRTE_RELEASE(rev->sink);
     }
     if (NULL != proct) {
-        PRRTE_RELEASE(proct);
+        PRTE_RELEASE(proct);
     }
 }
-PRRTE_CLASS_INSTANCE(prrte_iof_read_event_t,
-                   prrte_object_t,
-                   prrte_iof_base_read_event_construct,
-                   prrte_iof_base_read_event_destruct);
+PRTE_CLASS_INSTANCE(prte_iof_read_event_t,
+                   prte_object_t,
+                   prte_iof_base_read_event_construct,
+                   prte_iof_base_read_event_destruct);
 
-static void prrte_iof_base_write_event_construct(prrte_iof_write_event_t* wev)
+static void prte_iof_base_write_event_construct(prte_iof_write_event_t* wev)
 {
     wev->pending = false;
     wev->always_writable = false;
     wev->fd = -1;
-    PRRTE_CONSTRUCT(&wev->outputs, prrte_list_t);
-    wev->ev = prrte_event_alloc();
+    PRTE_CONSTRUCT(&wev->outputs, prte_list_t);
+    wev->ev = prte_event_alloc();
     wev->tv.tv_sec = 0;
     wev->tv.tv_usec = 0;
 }
-static void prrte_iof_base_write_event_destruct(prrte_iof_write_event_t* wev)
+static void prte_iof_base_write_event_destruct(prte_iof_write_event_t* wev)
 {
     if (0 <= wev->fd) {
-        prrte_event_free(wev->ev);
+        prte_event_free(wev->ev);
     } else {
         free(wev->ev);
     }
-    if (PRRTE_PROC_IS_MASTER && NULL != prrte_xml_fp) {
-        int xmlfd = fileno(prrte_xml_fp);
+    if (PRTE_PROC_IS_MASTER && NULL != prte_xml_fp) {
+        int xmlfd = fileno(prte_xml_fp);
         if (xmlfd == wev->fd) {
             /* don't close this one - will get it later */
-            PRRTE_DESTRUCT(&wev->outputs);
+            PRTE_DESTRUCT(&wev->outputs);
             return;
         }
     }
     if (2 < wev->fd) {
-        PRRTE_OUTPUT_VERBOSE((20, prrte_iof_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                              "%s iof: closing fd %d for write event",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), wev->fd));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
         close(wev->fd);
     }
-    PRRTE_DESTRUCT(&wev->outputs);
+    PRTE_DESTRUCT(&wev->outputs);
 }
-PRRTE_CLASS_INSTANCE(prrte_iof_write_event_t,
-                   prrte_list_item_t,
-                   prrte_iof_base_write_event_construct,
-                   prrte_iof_base_write_event_destruct);
+PRTE_CLASS_INSTANCE(prte_iof_write_event_t,
+                   prte_list_item_t,
+                   prte_iof_base_write_event_construct,
+                   prte_iof_base_write_event_destruct);
 
-PRRTE_CLASS_INSTANCE(prrte_iof_write_output_t,
-                   prrte_list_item_t,
+PRTE_CLASS_INSTANCE(prte_iof_write_output_t,
+                   prte_list_item_t,
                    NULL, NULL);

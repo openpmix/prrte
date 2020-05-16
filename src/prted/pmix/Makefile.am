@@ -1,6 +1,6 @@
 #
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
-# Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -12,7 +12,7 @@ headers += \
           prted/pmix/pmix_server.h \
           prted/pmix/pmix_server_internal.h
 
-libprrte_la_SOURCES += \
+libprte_la_SOURCES += \
           prted/pmix/pmix_server.c \
           prted/pmix/pmix_server_fence.c \
           prted/pmix/pmix_server_register_fns.c \

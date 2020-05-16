@@ -13,6 +13,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,24 +23,24 @@
 
 /** @file */
 
-#ifndef PRRTE_UTIL_KEYVAL_PARSE_H
-#define PRRTE_UTIL_KEYVAL_PARSE_H
+#ifndef PRTE_UTIL_KEYVAL_PARSE_H
+#define PRTE_UTIL_KEYVAL_PARSE_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 BEGIN_C_DECLS
 
-extern int prrte_util_keyval_parse_lineno;
+extern int prte_util_keyval_parse_lineno;
 
 /**
  * Callback triggered for each key = value pair
  *
- * Callback triggered from prrte_util_keyval_parse for each key = value
+ * Callback triggered from prte_util_keyval_parse for each key = value
  * pair.  Both key and value will be pointers into static buffers.
  * The buffers must not be free()ed and contents may be overwritten
  * immediately after the callback returns.
  */
-typedef void (*prrte_keyval_parse_fn_t)(const char *key, const char *value, char ***dstenv);
+typedef void (*prte_keyval_parse_fn_t)(const char *key, const char *value, char ***dstenv);
 
 /**
  * Parse \c filename, made up of key = value pairs.
@@ -47,14 +48,14 @@ typedef void (*prrte_keyval_parse_fn_t)(const char *key, const char *value, char
  * Parse \c filename, made up of key = value pairs.  For each line
  * that appears to contain a key = value pair, \c callback will be
  * called exactly once.  In a multithreaded context, calls to
- * prrte_util_keyval_parse() will serialize multiple calls.
+ * prte_util_keyval_parse() will serialize multiple calls.
  */
-PRRTE_EXPORT int prrte_util_keyval_parse(const char *filename, char ***dstenv,
-                                         prrte_keyval_parse_fn_t callback);
+PRTE_EXPORT int prte_util_keyval_parse(const char *filename, char ***dstenv,
+                                         prte_keyval_parse_fn_t callback);
 
-PRRTE_EXPORT int prrte_util_keyval_parse_init(void);
+PRTE_EXPORT int prte_util_keyval_parse_init(void);
 
-PRRTE_EXPORT void prrte_util_keyval_parse_finalize (void);
+PRTE_EXPORT void prte_util_keyval_parse_finalize (void);
 
 END_C_DECLS
 

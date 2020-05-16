@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -9,7 +9,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/include/constants.h"
 
@@ -20,31 +20,31 @@
 /*
  * Don't use show_help() here (or print any error message at all).
  * Let the upper layer output a relevant message, because doing so may
- * be complicated (e.g., this might be called from the PRRTE ODLS,
+ * be complicated (e.g., this might be called from the PRTE ODLS,
  * which has to do some extra steps to get error messages to be
  * displayed).
  */
-int prrte_hwloc_base_set_process_membind_policy(void)
+int prte_hwloc_base_set_process_membind_policy(void)
 {
     int rc = 0, flags;
     hwloc_membind_policy_t policy;
     hwloc_cpuset_t cpuset;
 
-    /* Make sure prrte_hwloc_topology has been set by the time we've
+    /* Make sure prte_hwloc_topology has been set by the time we've
        been called */
-    if (PRRTE_SUCCESS != prrte_hwloc_base_get_topology()) {
-        return PRRTE_ERR_BAD_PARAM;
+    if (PRTE_SUCCESS != prte_hwloc_base_get_topology()) {
+        return PRTE_ERR_BAD_PARAM;
     }
 
     /* Set the default memory allocation policy according to MCA
        param */
-    switch (prrte_hwloc_base_map) {
-    case PRRTE_HWLOC_BASE_MAP_LOCAL_ONLY:
+    switch (prte_hwloc_base_map) {
+    case PRTE_HWLOC_BASE_MAP_LOCAL_ONLY:
         policy = HWLOC_MEMBIND_BIND;
         flags = HWLOC_MEMBIND_STRICT;
         break;
 
-    case PRRTE_HWLOC_BASE_MAP_NONE:
+    case PRTE_HWLOC_BASE_MAP_NONE:
     default:
         policy = HWLOC_MEMBIND_DEFAULT;
         flags = 0;
@@ -53,11 +53,11 @@ int prrte_hwloc_base_set_process_membind_policy(void)
 
     cpuset = hwloc_bitmap_alloc();
     if (NULL == cpuset) {
-        rc = PRRTE_ERR_OUT_OF_RESOURCE;
+        rc = PRTE_ERR_OUT_OF_RESOURCE;
     } else {
         int e;
-        hwloc_get_cpubind(prrte_hwloc_topology, cpuset, 0);
-        rc = hwloc_set_membind(prrte_hwloc_topology,
+        hwloc_get_cpubind(prte_hwloc_topology, cpuset, 0);
+        rc = hwloc_set_membind(prte_hwloc_topology,
                                cpuset, policy, flags);
         e = errno;
         hwloc_bitmap_free(cpuset);
@@ -66,26 +66,26 @@ int prrte_hwloc_base_set_process_membind_policy(void)
            ENOSYS, but the base_map == NONE, then it's not really an
            error. */
         if (0 != rc && ENOSYS == e &&
-            PRRTE_HWLOC_BASE_MAP_NONE == prrte_hwloc_base_map) {
+            PRTE_HWLOC_BASE_MAP_NONE == prte_hwloc_base_map) {
             rc = 0;
         }
     }
 
-    return (0 == rc) ? PRRTE_SUCCESS : PRRTE_ERROR;
+    return (0 == rc) ? PRTE_SUCCESS : PRTE_ERROR;
 }
 
-int prrte_hwloc_base_memory_set(prrte_hwloc_base_memory_segment_t *segments,
+int prte_hwloc_base_memory_set(prte_hwloc_base_memory_segment_t *segments,
                                size_t num_segments)
 {
-    int rc = PRRTE_SUCCESS;
+    int rc = PRTE_SUCCESS;
     char *msg = NULL;
     size_t i;
     hwloc_cpuset_t cpuset = NULL;
 
     /* bozo check */
-    if (PRRTE_SUCCESS != prrte_hwloc_base_get_topology()) {
+    if (PRTE_SUCCESS != prte_hwloc_base_get_topology()) {
         msg = "hwloc_set_area_membind() failure - topology not available";
-        return prrte_hwloc_base_report_bind_failure(__FILE__, __LINE__,
+        return prte_hwloc_base_report_bind_failure(__FILE__, __LINE__,
                                                    msg, rc);
     }
 
@@ -94,18 +94,18 @@ int prrte_hwloc_base_memory_set(prrte_hwloc_base_memory_segment_t *segments,
        bind our memory there, too. */
     cpuset = hwloc_bitmap_alloc();
     if (NULL == cpuset) {
-        rc = PRRTE_ERR_OUT_OF_RESOURCE;
+        rc = PRTE_ERR_OUT_OF_RESOURCE;
         msg = "hwloc_bitmap_alloc() failure";
         goto out;
     }
-    hwloc_get_cpubind(prrte_hwloc_topology, cpuset, 0);
+    hwloc_get_cpubind(prte_hwloc_topology, cpuset, 0);
     for (i = 0; i < num_segments; ++i) {
-        if (0 != hwloc_set_area_membind(prrte_hwloc_topology,
+        if (0 != hwloc_set_area_membind(prte_hwloc_topology,
                                         segments[i].mbs_start_addr,
                                         segments[i].mbs_len, cpuset,
                                         HWLOC_MEMBIND_BIND,
                                         HWLOC_MEMBIND_STRICT)) {
-            rc = PRRTE_ERROR;
+            rc = PRTE_ERROR;
             msg = "hwloc_set_area_membind() failure";
             goto out;
         }
@@ -115,49 +115,49 @@ int prrte_hwloc_base_memory_set(prrte_hwloc_base_memory_segment_t *segments,
     if (NULL != cpuset) {
         hwloc_bitmap_free(cpuset);
     }
-    if (PRRTE_SUCCESS != rc) {
-        return prrte_hwloc_base_report_bind_failure(__FILE__, __LINE__, msg, rc);
+    if (PRTE_SUCCESS != rc) {
+        return prte_hwloc_base_report_bind_failure(__FILE__, __LINE__, msg, rc);
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_hwloc_base_node_name_to_id(char *node_name, int *id)
+int prte_hwloc_base_node_name_to_id(char *node_name, int *id)
 {
     /* GLB: fix me */
     *id = atoi(node_name + 3);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_hwloc_base_membind(prrte_hwloc_base_memory_segment_t *segs,
+int prte_hwloc_base_membind(prte_hwloc_base_memory_segment_t *segs,
                             size_t count, int node_id)
 {
     size_t i;
-    int rc = PRRTE_SUCCESS;
+    int rc = PRTE_SUCCESS;
     char *msg = NULL;
     hwloc_cpuset_t cpuset = NULL;
 
     /* bozo check */
-    if (PRRTE_SUCCESS != prrte_hwloc_base_get_topology()) {
+    if (PRTE_SUCCESS != prte_hwloc_base_get_topology()) {
         msg = "hwloc_set_area_membind() failure - topology not available";
-        return prrte_hwloc_base_report_bind_failure(__FILE__, __LINE__,
+        return prte_hwloc_base_report_bind_failure(__FILE__, __LINE__,
                                                    msg, rc);
     }
 
     cpuset = hwloc_bitmap_alloc();
     if (NULL == cpuset) {
-        rc = PRRTE_ERR_OUT_OF_RESOURCE;
+        rc = PRTE_ERR_OUT_OF_RESOURCE;
         msg = "hwloc_bitmap_alloc() failure";
         goto out;
     }
     hwloc_bitmap_set(cpuset, node_id);
     for(i = 0; i < count; i++) {
-        if (0 != hwloc_set_area_membind(prrte_hwloc_topology,
+        if (0 != hwloc_set_area_membind(prte_hwloc_topology,
                                         segs[i].mbs_start_addr,
                                         segs[i].mbs_len, cpuset,
                                         HWLOC_MEMBIND_BIND,
                                         HWLOC_MEMBIND_STRICT)) {
-            rc = PRRTE_ERROR;
+            rc = PRTE_ERROR;
             msg = "hwloc_set_area_membind() failure";
             goto out;
         }
@@ -167,8 +167,8 @@ int prrte_hwloc_base_membind(prrte_hwloc_base_memory_segment_t *segs,
     if (NULL != cpuset) {
         hwloc_bitmap_free(cpuset);
     }
-    if (PRRTE_SUCCESS != rc) {
-        return prrte_hwloc_base_report_bind_failure(__FILE__, __LINE__, msg, rc);
+    if (PRTE_SUCCESS != rc) {
+        return prte_hwloc_base_report_bind_failure(__FILE__, __LINE__, msg, rc);
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

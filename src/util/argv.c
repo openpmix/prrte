@@ -15,6 +15,7 @@
  *                         and Technology (RIST). All rights reserved.
  *
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,7 +23,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,21 +38,21 @@
 /*
  * Append a string to the end of a new or existing argv array.
  */
-int prrte_argv_append(int *argc, char ***argv, const char *arg)
+int prte_argv_append(int *argc, char ***argv, const char *arg)
 {
     int rc;
 
     /* add the new element */
-    if (PRRTE_SUCCESS != (rc = prrte_argv_append_nosize(argv, arg))) {
+    if (PRTE_SUCCESS != (rc = prte_argv_append_nosize(argv, arg))) {
         return rc;
     }
 
-    *argc = prrte_argv_count(*argv);
+    *argc = prte_argv_count(*argv);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_argv_append_nosize(char ***argv, const char *arg)
+int prte_argv_append_nosize(char ***argv, const char *arg)
 {
     int argc;
 
@@ -60,7 +61,7 @@ int prrte_argv_append_nosize(char ***argv, const char *arg)
   if (NULL == *argv) {
     *argv = (char**) malloc(2 * sizeof(char *));
     if (NULL == *argv) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
     argc = 0;
     (*argv)[0] = NULL;
@@ -70,11 +71,11 @@ int prrte_argv_append_nosize(char ***argv, const char *arg)
   /* Extend existing argv. */
   else {
         /* count how many entries currently exist */
-        argc = prrte_argv_count(*argv);
+        argc = prte_argv_count(*argv);
 
         *argv = (char**) realloc(*argv, (argc + 2) * sizeof(char *));
         if (NULL == *argv) {
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
 
@@ -82,16 +83,16 @@ int prrte_argv_append_nosize(char ***argv, const char *arg)
 
     (*argv)[argc] = strdup(arg);
     if (NULL == (*argv)[argc]) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     argc = argc + 1;
     (*argv)[argc] = NULL;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_argv_prepend_nosize(char ***argv, const char *arg)
+int prte_argv_prepend_nosize(char ***argv, const char *arg)
 {
     int argc;
     int i;
@@ -101,17 +102,17 @@ int prrte_argv_prepend_nosize(char ***argv, const char *arg)
     if (NULL == *argv) {
         *argv = (char**) malloc(2 * sizeof(char *));
         if (NULL == *argv) {
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
         (*argv)[0] = strdup(arg);
         (*argv)[1] = NULL;
     } else {
         /* count how many entries currently exist */
-        argc = prrte_argv_count(*argv);
+        argc = prte_argv_count(*argv);
 
         *argv = (char**) realloc(*argv, (argc + 2) * sizeof(char *));
         if (NULL == *argv) {
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
         (*argv)[argc+1] = NULL;
 
@@ -122,10 +123,10 @@ int prrte_argv_prepend_nosize(char ***argv, const char *arg)
         (*argv)[0] = strdup(arg);
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_argv_append_unique_nosize(char ***argv, const char *arg)
+int prte_argv_append_unique_nosize(char ***argv, const char *arg)
 {
     int i;
 
@@ -133,25 +134,25 @@ int prrte_argv_append_unique_nosize(char ***argv, const char *arg)
      * so just go ahead and append
      */
     if (NULL == *argv) {
-        return prrte_argv_append_nosize(argv, arg);
+        return prte_argv_append_nosize(argv, arg);
     }
 
     /* see if this arg is already present in the array */
     for (i=0; NULL != (*argv)[i]; i++) {
         if (0 == strcmp(arg, (*argv)[i])) {
             /* already exists */
-            return PRRTE_SUCCESS;
+            return PRTE_SUCCESS;
         }
     }
 
     /* we get here if the arg is not in the array - so add it */
-    return prrte_argv_append_nosize(argv, arg);
+    return prte_argv_append_nosize(argv, arg);
 }
 
 /*
  * Free a NULL-terminated argv array.
  */
-void prrte_argv_free(char **argv)
+void prte_argv_free(char **argv)
 {
   char **p;
 
@@ -169,7 +170,7 @@ void prrte_argv_free(char **argv)
 /*
  * Split a string into a NULL-terminated argv array.
  */
-static char **prrte_argv_split_inter(const char *src_string,
+static char **prte_argv_split_inter(const char *src_string,
                                      int delimiter,
                                      int include_empty)
 {
@@ -195,7 +196,7 @@ static char **prrte_argv_split_inter(const char *src_string,
         if (src == p) {
             if (include_empty) {
                 arg[0] = '\0';
-                if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, arg)) {
+                if (PRTE_SUCCESS != prte_argv_append(&argc, &argv, arg)) {
                     return NULL;
                 }
             }
@@ -204,7 +205,7 @@ static char **prrte_argv_split_inter(const char *src_string,
         /* tail argument, add straight from the original string */
 
         else if ('\0' == *p) {
-            if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, src)) {
+            if (PRTE_SUCCESS != prte_argv_append(&argc, &argv, src)) {
                 return NULL;
             }
             break;
@@ -218,10 +219,10 @@ static char **prrte_argv_split_inter(const char *src_string,
                return NULL;
             }
 
-            prrte_string_copy(argtemp, src, arglen + 1);
+            prte_string_copy(argtemp, src, arglen + 1);
             argtemp[arglen] = '\0';
 
-            if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, argtemp)) {
+            if (PRTE_SUCCESS != prte_argv_append(&argc, &argv, argtemp)) {
                free(argtemp);
                return NULL;
             }
@@ -232,10 +233,10 @@ static char **prrte_argv_split_inter(const char *src_string,
         /* short argument, copy to buffer and add */
 
         else {
-            prrte_string_copy(arg, src, arglen + 1);
+            prte_string_copy(arg, src, arglen + 1);
             arg[arglen] = '\0';
 
-            if (PRRTE_SUCCESS != prrte_argv_append(&argc, &argv, arg)) {
+            if (PRTE_SUCCESS != prte_argv_append(&argc, &argv, arg)) {
                return NULL;
             }
         }
@@ -248,20 +249,20 @@ static char **prrte_argv_split_inter(const char *src_string,
   return argv;
 }
 
-char **prrte_argv_split(const char *src_string, int delimiter)
+char **prte_argv_split(const char *src_string, int delimiter)
 {
-    return prrte_argv_split_inter(src_string, delimiter, 0);
+    return prte_argv_split_inter(src_string, delimiter, 0);
 }
 
-char **prrte_argv_split_with_empty(const char *src_string, int delimiter)
+char **prte_argv_split_with_empty(const char *src_string, int delimiter)
 {
-    return prrte_argv_split_inter(src_string, delimiter, 1);
+    return prte_argv_split_inter(src_string, delimiter, 1);
 }
 
 /*
  * Return the length of a NULL-terminated argv array.
  */
-int prrte_argv_count(char **argv)
+int prte_argv_count(char **argv)
 {
   char **p;
   int i;
@@ -280,7 +281,7 @@ int prrte_argv_count(char **argv)
  * Join all the elements of an argv array into a single
  * newly-allocated string.
  */
-char *prrte_argv_join(char **argv, int delimiter)
+char *prte_argv_join(char **argv, int delimiter)
 {
   char **p;
   char *pp;
@@ -336,7 +337,7 @@ char *prrte_argv_join(char **argv, int delimiter)
  * Join all the elements of an argv array from within a
  * specified range into a single newly-allocated string.
  */
-char *prrte_argv_join_range(char **argv, size_t start, size_t end, int delimiter)
+char *prte_argv_join_range(char **argv, size_t start, size_t end, int delimiter)
 {
     char **p;
     char *pp;
@@ -346,7 +347,7 @@ char *prrte_argv_join_range(char **argv, size_t start, size_t end, int delimiter
 
     /* Bozo case */
 
-    if (NULL == argv || NULL == argv[0] || (int)start > prrte_argv_count(argv)) {
+    if (NULL == argv || NULL == argv[0] || (int)start > prte_argv_count(argv)) {
         return strdup("");
     }
 
@@ -391,7 +392,7 @@ char *prrte_argv_join_range(char **argv, size_t start, size_t end, int delimiter
 /*
  * Return the number of bytes consumed by an argv array.
  */
-size_t prrte_argv_len(char **argv)
+size_t prte_argv_len(char **argv)
 {
   char **p;
   size_t length;
@@ -412,7 +413,7 @@ size_t prrte_argv_len(char **argv)
 /*
  * Copy a NULL-terminated argv array.
  */
-char **prrte_argv_copy(char **argv)
+char **prte_argv_copy(char **argv)
 {
   char **dupv = NULL;
   int dupc = 0;
@@ -426,8 +427,8 @@ char **prrte_argv_copy(char **argv)
   dupv[0] = NULL;
 
   while (NULL != *argv) {
-    if (PRRTE_SUCCESS != prrte_argv_append(&dupc, &dupv, *argv)) {
-      prrte_argv_free(dupv);
+    if (PRTE_SUCCESS != prte_argv_append(&dupc, &dupv, *argv)) {
+      prte_argv_free(dupv);
       return NULL;
     }
 
@@ -440,7 +441,7 @@ char **prrte_argv_copy(char **argv)
 }
 
 
-int prrte_argv_delete(int *argc, char ***argv, int start, int num_to_delete)
+int prte_argv_delete(int *argc, char ***argv, int start, int num_to_delete)
 {
     int i;
     int count;
@@ -449,13 +450,13 @@ int prrte_argv_delete(int *argc, char ***argv, int start, int num_to_delete)
 
     /* Check for the bozo cases */
     if (NULL == argv || NULL == *argv || 0 == num_to_delete) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
-    count = prrte_argv_count(*argv);
+    count = prte_argv_count(*argv);
     if (start > count) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     } else if (start < 0 || num_to_delete < 0) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
 
     /* Ok, we have some tokens to delete.  Calculate the new length of
@@ -488,14 +489,14 @@ int prrte_argv_delete(int *argc, char ***argv, int start, int num_to_delete)
 
     /* adjust the argc */
     if (NULL != argc) {
-        (*argc) = prrte_argv_count(*argv);
+        (*argc) = prte_argv_count(*argv);
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-int prrte_argv_insert(char ***target, int start, char **source)
+int prte_argv_insert(char ***target, int start, char **source)
 {
     int i, source_count, target_count;
     int suffix_count;
@@ -503,18 +504,18 @@ int prrte_argv_insert(char ***target, int start, char **source)
     /* Check for the bozo cases */
 
     if (NULL == target || NULL == *target || start < 0) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     } else if (NULL == source) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* Easy case: appending to the end */
 
-    target_count = prrte_argv_count(*target);
-    source_count = prrte_argv_count(source);
+    target_count = prte_argv_count(*target);
+    source_count = prte_argv_count(source);
     if (start > target_count) {
         for (i = 0; i < source_count; ++i) {
-            prrte_argv_append(&target_count, target, source[i]);
+            prte_argv_append(&target_count, target, source[i]);
         }
     }
 
@@ -545,10 +546,10 @@ int prrte_argv_insert(char ***target, int start, char **source)
 
     /* All done */
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_argv_insert_element(char ***target, int location, char *source)
+int prte_argv_insert_element(char ***target, int location, char *source)
 {
     int i, target_count;
     int suffix_count;
@@ -556,16 +557,16 @@ int prrte_argv_insert_element(char ***target, int location, char *source)
     /* Check for the bozo cases */
 
     if (NULL == target || NULL == *target || location < 0) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     } else if (NULL == source) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* Easy case: appending to the end */
-    target_count = prrte_argv_count(*target);
+    target_count = prte_argv_count(*target);
     if (location > target_count) {
-        prrte_argv_append(&target_count, target, source);
-        return PRRTE_SUCCESS;
+        prte_argv_append(&target_count, target, source);
+        return PRTE_SUCCESS;
     }
 
     /* Alloc out new space */
@@ -584,5 +585,5 @@ int prrte_argv_insert_element(char ***target, int location, char *source)
     (*target)[location] = strdup(source);
 
     /* All done */
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

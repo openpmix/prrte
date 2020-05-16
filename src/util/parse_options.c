@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
- * Copyright (c) 2008      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -20,7 +20,7 @@
  *
  * $HEADER$
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <stdio.h>
@@ -36,11 +36,11 @@
 #include "src/util/argv.h"
 #include "src/util/output.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/util/parse_options.h"
 
-void prrte_util_parse_range_options(char *inp, char ***output)
+void prte_util_parse_range_options(char *inp, char ***output)
 {
     char **r1=NULL, **r2=NULL;
     int i, vint;
@@ -64,11 +64,11 @@ void prrte_util_parse_range_options(char *inp, char ***output)
     }
 
     /* split on commas */
-    r1 = prrte_argv_split(input, ',');
+    r1 = prte_argv_split(input, ',');
     /* for each resulting element, check for range */
-    for (i=0; i < prrte_argv_count(r1); i++) {
-        r2 = prrte_argv_split(r1[i], '-');
-        if (1 < prrte_argv_count(r2)) {
+    for (i=0; i < prte_argv_count(r1); i++) {
+        r2 = prte_argv_split(r1[i], '-');
+        if (1 < prte_argv_count(r2)) {
             /* given range - get start and end */
             start = strtol(r2[0], NULL, 10);
             end = strtol(r2[1], NULL, 10);
@@ -78,10 +78,10 @@ void prrte_util_parse_range_options(char *inp, char ***output)
              */
             vint = strtol(r1[i], NULL, 10);
             if (-1 == vint) {
-                prrte_argv_free(*output);
+                prte_argv_free(*output);
                 *output = NULL;
-                prrte_argv_append_nosize(output, "-1");
-                prrte_argv_free(r2);
+                prte_argv_append_nosize(output, "-1");
+                prte_argv_free(r2);
                 goto cleanup;
             }
             start = strtol(r2[0], NULL, 10);
@@ -89,21 +89,21 @@ void prrte_util_parse_range_options(char *inp, char ***output)
         }
         for (n = start; n <= end; n++) {
             snprintf(nstr, 32, "%d", n);
-            prrte_argv_append_nosize(output, nstr);
+            prte_argv_append_nosize(output, nstr);
         }
-        prrte_argv_free(r2);
+        prte_argv_free(r2);
     }
 
 cleanup:
     if (bang_option) {
-        prrte_argv_append_nosize(output, "BANG");
+        prte_argv_append_nosize(output, "BANG");
     }
     free(input);
-    prrte_argv_free(r1);
+    prte_argv_free(r1);
 
 }
 
-void prrte_util_get_ranges(char *inp, char ***startpts, char ***endpts)
+void prte_util_get_ranges(char *inp, char ***startpts, char ***endpts)
 {
     char **r1=NULL, **r2=NULL;
     int i;
@@ -118,29 +118,29 @@ void prrte_util_get_ranges(char *inp, char ***startpts, char ***endpts)
     input = strdup(inp);
 
     /* split on commas */
-    r1 = prrte_argv_split(input, ',');
+    r1 = prte_argv_split(input, ',');
     /* for each resulting element, check for range */
-    for (i=0; i < prrte_argv_count(r1); i++) {
-        r2 = prrte_argv_split(r1[i], '-');
-        if (2 == prrte_argv_count(r2)) {
+    for (i=0; i < prte_argv_count(r1); i++) {
+        r2 = prte_argv_split(r1[i], '-');
+        if (2 == prte_argv_count(r2)) {
             /* given range - get start and end */
-            prrte_argv_append_nosize(startpts, r2[0]);
-            prrte_argv_append_nosize(endpts, r2[1]);
-        } else if (1 == prrte_argv_count(r2)) {
+            prte_argv_append_nosize(startpts, r2[0]);
+            prte_argv_append_nosize(endpts, r2[1]);
+        } else if (1 == prte_argv_count(r2)) {
             /* only one value provided, so it is both the start
              * and the end
              */
-            prrte_argv_append_nosize(startpts, r2[0]);
-            prrte_argv_append_nosize(endpts, r2[0]);
+            prte_argv_append_nosize(startpts, r2[0]);
+            prte_argv_append_nosize(endpts, r2[0]);
         } else {
             /* no idea how to parse this */
-            prrte_output(0, "%s Unknown parse error on string: %s(%s)",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), inp, r1[i]);
+            prte_output(0, "%s Unknown parse error on string: %s(%s)",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inp, r1[i]);
         }
-        prrte_argv_free(r2);
+        prte_argv_free(r2);
     }
 
     free(input);
-    prrte_argv_free(r1);
+    prte_argv_free(r1);
 
 }

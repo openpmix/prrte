@@ -16,6 +16,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,15 +30,15 @@
  * Runtime Messaging Layer (RML) Communication Interface
  *
  * The Runtime Messaging Layer (RML) provices basic point-to-point
- * communication between PRRTE processes.  The system is available for
+ * communication between PRTE processes.  The system is available for
  * most architectures, with some exceptions (the Cray XT3/XT4, for example).
  */
 
 
-#ifndef PRRTE_MCA_RML_RML_H_
-#define PRRTE_MCA_RML_RML_H_
+#ifndef PRTE_MCA_RML_RML_H_
+#define PRTE_MCA_RML_RML_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
 #ifdef HAVE_UNISTD_H
@@ -55,24 +56,24 @@ BEGIN_C_DECLS
 /* ******************************************************************** */
 
 typedef struct {
-    prrte_object_t super;
-    prrte_process_name_t name;
-    prrte_buffer_t data;
+    prte_object_t super;
+    prte_process_name_t name;
+    prte_buffer_t data;
     bool active;
-} prrte_rml_recv_cb_t;
-PRRTE_CLASS_DECLARATION(prrte_rml_recv_cb_t);
+} prte_rml_recv_cb_t;
+PRTE_CLASS_DECLARATION(prte_rml_recv_cb_t);
 
 /* Provide a generic callback function to release buffers
  * following a non-blocking send as this happens all over
  * the code base
  */
-PRRTE_EXPORT void prrte_rml_send_callback(int status, prrte_process_name_t* sender,
-                                          prrte_buffer_t* buffer, prrte_rml_tag_t tag,
+PRTE_EXPORT void prte_rml_send_callback(int status, prte_process_name_t* sender,
+                                          prte_buffer_t* buffer, prte_rml_tag_t tag,
                                           void* cbdata);
 
-PRRTE_EXPORT void prrte_rml_recv_callback(int status, prrte_process_name_t* sender,
-                                          prrte_buffer_t *buffer,
-                                          prrte_rml_tag_t tag, void *cbdata);
+PRTE_EXPORT void prte_rml_recv_callback(int status, prte_process_name_t* sender,
+                                          prte_buffer_t *buffer,
+                                          prte_rml_tag_t tag, void *cbdata);
 
 /* ******************************************************************** */
 /*                     RML CALLBACK FUNCTION DEFINITIONS                */
@@ -101,11 +102,11 @@ PRRTE_EXPORT void prrte_rml_recv_callback(int status, prrte_process_name_t* send
  * @param[in] tag     User defined tag for matching send/recv
  * @param[in] cbdata  User data passed to send_nb()
  */
-typedef void (*prrte_rml_callback_fn_t)(int status,
-                                       prrte_process_name_t* peer,
+typedef void (*prte_rml_callback_fn_t)(int status,
+                                       prte_process_name_t* peer,
                                        struct iovec* msg,
                                        int count,
-                                       prrte_rml_tag_t tag,
+                                       prte_rml_tag_t tag,
                                        void* cbdata);
 
 
@@ -126,10 +127,10 @@ typedef void (*prrte_rml_callback_fn_t)(int status,
  * @param[in] tag     User defined tag for matching send/recv
  * @param[in] cbdata  User data passed to send_buffer_nb() or recv_buffer_nb()
  */
-typedef void (*prrte_rml_buffer_callback_fn_t)(int status,
-                                              prrte_process_name_t* peer,
-                                              struct prrte_buffer_t* buffer,
-                                              prrte_rml_tag_t tag,
+typedef void (*prte_rml_buffer_callback_fn_t)(int status,
+                                              prte_process_name_t* peer,
+                                              struct prte_buffer_t* buffer,
+                                              prte_rml_tag_t tag,
                                               void* cbdata);
 
 /**
@@ -143,8 +144,8 @@ typedef void (*prrte_rml_buffer_callback_fn_t)(int status,
  * @param[in] peer      Name of peer process
  * @param[in] exception Description of the error causing the exception
  */
-typedef void (*prrte_rml_exception_callback_t)(prrte_process_name_t* peer,
-                                              prrte_rml_exception_t exception);
+typedef void (*prte_rml_exception_callback_t)(prte_process_name_t* peer,
+                                              prte_rml_exception_t exception);
 
 
 /* ******************************************************************** */
@@ -163,11 +164,11 @@ typedef void (*prrte_rml_exception_callback_t)(prrte_process_name_t* peer,
  * @param[in] contact_info The contact info string for the remote process
  * @param[in] tv           Timeout after which the ping should be failed
  *
- * @retval PRRTE_SUCESS The process is available and will allow connections
+ * @retval PRTE_SUCESS The process is available and will allow connections
  *                     from the local process
- * @retval PRRTE_ERROR  An unspecified error occurred during the update
+ * @retval PRTE_ERROR  An unspecified error occurred during the update
  */
-typedef int (*prrte_rml_module_ping_fn_t)(const char* contact_info,
+typedef int (*prte_rml_module_ping_fn_t)(const char* contact_info,
                                          const struct timeval* tv);
 
 
@@ -188,17 +189,17 @@ typedef int (*prrte_rml_module_ping_fn_t)(const char* contact_info,
  * @param[in] cbfunc Callback function on message comlpetion
  * @param[in] cbdata User data to provide during completion callback
  *
- * @retval PRRTE_SUCCESS The message was successfully started
- * @retval PRRTE_ERR_BAD_PARAM One of the parameters was invalid
- * @retval PRRTE_ERR_ADDRESSEE_UNKNOWN Contact information for the
+ * @retval PRTE_SUCCESS The message was successfully started
+ * @retval PRTE_ERR_BAD_PARAM One of the parameters was invalid
+ * @retval PRTE_ERR_ADDRESSEE_UNKNOWN Contact information for the
  *                    receiving process is not available
- * @retval PRRTE_ERROR  An unspecified error occurred
+ * @retval PRTE_ERROR  An unspecified error occurred
  */
-typedef int (*prrte_rml_module_send_nb_fn_t)(prrte_process_name_t* peer,
+typedef int (*prte_rml_module_send_nb_fn_t)(prte_process_name_t* peer,
                                             struct iovec* msg,
                                             int count,
-                                            prrte_rml_tag_t tag,
-                                            prrte_rml_callback_fn_t cbfunc,
+                                            prte_rml_tag_t tag,
+                                            prte_rml_callback_fn_t cbfunc,
                                             void* cbdata);
 
 
@@ -218,16 +219,16 @@ typedef int (*prrte_rml_module_send_nb_fn_t)(prrte_process_name_t* peer,
  * @param[in] cbfunc Callback function on message comlpetion
  * @param[in] cbdata User data to provide during completion callback
  *
- * @retval PRRTE_SUCCESS The message was successfully started
- * @retval PRRTE_ERR_BAD_PARAM One of the parameters was invalid
- * @retval PRRTE_ERR_ADDRESSEE_UNKNOWN Contact information for the
+ * @retval PRTE_SUCCESS The message was successfully started
+ * @retval PRTE_ERR_BAD_PARAM One of the parameters was invalid
+ * @retval PRTE_ERR_ADDRESSEE_UNKNOWN Contact information for the
  *                    receiving process is not available
- * @retval PRRTE_ERROR  An unspecified error occurred
+ * @retval PRTE_ERROR  An unspecified error occurred
  */
-typedef int (*prrte_rml_module_send_buffer_nb_fn_t)(prrte_process_name_t* peer,
-                                                   struct prrte_buffer_t* buffer,
-                                                   prrte_rml_tag_t tag,
-                                                   prrte_rml_buffer_callback_fn_t cbfunc,
+typedef int (*prte_rml_module_send_buffer_nb_fn_t)(prte_process_name_t* peer,
+                                                   struct prte_buffer_t* buffer,
+                                                   prte_rml_tag_t tag,
+                                                   prte_rml_buffer_callback_fn_t cbfunc,
                                                    void* cbdata);
 
 /**
@@ -235,38 +236,38 @@ typedef int (*prrte_rml_module_send_buffer_nb_fn_t)(prrte_process_name_t* peer,
  * to/from a specified process. Used when a process aborts
  * and is to be restarted
  */
-typedef void (*prrte_rml_module_purge_fn_t)(prrte_process_name_t *peer);
+typedef void (*prte_rml_module_purge_fn_t)(prte_process_name_t *peer);
 
 
 /**
  * Receive an iovec non-blocking message
  *
- * @param[in]  peer    Peer process or PRRTE_NAME_WILDCARD for wildcard receive
+ * @param[in]  peer    Peer process or PRTE_NAME_WILDCARD for wildcard receive
  * @param[in]  tag     User defined tag for matching send/recv
  * @param[in] persistent Boolean flag indicating whether or not this is a one-time recv
  * @param[in] cbfunc   Callback function on message comlpetion
  * @param[in] cbdata   User data to provide during completion callback
  */
-typedef void (*prrte_rml_module_recv_nb_fn_t)(prrte_process_name_t* peer,
-                                          prrte_rml_tag_t tag,
+typedef void (*prte_rml_module_recv_nb_fn_t)(prte_process_name_t* peer,
+                                          prte_rml_tag_t tag,
                                           bool persistent,
-                                          prrte_rml_callback_fn_t cbfunc,
+                                          prte_rml_callback_fn_t cbfunc,
                                           void* cbdata);
 
 
 /**
  * Receive a buffer non-blocking message
  *
- * @param[in]  peer    Peer process or PRRTE_NAME_WILDCARD for wildcard receive
+ * @param[in]  peer    Peer process or PRTE_NAME_WILDCARD for wildcard receive
  * @param[in]  tag     User defined tag for matching send/recv
  * @param[in] persistent Boolean flag indicating whether or not this is a one-time recv
  * @param[in] cbfunc   Callback function on message comlpetion
  * @param[in] cbdata   User data to provide during completion callback
  */
-typedef void (*prrte_rml_module_recv_buffer_nb_fn_t)(prrte_process_name_t* peer,
-                                                 prrte_rml_tag_t tag,
+typedef void (*prte_rml_module_recv_buffer_nb_fn_t)(prte_process_name_t* peer,
+                                                 prte_rml_tag_t tag,
                                                  bool persistent,
-                                                 prrte_rml_buffer_callback_fn_t cbfunc,
+                                                 prte_rml_buffer_callback_fn_t cbfunc,
                                                  void* cbdata);
 
 /**
@@ -274,42 +275,42 @@ typedef void (*prrte_rml_module_recv_buffer_nb_fn_t)(prrte_process_name_t* peer,
  *
  * Attempt to cancel a posted non-blocking receive.
  *
- * @param[in] peer    Peer process or PRRTE_NAME_WILDCARD, exactly as passed
+ * @param[in] peer    Peer process or PRTE_NAME_WILDCARD, exactly as passed
  *                    to the non-blocking receive call
  * @param[in] tag     Posted receive tag
  */
-typedef void (*prrte_rml_module_recv_cancel_fn_t)(prrte_process_name_t* peer,
-                                              prrte_rml_tag_t tag);
+typedef void (*prte_rml_module_recv_cancel_fn_t)(prte_process_name_t* peer,
+                                              prte_rml_tag_t tag);
 
 
 /**
  * RML internal module interface - these will be implemented by all RML components
  */
-typedef struct prrte_rml_base_module_t {
+typedef struct prte_rml_base_module_t {
     /* pointer to the parent component for this module */
-    struct prrte_rml_component_t                 *component;
+    struct prte_rml_component_t                 *component;
     /* the routed module to be used */
     char                                        *routed;
     /** Ping process for connectivity check */
-    prrte_rml_module_ping_fn_t                    ping;
+    prte_rml_module_ping_fn_t                    ping;
 
     /** Send non-blocking iovec message */
-    prrte_rml_module_send_nb_fn_t                 send_nb;
+    prte_rml_module_send_nb_fn_t                 send_nb;
 
     /** Send non-blocking buffer message */
-    prrte_rml_module_send_buffer_nb_fn_t          send_buffer_nb;
+    prte_rml_module_send_buffer_nb_fn_t          send_buffer_nb;
 
-    prrte_rml_module_recv_nb_fn_t                 recv_nb;
-    prrte_rml_module_recv_buffer_nb_fn_t          recv_buffer_nb;
-    prrte_rml_module_recv_cancel_fn_t             recv_cancel;
+    prte_rml_module_recv_nb_fn_t                 recv_nb;
+    prte_rml_module_recv_buffer_nb_fn_t          recv_buffer_nb;
+    prte_rml_module_recv_cancel_fn_t             recv_cancel;
 
     /** Purge information */
-    prrte_rml_module_purge_fn_t                   purge;
-} prrte_rml_base_module_t;
+    prte_rml_module_purge_fn_t                   purge;
+} prte_rml_base_module_t;
 
 
 /** Interface for RML communication */
-PRRTE_EXPORT extern prrte_rml_base_module_t prrte_rml;
+PRTE_EXPORT extern prte_rml_base_module_t prte_rml;
 
 /* ******************************************************************** */
 /*                     RML COMPONENT DEFINITION                         */
@@ -321,14 +322,14 @@ PRRTE_EXPORT extern prrte_rml_base_module_t prrte_rml;
  * this structure, called mca_rml_[component name]_component, must
  * exist in any RML component.
  */
-typedef struct prrte_rml_component_t {
+typedef struct prte_rml_component_t {
     /* Base component description */
-    prrte_mca_base_component_t                        base;
+    prte_mca_base_component_t                        base;
     /* Base component data block */
-    prrte_mca_base_component_data_t                   data;
+    prte_mca_base_component_data_t                   data;
     /* Component priority */
     int                                         priority;
-} prrte_rml_component_t;
+} prte_rml_component_t;
 
 
 
@@ -336,8 +337,8 @@ typedef struct prrte_rml_component_t {
 
 
 /** Macro for use in components that are of type rml */
-#define PRRTE_RML_BASE_VERSION_3_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("rml", 3, 0, 0)
+#define PRTE_RML_BASE_VERSION_3_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("rml", 3, 0, 0)
 
 
 /* ******************************************************************** */

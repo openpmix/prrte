@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies Ltd.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -9,7 +10,7 @@
  *
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
 #ifdef HAVE_UNISTD_H
@@ -19,9 +20,9 @@
 
 #include "src/util/argv.h"
 #include "src/util/basename.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/mca/schizo/base/base.h"
 
@@ -30,7 +31,7 @@
 static int get_remaining_time(uint32_t *timeleft);
 static int define_session_dir(char **tmpdir);
 
-prrte_schizo_base_module_t prrte_schizo_slurm_module = {
+prte_schizo_base_module_t prte_schizo_slurm_module = {
     .define_session_dir = define_session_dir,
     .get_remaining_time = get_remaining_time
 };
@@ -41,9 +42,9 @@ static int define_session_dir(char **tmpdir)
 
     /* setup a session dir based on our slurm jobid */
     jid = getenv("SLURM_JOBID");
-    prrte_asprintf(tmpdir, "%s.session.%s", prrte_tool_basename, jid);
+    prte_asprintf(tmpdir, "%s.session.%s", prte_tool_basename, jid);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 static int get_remaining_time(uint32_t *timeleft)
 {
@@ -56,26 +57,26 @@ static int get_remaining_time(uint32_t *timeleft)
     *timeleft = UINT32_MAX;
 
     if (NULL == (jobid = getenv("SLURM_JOBID"))) {
-        return PRRTE_ERR_TAKE_NEXT_OPTION;
+        return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    if (0 > prrte_asprintf(&cmd, "squeue -h -j %s -o %%L", jobid)) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+    if (0 > prte_asprintf(&cmd, "squeue -h -j %s -o %%L", jobid)) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
     fp = popen(cmd, "r");
     if (NULL == fp) {
         free(cmd);
-        return PRRTE_ERR_FILE_OPEN_FAILURE;
+        return PRTE_ERR_FILE_OPEN_FAILURE;
     }
     if (NULL == fgets(output, 256, fp)) {
         free(cmd);
         pclose(fp);
-        return PRRTE_ERR_FILE_READ_FAILURE;
+        return PRTE_ERR_FILE_READ_FAILURE;
     }
     free(cmd);
     pclose(fp);
     /* the output is returned in a colon-delimited set of fields */
-    res = prrte_argv_split(output, ':');
-    cnt =  prrte_argv_count(res);
+    res = prte_argv_split(output, ':');
+    cnt =  prte_argv_count(res);
     tleft = strtol(res[cnt-1], NULL, 10); // has to be at least one field
     /* the next field would be minutes */
     if (1 < cnt) {
@@ -93,8 +94,8 @@ static int get_remaining_time(uint32_t *timeleft)
     if (4 < cnt) {
         tleft = UINT32_MAX;
     }
-    prrte_argv_free(res);
+    prte_argv_free(res);
 
     *timeleft = tleft;
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

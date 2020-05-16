@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2007-2010 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
@@ -12,11 +12,11 @@
  *
  */
 
-#ifndef PRRTE_INSTALLDIRS_BASE_H
-#define PRRTE_INSTALLDIRS_BASE_H
+#ifndef PRTE_INSTALLDIRS_BASE_H
+#define PRTE_INSTALLDIRS_BASE_H
 
-#include "prrte_config.h"
-#include "src/mca/base/prrte_mca_base_framework.h"
+#include "prte_config.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
 /*
@@ -27,14 +27,14 @@ BEGIN_C_DECLS
 /**
  * Framework structure declaration
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_prteinstalldirs_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_prteinstalldirs_base_framework;
 
-/* Just like prrte_install_dirs_expand() (see prteinstalldirs.h), but will
-   also insert the value of the environment variable $PRRTE_DESTDIR, if
+/* Just like prte_install_dirs_expand() (see prteinstalldirs.h), but will
+   also insert the value of the environment variable $PRTE_DESTDIR, if
    it exists/is set.  This function should *only* be used during the
    setup routines of prteinstalldirs. */
-char * prrte_install_dirs_expand_setup(const char* input);
+char * prte_install_dirs_expand_setup(const char* input);
 
 END_C_DECLS
 
-#endif /* PRRTE_BASE_INSTALLDIRS_H */
+#endif /* PRTE_BASE_INSTALLDIRS_H */

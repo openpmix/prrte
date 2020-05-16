@@ -21,14 +21,14 @@
 #
 
 
-AM_LFLAGS = -Pprrte_util_hostfile_
-LEX_OUTPUT_ROOT = lex.prrte_util_hostfile_
+AM_LFLAGS = -Pprte_util_hostfile_
+LEX_OUTPUT_ROOT = lex.prte_util_hostfile_
 
-noinst_LTLIBRARIES = libprrteutilhostfile.la
+noinst_LTLIBRARIES = libprteutilhostfile.la
 
 # Source code files
 
-libprrteutilhostfile_la_SOURCES = \
+libprteutilhostfile_la_SOURCES = \
 	hostfile_lex.h \
         hostfile_lex.l \
         hostfile.h \

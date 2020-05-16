@@ -1,6 +1,6 @@
 # NAME
 
-prrte - Establish a PRTE Distributed Virtual Machine (DVM).
+prte - Establish a PRTE Distributed Virtual Machine (DVM).
 
 # SYNOPSIS
 
@@ -28,7 +28,7 @@ $ prte --prefix /usr/local
 `prte` will establish a DVM that can be used to execute subsequent
 applications. Use of `prte` can be advantageous, for example, when
 you want to execute a number of short-lived tasks. In such cases, the
-time required to start the PRRTE DVM can be a significant fraction of
+time required to start the PRTE DVM can be a significant fraction of
 the time to execute the overall application. Thus, creating a persistent
 DVM can speed the overall execution. In addition, a persistent DVM will
 support executing multiple parallel applications while maintaining
@@ -63,7 +63,7 @@ cluster to use for the DVM.
 `--prefix <dir>`
 
 :   Prefix directory that will be used to set the `PATH` and
-    `LD_LIBRARY_PATH` on the remote node before invoking the PRRTE
+    `LD_LIBRARY_PATH` on the remote node before invoking the PRTE
     daemon.
 
 Setting MCA parameters:
@@ -86,15 +86,15 @@ Setting MCA parameters:
     filename to which the URI is to be written.
 
 The following options are useful for developers; they are not generally
-useful to most PRRTE users:
+useful to most PRTE users:
 
 `-d, --debug-devel`
 
-:   Enable debugging of the PRRTE layer.
+:   Enable debugging of the PRTE layer.
 
 `--debug-daemons-file`
 
-:   Enable debugging of the PRRTE daemons in the DVM, storing output in
+:   Enable debugging of the PRTE daemons in the DVM, storing output in
     files.
 
 There may be other options listed with `prte --help`.
@@ -130,5 +130,5 @@ potentially execute on a node. For best performance, the number of
 slots may be chosen to be the number of cores on the node or the
 number of processor sockets. If the hostfile does not provide slots
 information, a default of 1 is assumed. When running under resource
-managers (e.g., SLURM, Torque, etc.), PRRTE will obtain both the
+managers (e.g., SLURM, Torque, etc.), PRTE will obtain both the
 hostnames and the number of slots directly from the resource manger.

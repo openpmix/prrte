@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2007-2008 Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,12 +22,12 @@
 /**
  * @file
  *
- * Interface into the PRRTE Run Time Environment
+ * Interface into the PRTE Run Time Environment
  */
-#ifndef PRRTE_RUNTIME_H
-#define PRRTE_RUNTIME_H
+#ifndef PRTE_RUNTIME_H
+#define PRTE_RUNTIME_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -37,16 +38,16 @@
 BEGIN_C_DECLS
 
 /** version string of ompi */
-PRRTE_EXPORT extern const char prrte_version_string[];
+PRTE_EXPORT extern const char prte_version_string[];
 
 /**
- * Whether PRRTE is initialized or we are in prrte_finalize
+ * Whether PRTE is initialized or we are in prte_finalize
  */
-PRRTE_EXPORT extern int prrte_initialized;
-PRRTE_EXPORT extern bool prrte_finalizing;
-PRRTE_EXPORT extern int prrte_debug_output;
-PRRTE_EXPORT extern bool prrte_debug_flag;
-PRRTE_EXPORT extern int prrte_cache_line_size;
+PRTE_EXPORT extern int prte_initialized;
+PRTE_EXPORT extern bool prte_finalizing;
+PRTE_EXPORT extern int prte_debug_output;
+PRTE_EXPORT extern bool prte_debug_flag;
+PRTE_EXPORT extern int prte_cache_line_size;
 
     /**
      * Initialize the Open Run Time Environment
@@ -59,25 +60,25 @@ PRRTE_EXPORT extern int prrte_cache_line_size;
      *
      * @param pargc  Pointer to the number of arguments in the pargv array
      * @param pargv  The list of arguments.
-     * @param flags  Whether we are PRRTE tool or not
+     * @param flags  Whether we are PRTE tool or not
      */
-PRRTE_EXPORT int prrte_init(int*pargc, char*** pargv, prrte_proc_type_t flags);
-PRRTE_EXPORT int prrte_init_util(prrte_proc_type_t flags);
+PRTE_EXPORT int prte_init(int*pargc, char*** pargv, prte_proc_type_t flags);
+PRTE_EXPORT int prte_init_util(prte_proc_type_t flags);
 
     /**
-     * Initialize parameters for PRRTE.
+     * Initialize parameters for PRTE.
      *
-     * @retval PRRTE_SUCCESS Upon success.
-     * @retval PRRTE_ERROR Upon failure.
+     * @retval PRTE_SUCCESS Upon success.
+     * @retval PRTE_ERROR Upon failure.
      */
-PRRTE_EXPORT    int prrte_register_params(void);
+PRTE_EXPORT    int prte_register_params(void);
 
     /**
      * Finalize the Open run time environment. Any function calling \code
-     * prrte_init should call \code prrte_finalize.
+     * prte_init should call \code prte_finalize.
      *
      */
-PRRTE_EXPORT int prrte_finalize(void);
+PRTE_EXPORT int prte_finalize(void);
 
 END_C_DECLS
 

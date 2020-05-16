@@ -18,10 +18,10 @@
 # $HEADER$
 #
 
-prrte_config_files = @PRRTE_DEFAULT_MCA_PARAM_CONF@
-prrte_file_from_platform = @PRRTE_PARAM_FROM_PLATFORM@
+prte_config_files = @PRTE_DEFAULT_MCA_PARAM_CONF@
+prte_file_from_platform = @PRTE_PARAM_FROM_PLATFORM@
 
-EXTRA_DIST = $(prrte_config_files) prrte-default-hostfile
+EXTRA_DIST = $(prte_config_files) prte-default-hostfile
 
 # Steal a little trickery from a generated Makefile to only install
 # files if they do not already exist at the target.  Be sure to read
@@ -31,14 +31,14 @@ EXTRA_DIST = $(prrte_config_files) prrte-default-hostfile
 
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(sysconfdir)
-	@ p="$(prrte_config_files)"; \
-        if test "$(prrte_file_from_platform)" = "yes"; then \
+	@ p="$(prte_config_files)"; \
+        if test "$(prte_file_from_platform)" = "yes"; then \
 	    	if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
-	    	echo " $(INSTALL_DATA) $$d$$p $(DESTDIR)$(sysconfdir)/prrte-mca-params.conf"; \
-		    $(INSTALL_DATA) $$d$$p $(DESTDIR)$(sysconfdir)/prrte-mca-params.conf; \
+		echo " $(INSTALL_DATA) $$d$$p $(DESTDIR)$(sysconfdir)/prte-mca-params.conf"; \
+		    $(INSTALL_DATA) $$d$$p $(DESTDIR)$(sysconfdir)/prte-mca-params.conf; \
         else \
             for file in $$p; do \
-	        	if test -f $(DESTDIR)$(sysconfdir)/prrte-mca-params.conf; then \
+			if test -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf; then \
 		            echo "******************************* WARNING ************************************"; \
 		            echo "*** Not installing new $$file over existing file in:"; \
 		            echo "***   $(DESTDIR)$(sysconfdir)/$$file"; \
@@ -51,13 +51,13 @@ install-data-local:
 		        fi; \
 		    done \
 	    fi; \
-		if test -f $(DESTDIR)$(sysconfdir)/prrte-default-hostfile; then \
+		if test -f $(DESTDIR)$(sysconfdir)/prte-default-hostfile; then \
             echo "******************************* WARNING ************************************"; \
-            echo "*** Not installing new prrte-default-hostfile over existing file in:"; \
+            echo "*** Not installing new prte-default-hostfile over existing file in:"; \
             echo "***   $(DESTDIR)$(sysconfdir)/$$file"; \
             echo "******************************* WARNING ************************************"; \
         else \
-            $(INSTALL_DATA) $(srcdir)/prrte-default-hostfile $(DESTDIR)$(sysconfdir)/; \
+            $(INSTALL_DATA) $(srcdir)/prte-default-hostfile $(DESTDIR)$(sysconfdir)/; \
         fi;
 
 
@@ -66,7 +66,7 @@ install-data-local:
 #    the return of the evaluted command is 0 (as opposed to non-zero
 #    as used by everyone else)
 uninstall-local:
-	@ p="$(prrte_config_files)"; \
+	@ p="$(prte_config_files)"; \
 	for file in $$p; do \
 	  if test -f "$(DESTDIR)$(sysconfdir)/$$file"; then \
 	  	if test -f "$$file"; then d=; else d="$(srcdir)/"; fi; \
@@ -76,9 +76,9 @@ uninstall-local:
 	    fi ; \
 	  fi ; \
 	done
-	@ if test -f "$(DESTDIR)$(sysconfdir)/prrte-default-hostfile"; then \
-		if diff "$(DESTDIR)$(sysconfdir)/prrte-default-hostfile" "$(srcdir)/prrte-default-hostfile" > /dev/null 2>&1 ; then \
-	      echo "rm -f $(DESTDIR)$(sysconfdir)/prrte-default-hostfile" ; \
-	      rm -f "$(DESTDIR)$(sysconfdir)/prrte-default-hostfile" ; \
+	@ if test -f "$(DESTDIR)$(sysconfdir)/prte-default-hostfile"; then \
+		if diff "$(DESTDIR)$(sysconfdir)/prte-default-hostfile" "$(srcdir)/prte-default-hostfile" > /dev/null 2>&1 ; then \
+	      echo "rm -f $(DESTDIR)$(sysconfdir)/prte-default-hostfile" ; \
+	      rm -f "$(DESTDIR)$(sysconfdir)/prte-default-hostfile" ; \
 	    fi ; \
 	fi ;

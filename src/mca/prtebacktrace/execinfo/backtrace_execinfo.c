@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2006 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
@@ -19,7 +19,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -34,20 +34,20 @@
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 
 int
-prrte_backtrace_print(FILE *file, char *prefix, int strip)
+prte_backtrace_print(FILE *file, char *prefix, int strip)
 {
     int i, len;
     int trace_size;
     void * trace[32];
     char buf[6];
-    int fd = prrte_stacktrace_output_fileno;
+    int fd = prte_stacktrace_output_fileno;
 
     if( NULL != file ) {
         fd = fileno(file);
     }
 
     if (-1 == fd) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
 
     trace_size = backtrace (trace, 32);
@@ -61,12 +61,12 @@ prrte_backtrace_print(FILE *file, char *prefix, int strip)
         backtrace_symbols_fd (&trace[i], 1, fd);
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
 int
-prrte_backtrace_buffer(char ***message_out, int *len_out)
+prte_backtrace_buffer(char ***message_out, int *len_out)
 {
     int trace_size;
     void * trace[32];
@@ -78,5 +78,5 @@ prrte_backtrace_buffer(char ***message_out, int *len_out)
     *message_out = funcs;
     *len_out = trace_size;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

@@ -1,5 +1,6 @@
 #
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -15,4 +16,4 @@ libmca_rtc_la_SOURCES += \
         base/rtc_base_select.c \
         base/rtc_base_stubs.c
 
-dist_prrtedata_DATA = base/help-prrte-rtc-base.txt
+dist_prtedata_DATA = base/help-prte-rtc-base.txt

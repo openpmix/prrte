@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2015      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -16,8 +16,8 @@ use Getopt::Long;
 my $package_name;
 my $package_version;
 my $ompi_date;
-my $prrte_date;
-my $prrte_date;
+my $prte_date;
+my $prte_date;
 my $cxx = '1';
 my $fortran = '1';
 my $f08 = '1';
@@ -29,8 +29,8 @@ my $help_arg = 0;
 my $ok = Getopt::Long::GetOptions("package-name=s" => \$package_name,
                                   "package-version=s" => \$package_version,
                                   "ompi-date=s" => \$ompi_date,
-                                  "prrte-date=s" => \$prrte_date,
-                                  "prrte-date=s" => \$prrte_date,
+                                  "prte-date=s" => \$prte_date,
+                                  "prte-date=s" => \$prte_date,
                                   "cxx!" => \$cxx,
                                   "fortran!" => \$fortran,
                                   "f08!" => \$f08,
@@ -43,9 +43,9 @@ if ($help_arg || !$ok ||
     !defined($package_name) ||
     !defined($package_version) ||
     !defined($ompi_date) ||
-    !defined($prrte_date) ||
-    !defined($prrte_date)) {
-    print "Usage: $0 --package-name=<package name> --package-version=<package version> --ompi-date=<ompi date> --prrte-date=<prrte date> --prrte-date=<prrte date> --input=<input file> --output=<output file> [--nocxx] [ --nofortran] [--nof08]\n";
+    !defined($prte_date) ||
+    !defined($prte_date)) {
+    print "Usage: $0 --package-name=<package name> --package-version=<package version> --ompi-date=<ompi date> --prte-date=<prte date> --prte-date=<prte date> --input=<input file> --output=<output file> [--nocxx] [ --nofortran] [--nof08]\n";
     exit(1 - $ok);
 }
 
@@ -59,8 +59,8 @@ close(FILE);
 $file =~ s/#PACKAGE_NAME#/$package_name/g;
 $file =~ s/#PACKAGE_VERSION#/$package_version/g;
 $file =~ s/#OMPI_DATE#/$ompi_date/g;
-$file =~ s/#PRRTE_DATE#/$prrte_date/g;
-$file =~ s/#PRRTE_DATE#/$prrte_date/g;
+$file =~ s/#PRTE_DATE#/$prte_date/g;
+$file =~ s/#PRTE_DATE#/$prte_date/g;
 
 if ($cxx == 0) {
     $file =~ s/\n\.SH C\+\+ Syntax.+?\n\.SH/\n\.SH/s;

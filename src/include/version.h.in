@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -18,23 +18,23 @@
  * $HEADER$
  *
  * This file should be included by any file that needs full
- * version information for the PRRTE project
+ * version information for the PRTE project
  */
 
-#ifndef PRRTE_VERSIONS_H
-#define PRRTE_VERSIONS_H
+#ifndef PRTE_VERSIONS_H
+#define PRTE_VERSIONS_H
 
-#define PRRTE_MAJOR_VERSION @PRRTE_MAJOR_VERSION@
-#define PRRTE_MINOR_VERSION @PRRTE_MINOR_VERSION@
-#define PRRTE_RELEASE_VERSION @PRRTE_RELEASE_VERSION@
-#define PRRTE_GREEK_VERSION "@PRRTE_GREEK_VERSION@"
-#define PRRTE_WANT_REPO_REV @PRRTE_WANT_REPO_REV@
-#define PRRTE_REPO_REV "@PRRTE_REPO_REV@"
-#ifdef PRRTE_VERSION
+#define PRTE_MAJOR_VERSION @PRTE_MAJOR_VERSION@
+#define PRTE_MINOR_VERSION @PRTE_MINOR_VERSION@
+#define PRTE_RELEASE_VERSION @PRTE_RELEASE_VERSION@
+#define PRTE_GREEK_VERSION "@PRTE_GREEK_VERSION@"
+#define PRTE_WANT_REPO_REV @PRTE_WANT_REPO_REV@
+#define PRTE_REPO_REV "@PRTE_REPO_REV@"
+#ifdef PRTE_VERSION
 /* If we included version.h, we want the real version, not the
    stripped (no-r number) verstion */
-#undef PRRTE_VERSION
+#undef PRTE_VERSION
 #endif
-#define PRRTE_VERSION "@PRRTE_VERSION@"
+#define PRTE_VERSION "@PRTE_VERSION@"
 
 #endif

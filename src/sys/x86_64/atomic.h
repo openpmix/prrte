@@ -16,14 +16,15 @@
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
  *
  * $HEADER$
  */
-#ifndef PRRTE_SYS_ARCH_ATOMIC_H
-#define PRRTE_SYS_ARCH_ATOMIC_H 1
+#ifndef PRTE_SYS_ARCH_ATOMIC_H
+#define PRTE_SYS_ARCH_ATOMIC_H 1
 
 /*
  * On x86_64, we use cmpxchg.
@@ -39,41 +40,41 @@
  * Define constants for AMD64 / x86_64 / EM64T / ...
  *
  *********************************************************************/
-#define PRRTE_HAVE_ATOMIC_MEM_BARRIER 1
+#define PRTE_HAVE_ATOMIC_MEM_BARRIER 1
 
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_32 1
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_32 1
 
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_64 1
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_64 1
 
 /**********************************************************************
  *
  * Memory Barriers
  *
  *********************************************************************/
-#if PRRTE_GCC_INLINE_ASSEMBLY
+#if PRTE_GCC_INLINE_ASSEMBLY
 
-static inline void prrte_atomic_mb(void)
+static inline void prte_atomic_mb(void)
 {
     MB();
 }
 
 
-static inline void prrte_atomic_rmb(void)
+static inline void prte_atomic_rmb(void)
 {
     MB();
 }
 
 
-static inline void prrte_atomic_wmb(void)
+static inline void prte_atomic_wmb(void)
 {
     MB();
 }
 
-static inline void prrte_atomic_isync(void)
+static inline void prte_atomic_isync(void)
 {
 }
 
-#endif /* PRRTE_GCC_INLINE_ASSEMBLY */
+#endif /* PRTE_GCC_INLINE_ASSEMBLY */
 
 
 /**********************************************************************
@@ -81,9 +82,9 @@ static inline void prrte_atomic_isync(void)
  * Atomic math operations
  *
  *********************************************************************/
-#if PRRTE_GCC_INLINE_ASSEMBLY
+#if PRTE_GCC_INLINE_ASSEMBLY
 
-static inline bool prrte_atomic_compare_exchange_strong_32 (prrte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
+static inline bool prte_atomic_compare_exchange_strong_32 (prte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
 {
    unsigned char ret;
    __asm__ __volatile__ (
@@ -96,20 +97,20 @@ static inline bool prrte_atomic_compare_exchange_strong_32 (prrte_atomic_int32_t
    return (bool) ret;
 }
 
-#endif /* PRRTE_GCC_INLINE_ASSEMBLY */
+#endif /* PRTE_GCC_INLINE_ASSEMBLY */
 
-#define prrte_atomic_compare_exchange_strong_acq_32 prrte_atomic_compare_exchange_strong_32
-#define prrte_atomic_compare_exchange_strong_rel_32 prrte_atomic_compare_exchange_strong_32
+#define prte_atomic_compare_exchange_strong_acq_32 prte_atomic_compare_exchange_strong_32
+#define prte_atomic_compare_exchange_strong_rel_32 prte_atomic_compare_exchange_strong_32
 
-#if PRRTE_GCC_INLINE_ASSEMBLY
+#if PRTE_GCC_INLINE_ASSEMBLY
 
-static inline bool prrte_atomic_compare_exchange_strong_64 (prrte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
+static inline bool prte_atomic_compare_exchange_strong_64 (prte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
 {
    unsigned char ret;
    __asm__ __volatile__ (
                        SMPLOCK "cmpxchgq %3,%2   \n\t"
                                "sete     %0      \n\t"
-                       : "=qm" (ret), "+a" (*oldval), "+m" (*((prrte_atomic_long_t *)addr))
+                       : "=qm" (ret), "+a" (*oldval), "+m" (*((prte_atomic_long_t *)addr))
                        : "q"(newval)
                        : "memory", "cc"
                        );
@@ -117,14 +118,14 @@ static inline bool prrte_atomic_compare_exchange_strong_64 (prrte_atomic_int64_t
    return (bool) ret;
 }
 
-#endif /* PRRTE_GCC_INLINE_ASSEMBLY */
+#endif /* PRTE_GCC_INLINE_ASSEMBLY */
 
-#define prrte_atomic_compare_exchange_strong_acq_64 prrte_atomic_compare_exchange_strong_64
-#define prrte_atomic_compare_exchange_strong_rel_64 prrte_atomic_compare_exchange_strong_64
+#define prte_atomic_compare_exchange_strong_acq_64 prte_atomic_compare_exchange_strong_64
+#define prte_atomic_compare_exchange_strong_rel_64 prte_atomic_compare_exchange_strong_64
 
-#if PRRTE_GCC_INLINE_ASSEMBLY && PRRTE_HAVE_CMPXCHG16B && HAVE_PRRTE_INT128_T
+#if PRTE_GCC_INLINE_ASSEMBLY && PRTE_HAVE_CMPXCHG16B && HAVE_PRTE_INT128_T
 
-static inline bool prrte_atomic_compare_exchange_strong_128 (prrte_atomic_int128_t *addr, prrte_int128_t *oldval, prrte_int128_t newval)
+static inline bool prte_atomic_compare_exchange_strong_128 (prte_atomic_int128_t *addr, prte_int128_t *oldval, prte_int128_t newval)
 {
     unsigned char ret;
 
@@ -140,18 +141,18 @@ static inline bool prrte_atomic_compare_exchange_strong_128 (prrte_atomic_int128
     return (bool) ret;
 }
 
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 1
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 1
 
-#endif /* PRRTE_GCC_INLINE_ASSEMBLY */
+#endif /* PRTE_GCC_INLINE_ASSEMBLY */
 
 
-#if PRRTE_GCC_INLINE_ASSEMBLY
+#if PRTE_GCC_INLINE_ASSEMBLY
 
-#define PRRTE_HAVE_ATOMIC_SWAP_32 1
+#define PRTE_HAVE_ATOMIC_SWAP_32 1
 
-#define PRRTE_HAVE_ATOMIC_SWAP_64 1
+#define PRTE_HAVE_ATOMIC_SWAP_64 1
 
-static inline int32_t prrte_atomic_swap_32( prrte_atomic_int32_t *addr,
+static inline int32_t prte_atomic_swap_32( prte_atomic_int32_t *addr,
 					   int32_t newval)
 {
     int32_t oldval;
@@ -163,11 +164,11 @@ static inline int32_t prrte_atomic_swap_32( prrte_atomic_int32_t *addr,
     return oldval;
 }
 
-#endif /* PRRTE_GCC_INLINE_ASSEMBLY */
+#endif /* PRTE_GCC_INLINE_ASSEMBLY */
 
-#if PRRTE_GCC_INLINE_ASSEMBLY
+#if PRTE_GCC_INLINE_ASSEMBLY
 
-static inline int64_t prrte_atomic_swap_64( prrte_atomic_int64_t *addr,
+static inline int64_t prte_atomic_swap_64( prte_atomic_int64_t *addr,
                                            int64_t newval)
 {
     int64_t oldval;
@@ -179,16 +180,16 @@ static inline int64_t prrte_atomic_swap_64( prrte_atomic_int64_t *addr,
     return oldval;
 }
 
-#endif /* PRRTE_GCC_INLINE_ASSEMBLY */
+#endif /* PRTE_GCC_INLINE_ASSEMBLY */
 
 
 
-#if PRRTE_GCC_INLINE_ASSEMBLY
+#if PRTE_GCC_INLINE_ASSEMBLY
 
-#define PRRTE_HAVE_ATOMIC_MATH_32 1
-#define PRRTE_HAVE_ATOMIC_MATH_64 1
+#define PRTE_HAVE_ATOMIC_MATH_32 1
+#define PRTE_HAVE_ATOMIC_MATH_64 1
 
-#define PRRTE_HAVE_ATOMIC_ADD_32 1
+#define PRTE_HAVE_ATOMIC_ADD_32 1
 
 /**
  * atomic_add - add integer to atomic variable
@@ -197,7 +198,7 @@ static inline int64_t prrte_atomic_swap_64( prrte_atomic_int64_t *addr,
  *
  * Atomically adds @i to @v.
  */
-static inline int32_t prrte_atomic_fetch_add_32(prrte_atomic_int32_t* v, int i)
+static inline int32_t prte_atomic_fetch_add_32(prte_atomic_int32_t* v, int i)
 {
     int ret = i;
    __asm__ __volatile__(
@@ -209,7 +210,7 @@ static inline int32_t prrte_atomic_fetch_add_32(prrte_atomic_int32_t* v, int i)
    return ret;
 }
 
-#define PRRTE_HAVE_ATOMIC_ADD_64 1
+#define PRTE_HAVE_ATOMIC_ADD_64 1
 
 /**
  * atomic_add - add integer to atomic variable
@@ -218,7 +219,7 @@ static inline int32_t prrte_atomic_fetch_add_32(prrte_atomic_int32_t* v, int i)
  *
  * Atomically adds @i to @v.
  */
-static inline int64_t prrte_atomic_fetch_add_64(prrte_atomic_int64_t* v, int64_t i)
+static inline int64_t prte_atomic_fetch_add_64(prte_atomic_int64_t* v, int64_t i)
 {
     int64_t ret = i;
    __asm__ __volatile__(
@@ -230,7 +231,7 @@ static inline int64_t prrte_atomic_fetch_add_64(prrte_atomic_int64_t* v, int64_t
    return ret;
 }
 
-#define PRRTE_HAVE_ATOMIC_SUB_32 1
+#define PRTE_HAVE_ATOMIC_SUB_32 1
 
 /**
  * atomic_sub - subtract the atomic variable
@@ -239,7 +240,7 @@ static inline int64_t prrte_atomic_fetch_add_64(prrte_atomic_int64_t* v, int64_t
  *
  * Atomically subtracts @i from @v.
  */
-static inline int32_t prrte_atomic_fetch_sub_32(prrte_atomic_int32_t* v, int i)
+static inline int32_t prte_atomic_fetch_sub_32(prte_atomic_int32_t* v, int i)
 {
     int ret = -i;
    __asm__ __volatile__(
@@ -251,7 +252,7 @@ static inline int32_t prrte_atomic_fetch_sub_32(prrte_atomic_int32_t* v, int i)
    return ret;
 }
 
-#define PRRTE_HAVE_ATOMIC_SUB_64 1
+#define PRTE_HAVE_ATOMIC_SUB_64 1
 
 /**
  * atomic_sub - subtract the atomic variable
@@ -260,7 +261,7 @@ static inline int32_t prrte_atomic_fetch_sub_32(prrte_atomic_int32_t* v, int i)
  *
  * Atomically subtracts @i from @v.
  */
-static inline int64_t prrte_atomic_fetch_sub_64(prrte_atomic_int64_t* v, int64_t i)
+static inline int64_t prte_atomic_fetch_sub_64(prte_atomic_int64_t* v, int64_t i)
 {
     int64_t ret = -i;
    __asm__ __volatile__(
@@ -272,6 +273,6 @@ static inline int64_t prrte_atomic_fetch_sub_64(prrte_atomic_int64_t* v, int64_t
    return ret;
 }
 
-#endif /* PRRTE_GCC_INLINE_ASSEMBLY */
+#endif /* PRTE_GCC_INLINE_ASSEMBLY */
 
-#endif /* ! PRRTE_SYS_ARCH_ATOMIC_H */
+#endif /* ! PRTE_SYS_ARCH_ATOMIC_H */

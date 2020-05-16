@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2006-2007 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2007-2010 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2007      Sun Microsystem, Inc.  All rights reserved.
  * Copyright (c) 2010      Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
@@ -14,7 +14,7 @@
  *
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <string.h>
 
@@ -35,8 +35,8 @@
             tmp = retval;                                               \
             *start_pos = '\0';                                          \
             end_pos = start_pos + strlen("${" #fieldname "}");          \
-            prrte_asprintf(&retval, "%s%s%s", tmp,                            \
-                     prrte_install_dirs.prtename + destdir_offset,       \
+            prte_asprintf(&retval, "%s%s%s", tmp,                            \
+                     prte_install_dirs.prtename + destdir_offset,       \
                      end_pos);                                          \
             free(tmp);                                                  \
             changed = true;                                             \
@@ -44,8 +44,8 @@
             tmp = retval;                                               \
             *start_pos = '\0';                                          \
             end_pos = start_pos + strlen("@{" #fieldname "}");          \
-            prrte_asprintf(&retval, "%s%s%s", tmp,                            \
-                     prrte_install_dirs.prtename + destdir_offset,       \
+            prte_asprintf(&retval, "%s%s%s", tmp,                            \
+                     prte_install_dirs.prtename + destdir_offset,       \
                      end_pos);                                          \
             free(tmp);                                                  \
             changed = true;                                             \
@@ -58,7 +58,7 @@
  * is_setup parameter.
  */
 static char *
-prrte_install_dirs_expand_internal(const char* input, bool is_setup)
+prte_install_dirs_expand_internal(const char* input, bool is_setup)
 {
     size_t len, i;
     bool needs_expand = false;
@@ -69,12 +69,12 @@ prrte_install_dirs_expand_internal(const char* input, bool is_setup)
     /* This is subtle, and worth explaining.
 
        If we substitute in any ${FIELD} values, we need to prepend it
-       with the value of the $PRRTE_DESTDIR environment variable -- if
+       with the value of the $PRTE_DESTDIR environment variable -- if
        it is set.
 
        We need to handle at least three cases properly (assume that
        configure was invoked with --prefix=/opt/openmpi and no other
-       directory specifications, and PRRTE_DESTDIR is set to
+       directory specifications, and PRTE_DESTDIR is set to
        /tmp/buildroot):
 
        1. Individual directories, such as libdir.  These need to be
@@ -101,13 +101,13 @@ prrte_install_dirs_expand_internal(const char* input, bool is_setup)
 
           -pthread
 
-       Note, too, that this PRRTE_DESTDIR futzing only needs to occur
-       during prrte_init().  By the time prrte_init() has completed, all
+       Note, too, that this PRTE_DESTDIR futzing only needs to occur
+       during prte_init().  By the time prte_init() has completed, all
        values should be substituted in that need substituting.  Hence,
        we take an extra parameter (is_setup) to know whether we should
        do this futzing or not. */
     if (is_setup) {
-        destdir = getenv("PRRTE_DESTDIR");
+        destdir = getenv("PRTE_DESTDIR");
         if (NULL != destdir && strlen(destdir) > 0) {
             destdir_offset = strlen(destdir);
         }
@@ -144,15 +144,15 @@ prrte_install_dirs_expand_internal(const char* input, bool is_setup)
             EXPAND_STRING(includedir);
             EXPAND_STRING(infodir);
             EXPAND_STRING(mandir);
-            EXPAND_STRING2(prrtedatadir, pkgdatadir);
-            EXPAND_STRING2(prrtelibdir, pkglibdir);
-            EXPAND_STRING2(prrteincludedir, pkgincludedir);
+            EXPAND_STRING2(prtedatadir, pkgdatadir);
+            EXPAND_STRING2(prtelibdir, pkglibdir);
+            EXPAND_STRING2(prteincludedir, pkgincludedir);
         } while (changed);
     }
 
     if (NULL != destdir) {
         char *tmp = retval;
-        retval = prrte_os_path(false, destdir, tmp, NULL);
+        retval = prte_os_path(false, destdir, tmp, NULL);
         free(tmp);
     }
 
@@ -161,16 +161,16 @@ prrte_install_dirs_expand_internal(const char* input, bool is_setup)
 
 
 char *
-prrte_install_dirs_expand(const char* input)
+prte_install_dirs_expand(const char* input)
 {
-    /* We do NOT want PRRTE_DESTDIR expansion in this case. */
-    return prrte_install_dirs_expand_internal(input, false);
+    /* We do NOT want PRTE_DESTDIR expansion in this case. */
+    return prte_install_dirs_expand_internal(input, false);
 }
 
 
 char *
-prrte_install_dirs_expand_setup(const char* input)
+prte_install_dirs_expand_setup(const char* input)
 {
-    /* We DO want PRRTE_DESTDIR expansion in this case. */
-    return prrte_install_dirs_expand_internal(input, true);
+    /* We DO want PRTE_DESTDIR expansion in this case. */
+    return prte_install_dirs_expand_internal(input, true);
 }

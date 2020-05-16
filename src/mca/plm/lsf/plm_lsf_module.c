@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2006-2007 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2007-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2008      Institut National de Recherche en Informatique
@@ -31,7 +31,7 @@
  * entire components just to query their version and parameters.
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 #include "types.h"
 
@@ -61,11 +61,11 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 
 #include "src/util/show_help.h"
-#include "src/runtime/prrte_globals.h"
-#include "src/runtime/prrte_wait.h"
+#include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_wait.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/schizo/schizo.h"
@@ -82,23 +82,23 @@
  * Local functions
  */
 static int plm_lsf_init(void);
-static int plm_lsf_launch_job(prrte_job_t *jdata);
+static int plm_lsf_launch_job(prte_job_t *jdata);
 static int plm_lsf_terminate_orteds(void);
-static int plm_lsf_signal_job(prrte_jobid_t jobid, int32_t signal);
+static int plm_lsf_signal_job(prte_jobid_t jobid, int32_t signal);
 static int plm_lsf_finalize(void);
 
 
 /*
  * Global variable
  */
-prrte_plm_base_module_t prrte_plm_lsf_module = {
+prte_plm_base_module_t prte_plm_lsf_module = {
     plm_lsf_init,
-    prrte_plm_base_set_hnp_name,
+    prte_plm_base_set_hnp_name,
     plm_lsf_launch_job,
     NULL,
-    prrte_plm_base_prted_terminate_job,
+    prte_plm_base_prted_terminate_job,
     plm_lsf_terminate_orteds,
-    prrte_plm_base_prted_kill_local_procs,
+    prte_plm_base_prted_kill_local_procs,
     plm_lsf_signal_job,
     plm_lsf_finalize
 };
@@ -112,13 +112,13 @@ int plm_lsf_init(void)
 {
     int rc;
 
-    if (PRRTE_SUCCESS != (rc = prrte_plm_base_comm_start())) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_plm_base_comm_start())) {
+        PRTE_ERROR_LOG(rc);
     }
 
-    if (prrte_do_not_launch) {
+    if (prte_do_not_launch) {
         /* must assign daemons as won't be launching them */
-        prrte_plm_globals.daemon_nodes_assigned_at_launch = true;
+        prte_plm_globals.daemon_nodes_assigned_at_launch = true;
     } else {
         /* we do NOT assign daemons to nodes at launch - we will
          * determine that mapping when the daemon
@@ -126,13 +126,13 @@ int plm_lsf_init(void)
          * its own mapping of proc-to-node, and we cannot know
          * in advance which daemon will wind up on which node
          */
-        prrte_plm_globals.daemon_nodes_assigned_at_launch = false;
+        prte_plm_globals.daemon_nodes_assigned_at_launch = false;
     }
 
     /* point to our launch command */
-    if (PRRTE_SUCCESS != (rc = prrte_state.add_job_state(PRRTE_JOB_STATE_LAUNCH_DAEMONS,
-                                                       launch_daemons, PRRTE_SYS_PRI))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_state.add_job_state(PRTE_JOB_STATE_LAUNCH_DAEMONS,
+                                                       launch_daemons, PRTE_SYS_PRI))) {
+        PRTE_ERROR_LOG(rc);
         return rc;
     }
 
@@ -143,21 +143,21 @@ int plm_lsf_init(void)
  * you encounter an error so that prun will be woken up and
  * the job can cleanly terminate
  */
-static int plm_lsf_launch_job(prrte_job_t *jdata)
+static int plm_lsf_launch_job(prte_job_t *jdata)
 {
-    if (PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_RESTART)) {
+    if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         /* this is a restart situation - skip to the mapping stage */
-        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_MAP);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP);
     } else {
         /* new job - set it up */
-        PRRTE_ACTIVATE_JOB_STATE(jdata, PRRTE_JOB_STATE_INIT);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_INIT);
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static void launch_daemons(int fd, short args, void *cbdata)
 {
-    prrte_job_map_t *map;
+    prte_job_map_t *map;
     size_t num_nodes;
     char *param;
     char **argv = NULL;
@@ -171,20 +171,20 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char *cur_prefix;
     int proc_vpid_index = 0;
     bool failed_launch = true;
-    prrte_app_context_t *app;
-    prrte_node_t *node;
-    prrte_std_cntr_t nnode;
-    prrte_job_t *daemons;
-    prrte_state_caddy_t *state = (prrte_state_caddy_t*)cbdata;
-    prrte_job_t *jdata;
+    prte_app_context_t *app;
+    prte_node_t *node;
+    prte_std_cntr_t nnode;
+    prte_job_t *daemons;
+    prte_state_caddy_t *state = (prte_state_caddy_t*)cbdata;
+    prte_job_t *jdata;
 
-    PRRTE_ACQUIRE_OBJECT(state);
+    PRTE_ACQUIRE_OBJECT(state);
     jdata  = state->jdata;
 
     /* start by setting up the virtual machine */
-    daemons = prrte_get_job_data_object(PRRTE_PROC_MY_NAME->jobid);
-    if (PRRTE_SUCCESS != (rc = prrte_plm_base_setup_virtual_machine(jdata))) {
-        PRRTE_ERROR_LOG(rc);
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(jdata))) {
+        PRTE_ERROR_LOG(rc);
         goto cleanup;
     }
 
@@ -192,26 +192,26 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * launch the daemons - the user really wants to just
      * look at the proposed process map
      */
-    if (prrte_do_not_launch) {
+    if (prte_do_not_launch) {
         /* set the state to indicate the daemons reported - this
          * will trigger the daemons_reported event and cause the
          * job to move to the following step
          */
-        state->jdata->state = PRRTE_JOB_STATE_DAEMONS_LAUNCHED;
-        PRRTE_ACTIVATE_JOB_STATE(state->jdata, PRRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRRTE_RELEASE(state);
+        state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
+        PRTE_RELEASE(state);
         return;
     }
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_plm_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                          "%s plm:lsf: launching vm",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
 
     /* Get the map for this job */
     if (NULL == (map = daemons->map)) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        rc = PRRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        rc = PRTE_ERR_NOT_FOUND;
         goto cleanup;
     }
 
@@ -221,12 +221,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * will trigger the daemons_reported event and cause the
          * job to move to the following step
          */
-        PRRTE_OUTPUT_VERBOSE((1, prrte_plm_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:lsf: no new daemons to launch",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
-        state->jdata->state = PRRTE_JOB_STATE_DAEMONS_LAUNCHED;
-        PRRTE_ACTIVATE_JOB_STATE(state->jdata, PRRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRRTE_RELEASE(state);
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
+        PRTE_RELEASE(state);
         return;
     }
 
@@ -235,20 +235,20 @@ static void launch_daemons(int fd, short args, void *cbdata)
     nodelist_argc = 0;
 
     for (nnode=0; nnode < map->nodes->size; nnode++) {
-        if (NULL == (node = (prrte_node_t*)prrte_pointer_array_get_item(map->nodes, nnode))) {
+        if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(map->nodes, nnode))) {
             continue;
         }
         /* if the daemon already exists on this node, then
          * don't include it
          */
-        if (PRRTE_FLAG_TEST(node, PRRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
+        if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
             continue;
         }
 
         /* otherwise, add it to the list of nodes upon which
          * we need to launch a daemon
          */
-        prrte_argv_append(&nodelist_argc, &nodelist_argv, node->name);
+        prte_argv_append(&nodelist_argc, &nodelist_argv, node->name);
     }
 
     /*
@@ -258,7 +258,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     argc = 0;
 
     /*
-     * PRRTED OPTIONS
+     * PRTED OPTIONS
      */
 
     /* protect against launchers that forward the entire environment */
@@ -270,20 +270,20 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* add the daemon command (as specified by user) */
-    prrte_plm_base_setup_prted_cmd(&argc, &argv);
+    prte_plm_base_setup_prted_cmd(&argc, &argv);
 
 
     /* Add basic orted command line options */
-    prrte_plm_base_prted_append_basic_args(&argc, &argv,
+    prte_plm_base_prted_append_basic_args(&argc, &argv,
                                            "lsf",
                                            &proc_vpid_index);
 
     /* tell the new daemons the base of the name list so they can compute
      * their own name on the other end
      */
-    rc = prrte_util_convert_vpid_to_string(&vpid_string, map->daemon_vpid_start);
-    if (PRRTE_SUCCESS != rc) {
-        prrte_output(0, "plm_lsf: unable to get daemon vpid as string");
+    rc = prte_util_convert_vpid_to_string(&vpid_string, map->daemon_vpid_start);
+    if (PRTE_SUCCESS != rc) {
+        prte_output(0, "plm_lsf: unable to get daemon vpid as string");
         goto cleanup;
     }
     free(argv[proc_vpid_index]);
@@ -291,13 +291,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
     free(vpid_string);
 
     /* protect the args in case someone has a script wrapper */
-    prrte_schizo.wrap_args(argv);
+    prte_schizo.wrap_args(argv);
 
-    if (0 < prrte_output_get_verbosity(prrte_plm_base_framework.framework_output)) {
-        param = prrte_argv_join(argv, ' ');
+    if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+        param = prte_argv_join(argv, ' ');
         if (NULL != param) {
-            prrte_output(0, "plm:lsf: final top-level argv:");
-            prrte_output(0, "plm:lsf:     %s", param);
+            prte_output(0, "plm:lsf: final top-level argv:");
+            prte_output(0, "plm:lsf:     %s", param);
             free(param);
         }
     }
@@ -311,18 +311,18 @@ static void launch_daemons(int fd, short args, void *cbdata)
     cur_prefix = NULL;
     for (i=0; i < jdata->apps->size; i++) {
         char *app_prefix_dir=NULL;
-        if (NULL == (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prrte_get_attribute(&app->attributes, PRRTE_APP_PREFIX_DIR, (void**)&app_prefix_dir, PRRTE_STRING) &&
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&app_prefix_dir, PRTE_STRING) &&
             NULL != app_prefix_dir) {
             /* Check for already set cur_prefix_dir -- if different,
                complain */
             if (NULL != cur_prefix &&
                 0 != strcmp (cur_prefix, app_prefix_dir)) {
-                prrte_show_help("help-plm-lsf.txt", "multiple-prefixes",
+                prte_show_help("help-plm-lsf.txt", "multiple-prefixes",
                                true, cur_prefix, app_prefix_dir);
-                rc = PRRTE_ERR_FAILED_TO_START;
+                rc = PRTE_ERR_FAILED_TO_START;
                 goto cleanup;
             }
 
@@ -330,23 +330,23 @@ static void launch_daemons(int fd, short args, void *cbdata)
                same anyway */
             if (NULL == cur_prefix) {
                 cur_prefix = strdup(app_prefix_dir);
-                PRRTE_OUTPUT_VERBOSE((1, prrte_plm_base_framework.framework_output,
+                PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:lsf: Set prefix:%s",
-                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), cur_prefix));
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cur_prefix));
             }
             free(app_prefix_dir);
         }
     }
 
     /* setup environment */
-    env = prrte_argv_copy(prrte_launch_environ);
+    env = prte_argv_copy(prte_launch_environ);
 
     /* lsb_launch tampers with SIGCHLD.
      * After the call to lsb_launch, the signal handler for SIGCHLD is NULL.
      * So, we disable the SIGCHLD handler of libevent for the duration of
      * the call to lsb_launch
      */
-    prrte_wait_disable();
+    prte_wait_disable();
 
     /* exec the daemon(s). Do NOT wait for lsb_launch to complete as
      * it only completes when the processes it starts - in this case,
@@ -355,40 +355,40 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * failures and deal with them elsewhere
      */
     if ( (rc = lsb_launch(nodelist_argv, argv, LSF_DJOB_REPLACE_ENV | LSF_DJOB_NOWAIT, env)) < 0) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_FAILED_TO_START);
+        PRTE_ERROR_LOG(PRTE_ERR_FAILED_TO_START);
         char *flattened_nodelist = NULL;
-        flattened_nodelist = prrte_argv_join(nodelist_argv, '\n');
-        prrte_show_help("help-plm-lsf.txt", "lsb_launch-failed",
+        flattened_nodelist = prte_argv_join(nodelist_argv, '\n');
+        prte_show_help("help-plm-lsf.txt", "lsb_launch-failed",
                        true, rc, lsberrno, lsb_sysmsg(),
-                       prrte_argv_count(nodelist_argv), flattened_nodelist);
+                       prte_argv_count(nodelist_argv), flattened_nodelist);
         free(flattened_nodelist);
-        rc = PRRTE_ERR_FAILED_TO_START;
-        prrte_wait_enable();  /* re-enable our SIGCHLD handler */
+        rc = PRTE_ERR_FAILED_TO_START;
+        prte_wait_enable();  /* re-enable our SIGCHLD handler */
         goto cleanup;
     }
-    prrte_wait_enable();  /* re-enable our SIGCHLD handler */
+    prte_wait_enable();  /* re-enable our SIGCHLD handler */
 
     /* indicate that the daemons for this job were launched */
-    state->jdata->state = PRRTE_JOB_STATE_DAEMONS_LAUNCHED;
-    daemons->state = PRRTE_JOB_STATE_DAEMONS_LAUNCHED;
+    state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
+    daemons->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
 
     /* flag that launch was successful, so far as we currently know */
     failed_launch = false;
 
  cleanup:
     if (NULL != argv) {
-        prrte_argv_free(argv);
+        prte_argv_free(argv);
     }
     if (NULL != env) {
-        prrte_argv_free(env);
+        prte_argv_free(env);
     }
 
     /* cleanup the caddy */
-    PRRTE_RELEASE(state);
+    PRTE_RELEASE(state);
 
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
     }
 }
 
@@ -400,8 +400,8 @@ static int plm_lsf_terminate_orteds(void)
 {
     int rc;
 
-    if (PRRTE_SUCCESS != (rc = prrte_plm_base_prted_exit(PRRTE_DAEMON_EXIT_CMD))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_plm_base_prted_exit(PRTE_DAEMON_EXIT_CMD))) {
+        PRTE_ERROR_LOG(rc);
     }
 
     return rc;
@@ -411,13 +411,13 @@ static int plm_lsf_terminate_orteds(void)
 /**
  * Signal all the processes in the job
  */
-static int plm_lsf_signal_job(prrte_jobid_t jobid, int32_t signal)
+static int plm_lsf_signal_job(prte_jobid_t jobid, int32_t signal)
 {
     int rc;
 
     /* order the orteds to pass this signal to their local procs */
-    if (PRRTE_SUCCESS != (rc = prrte_plm_base_prted_signal_local_procs(jobid, signal))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_plm_base_prted_signal_local_procs(jobid, signal))) {
+        PRTE_ERROR_LOG(rc);
     }
     return rc;
 }
@@ -428,9 +428,9 @@ static int plm_lsf_finalize(void)
     int rc;
 
     /* cleanup any pending recvs */
-    if (PRRTE_SUCCESS != (rc = prrte_plm_base_comm_stop())) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_plm_base_comm_stop())) {
+        PRTE_ERROR_LOG(rc);
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
@@ -23,7 +23,7 @@
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_iof_hnp_DSO
+if MCA_BUILD_prte_iof_hnp_DSO
 component_noinst =
 component_install = mca_iof_hnp.la
 else
@@ -39,11 +39,11 @@ hnp_SOURCES = \
     iof_hnp_send.c \
     iof_hnp_receive.c
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_iof_hnp_la_SOURCES = $(hnp_SOURCES)
 mca_iof_hnp_la_LDFLAGS = -module -avoid-version
-mca_iof_hnp_la_LIBADD = $(top_builddir)/src/libprrte.la
+mca_iof_hnp_la_LIBADD = $(top_builddir)/src/libprte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_iof_hnp_la_SOURCES = $(hnp_SOURCES)

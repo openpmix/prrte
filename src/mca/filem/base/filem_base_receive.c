@@ -13,6 +13,7 @@
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,7 +27,7 @@
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <string.h>
 #ifdef HAVE_SYS_TYPES_H
@@ -52,8 +53,8 @@
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/state/state.h"
 #include "src/util/name_fns.h"
-#include "src/runtime/prrte_globals.h"
-#include "src/runtime/prrte_quit.h"
+#include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_quit.h"
 
 #include "src/mca/filem/filem.h"
 #include "src/mca/filem/base/base.h"
@@ -61,122 +62,122 @@
 /*
  * Functions to process some FileM specific commands
  */
-static void filem_base_process_get_proc_node_name_cmd(prrte_process_name_t* sender,
-                                                      prrte_buffer_t* buffer);
-static void filem_base_process_get_remote_path_cmd(prrte_process_name_t* sender,
-                                                   prrte_buffer_t* buffer);
+static void filem_base_process_get_proc_node_name_cmd(prte_process_name_t* sender,
+                                                      prte_buffer_t* buffer);
+static void filem_base_process_get_remote_path_cmd(prte_process_name_t* sender,
+                                                   prte_buffer_t* buffer);
 
 static bool recv_issued=false;
 
-int prrte_filem_base_comm_start(void)
+int prte_filem_base_comm_start(void)
 {
     /* Only active in HNP and daemons */
-    if( !PRRTE_PROC_IS_MASTER && !PRRTE_PROC_IS_DAEMON ) {
-        return PRRTE_SUCCESS;
+    if( !PRTE_PROC_IS_MASTER && !PRTE_PROC_IS_DAEMON ) {
+        return PRTE_SUCCESS;
     }
     if ( recv_issued ) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
-    PRRTE_OUTPUT_VERBOSE((5, prrte_filem_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
                          "%s filem:base: Receive: Start command recv",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    prrte_rml.recv_buffer_nb(PRRTE_NAME_WILDCARD,
-                            PRRTE_RML_TAG_FILEM_BASE,
-                            PRRTE_RML_PERSISTENT,
-                            prrte_filem_base_recv,
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD,
+                            PRTE_RML_TAG_FILEM_BASE,
+                            PRTE_RML_PERSISTENT,
+                            prte_filem_base_recv,
                             NULL);
 
     recv_issued = true;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-int prrte_filem_base_comm_stop(void)
+int prte_filem_base_comm_stop(void)
 {
     /* Only active in HNP and daemons */
-    if( !PRRTE_PROC_IS_MASTER && !PRRTE_PROC_IS_DAEMON ) {
-        return PRRTE_SUCCESS;
+    if( !PRTE_PROC_IS_MASTER && !PRTE_PROC_IS_DAEMON ) {
+        return PRTE_SUCCESS;
     }
     if ( recv_issued ) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
-    PRRTE_OUTPUT_VERBOSE((5, prrte_filem_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
                          "%s filem:base:receive stop comm",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    prrte_rml.recv_cancel(PRRTE_NAME_WILDCARD, PRRTE_RML_TAG_FILEM_BASE);
+    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE);
     recv_issued = false;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
 /*
  * handle message from proxies
- * NOTE: The incoming buffer "buffer" is PRRTE_RELEASED by the calling program.
+ * NOTE: The incoming buffer "buffer" is PRTE_RELEASED by the calling program.
  * DO NOT RELEASE THIS BUFFER IN THIS CODE
  */
-void prrte_filem_base_recv(int status, prrte_process_name_t* sender,
-                        prrte_buffer_t* buffer, prrte_rml_tag_t tag,
+void prte_filem_base_recv(int status, prte_process_name_t* sender,
+                        prte_buffer_t* buffer, prte_rml_tag_t tag,
                         void* cbdata)
 {
-    prrte_filem_cmd_flag_t command;
-    prrte_std_cntr_t count;
+    prte_filem_cmd_flag_t command;
+    prte_std_cntr_t count;
     int rc;
 
-    PRRTE_OUTPUT_VERBOSE((5, prrte_filem_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
                          "%s filem:base: Receive a command message.",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     count = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &command, &count, PRRTE_FILEM_CMD))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &command, &count, PRTE_FILEM_CMD))) {
+        PRTE_ERROR_LOG(rc);
         return;
     }
 
     switch (command) {
-        case PRRTE_FILEM_GET_PROC_NODE_NAME_CMD:
-            PRRTE_OUTPUT_VERBOSE((10, prrte_filem_base_framework.framework_output,
+        case PRTE_FILEM_GET_PROC_NODE_NAME_CMD:
+            PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:base: Command: Get Proc node name command",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
             filem_base_process_get_proc_node_name_cmd(sender, buffer);
             break;
 
-        case PRRTE_FILEM_GET_REMOTE_PATH_CMD:
-            PRRTE_OUTPUT_VERBOSE((10, prrte_filem_base_framework.framework_output,
+        case PRTE_FILEM_GET_REMOTE_PATH_CMD:
+            PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:base: Command: Get remote path command",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
             filem_base_process_get_remote_path_cmd(sender, buffer);
             break;
 
         default:
-            PRRTE_ERROR_LOG(PRRTE_ERR_VALUE_OUT_OF_BOUNDS);
+            PRTE_ERROR_LOG(PRTE_ERR_VALUE_OUT_OF_BOUNDS);
     }
 }
 
-static void filem_base_process_get_proc_node_name_cmd(prrte_process_name_t* sender,
-                                                      prrte_buffer_t* buffer)
+static void filem_base_process_get_proc_node_name_cmd(prte_process_name_t* sender,
+                                                      prte_buffer_t* buffer)
 {
-    prrte_buffer_t *answer;
-    prrte_std_cntr_t count;
-    prrte_job_t *jdata = NULL;
-    prrte_proc_t *proc = NULL;
-    prrte_process_name_t name;
+    prte_buffer_t *answer;
+    prte_std_cntr_t count;
+    prte_job_t *jdata = NULL;
+    prte_proc_t *proc = NULL;
+    prte_process_name_t name;
     int rc;
 
     /*
      * Unpack the data
      */
     count = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &name, &count, PRRTE_NAME))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
+    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &name, &count, PRTE_NAME))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         return;
     }
 
@@ -184,36 +185,36 @@ static void filem_base_process_get_proc_node_name_cmd(prrte_process_name_t* send
      * Process the data
      */
     /* get the job data object for this proc */
-    if (NULL == (jdata = prrte_get_job_data_object(name.jobid))) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
+    if (NULL == (jdata = prte_get_job_data_object(name.jobid))) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         return;
     }
     /* get the proc object for it */
-    proc = (prrte_proc_t*)prrte_pointer_array_get_item(jdata->procs, name.vpid);
+    proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, name.vpid);
     if (NULL == proc || NULL == proc->node) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         return;
     }
 
     /*
      * Send back the answer
      */
-    answer = PRRTE_NEW(prrte_buffer_t);
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(answer, &(proc->node->name), 1, PRRTE_STRING))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRRTE_RELEASE(answer);
+    answer = PRTE_NEW(prte_buffer_t);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(answer, &(proc->node->name), 1, PRTE_STRING))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_RELEASE(answer);
         return;
     }
 
-    if (0 > (rc = prrte_rml.send_buffer_nb(sender, answer,
-                                          PRRTE_RML_TAG_FILEM_BASE_RESP,
-                                          prrte_rml_send_callback, NULL))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRRTE_RELEASE(answer);
+    if (0 > (rc = prte_rml.send_buffer_nb(sender, answer,
+                                          PRTE_RML_TAG_FILEM_BASE_RESP,
+                                          prte_rml_send_callback, NULL))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_RELEASE(answer);
         return;
     }
 }
@@ -224,22 +225,22 @@ static void filem_base_process_get_proc_node_name_cmd(prrte_process_name_t* send
  * - Verify the existence of the file/dir
  * - Determine if the specified file/dir is in fact a file or dir or unknown if not found.
  */
-static void filem_base_process_get_remote_path_cmd(prrte_process_name_t* sender,
-                                                   prrte_buffer_t* buffer)
+static void filem_base_process_get_remote_path_cmd(prte_process_name_t* sender,
+                                                   prte_buffer_t* buffer)
 {
-    prrte_buffer_t *answer;
-    prrte_std_cntr_t count;
+    prte_buffer_t *answer;
+    prte_std_cntr_t count;
     char *filename = NULL;
     char *tmp_name = NULL;
-    char cwd[PRRTE_PATH_MAX];
-    int file_type = PRRTE_FILEM_TYPE_UNKNOWN;
+    char cwd[PRTE_PATH_MAX];
+    int file_type = PRTE_FILEM_TYPE_UNKNOWN;
     struct stat file_status;
     int rc;
 
     count = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &filename, &count, PRRTE_STRING))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
+    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &filename, &count, PRTE_STRING))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         goto CLEANUP;
     }
 
@@ -250,16 +251,16 @@ static void filem_base_process_get_remote_path_cmd(prrte_process_name_t* sender,
         if (NULL == getcwd(cwd, sizeof(cwd))) {
             return;
         }
-        prrte_asprintf(&tmp_name, "%s/%s", cwd, filename);
+        prte_asprintf(&tmp_name, "%s/%s", cwd, filename);
     }
     else {
         tmp_name = strdup(filename);
     }
 
-    prrte_output_verbose(10, prrte_filem_base_framework.framework_output,
+    prte_output_verbose(10, prte_filem_base_framework.framework_output,
                         "filem:base: process_get_remote_path_cmd: %s -> %s: Filename Requested (%s) translated to (%s)",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(sender),
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(sender),
                         filename, tmp_name);
 
     /*
@@ -267,45 +268,45 @@ static void filem_base_process_get_remote_path_cmd(prrte_process_name_t* sender,
      * Determine if the file/dir is a file or a directory
      */
     if (0 != (rc = stat(tmp_name, &file_status) ) ){
-        file_type = PRRTE_FILEM_TYPE_UNKNOWN;
+        file_type = PRTE_FILEM_TYPE_UNKNOWN;
     }
     else {
         /* Is it a directory? */
         if(S_ISDIR(file_status.st_mode)) {
-            file_type = PRRTE_FILEM_TYPE_DIR;
+            file_type = PRTE_FILEM_TYPE_DIR;
         }
         else if(S_ISREG(file_status.st_mode)) {
-            file_type = PRRTE_FILEM_TYPE_FILE;
+            file_type = PRTE_FILEM_TYPE_FILE;
         }
     }
 
     /*
      * Pack up the response
      * Send back the reference type
-     * - PRRTE_FILEM_TYPE_FILE    = File
-     * - PRRTE_FILEM_TYPE_DIR     = Directory
-     * - PRRTE_FILEM_TYPE_UNKNOWN = Could not be determined, or does not exist
+     * - PRTE_FILEM_TYPE_FILE    = File
+     * - PRTE_FILEM_TYPE_DIR     = Directory
+     * - PRTE_FILEM_TYPE_UNKNOWN = Could not be determined, or does not exist
      */
-    answer = PRRTE_NEW(prrte_buffer_t);
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(answer, &tmp_name, 1, PRRTE_STRING))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRRTE_RELEASE(answer);
+    answer = PRTE_NEW(prte_buffer_t);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(answer, &tmp_name, 1, PRTE_STRING))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_RELEASE(answer);
         goto CLEANUP;
     }
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(answer, &file_type, 1, PRRTE_INT))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRRTE_RELEASE(answer);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(answer, &file_type, 1, PRTE_INT))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_RELEASE(answer);
         goto CLEANUP;
     }
 
-    if (0 > (rc = prrte_rml.send_buffer_nb(sender, answer,
-                                          PRRTE_RML_TAG_FILEM_BASE_RESP,
-                                          prrte_rml_send_callback, NULL))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRRTE_RELEASE(answer);
+    if (0 > (rc = prte_rml.send_buffer_nb(sender, answer,
+                                          PRTE_RML_TAG_FILEM_BASE_RESP,
+                                          prte_rml_send_callback, NULL))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_RELEASE(answer);
     }
 
  CLEANUP:

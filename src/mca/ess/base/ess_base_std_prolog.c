@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,7 +18,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <sys/types.h>
@@ -31,36 +32,36 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/util/show_help.h"
-#include "src/runtime/prrte_wait.h"
+#include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime_internals.h"
 
 #include "src/mca/ess/base/base.h"
 
-int prrte_ess_base_std_prolog(void)
+int prte_ess_base_std_prolog(void)
 {
     int ret;
     char *error = NULL;
 
-    /* Initialize the PRRTE data type support */
-    if (PRRTE_SUCCESS != (ret = prrte_dt_init())) {
-        error = "prrte_dt_init";
+    /* Initialize the PRTE data type support */
+    if (PRTE_SUCCESS != (ret = prte_dt_init())) {
+        error = "prte_dt_init";
         goto error;
     }
     /*
      * Setup the waitpid/sigchld system
      */
-    if (PRRTE_SUCCESS != (ret = prrte_wait_init())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_wait_init";
+    if (PRTE_SUCCESS != (ret = prte_wait_init())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_wait_init";
         goto error;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 
  error:
-    prrte_show_help("help-prrte-runtime",
-                   "prrte_init:startup:internal-failure",
-                   true, error, PRRTE_ERROR_NAME(ret), ret);
+    prte_show_help("help-prte-runtime",
+                   "prte_init:startup:internal-failure",
+                   true, error, PRTE_ERROR_NAME(ret), ret);
 
     return ret;
 }

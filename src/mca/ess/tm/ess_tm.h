@@ -12,6 +12,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,20 +20,20 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_ESS_TM_H
-#define PRRTE_ESS_TM_H
+#ifndef PRTE_ESS_TM_H
+#define PRTE_ESS_TM_H
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_ess_base_component_t prrte_ess_tm_component;
+PRTE_MODULE_EXPORT extern prte_ess_base_component_t prte_ess_tm_component;
 
 /*
  * Module open / close
  */
-int prrte_ess_tm_component_open(void);
-int prrte_ess_tm_component_close(void);
-int prrte_ess_tm_component_query(prrte_mca_base_module_t **module, int *priority);
+int prte_ess_tm_component_open(void);
+int prte_ess_tm_component_close(void);
+int prte_ess_tm_component_query(prte_mca_base_module_t **module, int *priority);
 
 END_C_DECLS
 
-#endif /* PRRTE_ESS_TM_H */
+#endif /* PRTE_ESS_TM_H */

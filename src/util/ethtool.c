@@ -2,7 +2,7 @@
  * Copyright (c) 2016      Karol Mroz.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2016      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -11,7 +11,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <string.h>
 #include <limits.h>
@@ -48,7 +48,7 @@
  * speed as 0.
  */
 unsigned int
-prrte_ethtool_get_speed (const char *if_name)
+prte_ethtool_get_speed (const char *if_name)
 {
     unsigned int speed = 0;
 
@@ -65,7 +65,7 @@ prrte_ethtool_get_speed (const char *if_name)
     }
 
     memset(&ifr, 0, sizeof(struct ifreq));
-    prrte_string_copy(ifr.ifr_name, if_name, PRRTE_IF_NAMESIZE);
+    prte_string_copy(ifr.ifr_name, if_name, PRTE_IF_NAMESIZE);
     ifr.ifr_data = (char *)&edata;
 
     if (ioctl(sockfd, SIOCETHTOOL, &ifr) < 0) {

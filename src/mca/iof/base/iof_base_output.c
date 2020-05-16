@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * $COPYRIGHT$
@@ -25,7 +25,7 @@
  * entire components just to query their version and parameters.
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <string.h>
@@ -40,34 +40,34 @@
 
 #include "src/util/name_fns.h"
 #include "src/threads/threads.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/state/state.h"
 
 #include "src/mca/iof/base/base.h"
 
-int prrte_iof_base_write_output(const prrte_process_name_t *name, prrte_iof_tag_t stream,
+int prte_iof_base_write_output(const prte_process_name_t *name, prte_iof_tag_t stream,
                                const unsigned char *data, int numbytes,
-                               prrte_iof_write_event_t *channel)
+                               prte_iof_write_event_t *channel)
 {
-    char starttag[PRRTE_IOF_BASE_TAG_MAX], endtag[PRRTE_IOF_BASE_TAG_MAX], *suffix;
-    prrte_iof_write_output_t *output;
+    char starttag[PRTE_IOF_BASE_TAG_MAX], endtag[PRTE_IOF_BASE_TAG_MAX], *suffix;
+    prte_iof_write_output_t *output;
     int i, j, k, starttaglen, endtaglen, num_buffered;
     bool endtagged;
     char qprint[10];
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s write:output setting up to write %d bytes to %s for %s on fd %d",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), numbytes,
-                         (PRRTE_IOF_STDIN & stream) ? "stdin" : ((PRRTE_IOF_STDOUT & stream) ? "stdout" : ((PRRTE_IOF_STDERR & stream) ? "stderr" : "stddiag")),
-                         PRRTE_NAME_PRINT(name),
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
+                         (PRTE_IOF_STDIN & stream) ? "stdin" : ((PRTE_IOF_STDOUT & stream) ? "stdout" : ((PRTE_IOF_STDERR & stream) ? "stderr" : "stddiag")),
+                         PRTE_NAME_PRINT(name),
                          (NULL == channel) ? -1 : channel->fd));
 
     /* setup output object */
-    output = PRRTE_NEW(prrte_iof_write_output_t);
+    output = PRTE_NEW(prte_iof_write_output_t);
 
     /* write output data to the corresponding tag */
-    if (PRRTE_IOF_STDIN & stream) {
+    if (PRTE_IOF_STDIN & stream) {
         /* copy over the data to be written */
         if (0 < numbytes) {
             /* don't copy 0 bytes - we just need to pass
@@ -78,34 +78,34 @@ int prrte_iof_base_write_output(const prrte_process_name_t *name, prrte_iof_tag_
         }
         output->numbytes = numbytes;
         goto process;
-    } else if (PRRTE_IOF_STDOUT & stream) {
+    } else if (PRTE_IOF_STDOUT & stream) {
         /* write the bytes to stdout */
         suffix = "stdout";
-    } else if (PRRTE_IOF_STDERR & stream) {
+    } else if (PRTE_IOF_STDERR & stream) {
         /* write the bytes to stderr */
         suffix = "stderr";
-    } else if (PRRTE_IOF_STDDIAG & stream) {
+    } else if (PRTE_IOF_STDDIAG & stream) {
         /* write the bytes to stderr */
         suffix = "stddiag";
     } else {
         /* error - this should never happen */
-        PRRTE_ERROR_LOG(PRRTE_ERR_VALUE_OUT_OF_BOUNDS);
-        PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
-                             "%s stream %0x", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), stream));
-        return PRRTE_ERR_VALUE_OUT_OF_BOUNDS;
+        PRTE_ERROR_LOG(PRTE_ERR_VALUE_OUT_OF_BOUNDS);
+        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                             "%s stream %0x", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), stream));
+        return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
     }
 
     /* if this is to be xml tagged, create a tag with the correct syntax - we do not allow
      * timestamping of xml output
      */
-    if (prrte_xml_output) {
-        snprintf(starttag, PRRTE_IOF_BASE_TAG_MAX, "<%s rank=\"%s\">", suffix, PRRTE_VPID_PRINT(name->vpid));
-        snprintf(endtag, PRRTE_IOF_BASE_TAG_MAX, "</%s>", suffix);
+    if (prte_xml_output) {
+        snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "<%s rank=\"%s\">", suffix, PRTE_VPID_PRINT(name->vpid));
+        snprintf(endtag, PRTE_IOF_BASE_TAG_MAX, "</%s>", suffix);
         goto construct;
     }
 
     /* if we are to timestamp output, start the tag with that */
-    if (prrte_timestamp_output) {
+    if (prte_timestamp_output) {
         time_t mytime;
         char *cptr;
         /* get the timestamp */
@@ -113,26 +113,26 @@ int prrte_iof_base_write_output(const prrte_process_name_t *name, prrte_iof_tag_
         cptr = ctime(&mytime);
         cptr[strlen(cptr)-1] = '\0';  /* remove trailing newline */
 
-        if (prrte_tag_output) {
+        if (prte_tag_output) {
             /* if we want it tagged as well, use both */
-            snprintf(starttag, PRRTE_IOF_BASE_TAG_MAX, "%s[%s,%s]<%s>:",
-                     cptr, PRRTE_LOCAL_JOBID_PRINT(name->jobid),
-                     PRRTE_VPID_PRINT(name->vpid), suffix);
+            snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "%s[%s,%s]<%s>:",
+                     cptr, PRTE_LOCAL_JOBID_PRINT(name->jobid),
+                     PRTE_VPID_PRINT(name->vpid), suffix);
         } else {
             /* only use timestamp */
-            snprintf(starttag, PRRTE_IOF_BASE_TAG_MAX, "%s<%s>:", cptr, suffix);
+            snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "%s<%s>:", cptr, suffix);
         }
         /* no endtag for this option */
-        memset(endtag, '\0', PRRTE_IOF_BASE_TAG_MAX);
+        memset(endtag, '\0', PRTE_IOF_BASE_TAG_MAX);
         goto construct;
     }
 
-    if (prrte_tag_output) {
-        snprintf(starttag, PRRTE_IOF_BASE_TAG_MAX, "[%s,%s]<%s>:",
-                 PRRTE_LOCAL_JOBID_PRINT(name->jobid),
-                 PRRTE_VPID_PRINT(name->vpid), suffix);
+    if (prte_tag_output) {
+        snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "[%s,%s]<%s>:",
+                 PRTE_LOCAL_JOBID_PRINT(name->jobid),
+                 PRTE_VPID_PRINT(name->vpid), suffix);
         /* no endtag for this option */
-        memset(endtag, '\0', PRRTE_IOF_BASE_TAG_MAX);
+        memset(endtag, '\0', PRTE_IOF_BASE_TAG_MAX);
         goto construct;
     }
 
@@ -154,62 +154,62 @@ int prrte_iof_base_write_output(const prrte_process_name_t *name, prrte_iof_tag_
     endtaglen = strlen(endtag);
     endtagged = false;
     /* start with the tag */
-    for (j=0, k=0; j < starttaglen && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
+    for (j=0, k=0; j < starttaglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
         output->data[k++] = starttag[j];
     }
     /* cycle through the data looking for <cr>
      * and replace those with the tag
      */
-    for (i=0; i < numbytes && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX; i++) {
-        if (prrte_xml_output) {
+    for (i=0; i < numbytes && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; i++) {
+        if (prte_xml_output) {
             if ('&' == data[i]) {
-                if (k+5 >= PRRTE_IOF_BASE_TAGGED_OUT_MAX) {
-                    PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+                if (k+5 >= PRTE_IOF_BASE_TAGGED_OUT_MAX) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                     goto process;
                 }
                 snprintf(qprint, 10, "&amp;");
-                for (j=0; j < (int)strlen(qprint) && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
+                for (j=0; j < (int)strlen(qprint) && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
                     output->data[k++] = qprint[j];
                 }
             } else if ('<' == data[i]) {
-                if (k+4 >= PRRTE_IOF_BASE_TAGGED_OUT_MAX) {
-                    PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+                if (k+4 >= PRTE_IOF_BASE_TAGGED_OUT_MAX) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                     goto process;
                 }
                 snprintf(qprint, 10, "&lt;");
-                for (j=0; j < (int)strlen(qprint) && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
+                for (j=0; j < (int)strlen(qprint) && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
                     output->data[k++] = qprint[j];
                 }
             } else if ('>' == data[i]) {
-                if (k+4 >= PRRTE_IOF_BASE_TAGGED_OUT_MAX) {
-                    PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+                if (k+4 >= PRTE_IOF_BASE_TAGGED_OUT_MAX) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                     goto process;
                 }
                 snprintf(qprint, 10, "&gt;");
-                for (j=0; j < (int)strlen(qprint) && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
+                for (j=0; j < (int)strlen(qprint) && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
                     output->data[k++] = qprint[j];
                 }
             } else if (data[i] < 32 || data[i] > 127) {
                 /* this is a non-printable character, so escape it too */
-                if (k+7 >= PRRTE_IOF_BASE_TAGGED_OUT_MAX) {
-                    PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+                if (k+7 >= PRTE_IOF_BASE_TAGGED_OUT_MAX) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                     goto process;
                 }
                 snprintf(qprint, 10, "&#%03d;", (int)data[i]);
-                for (j=0; j < (int)strlen(qprint) && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
+                for (j=0; j < (int)strlen(qprint) && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
                     output->data[k++] = qprint[j];
                 }
                 /* if this was a \n, then we also need to break the line with the end tag */
-                if ('\n' == data[i] && (k+endtaglen+1) < PRRTE_IOF_BASE_TAGGED_OUT_MAX) {
+                if ('\n' == data[i] && (k+endtaglen+1) < PRTE_IOF_BASE_TAGGED_OUT_MAX) {
                     /* we need to break the line with the end tag */
-                    for (j=0; j < endtaglen && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX-1; j++) {
+                    for (j=0; j < endtaglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX-1; j++) {
                         output->data[k++] = endtag[j];
                     }
                     /* move the <cr> over */
                     output->data[k++] = '\n';
                     /* if this isn't the end of the data buffer, add a new start tag */
-                    if (i < numbytes-1 && (k+starttaglen) < PRRTE_IOF_BASE_TAGGED_OUT_MAX) {
-                        for (j=0; j < starttaglen && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
+                    if (i < numbytes-1 && (k+starttaglen) < PRTE_IOF_BASE_TAGGED_OUT_MAX) {
+                        for (j=0; j < starttaglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
                             output->data[k++] = starttag[j];
                             endtagged = false;
                         }
@@ -223,14 +223,14 @@ int prrte_iof_base_write_output(const prrte_process_name_t *name, prrte_iof_tag_
         } else {
             if ('\n' == data[i]) {
                 /* we need to break the line with the end tag */
-                for (j=0; j < endtaglen && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX-1; j++) {
+                for (j=0; j < endtaglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX-1; j++) {
                     output->data[k++] = endtag[j];
                 }
                 /* move the <cr> over */
                 output->data[k++] = '\n';
                 /* if this isn't the end of the data buffer, add a new start tag */
                 if (i < numbytes-1) {
-                    for (j=0; j < starttaglen && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
+                    for (j=0; j < starttaglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
                         output->data[k++] = starttag[j];
                         endtagged = false;
                     }
@@ -242,9 +242,9 @@ int prrte_iof_base_write_output(const prrte_process_name_t *name, prrte_iof_tag_
             }
         }
     }
-    if (!endtagged && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX) {
+    if (!endtagged && k < PRTE_IOF_BASE_TAGGED_OUT_MAX) {
         /* need to add an endtag */
-        for (j=0; j < endtaglen && k < PRRTE_IOF_BASE_TAGGED_OUT_MAX-1; j++) {
+        for (j=0; j < endtaglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX-1; j++) {
             output->data[k++] = endtag[j];
         }
         output->data[k] = '\n';
@@ -253,36 +253,36 @@ int prrte_iof_base_write_output(const prrte_process_name_t *name, prrte_iof_tag_
 
   process:
     /* add this data to the write list for this fd */
-    prrte_list_append(&channel->outputs, &output->super);
+    prte_list_append(&channel->outputs, &output->super);
 
     /* record how big the buffer is */
-    num_buffered = prrte_list_get_size(&channel->outputs);
+    num_buffered = prte_list_get_size(&channel->outputs);
 
     /* is the write event issued? */
     if (!channel->pending) {
         /* issue it */
-        PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s write:output adding write event",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
-        PRRTE_IOF_SINK_ACTIVATE(channel);
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        PRTE_IOF_SINK_ACTIVATE(channel);
     }
 
     return num_buffered;
 }
 
-void prrte_iof_base_static_dump_output(prrte_iof_read_event_t *rev)
+void prte_iof_base_static_dump_output(prte_iof_read_event_t *rev)
 {
     bool dump;
     int num_written;
-    prrte_iof_write_event_t *wev;
-    prrte_iof_write_output_t *output;
+    prte_iof_write_event_t *wev;
+    prte_iof_write_output_t *output;
 
     if (NULL != rev->sink) {
         wev = rev->sink->wev;
-        if (NULL != wev && !prrte_list_is_empty(&wev->outputs)) {
+        if (NULL != wev && !prte_list_is_empty(&wev->outputs)) {
             dump = false;
             /* make one last attempt to write this out */
-            while (NULL != (output = (prrte_iof_write_output_t*)prrte_list_remove_first(&wev->outputs))) {
+            while (NULL != (output = (prte_iof_write_output_t*)prte_list_remove_first(&wev->outputs))) {
                 if (!dump) {
                     num_written = write(wev->fd, output->data, output->numbytes);
                     if (num_written < output->numbytes) {
@@ -290,43 +290,43 @@ void prrte_iof_base_static_dump_output(prrte_iof_read_event_t *rev)
                         dump = true;
                     }
                 }
-                PRRTE_RELEASE(output);
+                PRTE_RELEASE(output);
             }
         }
     }
 }
 
-void prrte_iof_base_write_handler(int _fd, short event, void *cbdata)
+void prte_iof_base_write_handler(int _fd, short event, void *cbdata)
 {
-    prrte_iof_sink_t *sink = (prrte_iof_sink_t*)cbdata;
-    prrte_iof_write_event_t *wev = sink->wev;
-    prrte_list_item_t *item;
-    prrte_iof_write_output_t *output;
+    prte_iof_sink_t *sink = (prte_iof_sink_t*)cbdata;
+    prte_iof_write_event_t *wev = sink->wev;
+    prte_list_item_t *item;
+    prte_iof_write_output_t *output;
     int num_written, total_written = 0;
 
-    PRRTE_ACQUIRE_OBJECT(sink);
+    PRTE_ACQUIRE_OBJECT(sink);
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s write:handler writing data to %d",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          wev->fd));
 
-    while (NULL != (item = prrte_list_remove_first(&wev->outputs))) {
-        output = (prrte_iof_write_output_t*)item;
+    while (NULL != (item = prte_list_remove_first(&wev->outputs))) {
+        output = (prte_iof_write_output_t*)item;
         if (0 == output->numbytes) {
             /* indicates we are to close this stream */
-            PRRTE_RELEASE(sink);
+            PRTE_RELEASE(sink);
             return;
         }
         num_written = write(wev->fd, output->data, output->numbytes);
         if (num_written < 0) {
             if (EAGAIN == errno || EINTR == errno) {
                 /* push this item back on the front of the list */
-                prrte_list_prepend(&wev->outputs, item);
+                prte_list_prepend(&wev->outputs, item);
                 /* if the list is getting too large, abort */
-                if (prrte_iof_base.output_limit < prrte_list_get_size(&wev->outputs)) {
-                    prrte_output(0, "IO Forwarding is running too far behind - something is blocking us from writing");
-                    PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
+                if (prte_iof_base.output_limit < prte_list_get_size(&wev->outputs)) {
+                    prte_output(0, "IO Forwarding is running too far behind - something is blocking us from writing");
+                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
                     goto ABORT;
                 }
                 /* leave the write event running so it will call us again
@@ -337,7 +337,7 @@ void prrte_iof_base_write_handler(int _fd, short event, void *cbdata)
             /* otherwise, something bad happened so all we can do is abort
              * this attempt
              */
-            PRRTE_RELEASE(output);
+            PRTE_RELEASE(output);
             goto ABORT;
         } else if (num_written < output->numbytes) {
             /* incomplete write - adjust data to avoid duplicate output */
@@ -345,11 +345,11 @@ void prrte_iof_base_write_handler(int _fd, short event, void *cbdata)
             /* adjust the number of bytes remaining to be written */
             output->numbytes -= num_written;
             /* push this item back on the front of the list */
-            prrte_list_prepend(&wev->outputs, item);
+            prte_list_prepend(&wev->outputs, item);
             /* if the list is getting too large, abort */
-            if (prrte_iof_base.output_limit < prrte_list_get_size(&wev->outputs)) {
-                prrte_output(0, "IO Forwarding is running too far behind - something is blocking us from writing");
-                PRRTE_FORCED_TERMINATE(PRRTE_ERROR_DEFAULT_EXIT_CODE);
+            if (prte_iof_base.output_limit < prte_list_get_size(&wev->outputs)) {
+                prte_output(0, "IO Forwarding is running too far behind - something is blocking us from writing");
+                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
                 goto ABORT;
             }
             /* leave the write event running so it will call us again
@@ -357,12 +357,12 @@ void prrte_iof_base_write_handler(int _fd, short event, void *cbdata)
              */
             goto NEXT_CALL;
         }
-        PRRTE_RELEASE(output);
+        PRTE_RELEASE(output);
 
         total_written += num_written;
-        if(wev->always_writable && (PRRTE_IOF_SINK_BLOCKSIZE <= total_written)){
+        if(wev->always_writable && (PRTE_IOF_SINK_BLOCKSIZE <= total_written)){
             /* If this is a regular file it will never tell us it will block
-             * Write no more than PRRTE_IOF_REGULARF_BLOCK at a time allowing
+             * Write no more than PRTE_IOF_REGULARF_BLOCK at a time allowing
              * other fds to progress
              */
             goto NEXT_CALL;
@@ -370,8 +370,8 @@ void prrte_iof_base_write_handler(int _fd, short event, void *cbdata)
     }
   ABORT:
     wev->pending = false;
-    PRRTE_POST_OBJECT(wev);
+    PRTE_POST_OBJECT(wev);
     return;
 NEXT_CALL:
-    PRRTE_IOF_SINK_ACTIVATE(wev);
+    PRTE_IOF_SINK_ACTIVATE(wev);
 }

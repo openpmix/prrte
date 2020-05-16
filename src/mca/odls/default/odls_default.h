@@ -12,6 +12,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,10 +23,10 @@
  * @file:
  */
 
-#ifndef PRRTE_ODLS_DEFAULT_H
-#define PRRTE_ODLS_DEFAULT_H
+#ifndef PRTE_ODLS_DEFAULT_H
+#define PRTE_ODLS_DEFAULT_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/mca/mca.h"
 
@@ -36,16 +37,16 @@ BEGIN_C_DECLS
 /*
  * Module open / close
  */
-int prrte_odls_default_component_open(void);
-int prrte_odls_default_component_close(void);
-int prrte_odls_default_component_query(prrte_mca_base_module_t **module, int *priority);
+int prte_odls_default_component_open(void);
+int prte_odls_default_component_close(void);
+int prte_odls_default_component_query(prte_mca_base_module_t **module, int *priority);
 
 /*
  * ODLS Default module
  */
-extern prrte_odls_base_module_t prrte_odls_default_module;
-PRRTE_MODULE_EXPORT extern prrte_odls_base_component_t prrte_odls_default_component;
+extern prte_odls_base_module_t prte_odls_default_module;
+PRTE_MODULE_EXPORT extern prte_odls_base_component_t prte_odls_default_component;
 
 END_C_DECLS
 
-#endif /* PRRTE_ODLS_H */
+#endif /* PRTE_ODLS_H */

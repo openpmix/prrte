@@ -19,12 +19,12 @@ the HNP looks like after IOF has been wired up.
 
 VIEW OF DATA STRUCTURES ON IOF SVC SIDE
 
-KEY: PRRTE_IOF_SOURCE=0
-     PRRTE_IOF_SINK=1
+KEY: PRTE_IOF_SOURCE=0
+     PRTE_IOF_SINK=1
 
 After the job starts up, this is how things look on the HNP side of things.
 
-ENDPOINTS (prrte_iof_base_endpoint_t)
+ENDPOINTS (prte_iof_base_endpoint_t)
 mode   origin	 tag	fd	seq	ack	src_frags   sink_frags  notes
 =============================================================================================
 1	0,0,0	 1      1         0       0             0            0  pull() call from rmgr<-
@@ -35,7 +35,7 @@ mode   origin	 tag	fd	seq	ack	src_frags   sink_frags  notes
 =============================================================================================  |   |
                                                                                                |   |
                                                                                                |   |
-SUBSCRIBERS (prrte_iof_svc_sub_t)                                                               |   |
+SUBSCRIBERS (prte_iof_svc_sub_t)                                                               |   |
    ORIGIN              TARGET		  	 (list)                                        |   |
 name   mask  tag    name   mask  tag  endpoint  forward  has_been_acked last_ack_forwarded     |   |
 ======================================================================================         |   |
@@ -50,22 +50,22 @@ name   mask  tag    name   mask  tag  endpoint  forward  has_been_acked last_ack
 ======================================================================================     |
                                                                                            |
                                                                                            |
-PUBLISHED (prrte_iof_svc_pub_t)                                                             |
+PUBLISHED (prte_iof_svc_pub_t)                                                             |
 name   proxy    mask  tag	endpoint                                                   |
 =========================================================================================  |
 0,1,0  0,0,1      ff    0       NULL                                    <------------------
 =========================================================================================
 
 
-FORWARD (prrte_iof_svc_fwd_t)
+FORWARD (prte_iof_svc_fwd_t)
 This structure is just a connection from a subscriber to publisher.  I have
 omitted it in the drawings.  However, it is worth pointing out the structure
 as I am not clear on why we have the table.
 
-struct prrte_iof_svc_fwd_t {
-    prrte_list_item_t super;
-    prrte_iof_svc_pub_t* fwd_pub;
-    prrte_hash_table_t fwd_seq_hash;
+struct prte_iof_svc_fwd_t {
+    prte_list_item_t super;
+    prte_iof_svc_pub_t* fwd_pub;
+    prte_hash_table_t fwd_seq_hash;
 };
 
 
@@ -89,13 +89,13 @@ tied to the subscription.  Hmmm, this I do not really understand.
 
 APPENDIX A
 These are the defines that go with the mask.
-#define PRRTE_NS_CMP_NONE       0x00
-#define PRRTE_NS_CMP_JOBID      0x02
-#define PRRTE_NS_CMP_VPID       0x04
-#define PRRTE_NS_CMP_ALL        0Xff
+#define PRTE_NS_CMP_NONE       0x00
+#define PRTE_NS_CMP_JOBID      0x02
+#define PRTE_NS_CMP_VPID       0x04
+#define PRTE_NS_CMP_ALL        0Xff
 
 
-When we get a HDR_MSG, we call prrte_iof_svc_proxy_msg()
+When we get a HDR_MSG, we call prte_iof_svc_proxy_msg()
 
 APPENDIX B
 There are two dbx files that help get to where we want to get

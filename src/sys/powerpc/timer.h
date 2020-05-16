@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,17 +18,17 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_SYS_ARCH_TIMER_H
-#define PRRTE_SYS_ARCH_TIMER_H 1
+#ifndef PRTE_SYS_ARCH_TIMER_H
+#define PRTE_SYS_ARCH_TIMER_H 1
 
 
-typedef uint64_t prrte_timer_t;
+typedef uint64_t prte_timer_t;
 
 
-#if PRRTE_GCC_INLINE_ASSEMBLY
+#if PRTE_GCC_INLINE_ASSEMBLY
 
-static inline prrte_timer_t
-prrte_sys_timer_get_cycles(void)
+static inline prte_timer_t
+prte_sys_timer_get_cycles(void)
 {
     unsigned int tbl, tbu0, tbu1;
 
@@ -40,12 +41,12 @@ prrte_sys_timer_get_cycles(void)
     return (((unsigned long long)tbu0) << 32) | tbl;
 }
 
-#define PRRTE_HAVE_SYS_TIMER_GET_CYCLES 1
+#define PRTE_HAVE_SYS_TIMER_GET_CYCLES 1
 
 #else
 
-#define PRRTE_HAVE_SYS_TIMER_GET_CYCLES 0
+#define PRTE_HAVE_SYS_TIMER_GET_CYCLES 0
 
-#endif /* PRRTE_GCC_INLINE_ASSEMBLY */
+#endif /* PRTE_GCC_INLINE_ASSEMBLY */
 
-#endif /* ! PRRTE_SYS_ARCH_TIMER_H */
+#endif /* ! PRTE_SYS_ARCH_TIMER_H */

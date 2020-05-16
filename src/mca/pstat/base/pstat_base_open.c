@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -21,7 +21,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "constants.h"
 #include "src/util/output.h"
@@ -34,57 +34,57 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prrte_mca_base_component_t struct.
+ * component's public prte_mca_base_component_t struct.
  */
 #include "src/mca/pstat/base/static-components.h"
 
 /* unsupported functions */
-static int prrte_pstat_base_unsupported_init(void);
-static int prrte_pstat_base_unsupported_query(pid_t pid, prrte_pstats_t *stats, prrte_node_stats_t *nstats);
-static int prrte_pstat_base_unsupported_finalize(void);
+static int prte_pstat_base_unsupported_init(void);
+static int prte_pstat_base_unsupported_query(pid_t pid, prte_pstats_t *stats, prte_node_stats_t *nstats);
+static int prte_pstat_base_unsupported_finalize(void);
 
 /*
  * Globals
  */
-prrte_pstat_base_component_t *prrte_pstat_base_component = NULL;
-prrte_pstat_base_module_t prrte_pstat = {
-    prrte_pstat_base_unsupported_init,
-    prrte_pstat_base_unsupported_query,
-    prrte_pstat_base_unsupported_finalize
+prte_pstat_base_component_t *prte_pstat_base_component = NULL;
+prte_pstat_base_module_t prte_pstat = {
+    prte_pstat_base_unsupported_init,
+    prte_pstat_base_unsupported_query,
+    prte_pstat_base_unsupported_finalize
 };
 
 /* Use default register/open/close functions */
-static int prrte_pstat_base_close(void)
+static int prte_pstat_base_close(void)
 {
     /* let the selected module finalize */
-    if (NULL != prrte_pstat.finalize) {
-            prrte_pstat.finalize();
+    if (NULL != prte_pstat.finalize) {
+            prte_pstat.finalize();
     }
 
-    return prrte_mca_base_framework_components_close(&prrte_pstat_base_framework, NULL);
+    return prte_mca_base_framework_components_close(&prte_pstat_base_framework, NULL);
 }
 
-static int prrte_pstat_base_open(prrte_mca_base_open_flag_t flags)
+static int prte_pstat_base_open(prte_mca_base_open_flag_t flags)
 {
     /* Open up all available components */
-    return prrte_mca_base_framework_components_open(&prrte_pstat_base_framework, flags);
+    return prte_mca_base_framework_components_open(&prte_pstat_base_framework, flags);
 }
 
-PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, pstat, "process statistics", NULL,
-                                 prrte_pstat_base_open, prrte_pstat_base_close,
-                                 prrte_pstat_base_static_components, 0);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, pstat, "process statistics", NULL,
+                                 prte_pstat_base_open, prte_pstat_base_close,
+                                 prte_pstat_base_static_components, 0);
 
-static int prrte_pstat_base_unsupported_init(void)
+static int prte_pstat_base_unsupported_init(void)
 {
-    return PRRTE_ERR_NOT_SUPPORTED;
+    return PRTE_ERR_NOT_SUPPORTED;
 }
 
-static int prrte_pstat_base_unsupported_query(pid_t pid, prrte_pstats_t *stats, prrte_node_stats_t *nstats)
+static int prte_pstat_base_unsupported_query(pid_t pid, prte_pstats_t *stats, prte_node_stats_t *nstats)
 {
-    return PRRTE_ERR_NOT_SUPPORTED;
+    return PRTE_ERR_NOT_SUPPORTED;
 }
 
-static int prrte_pstat_base_unsupported_finalize(void)
+static int prte_pstat_base_unsupported_finalize(void)
 {
-    return PRRTE_ERR_NOT_SUPPORTED;
+    return PRTE_ERR_NOT_SUPPORTED;
 }

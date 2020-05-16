@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2009 Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  *
@@ -11,7 +11,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -54,7 +54,7 @@
 /*
  * Simple loop over reading from a fd
  */
-int prrte_fd_read(int fd, int len, void *buffer)
+int prte_fd_read(int fd, int len, void *buffer)
 {
     int rc;
     char *b = buffer;
@@ -67,19 +67,19 @@ int prrte_fd_read(int fd, int len, void *buffer)
             len -= rc;
             b += rc;
         } else if (0 == rc) {
-            return PRRTE_ERR_TIMEOUT;
+            return PRTE_ERR_TIMEOUT;
         } else {
-            return PRRTE_ERR_IN_ERRNO;
+            return PRTE_ERR_IN_ERRNO;
         }
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
 /*
  * Simple loop over writing to an fd
  */
-int prrte_fd_write(int fd, int len, const void *buffer)
+int prte_fd_write(int fd, int len, const void *buffer)
 {
     int rc;
     const char *b = buffer;
@@ -92,15 +92,15 @@ int prrte_fd_write(int fd, int len, const void *buffer)
             len -= rc;
             b += rc;
         } else {
-            return PRRTE_ERR_IN_ERRNO;
+            return PRTE_ERR_IN_ERRNO;
         }
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-int prrte_fd_set_cloexec(int fd)
+int prte_fd_set_cloexec(int fd)
 {
 #ifdef FD_CLOEXEC
     int flags;
@@ -109,18 +109,18 @@ int prrte_fd_set_cloexec(int fd)
        them.  So say we all. */
     flags = fcntl(fd, F_GETFD, 0);
     if (-1 == flags) {
-        return PRRTE_ERR_IN_ERRNO;
+        return PRTE_ERR_IN_ERRNO;
     }
 
     if (fcntl(fd, F_SETFD, FD_CLOEXEC | flags) == -1) {
-        return PRRTE_ERR_IN_ERRNO;
+        return PRTE_ERR_IN_ERRNO;
     }
 #endif
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-bool prrte_fd_is_regular(int fd)
+bool prte_fd_is_regular(int fd)
 {
     struct stat buf;
     if (fstat(fd, &buf)) {
@@ -129,7 +129,7 @@ bool prrte_fd_is_regular(int fd)
     return S_ISREG(buf.st_mode);
 }
 
-bool prrte_fd_is_chardev(int fd)
+bool prte_fd_is_chardev(int fd)
 {
     struct stat buf;
     if (fstat(fd, &buf)) {
@@ -138,7 +138,7 @@ bool prrte_fd_is_chardev(int fd)
     return S_ISCHR(buf.st_mode);
 }
 
-bool prrte_fd_is_blkdev(int fd)
+bool prte_fd_is_blkdev(int fd)
 {
     struct stat buf;
     if (fstat(fd, &buf)) {
@@ -147,13 +147,13 @@ bool prrte_fd_is_blkdev(int fd)
     return S_ISBLK(buf.st_mode);
 }
 
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
     static char str[INET6_ADDRSTRLEN];
 #else
     static char str[INET_ADDRSTRLEN];
 #endif
 
-const char *prrte_fd_get_peer_name(int fd)
+const char *prte_fd_get_peer_name(int fd)
 {
     const char *ret = NULL;
     struct sockaddr sa;
@@ -170,7 +170,7 @@ const char *prrte_fd_get_peer_name(int fd)
         si = (struct sockaddr_in*) &sa;
         ret = inet_ntop(AF_INET, &(si->sin_addr), str, INET_ADDRSTRLEN);
     }
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
     else if (sa.sa_family == AF_INET6) {
         struct sockaddr_in6 *si6;
         si6 = (struct sockaddr_in6*) &sa;
@@ -180,7 +180,7 @@ const char *prrte_fd_get_peer_name(int fd)
     else {
         // This string is guaranteed to be <= INET_ADDRSTRLEN
         memset(str, 0, sizeof(str));
-        prrte_string_copy(str, "Unknown", sizeof(str)-1);
+        prte_string_copy(str, "Unknown", sizeof(str)-1);
         ret = str;
     }
 
@@ -191,7 +191,7 @@ static int fdmax = -1;
 
 /* close all open file descriptors w/ exception of stdin/stdout/stderr
    and the pipe up to the parent. */
-void prrte_close_open_file_descriptors(int protected_fd)
+void prte_close_open_file_descriptors(int protected_fd)
 {
     DIR *dir = opendir("/proc/self/fd");
     int fd;

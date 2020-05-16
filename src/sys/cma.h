@@ -5,6 +5,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  */
 
@@ -16,12 +17,12 @@
  * are incorporated into glibc
  */
 
-#ifndef PRRTE_SYS_CMA_H
-#define PRRTE_SYS_CMA_H 1
+#ifndef PRTE_SYS_CMA_H
+#define PRTE_SYS_CMA_H 1
 
-#if !defined(PRRTE_ASSEMBLY_ARCH)
-/* need prrte_config.h for the assembly architecture */
-#include "prrte_config.h"
+#if !defined(PRTE_ASSEMBLY_ARCH)
+/* need prte_config.h for the assembly architecture */
+#include "prte_config.h"
 #endif
 
 #include "src/sys/architecture.h"
@@ -38,24 +39,24 @@
 
 /* Cross Memory Attach is so far only supported under linux */
 
-#if PRRTE_ASSEMBLY_ARCH == PRRTE_X86_64
+#if PRTE_ASSEMBLY_ARCH == PRTE_X86_64
 #define __NR_process_vm_readv 310
 #define __NR_process_vm_writev 311
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_IA32
+#elif PRTE_ASSEMBLY_ARCH == PRTE_IA32
 #define __NR_process_vm_readv 347
 #define __NR_process_vm_writev 348
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC32
+#elif PRTE_ASSEMBLY_ARCH == PRTE_POWERPC32
 #define __NR_process_vm_readv 351
 #define __NR_process_vm_writev 352
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC64
+#elif PRTE_ASSEMBLY_ARCH == PRTE_POWERPC64
 #define __NR_process_vm_readv 351
 #define __NR_process_vm_writev 352
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_ARM
+#elif PRTE_ASSEMBLY_ARCH == PRTE_ARM
 
 #define __NR_process_vm_readv 376
 #define __NR_process_vm_writev 377
 
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_ARM64
+#elif PRTE_ASSEMBLY_ARCH == PRTE_ARM64
 
 /* ARM64 uses the asm-generic syscall numbers */
 
@@ -92,4 +93,4 @@ process_vm_writev(pid_t pid,
 
 #endif /* __linux__ */
 
-#endif /* PRRTE_SYS_CMA_H */
+#endif /* PRTE_SYS_CMA_H */

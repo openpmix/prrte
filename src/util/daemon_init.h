@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,10 +19,10 @@
  */
 /** @file **/
 
-#ifndef PRRTE_DAEMON_INIT_H
-#define PRRTE_DAEMON_INIT_H
+#ifndef PRTE_DAEMON_INIT_H
+#define PRTE_DAEMON_INIT_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 BEGIN_C_DECLS
 
@@ -37,18 +38,18 @@ BEGIN_C_DECLS
  * @param parent_fn The function to execute in the parent before exiting
  * a value of NULL will cause the parent to simply exit(0).
  *
- * @retval PRRTE_SUCCESS Indicates that the conversion was successful
- * @retval PRRTE_ERROR Indicates that the conversion was not successful - a fork could not be completed.
+ * @retval PRTE_SUCCESS Indicates that the conversion was successful
+ * @retval PRTE_ERROR Indicates that the conversion was not successful - a fork could not be completed.
  */
-PRRTE_EXPORT int prrte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t child));
+PRTE_EXPORT int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t child));
 
 END_C_DECLS
 
-static inline int prrte_daemon_init(char *working_dir)
+static inline int prte_daemon_init(char *working_dir)
 {
-    return prrte_daemon_init_callback(working_dir, NULL);
+    return prte_daemon_init_callback(working_dir, NULL);
 }
 
 END_C_DECLS
 
-#endif /* PRRTE_DAEMON_INIT_H */
+#endif /* PRTE_DAEMON_INIT_H */

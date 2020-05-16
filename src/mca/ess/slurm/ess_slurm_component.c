@@ -15,6 +15,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +29,7 @@
  * entire components just to query their version and parameters.
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include "src/util/proc_info.h"
@@ -36,41 +37,41 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/ess/slurm/ess_slurm.h"
 
-extern prrte_ess_base_module_t prrte_ess_slurm_module;
+extern prte_ess_base_module_t prte_ess_slurm_module;
 
 /*
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
-prrte_ess_base_component_t prrte_ess_slurm_component = {
+prte_ess_base_component_t prte_ess_slurm_component = {
     .base_version = {
-        PRRTE_ESS_BASE_VERSION_3_0_0,
+        PRTE_ESS_BASE_VERSION_3_0_0,
 
         /* Component name and version */
         .mca_component_name = "slurm",
-        PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                    PRRTE_RELEASE_VERSION),
+        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                    PRTE_RELEASE_VERSION),
 
         /* Component open and close functions */
-        .mca_open_component = prrte_ess_slurm_component_open,
-        .mca_close_component = prrte_ess_slurm_component_close,
-        .mca_query_component = prrte_ess_slurm_component_query,
+        .mca_open_component = prte_ess_slurm_component_open,
+        .mca_close_component = prte_ess_slurm_component_close,
+        .mca_query_component = prte_ess_slurm_component_query,
     },
     .base_data = {
         /* The component is checkpoint ready */
-        PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
     },
 };
 
 
 int
-prrte_ess_slurm_component_open(void)
+prte_ess_slurm_component_open(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-int prrte_ess_slurm_component_query(prrte_mca_base_module_t **module, int *priority)
+int prte_ess_slurm_component_query(prte_mca_base_module_t **module, int *priority)
 {
     /* Are we running under a SLURM job? Were
      * we given a path back to the HNP? If the
@@ -78,24 +79,24 @@ int prrte_ess_slurm_component_query(prrte_mca_base_module_t **module, int *prior
      * by mpirun in a slurm world, so make ourselves available
      */
 
-    if (PRRTE_PROC_IS_DAEMON &&
+    if (PRTE_PROC_IS_DAEMON &&
         NULL != getenv("SLURM_JOBID") &&
-        NULL != prrte_process_info.my_hnp_uri) {
+        NULL != prte_process_info.my_hnp_uri) {
         *priority = 50;
-        *module = (prrte_mca_base_module_t *)&prrte_ess_slurm_module;
-        return PRRTE_SUCCESS;
+        *module = (prte_mca_base_module_t *)&prte_ess_slurm_module;
+        return PRTE_SUCCESS;
     }
 
     /* Sadly, no */
     *priority = -1;
     *module = NULL;
-    return PRRTE_ERROR;
+    return PRTE_ERROR;
 }
 
 
 int
-prrte_ess_slurm_component_close(void)
+prte_ess_slurm_component_close(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 

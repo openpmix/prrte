@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2010 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -20,7 +20,7 @@
 
 # Note that this file must exist, even though it is empty (there is no
 # "base" directory for the common framework).  autogen.pl and
-# prrte_mca.m4 assume that every framework has a top-level Makefile.am.
+# prte_mca.m4 assume that every framework has a top-level Makefile.am.
 # We *could* adjust the framework glue code to exclude "common" from
 # this requirement, but it's just a lot easier to have an empty
 # Makefile.am here.

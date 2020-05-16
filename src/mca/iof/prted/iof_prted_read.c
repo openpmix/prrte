@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
@@ -20,7 +20,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <errno.h>
@@ -37,23 +37,23 @@
 #include "src/util/name_fns.h"
 #include "src/threads/threads.h"
 #include "src/mca/state/state.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/iof/iof.h"
 #include "src/mca/iof/base/base.h"
 
 #include "iof_prted.h"
 
-void prrte_iof_prted_read_handler(int fd, short event, void *cbdata)
+void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
 {
-    prrte_iof_read_event_t *rev = (prrte_iof_read_event_t*)cbdata;
-    unsigned char data[PRRTE_IOF_BASE_MSG_MAX];
-    prrte_buffer_t *buf=NULL;
+    prte_iof_read_event_t *rev = (prte_iof_read_event_t*)cbdata;
+    unsigned char data[PRTE_IOF_BASE_MSG_MAX];
+    prte_buffer_t *buf=NULL;
     int rc;
     int32_t numbytes;
-    prrte_iof_proc_t *proct = (prrte_iof_proc_t*)rev->proc;
+    prte_iof_proc_t *proct = (prte_iof_proc_t*)rev->proc;
 
-    PRRTE_ACQUIRE_OBJECT(rev);
+    PRTE_ACQUIRE_OBJECT(rev);
 
     /* As we may use timer events, fd can be bogus (-1)
      * use the right one here
@@ -65,28 +65,28 @@ void prrte_iof_prted_read_handler(int fd, short event, void *cbdata)
 
     if (NULL == proct) {
         /* nothing we can do */
-        PRRTE_ERROR_LOG(PRRTE_ERR_ADDRESSEE_UNKNOWN);
+        PRTE_ERROR_LOG(PRTE_ERR_ADDRESSEE_UNKNOWN);
         return;
     }
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:prted:read handler read %d bytes from %s, fd %d",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         numbytes, PRRTE_NAME_PRINT(&proct->name), fd));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         numbytes, PRTE_NAME_PRINT(&proct->name), fd));
 
     if (numbytes <= 0) {
         if (0 > numbytes) {
             /* either we have a connection error or it was a non-blocking read */
             if (EAGAIN == errno || EINTR == errno) {
                 /* non-blocking, retry */
-                PRRTE_IOF_READ_ACTIVATE(rev);
+                PRTE_IOF_READ_ACTIVATE(rev);
                 return;
             }
 
-            PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+            PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                  "%s iof:prted:read handler %s Error on connection:%d",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                 PRRTE_NAME_PRINT(&proct->name), fd));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_NAME_PRINT(&proct->name), fd));
         }
         /* numbytes must have been zero, so go down and close the fd etc */
         goto CLEAN_RETURN;
@@ -95,47 +95,47 @@ void prrte_iof_prted_read_handler(int fd, short event, void *cbdata)
     /* see if the user wanted the output directed to files */
     if (NULL != rev->sink) {
         /* output to the corresponding file */
-        prrte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, rev->sink->wev);
+        prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, rev->sink->wev);
     }
     if (!proct->copy) {
         /* re-add the event */
-        PRRTE_IOF_READ_ACTIVATE(rev);
+        PRTE_IOF_READ_ACTIVATE(rev);
         return;
     }
 
     /* prep the buffer */
-    buf = PRRTE_NEW(prrte_buffer_t);
+    buf = PRTE_NEW(prte_buffer_t);
 
     /* pack the stream first - we do this so that flow control messages can
      * consist solely of the tag
      */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buf, &rev->tag, 1, PRRTE_IOF_TAG))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &rev->tag, 1, PRTE_IOF_TAG))) {
+        PRTE_ERROR_LOG(rc);
         goto CLEAN_RETURN;
     }
 
     /* pack name of process that gave us this data */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buf, &proct->name, 1, PRRTE_NAME))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &proct->name, 1, PRTE_NAME))) {
+        PRTE_ERROR_LOG(rc);
         goto CLEAN_RETURN;
     }
 
     /* pack the data - only pack the #bytes we read! */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buf, &data, numbytes, PRRTE_BYTE))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &data, numbytes, PRTE_BYTE))) {
+        PRTE_ERROR_LOG(rc);
         goto CLEAN_RETURN;
     }
 
     /* start non-blocking RML call to forward received data */
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:prted:read handler sending %d bytes to HNP",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), numbytes));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes));
 
-    prrte_rml.send_buffer_nb(PRRTE_PROC_MY_HNP, buf, PRRTE_RML_TAG_IOF_HNP,
-                            prrte_rml_send_callback, NULL);
+    prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP,
+                            prte_rml_send_callback, NULL);
 
     /* re-add the event */
-    PRRTE_IOF_READ_ACTIVATE(rev);
+    PRTE_IOF_READ_ACTIVATE(rev);
 
     return;
 
@@ -144,25 +144,25 @@ void prrte_iof_prted_read_handler(int fd, short event, void *cbdata)
      * proc terminated this IOF channel - either way, release the
      * corresponding event. This deletes the read event and closes
      * the file descriptor */
-    if (rev->tag & PRRTE_IOF_STDOUT) {
+    if (rev->tag & PRTE_IOF_STDOUT) {
         if( NULL != proct->revstdout ) {
-            prrte_iof_base_static_dump_output(proct->revstdout);
-            PRRTE_RELEASE(proct->revstdout);
+            prte_iof_base_static_dump_output(proct->revstdout);
+            PRTE_RELEASE(proct->revstdout);
         }
-    } else if (rev->tag & PRRTE_IOF_STDERR) {
+    } else if (rev->tag & PRTE_IOF_STDERR) {
         if( NULL != proct->revstderr ) {
-            prrte_iof_base_static_dump_output(proct->revstderr);
-            PRRTE_RELEASE(proct->revstderr);
+            prte_iof_base_static_dump_output(proct->revstderr);
+            PRTE_RELEASE(proct->revstderr);
         }
     }
     /* check to see if they are all done */
     if (NULL == proct->revstdout &&
         NULL == proct->revstderr) {
         /* this proc's iof is complete */
-        PRRTE_ACTIVATE_PROC_STATE(&proct->name, PRRTE_PROC_STATE_IOF_COMPLETE);
+        PRTE_ACTIVATE_PROC_STATE(&proct->name, PRTE_PROC_STATE_IOF_COMPLETE);
     }
     if (NULL != buf) {
-        PRRTE_RELEASE(buf);
+        PRTE_RELEASE(buf);
     }
     return;
 }

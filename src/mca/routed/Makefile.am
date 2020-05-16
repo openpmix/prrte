@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2007      Los Alamos National Security, LLC.
 #                         All rights reserved.
-# Copyright (c) 2010 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -22,8 +22,8 @@ libmca_routed_la_SOURCES += $(headers)
 
 # Conditionally install the header files
 if WANT_INSTALL_HEADERS
-prrtedir = $(prrteincludedir)/$(subdir)
-nobase_prrte_HEADERS = $(headers)
+prtedir = $(prteincludedir)/$(subdir)
+nobase_prte_HEADERS = $(headers)
 endif
 
 include base/Makefile.am

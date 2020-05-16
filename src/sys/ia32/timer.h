@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,22 +18,22 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_SYS_ARCH_TIMER_H
-#define PRRTE_SYS_ARCH_TIMER_H 1
+#ifndef PRTE_SYS_ARCH_TIMER_H
+#define PRTE_SYS_ARCH_TIMER_H 1
 
 
-typedef uint64_t prrte_timer_t;
+typedef uint64_t prte_timer_t;
 
 /* Using RDTSC(P) results in non-monotonic timers across cores */
-#undef PRRTE_TIMER_MONOTONIC
-#define PRRTE_TIMER_MONOTONIC 0
+#undef PRTE_TIMER_MONOTONIC
+#define PRTE_TIMER_MONOTONIC 0
 
-#if PRRTE_GCC_INLINE_ASSEMBLY
+#if PRTE_GCC_INLINE_ASSEMBLY
 
-static inline prrte_timer_t
-prrte_sys_timer_get_cycles(void)
+static inline prte_timer_t
+prte_sys_timer_get_cycles(void)
 {
-    prrte_timer_t ret;
+    prte_timer_t ret;
     int tmp;
 
     __asm__ __volatile__(
@@ -46,12 +47,12 @@ prrte_sys_timer_get_cycles(void)
     return ret;
 }
 
-#define PRRTE_HAVE_SYS_TIMER_GET_CYCLES 1
+#define PRTE_HAVE_SYS_TIMER_GET_CYCLES 1
 
 #else
 
-#define PRRTE_HAVE_SYS_TIMER_GET_CYCLES 0
+#define PRTE_HAVE_SYS_TIMER_GET_CYCLES 0
 
-#endif /* PRRTE_GCC_INLINE_ASSEMBLY */
+#endif /* PRTE_GCC_INLINE_ASSEMBLY */
 
-#endif /* ! PRRTE_SYS_ARCH_TIMER_H */
+#endif /* ! PRTE_SYS_ARCH_TIMER_H */

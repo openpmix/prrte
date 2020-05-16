@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
@@ -25,7 +25,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <string.h>
@@ -61,10 +61,10 @@
 #include "src/util/session_dir.h"
 #include "src/util/proc_info.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
-#include "src/runtime/prrte_wait.h"
-#include "src/runtime/prrte_locks.h"
+#include "src/runtime/prte_wait.h"
+#include "src/runtime/prte_locks.h"
 
 #include "src/mca/ess/ess.h"
 #include "src/mca/state/state.h"
@@ -81,23 +81,23 @@
 /*
  * Public interfaces
  */
-void prrte_errmgr_base_log(int error_code, char *filename, int line)
+void prte_errmgr_base_log(int error_code, char *filename, int line)
 {
     char *errstring = NULL;
 
-    errstring = (char*)PRRTE_ERROR_NAME(error_code);
+    errstring = (char*)PRTE_ERROR_NAME(error_code);
 
     if (NULL == errstring) {
         /* if the error is silent, say nothing */
         return;
     }
 
-    prrte_output(0, "%s PRRTE_ERROR_LOG: %s in file %s at line %d",
-                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+    prte_output(0, "%s PRTE_ERROR_LOG: %s in file %s at line %d",
+                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                 errstring, filename, line);
 }
 
-void prrte_errmgr_base_abort(int error_code, char *fmt, ...)
+void prte_errmgr_base_abort(int error_code, char *fmt, ...)
 {
     va_list arglist;
 
@@ -105,40 +105,40 @@ void prrte_errmgr_base_abort(int error_code, char *fmt, ...)
     va_start(arglist, fmt);
     if( NULL != fmt ) {
         char* buffer = NULL;
-        prrte_vasprintf( &buffer, fmt, arglist );
-        prrte_output( 0, "%s", buffer );
+        prte_vasprintf( &buffer, fmt, arglist );
+        prte_output( 0, "%s", buffer );
         free( buffer );
     }
     va_end(arglist);
 
     /* if I am a daemon or the HNP... */
-    if (PRRTE_PROC_IS_MASTER || PRRTE_PROC_IS_DAEMON) {
+    if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_DAEMON) {
         /* whack my local procs */
-        if( NULL != prrte_odls.kill_local_procs ) {
-            prrte_odls.kill_local_procs(NULL);
+        if( NULL != prte_odls.kill_local_procs ) {
+            prte_odls.kill_local_procs(NULL);
         }
         /* whack any session directories */
-        prrte_session_dir_cleanup(PRRTE_JOBID_WILDCARD);
+        prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
     }
 
     /* if a critical connection failed, or a sensor limit was exceeded, exit without dropping a core */
-    if (PRRTE_ERR_CONNECTION_FAILED == error_code ||
-        PRRTE_ERR_SENSOR_LIMIT_EXCEEDED == error_code) {
-        prrte_ess.abort(error_code, false);
+    if (PRTE_ERR_CONNECTION_FAILED == error_code ||
+        PRTE_ERR_SENSOR_LIMIT_EXCEEDED == error_code) {
+        prte_ess.abort(error_code, false);
     } else {
-        prrte_ess.abort(error_code, true);
+        prte_ess.abort(error_code, true);
     }
 
     /*
-     * We must exit in prrte_ess.abort; all implementations of prrte_ess.abort
-     * contain __prrte_attribute_noreturn__
+     * We must exit in prte_ess.abort; all implementations of prte_ess.abort
+     * contain __prte_attribute_noreturn__
      */
     /* No way to reach here */
 }
 
-int prrte_errmgr_base_abort_peers(prrte_process_name_t *procs,
-                                 prrte_std_cntr_t num_procs,
+int prte_errmgr_base_abort_peers(prte_process_name_t *procs,
+                                 prte_std_cntr_t num_procs,
                                  int error_code)
 {
-    return PRRTE_ERR_NOT_IMPLEMENTED;
+    return PRTE_ERR_NOT_IMPLEMENTED;
 }

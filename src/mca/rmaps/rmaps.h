@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
@@ -21,7 +21,7 @@
  */
 /** @file:
  *
- * The PRRTE Resource MAPping Subsystem (RMAPS)
+ * The PRTE Resource MAPping Subsystem (RMAPS)
  *
  * The resource mapping subsystem is responsible for mapping processes
  * to specific nodes/cpus within a given job. In many systems, this
@@ -42,15 +42,15 @@
  *
  */
 
-#ifndef PRRTE_MCA_RMAPS_H
-#define PRRTE_MCA_RMAPS_H
+#ifndef PRTE_MCA_RMAPS_H
+#define PRTE_MCA_RMAPS_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
 #include "src/mca/mca.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/rmaps/rmaps_types.h"
 
@@ -67,28 +67,28 @@ BEGIN_C_DECLS
 
 /* map a job - used by the HNP to compute the #procs on each node.
  * This is passed to the backend daemons as a regex which they
- * use to create an prrte_job_map_t for the job */
-typedef int (*prrte_rmaps_base_module_map_fn_t)(prrte_job_t *jdata);
+ * use to create an prte_job_map_t for the job */
+typedef int (*prte_rmaps_base_module_map_fn_t)(prte_job_t *jdata);
 
 /* assign a location to each process. Used by the backend daemons,
- * this function takes the prrte_job_map_t created from the regex
+ * this function takes the prte_job_map_t created from the regex
  * and assigns each process to a specific location within the
  * hardware topology based on the --map-by directive */
-typedef int (*prrte_rmaps_base_module_assign_loc_fn_t)(prrte_job_t *jdata);
+typedef int (*prte_rmaps_base_module_assign_loc_fn_t)(prte_job_t *jdata);
 
 /*
  * rmaps module version 3.0.0
  */
-struct prrte_rmaps_base_module_3_0_0_t {
+struct prte_rmaps_base_module_3_0_0_t {
     /** Mapping function pointer */
-    prrte_rmaps_base_module_map_fn_t         map_job;
+    prte_rmaps_base_module_map_fn_t         map_job;
     /* assign locations */
-    prrte_rmaps_base_module_assign_loc_fn_t  assign_locations;
+    prte_rmaps_base_module_assign_loc_fn_t  assign_locations;
 };
 /** Convenience typedef */
-typedef struct prrte_rmaps_base_module_3_0_0_t prrte_rmaps_base_module_3_0_0_t;
+typedef struct prte_rmaps_base_module_3_0_0_t prte_rmaps_base_module_3_0_0_t;
 /** Convenience typedef */
-typedef prrte_rmaps_base_module_3_0_0_t prrte_rmaps_base_module_t;
+typedef prte_rmaps_base_module_3_0_0_t prte_rmaps_base_module_t;
 
 
 /*
@@ -98,16 +98,16 @@ typedef prrte_rmaps_base_module_3_0_0_t prrte_rmaps_base_module_t;
 /**
  * rmaps component version 3.0.0
  */
-struct prrte_rmaps_base_component_3_0_0_t {
+struct prte_rmaps_base_component_3_0_0_t {
     /** Base MCA structure */
-    prrte_mca_base_component_t base_version;
+    prte_mca_base_component_t base_version;
     /** Base MCA data */
-    prrte_mca_base_component_data_t base_data;
+    prte_mca_base_component_data_t base_data;
 };
 /** Convenience typedef */
-typedef struct prrte_rmaps_base_component_3_0_0_t prrte_rmaps_base_component_3_0_0_t;
+typedef struct prte_rmaps_base_component_3_0_0_t prte_rmaps_base_component_3_0_0_t;
 /** Convenience typedef */
-typedef prrte_rmaps_base_component_3_0_0_t prrte_rmaps_base_component_t;
+typedef prte_rmaps_base_component_3_0_0_t prte_rmaps_base_component_t;
 
 
 END_C_DECLS

@@ -12,6 +12,7 @@
 # Copyright (c) 2012-2013 Los Alamos National Security, LLC.
 #                         All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -28,4 +29,4 @@ libmca_odls_la_SOURCES += \
         base/odls_base_select.c \
         base/odls_base_default_fns.c
 
-dist_prrtedata_DATA += base/help-prrte-odls-base.txt
+dist_prtedata_DATA += base/help-prte-odls-base.txt

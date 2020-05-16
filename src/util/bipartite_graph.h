@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -18,21 +18,21 @@
  * that complicates other pieces of the implementation (specifically, adding
  * and removing edges). */
 
-#ifndef PRRTE_BP_GRAPH_H
-#define PRRTE_BP_GRAPH_H
+#ifndef PRTE_BP_GRAPH_H
+#define PRTE_BP_GRAPH_H
 
-struct prrte_bp_graph_vertex_t;
-struct prrte_bp_graph_edge_t;
-struct prrte_bp_graph_t;
+struct prte_bp_graph_vertex_t;
+struct prte_bp_graph_edge_t;
+struct prte_bp_graph_t;
 
-typedef struct prrte_bp_graph_vertex_t prrte_bp_graph_vertex_t;
-typedef struct prrte_bp_graph_edge_t prrte_bp_graph_edge_t;
-typedef struct prrte_bp_graph_t prrte_bp_graph_t;
+typedef struct prte_bp_graph_vertex_t prte_bp_graph_vertex_t;
+typedef struct prte_bp_graph_edge_t prte_bp_graph_edge_t;
+typedef struct prte_bp_graph_t prte_bp_graph_t;
 
 /**
  * callback function pointer type for cleaning up user data associated with a
  * vertex or edge */
-typedef void (*prrte_bp_graph_cleanup_fn_t)(void *user_data);
+typedef void (*prte_bp_graph_cleanup_fn_t)(void *user_data);
 
 /**
  * create a new empty graph
@@ -43,11 +43,11 @@ typedef void (*prrte_bp_graph_cleanup_fn_t)(void *user_data);
  * @param[in] e_data_cleanup_fn  cleanup function to use for edge user data
  * @param[out] g_out             the created graph
  *
- * @returns PRRTE_SUCCESS or an OMPI error code
+ * @returns PRTE_SUCCESS or an OMPI error code
  */
-int prrte_bp_graph_create(prrte_bp_graph_cleanup_fn_t v_data_cleanup_fn,
-			 prrte_bp_graph_cleanup_fn_t e_data_cleanup_fn,
-			 prrte_bp_graph_t **g_out);
+int prte_bp_graph_create(prte_bp_graph_cleanup_fn_t v_data_cleanup_fn,
+			 prte_bp_graph_cleanup_fn_t e_data_cleanup_fn,
+			 prte_bp_graph_t **g_out);
 
 /**
  * free the given graph
@@ -55,9 +55,9 @@ int prrte_bp_graph_create(prrte_bp_graph_cleanup_fn_t v_data_cleanup_fn,
  * Any user data associated with vertices or edges in the graph will have
  * the given edge/vertex cleanup callback invoked in some arbitrary order.
  *
- * @returns PRRTE_SUCCESS or an OMPI error code
+ * @returns PRTE_SUCCESS or an OMPI error code
  */
-int prrte_bp_graph_free(prrte_bp_graph_t *g);
+int prte_bp_graph_free(prte_bp_graph_t *g);
 
 /**
  * clone (deep copy) the given graph
@@ -69,11 +69,11 @@ int prrte_bp_graph_free(prrte_bp_graph_t *g);
  * @param[in] copy_user_data  if true, copy vertex/edge user data to the new
  *                            graph
  * @param[in] g_clone_out     the resulting cloned graph
- * @returns PRRTE_SUCCESS or an OMPI error code
+ * @returns PRTE_SUCCESS or an OMPI error code
  */
-int prrte_bp_graph_clone(const prrte_bp_graph_t *g,
+int prte_bp_graph_clone(const prte_bp_graph_t *g,
 			bool copy_user_data,
-			prrte_bp_graph_t **g_clone_out);
+			prte_bp_graph_t **g_clone_out);
 
 /**
  * return the number of edges for which this vertex is a destination
@@ -82,7 +82,7 @@ int prrte_bp_graph_clone(const prrte_bp_graph_t *g,
  * @param[in] vertex  the vertex id to query
  * @returns the number of edges for which this vertex is a destination
  */
-int prrte_bp_graph_indegree(const prrte_bp_graph_t *g,
+int prte_bp_graph_indegree(const prte_bp_graph_t *g,
 			   int vertex);
 
 /**
@@ -92,7 +92,7 @@ int prrte_bp_graph_indegree(const prrte_bp_graph_t *g,
  * @param[in] vertex  the vertex id to query
  * @returns the number of edges for which this vertex is a source
  */
-int prrte_bp_graph_outdegree(const prrte_bp_graph_t *g,
+int prte_bp_graph_outdegree(const prte_bp_graph_t *g,
 			    int vertex);
 
 /**
@@ -105,9 +105,9 @@ int prrte_bp_graph_outdegree(const prrte_bp_graph_t *g,
  * @param[in] e_data    caller data to associate with this edge, useful for
  *                      debugging or minimizing state shared across components
  *
- * @returns PRRTE_SUCCESS or an OMPI error code
+ * @returns PRTE_SUCCESS or an OMPI error code
  */
-int prrte_bp_graph_add_edge(prrte_bp_graph_t *g,
+int prte_bp_graph_add_edge(prte_bp_graph_t *g,
 			   int from,
 			   int to,
 			   int64_t cost,
@@ -121,9 +121,9 @@ int prrte_bp_graph_add_edge(prrte_bp_graph_t *g,
  * @param[in]  v_data     data to associate with the new vertex
  * @param[out] index_out  integer index of the new vertex.  May be NULL.
  *
- * @returns PRRTE_SUCCESS or an OMPI error code
+ * @returns PRTE_SUCCESS or an OMPI error code
  */
-int prrte_bp_graph_add_vertex(prrte_bp_graph_t *g,
+int prte_bp_graph_add_vertex(prte_bp_graph_t *g,
 			     void *v_data,
 			     int *index_out);
 
@@ -132,7 +132,7 @@ int prrte_bp_graph_add_vertex(prrte_bp_graph_t *g,
  *
  * @param[in] g the graph to query
  */
-int prrte_bp_graph_order(const prrte_bp_graph_t *g);
+int prte_bp_graph_order(const prte_bp_graph_t *g);
 
 /**
  * This function solves the "assignment problem":
@@ -156,10 +156,10 @@ int prrte_bp_graph_order(const prrte_bp_graph_t *g);
  * @param[out] match_edges_out      an array of (u,v) vertex pairs indicating
  *                                  which edges are in the matching
  *
- * @returns PRRTE_SUCCESS or an OMPI error code
+ * @returns PRTE_SUCCESS or an OMPI error code
  */
-int prrte_bp_graph_solve_bipartite_assignment(const prrte_bp_graph_t *g,
+int prte_bp_graph_solve_bipartite_assignment(const prte_bp_graph_t *g,
 					     int *num_match_edges_out,
 					     int **match_edges_out);
 
-#endif /* PRRTE_BP_GRAPH_H */
+#endif /* PRTE_BP_GRAPH_H */

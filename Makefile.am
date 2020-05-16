@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006-2016 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2012-2015 Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017-2018 Amazon.com, Inc. or its affiliates.
@@ -28,7 +28,7 @@ EXTRA_DIST = README INSTALL VERSION Doxyfile LICENSE autogen.pl
 include examples/Makefile.include
 
 # dist-hook:
-#	env LS_COLORS= sh "$(top_srcdir)/config/distscript.sh" "$(top_srcdir)" "$(distdir)" "$(PRRTE_REPO_REV)"
+#	env LS_COLORS= sh "$(top_srcdir)/config/distscript.sh" "$(top_srcdir)" "$(distdir)" "$(PRTE_REPO_REV)"
 #	@if test ! -s $(distdir)/AUTHORS ; then \
 #		echo "AUTHORS file is empty; aborting distribution"; \
 #		exit 1; \

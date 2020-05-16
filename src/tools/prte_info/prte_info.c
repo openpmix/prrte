@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2012 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010-2016 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
@@ -23,7 +23,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -41,8 +41,8 @@
 #include <signal.h>
 
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/class/prrte_object.h"
-#include "src/class/prrte_pointer_array.h"
+#include "src/class/prte_object.h"
+#include "src/class/prte_pointer_array.h"
 #include "src/util/cmd_line.h"
 #include "src/util/error.h"
 #include "src/util/argv.h"
@@ -53,7 +53,7 @@
 #include "src/prted/pmix/pmix_server.h"
 
 #include "constants.h"
-#include "src/runtime/prrte_locks.h"
+#include "src/runtime/prte_locks.h"
 #include "src/include/frameworks.h"
 #include "src/include/version.h"
 
@@ -63,14 +63,14 @@
  * Public variables
  */
 
-bool prrte_info_pretty = true;
-prrte_cmd_line_t *prrte_info_cmd_line = NULL;
+bool prte_info_pretty = true;
+prte_cmd_line_t *prte_info_cmd_line = NULL;
 
-const char *prrte_info_type_all = "all";
-const char *prrte_info_type_prrte = "prrte";
-const char *prrte_info_type_base = "base";
+const char *prte_info_type_all = "all";
+const char *prte_info_type_prte = "prte";
+const char *prte_info_type_base = "base";
 
-prrte_pointer_array_t mca_types = {{0}};
+prte_pointer_array_t mca_types = {{0}};
 
 int main(int argc, char *argv[])
 {
@@ -87,86 +87,86 @@ int main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
 
     /* Initialize the argv parsing stuff */
-    if (PRRTE_SUCCESS != (ret = prrte_init_util(PRRTE_PROC_MASTER))) {
-        prrte_show_help("help-prrte-info.txt", "lib-call-fail", true,
-                       "prrte_init_util", __FILE__, __LINE__, NULL);
+    if (PRTE_SUCCESS != (ret = prte_init_util(PRTE_PROC_MASTER))) {
+        prte_show_help("help-prte-info.txt", "lib-call-fail", true,
+                       "prte_init_util", __FILE__, __LINE__, NULL);
         exit(ret);
     }
 
-    prrte_info_cmd_line = PRRTE_NEW(prrte_cmd_line_t);
-    if (NULL == prrte_info_cmd_line) {
+    prte_info_cmd_line = PRTE_NEW(prte_cmd_line_t);
+    if (NULL == prte_info_cmd_line) {
         ret = errno;
-        prrte_show_help("help-prrte-info.txt", "lib-call-fail", true,
-                       "prrte_cmd_line_create", __FILE__, __LINE__, NULL);
+        prte_show_help("help-prte-info.txt", "lib-call-fail", true,
+                       "prte_cmd_line_create", __FILE__, __LINE__, NULL);
         exit(ret);
     }
 
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "show-version", 2,
-                            "Show version of PRRTE or a component.  The first parameter can be the keywords \"prrte\" or \"all\", a framework name (indicating all components in a framework), or a framework:component string (indicating a specific component).  The second parameter can be one of: full, major, minor, release, greek, svn.",
-                            PRRTE_CMD_LINE_OTYPE_GENERAL);
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "param", 2,
+    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "show-version", 2,
+                            "Show version of PRTE or a component.  The first parameter can be the keywords \"prte\" or \"all\", a framework name (indicating all components in a framework), or a framework:component string (indicating a specific component).  The second parameter can be one of: full, major, minor, release, greek, svn.",
+                            PRTE_CMD_LINE_OTYPE_GENERAL);
+    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "param", 2,
                             "Show MCA parameters.  The first parameter is the framework (or the keyword \"all\"); the second parameter is the specific component name (or the keyword \"all\").",
-                            PRRTE_CMD_LINE_OTYPE_GENERAL);
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "internal", 0,
+                            PRTE_CMD_LINE_OTYPE_GENERAL);
+    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "internal", 0,
                             "Show internal MCA parameters (not meant to be modified by users)",
-                            PRRTE_CMD_LINE_OTYPE_GENERAL);
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "path", 1,
-                            "Show paths that PRRTE was configured with.  Accepts the following parameters: prefix, bindir, libdir, incdir, mandir, pkglibdir, sysconfdir",
-                            PRRTE_CMD_LINE_OTYPE_GENERAL);
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "arch", 0,
-                            "Show architecture PRRTE was compiled on",
-                            PRRTE_CMD_LINE_OTYPE_GENERAL);
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, 'c', "config", 0,
+                            PRTE_CMD_LINE_OTYPE_GENERAL);
+    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "path", 1,
+                            "Show paths that PRTE was configured with.  Accepts the following parameters: prefix, bindir, libdir, incdir, mandir, pkglibdir, sysconfdir",
+                            PRTE_CMD_LINE_OTYPE_GENERAL);
+    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "arch", 0,
+                            "Show architecture PRTE was compiled on",
+                            PRTE_CMD_LINE_OTYPE_GENERAL);
+    prte_cmd_line_make_opt3(prte_info_cmd_line, 'c', "config", 0,
                             "Show configuration options",
-                            PRRTE_CMD_LINE_OTYPE_GENERAL);
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, '\0', "hostname", 0,
-                            "Show the hostname that PRRTE was configured "
+                            PRTE_CMD_LINE_OTYPE_GENERAL);
+    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "hostname", 0,
+                            "Show the hostname that PRTE was configured "
                             "and built on",
-                            PRRTE_CMD_LINE_OTYPE_GENERAL);
-    prrte_cmd_line_make_opt3(prrte_info_cmd_line, 'a', "all", 0,
+                            PRTE_CMD_LINE_OTYPE_GENERAL);
+    prte_cmd_line_make_opt3(prte_info_cmd_line, 'a', "all", 0,
                             "Show all configuration options and MCA parameters",
-                            PRRTE_CMD_LINE_OTYPE_GENERAL);
+                            PRTE_CMD_LINE_OTYPE_GENERAL);
 
     /* open the SCHIZO framework */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_schizo_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
         return ret;
     }
 
-    if (PRRTE_SUCCESS != (ret = prrte_schizo_base_select())) {
-        PRRTE_ERROR_LOG(ret);
+    if (PRTE_SUCCESS != (ret = prte_schizo_base_select())) {
+        PRTE_ERROR_LOG(ret);
         return ret;
     }
     /* scan for personalities */
     for (i=0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
-            prrte_argv_append_nosize(&prrte_schizo_base.personalities, argv[i+1]);
+            prte_argv_append_nosize(&prte_schizo_base.personalities, argv[i+1]);
         }
     }
 
     /* setup the rest of the cmd line only once */
-    if (PRRTE_SUCCESS != (ret = prrte_schizo.define_cli(prrte_info_cmd_line))) {
-        PRRTE_ERROR_LOG(ret);
+    if (PRTE_SUCCESS != (ret = prte_schizo.define_cli(prte_info_cmd_line))) {
+        PRTE_ERROR_LOG(ret);
         return ret;
     }
 
     /* Do the parsing */
-    ret = prrte_cmd_line_parse(prrte_info_cmd_line, false, false, argc, argv);
-    if (PRRTE_SUCCESS != ret) {
-        if (PRRTE_ERR_SILENT != ret) {
+    ret = prte_cmd_line_parse(prte_info_cmd_line, false, false, argc, argv);
+    if (PRTE_SUCCESS != ret) {
+        if (PRTE_ERR_SILENT != ret) {
             fprintf(stderr, "%s: command line error (%s)\n", argv[0],
-                    prrte_strerror(ret));
+                    prte_strerror(ret));
         }
         cmd_error = true;
     }
     if (!cmd_error &&
-        (prrte_cmd_line_is_taken(prrte_info_cmd_line, "help") ||
-         prrte_cmd_line_is_taken(prrte_info_cmd_line, "h"))) {
+        (prte_cmd_line_is_taken(prte_info_cmd_line, "help") ||
+         prte_cmd_line_is_taken(prte_info_cmd_line, "h"))) {
         char *str, *usage;
 
         want_help = true;
-        usage = prrte_cmd_line_get_usage_msg(prrte_info_cmd_line, false);
-        str = prrte_show_help_string("help-prrte-info.txt", "usage", true,
+        usage = prte_cmd_line_get_usage_msg(prte_info_cmd_line, false);
+        str = prte_show_help_string("help-prte-info.txt", "usage", true,
                                     usage);
         if (NULL != str) {
             printf("%s", str);
@@ -175,94 +175,94 @@ int main(int argc, char *argv[])
         free(usage);
     }
     if (cmd_error || want_help) {
-        prrte_mca_base_close();
-        PRRTE_RELEASE(prrte_info_cmd_line);
+        prte_mca_base_close();
+        PRTE_RELEASE(prte_info_cmd_line);
         exit(cmd_error ? 1 : 0);
     }
 
-    if (prrte_cmd_line_is_taken(prrte_info_cmd_line, "version")) {
-        fprintf(stdout, "PRRTE v%s\n\n%s\n",
-                PRRTE_VERSION, PACKAGE_BUGREPORT);
+    if (prte_cmd_line_is_taken(prte_info_cmd_line, "version")) {
+        fprintf(stdout, "PRTE v%s\n\n%s\n",
+                PRTE_VERSION, PACKAGE_BUGREPORT);
         exit(0);
     }
 
 
     /* setup the mca_types array */
-    PRRTE_CONSTRUCT(&mca_types, prrte_pointer_array_t);
-    prrte_pointer_array_init(&mca_types, 256, INT_MAX, 128);
+    PRTE_CONSTRUCT(&mca_types, prte_pointer_array_t);
+    prte_pointer_array_init(&mca_types, 256, INT_MAX, 128);
 
-    /* add a type for prrte itself */
-    prrte_pointer_array_add(&mca_types, "prrte");
+    /* add a type for prte itself */
+    prte_pointer_array_add(&mca_types, "prte");
 
     /* add a type for hwloc */
-    prrte_pointer_array_add(&mca_types, "hwloc");
+    prte_pointer_array_add(&mca_types, "hwloc");
 
     /* let the pmix server register params */
     pmix_server_register_params();
     /* add those in */
-    prrte_pointer_array_add(&mca_types, "pmix");
+    prte_pointer_array_add(&mca_types, "pmix");
 
     /* push all the types found by autogen */
-    for (i=0; NULL != prrte_frameworks[i]; i++) {
-        prrte_pointer_array_add(&mca_types, prrte_frameworks[i]->framework_name);
+    for (i=0; NULL != prte_frameworks[i]; i++) {
+        prte_pointer_array_add(&mca_types, prte_frameworks[i]->framework_name);
     }
 
     /* Execute the desired action(s) */
 
-    if (prrte_cmd_line_is_taken(prrte_info_cmd_line, "prrte_info_pretty")) {
-        prrte_info_pretty = true;
-    } else if (prrte_cmd_line_is_taken(prrte_info_cmd_line, "parsable") || prrte_cmd_line_is_taken(prrte_info_cmd_line, "parseable")) {
-        prrte_info_pretty = false;
+    if (prte_cmd_line_is_taken(prte_info_cmd_line, "prte_info_pretty")) {
+        prte_info_pretty = true;
+    } else if (prte_cmd_line_is_taken(prte_info_cmd_line, "parsable") || prte_cmd_line_is_taken(prte_info_cmd_line, "parseable")) {
+        prte_info_pretty = false;
     }
 
-    want_all = prrte_cmd_line_is_taken(prrte_info_cmd_line, "all");
-    if (want_all || prrte_cmd_line_is_taken(prrte_info_cmd_line, "show-version")) {
-        prrte_info_do_version(want_all, prrte_info_cmd_line);
+    want_all = prte_cmd_line_is_taken(prte_info_cmd_line, "all");
+    if (want_all || prte_cmd_line_is_taken(prte_info_cmd_line, "show-version")) {
+        prte_info_do_version(want_all, prte_info_cmd_line);
         acted = true;
     }
-    if (want_all || prrte_cmd_line_is_taken(prrte_info_cmd_line, "path")) {
-        prrte_info_do_path(want_all, prrte_info_cmd_line);
+    if (want_all || prte_cmd_line_is_taken(prte_info_cmd_line, "path")) {
+        prte_info_do_path(want_all, prte_info_cmd_line);
         acted = true;
     }
-    if (want_all || prrte_cmd_line_is_taken(prrte_info_cmd_line, "arch")) {
-        prrte_info_do_arch();
+    if (want_all || prte_cmd_line_is_taken(prte_info_cmd_line, "arch")) {
+        prte_info_do_arch();
         acted = true;
     }
-    if (want_all || prrte_cmd_line_is_taken(prrte_info_cmd_line, "hostname")) {
-        prrte_info_do_hostname();
+    if (want_all || prte_cmd_line_is_taken(prte_info_cmd_line, "hostname")) {
+        prte_info_do_hostname();
         acted = true;
     }
-    if (want_all || prrte_cmd_line_is_taken(prrte_info_cmd_line, "config")) {
-        prrte_info_do_config(true);
+    if (want_all || prte_cmd_line_is_taken(prte_info_cmd_line, "config")) {
+        prte_info_do_config(true);
         acted = true;
     }
-    if (want_all || prrte_cmd_line_is_taken(prrte_info_cmd_line, "param")) {
-        prrte_info_do_params(want_all, prrte_cmd_line_is_taken(prrte_info_cmd_line, "internal"));
+    if (want_all || prte_cmd_line_is_taken(prte_info_cmd_line, "param")) {
+        prte_info_do_params(want_all, prte_cmd_line_is_taken(prte_info_cmd_line, "internal"));
         acted = true;
     }
 
     /* If no command line args are specified, show default set */
 
     if (!acted) {
-        prrte_info_show_prrte_version(prrte_info_ver_full);
-        prrte_info_show_path(prrte_info_path_prefix, prrte_install_dirs.prefix);
-        prrte_info_do_arch();
-        prrte_info_do_hostname();
-        prrte_info_do_config(false);
-        prrte_info_components_open();
+        prte_info_show_prte_version(prte_info_ver_full);
+        prte_info_show_path(prte_info_path_prefix, prte_install_dirs.prefix);
+        prte_info_do_arch();
+        prte_info_do_hostname();
+        prte_info_do_config(false);
+        prte_info_components_open();
         for (i = 0; i < mca_types.size; ++i) {
-            if (NULL == (str = (char*)prrte_pointer_array_get_item(&mca_types, i))) {
+            if (NULL == (str = (char*)prte_pointer_array_get_item(&mca_types, i))) {
                 continue;
             }
-            prrte_info_show_component_version(str, prrte_info_component_all,
-                                             prrte_info_ver_full, prrte_info_type_all);
+            prte_info_show_component_version(str, prte_info_component_all,
+                                             prte_info_ver_full, prte_info_type_all);
         }
     }
 
     /* All done */
-    prrte_info_components_close();
-    PRRTE_DESTRUCT(&mca_types);
-    prrte_mca_base_close();
+    prte_info_components_close();
+    PRTE_DESTRUCT(&mca_types);
+    prte_mca_base_close();
 
     return 0;
 }

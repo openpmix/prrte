@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -18,8 +18,8 @@ libmca_prteif_la_SOURCES += $(headers)
 
 # Conditionally install the header files
 if WANT_INSTALL_HEADERS
-prrtedir = $(prrteincludedir)/src/mca/prteif
-nobase_prrte_HEADERS = $(headers)
+prtedir = $(prteincludedir)/src/mca/prteif
+nobase_prte_HEADERS = $(headers)
 endif
 
 include base/Makefile.am

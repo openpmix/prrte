@@ -6,6 +6,7 @@
  * Copyright (c) 2016      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,24 +15,24 @@
  */
 #include "wait_sync.h"
 
-static prrte_mutex_t wait_sync_lock = PRRTE_MUTEX_STATIC_INIT;
-static prrte_wait_sync_t* wait_sync_list = NULL;
+static prte_mutex_t wait_sync_lock = PRTE_MUTEX_STATIC_INIT;
+static prte_wait_sync_t* wait_sync_list = NULL;
 
-#define PRRTE_WAIT_SYNC_PASS_OWNERSHIP(who)             \
+#define PRTE_WAIT_SYNC_PASS_OWNERSHIP(who)             \
     do {                                               \
         pthread_mutex_lock( &(who)->lock);             \
         pthread_cond_signal( &(who)->condition );      \
         pthread_mutex_unlock( &(who)->lock);           \
     } while(0)
 
-int prrte_sync_wait_mt(prrte_wait_sync_t *sync)
+int prte_sync_wait_mt(prte_wait_sync_t *sync)
 {
     /* Don't stop if the waiting synchronization is completed. We avoid the
      * race condition around the release of the synchronization using the
      * signaling field.
      */
     if(sync->count <= 0)
-        return (0 == sync->status) ? PRRTE_SUCCESS : PRRTE_ERROR;
+        return (0 == sync->status) ? PRTE_SUCCESS : PRTE_ERROR;
 
     /* lock so nobody can signal us during the list updating */
     pthread_mutex_lock(&sync->lock);
@@ -41,11 +42,11 @@ int prrte_sync_wait_mt(prrte_wait_sync_t *sync)
      */
     if(sync->count <= 0) {
         pthread_mutex_unlock(&sync->lock);
-        return (0 == sync->status) ? PRRTE_SUCCESS : PRRTE_ERROR;
+        return (0 == sync->status) ? PRTE_SUCCESS : PRTE_ERROR;
     }
 
     /* Insert sync on the list of pending synchronization constructs */
-    prrte_mutex_lock(&wait_sync_lock);
+    prte_mutex_lock(&wait_sync_lock);
     if( NULL == wait_sync_list ) {
         sync->next = sync->prev = sync;
         wait_sync_list = sync;
@@ -55,7 +56,7 @@ int prrte_sync_wait_mt(prrte_wait_sync_t *sync)
         sync->next = wait_sync_list;
         wait_sync_list->prev = sync;
     }
-    prrte_mutex_unlock(&wait_sync_lock);
+    prte_mutex_unlock(&wait_sync_lock);
 
     /**
      * If we are not responsible for progresing, go silent until something worth noticing happen:
@@ -87,16 +88,16 @@ int prrte_sync_wait_mt(prrte_wait_sync_t *sync)
 
  i_am_done:
     /* My sync is now complete. Trim the list: remove self, wake next */
-    prrte_mutex_lock(&wait_sync_lock);
+    prte_mutex_lock(&wait_sync_lock);
     sync->prev->next = sync->next;
     sync->next->prev = sync->prev;
     /* In case I am the progress manager, pass the duties on */
     if( sync == wait_sync_list ) {
         wait_sync_list = (sync == sync->next) ? NULL : sync->next;
         if( NULL != wait_sync_list )
-            PRRTE_WAIT_SYNC_PASS_OWNERSHIP(wait_sync_list);
+            PRTE_WAIT_SYNC_PASS_OWNERSHIP(wait_sync_list);
     }
-    prrte_mutex_unlock(&wait_sync_lock);
+    prte_mutex_unlock(&wait_sync_lock);
 
-    return (0 == sync->status) ? PRRTE_SUCCESS : PRRTE_ERROR;
+    return (0 == sync->status) ? PRTE_SUCCESS : PRTE_ERROR;
 }

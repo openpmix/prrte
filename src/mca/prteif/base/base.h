@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -9,12 +9,12 @@
  *
  */
 
-#ifndef PRRTE_IF_BASE_H
-#define PRRTE_IF_BASE_H
+#ifndef PRTE_IF_BASE_H
+#define PRTE_IF_BASE_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
-#include "src/mca/base/prrte_mca_base_framework.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 
 #include "src/mca/prteif/prteif.h"
 
@@ -23,8 +23,8 @@ BEGIN_C_DECLS
 /*
  * Framework declaration
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_prteif_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_prteif_base_framework;
 
 END_C_DECLS
 
-#endif /* PRRTE_BASE_IF_H */
+#endif /* PRTE_BASE_IF_H */

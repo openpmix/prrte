@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -11,7 +11,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/include/constants.h"
 
@@ -20,56 +20,56 @@
 /*
  * Globals
  */
-prrte_event_base_t *prrte_sync_event_base=NULL;
+prte_event_base_t *prte_sync_event_base=NULL;
 static bool initialized = false;
 
-int prrte_event_base_open(void)
+int prte_event_base_open(void)
 {
     if (initialized) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* Declare our intent to use threads */
-    prrte_event_use_threads();
+    prte_event_use_threads();
 
     /* get our event base */
-    if (NULL == (prrte_sync_event_base = event_base_new())) {
-        return PRRTE_ERROR;
+    if (NULL == (prte_sync_event_base = event_base_new())) {
+        return PRTE_ERROR;
     }
 
     /* set the number of priorities */
-    if (0 < PRRTE_EVENT_NUM_PRI) {
-        prrte_event_base_priority_init(prrte_sync_event_base, PRRTE_EVENT_NUM_PRI);
+    if (0 < PRTE_EVENT_NUM_PRI) {
+        prte_event_base_priority_init(prte_sync_event_base, PRTE_EVENT_NUM_PRI);
     }
 
     initialized = true;
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_event_base_close(void)
+int prte_event_base_close(void)
 {
     if (!initialized) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
-    prrte_event_base_free(prrte_sync_event_base);
+    prte_event_base_free(prte_sync_event_base);
 
     initialized = false;
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 
 }
 
-prrte_event_t* prrte_event_alloc(void)
+prte_event_t* prte_event_alloc(void)
 {
-    prrte_event_t *ev;
+    prte_event_t *ev;
 
-    ev = (prrte_event_t*)malloc(sizeof(prrte_event_t));
+    ev = (prte_event_t*)malloc(sizeof(prte_event_t));
     return ev;
 }
 
-int prrte_event_assign(struct event *ev, prrte_event_base_t *evbase,
+int prte_event_assign(struct event *ev, prte_event_base_t *evbase,
                       int fd, short arg, event_callback_fn cbfn, void *cbd)
 {
-#if PRRTE_HAVE_LIBEV
+#if PRTE_HAVE_LIBEV
     event_set(ev, fd, arg, cbfn, cbd);
     event_base_set(evbase, ev);
 #else
@@ -78,6 +78,6 @@ int prrte_event_assign(struct event *ev, prrte_event_base_t *evbase,
     return 0;
 }
 
-PRRTE_CLASS_INSTANCE(prrte_event_list_item_t,
-                     prrte_list_item_t,
+PRTE_CLASS_INSTANCE(prte_event_list_item_t,
+                     prte_list_item_t,
                      NULL, NULL);

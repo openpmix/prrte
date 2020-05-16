@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -9,27 +10,27 @@
 /** @file:
  */
 
-#ifndef PRRTE_MCA_REACHABLE_BASE_H
-#define PRRTE_MCA_REACHABLE_BASE_H
+#ifndef PRTE_MCA_REACHABLE_BASE_H
+#define PRTE_MCA_REACHABLE_BASE_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "src/include/types.h"
 
 #include "src/mca/mca.h"
-#include "src/mca/base/prrte_mca_base_framework.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 
 #include "src/mca/prtereachable/prtereachable.h"
 
 BEGIN_C_DECLS
 
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_prtereachable_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_prtereachable_base_framework;
 
 /**
  * Select a prtereachable module
  */
-PRRTE_EXPORT int prrte_reachable_base_select(void);
+PRTE_EXPORT int prte_reachable_base_select(void);
 
-PRRTE_EXPORT prrte_reachable_t * prrte_reachable_allocate(unsigned int num_local,
+PRTE_EXPORT prte_reachable_t * prte_reachable_allocate(unsigned int num_local,
                                                           unsigned int num_remote);
 
 

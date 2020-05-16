@@ -11,6 +11,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC.
  *                         All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +19,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <string.h>
 
@@ -32,32 +33,32 @@
 #include "src/mca/filem/base/base.h"
 
 
-int prrte_filem_base_select(void)
+int prte_filem_base_select(void)
 {
-    int exit_status = PRRTE_SUCCESS;
-    prrte_filem_base_component_t *best_component = NULL;
-    prrte_filem_base_module_t *best_module = NULL;
+    int exit_status = PRTE_SUCCESS;
+    prte_filem_base_component_t *best_component = NULL;
+    prte_filem_base_module_t *best_module = NULL;
 
     /*
      * Select the best component
      */
-    if( PRRTE_SUCCESS != prrte_mca_base_select("filem", prrte_filem_base_framework.framework_output,
-                                                &prrte_filem_base_framework.framework_components,
-                                                (prrte_mca_base_module_t **) &best_module,
-                                                (prrte_mca_base_component_t **) &best_component, NULL) ) {
+    if( PRTE_SUCCESS != prte_mca_base_select("filem", prte_filem_base_framework.framework_output,
+                                                &prte_filem_base_framework.framework_components,
+                                                (prte_mca_base_module_t **) &best_module,
+                                                (prte_mca_base_component_t **) &best_component, NULL) ) {
         /* It is okay to not select anything - we'll just retain
          * the default none module
          */
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* Save the winner */
-    prrte_filem = *best_module;
+    prte_filem = *best_module;
 
     /* Initialize the winner */
-    if (NULL != prrte_filem.filem_init) {
-        if (PRRTE_SUCCESS != prrte_filem.filem_init()) {
-            exit_status = PRRTE_ERROR;
+    if (NULL != prte_filem.filem_init) {
+        if (PRTE_SUCCESS != prte_filem.filem_init()) {
+            exit_status = PRTE_ERROR;
         }
     }
 

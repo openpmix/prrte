@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -19,11 +19,11 @@
  *
  */
 
-#ifndef PRRTE_PSTAT_BASE_H
-#define PRRTE_PSTAT_BASE_H
+#ifndef PRTE_PSTAT_BASE_H
+#define PRTE_PSTAT_BASE_H
 
-#include "prrte_config.h"
-#include "src/mca/base/prrte_mca_base_framework.h"
+#include "prte_config.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/pstat/pstat.h"
 
 /*
@@ -35,14 +35,14 @@ BEGIN_C_DECLS
 /**
  * Framework structure declaration for this framework
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_pstat_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_pstat_base_framework;
 
 /**
  * Select an available component.
  *
- * @return PRRTE_SUCCESS Upon success.
- * @return PRRTE_NOT_FOUND If no component can be selected.
- * @return PRRTE_ERROR Upon other failure.
+ * @return PRTE_SUCCESS Upon success.
+ * @return PRTE_NOT_FOUND If no component can be selected.
+ * @return PRTE_ERROR Upon other failure.
  *
  * At the end of this process, we'll either have a single
  * component that is selected and initialized, or no component was
@@ -50,10 +50,10 @@ PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_pstat_base_framework;
  * of the pstat functions will return an error indicating no data
  * could be obtained
  */
-PRRTE_EXPORT int prrte_pstat_base_select(void);
+PRTE_EXPORT int prte_pstat_base_select(void);
 
-PRRTE_EXPORT extern prrte_pstat_base_component_t *prrte_pstat_base_component;
+PRTE_EXPORT extern prte_pstat_base_component_t *prte_pstat_base_component;
 
 END_C_DECLS
 
-#endif /* PRRTE_BASE_PSTAT_H */
+#endif /* PRTE_BASE_PSTAT_H */

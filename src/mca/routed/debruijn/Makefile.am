@@ -3,7 +3,7 @@
 #                         All rights reserved.
 # Copyright (c) 2009      High Performance Computing Center Stuttgart,
 #                         University of Stuttgart.  All rights reserved.
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
@@ -22,7 +22,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_routed_debruijn_DSO
+if MCA_BUILD_prte_routed_debruijn_DSO
 component_noinst =
 component_install = mca_routed_debruijn.la
 else
@@ -30,11 +30,11 @@ component_noinst = libmca_routed_debruijn.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_routed_debruijn_la_SOURCES = $(sources)
 mca_routed_debruijn_la_LDFLAGS = -module -avoid-version
-mca_routed_debruijn_la_LIBADD = $(top_builddir)/src/libprrte.la
+mca_routed_debruijn_la_LIBADD = $(top_builddir)/src/libprte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_routed_debruijn_la_SOURCES = $(sources)

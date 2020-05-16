@@ -14,6 +14,7 @@
  * Copyright (c) 2016-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,10 +28,10 @@
  * timer interface instead
  */
 
-#ifndef PRRTE_SYS_TIMER_H
-#define PRRTE_SYS_TIMER_H 1
+#ifndef PRTE_SYS_TIMER_H
+#define PRTE_SYS_TIMER_H 1
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/sys/architecture.h"
 
@@ -40,18 +41,18 @@
 
 /* do some quick #define cleanup in cases where we are doing
    testing... */
-#ifdef PRRTE_DISABLE_INLINE_ASM
-#undef PRRTE_C_GCC_INLINE_ASSEMBLY
-#define PRRTE_C_GCC_INLINE_ASSEMBLY 0
+#ifdef PRTE_DISABLE_INLINE_ASM
+#undef PRTE_C_GCC_INLINE_ASSEMBLY
+#define PRTE_C_GCC_INLINE_ASSEMBLY 0
 #endif
 
-/* define PRRTE_{GCC,DEC,XLC}_INLINE_ASSEMBLY based on the
-   PRRTE_{C,CXX}_{GCC,DEC,XLC}_INLINE_ASSEMBLY defines and whether we
+/* define PRTE_{GCC,DEC,XLC}_INLINE_ASSEMBLY based on the
+   PRTE_{C,CXX}_{GCC,DEC,XLC}_INLINE_ASSEMBLY defines and whether we
    are in C or C++ */
 #if defined(c_plusplus) || defined(__cplusplus)
-#define PRRTE_GCC_INLINE_ASSEMBLY PRRTE_CXX_GCC_INLINE_ASSEMBLY
+#define PRTE_GCC_INLINE_ASSEMBLY PRTE_CXX_GCC_INLINE_ASSEMBLY
 #else
-#define PRRTE_GCC_INLINE_ASSEMBLY PRRTE_C_GCC_INLINE_ASSEMBLY
+#define PRTE_GCC_INLINE_ASSEMBLY PRTE_C_GCC_INLINE_ASSEMBLY
 #endif
 
 /**********************************************************************
@@ -62,7 +63,7 @@
  *********************************************************************/
 
 /* By default we suppose all timers are monotonic per node. */
-#define PRRTE_TIMER_MONOTONIC 1
+#define PRTE_TIMER_MONOTONIC 1
 
 BEGIN_C_DECLS
 
@@ -71,43 +72,43 @@ BEGIN_C_DECLS
 
 #if defined(DOXYGEN)
 /* don't include system-level gorp when generating doxygen files */
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_X86_64
+#elif PRTE_ASSEMBLY_ARCH == PRTE_X86_64
 #include "src/sys/x86_64/timer.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_ARM
+#elif PRTE_ASSEMBLY_ARCH == PRTE_ARM
 #include "src/sys/arm/timer.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_ARM64
+#elif PRTE_ASSEMBLY_ARCH == PRTE_ARM64
 #include "src/sys/arm64/timer.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_IA32
+#elif PRTE_ASSEMBLY_ARCH == PRTE_IA32
 #include "src/sys/ia32/timer.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC32
+#elif PRTE_ASSEMBLY_ARCH == PRTE_POWERPC32
 #include "src/sys/powerpc/timer.h"
-#elif PRRTE_ASSEMBLY_ARCH == PRRTE_POWERPC64
+#elif PRTE_ASSEMBLY_ARCH == PRTE_POWERPC64
 #include "src/sys/powerpc/timer.h"
 #endif
 
 #ifndef DOXYGEN
-#ifndef PRRTE_HAVE_SYS_TIMER_GET_CYCLES
-#define PRRTE_HAVE_SYS_TIMER_GET_CYCLES 0
+#ifndef PRTE_HAVE_SYS_TIMER_GET_CYCLES
+#define PRTE_HAVE_SYS_TIMER_GET_CYCLES 0
 
-typedef long prrte_timer_t;
+typedef long prte_timer_t;
 #endif
 
-#ifndef PRRTE_HAVE_SYS_TIMER_GET_FREQ
-#define PRRTE_HAVE_SYS_TIMER_GET_FREQ 0
+#ifndef PRTE_HAVE_SYS_TIMER_GET_FREQ
+#define PRTE_HAVE_SYS_TIMER_GET_FREQ 0
 #endif
 #endif
 
-#ifndef PRRTE_HAVE_SYS_TIMER_IS_MONOTONIC
+#ifndef PRTE_HAVE_SYS_TIMER_IS_MONOTONIC
 
-#define PRRTE_HAVE_SYS_TIMER_IS_MONOTONIC 1
+#define PRTE_HAVE_SYS_TIMER_IS_MONOTONIC 1
 
-static inline bool prrte_sys_timer_is_monotonic (void)
+static inline bool prte_sys_timer_is_monotonic (void)
 {
-    return PRRTE_TIMER_MONOTONIC;
+    return PRTE_TIMER_MONOTONIC;
 }
 
 #endif
 
 END_C_DECLS
 
-#endif /* PRRTE_SYS_TIMER_H */
+#endif /* PRTE_SYS_TIMER_H */

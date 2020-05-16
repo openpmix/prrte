@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011-2012 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
@@ -22,7 +22,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <string.h>
@@ -31,7 +31,7 @@
 #include "src/util/output.h"
 #include "src/mca/base/base.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/show_help.h"
 #include "src/mca/errmgr/errmgr.h"
 
@@ -39,42 +39,42 @@
 #include "src/mca/rmaps/base/rmaps_private.h"
 
 
-int prrte_rmaps_base_assign_locations(prrte_job_t *jdata)
+int prte_rmaps_base_assign_locations(prte_job_t *jdata)
 {
     int rc;
-    prrte_rmaps_base_selected_module_t *mod;
+    prte_rmaps_base_selected_module_t *mod;
 
-    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: assigning locations for job %s",
-                        PRRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->jobid));
 
     /* cycle thru the available mappers until one agrees to assign
      * locations for the job
      */
-    if (1 == prrte_list_get_size(&prrte_rmaps_base.selected_modules)) {
+    if (1 == prte_list_get_size(&prte_rmaps_base.selected_modules)) {
         /* forced selection */
-        mod = (prrte_rmaps_base_selected_module_t*)prrte_list_get_first(&prrte_rmaps_base.selected_modules);
+        mod = (prte_rmaps_base_selected_module_t*)prte_list_get_first(&prte_rmaps_base.selected_modules);
         jdata->map->req_mapper = strdup(mod->component->mca_component_name);
     }
-    PRRTE_LIST_FOREACH(mod, &prrte_rmaps_base.selected_modules, prrte_rmaps_base_selected_module_t) {
+    PRTE_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t) {
         if (NULL == mod->module->assign_locations) {
             continue;
         }
-        if (PRRTE_SUCCESS == (rc = mod->module->assign_locations(jdata))) {
+        if (PRTE_SUCCESS == (rc = mod->module->assign_locations(jdata))) {
             return rc;
         }
         /* mappers return "next option" if they didn't attempt to
          * process the job. anything else is a true error.
          */
-        if (PRRTE_ERR_TAKE_NEXT_OPTION != rc) {
-            PRRTE_ERROR_LOG(rc);
+        if (PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+            PRTE_ERROR_LOG(rc);
             return rc;
         }
     }
 
     /* if we get here without doing the assignments, then that's an error */
-    prrte_show_help("help-prrte-rmaps-base.txt", "failed-assignments", true,
-                   prrte_process_info.nodename,
-                   prrte_rmaps_base_print_mapping(jdata->map->mapping));
-    return PRRTE_ERROR;
+    prte_show_help("help-prte-rmaps-base.txt", "failed-assignments", true,
+                   prte_process_info.nodename,
+                   prte_rmaps_base_print_mapping(jdata->map->mapping));
+    return PRTE_ERROR;
 }

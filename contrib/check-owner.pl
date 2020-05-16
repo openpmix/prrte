@@ -57,7 +57,7 @@ sub isTopDir {
     my ($d) = @_;
 
     # master
-    if (-f "$d/Makefile.prrte-rules") {
+    if (-f "$d/Makefile.prte-rules") {
         return 1;
     }
 

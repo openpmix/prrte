@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2008 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
@@ -30,7 +30,7 @@
  * The design is fairly simple: when a proc is spawned, the IOF establishes
  * connections between its stdin, stdout, and stderr to a
  * corresponding IOF stream. In addition, the IOF designates a separate
- * stream for passing OMPI/PRRTE internal diagnostic/help output to mpirun.
+ * stream for passing OMPI/PRTE internal diagnostic/help output to mpirun.
  * This is done specifically to separate such output from the user's
  * stdout/err - basically, it allows us to present it to the user in
  * a separate format for easier recognition. Data read from a source
@@ -52,15 +52,15 @@
  *
  * Tools can exploit either of two mechanisms for this purpose:
  *
- * (a) call prrte_init themselves and utilize the PRRTE tool comm
+ * (a) call prte_init themselves and utilize the PRTE tool comm
  *     library to access the IOF. This also provides access to
  *     other tool library functions - e.g., to order that a job
  *     be spawned; or
  *
- * (b) fork/exec the "prrte-iof" tool and let it serve as the interface
- *     to mpirun. This lets the tool avoid calling prrte_init, and means
- *     the tool will not have to compile against the PRRTE/OMPI libraries.
- *     However, the prrte-iof tool is limited solely to interfacing
+ * (b) fork/exec the "prte-iof" tool and let it serve as the interface
+ *     to mpirun. This lets the tool avoid calling prte_init, and means
+ *     the tool will not have to compile against the PRTE/OMPI libraries.
+ *     However, the prte-iof tool is limited solely to interfacing
  *     stdio and cannot be used for other functions included in
  *     the tool comm library
  *
@@ -69,18 +69,18 @@
  * ranks and passing it to its own stdout/err/diag plus any "pull"
  * requestors.
  *
- * Streams are identified by PRRTE process name (to include wildcards,
- * such as "all processes in PRRTE job X") and tag.  There are
+ * Streams are identified by PRTE process name (to include wildcards,
+ * such as "all processes in PRTE job X") and tag.  There are
  * currently only 4 allowed predefined tags:
  *
- * - PRRTE_IOF_STDIN (value 0)
- * - PRRTE_IOF_STDOUT (value 1)
- * - PRRTE_IOF_STDERR (value 2)
- * - PRRTE_IOF_INTERNAL (value 3): for "internal" messages
+ * - PRTE_IOF_STDIN (value 0)
+ * - PRTE_IOF_STDOUT (value 1)
+ * - PRTE_IOF_STDERR (value 2)
+ * - PRTE_IOF_INTERNAL (value 3): for "internal" messages
  *   from the infrastructure, just to differentiate them from user job
  *   stdout/stderr
  *
- * Note that since streams are identified by PRRTE process name, the
+ * Note that since streams are identified by PRTE process name, the
  * caller has no idea whether the stream is on the local node or a
  * remote node -- it's just a stream.
  *
@@ -99,8 +99,8 @@
  * Subsequent input that appears via the stream will
  * automatically be sent to the target file descriptor until the
  * stream is "closed" or an EOF is received on the local file descriptor.
- * Valid source values include PRRTE_IOF_STDOUT, PRRTE_IOF_STDERR, and
- * PRRTE_IOF_INTERNAL
+ * Valid source values include PRTE_IOF_STDOUT, PRTE_IOF_STDERR, and
+ * PRTE_IOF_INTERNAL
  *
  * close: Closes a stream, flushing any pending data down it and
  * terminating any "push/pull" connections against it. Unclear yet
@@ -112,15 +112,15 @@
  *
  */
 
-#ifndef PRRTE_IOF_H
-#define PRRTE_IOF_H
+#ifndef PRTE_IOF_H
+#define PRTE_IOF_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
 #include "src/mca/mca.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "iof_types.h"
 
@@ -128,34 +128,34 @@ BEGIN_C_DECLS
 
 /* define a macro for requesting a proxy PULL of IO on
  * behalf of a tool that had the HNP spawn a job. First
- * argument is the prrte_job_t of the spawned job, second
+ * argument is the prte_job_t of the spawned job, second
  * is a pointer to the name of the requesting tool */
-#define PRRTE_IOF_PROXY_PULL(a, b)                                       \
+#define PRTE_IOF_PROXY_PULL(a, b)                                       \
     do {                                                                \
-        prrte_buffer_t *buf;                                             \
-        prrte_iof_tag_t tag;                                             \
-        prrte_process_name_t nm;                                         \
+        prte_buffer_t *buf;                                             \
+        prte_iof_tag_t tag;                                             \
+        prte_process_name_t nm;                                         \
                                                                         \
-        buf = PRRTE_NEW(prrte_buffer_t);                                   \
+        buf = PRTE_NEW(prte_buffer_t);                                   \
                                                                         \
         /* setup the tag to pull from HNP */                            \
-        tag = PRRTE_IOF_STDOUTALL | PRRTE_IOF_PULL | PRRTE_IOF_EXCLUSIVE;  \
-        prrte_dss.pack(buf, &tag, 1, PRRTE_IOF_TAG);                      \
+        tag = PRTE_IOF_STDOUTALL | PRTE_IOF_PULL | PRTE_IOF_EXCLUSIVE;  \
+        prte_dss.pack(buf, &tag, 1, PRTE_IOF_TAG);                      \
         /* pack the name of the source we want to pull */               \
         nm.jobid = (a)->jobid;                                          \
-        nm.vpid = PRRTE_VPID_WILDCARD;                                   \
-        prrte_dss.pack(buf, &nm, 1, PRRTE_NAME);                          \
+        nm.vpid = PRTE_VPID_WILDCARD;                                   \
+        prte_dss.pack(buf, &nm, 1, PRTE_NAME);                          \
         /* pack the name of the tool */                                 \
-        prrte_dss.pack(buf, (b), 1, PRRTE_NAME);                          \
+        prte_dss.pack(buf, (b), 1, PRTE_NAME);                          \
                                                                         \
         /* send the buffer to the HNP */                                \
-        prrte_rml.send_buffer_nb(PRRTE_PROC_MY_HNP, buf,                  \
-                                PRRTE_RML_TAG_IOF_HNP,                   \
-                                prrte_rml_send_callback, NULL);          \
+        prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,                  \
+                                PRTE_RML_TAG_IOF_HNP,                   \
+                                prte_rml_send_callback, NULL);          \
     } while(0);
 
 /* Initialize the selected module */
-typedef int (*prrte_iof_base_init_fn_t)(void);
+typedef int (*prte_iof_base_init_fn_t)(void);
 
 /**
  * Explicitly push data from the specified input file descriptor to
@@ -165,8 +165,8 @@ typedef int (*prrte_iof_base_init_fn_t)(void);
  * @param peer  Name of target peer(s)
  * @param fd    Local file descriptor for input.
  */
-typedef int (*prrte_iof_base_push_fn_t)(const prrte_process_name_t* peer,
-                                       prrte_iof_tag_t src_tag, int fd);
+typedef int (*prte_iof_base_push_fn_t)(const prte_process_name_t* peer,
+                                       prte_iof_tag_t src_tag, int fd);
 
 /**
  * Explicitly pull data from the specified set of SOURCE peers and
@@ -177,69 +177,69 @@ typedef int (*prrte_iof_base_push_fn_t)(const prrte_process_name_t* peer,
  * @param source_tag    Indicates the output streams to be forwarded
  * @param fd            Local file descriptor for output.
  */
-typedef int (*prrte_iof_base_pull_fn_t)(const prrte_process_name_t* peer,
-                                       prrte_iof_tag_t source_tag,
+typedef int (*prte_iof_base_pull_fn_t)(const prte_process_name_t* peer,
+                                       prte_iof_tag_t source_tag,
                                        int fd);
 
 /**
  * Close the specified iof stream(s) from the indicated peer(s)
  */
-typedef int (*prrte_iof_base_close_fn_t)(const prrte_process_name_t* peer,
-                                        prrte_iof_tag_t source_tag);
+typedef int (*prte_iof_base_close_fn_t)(const prte_process_name_t* peer,
+                                        prte_iof_tag_t source_tag);
 
 /**
  * Output something via the IOF subsystem
  */
-typedef int (*prrte_iof_base_output_fn_t)(const prrte_process_name_t* peer,
-                                         prrte_iof_tag_t source_tag,
+typedef int (*prte_iof_base_output_fn_t)(const prte_process_name_t* peer,
+                                         prte_iof_tag_t source_tag,
                                          const char *msg);
 
-typedef int (*prrte_iof_base_push_stdin_fn_t)(const prrte_process_name_t* dst_name,
+typedef int (*prte_iof_base_push_stdin_fn_t)(const prte_process_name_t* dst_name,
                                              uint8_t *data, size_t sz);
 
 /* Flag that a job is complete */
-typedef void (*prrte_iof_base_complete_fn_t)(const prrte_job_t *jdata);
+typedef void (*prte_iof_base_complete_fn_t)(const prte_job_t *jdata);
 
 /* finalize the selected module */
-typedef int (*prrte_iof_base_finalize_fn_t)(void);
+typedef int (*prte_iof_base_finalize_fn_t)(void);
 
 /**
  * FT Event Notification
  */
-typedef int (*prrte_iof_base_ft_event_fn_t)(int state);
+typedef int (*prte_iof_base_ft_event_fn_t)(int state);
 
 /**
  *  IOF module.
  */
-struct prrte_iof_base_module_2_0_0_t {
-    prrte_iof_base_init_fn_t         init;
-    prrte_iof_base_push_fn_t         push;
-    prrte_iof_base_pull_fn_t         pull;
-    prrte_iof_base_close_fn_t        close;
-    prrte_iof_base_output_fn_t       output;
-    prrte_iof_base_complete_fn_t     complete;
-    prrte_iof_base_finalize_fn_t     finalize;
-    prrte_iof_base_ft_event_fn_t     ft_event;
-    prrte_iof_base_push_stdin_fn_t   push_stdin;
+struct prte_iof_base_module_2_0_0_t {
+    prte_iof_base_init_fn_t         init;
+    prte_iof_base_push_fn_t         push;
+    prte_iof_base_pull_fn_t         pull;
+    prte_iof_base_close_fn_t        close;
+    prte_iof_base_output_fn_t       output;
+    prte_iof_base_complete_fn_t     complete;
+    prte_iof_base_finalize_fn_t     finalize;
+    prte_iof_base_ft_event_fn_t     ft_event;
+    prte_iof_base_push_stdin_fn_t   push_stdin;
 };
 
-typedef struct prrte_iof_base_module_2_0_0_t prrte_iof_base_module_2_0_0_t;
-typedef prrte_iof_base_module_2_0_0_t prrte_iof_base_module_t;
-PRRTE_EXPORT extern prrte_iof_base_module_t prrte_iof;
+typedef struct prte_iof_base_module_2_0_0_t prte_iof_base_module_2_0_0_t;
+typedef prte_iof_base_module_2_0_0_t prte_iof_base_module_t;
+PRTE_EXPORT extern prte_iof_base_module_t prte_iof;
 
-struct prrte_iof_base_component_2_0_0_t {
-  prrte_mca_base_component_t iof_version;
-  prrte_mca_base_component_data_t iof_data;
+struct prte_iof_base_component_2_0_0_t {
+  prte_mca_base_component_t iof_version;
+  prte_mca_base_component_data_t iof_data;
 };
-typedef struct prrte_iof_base_component_2_0_0_t prrte_iof_base_component_2_0_0_t;
-typedef struct prrte_iof_base_component_2_0_0_t prrte_iof_base_component_t;
+typedef struct prte_iof_base_component_2_0_0_t prte_iof_base_component_2_0_0_t;
+typedef struct prte_iof_base_component_2_0_0_t prte_iof_base_component_t;
 
 END_C_DECLS
 
 /*
  * Macro for use in components that are of type iof
  */
-#define PRRTE_IOF_BASE_VERSION_2_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("iof", 2, 0, 0)
+#define PRTE_IOF_BASE_VERSION_2_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("iof", 2, 0, 0)
 
-#endif /* PRRTE_IOF_H */
+#endif /* PRTE_IOF_H */

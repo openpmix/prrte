@@ -40,49 +40,49 @@
 m4_include([config/autogen_found_items.m4])
 
 # Load the version number code
-m4_include([config/prrte_get_version.m4])
+m4_include([config/prte_get_version.m4])
 AC_LANG([C])
 
 # Init autoconf
 # We don't have the version number to put in here yet, and we can't
-# call PRRTE_GET_VERSION (etc.) before AC_INIT.  So use the shell
+# call PRTE_GET_VERSION (etc.) before AC_INIT.  So use the shell
 # version.  project_name_* comes from config/project_list.m4, which
 # was set during autogen.pl.
 
 AC_INIT([project_name_long],
-        [m4_normalize(esyscmd([config/prrte_get_version.sh VERSION --tarball]))],
-        [https://github.com/openpmix/prrte/], [project_name_short])
+        [m4_normalize(esyscmd([config/prte_get_version.sh VERSION --tarball]))],
+        [https://github.com/openpmix/prte/], [project_name_short])
 
 AC_PREREQ(2.60)
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
-PRRTE_CAPTURE_CONFIGURE_CLI([PRRTE_CONFIGURE_CLI])
+PRTE_CAPTURE_CONFIGURE_CLI([PRTE_CONFIGURE_CLI])
 
 # Get our platform support file.  This has to be done very, very early
 # because it twiddles random bits of autoconf
-PRRTE_LOAD_PLATFORM
+PRTE_LOAD_PLATFORM
 
 #
 # Start it up
 #
 
-PRRTE_CONFIGURE_SETUP
+PRTE_CONFIGURE_SETUP
 
-prrte_show_title "Configuring PRRTE"
+prte_show_title "Configuring PRTE"
 
 #
 # Setup some things that must be done before AM-INIT-AUTOMAKE
 #
 
-prrte_show_subtitle "Startup tests"
+prte_show_subtitle "Startup tests"
 
 AC_CHECK_PROG([PERL],[perl],[perl],[no])
 AS_IF([test "X$PERL" = "Xno"],
-      [AC_MSG_ERROR(["PRRTE requires perl. Aborting"])])
+      [AC_MSG_ERROR(["PRTE requires perl. Aborting"])])
 
 AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
-AC_DEFINE_UNQUOTED(PRRTE_ARCH, "$target", [PRTE architecture string])
+AC_DEFINE_UNQUOTED(PRTE_ARCH, "$target", [PRTE architecture string])
 
 AS_IF([test "$host" != "$target"],
       [AC_MSG_WARN([Cross-compile detected])
@@ -91,7 +91,7 @@ AS_IF([test "$host" != "$target"],
 
 # AC_USE_SYSTEM_EXTENSIONS alters CFLAGS (e.g., adds -g -O2)
 
-PRRTE_VAR_SCOPE_PUSH([CFLAGS_save])
+PRTE_VAR_SCOPE_PUSH([CFLAGS_save])
 CFLAGS_save=$CFLAGS
 AC_USE_SYSTEM_EXTENSIONS
 
@@ -101,7 +101,7 @@ AC_USE_SYSTEM_EXTENSIONS
 
 AS_IF([test -z "$CFLAGS_save"], [CFLAGS=])
 
-PRRTE_VAR_SCOPE_POP
+PRTE_VAR_SCOPE_POP
 
 #
 # Init automake
@@ -119,18 +119,18 @@ AM_SILENT_RULES([yes])
 # Make configure depend on the VERSION file, since it's used in AC_INIT
 AC_SUBST([CONFIGURE_DEPENDENCIES], ['$(top_srcdir)/VERSION'])
 
-prrte_show_subtitle "Checking versions"
+prte_show_subtitle "Checking versions"
 
 # Get the version of PRTE that we are installing
-PRRTE_SAVE_VERSION([PRRTE], [PMIx Reference Run-Time Environment],
+PRTE_SAVE_VERSION([PRTE], [PMIx Reference Run-Time Environment],
                           [$srcdir/VERSION],
                           [src/include/version.h])
 
 # Get shared library version numbers
 . $srcdir/VERSION
 
-AC_SUBST(libprrte_so_version)
-AC_SUBST(libprrte_common_alps_so_version)
+AC_SUBST(libprte_so_version)
+AC_SUBST(libprte_common_alps_so_version)
 
 #
 # Get the versions of the autotools that were used to bootstrap us
@@ -150,24 +150,24 @@ AC_MSG_RESULT([$ltversion])
 
 # List header files to generate
 
-AC_CONFIG_HEADERS([src/include/prrte_config.h])
+AC_CONFIG_HEADERS([src/include/prte_config.h])
 
-prrte_show_subtitle "Initialization, setup"
+prte_show_subtitle "Initialization, setup"
 
-PRRTE_TOP_BUILDDIR="`pwd`"
-AC_SUBST(PRRTE_TOP_BUILDDIR)
+PRTE_TOP_BUILDDIR="`pwd`"
+AC_SUBST(PRTE_TOP_BUILDDIR)
 cd "$srcdir"
-PRRTE_TOP_SRCDIR="`pwd`"
-AC_SUBST(PRRTE_TOP_SRCDIR)
-cd "$PRRTE_TOP_BUILDDIR"
-AC_MSG_NOTICE([builddir: $PRRTE_TOP_BUILDDIR])
-AC_MSG_NOTICE([srcdir: $PRRTE_TOP_SRCDIR])
+PRTE_TOP_SRCDIR="`pwd`"
+AC_SUBST(PRTE_TOP_SRCDIR)
+cd "$PRTE_TOP_BUILDDIR"
+AC_MSG_NOTICE([builddir: $PRTE_TOP_BUILDDIR])
+AC_MSG_NOTICE([srcdir: $PRTE_TOP_SRCDIR])
 
-if test "$PRRTE_TOP_BUILDDIR" != "$PRRTE_TOP_SRCDIR"; then
+if test "$PRTE_TOP_BUILDDIR" != "$PRTE_TOP_SRCDIR"; then
     AC_MSG_NOTICE([Detected VPATH build])
 fi
 
-# Setup the top of the src/include/prrte_config.h file
+# Setup the top of the src/include/prte_config.h file
 
 AH_TOP([/* -*- c -*-
  *
@@ -189,33 +189,33 @@ AH_TOP([/* -*- c -*-
  * Function: - OS, CPU and compiler dependent configuration
  */
 
-#ifndef PRRTE_CONFIG_H
-#define PRRTE_CONFIG_H
+#ifndef PRTE_CONFIG_H
+#define PRTE_CONFIG_H
 
-#include "prrte_config_top.h"
+#include "prte_config_top.h"
 ])
 
 AH_BOTTOM([
-#include "prrte_config_bottom.h"
-#endif /* PRRTE_CONFIG_H */
+#include "prte_config_bottom.h"
+#endif /* PRTE_CONFIG_H */
 ])
 
 # Other basic setup stuff (shared with components)
 
-PRRTE_BASIC_SETUP
+PRTE_BASIC_SETUP
 
-PRRTE_TOP_SRCDIR="$PRRTE_TOP_SRCDIR"
-PRRTE_TOP_BUILDDIR="$PRRTE_TOP_BUILDDIR"
-AC_SUBST(PRRTE_TOP_SRCDIR)
-AC_SUBST(PRRTE_TOP_BUILDDIR)
+PRTE_TOP_SRCDIR="$PRTE_TOP_SRCDIR"
+PRTE_TOP_BUILDDIR="$PRTE_TOP_BUILDDIR"
+AC_SUBST(PRTE_TOP_SRCDIR)
+AC_SUBST(PRTE_TOP_BUILDDIR)
 
 ############################################################################
 # Configuration options
 ############################################################################
 
-PRRTE_CONFIGURE_OPTIONS
-PRRTE_CHECK_OS_FLAVORS
-PRRTE_CONFIGURE_OPTIONS
+PRTE_CONFIGURE_OPTIONS
+PRTE_CHECK_OS_FLAVORS
+PRTE_CONFIGURE_OPTIONS
 
 if test "$enable_binaries" = "no" && test "$enable_dist" = "yes"; then
     AC_MSG_WARN([--disable-binaries is incompatible with --enable dist])
@@ -234,7 +234,7 @@ fi
 
 AM_ENABLE_SHARED
 AM_DISABLE_STATIC
-PRRTE_SETUP_WRAPPER_INIT
+PRTE_SETUP_WRAPPER_INIT
 
 ##################################
 # Check for known incompatibility
@@ -263,17 +263,17 @@ esac
 # Check for compilers and preprocessors
 ############################################################################
 
-prrte_show_title "Compiler and preprocessor tests"
+prte_show_title "Compiler and preprocessor tests"
 
 ##################################
 # C compiler characteristics
 ##################################
 
-PRRTE_SETUP_CC
+PRTE_SETUP_CC
 
 # Does the compiler support "ident"-like constructs?
 
-PRRTE_CHECK_IDENT([CC], [CFLAGS], [c], [C])
+PRTE_CHECK_IDENT([CC], [CFLAGS], [c], [C])
 
 #
 # Check for some types
@@ -294,7 +294,7 @@ AC_CHECK_TYPES(long long)
 AC_CHECK_TYPES(__float128)
 AC_CHECK_TYPES(long double)
 # We only need these types if we're building the OMPI project, but
-# PRRTE currently doesn't protect for their lack of presence well.
+# PRTE currently doesn't protect for their lack of presence well.
 AC_CHECK_HEADERS(complex.h)
 AC_CHECK_TYPES(float _Complex)
 AC_CHECK_TYPES(double _Complex)
@@ -328,7 +328,7 @@ if test "$ac_cv_type___float128" = yes; then
 fi
 
 # We only need these types if we're building the OMPI project, but
-# PRRTE currently doesn't protect for their lack of presence well.
+# PRTE currently doesn't protect for their lack of presence well.
 AC_CHECK_SIZEOF(float _Complex)
 AC_CHECK_SIZEOF(double _Complex)
 AC_CHECK_SIZEOF(long double _Complex)
@@ -349,7 +349,7 @@ fi
 AC_CHECK_SIZEOF(wchar_t)
 AC_CHECK_SIZEOF(pid_t)
 
-# Check sizes of atomic types so we can define fixed-width types in PRRTE
+# Check sizes of atomic types so we can define fixed-width types in PRTE
 AC_CHECK_SIZEOF(atomic_short, [],[[#include <stdatomic.h>]])
 AC_CHECK_SIZEOF(atomic_int,[],[[#include <stdatomic.h>]])
 AC_CHECK_SIZEOF(atomic_long,[],[[#include <stdatomic.h>]])
@@ -359,76 +359,76 @@ AC_CHECK_SIZEOF(atomic_llong,[],[[#include <stdatomic.h>]])
 # Check for type alignments
 #
 
-PRRTE_C_GET_ALIGNMENT(bool, PRRTE_ALIGNMENT_BOOL)
-PRRTE_C_GET_ALIGNMENT(int8_t, PRRTE_ALIGNMENT_INT8)
-PRRTE_C_GET_ALIGNMENT(int16_t, PRRTE_ALIGNMENT_INT16)
-PRRTE_C_GET_ALIGNMENT(int32_t, PRRTE_ALIGNMENT_INT32)
-PRRTE_C_GET_ALIGNMENT(int64_t, PRRTE_ALIGNMENT_INT64)
+PRTE_C_GET_ALIGNMENT(bool, PRTE_ALIGNMENT_BOOL)
+PRTE_C_GET_ALIGNMENT(int8_t, PRTE_ALIGNMENT_INT8)
+PRTE_C_GET_ALIGNMENT(int16_t, PRTE_ALIGNMENT_INT16)
+PRTE_C_GET_ALIGNMENT(int32_t, PRTE_ALIGNMENT_INT32)
+PRTE_C_GET_ALIGNMENT(int64_t, PRTE_ALIGNMENT_INT64)
 
 if test "$ac_cv_type_int128_t" = yes ; then
-  PRRTE_C_GET_ALIGNMENT(int128_t, PRRTE_ALIGNMENT_INT128)
+  PRTE_C_GET_ALIGNMENT(int128_t, PRTE_ALIGNMENT_INT128)
 fi
 
-PRRTE_C_GET_ALIGNMENT(char, PRRTE_ALIGNMENT_CHAR)
-PRRTE_C_GET_ALIGNMENT(short, PRRTE_ALIGNMENT_SHORT)
-PRRTE_C_GET_ALIGNMENT(wchar_t, PRRTE_ALIGNMENT_WCHAR)
-PRRTE_C_GET_ALIGNMENT(int, PRRTE_ALIGNMENT_INT)
-PRRTE_C_GET_ALIGNMENT(long, PRRTE_ALIGNMENT_LONG)
-PRRTE_C_GET_ALIGNMENT(long long, PRRTE_ALIGNMENT_LONG_LONG)
-PRRTE_C_GET_ALIGNMENT(float, PRRTE_ALIGNMENT_FLOAT)
-PRRTE_C_GET_ALIGNMENT(double, PRRTE_ALIGNMENT_DOUBLE)
-PRRTE_C_GET_ALIGNMENT(long double, PRRTE_ALIGNMENT_LONG_DOUBLE)
+PRTE_C_GET_ALIGNMENT(char, PRTE_ALIGNMENT_CHAR)
+PRTE_C_GET_ALIGNMENT(short, PRTE_ALIGNMENT_SHORT)
+PRTE_C_GET_ALIGNMENT(wchar_t, PRTE_ALIGNMENT_WCHAR)
+PRTE_C_GET_ALIGNMENT(int, PRTE_ALIGNMENT_INT)
+PRTE_C_GET_ALIGNMENT(long, PRTE_ALIGNMENT_LONG)
+PRTE_C_GET_ALIGNMENT(long long, PRTE_ALIGNMENT_LONG_LONG)
+PRTE_C_GET_ALIGNMENT(float, PRTE_ALIGNMENT_FLOAT)
+PRTE_C_GET_ALIGNMENT(double, PRTE_ALIGNMENT_DOUBLE)
+PRTE_C_GET_ALIGNMENT(long double, PRTE_ALIGNMENT_LONG_DOUBLE)
 if test "$ac_cv_type___float128" = yes; then
-    PRRTE_C_GET_ALIGNMENT(__float128, PRRTE_ALIGNMENT___FLOAT128)
+    PRTE_C_GET_ALIGNMENT(__float128, PRTE_ALIGNMENT___FLOAT128)
 fi
 
 # We only need these types if we're building the OMPI project, but
-# PRRTE currently doesn't protect for their lack of presence well.
-PRRTE_C_GET_ALIGNMENT(float _Complex, PRRTE_ALIGNMENT_FLOAT_COMPLEX)
-PRRTE_C_GET_ALIGNMENT(double _Complex, PRRTE_ALIGNMENT_DOUBLE_COMPLEX)
-PRRTE_C_GET_ALIGNMENT(long double _Complex, PRRTE_ALIGNMENT_LONG_DOUBLE_COMPLEX)
+# PRTE currently doesn't protect for their lack of presence well.
+PRTE_C_GET_ALIGNMENT(float _Complex, PRTE_ALIGNMENT_FLOAT_COMPLEX)
+PRTE_C_GET_ALIGNMENT(double _Complex, PRTE_ALIGNMENT_DOUBLE_COMPLEX)
+PRTE_C_GET_ALIGNMENT(long double _Complex, PRTE_ALIGNMENT_LONG_DOUBLE_COMPLEX)
 
-PRRTE_C_GET_ALIGNMENT(void *, PRRTE_ALIGNMENT_VOID_P)
-PRRTE_C_GET_ALIGNMENT(size_t, PRRTE_ALIGNMENT_SIZE_T)
+PRTE_C_GET_ALIGNMENT(void *, PRTE_ALIGNMENT_VOID_P)
+PRTE_C_GET_ALIGNMENT(size_t, PRTE_ALIGNMENT_SIZE_T)
 
 #
 # Check for other compiler characteristics
 #
 
-PRRTE_C_WEAK_SYMBOLS
-PRRTE_C_MACRO_WEAK_SYMBOLS
+PRTE_C_WEAK_SYMBOLS
+PRTE_C_MACRO_WEAK_SYMBOLS
 
 
 if test "x$CC" = "xicc"; then
-    PRRTE_CHECK_ICC_VARARGS
+    PRTE_CHECK_ICC_VARARGS
 fi
 
 # Check if we support the offsetof compiler directive
-PRRTE_CHECK_OFFSETOF
+PRTE_CHECK_OFFSETOF
 
 ##################################
 # Only after setting up C check compiler attributes.
 ##################################
 
-prrte_show_subtitle "Compiler characteristics"
+prte_show_subtitle "Compiler characteristics"
 
-PRRTE_CHECK_ATTRIBUTES
-PRRTE_CHECK_COMPILER_VERSION_ID
+PRTE_CHECK_ATTRIBUTES
+PRTE_CHECK_COMPILER_VERSION_ID
 
 ##################################
 # Assembler Configuration
 ##################################
 
-prrte_show_subtitle "Assembler"
+prte_show_subtitle "Assembler"
 
 AM_PROG_AS
-PRRTE_CONFIG_ASM
+PRTE_CONFIG_ASM
 
 ##################################
 # Header files
 ##################################
 
-prrte_show_title "Header file tests"
+prte_show_title "Header file tests"
 
 AC_CHECK_HEADERS([alloca.h aio.h arpa/inet.h dirent.h \
     dlfcn.h endian.h execinfo.h err.h fcntl.h grp.h libgen.h \
@@ -483,7 +483,7 @@ AC_CACHE_SAVE
 # Types
 ##################################
 
-prrte_show_title "Type tests"
+prte_show_title "Type tests"
 
 AC_CHECK_TYPES([socklen_t, struct sockaddr_in, struct sockaddr_in6,
                 struct sockaddr_storage, struct ifreq, struct ethtool_cmd],
@@ -557,17 +557,17 @@ AC_CHECK_DECLS([AF_UNSPEC, PF_UNSPEC, AF_INET6, PF_INET6],
 
 # SA_RESTART in signal.h
 
-PRRTE_VAR_SCOPE_PUSH([MSG])
+PRTE_VAR_SCOPE_PUSH([MSG])
 AC_MSG_CHECKING([if SA_RESTART defined in signal.h])
 AC_EGREP_CPP(yes, [
 #include <signal.h>
 #ifdef SA_RESTART
     yes
 #endif ], [MSG=yes VALUE=1], [MSG=no VALUE=0])
-AC_DEFINE_UNQUOTED(PRRTE_HAVE_SA_RESTART, $VALUE,
+AC_DEFINE_UNQUOTED(PRTE_HAVE_SA_RESTART, $VALUE,
     [Whether we have SA_RESTART in <signal.h> or not])
 AC_MSG_RESULT([$MSG])
-PRRTE_VAR_SCOPE_POP
+PRTE_VAR_SCOPE_POP
 
 AC_CHECK_MEMBERS([struct sockaddr.sa_len], [], [], [
 #include <sys/types.h>
@@ -638,21 +638,21 @@ AC_INCLUDES_DEFAULT
 
 AC_MSG_CHECKING([for pointer diff type])
 if test $ac_cv_type_ptrdiff_t = yes ; then
-    prrte_ptrdiff_t="ptrdiff_t"
-    prrte_ptrdiff_size=$ac_cv_sizeof_ptrdiff_t
+    prte_ptrdiff_t="ptrdiff_t"
+    prte_ptrdiff_size=$ac_cv_sizeof_ptrdiff_t
 elif test $ac_cv_sizeof_void_p -eq $ac_cv_sizeof_long ; then
-    prrte_ptrdiff_t="long"
-    prrte_ptrdiff_size=$ac_cv_sizeof_long
+    prte_ptrdiff_t="long"
+    prte_ptrdiff_size=$ac_cv_sizeof_long
 elif test $ac_cv_type_long_long = yes && test $ac_cv_sizeof_void_p -eq $ac_cv_sizeof_long_long ; then
-    prrte_ptrdiff_t="long long"
-    prrte_ptrdiff_size=$ac_cv_sizeof_long_long
+    prte_ptrdiff_t="long long"
+    prte_ptrdiff_size=$ac_cv_sizeof_long_long
 else
     AC_MSG_ERROR([Could not find datatype to emulate ptrdiff_t.  Cannot continue])
 fi
 
-AC_DEFINE_UNQUOTED([PRRTE_PTRDIFF_TYPE], [$prrte_ptrdiff_t],
+AC_DEFINE_UNQUOTED([PRTE_PTRDIFF_TYPE], [$prte_ptrdiff_t],
     [type to use for ptrdiff_t])
-AC_MSG_RESULT([$prrte_ptrdiff_t (size: $prrte_ptrdiff_size)])
+AC_MSG_RESULT([$prte_ptrdiff_t (size: $prte_ptrdiff_size)])
 
 #
 # Find corresponding types for MPI_Aint, MPI_Count, and MPI_Offset.
@@ -668,39 +668,39 @@ AC_CACHE_SAVE
 ##################################
 
 AC_MSG_CHECKING([the linker for support for the -fini option])
-PRRTE_VAR_SCOPE_PUSH([LDFLAGS_save])
+PRTE_VAR_SCOPE_PUSH([LDFLAGS_save])
 LDFLAGS_save=$LDFLAGS
 LDFLAGS="$LDFLAGS_save -Wl,-fini -Wl,finalize"
 AC_TRY_LINK([void finalize (void) {}], [], [AC_MSG_RESULT([yes])
-        prrte_ld_have_fini=1], [AC_MSG_RESULT([no])
-        prrte_ld_have_fini=0])
+        prte_ld_have_fini=1], [AC_MSG_RESULT([no])
+        prte_ld_have_fini=0])
 LDFLAGS=$LDFLAGS_save
-PRRTE_VAR_SCOPE_POP
+PRTE_VAR_SCOPE_POP
 
 ##################################
 # Libraries
 ##################################
 
-prrte_show_title "Library and Function tests"
+prte_show_title "Library and Function tests"
 
 # Darwin doesn't need -lutil, as it's something other than this -lutil.
-PRRTE_SEARCH_LIBS_CORE([openpty], [util])
+PRTE_SEARCH_LIBS_CORE([openpty], [util])
 
-PRRTE_SEARCH_LIBS_CORE([gethostbyname], [nsl])
+PRTE_SEARCH_LIBS_CORE([gethostbyname], [nsl])
 
-PRRTE_SEARCH_LIBS_CORE([socket], [socket])
+PRTE_SEARCH_LIBS_CORE([socket], [socket])
 
 # Solaris has sched_yield in -lrt, usually in libc
-PRRTE_SEARCH_LIBS_CORE([sched_yield], [rt])
+PRTE_SEARCH_LIBS_CORE([sched_yield], [rt])
 
 # IRIX and CentOS have dirname in -lgen, usually in libc
-PRRTE_SEARCH_LIBS_CORE([dirname], [gen])
+PRTE_SEARCH_LIBS_CORE([dirname], [gen])
 
 # Darwin doesn't need -lm, as it's a symlink to libSystem.dylib
-PRRTE_SEARCH_LIBS_CORE([ceil], [m])
+PRTE_SEARCH_LIBS_CORE([ceil], [m])
 
 # -lrt might be needed for clock_gettime
-PRRTE_SEARCH_LIBS_CORE([clock_gettime], [rt])
+PRTE_SEARCH_LIBS_CORE([clock_gettime], [rt])
 
 AC_CHECK_FUNCS([asprintf snprintf vasprintf vsnprintf openpty isatty getpwuid fork waitpid execve pipe ptsname setsid mmap tcgetpgrp posix_memalign strsignal sysconf syslog vsyslog regcmp regexec regfree _NSGetEnviron socketpair strncpy_s usleep mkfifo dbopen dbm_open statfs statvfs setpgid setenv __malloc_initialize_hook])
 
@@ -731,11 +731,11 @@ AC_CACHE_CHECK([for htonl define],
 #ifndef ntohl
 #error "ntohl not defined"
 #endif
-])], [prrte_cv_htonl_define=yes], [prrte_cv_htonl_define=no])])
+])], [prte_cv_htonl_define=yes], [prte_cv_htonl_define=no])])
 
-AC_CHECK_FUNC([htonl], [prrte_have_htonl=yes], [prrte_have_htonl=no])
+AC_CHECK_FUNC([htonl], [prte_have_htonl=yes], [prte_have_htonl=no])
 
-AS_IF([test "$prrte_cv_htonl_define" = "yes" || test "$prrte_have_htonl" = "yes"],
+AS_IF([test "$prte_cv_htonl_define" = "yes" || test "$prte_have_htonl" = "yes"],
     [AC_DEFINE_UNQUOTED([HAVE_UNIX_BYTESWAP], [1],
         [whether unix byteswap routines -- htonl, htons, nothl, ntohs -- are available])])
 
@@ -743,16 +743,16 @@ AS_IF([test "$prrte_cv_htonl_define" = "yes" || test "$prrte_have_htonl" = "yes"
 # Make sure we can copy va_lists (need check declared, not linkable)
 #
 
-AC_CHECK_DECL(va_copy, PRRTE_HAVE_VA_COPY=1, PRRTE_HAVE_VA_COPY=0,
+AC_CHECK_DECL(va_copy, PRTE_HAVE_VA_COPY=1, PRTE_HAVE_VA_COPY=0,
     [#include <stdarg.h>])
 
-AC_DEFINE_UNQUOTED(PRRTE_HAVE_VA_COPY, $PRRTE_HAVE_VA_COPY,
+AC_DEFINE_UNQUOTED(PRTE_HAVE_VA_COPY, $PRTE_HAVE_VA_COPY,
     [Whether we have va_copy or not])
 
-AC_CHECK_DECL(__va_copy, PRRTE_HAVE_UNDERSCORE_VA_COPY=1,
-    PRRTE_HAVE_UNDERSCORE_VA_COPY=0, [#include <stdarg.h>])
+AC_CHECK_DECL(__va_copy, PRTE_HAVE_UNDERSCORE_VA_COPY=1,
+    PRTE_HAVE_UNDERSCORE_VA_COPY=0, [#include <stdarg.h>])
 
-AC_DEFINE_UNQUOTED(PRRTE_HAVE_UNDERSCORE_VA_COPY, $PRRTE_HAVE_UNDERSCORE_VA_COPY,
+AC_DEFINE_UNQUOTED(PRTE_HAVE_UNDERSCORE_VA_COPY, $PRTE_HAVE_UNDERSCORE_VA_COPY,
     [Whether we have __va_copy or not])
 
 AC_CHECK_DECLS(__func__)
@@ -764,7 +764,7 @@ AC_CACHE_SAVE
 # System-specific tests
 ##################################
 
-prrte_show_title "System-specific tests"
+prte_show_title "System-specific tests"
 
 # Do we have _SC_NPROCESSORS_ONLN? (only going to pass if we also have
 # <unistd.h> and sysconf(), which is ok) OS X 10.4 has <unistd.h> and
@@ -783,26 +783,26 @@ AC_INCLUDES_DEFAULT
 AS_IF([test "$ompi_cv_have__SC_NPROCESSORS_ONLN" = "yes"],
       [result=1], [result=0])
 
-AC_DEFINE_UNQUOTED([PRRTE_HAVE__SC_NPROCESSORS_ONLN], [$result],
+AC_DEFINE_UNQUOTED([PRTE_HAVE__SC_NPROCESSORS_ONLN], [$result],
   [Define to 1 ifyou have the declaration of _SC_NPROCESSORS_ONLN, and to 0 otherwise])
 
 # all: endian
 AC_C_BIGENDIAN
 
-PRRTE_CHECK_BROKEN_QSORT
+PRTE_CHECK_BROKEN_QSORT
 
 #
 # Check out what thread support we have
 #
 
-PRRTE_CONFIG_THREADS
+PRTE_CONFIG_THREADS
 
 CFLAGS="$CFLAGS $THREAD_CFLAGS"
 LDFLAGS="$LDFLAGS $THREAD_LDFLAGS"
 LIBS="$LIBS $THREAD_LIBS"
 
-PRRTE_WRAPPER_FLAGS_ADD([CFLAGS], [$THREAD_CFLAGS])
-PRRTE_WRAPPER_FLAGS_ADD([LDFLAGS], [$THREAD_LDFLAGS])
+PRTE_WRAPPER_FLAGS_ADD([CFLAGS], [$THREAD_CFLAGS])
+PRTE_WRAPPER_FLAGS_ADD([LDFLAGS], [$THREAD_LDFLAGS])
 
 # no need to update WRAPPER_EXTRA_LIBS - we'll get it from LT later
 #
@@ -830,11 +830,11 @@ AM_PROG_LEX
 if test -z "$LEX" || \
    test -n "`echo $LEX | $GREP missing`" || \
    test "`basename $LEX`" != "flex"; then
-    if test ! -f "$srcdir/prrte/util/show_help_lex.c"; then
+    if test ! -f "$srcdir/prte/util/show_help_lex.c"; then
         AC_MSG_WARN([*** Could not find Flex on your system.])
         AC_MSG_WARN([*** Flex is required for developer builds of PRTE.])
         AC_MSG_WARN([*** Other versions of Lex are not supported.])
-        AC_MSG_WARN([*** NOTE: If you are building from a tarball downloaded from the PRRTE web site, you do not need Flex.])
+        AC_MSG_WARN([*** NOTE: If you are building from a tarball downloaded from the PRTE web site, you do not need Flex.])
         AC_MSG_ERROR([Cannot continue])
     fi
 fi
@@ -842,18 +842,18 @@ fi
 #
 # Setup Pandoc for man pages
 #
-PRRTE_SETUP_MAN_PAGES
+PRTE_SETUP_MAN_PAGES
 
 #
 # Look for ps command and arguments
 #
-PRRTE_PS_FLAVOR_CHECK
+PRTE_PS_FLAVOR_CHECK
 
 #
 # File system case sensitivity
 #
 
-PRRTE_CASE_SENSITIVE_FS_SETUP
+PRTE_CASE_SENSITIVE_FS_SETUP
 
 #
 # Do we have RLIMIT_NPROC in <sys/resources.h>? (e.g., Solaris does not)
@@ -932,18 +932,18 @@ AC_CACHE_SAVE
 # Libevent
 ##################################
 
-prrte_show_title "Configure libevent"
+prte_show_title "Configure libevent"
 
-PRRTE_LIBEV_CONFIG
-PRRTE_LIBEVENT_CONFIG
+PRTE_LIBEV_CONFIG
+PRTE_LIBEVENT_CONFIG
 
-AS_IF([test $prrte_libevent_support -eq 1 && test $prrte_libev_support -eq 1],
+AS_IF([test $prte_libevent_support -eq 1 && test $prte_libev_support -eq 1],
       [AC_MSG_WARN([Both libevent and libev support have been specified.])
        AC_MSG_WARN([Only one can be configured against at a time. Please])
        AC_MSG_WARN([remove one from the configure command line.])
        AC_MSG_ERROR([Cannot continue])])
 
-AS_IF([test $prrte_libevent_support -eq 0 && test $prrte_libev_support -eq 0],
+AS_IF([test $prte_libevent_support -eq 0 && test $prte_libev_support -eq 0],
       [AC_MSG_WARN([Either libevent or libev support is required, but neither])
        AC_MSG_WARN([was found. Please use the configure options to point us])
        AC_MSG_WARN([to where we can find one or the other library])
@@ -953,29 +953,29 @@ AS_IF([test $prrte_libevent_support -eq 0 && test $prrte_libev_support -eq 0],
 # PMIx
 ##################################
 
-prrte_show_title "Configure PMIx"
+prte_show_title "Configure PMIx"
 
-PRRTE_CHECK_PMIX
+PRTE_CHECK_PMIX
 
 ##################################
 # HWLOC
 ##################################
 
-prrte_show_title "Configure HWLOC"
+prte_show_title "Configure HWLOC"
 
-PRRTE_HWLOC_CONFIG
+PRTE_HWLOC_CONFIG
 
 ##################################
 # MCA
 ##################################
 
-prrte_show_title "Modular Component Architecture (MCA) setup"
+prte_show_title "Modular Component Architecture (MCA) setup"
 
 AC_MSG_CHECKING([for subdir args])
-PRRTE_CONFIG_SUBDIR_ARGS([prrte_subdir_args])
-AC_MSG_RESULT([$prrte_subdir_args])
+PRTE_CONFIG_SUBDIR_ARGS([prte_subdir_args])
+AC_MSG_RESULT([$prte_subdir_args])
 
-PRRTE_MCA
+PRTE_MCA
 
 # checkpoint results
 AC_CACHE_SAVE
@@ -987,34 +987,34 @@ AC_CACHE_SAVE
 # the previous tests that are not necessarily prepared for
 # the visibility feature.
 
-prrte_show_title "Symbol visibility feature"
+prte_show_title "Symbol visibility feature"
 
-PRRTE_CHECK_VISIBILITY
+PRTE_CHECK_VISIBILITY
 
 ##################################
 # STOP-ON-EXEC
 ##################################
 # Check ptrace support for stop-on-exec
 
-prrte_show_title "Ptrace stop-on-exec support"
+prte_show_title "Ptrace stop-on-exec support"
 
-PRRTE_CHECK_PTRACE
+PRTE_CHECK_PTRACE
 
 ############################################################################
 # Final top-level PRTE configuration
 ############################################################################
 
-prrte_show_title "Final top-level PRTE configuration"
+prte_show_title "Final top-level PRTE configuration"
 
 ############################################################################
 # Libtool: part two
 # (after C compiler setup = no compiler/linker tests after this)
 ############################################################################
-prrte_show_subtitle "Libtool configuration"
+prte_show_subtitle "Libtool configuration"
 
 # Use the undocumented solaris_use_stlport4 libtool variable to turn off any
 # Cstd/stlport4 linkage. This allows PRTE to be C++ STL agnostic.
-if test "x$prrte_cv_c_compiler_vendor" = "xsun"; then
+if test "x$prte_cv_c_compiler_vendor" = "xsun"; then
     solaris_use_stlport4="yes"
 fi
 
@@ -1026,35 +1026,35 @@ LT_INIT([dlopen win32-dll])
 # platforms, there didn't seem to be any harm in leaving in some of
 # them, alhtough I did remove some that we have never/will never
 # support, like OS/2).
-PRRTE_DYN_LIB_PREFIX=lib
+PRTE_DYN_LIB_PREFIX=lib
 case $host_os in
 cygwin*)
-    PRRTE_DYN_LIB_PREFIX=cyg
-    PRRTE_DYN_LIB_SUFFIX=dll
+    PRTE_DYN_LIB_PREFIX=cyg
+    PRTE_DYN_LIB_SUFFIX=dll
     ;;
 mingw* | pw32* | cegcc*)
-    PRRTE_DYN_LIB_SUFFIX=dll
+    PRTE_DYN_LIB_SUFFIX=dll
     ;;
 darwin* | rhapsody*)
-    PRRTE_DYN_LIB_SUFFIX=dylib
+    PRTE_DYN_LIB_SUFFIX=dylib
     ;;
 hpux9* | hpux10* | hpux11*)
     case $host_cpu in
         ia64*)
-        PRRTE_DYN_LIB_SUFFIX=so
+        PRTE_DYN_LIB_SUFFIX=so
         ;;
     *)
-        PRRTE_DYN_LIB_SUFFIX=sl
+        PRTE_DYN_LIB_SUFFIX=sl
         ;;
     esac
     ;;
 *)
-   PRRTE_DYN_LIB_SUFFIX=so
+   PRTE_DYN_LIB_SUFFIX=so
    ;;
 esac
 
-AC_SUBST(PRRTE_DYN_LIB_PREFIX)
-AC_SUBST(PRRTE_DYN_LIB_SUFFIX)
+AC_SUBST(PRTE_DYN_LIB_PREFIX)
+AC_SUBST(PRTE_DYN_LIB_SUFFIX)
 
 # Need the libtool binary before the rpathify stuff
 LT_OUTPUT
@@ -1062,7 +1062,7 @@ LT_OUTPUT
 ############################################################################
 # final compiler config
 ############################################################################
-prrte_show_subtitle "Compiler flags"
+prte_show_subtitle "Compiler flags"
 
 #
 # This is needed for VPATH builds, so that it will -I the appropriate
@@ -1071,26 +1071,26 @@ prrte_show_subtitle "Compiler flags"
 # purely aesthetic.
 #
 
-# Because prrte_config.h is created by AC_CONFIG_HEADERS, we
-# don't need to -I the builddir for prrte/include. However, we do
-# need to add it for prrte as it doesn't have an AC_CONFIG_HEADERS that
+# Because prte_config.h is created by AC_CONFIG_HEADERS, we
+# don't need to -I the builddir for prte/include. However, we do
+# need to add it for prte as it doesn't have an AC_CONFIG_HEADERS that
 # will install it for us. If we VPATH building, we do need to include the
 # source directories, however.
 #
 
-if test "$PRRTE_TOP_BUILDDIR" != "$PRRTE_TOP_SRCDIR"; then
+if test "$PRTE_TOP_BUILDDIR" != "$PRTE_TOP_SRCDIR"; then
     # Note the embedded m4 directives here -- we must embed them
     # rather than have successive assignments to these shell
     # variables, lest the $(foo) names try to get evaluated here.
     # Yuck!
-    cpp_includes="$PRRTE_TOP_SRCDIR $PRRTE_TOP_BUILDDIR $PRRTE_TOP_SRCDIR/src/include $PRRTE_TOP_BUILDDIR/src/include"
+    cpp_includes="$PRTE_TOP_SRCDIR $PRTE_TOP_BUILDDIR $PRTE_TOP_SRCDIR/src/include $PRTE_TOP_BUILDDIR/src/include"
 else
-    cpp_includes="$PRRTE_TOP_SRCDIR $PRRTE_TOP_SRCDIR/src/include"
+    cpp_includes="$PRTE_TOP_SRCDIR $PRTE_TOP_SRCDIR/src/include"
 fi
-CPP_INCLUDES="$(echo $cpp_includes | $SED 's/[[^ \]]* */'"$prrte_cc_iquote"'&/g')"
-CPPFLAGS="$CPP_INCLUDES $CPPFLAGS $PRRTE_FINAL_CPPFLAGS"
-LDFLAGS="$LDFLAGS $PRRTE_FINAL_LDFLAGS"
-LIBS="$LIBS $PRRTE_FINAL_LIBS"
+CPP_INCLUDES="$(echo $cpp_includes | $SED 's/[[^ \]]* */'"$prte_cc_iquote"'&/g')"
+CPPFLAGS="$CPP_INCLUDES $CPPFLAGS $PRTE_FINAL_CPPFLAGS"
+LDFLAGS="$LDFLAGS $PRTE_FINAL_LDFLAGS"
+LIBS="$LIBS $PRTE_FINAL_LIBS"
 
 #
 # Delayed the substitution of CFLAGS and CXXFLAGS until now because
@@ -1102,17 +1102,17 @@ AC_SUBST(CFLAGS)
 #
 # Aggregate MCA parameters directory
 #
-AC_SUBST([AMCA_PARAM_SETS_DIR], ['$(prrtedatadir)/amca-param-sets'])
+AC_SUBST([AMCA_PARAM_SETS_DIR], ['$(prtedatadir)/amca-param-sets'])
 
 ############################################################################
 # final wrapper compiler config
 ############################################################################
-prrte_show_subtitle "Wrapper compiler final setup"
+prte_show_subtitle "Wrapper compiler final setup"
 
-PRRTE_SETUP_WRAPPER_FINAL
+PRTE_SETUP_WRAPPER_FINAL
 
 # If there is a local hook, call it.
-m4_ifdef([prrte_CONFIG_LOCAL], [prrte_CONFIG_LOCAL])
+m4_ifdef([prte_CONFIG_LOCAL], [prte_CONFIG_LOCAL])
 
 ############################################################################
 # Party on
@@ -1132,22 +1132,22 @@ case "`uname`" in
     ;;
 esac
 
-# prrtedatadir, prrtelibdir, and prrteinclude are essentially the same as
-# pkg*dir, but will always be */prrte.
+# prtedatadir, prtelibdir, and prteinclude are essentially the same as
+# pkg*dir, but will always be */prte.
 
-prrtedatadir='${datadir}/prrte'
-prrtelibdir='${libdir}/prrte'
-prrteincludedir='${includedir}/prrte'
-AC_SUBST(prrtedatadir)
-AC_SUBST(prrtelibdir)
-AC_SUBST(prrteincludedir)
+prtedatadir='${datadir}/prte'
+prtelibdir='${libdir}/prte'
+prteincludedir='${includedir}/prte'
+AC_SUBST(prtedatadir)
+AC_SUBST(prtelibdir)
+AC_SUBST(prteincludedir)
 
-PRRTE_SET_MCA_PREFIX([PRRTE_MCA_])
-PRRTE_SET_MCA_CMD_LINE_ID([mca])
+PRTE_SET_MCA_PREFIX([PRTE_MCA_])
+PRTE_SET_MCA_CMD_LINE_ID([mca])
 
-prrte_want_prd=0
+prte_want_prd=0
 
-prrte_show_subtitle "Final output"
+prte_show_subtitle "Final output"
 
 AC_CONFIG_FILES([
     Makefile
@@ -1155,10 +1155,10 @@ AC_CONFIG_FILES([
     contrib/Makefile
 ])
 
-PRRTE_CONFIG_FILES
+PRTE_CONFIG_FILES
 
-PRRTE_CHECK_LIBNL_SUMMARY
+PRTE_CHECK_LIBNL_SUMMARY
 
 AC_OUTPUT
 
-PRRTE_SUMMARY_PRINT
+PRTE_SUMMARY_PRINT

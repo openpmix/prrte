@@ -12,6 +12,7 @@
  * Copyright (c) 2013      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,10 +20,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_SYS_LIMITS_H
-#define PRRTE_SYS_LIMITS_H
+#ifndef PRTE_SYS_LIMITS_H
+#define PRTE_SYS_LIMITS_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -33,29 +34,29 @@ BEGIN_C_DECLS
 /* define a structure to hold the various limits we find
  * so that users can neatly access them
  */
-typedef struct prrte_sys_limits_t {
+typedef struct prte_sys_limits_t {
     bool initialized;
     int num_files;
     int num_procs;
     size_t file_size;
-} prrte_sys_limits_t;
+} prte_sys_limits_t;
 
 /* since we only want to do this once, we will store the
  * values in the following locations - provide access here
  */
-PRRTE_EXPORT extern prrte_sys_limits_t prrte_sys_limits;
+PRTE_EXPORT extern prte_sys_limits_t prte_sys_limits;
 
 /* Get the system resource limits and, if requested, set
  * them to the specified limit
  */
-PRRTE_EXPORT int prrte_util_init_sys_limits(char **errmsg);
+PRTE_EXPORT int prte_util_init_sys_limits(char **errmsg);
 
 /**
  * Get pagesize
  */
-PRRTE_EXPORT int prrte_getpagesize(void);
+PRTE_EXPORT int prte_getpagesize(void);
 
 
 END_C_DECLS
 
-#endif /* PRRTE_STRNCPY_H */
+#endif /* PRTE_STRNCPY_H */

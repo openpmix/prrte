@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
@@ -30,7 +30,7 @@
  * are returned by these functions under UNIX/Linux environments
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 #include "types.h"
 
@@ -55,12 +55,12 @@
 #include "src/util/show_help.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
-#include "src/include/prrte_socket_errno.h"
+#include "src/include/prte_socket_errno.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/argv.h"
-#include "src/class/prrte_hash_table.h"
-#include "src/class/prrte_list.h"
+#include "src/class/prte_hash_table.h"
+#include "src/class/prte_list.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -73,33 +73,33 @@
 #include "src/util/parse_options.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 static int alps_component_open(void);
 static int alps_component_close(void);
 static int component_available(void);
 static int component_startup(void);
 static void component_shutdown(void);
-static int component_send(prrte_rml_send_t *msg);
+static int component_send(prte_rml_send_t *msg);
 static char* component_get_addr(void);
-static int component_set_addr(prrte_process_name_t *peer, char **uris);
-static bool component_is_reachable(char *routed, prrte_process_name_t *peer);
+static int component_set_addr(prte_process_name_t *peer, char **uris);
+static bool component_is_reachable(char *routed, prte_process_name_t *peer);
 
 /*
  * Struct of function pointers and all that to let us be initialized
  */
-prrte_oob_base_component_t prrte_oob_alps_component = {
+prte_oob_base_component_t prte_oob_alps_component = {
     .oob_base = {
-        PRRTE_OOB_BASE_VERSION_2_0_0,
+        PRTE_OOB_BASE_VERSION_2_0_0,
         .mca_component_name = "alps",
-        PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                    PRRTE_RELEASE_VERSION),
+        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                    PRTE_RELEASE_VERSION),
         .mca_open_component = alps_component_open,
         .mca_close_component = alps_component_close,
     },
     .oob_data = {
         /* The component is checkpoint ready */
-        PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
     },
     .priority = 30, // default priority of this transport
     .available = component_available,
@@ -116,44 +116,44 @@ prrte_oob_base_component_t prrte_oob_alps_component = {
  */
 static int alps_component_open(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int alps_component_close(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int component_available(void)
 {
-    return PRRTE_ERR_NOT_SUPPORTED;
+    return PRTE_ERR_NOT_SUPPORTED;
 }
 
 /* Start all modules */
 static int component_startup(void)
 {
-    prrte_output_verbose(2, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(2, prte_oob_base_framework.framework_output,
                         "%s ALPS STARTUP",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static void component_shutdown(void)
 {
-    prrte_output_verbose(2, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(2, prte_oob_base_framework.framework_output,
                         "%s ALPS SHUTDOWN",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 }
 
-static int component_send(prrte_rml_send_t *msg)
+static int component_send(prte_rml_send_t *msg)
 {
-    prrte_output_verbose(10, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(10, prte_oob_base_framework.framework_output,
                         "%s oob:alps:send_nb to peer %s:%d this should not be happening",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                        PRRTE_NAME_PRINT(&msg->dst), msg->tag);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(&msg->dst), msg->tag);
 
-    return PRRTE_ERR_NOT_SUPPORTED;
+    return PRTE_ERR_NOT_SUPPORTED;
 }
 
 static char* component_get_addr(void)
@@ -165,27 +165,27 @@ static char* component_get_addr(void)
      * eventually be able to support connect/accept using aprun.
      */
 
-    prrte_asprintf(&cptr, "gni://%s:%d", prrte_process_info.nodename, getpid());
+    prte_asprintf(&cptr, "gni://%s:%d", prte_process_info.nodename, getpid());
 
-    prrte_output_verbose(10, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(10, prte_oob_base_framework.framework_output,
                         "%s oob:alps: component_get_addr invoked - %s",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),cptr);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),cptr);
     return cptr;
 }
 
-static int component_set_addr(prrte_process_name_t *peer,
+static int component_set_addr(prte_process_name_t *peer,
                               char **uris)
 {
-    prrte_output_verbose(10, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(10, prte_oob_base_framework.framework_output,
                         "%s oob:alps: component_set_addr invoked - this should not be happening",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-    return PRRTE_ERR_NOT_SUPPORTED;
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+    return PRTE_ERR_NOT_SUPPORTED;
 }
 
-static bool component_is_reachable(char *routed, prrte_process_name_t *peer)
+static bool component_is_reachable(char *routed, prte_process_name_t *peer)
 {
-    prrte_output_verbose(10, prrte_oob_base_framework.framework_output,
+    prte_output_verbose(10, prte_oob_base_framework.framework_output,
                         "%s oob:alps: component_set_addr invoked - this should not be happening",
-                        PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     return false;
 }

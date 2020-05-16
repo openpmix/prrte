@@ -15,6 +15,7 @@
  * Copyright (c) 2016-2018 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,30 +23,30 @@
  * $HEADER$
  */
 
-#if !defined(PRRTE_SYS_ARCH_ATOMIC_H)
+#if !defined(PRTE_SYS_ARCH_ATOMIC_H)
 
-#define PRRTE_SYS_ARCH_ATOMIC_H 1
+#define PRTE_SYS_ARCH_ATOMIC_H 1
 
-#if PRRTE_GCC_INLINE_ASSEMBLY
+#if PRTE_GCC_INLINE_ASSEMBLY
 
-#define PRRTE_HAVE_ATOMIC_MEM_BARRIER 1
-#define PRRTE_HAVE_ATOMIC_LLSC_32 1
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_32 1
-#define PRRTE_HAVE_ATOMIC_SWAP_32 1
-#define PRRTE_HAVE_ATOMIC_MATH_32 1
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_64 1
-#define PRRTE_HAVE_ATOMIC_SWAP_64 1
-#define PRRTE_HAVE_ATOMIC_LLSC_64 1
-#define PRRTE_HAVE_ATOMIC_ADD_32 1
-#define PRRTE_HAVE_ATOMIC_AND_32 1
-#define PRRTE_HAVE_ATOMIC_OR_32 1
-#define PRRTE_HAVE_ATOMIC_XOR_32 1
-#define PRRTE_HAVE_ATOMIC_SUB_32 1
-#define PRRTE_HAVE_ATOMIC_ADD_64 1
-#define PRRTE_HAVE_ATOMIC_AND_64 1
-#define PRRTE_HAVE_ATOMIC_OR_64 1
-#define PRRTE_HAVE_ATOMIC_XOR_64 1
-#define PRRTE_HAVE_ATOMIC_SUB_64 1
+#define PRTE_HAVE_ATOMIC_MEM_BARRIER 1
+#define PRTE_HAVE_ATOMIC_LLSC_32 1
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_32 1
+#define PRTE_HAVE_ATOMIC_SWAP_32 1
+#define PRTE_HAVE_ATOMIC_MATH_32 1
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_64 1
+#define PRTE_HAVE_ATOMIC_SWAP_64 1
+#define PRTE_HAVE_ATOMIC_LLSC_64 1
+#define PRTE_HAVE_ATOMIC_ADD_32 1
+#define PRTE_HAVE_ATOMIC_AND_32 1
+#define PRTE_HAVE_ATOMIC_OR_32 1
+#define PRTE_HAVE_ATOMIC_XOR_32 1
+#define PRTE_HAVE_ATOMIC_SUB_32 1
+#define PRTE_HAVE_ATOMIC_ADD_64 1
+#define PRTE_HAVE_ATOMIC_AND_64 1
+#define PRTE_HAVE_ATOMIC_OR_64 1
+#define PRTE_HAVE_ATOMIC_XOR_64 1
+#define PRTE_HAVE_ATOMIC_SUB_64 1
 
 #define MB()  __asm__ __volatile__ ("dmb sy" : : : "memory")
 #define RMB() __asm__ __volatile__ ("dmb ld" : : : "memory")
@@ -57,22 +58,22 @@
  *
  *********************************************************************/
 
-static inline void prrte_atomic_mb (void)
+static inline void prte_atomic_mb (void)
 {
     MB();
 }
 
-static inline void prrte_atomic_rmb (void)
+static inline void prte_atomic_rmb (void)
 {
     RMB();
 }
 
-static inline void prrte_atomic_wmb (void)
+static inline void prte_atomic_wmb (void)
 {
     WMB();
 }
 
-static inline void prrte_atomic_isync (void)
+static inline void prte_atomic_isync (void)
 {
     __asm__ __volatile__ ("isb");
 }
@@ -83,7 +84,7 @@ static inline void prrte_atomic_isync (void)
  *
  *********************************************************************/
 
-static inline bool prrte_atomic_compare_exchange_strong_32 (prrte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
+static inline bool prte_atomic_compare_exchange_strong_32 (prte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
 {
     int32_t prev, tmp;
     bool ret;
@@ -103,7 +104,7 @@ static inline bool prrte_atomic_compare_exchange_strong_32 (prrte_atomic_int32_t
     return ret;
 }
 
-static inline int32_t prrte_atomic_swap_32(prrte_atomic_int32_t *addr, int32_t newval)
+static inline int32_t prte_atomic_swap_32(prte_atomic_int32_t *addr, int32_t newval)
 {
     int32_t ret, tmp;
 
@@ -122,7 +123,7 @@ static inline int32_t prrte_atomic_swap_32(prrte_atomic_int32_t *addr, int32_t n
    atomic_?mb can be inlined).  Instead, we "inline" them by hand in
    the assembly, meaning there is one function call overhead instead
    of two */
-static inline bool prrte_atomic_compare_exchange_strong_acq_32 (prrte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
+static inline bool prte_atomic_compare_exchange_strong_acq_32 (prte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
 {
     int32_t prev, tmp;
     bool ret;
@@ -143,7 +144,7 @@ static inline bool prrte_atomic_compare_exchange_strong_acq_32 (prrte_atomic_int
 }
 
 
-static inline bool prrte_atomic_compare_exchange_strong_rel_32 (prrte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
+static inline bool prte_atomic_compare_exchange_strong_rel_32 (prte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
 {
     int32_t prev, tmp;
     bool ret;
@@ -163,9 +164,9 @@ static inline bool prrte_atomic_compare_exchange_strong_rel_32 (prrte_atomic_int
     return ret;
 }
 
-#define prrte_atomic_ll_32(addr, ret)                                    \
+#define prte_atomic_ll_32(addr, ret)                                    \
     do {                                                                \
-        prrte_atomic_int32_t *_addr = (addr);                               \
+        prte_atomic_int32_t *_addr = (addr);                               \
         int32_t _ret;                                                   \
                                                                         \
         __asm__ __volatile__ ("ldaxr    %w0, [%1]          \n"          \
@@ -175,9 +176,9 @@ static inline bool prrte_atomic_compare_exchange_strong_rel_32 (prrte_atomic_int
         ret = (typeof(ret)) _ret;                                       \
     } while (0)
 
-#define prrte_atomic_sc_32(addr, newval, ret)                            \
+#define prte_atomic_sc_32(addr, newval, ret)                            \
     do {                                                                \
-        prrte_atomic_int32_t *_addr = (addr);                               \
+        prte_atomic_int32_t *_addr = (addr);                               \
         int32_t _newval = (int32_t) newval;                             \
         int _ret;                                                       \
                                                                         \
@@ -189,7 +190,7 @@ static inline bool prrte_atomic_compare_exchange_strong_rel_32 (prrte_atomic_int
         ret = (_ret == 0);                                              \
     } while (0)
 
-static inline bool prrte_atomic_compare_exchange_strong_64 (prrte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
+static inline bool prte_atomic_compare_exchange_strong_64 (prte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
 {
     int64_t prev;
     int tmp;
@@ -210,7 +211,7 @@ static inline bool prrte_atomic_compare_exchange_strong_64 (prrte_atomic_int64_t
     return ret;
 }
 
-static inline int64_t prrte_atomic_swap_64 (prrte_atomic_int64_t *addr, int64_t newval)
+static inline int64_t prte_atomic_swap_64 (prte_atomic_int64_t *addr, int64_t newval)
 {
     int64_t ret;
     int tmp;
@@ -230,7 +231,7 @@ static inline int64_t prrte_atomic_swap_64 (prrte_atomic_int64_t *addr, int64_t 
    atomic_?mb can be inlined).  Instead, we "inline" them by hand in
    the assembly, meaning there is one function call overhead instead
    of two */
-static inline bool prrte_atomic_compare_exchange_strong_acq_64 (prrte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
+static inline bool prte_atomic_compare_exchange_strong_acq_64 (prte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
 {
     int64_t prev;
     int tmp;
@@ -252,7 +253,7 @@ static inline bool prrte_atomic_compare_exchange_strong_acq_64 (prrte_atomic_int
 }
 
 
-static inline bool prrte_atomic_compare_exchange_strong_rel_64 (prrte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
+static inline bool prte_atomic_compare_exchange_strong_rel_64 (prte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
 {
     int64_t prev;
     int tmp;
@@ -273,9 +274,9 @@ static inline bool prrte_atomic_compare_exchange_strong_rel_64 (prrte_atomic_int
     return ret;
 }
 
-#define prrte_atomic_ll_64(addr, ret)                            \
+#define prte_atomic_ll_64(addr, ret)                            \
     do {                                                        \
-        prrte_atomic_int64_t *_addr = (addr);                       \
+        prte_atomic_int64_t *_addr = (addr);                       \
         int64_t _ret;                                           \
                                                                 \
         __asm__ __volatile__ ("ldaxr    %0, [%1]          \n"   \
@@ -285,9 +286,9 @@ static inline bool prrte_atomic_compare_exchange_strong_rel_64 (prrte_atomic_int
         ret = (typeof(ret)) _ret;                               \
     } while (0)
 
-#define prrte_atomic_sc_64(addr, newval, ret)                            \
+#define prte_atomic_sc_64(addr, newval, ret)                            \
     do {                                                                \
-        prrte_atomic_int64_t *_addr = (addr);                               \
+        prte_atomic_int64_t *_addr = (addr);                               \
         int64_t _newval = (int64_t) newval;                             \
         int _ret;                                                       \
                                                                         \
@@ -299,8 +300,8 @@ static inline bool prrte_atomic_compare_exchange_strong_rel_64 (prrte_atomic_int
         ret = (_ret == 0);                                              \
     } while (0)
 
-#define PRRTE_ASM_MAKE_ATOMIC(type, bits, name, inst, reg)                   \
-    static inline type prrte_atomic_fetch_ ## name ## _ ## bits (prrte_atomic_ ## type *addr, type value) \
+#define PRTE_ASM_MAKE_ATOMIC(type, bits, name, inst, reg)                   \
+    static inline type prte_atomic_fetch_ ## name ## _ ## bits (prte_atomic_ ## type *addr, type value) \
     {                                                                   \
         type newval, old;                                               \
         int32_t tmp;                                                    \
@@ -316,17 +317,17 @@ static inline bool prrte_atomic_compare_exchange_strong_rel_64 (prrte_atomic_int
         return old;                                                     \
     }
 
-PRRTE_ASM_MAKE_ATOMIC(int32_t, 32, add, "add", "w")
-PRRTE_ASM_MAKE_ATOMIC(int32_t, 32, and, "and", "w")
-PRRTE_ASM_MAKE_ATOMIC(int32_t, 32, or, "orr", "w")
-PRRTE_ASM_MAKE_ATOMIC(int32_t, 32, xor, "eor", "w")
-PRRTE_ASM_MAKE_ATOMIC(int32_t, 32, sub, "sub", "w")
-PRRTE_ASM_MAKE_ATOMIC(int64_t, 64, add, "add", "")
-PRRTE_ASM_MAKE_ATOMIC(int64_t, 64, and, "and", "")
-PRRTE_ASM_MAKE_ATOMIC(int64_t, 64, or, "orr", "")
-PRRTE_ASM_MAKE_ATOMIC(int64_t, 64, xor, "eor", "")
-PRRTE_ASM_MAKE_ATOMIC(int64_t, 64, sub, "sub", "")
+PRTE_ASM_MAKE_ATOMIC(int32_t, 32, add, "add", "w")
+PRTE_ASM_MAKE_ATOMIC(int32_t, 32, and, "and", "w")
+PRTE_ASM_MAKE_ATOMIC(int32_t, 32, or, "orr", "w")
+PRTE_ASM_MAKE_ATOMIC(int32_t, 32, xor, "eor", "w")
+PRTE_ASM_MAKE_ATOMIC(int32_t, 32, sub, "sub", "w")
+PRTE_ASM_MAKE_ATOMIC(int64_t, 64, add, "add", "")
+PRTE_ASM_MAKE_ATOMIC(int64_t, 64, and, "and", "")
+PRTE_ASM_MAKE_ATOMIC(int64_t, 64, or, "orr", "")
+PRTE_ASM_MAKE_ATOMIC(int64_t, 64, xor, "eor", "")
+PRTE_ASM_MAKE_ATOMIC(int64_t, 64, sub, "sub", "")
 
-#endif /* PRRTE_GCC_INLINE_ASSEMBLY */
+#endif /* PRTE_GCC_INLINE_ASSEMBLY */
 
-#endif /* ! PRRTE_SYS_ARCH_ATOMIC_H */
+#endif /* ! PRTE_SYS_ARCH_ATOMIC_H */

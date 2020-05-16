@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2014 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
@@ -23,7 +23,7 @@
  * Buffer safe printf functions for portability to archaic platforms.
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/util/printf.h"
 #include "src/util/output.h"
@@ -81,8 +81,8 @@ static int guess_strlen(const char *fmt, va_list ap)
                 if (NULL != sarg) {
                     len += (int)strlen(sarg);
                 } else {
-#if PRRTE_ENABLE_DEBUG
-                    prrte_output(0, "PRRTE DEBUG WARNING: Got a NULL argument to prrte_vasprintf!\n");
+#if PRTE_ENABLE_DEBUG
+                    prte_output(0, "PRTE DEBUG WARNING: Got a NULL argument to prte_vasprintf!\n");
 #endif
                     len += 5;
                 }
@@ -197,21 +197,21 @@ static int guess_strlen(const char *fmt, va_list ap)
 }
 #endif /* #ifndef HAVE_VASPRINTF */
 
-int prrte_asprintf(char **ptr, const char *fmt, ...)
+int prte_asprintf(char **ptr, const char *fmt, ...)
 {
     int length;
     va_list ap;
 
     va_start(ap, fmt);
-    /* prrte_vasprintf guarantees that *ptr is set to NULL on error */
-    length = prrte_vasprintf(ptr, fmt, ap);
+    /* prte_vasprintf guarantees that *ptr is set to NULL on error */
+    length = prte_vasprintf(ptr, fmt, ap);
     va_end(ap);
 
     return length;
 }
 
 
-int prrte_vasprintf(char **ptr, const char *fmt, va_list ap)
+int prte_vasprintf(char **ptr, const char *fmt, va_list ap)
 {
 #ifdef HAVE_VASPRINTF
     int length;
@@ -229,9 +229,9 @@ int prrte_vasprintf(char **ptr, const char *fmt, va_list ap)
     /* va_list might have pointer to internal state and using
        it twice is a bad idea.  So make a copy for the second
        use.  Copy order taken from Autoconf docs. */
-#if PRRTE_HAVE_VA_COPY
+#if PRTE_HAVE_VA_COPY
     va_copy(ap2, ap);
-#elif PRRTE_HAVE_UNDERSCORE_VA_COPY
+#elif PRTE_HAVE_UNDERSCORE_VA_COPY
     __va_copy(ap2, ap);
 #else
     memcpy (&ap2, &ap, sizeof(va_list));
@@ -250,9 +250,9 @@ int prrte_vasprintf(char **ptr, const char *fmt, va_list ap)
 
     /* fill the buffer */
     length = vsprintf(*ptr, fmt, ap2);
-#if PRRTE_HAVE_VA_COPY || PRRTE_HAVE_UNDERSCORE_VA_COPY
+#if PRTE_HAVE_VA_COPY || PRTE_HAVE_UNDERSCORE_VA_COPY
     va_end(ap2);
-#endif  /* PRRTE_HAVE_VA_COPY || PRRTE_HAVE_UNDERSCORE_VA_COPY */
+#endif  /* PRTE_HAVE_VA_COPY || PRTE_HAVE_UNDERSCORE_VA_COPY */
 
     /* realloc */
     *ptr = (char*) realloc(*ptr, (size_t) length + 1);
@@ -266,25 +266,25 @@ int prrte_vasprintf(char **ptr, const char *fmt, va_list ap)
 }
 
 
-int prrte_snprintf(char *str, size_t size, const char *fmt, ...)
+int prte_snprintf(char *str, size_t size, const char *fmt, ...)
 {
     int length;
     va_list ap;
 
     va_start(ap, fmt);
-    length = prrte_vsnprintf(str, size, fmt, ap);
+    length = prte_vsnprintf(str, size, fmt, ap);
     va_end(ap);
 
     return length;
 }
 
 
-int prrte_vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
+int prte_vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 {
     int length;
     char *buf;
 
-    length = prrte_vasprintf(&buf, fmt, ap);
+    length = prte_vasprintf(&buf, fmt, ap);
     if (length < 0) {
         return length;
     }
@@ -316,23 +316,23 @@ int main(int argc, char *argv[])
     int length;
 
     puts("test for NULL buffer in snprintf:");
-    length = prrte_snprintf(NULL, 0, "this is a string %d", 1004);
+    length = prte_snprintf(NULL, 0, "this is a string %d", 1004);
     printf("length = %d\n", length);
 
     puts("test of snprintf to an undersize buffer:");
-    length = prrte_snprintf(a, sizeof(a), "this is a string %d", 1004);
+    length = prte_snprintf(a, sizeof(a), "this is a string %d", 1004);
     printf("string = %s\n", a);
     printf("length = %d\n", length);
     printf("strlen = %d\n", (int) strlen(a));
 
     puts("test of snprintf to an oversize buffer:");
-    length = prrte_snprintf(b, sizeof(b), "this is a string %d", 1004);
+    length = prte_snprintf(b, sizeof(b), "this is a string %d", 1004);
     printf("string = %s\n", b);
     printf("length = %d\n", length);
     printf("strlen = %d\n", (int) strlen(b));
 
     puts("test of asprintf:");
-    length = prrte_asprintf(&s, "this is a string %d", 1004);
+    length = prte_asprintf(&s, "this is a string %d", 1004);
     printf("string = %s\n", s);
     printf("length = %d\n", length);
     printf("strlen = %d\n", (int) strlen(s));

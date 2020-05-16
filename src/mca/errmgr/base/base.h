@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,16 +21,16 @@
 /** @file:
  */
 
-#ifndef PRRTE_MCA_ERRMGR_BASE_H
-#define PRRTE_MCA_ERRMGR_BASE_H
+#ifndef PRTE_MCA_ERRMGR_BASE_H
+#define PRTE_MCA_ERRMGR_BASE_H
 
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 
 #include "src/mca/mca.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -40,9 +41,9 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_errmgr_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_errmgr_base_framework;
 /* select a component */
-PRRTE_EXPORT    int prrte_errmgr_base_select(void);
+PRTE_EXPORT    int prte_errmgr_base_select(void);
 
 END_C_DECLS
 

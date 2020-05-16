@@ -3,6 +3,7 @@
  * Copyright (c) 2006-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -10,10 +11,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_MCA_INSTALLDIRS_INSTALLDIRS_H
-#define PRRTE_MCA_INSTALLDIRS_INSTALLDIRS_H
+#ifndef PRTE_MCA_INSTALLDIRS_INSTALLDIRS_H
+#define PRTE_MCA_INSTALLDIRS_INSTALLDIRS_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
@@ -22,9 +23,9 @@ BEGIN_C_DECLS
 
 /*
  * Most of this file is just for ompi_info.  The only public interface
- * once prrte_init has been called is the prrte_install_dirs structure
- * and the prrte_install_dirs_expand() call */
-struct prrte_install_dirs_t {
+ * once prte_init has been called is the prte_install_dirs structure
+ * and the prte_install_dirs_expand() call */
+struct prte_install_dirs_t {
     char* prefix;
     char* exec_prefix;
     char* bindir;
@@ -41,7 +42,7 @@ struct prrte_install_dirs_t {
     char* mandir;
 
     /* Note that the following fields intentionally have an "ompi"
-       prefix, even though they're down in the PRRTE layer.  This is
+       prefix, even though they're down in the PRTE layer.  This is
        not abstraction break because the "ompi" they're referring to
        is for the build system of the overall software tree -- not an
        individual project within that overall tree.
@@ -50,49 +51,49 @@ struct prrte_install_dirs_t {
        ompi{data,lib,includedir}, which is always set to
        {datadir,libdir,includedir}/openmpi. This will keep us from
        having help files in prefix/share/open-rte when building
-       without PRRTE, but in prefix/share/openmpi when building
-       with PRRTE.
+       without PRTE, but in prefix/share/openmpi when building
+       with PRTE.
 
        Note that these field names match macros set by configure that
        are used in Makefile.am files.  E.g., project help files are
-       installed into $(prrtedatadir). */
-    char* prrtedatadir;
-    char* prrtelibdir;
-    char* prrteincludedir;
+       installed into $(prtedatadir). */
+    char* prtedatadir;
+    char* prtelibdir;
+    char* prteincludedir;
 };
-typedef struct prrte_install_dirs_t prrte_install_dirs_t;
+typedef struct prte_install_dirs_t prte_install_dirs_t;
 
-/* Install directories.  Only available after prrte_init() */
-PRRTE_EXPORT extern prrte_install_dirs_t prrte_install_dirs;
+/* Install directories.  Only available after prte_init() */
+PRTE_EXPORT extern prte_install_dirs_t prte_install_dirs;
 
 /**
  * Expand out path variables (such as ${prefix}) in the input string
- * using the current prrte_install_dirs structure */
-PRRTE_EXPORT char * prrte_install_dirs_expand(const char* input);
+ * using the current prte_install_dirs structure */
+PRTE_EXPORT char * prte_install_dirs_expand(const char* input);
 
 
 /**
  * Structure for prteinstalldirs components.
  */
-struct prrte_prteinstalldirs_base_component_2_0_0_t {
+struct prte_prteinstalldirs_base_component_2_0_0_t {
     /** MCA base component */
-    prrte_mca_base_component_t component;
+    prte_mca_base_component_t component;
     /** MCA base data */
-    prrte_mca_base_component_data_t component_data;
+    prte_mca_base_component_data_t component_data;
     /** install directories provided by the given component */
-    prrte_install_dirs_t install_dirs_data;
+    prte_install_dirs_t install_dirs_data;
 };
 /**
  * Convenience typedef
  */
-typedef struct prrte_prteinstalldirs_base_component_2_0_0_t prrte_prteinstalldirs_base_component_t;
+typedef struct prte_prteinstalldirs_base_component_2_0_0_t prte_prteinstalldirs_base_component_t;
 
 /*
  * Macro for use in components that are of type prteinstalldirs
  */
-#define PRRTE_INSTALLDIRS_BASE_VERSION_2_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("prteinstalldirs", 2, 0, 0)
+#define PRTE_INSTALLDIRS_BASE_VERSION_2_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("prteinstalldirs", 2, 0, 0)
 
 END_C_DECLS
 
-#endif /* PRRTE_MCA_INSTALLDIRS_INSTALLDIRS_H */
+#endif /* PRTE_MCA_INSTALLDIRS_INSTALLDIRS_H */

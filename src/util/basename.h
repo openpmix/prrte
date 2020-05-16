@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,10 +24,10 @@
  * Returns an OS-independant basename() of a given filename.
  */
 
-#ifndef PRRTE_BASENAME_H
-#define PRRTE_BASENAME_H
+#ifndef PRTE_BASENAME_H
+#define PRTE_BASENAME_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 BEGIN_C_DECLS
 
@@ -67,7 +68,7 @@ BEGIN_C_DECLS
  *
  * The caller is responsible for freeing the returned string.
  */
-PRRTE_EXPORT char *prrte_basename(const char* filename) __prrte_attribute_malloc__ __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_basename(const char* filename) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 /**
  * Return the dirname of a filename.
@@ -106,8 +107,8 @@ PRRTE_EXPORT char *prrte_basename(const char* filename) __prrte_attribute_malloc
  *
  * The caller is responsible for freeing the returned string.
  */
-PRRTE_EXPORT char *prrte_dirname(const char* filename) __prrte_attribute_malloc__ __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_dirname(const char* filename) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 END_C_DECLS
 
-#endif /* PRRTE_BASENAME_H */
+#endif /* PRTE_BASENAME_H */

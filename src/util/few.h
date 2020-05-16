@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,10 +18,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_FEW_H
-#define PRRTE_FEW_H
+#ifndef PRTE_FEW_H
+#define PRTE_FEW_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 BEGIN_C_DECLS
 
@@ -34,17 +35,17 @@ BEGIN_C_DECLS
  * from waitpid(2).  The WIF* macros can be used to examine the value
  * (see waitpid(2)).
  *
- * @retval PRRTE_SUCCESS If the child launched and exited.
- * @retval PRRTE_ERR_IN_ERRNO If a failure occurred, errno should be
+ * @retval PRTE_SUCCESS If the child launched and exited.
+ * @retval PRTE_ERR_IN_ERRNO If a failure occurred, errno should be
  * examined for the specific error.
  *
  * This function forks, execs, and waits for an executable to
  * complete.  The input argv must be a NULL-terminated array (perhaps
- * built with the prrte_arr_*() interface).  Upon success, PRRTE_SUCCESS
+ * built with the prte_arr_*() interface).  Upon success, PRTE_SUCCESS
  * is returned.  This function will wait either until the child
  * process has exited or waitpid() returns an error other than EINTR.
  *
- * Note that a return of PRRTE_SUCCESS does \em not imply that the child
+ * Note that a return of PRTE_SUCCESS does \em not imply that the child
  * process exited successfully -- it simply indicates that the child
  * process exited.  The WIF* macros (see waitpid(2)) should be used to
  * examine the status to see hold the child exited.
@@ -54,7 +55,7 @@ BEGIN_C_DECLS
  *          safe in a multi-threaded environment in which a handler
  *          for \c SIGCHLD has been registered.
  */
-PRRTE_EXPORT int prrte_few(char *argv[], int *status);
+PRTE_EXPORT int prte_few(char *argv[], int *status);
 
 END_C_DECLS
-#endif /* PRRTE_FEW_H */
+#endif /* PRTE_FEW_H */

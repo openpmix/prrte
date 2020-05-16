@@ -10,6 +10,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -17,7 +18,7 @@
 # $HEADER$
 #
 
-dist_prrtedata_DATA += base/help-ras-base.txt
+dist_prtedata_DATA += base/help-ras-base.txt
 
 headers += \
         base/base.h \

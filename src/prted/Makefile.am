@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2018      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
@@ -22,12 +22,12 @@
 
 # This makefile.am does not stand on its own - it is included from src/Makefile.am
 
-dist_prrtedata_DATA += prted/help-prted.txt
+dist_prtedata_DATA += prted/help-prted.txt
 
 headers += \
 	prted/prted.h
 
-libprrte_la_SOURCES += \
+libprte_la_SOURCES += \
         prted/prted_comm.c
 
 include prted/pmix/Makefile.am

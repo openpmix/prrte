@@ -15,6 +15,7 @@
  * Copyright (c) 2017-2018 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,21 +33,21 @@
  * See Documentation/arm/kernel_user_helpers.txt in the kernel tree for details
  */
 
-#ifndef PRRTE_SYS_ARCH_ATOMIC_H
-#define PRRTE_SYS_ARCH_ATOMIC_H 1
+#ifndef PRTE_SYS_ARCH_ATOMIC_H
+#define PRTE_SYS_ARCH_ATOMIC_H 1
 
-#if (PRRTE_ASM_ARM_VERSION >= 7)
+#if (PRTE_ASM_ARM_VERSION >= 7)
 
-#define PRRTE_HAVE_ATOMIC_MEM_BARRIER 1
+#define PRTE_HAVE_ATOMIC_MEM_BARRIER 1
 /* use the DMB instruction if available... */
 
 #define MB()  __asm__ __volatile__ ("dmb" : : : "memory")
 #define RMB() __asm__ __volatile__ ("dmb" : : : "memory")
 #define WMB() __asm__ __volatile__ ("dmb" : : : "memory")
 
-#elif (PRRTE_ASM_ARM_VERSION == 6)
+#elif (PRTE_ASM_ARM_VERSION == 6)
 
-#define PRRTE_HAVE_ATOMIC_MEM_BARRIER 1
+#define PRTE_HAVE_ATOMIC_MEM_BARRIER 1
 /* ...or the v6-specific equivalent... */
 
 #define MB()  __asm__ __volatile__ ("mcr p15, 0, r0, c7, c10, 5" : : : "memory")
@@ -55,7 +56,7 @@
 
 #else
 
-#define PRRTE_HAVE_ATOMIC_MEM_BARRIER 1
+#define PRTE_HAVE_ATOMIC_MEM_BARRIER 1
 /* ...otherwise use the Linux kernel-provided barrier */
 
 #define MB() (*((void (*)(void))(0xffff0fa0)))()
@@ -70,30 +71,30 @@
  *
  *********************************************************************/
 
-#if (PRRTE_HAVE_ATOMIC_MEM_BARRIER == 1)
+#if (PRTE_HAVE_ATOMIC_MEM_BARRIER == 1)
 
 static inline
-void prrte_atomic_mb(void)
+void prte_atomic_mb(void)
 {
     MB();
 }
 
 
 static inline
-void prrte_atomic_rmb(void)
+void prte_atomic_rmb(void)
 {
     RMB();
 }
 
 
 static inline
-void prrte_atomic_wmb(void)
+void prte_atomic_wmb(void)
 {
     WMB();
 }
 
 static inline
-void prrte_atomic_isync(void)
+void prte_atomic_isync(void)
 {
 }
 
@@ -106,11 +107,11 @@ void prrte_atomic_isync(void)
  *
  *********************************************************************/
 
-#if (PRRTE_GCC_INLINE_ASSEMBLY && (PRRTE_ASM_ARM_VERSION >= 6))
+#if (PRTE_GCC_INLINE_ASSEMBLY && (PRTE_ASM_ARM_VERSION >= 6))
 
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_32 1
-#define PRRTE_HAVE_ATOMIC_MATH_32 1
-static inline bool prrte_atomic_compare_exchange_strong_32 (prrte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_32 1
+#define PRTE_HAVE_ATOMIC_MATH_32 1
+static inline bool prte_atomic_compare_exchange_strong_32 (prte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
 {
   int32_t prev, tmp;
   bool ret;
@@ -138,27 +139,27 @@ static inline bool prrte_atomic_compare_exchange_strong_32 (prrte_atomic_int32_t
    atomic_?mb can be inlined).  Instead, we "inline" them by hand in
    the assembly, meaning there is one function call overhead instead
    of two */
-static inline bool prrte_atomic_compare_exchange_strong_acq_32 (prrte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
+static inline bool prte_atomic_compare_exchange_strong_acq_32 (prte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
 {
     bool rc;
 
-    rc = prrte_atomic_compare_exchange_strong_32 (addr, oldval, newval);
-    prrte_atomic_rmb();
+    rc = prte_atomic_compare_exchange_strong_32 (addr, oldval, newval);
+    prte_atomic_rmb();
 
     return rc;
 }
 
 
-static inline bool prrte_atomic_compare_exchange_strong_rel_32 (prrte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
+static inline bool prte_atomic_compare_exchange_strong_rel_32 (prte_atomic_int32_t *addr, int32_t *oldval, int32_t newval)
 {
-    prrte_atomic_wmb();
-    return prrte_atomic_compare_exchange_strong_32 (addr, oldval, newval);
+    prte_atomic_wmb();
+    return prte_atomic_compare_exchange_strong_32 (addr, oldval, newval);
 }
 
-#if (PRRTE_ASM_SUPPORT_64BIT == 1)
+#if (PRTE_ASM_SUPPORT_64BIT == 1)
 
-#define PRRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_64 1
-static inline bool prrte_atomic_compare_exchange_strong_64 (prrte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
+#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_64 1
+static inline bool prte_atomic_compare_exchange_strong_64 (prte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
 {
     int64_t prev;
     int tmp;
@@ -189,28 +190,28 @@ static inline bool prrte_atomic_compare_exchange_strong_64 (prrte_atomic_int64_t
    atomic_?mb can be inlined).  Instead, we "inline" them by hand in
    the assembly, meaning there is one function call overhead instead
    of two */
-static inline bool prrte_atomic_compare_exchange_strong_acq_64 (prrte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
+static inline bool prte_atomic_compare_exchange_strong_acq_64 (prte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
 {
     bool rc;
 
-    rc = prrte_atomic_compare_exchange_strong_64 (addr, oldval, newval);
-    prrte_atomic_rmb();
+    rc = prte_atomic_compare_exchange_strong_64 (addr, oldval, newval);
+    prte_atomic_rmb();
 
     return rc;
 }
 
 
-static inline bool prrte_atomic_compare_exchange_strong_rel_64 (prrte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
+static inline bool prte_atomic_compare_exchange_strong_rel_64 (prte_atomic_int64_t *addr, int64_t *oldval, int64_t newval)
 {
-    prrte_atomic_wmb();
-    return prrte_atomic_compare_exchange_strong_64 (addr, oldval, newval);
+    prte_atomic_wmb();
+    return prte_atomic_compare_exchange_strong_64 (addr, oldval, newval);
 }
 
 #endif
 
 
-#define PRRTE_HAVE_ATOMIC_ADD_32 1
-static inline int32_t prrte_atomic_fetch_add_32(prrte_atomic_int32_t* v, int inc)
+#define PRTE_HAVE_ATOMIC_ADD_32 1
+static inline int32_t prte_atomic_fetch_add_32(prte_atomic_int32_t* v, int inc)
 {
     int32_t t, old;
     int tmp;
@@ -230,8 +231,8 @@ static inline int32_t prrte_atomic_fetch_add_32(prrte_atomic_int32_t* v, int inc
     return old;
 }
 
-#define PRRTE_HAVE_ATOMIC_SUB_32 1
-static inline int32_t prrte_atomic_fetch_sub_32(prrte_atomic_int32_t* v, int dec)
+#define PRTE_HAVE_ATOMIC_SUB_32 1
+static inline int32_t prte_atomic_fetch_sub_32(prte_atomic_int32_t* v, int dec)
 {
     int32_t t, old;
     int tmp;
@@ -252,4 +253,4 @@ static inline int32_t prrte_atomic_fetch_sub_32(prrte_atomic_int32_t* v, int dec
 
 #endif
 
-#endif /* ! PRRTE_SYS_ARCH_ATOMIC_H */
+#endif /* ! PRTE_SYS_ARCH_ATOMIC_H */

@@ -2,6 +2,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -10,7 +11,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "src/include/constants.h"
 
 #include "src/mca/mca.h"
@@ -28,26 +29,26 @@
 
 #include "src/mca/prtereachable/base/static-components.h"
 
-prrte_reachable_base_module_t prrte_reachable = {0};
+prte_reachable_base_module_t prte_reachable = {0};
 
-static int prrte_reachable_base_frame_register(prrte_mca_base_register_flag_t flags)
+static int prte_reachable_base_frame_register(prte_mca_base_register_flag_t flags)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-static int prrte_reachable_base_frame_close(void)
+static int prte_reachable_base_frame_close(void)
 {
-    return prrte_mca_base_framework_components_close(&prrte_prtereachable_base_framework, NULL);
+    return prte_mca_base_framework_components_close(&prte_prtereachable_base_framework, NULL);
 }
 
-static int prrte_reachable_base_frame_open(prrte_mca_base_open_flag_t flags)
+static int prte_reachable_base_frame_open(prte_mca_base_open_flag_t flags)
 {
     /* Open up all available components */
-    return prrte_mca_base_framework_components_open(&prrte_prtereachable_base_framework, flags);
+    return prte_mca_base_framework_components_open(&prte_prtereachable_base_framework, flags);
 }
 
-PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, prtereachable, "PRRTE Reachability Framework",
-                                 prrte_reachable_base_frame_register,
-                                 prrte_reachable_base_frame_open,
-                                 prrte_reachable_base_frame_close,
-                                 prrte_prtereachable_base_static_components, 0);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prtereachable, "PRTE Reachability Framework",
+                                 prte_reachable_base_frame_register,
+                                 prte_reachable_base_frame_open,
+                                 prte_reachable_base_frame_close,
+                                 prte_prtereachable_base_static_components, 0);

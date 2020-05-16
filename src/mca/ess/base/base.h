@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011-2012 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
@@ -27,10 +27,10 @@
 #ifndef MCA_ESS_BASE_H
 #define MCA_ESS_BASE_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
-#include "src/mca/base/prrte_mca_base_framework.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/mca.h"
 #include "src/dss/dss_types.h"
 #include "src/pmix/pmix-internal.h"
@@ -42,53 +42,53 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_ess_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_ess_base_framework;
 /**
  * Select a ess module
  */
-PRRTE_EXPORT int prrte_ess_base_select(void);
+PRTE_EXPORT int prte_ess_base_select(void);
 
 /*
  * stdout/stderr buffering control parameter
  */
-PRRTE_EXPORT extern int prrte_ess_base_std_buffering;
+PRTE_EXPORT extern int prte_ess_base_std_buffering;
 
-PRRTE_EXPORT extern int prrte_ess_base_num_procs;
-PRRTE_EXPORT extern char *prrte_ess_base_nspace;
-PRRTE_EXPORT extern char *prrte_ess_base_vpid;
-PRRTE_EXPORT extern prrte_list_t prrte_ess_base_signals;
+PRTE_EXPORT extern int prte_ess_base_num_procs;
+PRTE_EXPORT extern char *prte_ess_base_nspace;
+PRTE_EXPORT extern char *prte_ess_base_vpid;
+PRTE_EXPORT extern prte_list_t prte_ess_base_signals;
 
 /*
  * Internal helper functions used by components
  */
-PRRTE_EXPORT int prrte_ess_env_get(void);
+PRTE_EXPORT int prte_ess_env_get(void);
 
-PRRTE_EXPORT int prrte_ess_base_std_prolog(void);
+PRTE_EXPORT int prte_ess_base_std_prolog(void);
 
-PRRTE_EXPORT int prrte_ess_base_prted_setup(void);
-PRRTE_EXPORT int prrte_ess_base_prted_finalize(void);
+PRTE_EXPORT int prte_ess_base_prted_setup(void);
+PRTE_EXPORT int prte_ess_base_prted_finalize(void);
 
-PRRTE_EXPORT int prrte_ess_base_setup_signals(char *signals);
+PRTE_EXPORT int prte_ess_base_setup_signals(char *signals);
 
 /* Detect whether or not this proc is bound - if not,
  * see if it should bind itself
  */
-PRRTE_EXPORT int prrte_ess_base_proc_binding(void);
+PRTE_EXPORT int prte_ess_base_proc_binding(void);
 
 /*
  * Put functions
  */
-PRRTE_EXPORT int prrte_ess_env_put(prrte_std_cntr_t num_procs,
-                                   prrte_std_cntr_t num_local_procs,
+PRTE_EXPORT int prte_ess_env_put(prte_std_cntr_t num_procs,
+                                   prte_std_cntr_t num_local_procs,
                                    char ***env);
 
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     char *signame;
     int signal;
     bool can_forward;
-} prrte_ess_base_signal_t;
-PRRTE_CLASS_DECLARATION(prrte_ess_base_signal_t);
+} prte_ess_base_signal_t;
+PRTE_CLASS_DECLARATION(prte_ess_base_signal_t);
 
 END_C_DECLS
 

@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2009-2018 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      IBM Corporation.  All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
@@ -24,7 +24,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -72,7 +72,7 @@
 #endif
 
 
-#include "prrte_stdint.h"
+#include "prte_stdint.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/os_path.h"
@@ -99,9 +99,9 @@
 static void path_env_load(char *path, int *pargc, char ***pargv);
 static char *list_env_get(char *var, char **list);
 
-bool prrte_path_is_absolute( const char *path )
+bool prte_path_is_absolute( const char *path )
 {
-    if( PRRTE_PATH_SEP[0] == *path ) {
+    if( PRTE_PATH_SEP[0] == *path ) {
         return true;
     }
     return false;
@@ -110,7 +110,7 @@ bool prrte_path_is_absolute( const char *path )
 /**
  *  Locates a file with certain permissions
  */
-char *prrte_path_find(char *fname, char **pathv, int mode, char **envv)
+char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
 {
     char *fullpath;
     char *delimit;
@@ -119,8 +119,8 @@ char *prrte_path_find(char *fname, char **pathv, int mode, char **envv)
     int i;
 
     /* If absolute path is given, return it without searching. */
-    if( prrte_path_is_absolute(fname) ) {
-        return prrte_path_access(fname, NULL, mode);
+    if( prte_path_is_absolute(fname) ) {
+        return prte_path_access(fname, NULL, mode);
     }
 
     /* Initialize. */
@@ -135,36 +135,36 @@ char *prrte_path_find(char *fname, char **pathv, int mode, char **envv)
 
         /* Replace environment variable at the head of the string. */
         if ('$' == *pathv[i]) {
-            delimit = strchr(pathv[i], PRRTE_PATH_SEP[0]);
+            delimit = strchr(pathv[i], PRTE_PATH_SEP[0]);
             if (delimit) {
                 *delimit = '\0';
             }
             env = list_env_get(pathv[i]+1, envv);
             if (delimit) {
-                *delimit = PRRTE_PATH_SEP[0];
+                *delimit = PRTE_PATH_SEP[0];
             }
             if (NULL != env) {
                 if (!delimit) {
-                    fullpath = prrte_path_access(fname, env, mode);
+                    fullpath = prte_path_access(fname, env, mode);
                 } else {
-                    prrte_asprintf(&pfix, "%s%s", env, delimit);
-                    fullpath = prrte_path_access(fname, pfix, mode);
+                    prte_asprintf(&pfix, "%s%s", env, delimit);
+                    fullpath = prte_path_access(fname, pfix, mode);
                     free(pfix);
                 }
             }
         }
         else {
-            fullpath = prrte_path_access(fname, pathv[i], mode);
+            fullpath = prte_path_access(fname, pathv[i], mode);
         }
         i++;
     }
-    return prrte_make_filename_os_friendly(fullpath);
+    return prte_make_filename_os_friendly(fullpath);
 }
 
 /*
  * Locates a file with certain permissions from a list of search paths
  */
-char *prrte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
+char *prte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
 {
     char **dirv;
     char *fullpath;
@@ -201,13 +201,13 @@ char *prrte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
        the wrkdir to the end of the path */
 
     if (!found_dot && NULL != wrkdir) {
-        prrte_argv_append(&dirc, &dirv, wrkdir);
+        prte_argv_append(&dirc, &dirv, wrkdir);
     }
 
     if(NULL == dirv)
         return NULL;
-    fullpath = prrte_path_find(fname, dirv, mode, envv);
-    prrte_argv_free(dirv);
+    fullpath = prte_path_find(fname, dirv, mode, envv);
+    prte_argv_free(dirv);
     return fullpath;
 }
 
@@ -225,7 +225,7 @@ char *prrte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
  *      -Full pathname of located file Success
  *      -NULL Failure
  */
-char *prrte_path_access(char *fname, char *path, int mode)
+char *prte_path_access(char *fname, char *path, int mode)
 {
     char *fullpath = NULL;
     struct stat buf;
@@ -233,10 +233,10 @@ char *prrte_path_access(char *fname, char *path, int mode)
 
     /* Allocate space for the full pathname. */
     if (NULL == path) {
-        fullpath = prrte_os_path(false, fname, NULL);
+        fullpath = prte_os_path(false, fname, NULL);
     } else {
-        relative = !prrte_path_is_absolute(path);
-        fullpath = prrte_os_path(relative, path, fname, NULL);
+        relative = !prte_path_is_absolute(path);
+        fullpath = prte_os_path(relative, path, fname, NULL);
     }
     if (NULL == fullpath) {
         return NULL;
@@ -315,7 +315,7 @@ static void path_env_load(char *path, int *pargc, char ***pargv)
 
         /* Locate the delimiter. */
 
-        for (p = path; *p && (*p != PRRTE_ENV_SEP); ++p) {
+        for (p = path; *p && (*p != PRTE_ENV_SEP); ++p) {
             continue;
         }
 
@@ -324,7 +324,7 @@ static void path_env_load(char *path, int *pargc, char ***pargv)
         if (p != path) {
             saved = *p;
             *p = '\0';
-            prrte_argv_append(pargc, pargv, path);
+            prte_argv_append(pargc, pargv, path);
             *p = saved;
             path = p;
         }
@@ -376,29 +376,29 @@ static char *list_env_get(char *var, char **list)
  * function will return NULL. Otherwise, an newly allocated string
  * will be returned.
  */
-char* prrte_find_absolute_path( char* app_name )
+char* prte_find_absolute_path( char* app_name )
 {
     char* abs_app_name;
-    char cwd[PRRTE_PATH_MAX], *pcwd;
+    char cwd[PRTE_PATH_MAX], *pcwd;
 
-    if( prrte_path_is_absolute(app_name) ) { /* already absolute path */
+    if( prte_path_is_absolute(app_name) ) { /* already absolute path */
         abs_app_name = app_name;
     } else if ( '.' == app_name[0] ||
-               NULL != strchr(app_name, PRRTE_PATH_SEP[0])) {
+               NULL != strchr(app_name, PRTE_PATH_SEP[0])) {
         /* the app is in the current directory or below it */
-        pcwd = getcwd( cwd, PRRTE_PATH_MAX );
+        pcwd = getcwd( cwd, PRTE_PATH_MAX );
         if( NULL == pcwd ) {
             /* too bad there is no way we can get the app absolute name */
             return NULL;
         }
-        abs_app_name = prrte_os_path( false, pcwd, app_name, NULL );
+        abs_app_name = prte_os_path( false, pcwd, app_name, NULL );
     } else {
         /* Otherwise try to search for the application in the PATH ... */
-        abs_app_name = prrte_path_findv( app_name, X_OK, NULL, NULL );
+        abs_app_name = prte_path_findv( app_name, X_OK, NULL, NULL );
     }
 
     if( NULL != abs_app_name ) {
-        char* resolved_path = (char*)malloc(PRRTE_PATH_MAX);
+        char* resolved_path = (char*)malloc(PRTE_PATH_MAX);
         realpath( abs_app_name, resolved_path );
         if( abs_app_name != app_name ) free(abs_app_name);
         return resolved_path;
@@ -412,7 +412,7 @@ char* prrte_find_absolute_path( char* app_name )
  * Limitations: autofs on solaris/osx will be assumed as "nfs" type
  */
 
-static char *prrte_check_mtab(char *dev_path)
+static char *prte_check_mtab(char *dev_path)
 {
 
 #ifdef HAVE_MNTENT_H
@@ -502,7 +502,7 @@ static char *prrte_check_mtab(char *dev_path)
 #define MASK2        0xffff
 #define MASK4    0xffffffff
 
-bool prrte_path_nfs(char *fname, char **ret_fstype)
+bool prte_path_nfs(char *fname, char **ret_fstype)
 {
     int i;
     int fsrc = -1;
@@ -516,7 +516,7 @@ bool prrte_path_nfs(char *fname, char **ret_fstype)
     struct statvfs vfsbuf;
 #endif
     /*
-     * Be sure to update the test (test/util/prrte_path_nfs.c)
+     * Be sure to update the test (test/util/prte_path_nfs.c)
      * while adding a new Network/Cluster Filesystem here
      */
     static struct fs_types_t {
@@ -557,7 +557,7 @@ again:
     if (-1 == fsrc && -1 == vfsrc) {
         char * last_sep;
 
-        PRRTE_OUTPUT_VERBOSE((10, 0, "prrte_path_nfs: stat(v)fs on file:%s failed errno:%d directory:%s\n",
+        PRTE_OUTPUT_VERBOSE((10, 0, "prte_path_nfs: stat(v)fs on file:%s failed errno:%d directory:%s\n",
                              fname, errno, file));
         if (EPERM == errno) {
             free(file);
@@ -567,10 +567,10 @@ again:
             return false;
         }
 
-        last_sep = strrchr(file, PRRTE_PATH_SEP[0]);
+        last_sep = strrchr(file, PRTE_PATH_SEP[0]);
         /* Stop the search, when we have searched past root '/' */
         if (NULL == last_sep || (1 == strlen(last_sep) &&
-            PRRTE_PATH_SEP[0] == *last_sep)) {
+            PRTE_PATH_SEP[0] == *last_sep)) {
             free (file);
             if ( NULL != ret_fstype ) {
                 *ret_fstype=NULL;
@@ -630,7 +630,7 @@ found:
 
     free (file);
     if (AUTOFS_SUPER_MAGIC == fs_types[i].f_fsid) {
-        char *fs_type = prrte_check_mtab(fname);
+        char *fs_type = prte_check_mtab(fname);
         int x;
         if (NULL != fs_type) {
             for (x = 0; x < FS_TYPES_NUM; x++) {
@@ -638,7 +638,7 @@ found:
                     continue;
                 }
                 if (0 == strcasecmp(fs_types[x].f_fsname, fs_type)) {
-                    PRRTE_OUTPUT_VERBOSE((10, 0, "prrte_path_nfs: file:%s on fs:%s\n", fname, fs_type));
+                    PRTE_OUTPUT_VERBOSE((10, 0, "prte_path_nfs: file:%s on fs:%s\n", fname, fs_type));
                     free(fs_type);
                     if ( NULL != ret_fstype ) {
                         *ret_fstype = strdup(fs_types[x].f_fsname);
@@ -654,7 +654,7 @@ found:
         }
     }
 
-    PRRTE_OUTPUT_VERBOSE((10, 0, "prrte_path_nfs: file:%s on fs:%s\n",
+    PRTE_OUTPUT_VERBOSE((10, 0, "prte_path_nfs: file:%s on fs:%s\n",
                 fname, fs_types[i].f_fsname));
     if ( NULL != ret_fstype ) {
         *ret_fstype = strdup (fs_types[i].f_fsname);
@@ -665,7 +665,7 @@ found:
 }
 
 int
-prrte_path_df(const char *path,
+prte_path_df(const char *path,
              uint64_t *out_avail)
 {
     int rc = -1;
@@ -678,7 +678,7 @@ prrte_path_df(const char *path,
 #endif
 
     if (NULL == path || NULL == out_avail) {
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
     *out_avail = 0;
 
@@ -692,19 +692,19 @@ prrte_path_df(const char *path,
     } while (-1 == rc && ESTALE == err && (--trials > 0));
 
     if (-1 == rc) {
-        PRRTE_OUTPUT_VERBOSE((10, 2, "prrte_path_df: stat(v)fs on "
+        PRTE_OUTPUT_VERBOSE((10, 2, "prte_path_df: stat(v)fs on "
                              "path: %s failed with errno: %d (%s)\n",
                              path, err, strerror(err)));
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     /* now set the amount of free space available on path */
                                /* sometimes buf.f_bavail is negative */
     *out_avail = (uint64_t)buf.f_bsize * (uint64_t)((long)buf.f_bavail < 0 ? 0 : buf.f_bavail);
 
-    PRRTE_OUTPUT_VERBOSE((10, 2, "prrte_path_df: stat(v)fs states "
+    PRTE_OUTPUT_VERBOSE((10, 2, "prte_path_df: stat(v)fs states "
                          "path: %s has %"PRIu64 " B of free space.",
                          path, *out_avail));
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

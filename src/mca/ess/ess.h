@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2012 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2012-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -22,14 +22,14 @@
  */
 /** @file:
  *
- * The PRRTE Environment-Specific Services
+ * The PRTE Environment-Specific Services
  *
  */
 
-#ifndef PRRTE_ESS_H
-#define PRRTE_ESS_H
+#ifndef PRTE_ESS_H
+#define PRTE_ESS_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
 #include "src/mca/mca.h"
@@ -47,12 +47,12 @@ BEGIN_C_DECLS
 /*
  * Initialize the RTE for this environment
  */
-typedef int (*prrte_ess_base_module_init_fn_t)(int argc, char **argv);
+typedef int (*prte_ess_base_module_init_fn_t)(int argc, char **argv);
 
 /*
  * Finalize the RTE for this environment
  */
-typedef int (*prrte_ess_base_module_finalize_fn_t)(void);
+typedef int (*prte_ess_base_module_finalize_fn_t)(void);
 
 /**
  * Abort the current application
@@ -65,48 +65,48 @@ typedef int (*prrte_ess_base_module_finalize_fn_t)(void);
  * function should create an appropriate file to alert the local
  * orted that termination was abnormal.
  */
-typedef void (*prrte_ess_base_module_abort_fn_t)(int status, bool report);
+typedef void (*prte_ess_base_module_abort_fn_t)(int status, bool report);
 
 /**
  * Handle fault tolerance updates
  *
  * @param[in] state Fault tolerance state update
  *
- * @retval PRRTE_SUCCESS The operation completed successfully
- * @retval PRRTE_ERROR   An unspecifed error occurred
+ * @retval PRTE_SUCCESS The operation completed successfully
+ * @retval PRTE_ERROR   An unspecifed error occurred
  */
-typedef int  (*prrte_ess_base_module_ft_event_fn_t)(int state);
+typedef int  (*prte_ess_base_module_ft_event_fn_t)(int state);
 
 /*
  * the standard module data structure
  */
-struct prrte_ess_base_module_3_0_0_t {
-    prrte_ess_base_module_init_fn_t                  init;
-    prrte_ess_base_module_finalize_fn_t              finalize;
-    prrte_ess_base_module_abort_fn_t                 abort;
-    prrte_ess_base_module_ft_event_fn_t              ft_event;
+struct prte_ess_base_module_3_0_0_t {
+    prte_ess_base_module_init_fn_t                  init;
+    prte_ess_base_module_finalize_fn_t              finalize;
+    prte_ess_base_module_abort_fn_t                 abort;
+    prte_ess_base_module_ft_event_fn_t              ft_event;
 };
-typedef struct prrte_ess_base_module_3_0_0_t prrte_ess_base_module_3_0_0_t;
-typedef struct prrte_ess_base_module_3_0_0_t prrte_ess_base_module_t;
+typedef struct prte_ess_base_module_3_0_0_t prte_ess_base_module_3_0_0_t;
+typedef struct prte_ess_base_module_3_0_0_t prte_ess_base_module_t;
 
 /*
  * the standard component data structure
  */
-struct prrte_ess_base_component_2_0_0_t {
-    prrte_mca_base_component_t base_version;
-    prrte_mca_base_component_data_t base_data;
+struct prte_ess_base_component_2_0_0_t {
+    prte_mca_base_component_t base_version;
+    prte_mca_base_component_data_t base_data;
 };
-typedef struct prrte_ess_base_component_2_0_0_t prrte_ess_base_component_2_0_0_t;
-typedef struct prrte_ess_base_component_2_0_0_t prrte_ess_base_component_t;
+typedef struct prte_ess_base_component_2_0_0_t prte_ess_base_component_2_0_0_t;
+typedef struct prte_ess_base_component_2_0_0_t prte_ess_base_component_t;
 
 /*
  * Macro for use in components that are of type ess
  */
-#define PRRTE_ESS_BASE_VERSION_3_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("ess", 3, 0, 0)
+#define PRTE_ESS_BASE_VERSION_3_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("ess", 3, 0, 0)
 
 /* Global structure for accessing ESS functions */
-PRRTE_EXPORT extern prrte_ess_base_module_t prrte_ess;  /* holds selected module's function pointers */
+PRTE_EXPORT extern prte_ess_base_module_t prte_ess;  /* holds selected module's function pointers */
 
 END_C_DECLS
 

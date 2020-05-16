@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -10,16 +11,16 @@
  * rtc framework base functionality.
  */
 
-#ifndef PRRTE_MCA_RTC_BASE_H
-#define PRRTE_MCA_RTC_BASE_H
+#ifndef PRTE_MCA_RTC_BASE_H
+#define PRTE_MCA_RTC_BASE_H
 
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 #include "src/util/printf.h"
 #include "src/mca/mca.h"
 
@@ -30,9 +31,9 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_rtc_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_rtc_base_framework;
 /* select a component */
-PRRTE_EXPORT    int prrte_rtc_base_select(void);
+PRTE_EXPORT    int prte_rtc_base_select(void);
 
 /*
  * Global functions for MCA overall collective open and close
@@ -43,38 +44,38 @@ PRRTE_EXPORT    int prrte_rtc_base_select(void);
  */
 typedef struct {
     /* list of selected modules */
-    prrte_list_t actives;
-} prrte_rtc_base_t;
+    prte_list_t actives;
+} prte_rtc_base_t;
 
 /**
  * Global instance of rtc-wide framework data
  */
-PRRTE_EXPORT extern prrte_rtc_base_t prrte_rtc_base;
+PRTE_EXPORT extern prte_rtc_base_t prte_rtc_base;
 
 /**
  * Select an rtc component / module
  */
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     int pri;
-    prrte_rtc_base_module_t *module;
-    prrte_mca_base_component_t *component;
-} prrte_rtc_base_selected_module_t;
-PRRTE_CLASS_DECLARATION(prrte_rtc_base_selected_module_t);
+    prte_rtc_base_module_t *module;
+    prte_mca_base_component_t *component;
+} prte_rtc_base_selected_module_t;
+PRTE_CLASS_DECLARATION(prte_rtc_base_selected_module_t);
 
-PRRTE_EXPORT void prrte_rtc_base_assign(prrte_job_t *jdata);
-PRRTE_EXPORT void prrte_rtc_base_set(prrte_job_t *jdata, prrte_proc_t *proc,
+PRTE_EXPORT void prte_rtc_base_assign(prte_job_t *jdata);
+PRTE_EXPORT void prte_rtc_base_set(prte_job_t *jdata, prte_proc_t *proc,
                                      char ***env, int error_fd);
-PRRTE_EXPORT void prrte_rtc_base_get_avail_vals(prrte_list_t *vals);
+PRTE_EXPORT void prte_rtc_base_get_avail_vals(prte_list_t *vals);
 
 /* Called from the child to send a warning show_help message up the
    pipe to the waiting parent. */
-PRRTE_EXPORT int prrte_rtc_base_send_warn_show_help(int fd, const char *file,
+PRTE_EXPORT int prte_rtc_base_send_warn_show_help(int fd, const char *file,
                                                     const char *topic, ...);
 
 /* Called from the child to send an error message up the pipe to the
    waiting parent. */
-PRRTE_EXPORT void prrte_rtc_base_send_error_show_help(int fd, int exit_status,
+PRTE_EXPORT void prte_rtc_base_send_error_show_help(int fd, int exit_status,
                                                       const char *file,
                                                       const char *topic, ...);
 

@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,14 +18,14 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 
-#include "src/class/prrte_pointer_array.h"
+#include "src/class/prte_pointer_array.h"
 
 #include "src/dss/dss_internal.h"
 
@@ -32,7 +33,7 @@
  * Internal function that resizes (expands) an inuse buffer if
  * necessary.
  */
-char* prrte_dss_buffer_extend(prrte_buffer_t *buffer, size_t bytes_to_add)
+char* prte_dss_buffer_extend(prte_buffer_t *buffer, size_t bytes_to_add)
 {
     size_t required, to_alloc;
     size_t pack_offset, unpack_offset;
@@ -43,13 +44,13 @@ char* prrte_dss_buffer_extend(prrte_buffer_t *buffer, size_t bytes_to_add)
     }
 
     required = buffer->bytes_used + bytes_to_add;
-    if (required >= (size_t)prrte_dss_threshold_size) {
-        to_alloc = ((required + prrte_dss_threshold_size - 1)
-                    / prrte_dss_threshold_size) * prrte_dss_threshold_size;
+    if (required >= (size_t)prte_dss_threshold_size) {
+        to_alloc = ((required + prte_dss_threshold_size - 1)
+                    / prte_dss_threshold_size) * prte_dss_threshold_size;
     } else {
         to_alloc = buffer->bytes_allocated;
         if(0 == to_alloc) {
-            to_alloc = prrte_dss_initial_size;
+            to_alloc = prte_dss_initial_size;
         }
         while(to_alloc < required) {
             to_alloc <<= 1;
@@ -84,7 +85,7 @@ char* prrte_dss_buffer_extend(prrte_buffer_t *buffer, size_t bytes_to_add)
  * Internal function that checks to see if the specified number of bytes
  * remain in the buffer for unpacking
  */
-bool prrte_dss_too_small(prrte_buffer_t *buffer, size_t bytes_reqd)
+bool prte_dss_too_small(prte_buffer_t *buffer, size_t bytes_reqd)
 {
     size_t bytes_remaining_packed;
 
@@ -104,29 +105,29 @@ bool prrte_dss_too_small(prrte_buffer_t *buffer, size_t bytes_reqd)
     return false;
 }
 
-int prrte_dss_store_data_type(prrte_buffer_t *buffer, prrte_data_type_t type)
+int prte_dss_store_data_type(prte_buffer_t *buffer, prte_data_type_t type)
 {
-    prrte_dss_type_info_t *info;
+    prte_dss_type_info_t *info;
 
-    /* Lookup the pack function for the actual prrte_data_type type and call it */
+    /* Lookup the pack function for the actual prte_data_type type and call it */
 
-    if (NULL == (info = (prrte_dss_type_info_t*)prrte_pointer_array_get_item(&prrte_dss_types, PRRTE_DATA_TYPE_T))) {
-        return PRRTE_ERR_PACK_FAILURE;
+    if (NULL == (info = (prte_dss_type_info_t*)prte_pointer_array_get_item(&prte_dss_types, PRTE_DATA_TYPE_T))) {
+        return PRTE_ERR_PACK_FAILURE;
     }
 
-    return info->odti_pack_fn(buffer, &type, 1, PRRTE_DATA_TYPE_T);
+    return info->odti_pack_fn(buffer, &type, 1, PRTE_DATA_TYPE_T);
 }
 
-int prrte_dss_get_data_type(prrte_buffer_t *buffer, prrte_data_type_t *type)
+int prte_dss_get_data_type(prte_buffer_t *buffer, prte_data_type_t *type)
 {
-    prrte_dss_type_info_t *info;
+    prte_dss_type_info_t *info;
     int32_t n=1;
 
-    /* Lookup the unpack function for the actual prrte_data_type type and call it */
+    /* Lookup the unpack function for the actual prte_data_type type and call it */
 
-    if (NULL == (info = (prrte_dss_type_info_t*)prrte_pointer_array_get_item(&prrte_dss_types, PRRTE_DATA_TYPE_T))) {
-        return PRRTE_ERR_PACK_FAILURE;
+    if (NULL == (info = (prte_dss_type_info_t*)prte_pointer_array_get_item(&prte_dss_types, PRTE_DATA_TYPE_T))) {
+        return PRTE_ERR_PACK_FAILURE;
     }
 
-    return info->odti_unpack_fn(buffer, type, &n, PRRTE_DATA_TYPE_T);
+    return info->odti_unpack_fn(buffer, type, &n, PRTE_DATA_TYPE_T);
 }

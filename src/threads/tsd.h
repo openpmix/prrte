@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2007-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2008      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
@@ -13,10 +13,10 @@
  */
 
 
-#ifndef PRRTE_THREADS_TSD_H
-#define PRRTE_THREADS_TSD_H
+#ifndef PRTE_THREADS_TSD_H
+#define PRTE_THREADS_TSD_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <pthread.h>
 
@@ -36,28 +36,28 @@ BEGIN_C_DECLS
 /**
  * Prototype for callback when tsd data is being destroyed
  */
-typedef void (*prrte_tsd_destructor_t)(void *value);
+typedef void (*prte_tsd_destructor_t)(void *value);
 
 
-typedef pthread_key_t prrte_tsd_key_t;
+typedef pthread_key_t prte_tsd_key_t;
 
 static inline int
-prrte_tsd_key_delete(prrte_tsd_key_t key)
+prte_tsd_key_delete(prte_tsd_key_t key)
 {
     return pthread_key_delete(key);
 }
 
 static inline int
-prrte_tsd_setspecific(prrte_tsd_key_t key, void *value)
+prte_tsd_setspecific(prte_tsd_key_t key, void *value)
 {
     return pthread_setspecific(key, value);
 }
 
 static inline int
-prrte_tsd_getspecific(prrte_tsd_key_t key, void **valuep)
+prte_tsd_getspecific(prte_tsd_key_t key, void **valuep)
 {
     *valuep = pthread_getspecific(key);
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /**
@@ -65,7 +65,7 @@ prrte_tsd_getspecific(prrte_tsd_key_t key, void **valuep)
  *
  * Create a thread-specific data key visible to all threads in the
  * current process.  The returned key is valid in all threads,
- * although the values bound to the key by prrte_tsd_setspecific() are
+ * although the values bound to the key by prte_tsd_setspecific() are
  * allocated on a per-thread basis and persist for the life of the
  * calling thread.
  *
@@ -81,13 +81,13 @@ prrte_tsd_getspecific(prrte_tsd_key_t key, void **valuep)
  * @param key[out]       The key for accessing thread-specific data
  * @param destructor[in] Cleanup function to call when a thread exits
  *
- * @retval PRRTE_SUCCESS  Success
+ * @retval PRTE_SUCCESS  Success
  * @retval EAGAIN        The system lacked the necessary resource to
  *                       create another thread specific data key
  * @retval ENOMEM        Insufficient memory exists to create the key
  */
-PRRTE_EXPORT int prrte_tsd_key_create(prrte_tsd_key_t *key,
-                                      prrte_tsd_destructor_t destructor);
+PRTE_EXPORT int prte_tsd_key_create(prte_tsd_key_t *key,
+                                      prte_tsd_destructor_t destructor);
 
 
 /**
@@ -100,10 +100,10 @@ PRRTE_EXPORT int prrte_tsd_key_create(prrte_tsd_key_t *key,
  * keys of the main thread, since there is no such thing as
  * pthread_join(main_thread)
  *
- * @retval PRRTE_SUCCESS  Success
+ * @retval PRTE_SUCCESS  Success
  */
-PRRTE_EXPORT int prrte_tsd_keys_destruct(void);
+PRTE_EXPORT int prte_tsd_keys_destruct(void);
 
 END_C_DECLS
 
-#endif /* PRRTE_MTHREADS_TSD_H */
+#endif /* PRTE_MTHREADS_TSD_H */

@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2017      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -30,12 +30,12 @@
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 
-#include "src/class/prrte_list.h"
-#include "src/class/prrte_hash_table.h"
+#include "src/class/prte_list.h"
+#include "src/class/prte_hash_table.h"
 #include "src/dss/dss_types.h"
-#include "src/mca/base/prrte_mca_base_framework.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 #include "src/hwloc/hwloc-internal.h"
 
 #include "src/mca/mca.h"
@@ -52,46 +52,46 @@ BEGIN_C_DECLS
 /*
  * MCA framework
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_grpcomm_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_grpcomm_base_framework;
 /*
  * Select an available component.
  */
-PRRTE_EXPORT int prrte_grpcomm_base_select(void);
+PRTE_EXPORT int prte_grpcomm_base_select(void);
 
 /*
  * globals that might be needed
  */
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     int pri;
-    prrte_grpcomm_base_module_t *module;
-    prrte_mca_base_component_t *component;
-} prrte_grpcomm_base_active_t;
-PRRTE_CLASS_DECLARATION(prrte_grpcomm_base_active_t);
+    prte_grpcomm_base_module_t *module;
+    prte_mca_base_component_t *component;
+} prte_grpcomm_base_active_t;
+PRTE_CLASS_DECLARATION(prte_grpcomm_base_active_t);
 
 typedef struct {
-    prrte_list_t actives;
-    prrte_list_t ongoing;
-    prrte_hash_table_t sig_table;
+    prte_list_t actives;
+    prte_list_t ongoing;
+    prte_hash_table_t sig_table;
     char *transports;
     size_t context_id;
-} prrte_grpcomm_base_t;
+} prte_grpcomm_base_t;
 
-PRRTE_EXPORT extern prrte_grpcomm_base_t prrte_grpcomm_base;
+PRTE_EXPORT extern prte_grpcomm_base_t prte_grpcomm_base;
 
 /* Public API stubs */
-PRRTE_EXPORT int prrte_grpcomm_API_xcast(prrte_grpcomm_signature_t *sig,
-                                         prrte_rml_tag_t tag,
-                                         prrte_buffer_t *buf);
+PRTE_EXPORT int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig,
+                                         prte_rml_tag_t tag,
+                                         prte_buffer_t *buf);
 
-PRRTE_EXPORT int prrte_grpcomm_API_allgather(prrte_grpcomm_signature_t *sig,
-                                             prrte_buffer_t *buf, int mode,
-                                             prrte_grpcomm_cbfunc_t cbfunc,
+PRTE_EXPORT int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig,
+                                             prte_buffer_t *buf, int mode,
+                                             prte_grpcomm_cbfunc_t cbfunc,
                                              void *cbdata);
 
-PRRTE_EXPORT prrte_grpcomm_coll_t* prrte_grpcomm_base_get_tracker(prrte_grpcomm_signature_t *sig, bool create);
-PRRTE_EXPORT void prrte_grpcomm_base_mark_distance_recv(prrte_grpcomm_coll_t *coll, uint32_t distance);
-PRRTE_EXPORT unsigned int prrte_grpcomm_base_check_distance_recv(prrte_grpcomm_coll_t *coll, uint32_t distance);
+PRTE_EXPORT prte_grpcomm_coll_t* prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig, bool create);
+PRTE_EXPORT void prte_grpcomm_base_mark_distance_recv(prte_grpcomm_coll_t *coll, uint32_t distance);
+PRTE_EXPORT unsigned int prte_grpcomm_base_check_distance_recv(prte_grpcomm_coll_t *coll, uint32_t distance);
 
 END_C_DECLS
 #endif

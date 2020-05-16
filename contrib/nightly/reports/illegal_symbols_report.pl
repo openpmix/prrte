@@ -11,6 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -36,11 +37,11 @@ my @comp_suffixes = (".so");
 
 # Acceptable public symbol prefixes
 
-my @lib_acceptable = ("ompi_" , "mpi_", "MPI_", "OMPI_", "MPI::", "PMPI_", "PMPI::", "mca_", "lt_", "prrte_", "epoll", "opal_", "MPIR_",
+my @lib_acceptable = ("ompi_" , "mpi_", "MPI_", "OMPI_", "MPI::", "PMPI_", "PMPI::", "mca_", "lt_", "prte_", "epoll", "opal_", "MPIR_",
 # Portland Group compiler adds a bunch of these
                       "pghpf_",
 );
-my @comp_acceptable = ("mca_", "ompi_", "prrte_", "opal_",
+my @comp_acceptable = ("mca_", "ompi_", "prte_", "opal_",
 # The latest incarnation of ROMIO adds these
                       "MPIO_", "MPIOI_", "ADIO_", "ADIOI_", "MPIU_",
 );

@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011-2018 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012-2017 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
@@ -27,9 +27,9 @@
  * $HEADER$
  */
 
-#define PRRTE_HWLOC_WANT_SHMEM 1
+#define PRTE_HWLOC_WANT_SHMEM 1
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -47,7 +47,7 @@
 #include <fcntl.h>
 #endif
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/include/constants.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"
@@ -69,7 +69,7 @@ static bool topo_in_shmem = false;
  * only find PUs (!).  On such platforms, then do the same calculation
  * but with PUs instead of COREs.
  */
-hwloc_obj_t prrte_hwloc_base_get_pu(hwloc_topology_t topo,
+hwloc_obj_t prte_hwloc_base_get_pu(hwloc_topology_t topo,
                                     bool use_hwthread_cpus,
                                     int lid)
 {
@@ -93,12 +93,12 @@ hwloc_obj_t prrte_hwloc_base_get_pu(hwloc_topology_t topo,
         obj_type = HWLOC_OBJ_PU;
     }
 
-    prrte_output_verbose(5, prrte_hwloc_base_output,
+    prte_output_verbose(5, prte_hwloc_base_output,
                         "Searching for %d LOGICAL PU", lid);
 
     /* Now do the actual lookup. */
     obj = hwloc_get_obj_by_type(topo, obj_type, lid);
-    PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "logical cpu %d %s found",
                          lid, (NULL == obj) ? "not" : "is"));
 
@@ -106,29 +106,29 @@ hwloc_obj_t prrte_hwloc_base_get_pu(hwloc_topology_t topo,
     return obj;
 }
 
-hwloc_cpuset_t prrte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
+hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
                                                 bool use_hwthread_cpus,
                                                 char *cpulist)
 {
     hwloc_cpuset_t avail = NULL, pucpus, res;
     char **ranges=NULL, **range=NULL;
     int idx, cpu, start, end;
-    prrte_hwloc_obj_data_t *data;
+    prte_hwloc_obj_data_t *data;
     hwloc_obj_t pu;
 
     /* find the specified logical cpus */
-    ranges = prrte_argv_split(cpulist, ',');
+    ranges = prte_argv_split(cpulist, ',');
     avail = hwloc_bitmap_alloc();
     hwloc_bitmap_zero(avail);
     res = hwloc_bitmap_alloc();
     pucpus = hwloc_bitmap_alloc();
-    for (idx=0; idx < prrte_argv_count(ranges); idx++) {
-        range = prrte_argv_split(ranges[idx], '-');
-        switch (prrte_argv_count(range)) {
+    for (idx=0; idx < prte_argv_count(ranges); idx++) {
+        range = prte_argv_split(ranges[idx], '-');
+        switch (prte_argv_count(range)) {
         case 1:
             /* only one cpu given - get that object */
             cpu = strtoul(range[0], NULL, 10);
-            if (NULL != (pu = prrte_hwloc_base_get_pu(topo, use_hwthread_cpus, cpu))) {
+            if (NULL != (pu = prte_hwloc_base_get_pu(topo, use_hwthread_cpus, cpu))) {
                 #if HWLOC_API_VERSION < 0x20000
                     hwloc_bitmap_and(pucpus, pu->online_cpuset, pu->allowed_cpuset);
                 #else
@@ -136,10 +136,10 @@ hwloc_cpuset_t prrte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
                 #endif
                 hwloc_bitmap_or(res, avail, pucpus);
                 hwloc_bitmap_copy(avail, res);
-                data = (prrte_hwloc_obj_data_t*)pu->userdata;
+                data = (prte_hwloc_obj_data_t*)pu->userdata;
                 if (NULL == data) {
-                    pu->userdata = (void*)PRRTE_NEW(prrte_hwloc_obj_data_t);
-                    data = (prrte_hwloc_obj_data_t*)pu->userdata;
+                    pu->userdata = (void*)PRTE_NEW(prte_hwloc_obj_data_t);
+                    data = (prte_hwloc_obj_data_t*)pu->userdata;
                 }
                 data->npus++;
             }
@@ -149,7 +149,7 @@ hwloc_cpuset_t prrte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
             start = strtoul(range[0], NULL, 10);
             end = strtoul(range[1], NULL, 10);
             for (cpu=start; cpu <= end; cpu++) {
-                if (NULL != (pu = prrte_hwloc_base_get_pu(topo, use_hwthread_cpus, cpu))) {
+                if (NULL != (pu = prte_hwloc_base_get_pu(topo, use_hwthread_cpus, cpu))) {
                     #if HWLOC_API_VERSION < 0x20000
                         hwloc_bitmap_and(pucpus, pu->online_cpuset, pu->allowed_cpuset);
                     #else
@@ -157,10 +157,10 @@ hwloc_cpuset_t prrte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
                     #endif
                     hwloc_bitmap_or(res, avail, pucpus);
                     hwloc_bitmap_copy(avail, res);
-                    data = (prrte_hwloc_obj_data_t*)pu->userdata;
+                    data = (prte_hwloc_obj_data_t*)pu->userdata;
                     if (NULL == data) {
-                        pu->userdata = (void*)PRRTE_NEW(prrte_hwloc_obj_data_t);
-                        data = (prrte_hwloc_obj_data_t*)pu->userdata;
+                        pu->userdata = (void*)PRTE_NEW(prte_hwloc_obj_data_t);
+                        data = (prte_hwloc_obj_data_t*)pu->userdata;
                     }
                     data->npus++;
                 }
@@ -169,10 +169,10 @@ hwloc_cpuset_t prrte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
         default:
             break;
         }
-        prrte_argv_free(range);
+        prte_argv_free(range);
     }
     if (NULL != ranges) {
-        prrte_argv_free(ranges);
+        prte_argv_free(ranges);
     }
     hwloc_bitmap_free(res);
     hwloc_bitmap_free(pucpus);
@@ -180,7 +180,7 @@ hwloc_cpuset_t prrte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
     return avail;
 }
 
-hwloc_cpuset_t prrte_hwloc_base_setup_summary(hwloc_topology_t topo)
+hwloc_cpuset_t prte_hwloc_base_setup_summary(hwloc_topology_t topo)
 {
     hwloc_cpuset_t avail = NULL;
 
@@ -211,43 +211,43 @@ hwloc_cpuset_t prrte_hwloc_base_setup_summary(hwloc_topology_t topo)
 /* determine the node-level available cpuset based on
  * online vs allowed vs user-specified cpus
  */
-int prrte_hwloc_base_filter_cpus(hwloc_topology_t topo)
+int prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
 {
     hwloc_obj_t root;
     hwloc_cpuset_t avail = NULL;
-    prrte_hwloc_topo_data_t *sum;
+    prte_hwloc_topo_data_t *sum;
 
     root = hwloc_get_root_obj(topo);
 
     if (NULL == root->userdata) {
-        root->userdata = (void*)PRRTE_NEW(prrte_hwloc_topo_data_t);
+        root->userdata = (void*)PRTE_NEW(prte_hwloc_topo_data_t);
     }
-    sum = (prrte_hwloc_topo_data_t*)root->userdata;
+    sum = (prte_hwloc_topo_data_t*)root->userdata;
 
     /* should only ever enter here once, but check anyway */
     if (NULL != sum->available) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* process any specified default cpu set against this topology */
-    if (NULL == prrte_hwloc_default_cpu_list) {
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+    if (NULL == prte_hwloc_default_cpu_list) {
+        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base: no cpus specified - using root available cpuset"));
-        avail = prrte_hwloc_base_setup_summary(topo);
+        avail = prte_hwloc_base_setup_summary(topo);
     } else {
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base: filtering cpuset"));
-        avail = prrte_hwloc_base_generate_cpuset(topo, prrte_hwloc_default_use_hwthread_cpus,
-                                                 prrte_hwloc_default_cpu_list);
+        avail = prte_hwloc_base_generate_cpuset(topo, prte_hwloc_default_use_hwthread_cpus,
+                                                 prte_hwloc_default_cpu_list);
     }
     if (NULL == avail) {
-        return PRRTE_ERR_NOT_SUPPORTED;
+        return PRTE_ERR_NOT_SUPPORTED;
     }
 
     /* cache this info */
     sum->available = avail;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static void fill_cache_line_size(void)
@@ -263,9 +263,9 @@ static void fill_cache_line_size(void)
     while (cache_level > 0 && !found) {
         i=0;
         while (1) {
-            obj = prrte_hwloc_base_get_obj_by_type(prrte_hwloc_topology,
+            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology,
                                                   cache_object, cache_level,
-                                                  i, PRRTE_HWLOC_LOGICAL);
+                                                  i, PRTE_HWLOC_LOGICAL);
             if (NULL == obj) {
                 --cache_level;
                 cache_object = HWLOC_OBJ_L1CACHE;
@@ -283,93 +283,93 @@ static void fill_cache_line_size(void)
     }
 
     /* If we found an L2 cache size in the hwloc data, save it in
-       prrte_cache_line_size.  Otherwise, we'll leave whatever default
-       was set in prrte_init.c */
+       prte_cache_line_size.  Otherwise, we'll leave whatever default
+       was set in prte_init.c */
     if (found) {
-        prrte_cache_line_size = (int) size;
+        prte_cache_line_size = (int) size;
     }
 }
 
-int prrte_hwloc_base_get_topology(void)
+int prte_hwloc_base_get_topology(void)
 {
     int rc;
 
-    prrte_output_verbose(2, prrte_hwloc_base_output,
+    prte_output_verbose(2, prte_hwloc_base_output,
                          "hwloc:base:get_topology");
 
     /* see if we already have it */
-    if (NULL != prrte_hwloc_topology) {
-        return PRRTE_SUCCESS;
+    if (NULL != prte_hwloc_topology) {
+        return PRTE_SUCCESS;
     }
 
-    if (NULL == prrte_hwloc_base_topo_file) {
-        prrte_output_verbose(1, prrte_hwloc_base_output,
+    if (NULL == prte_hwloc_base_topo_file) {
+        prte_output_verbose(1, prte_hwloc_base_output,
                             "hwloc:base discovering topology");
-        if (0 != hwloc_topology_init(&prrte_hwloc_topology) ||
-            0 != prrte_hwloc_base_topology_set_flags(prrte_hwloc_topology, 0, true) ||
-            0 != hwloc_topology_load(prrte_hwloc_topology)) {
-            PRRTE_ERROR_LOG(PRRTE_ERR_NOT_SUPPORTED);
-            return PRRTE_ERR_NOT_SUPPORTED;
+        if (0 != hwloc_topology_init(&prte_hwloc_topology) ||
+            0 != prte_hwloc_base_topology_set_flags(prte_hwloc_topology, 0, true) ||
+            0 != hwloc_topology_load(prte_hwloc_topology)) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
+            return PRTE_ERR_NOT_SUPPORTED;
         }
         /* filter the cpus thru any default cpu set */
-        if (PRRTE_SUCCESS != (rc = prrte_hwloc_base_filter_cpus(prrte_hwloc_topology))) {
-            hwloc_topology_destroy(prrte_hwloc_topology);
+        if (PRTE_SUCCESS != (rc = prte_hwloc_base_filter_cpus(prte_hwloc_topology))) {
+            hwloc_topology_destroy(prte_hwloc_topology);
             return rc;
         }
     } else {
-        prrte_output_verbose(1, prrte_hwloc_base_output,
+        prte_output_verbose(1, prte_hwloc_base_output,
                             "hwloc:base loading topology from file %s",
-                            prrte_hwloc_base_topo_file);
-        if (PRRTE_SUCCESS != (rc = prrte_hwloc_base_set_topology(prrte_hwloc_base_topo_file))) {
+                            prte_hwloc_base_topo_file);
+        if (PRTE_SUCCESS != (rc = prte_hwloc_base_set_topology(prte_hwloc_base_topo_file))) {
             return rc;
         }
     }
 
-    /* fill prrte_cache_line_size global with the smallest L1 cache
+    /* fill prte_cache_line_size global with the smallest L1 cache
        line size */
     fill_cache_line_size();
 
     /* get or update our local cpuset - it will get used multiple
      * times, so it's more efficient to keep a global copy
      */
-    prrte_hwloc_base_get_local_cpuset();
+    prte_hwloc_base_get_local_cpuset();
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_hwloc_base_set_topology(char *topofile)
+int prte_hwloc_base_set_topology(char *topofile)
 {
     struct hwloc_topology_support *support;
 
-     PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                           "hwloc:base:set_topology %s", topofile));
 
-   if (NULL != prrte_hwloc_topology) {
-        hwloc_topology_destroy(prrte_hwloc_topology);
+   if (NULL != prte_hwloc_topology) {
+        hwloc_topology_destroy(prte_hwloc_topology);
     }
-    if (0 != hwloc_topology_init(&prrte_hwloc_topology)) {
-        return PRRTE_ERR_NOT_SUPPORTED;
+    if (0 != hwloc_topology_init(&prte_hwloc_topology)) {
+        return PRTE_ERR_NOT_SUPPORTED;
     }
-    if (0 != hwloc_topology_set_xml(prrte_hwloc_topology, topofile)) {
-        hwloc_topology_destroy(prrte_hwloc_topology);
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+    if (0 != hwloc_topology_set_xml(prte_hwloc_topology, topofile)) {
+        hwloc_topology_destroy(prte_hwloc_topology);
+        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base:set_topology bad topo file"));
-        return PRRTE_ERR_NOT_SUPPORTED;
+        return PRTE_ERR_NOT_SUPPORTED;
     }
     /* since we are loading this from an external source, we have to
      * explicitly set a flag so hwloc sets things up correctly
      */
-    if (0 != prrte_hwloc_base_topology_set_flags(prrte_hwloc_topology,
+    if (0 != prte_hwloc_base_topology_set_flags(prte_hwloc_topology,
                                                 HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM,
                                                 true)) {
-        hwloc_topology_destroy(prrte_hwloc_topology);
-        return PRRTE_ERR_NOT_SUPPORTED;
+        hwloc_topology_destroy(prte_hwloc_topology);
+        return PRTE_ERR_NOT_SUPPORTED;
     }
-    if (0 != hwloc_topology_load(prrte_hwloc_topology)) {
-        hwloc_topology_destroy(prrte_hwloc_topology);
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+    if (0 != hwloc_topology_load(prte_hwloc_topology)) {
+        hwloc_topology_destroy(prte_hwloc_topology);
+        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base:set_topology failed to load"));
-        return PRRTE_ERR_NOT_SUPPORTED;
+        return PRTE_ERR_NOT_SUPPORTED;
     }
 
     /* unfortunately, hwloc does not include support info in its
@@ -377,27 +377,27 @@ int prrte_hwloc_base_set_topology(char *topofile)
      * systems that use this option are likely to provide
      * binding support
      */
-    support = (struct hwloc_topology_support*)hwloc_topology_get_support(prrte_hwloc_topology);
+    support = (struct hwloc_topology_support*)hwloc_topology_get_support(prte_hwloc_topology);
     support->cpubind->set_thisproc_cpubind = true;
     support->membind->set_thisproc_membind = true;
 
-    /* fill prrte_cache_line_size global with the smallest L1 cache
+    /* fill prte_cache_line_size global with the smallest L1 cache
        line size */
     fill_cache_line_size();
 
     /* all done */
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static void free_object(hwloc_obj_t obj)
 {
-    prrte_hwloc_obj_data_t *data;
+    prte_hwloc_obj_data_t *data;
     unsigned k;
 
     /* free any data hanging on this object */
     if (NULL != obj->userdata) {
-        data = (prrte_hwloc_obj_data_t*)obj->userdata;
-        PRRTE_RELEASE(data);
+        data = (prte_hwloc_obj_data_t*)obj->userdata;
+        PRTE_RELEASE(data);
         obj->userdata = NULL;
     }
 
@@ -407,18 +407,18 @@ static void free_object(hwloc_obj_t obj)
     }
 }
 
-void prrte_hwloc_base_free_topology(hwloc_topology_t topo)
+void prte_hwloc_base_free_topology(hwloc_topology_t topo)
 {
     hwloc_obj_t obj;
-    prrte_hwloc_topo_data_t *rdata;
+    prte_hwloc_topo_data_t *rdata;
     unsigned k;
 
     if (!topo_in_shmem) {
         obj = hwloc_get_root_obj(topo);
         /* release the root-level userdata */
         if (NULL != obj->userdata) {
-            rdata = (prrte_hwloc_topo_data_t*)obj->userdata;
-            PRRTE_RELEASE(rdata);
+            rdata = (prte_hwloc_topo_data_t*)obj->userdata;
+            PRTE_RELEASE(rdata);
             obj->userdata = NULL;
         }
         /* now recursively descend and release userdata
@@ -431,65 +431,65 @@ void prrte_hwloc_base_free_topology(hwloc_topology_t topo)
     hwloc_topology_destroy(topo);
 }
 
-void prrte_hwloc_base_get_local_cpuset(void)
+void prte_hwloc_base_get_local_cpuset(void)
 {
 #if HWLOC_API_VERSION < 0x20000
     hwloc_obj_t root;
 #endif
 
-    if (NULL != prrte_hwloc_topology) {
-        if (NULL == prrte_hwloc_my_cpuset) {
-            prrte_hwloc_my_cpuset = hwloc_bitmap_alloc();
+    if (NULL != prte_hwloc_topology) {
+        if (NULL == prte_hwloc_my_cpuset) {
+            prte_hwloc_my_cpuset = hwloc_bitmap_alloc();
         }
 
         /* get the cpus we are bound to */
-        if (hwloc_get_cpubind(prrte_hwloc_topology,
-                              prrte_hwloc_my_cpuset,
+        if (hwloc_get_cpubind(prte_hwloc_topology,
+                              prte_hwloc_my_cpuset,
                               HWLOC_CPUBIND_PROCESS) < 0) {
             /* we are not bound - use the root's available cpuset */
             #if HWLOC_API_VERSION < 0x20000
-                root = hwloc_get_root_obj(prrte_hwloc_topology);
+                root = hwloc_get_root_obj(prte_hwloc_topology);
                 if (NULL == root->online_cpuset && NULL == root->allowed_cpuset) {
                     /* we are hosed */
-                    PRRTE_ERROR_LOG(PRRTE_ERR_NOT_SUPPORTED);
+                    PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
                 }
                 if (NULL == root->online_cpuset) {
-                    hwloc_bitmap_copy(prrte_hwloc_my_cpuset, root->allowed_cpuset);
+                    hwloc_bitmap_copy(prte_hwloc_my_cpuset, root->allowed_cpuset);
                 } else if (NULL == root->allowed_cpuset) {
-                    hwloc_bitmap_copy(prrte_hwloc_my_cpuset, root->online_cpuset);
+                    hwloc_bitmap_copy(prte_hwloc_my_cpuset, root->online_cpuset);
                 } else {
-                    hwloc_bitmap_and(prrte_hwloc_my_cpuset, root->online_cpuset, root->allowed_cpuset);
+                    hwloc_bitmap_and(prte_hwloc_my_cpuset, root->online_cpuset, root->allowed_cpuset);
                 }
             #else
-                hwloc_bitmap_copy(prrte_hwloc_my_cpuset, hwloc_topology_get_allowed_cpuset(prrte_hwloc_topology));
+                hwloc_bitmap_copy(prte_hwloc_my_cpuset, hwloc_topology_get_allowed_cpuset(prte_hwloc_topology));
             #endif
         }
     }
 }
 
-int prrte_hwloc_base_report_bind_failure(const char *file,
+int prte_hwloc_base_report_bind_failure(const char *file,
                                         int line,
                                         const char *msg, int rc)
 {
     static int already_reported = 0;
 
     if (!already_reported &&
-        PRRTE_HWLOC_BASE_MBFA_SILENT != prrte_hwloc_base_mbfa) {
+        PRTE_HWLOC_BASE_MBFA_SILENT != prte_hwloc_base_mbfa) {
 
-        prrte_show_help("help-prrte-hwloc-base.txt", "mbind failure", true,
-                       prrte_process_info.nodename, getpid(), file, line, msg,
-                       (PRRTE_HWLOC_BASE_MBFA_WARN == prrte_hwloc_base_mbfa) ?
+        prte_show_help("help-prte-hwloc-base.txt", "mbind failure", true,
+                       prte_process_info.nodename, getpid(), file, line, msg,
+                       (PRTE_HWLOC_BASE_MBFA_WARN == prte_hwloc_base_mbfa) ?
                        "Warning -- your job will continue, but possibly with degraded performance" :
                        "ERROR -- your job may abort or behave erraticly");
         already_reported = 1;
         return rc;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /* determine if there is a single cpu in a bitmap */
-bool prrte_hwloc_base_single_cpu(hwloc_cpuset_t cpuset)
+bool prte_hwloc_base_single_cpu(hwloc_cpuset_t cpuset)
 {
     int i;
     bool one=false;
@@ -517,7 +517,7 @@ bool prrte_hwloc_base_single_cpu(hwloc_cpuset_t cpuset)
 }
 
 /* get the number of pu's under a given hwloc object */
-unsigned int prrte_hwloc_base_get_npus(hwloc_topology_t topo,
+unsigned int prte_hwloc_base_get_npus(hwloc_topology_t topo,
                                        bool use_hwthread_cpus,
                                        hwloc_cpuset_t envelope,
                                        hwloc_obj_t obj)
@@ -556,28 +556,28 @@ unsigned int prrte_hwloc_base_get_npus(hwloc_topology_t topo,
     return cnt;
 }
 
-unsigned int prrte_hwloc_base_get_obj_idx(hwloc_topology_t topo,
+unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo,
                                          hwloc_obj_t obj,
-                                         prrte_hwloc_resource_type_t rtype)
+                                         prte_hwloc_resource_type_t rtype)
 {
     unsigned cache_level=0;
-    prrte_hwloc_obj_data_t *data;
+    prte_hwloc_obj_data_t *data;
     hwloc_obj_t ptr;
     unsigned int nobjs, i;
 
-    PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:get_idx"));
 
     /* see if we already have the info */
-    data = (prrte_hwloc_obj_data_t*)obj->userdata;
+    data = (prte_hwloc_obj_data_t*)obj->userdata;
 
     if (NULL == data) {
-        data = PRRTE_NEW(prrte_hwloc_obj_data_t);
+        data = PRTE_NEW(prte_hwloc_obj_data_t);
         obj->userdata = (void*)data;
     }
 
     if (data->idx < UINT_MAX) {
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base:get_idx already have data: %u",
                              data->idx));
         return data->idx;
@@ -590,22 +590,22 @@ unsigned int prrte_hwloc_base_get_obj_idx(hwloc_topology_t topo,
     }
 #endif
 
-    nobjs = prrte_hwloc_base_get_nbobjs_by_type(topo, obj->type, cache_level, rtype);
+    nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, obj->type, cache_level, rtype);
 
-    PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:get_idx found %u objects of type %s:%u",
                          nobjs, hwloc_obj_type_string(obj->type), cache_level));
 
     /* find this object */
     for (i=0; i < nobjs; i++) {
-        ptr = prrte_hwloc_base_get_obj_by_type(topo, obj->type, cache_level, i, rtype);
+        ptr = prte_hwloc_base_get_obj_by_type(topo, obj->type, cache_level, i, rtype);
         if (ptr == obj) {
             data->idx = i;
             return i;
         }
     }
     /* if we get here, it wasn't found */
-    prrte_show_help("help-prrte-hwloc-base.txt",
+    prte_show_help("help-prte-hwloc-base.txt",
                    "obj-idx-failed", true,
                    hwloc_obj_type_string(obj->type), cache_level);
     return UINT_MAX;
@@ -622,7 +622,7 @@ static hwloc_obj_t df_search(hwloc_topology_t topo,
                              hwloc_obj_type_t target,
                              unsigned cache_level,
                              unsigned int nobj,
-                             prrte_hwloc_resource_type_t rtype,
+                             prte_hwloc_resource_type_t rtype,
                              unsigned int *num_objs)
 {
     hwloc_obj_t obj;
@@ -642,12 +642,12 @@ static hwloc_obj_t df_search(hwloc_topology_t topo,
     if (HWLOC_TYPE_DEPTH_UNKNOWN == search_depth)
         return NULL;
 
-    if (PRRTE_HWLOC_LOGICAL == rtype) {
+    if (PRTE_HWLOC_LOGICAL == rtype) {
         if (num_objs)
             *num_objs = hwloc_get_nbobjs_by_depth(topo, search_depth);
         return hwloc_get_obj_by_depth(topo, search_depth, nobj);
     }
-    if (PRRTE_HWLOC_PHYSICAL == rtype) {
+    if (PRTE_HWLOC_PHYSICAL == rtype) {
         /* the PHYSICAL object number is stored as the os_index. When
          * counting physical objects, we can't just count the number
          * that are in the hwloc tree as the only entries in the tree
@@ -671,7 +671,7 @@ static hwloc_obj_t df_search(hwloc_topology_t topo,
         }
         return found;
     }
-    if (PRRTE_HWLOC_AVAILABLE == rtype) {
+    if (PRTE_HWLOC_AVAILABLE == rtype) {
         unsigned idx = 0;
         if (num_objs)
             *num_objs = hwloc_get_nbobjs_inside_cpuset_by_depth(topo, start->cpuset, search_depth);
@@ -686,20 +686,20 @@ static hwloc_obj_t df_search(hwloc_topology_t topo,
     return NULL;
 }
 
-unsigned int prrte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
+unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
                                                 hwloc_obj_type_t target,
                                                 unsigned cache_level,
-                                                prrte_hwloc_resource_type_t rtype)
+                                                prte_hwloc_resource_type_t rtype)
 {
     unsigned int num_objs;
     hwloc_obj_t obj;
-    prrte_hwloc_summary_t *sum;
-    prrte_hwloc_topo_data_t *data;
+    prte_hwloc_summary_t *sum;
+    prte_hwloc_topo_data_t *data;
     int rc;
 
     /* bozo check */
     if (NULL == topo) {
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base:get_nbobjs NULL topology"));
         return 0;
     }
@@ -708,14 +708,14 @@ unsigned int prrte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
      * use the hwloc accessor to get it, unless it is a CACHE
      * as these are treated as special cases
      */
-    if (PRRTE_HWLOC_LOGICAL == rtype
+    if (PRTE_HWLOC_LOGICAL == rtype
 #if HWLOC_API_VERSION < 0x20000
         && HWLOC_OBJ_CACHE != target
 #endif
        ) {
         /* we should not get an error back, but just in case... */
         if (0 > (rc = hwloc_get_nbobjs_by_type(topo, target))) {
-            prrte_output(0, "UNKNOWN HWLOC ERROR");
+            prte_output(0, "UNKNOWN HWLOC ERROR");
             return 0;
         }
         return rc;
@@ -726,17 +726,17 @@ unsigned int prrte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
     obj = hwloc_get_root_obj(topo);
 
     /* first see if the topology already has this summary */
-    data = (prrte_hwloc_topo_data_t*)obj->userdata;
+    data = (prte_hwloc_topo_data_t*)obj->userdata;
     if (NULL == data) {
-        data = PRRTE_NEW(prrte_hwloc_topo_data_t);
+        data = PRTE_NEW(prte_hwloc_topo_data_t);
         obj->userdata = (void*)data;
     } else {
-        PRRTE_LIST_FOREACH(sum, &data->summaries, prrte_hwloc_summary_t) {
+        PRTE_LIST_FOREACH(sum, &data->summaries, prte_hwloc_summary_t) {
             if (target == sum->type &&
                 cache_level == sum->cache_level &&
                 rtype == sum->rtype) {
                 /* yep - return the value */
-                PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+                PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                                      "hwloc:base:get_nbojbs pre-existing data %u of %s:%u",
                                      sum->num_objs, hwloc_obj_type_string(target), cache_level));
                 return sum->num_objs;
@@ -748,14 +748,14 @@ unsigned int prrte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
     df_search(topo, obj, target, cache_level, 0, rtype, &num_objs);
 
     /* cache the results for later */
-    sum = PRRTE_NEW(prrte_hwloc_summary_t);
+    sum = PRTE_NEW(prte_hwloc_summary_t);
     sum->type = target;
     sum->cache_level = cache_level;
     sum->num_objs = num_objs;
     sum->rtype = rtype;
-    prrte_list_append(&data->summaries, &sum->super);
+    prte_list_append(&data->summaries, &sum->super);
 
-    PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:get_nbojbs computed data %u of %s:%u",
                          num_objs, hwloc_obj_type_string(target), cache_level));
 
@@ -765,11 +765,11 @@ unsigned int prrte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
 /* as above, only return the Nth instance of the specified object
  * type from inside the topology
  */
-hwloc_obj_t prrte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
+hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
                                             hwloc_obj_type_t target,
                                             unsigned cache_level,
                                             unsigned int instance,
-                                            prrte_hwloc_resource_type_t rtype)
+                                            prte_hwloc_resource_type_t rtype)
 {
     hwloc_obj_t obj;
 
@@ -782,7 +782,7 @@ hwloc_obj_t prrte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
      * use the hwloc accessor to get it, unless it is a CACHE
      * as these are treated as special cases
      */
-    if (PRRTE_HWLOC_LOGICAL == rtype
+    if (PRTE_HWLOC_LOGICAL == rtype
 #if HWLOC_API_VERSION < 0x20000
         && HWLOC_OBJ_CACHE != target
 #endif
@@ -799,10 +799,10 @@ static void df_clear(hwloc_topology_t topo,
                      hwloc_obj_t start)
 {
     unsigned k;
-    prrte_hwloc_obj_data_t *data;
+    prte_hwloc_obj_data_t *data;
 
     /* see how many procs are bound to us */
-    data = (prrte_hwloc_obj_data_t*)start->userdata;
+    data = (prte_hwloc_obj_data_t*)start->userdata;
     if (NULL != data) {
         data->num_bound = 0;
     }
@@ -812,14 +812,14 @@ static void df_clear(hwloc_topology_t topo,
     }
 }
 
-void prrte_hwloc_base_clear_usage(hwloc_topology_t topo)
+void prte_hwloc_base_clear_usage(hwloc_topology_t topo)
 {
     hwloc_obj_t root;
     unsigned k;
 
     /* bozo check */
     if (NULL == topo) {
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base:clear_usage: NULL topology"));
         return;
     }
@@ -840,7 +840,7 @@ void prrte_hwloc_base_clear_usage(hwloc_topology_t topo)
 
 static int package_to_cpu_set(char *cpus,
                              hwloc_topology_t topo,
-                             prrte_hwloc_resource_type_t rtype,
+                             prte_hwloc_resource_type_t rtype,
                              hwloc_bitmap_t cpumask)
 {
     char **range;
@@ -856,15 +856,15 @@ static int package_to_cpu_set(char *cpus,
          * this specification equates to unbound
          */
         hwloc_bitmap_or(cpumask, cpumask, obj->cpuset);
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
-    range = prrte_argv_split(cpus,'-');
-    range_cnt = prrte_argv_count(range);
+    range = prte_argv_split(cpus,'-');
+    range_cnt = prte_argv_count(range);
     switch (range_cnt) {
     case 1:  /* no range was present, so just one package given */
         package_id = atoi(range[0]);
-        obj = prrte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id, rtype);
+        obj = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id, rtype);
         /* get the available cpus for this package */
         hwloc_bitmap_or(cpumask, cpumask, obj->cpuset);
         break;
@@ -874,26 +874,26 @@ static int package_to_cpu_set(char *cpus,
         upper_range = atoi(range[1]);
         /* cycle across the range of packages */
         for (package_id=lower_range; package_id<=upper_range; package_id++) {
-            obj = prrte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id, rtype);
+            obj = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id, rtype);
             /* set the available cpus for this package bits in the bitmask */
             hwloc_bitmap_or(cpumask, cpumask, obj->cpuset);
         }
         break;
     default:
-        prrte_argv_free(range);
-        return PRRTE_ERROR;
+        prte_argv_free(range);
+        return PRTE_ERROR;
     }
-    prrte_argv_free(range);
+    prte_argv_free(range);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int package_core_to_cpu_set(char *package_core_list,
                                   hwloc_topology_t topo,
-                                  prrte_hwloc_resource_type_t rtype,
+                                  prte_hwloc_resource_type_t rtype,
                                   hwloc_bitmap_t cpumask)
 {
-    int rc=PRRTE_SUCCESS, i, j;
+    int rc=PRTE_SUCCESS, i, j;
     char **package_core, *corestr;
     char **range, **list;
     int range_cnt;
@@ -902,14 +902,14 @@ static int package_core_to_cpu_set(char *package_core_list,
     hwloc_obj_t package, core;
     hwloc_obj_type_t obj_type = HWLOC_OBJ_CORE;
 
-    package_core = prrte_argv_split(package_core_list, ':');
+    package_core = prte_argv_split(package_core_list, ':');
     package_id = atoi(package_core[0]);
 
     /* get the object for this package id */
-    if (NULL == (package = prrte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0,
+    if (NULL == (package = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0,
                                                           package_id, rtype))) {
-        prrte_argv_free(package_core);
-        return PRRTE_ERR_NOT_FOUND;
+        prte_argv_free(package_core);
+        return PRTE_ERR_NOT_FOUND;
     }
 
     /* as described in comment near top of file, hwloc isn't able
@@ -931,34 +931,34 @@ static int package_core_to_cpu_set(char *package_core_list,
             /* set to all cpus on this package */
             hwloc_bitmap_or(cpumask, cpumask, package->cpuset);
             /* we are done - already assigned all cores! */
-            rc = PRRTE_SUCCESS;
+            rc = PRTE_SUCCESS;
             break;
         } else {
-            range = prrte_argv_split(corestr, '-');
-            range_cnt = prrte_argv_count(range);
+            range = prte_argv_split(corestr, '-');
+            range_cnt = prte_argv_count(range);
             /* see if a range was set or not */
             switch (range_cnt) {
             case 1:  /* only one core, or a list of cores, specified */
-                list = prrte_argv_split(range[0], ',');
+                list = prte_argv_split(range[0], ',');
                 for (j=0; NULL != list[j]; j++) {
                     core_id = atoi(list[j]);
                     /* get that object */
                     if (NULL == (core = df_search(topo, package, obj_type, 0,
-                                                  core_id, PRRTE_HWLOC_AVAILABLE,
+                                                  core_id, PRTE_HWLOC_AVAILABLE,
                                                   NULL))) {
-                        prrte_argv_free(list);
-                        prrte_argv_free(range);
-                        prrte_argv_free(package_core);
-                        return PRRTE_ERR_NOT_FOUND;
+                        prte_argv_free(list);
+                        prte_argv_free(range);
+                        prte_argv_free(package_core);
+                        return PRTE_ERR_NOT_FOUND;
                     }
                     /* get the cpus */
                     hwloc_bitmap_or(cpumask, cpumask, core->cpuset);
                 }
-                prrte_argv_free(list);
+                prte_argv_free(list);
                 break;
 
             case 2:  /* range of core id's was given */
-                prrte_output_verbose(5, prrte_hwloc_base_output,
+                prte_output_verbose(5, prte_hwloc_base_output,
                                     "range of cores given: start %s stop %s",
                                     range[0], range[1]);
                 lower_range = atoi(range[0]);
@@ -966,11 +966,11 @@ static int package_core_to_cpu_set(char *package_core_list,
                 for (core_id=lower_range; core_id <= upper_range; core_id++) {
                     /* get that object */
                     if (NULL == (core = df_search(topo, package, obj_type, 0,
-                                                  core_id, PRRTE_HWLOC_AVAILABLE,
+                                                  core_id, PRTE_HWLOC_AVAILABLE,
                                                   NULL))) {
-                        prrte_argv_free(range);
-                        prrte_argv_free(package_core);
-                        return PRRTE_ERR_NOT_FOUND;
+                        prte_argv_free(range);
+                        prte_argv_free(package_core);
+                        return PRTE_ERR_NOT_FOUND;
                     }
                     /* get the cpus add them into the result */
                     hwloc_bitmap_or(cpumask, cpumask, core->cpuset);
@@ -978,21 +978,21 @@ static int package_core_to_cpu_set(char *package_core_list,
                 break;
 
             default:
-                prrte_argv_free(range);
-                prrte_argv_free(package_core);
-                return PRRTE_ERROR;
+                prte_argv_free(range);
+                prte_argv_free(package_core);
+                return PRTE_ERROR;
             }
-            prrte_argv_free(range);
+            prte_argv_free(range);
         }
     }
-    prrte_argv_free(package_core);
+    prte_argv_free(package_core);
 
     return rc;
 }
 
-int prrte_hwloc_base_cpu_list_parse(const char *slot_str,
+int prte_hwloc_base_cpu_list_parse(const char *slot_str,
                                     hwloc_topology_t topo,
-                                    prrte_hwloc_resource_type_t rtype,
+                                    prte_hwloc_resource_type_t rtype,
                                     hwloc_cpuset_t cpumask)
 {
     char **item, **rngs;
@@ -1003,25 +1003,25 @@ int prrte_hwloc_base_cpu_list_parse(const char *slot_str,
     int core_id, lower_range, upper_range;
 
     /* bozo checks */
-    if (NULL == prrte_hwloc_topology) {
-        return PRRTE_ERR_NOT_SUPPORTED;
+    if (NULL == prte_hwloc_topology) {
+        return PRTE_ERR_NOT_SUPPORTED;
     }
     if (NULL == slot_str || 0 == strlen(slot_str)) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
 
-    prrte_output_verbose(5, prrte_hwloc_base_output,
+    prte_output_verbose(5, prte_hwloc_base_output,
                         "slot assignment: slot_list == %s",
                         slot_str);
 
     /* split at ';' */
-    item = prrte_argv_split(slot_str, ';');
+    item = prte_argv_split(slot_str, ';');
 
     /* start with a clean mask */
     hwloc_bitmap_zero(cpumask);
     /* loop across the items and accumulate the mask */
     for (i=0; NULL != item[i]; i++) {
-        prrte_output_verbose(5, prrte_hwloc_base_output,
+        prte_output_verbose(5, prte_hwloc_base_output,
                             "working assignment %s",
                             item[i]);
         /* if they specified "package" by starting with an S/s,
@@ -1037,64 +1037,64 @@ int prrte_hwloc_base_cpu_list_parse(const char *slot_str,
                  * it could specify multiple packages
                  * Skip the S and look for a ranges
                  */
-                rngs = prrte_argv_split(&item[i][1], ',');
+                rngs = prte_argv_split(&item[i][1], ',');
                 for (j=0; NULL != rngs[j]; j++) {
-                    if (PRRTE_SUCCESS != (rc = package_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
-                        prrte_argv_free(rngs);
-                        prrte_argv_free(item);
+                    if (PRTE_SUCCESS != (rc = package_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
+                        prte_argv_free(rngs);
+                        prte_argv_free(item);
                         return rc;
                     }
                 }
-                prrte_argv_free(rngs);
+                prte_argv_free(rngs);
             } else {
                 /* binding to a package/whatever specification */
                 if ('S' == item[i][0] ||
                     's' == item[i][0]) {
-                    rngs = prrte_argv_split(&item[i][1], ',');
+                    rngs = prte_argv_split(&item[i][1], ',');
                     for (j=0; NULL != rngs[j]; j++) {
-                        if (PRRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
-                            prrte_argv_free(rngs);
-                            prrte_argv_free(item);
+                        if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
+                            prte_argv_free(rngs);
+                            prte_argv_free(item);
                             return rc;
                         }
                     }
-                    prrte_argv_free(rngs);
+                    prte_argv_free(rngs);
                 } else {
-                    rngs = prrte_argv_split(item[i], ',');
+                    rngs = prte_argv_split(item[i], ',');
                     for (j=0; NULL != rngs[j]; j++) {
-                        if (PRRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
-                            prrte_argv_free(rngs);
-                            prrte_argv_free(item);
+                        if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
+                            prte_argv_free(rngs);
+                            prte_argv_free(item);
                             return rc;
                         }
                     }
-                    prrte_argv_free(rngs);
+                    prte_argv_free(rngs);
                 }
             }
         } else {
-            rngs = prrte_argv_split(item[i], ',');
+            rngs = prte_argv_split(item[i], ',');
             for (k=0; NULL != rngs[k]; k++) {
                 /* just a core specification - see if one or a range was given */
-                range = prrte_argv_split(rngs[k], '-');
-                range_cnt = prrte_argv_count(range);
+                range = prte_argv_split(rngs[k], '-');
+                range_cnt = prte_argv_count(range);
                 /* see if a range was set or not */
                 switch (range_cnt) {
                 case 1:  /* only one core, or a list of cores, specified */
-                    list = prrte_argv_split(range[0], ',');
+                    list = prte_argv_split(range[0], ',');
                     for (j=0; NULL != list[j]; j++) {
                         core_id = atoi(list[j]);
                         /* find the specified available cpu */
-                        if (NULL == (pu = prrte_hwloc_base_get_pu(topo, core_id, rtype))) {
-                            prrte_argv_free(range);
-                            prrte_argv_free(item);
-                            prrte_argv_free(rngs);
-                            prrte_argv_free(list);
-                            return PRRTE_ERR_SILENT;
+                        if (NULL == (pu = prte_hwloc_base_get_pu(topo, core_id, rtype))) {
+                            prte_argv_free(range);
+                            prte_argv_free(item);
+                            prte_argv_free(rngs);
+                            prte_argv_free(list);
+                            return PRTE_ERR_SILENT;
                         }
                         /* get the cpus for that object and set them in the massk*/
                         hwloc_bitmap_or(cpumask, cpumask, pu->cpuset);
                     }
-                    prrte_argv_free(list);
+                    prte_argv_free(list);
                     break;
 
                 case 2:  /* range of core id's was given */
@@ -1102,11 +1102,11 @@ int prrte_hwloc_base_cpu_list_parse(const char *slot_str,
                     upper_range = atoi(range[1]);
                     for (core_id=lower_range; core_id <= upper_range; core_id++) {
                         /* find the specified logical available cpu */
-                        if (NULL == (pu = prrte_hwloc_base_get_pu(topo, core_id, rtype))) {
-                            prrte_argv_free(range);
-                            prrte_argv_free(item);
-                            prrte_argv_free(rngs);
-                            return PRRTE_ERR_SILENT;
+                        if (NULL == (pu = prte_hwloc_base_get_pu(topo, core_id, rtype))) {
+                            prte_argv_free(range);
+                            prte_argv_free(item);
+                            prte_argv_free(rngs);
+                            return PRTE_ERR_SILENT;
                         }
                         /* get the cpus for that object and set them in the mask*/
                         hwloc_bitmap_or(cpumask, cpumask, pu->cpuset);
@@ -1114,23 +1114,23 @@ int prrte_hwloc_base_cpu_list_parse(const char *slot_str,
                     break;
 
                 default:
-                    prrte_argv_free(range);
-                    prrte_argv_free(item);
-                    prrte_argv_free(rngs);
-                    return PRRTE_ERROR;
+                    prte_argv_free(range);
+                    prte_argv_free(item);
+                    prte_argv_free(rngs);
+                    return PRTE_ERROR;
                 }
-                prrte_argv_free(range);
+                prte_argv_free(range);
             }
-            prrte_argv_free(rngs);
+            prte_argv_free(rngs);
         }
     }
-    prrte_argv_free(item);
-    return PRRTE_SUCCESS;
+    prte_argv_free(item);
+    return PRTE_SUCCESS;
 }
 
-static void prrte_hwloc_base_get_relative_locality_by_depth(hwloc_topology_t topo, unsigned d,
+static void prte_hwloc_base_get_relative_locality_by_depth(hwloc_topology_t topo, unsigned d,
                                                             hwloc_cpuset_t loc1, hwloc_cpuset_t loc2,
-                                                            prrte_hwloc_locality_t *locality, bool *shared)
+                                                            prte_hwloc_locality_t *locality, bool *shared)
 {
     unsigned width, w;
     hwloc_obj_t obj;
@@ -1153,34 +1153,34 @@ static void prrte_hwloc_base_get_relative_locality_by_depth(hwloc_topology_t top
             *shared = true;
             switch(obj->type) {
             case HWLOC_OBJ_PACKAGE:
-                *locality |= PRRTE_PROC_ON_PACKAGE;
+                *locality |= PRTE_PROC_ON_PACKAGE;
                 break;
 #if HWLOC_API_VERSION < 0x20000
             case HWLOC_OBJ_CACHE:
                 if (3 == obj->attr->cache.depth) {
-                    *locality |= PRRTE_PROC_ON_L3CACHE;
+                    *locality |= PRTE_PROC_ON_L3CACHE;
                 } else if (2 == obj->attr->cache.depth) {
-                    *locality |= PRRTE_PROC_ON_L2CACHE;
+                    *locality |= PRTE_PROC_ON_L2CACHE;
                 } else {
-                    *locality |= PRRTE_PROC_ON_L1CACHE;
+                    *locality |= PRTE_PROC_ON_L1CACHE;
                 }
                 break;
 #else
             case HWLOC_OBJ_L3CACHE:
-                *locality |= PRRTE_PROC_ON_L3CACHE;
+                *locality |= PRTE_PROC_ON_L3CACHE;
                 break;
             case HWLOC_OBJ_L2CACHE:
-                *locality |= PRRTE_PROC_ON_L2CACHE;
+                *locality |= PRTE_PROC_ON_L2CACHE;
                 break;
             case HWLOC_OBJ_L1CACHE:
-                *locality |= PRRTE_PROC_ON_L1CACHE;
+                *locality |= PRTE_PROC_ON_L1CACHE;
                 break;
 #endif
             case HWLOC_OBJ_CORE:
-                *locality |= PRRTE_PROC_ON_CORE;
+                *locality |= PRTE_PROC_ON_CORE;
                 break;
             case HWLOC_OBJ_PU:
-                *locality |= PRRTE_PROC_ON_HWTHREAD;
+                *locality |= PRTE_PROC_ON_HWTHREAD;
                 break;
             default:
                 /* just ignore it */
@@ -1195,10 +1195,10 @@ static void prrte_hwloc_base_get_relative_locality_by_depth(hwloc_topology_t top
     }
 }
 
-prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t topo,
+prte_hwloc_locality_t prte_hwloc_base_get_relative_locality(hwloc_topology_t topo,
                                                             char *cpuset1, char *cpuset2)
 {
-    prrte_hwloc_locality_t locality;
+    prte_hwloc_locality_t locality;
     hwloc_cpuset_t loc1, loc2;
     unsigned depth, d;
     bool shared;
@@ -1208,7 +1208,7 @@ prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t t
      * NOTE: we may alter that latter part as hwloc's ability to
      * sense multi-cu, multi-cluster systems grows
      */
-    locality = PRRTE_PROC_ON_NODE | PRRTE_PROC_ON_HOST | PRRTE_PROC_ON_CU | PRRTE_PROC_ON_CLUSTER;
+    locality = PRTE_PROC_ON_NODE | PRTE_PROC_ON_HOST | PRTE_PROC_ON_CU | PRTE_PROC_ON_CLUSTER;
 
     /* if either cpuset is NULL, then that isn't bound */
     if (NULL == cpuset1 || NULL == cpuset2) {
@@ -1243,7 +1243,7 @@ prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t t
             HWLOC_OBJ_PU != type) {
             continue;
         }
-        prrte_hwloc_base_get_relative_locality_by_depth(topo, d, loc1, loc2, &locality, &shared);
+        prte_hwloc_base_get_relative_locality_by_depth(topo, d, loc1, loc2, &locality, &shared);
 
         /* if we spanned the entire width without finding
          * a point of intersection, then no need to go
@@ -1255,12 +1255,12 @@ prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t t
     }
 
 #if HWLOC_API_VERSION >= 0x20000
-    prrte_hwloc_base_get_relative_locality_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE, loc1, loc2, &locality, &shared);
+    prte_hwloc_base_get_relative_locality_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE, loc1, loc2, &locality, &shared);
 #endif
 
-    prrte_output_verbose(5, prrte_hwloc_base_output,
+    prte_output_verbose(5, prte_hwloc_base_output,
                         "locality: %s",
-                        prrte_hwloc_base_print_locality(locality));
+                        prte_hwloc_base_print_locality(locality));
     hwloc_bitmap_free(loc1);
     hwloc_bitmap_free(loc2);
 
@@ -1271,7 +1271,7 @@ prrte_hwloc_locality_t prrte_hwloc_base_get_relative_locality(hwloc_topology_t t
  * their serial numbers as a comma-delimited string, or NULL
  * if no coprocessors are found
  */
-char* prrte_hwloc_base_find_coprocessors(hwloc_topology_t topo)
+char* prte_hwloc_base_find_coprocessors(hwloc_topology_t topo)
 {
 #if HAVE_DECL_HWLOC_OBJ_OSDEV_COPROC
     hwloc_obj_t osdev;
@@ -1285,7 +1285,7 @@ char* prrte_hwloc_base_find_coprocessors(hwloc_topology_t topo)
      * see if we have any of those
      */
     if (HWLOC_TYPE_DEPTH_UNKNOWN == (depth = hwloc_get_type_depth(topo, HWLOC_OBJ_OS_DEVICE))) {
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base:find_coprocessors: NONE FOUND IN TOPO"));
         return NULL;
     }
@@ -1297,38 +1297,38 @@ char* prrte_hwloc_base_find_coprocessors(hwloc_topology_t topo)
             /* got one! find and save its serial number */
             for (i=0; i < osdev->infos_count; i++) {
                 if (0 == strncmp(osdev->infos[i].name, "MICSerialNumber", strlen("MICSerialNumber"))) {
-                    PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+                    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                                          "hwloc:base:find_coprocessors: coprocessor %s found",
                                          osdev->infos[i].value));
-                    prrte_argv_append_nosize(&cps, osdev->infos[i].value);
+                    prte_argv_append_nosize(&cps, osdev->infos[i].value);
                 }
             }
         }
         osdev = osdev->next_cousin;
     }
     if (NULL != cps) {
-        cpstring = prrte_argv_join(cps, ',');
-        prrte_argv_free(cps);
+        cpstring = prte_argv_join(cps, ',');
+        prte_argv_free(cps);
     }
-    PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:find_coprocessors: hosting coprocessors %s",
                          (NULL == cpstring) ? "NONE" : cpstring));
 #else
-    PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
-                         "hwloc:base:find_coprocessors: the version of hwloc that PRRTE was built against (v%d.%d.%d) does not support detecting coprocessors",
+    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
+                         "hwloc:base:find_coprocessors: the version of hwloc that PRTE was built against (v%d.%d.%d) does not support detecting coprocessors",
                          (HWLOC_API_VERSION>>16)&&0xFF, (HWLOC_API_VERSION>>8)&0xFF, HWLOC_API_VERSION&&0xFF));
 #endif
     return cpstring;
 }
 
-#define PRRTE_HWLOC_MAX_ELOG_LINE 1024
+#define PRTE_HWLOC_MAX_ELOG_LINE 1024
 
 static char *hwloc_getline(FILE *fp)
 {
     char *ret, *buff;
-    char input[PRRTE_HWLOC_MAX_ELOG_LINE];
+    char input[PRTE_HWLOC_MAX_ELOG_LINE];
 
-    ret = fgets(input, PRRTE_HWLOC_MAX_ELOG_LINE, fp);
+    ret = fgets(input, PRTE_HWLOC_MAX_ELOG_LINE, fp);
     if (NULL != ret) {
            input[strlen(input)-1] = '\0';  /* remove newline */
            buff = strdup(input);
@@ -1342,7 +1342,7 @@ static char *hwloc_getline(FILE *fp)
  * is on a coprocessor - if so, it returns the serial number
  * as a string, or NULL if it isn't on a coprocessor
  */
-char* prrte_hwloc_base_check_on_coprocessor(void)
+char* prte_hwloc_base_check_on_coprocessor(void)
 {
     /* this support currently is limited to Intel Phi processors
      * but will hopefully be extended as we get better, more
@@ -1351,7 +1351,7 @@ char* prrte_hwloc_base_check_on_coprocessor(void)
     FILE *fp;
     char *t, *cptr, *e, *cp=NULL;
 
-    if (PRRTE_SUCCESS != prrte_os_dirpath_access("/proc/elog", S_IRUSR)) {
+    if (PRTE_SUCCESS != prte_os_dirpath_access("/proc/elog", S_IRUSR)) {
         /* if the file isn't there, or we don't have permission
          * to read it, then we are not on a coprocessor so far
          * as we can tell
@@ -1384,62 +1384,62 @@ char* prrte_hwloc_base_check_on_coprocessor(void)
         free(cptr);
     }
     fclose(fp);
-    PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:check_coprocessor: on coprocessor %s",
                          (NULL == cp) ? "NONE" : cp));
     return cp;
 }
 
-char* prrte_hwloc_base_print_binding(prrte_binding_policy_t binding)
+char* prte_hwloc_base_print_binding(prte_binding_policy_t binding)
 {
     char *ret, *bind;
-    prrte_hwloc_print_buffers_t *ptr;
+    prte_hwloc_print_buffers_t *ptr;
 
-    switch(PRRTE_GET_BINDING_POLICY(binding)) {
-    case PRRTE_BIND_TO_NONE:
+    switch(PRTE_GET_BINDING_POLICY(binding)) {
+    case PRTE_BIND_TO_NONE:
         bind = "NONE";
         break;
-    case PRRTE_BIND_TO_PACKAGE:
+    case PRTE_BIND_TO_PACKAGE:
         bind = "PACKAGE";
         break;
-    case PRRTE_BIND_TO_L3CACHE:
+    case PRTE_BIND_TO_L3CACHE:
         bind = "L3CACHE";
         break;
-    case PRRTE_BIND_TO_L2CACHE:
+    case PRTE_BIND_TO_L2CACHE:
         bind = "L2CACHE";
         break;
-    case PRRTE_BIND_TO_L1CACHE:
+    case PRTE_BIND_TO_L1CACHE:
         bind = "L1CACHE";
         break;
-    case PRRTE_BIND_TO_CORE:
+    case PRTE_BIND_TO_CORE:
         bind = "CORE";
         break;
-    case PRRTE_BIND_TO_HWTHREAD:
+    case PRTE_BIND_TO_HWTHREAD:
         bind = "HWTHREAD";
         break;
     default:
         bind = "UNKNOWN";
     }
-    ptr = prrte_hwloc_get_print_buffer();
+    ptr = prte_hwloc_get_print_buffer();
     if (NULL == ptr) {
-        return prrte_hwloc_print_null;
+        return prte_hwloc_print_null;
     }
     /* cycle around the ring */
-    if (PRRTE_HWLOC_PRINT_NUM_BUFS == ptr->cntr) {
+    if (PRTE_HWLOC_PRINT_NUM_BUFS == ptr->cntr) {
         ptr->cntr = 0;
     }
-    if (!PRRTE_BINDING_REQUIRED(binding) &&
-        PRRTE_BIND_OVERLOAD_ALLOWED(binding)) {
-        snprintf(ptr->buffers[ptr->cntr], PRRTE_HWLOC_PRINT_MAX_SIZE,
+    if (!PRTE_BINDING_REQUIRED(binding) &&
+        PRTE_BIND_OVERLOAD_ALLOWED(binding)) {
+        snprintf(ptr->buffers[ptr->cntr], PRTE_HWLOC_PRINT_MAX_SIZE,
                  "%s:IF-SUPPORTED:OVERLOAD-ALLOWED", bind);
-    } else if (PRRTE_BIND_OVERLOAD_ALLOWED(binding)) {
-        snprintf(ptr->buffers[ptr->cntr], PRRTE_HWLOC_PRINT_MAX_SIZE,
+    } else if (PRTE_BIND_OVERLOAD_ALLOWED(binding)) {
+        snprintf(ptr->buffers[ptr->cntr], PRTE_HWLOC_PRINT_MAX_SIZE,
                  "%s:OVERLOAD-ALLOWED", bind);
-    } else if (!PRRTE_BINDING_REQUIRED(binding)) {
-        snprintf(ptr->buffers[ptr->cntr], PRRTE_HWLOC_PRINT_MAX_SIZE,
+    } else if (!PRTE_BINDING_REQUIRED(binding)) {
+        snprintf(ptr->buffers[ptr->cntr], PRTE_HWLOC_PRINT_MAX_SIZE,
                  "%s:IF-SUPPORTED", bind);
     } else {
-        snprintf(ptr->buffers[ptr->cntr], PRRTE_HWLOC_PRINT_MAX_SIZE, "%s", bind);
+        snprintf(ptr->buffers[ptr->cntr], PRTE_HWLOC_PRINT_MAX_SIZE, "%s", bind);
     }
     ret = ptr->buffers[ptr->cntr];
     ptr->cntr++;
@@ -1492,7 +1492,7 @@ static void build_map(hwloc_topology_t topo,
 /*
  * Make a prettyprint string for a hwloc_cpuset_t
  */
-char* prrte_hwloc_base_cset2str(hwloc_cpuset_t cpuset,
+char* prte_hwloc_base_cset2str(hwloc_cpuset_t cpuset,
                                 bool use_hwthread_cpus,
                                 hwloc_topology_t topo)
 {
@@ -1549,12 +1549,12 @@ char* prrte_hwloc_base_cset2str(hwloc_cpuset_t cpuset,
             hwloc_bitmap_list_snprintf(tmp, 2048, coreset);
             snprintf(ans, 4096, "package[%d][core:%s]", n, tmp);
         }
-        prrte_argv_append_nosize(&output, ans);
+        prte_argv_append_nosize(&output, ans);
     }
 
     if (NULL != output) {
-        result = prrte_argv_join(output, ' ');
-        prrte_argv_free(output);
+        result = prte_argv_join(output, ' ');
+        prte_argv_free(output);
     } else {
         result = NULL;
     }
@@ -1566,10 +1566,10 @@ char* prrte_hwloc_base_cset2str(hwloc_cpuset_t cpuset,
 }
 
 
-static int dist_cmp_fn (prrte_list_item_t **a, prrte_list_item_t **b)
+static int dist_cmp_fn (prte_list_item_t **a, prte_list_item_t **b)
 {
-    prrte_rmaps_numa_node_t *aitem = *((prrte_rmaps_numa_node_t **) a);
-    prrte_rmaps_numa_node_t *bitem = *((prrte_rmaps_numa_node_t **) b);
+    prte_rmaps_numa_node_t *aitem = *((prte_rmaps_numa_node_t **) a);
+    prte_rmaps_numa_node_t *bitem = *((prte_rmaps_numa_node_t **) b);
 
     if (aitem->dist_from_closed > bitem->dist_from_closed) {
         return 1;
@@ -1580,12 +1580,12 @@ static int dist_cmp_fn (prrte_list_item_t **a, prrte_list_item_t **b)
     }
 }
 
-static void sort_by_dist(hwloc_topology_t topo, char* device_name, prrte_list_t *sorted_list)
+static void sort_by_dist(hwloc_topology_t topo, char* device_name, prte_list_t *sorted_list)
 {
     hwloc_obj_t device_obj = NULL;
     hwloc_obj_t obj = NULL;
     struct hwloc_distances_s* distances;
-    prrte_rmaps_numa_node_t *numa_node;
+    prte_rmaps_numa_node_t *numa_node;
     int close_node_index;
     float latency;
     unsigned int j;
@@ -1616,7 +1616,7 @@ static void sort_by_dist(hwloc_topology_t topo, char* device_name, prrte_list_t 
                 }
 #endif
                 if (obj == NULL) {
-                    prrte_output_verbose(5, prrte_hwloc_base_output,
+                    prte_output_verbose(5, prte_hwloc_base_output,
                             "hwloc:base:get_sorted_numa_list: NUMA node closest to %s wasn't found.",
                             device_name);
                     return;
@@ -1631,7 +1631,7 @@ static void sort_by_dist(hwloc_topology_t topo, char* device_name, prrte_list_t 
                     /* we can try to find distances under group object. This info can be there. */
                     depth = hwloc_get_type_depth(topo, HWLOC_OBJ_NODE);
                     if (HWLOC_TYPE_DEPTH_UNKNOWN == depth) {
-                        prrte_output_verbose(5, prrte_hwloc_base_output,
+                        prte_output_verbose(5, prte_hwloc_base_output,
                                 "hwloc:base:get_sorted_numa_list: There is no information about distances on the node.");
                         return;
                     }
@@ -1650,38 +1650,38 @@ static void sort_by_dist(hwloc_topology_t topo, char* device_name, prrte_list_t 
                 }
                 /* find all distances for our close node with logical index = close_node_index as close_node_index + nbobjs*j */
                 if ((NULL == distances) || (0 == distances->nbobjs)) {
-                    prrte_output_verbose(5, prrte_hwloc_base_output,
+                    prte_output_verbose(5, prte_hwloc_base_output,
                             "hwloc:base:get_sorted_numa_list: There is no information about distances on the node.");
                     return;
                 }
                 /* fill list of numa nodes */
                 for (j = 0; j < distances->nbobjs; j++) {
                     latency = distances->latency[close_node_index + distances->nbobjs * j];
-                    numa_node = PRRTE_NEW(prrte_rmaps_numa_node_t);
+                    numa_node = PRTE_NEW(prte_rmaps_numa_node_t);
                     numa_node->index = j;
                     numa_node->dist_from_closed = latency;
-                    prrte_list_append(sorted_list, &numa_node->super);
+                    prte_list_append(sorted_list, &numa_node->super);
                 }
 #else
                 distances_nr = 1;
                 if (0 != hwloc_distances_get_by_type(topo, HWLOC_OBJ_NODE, &distances_nr, &distances,
                                                      HWLOC_DISTANCES_KIND_MEANS_LATENCY, 0) || 0 == distances_nr) {
-                    prrte_output_verbose(5, prrte_hwloc_base_output,
+                    prte_output_verbose(5, prte_hwloc_base_output,
                             "hwloc:base:get_sorted_numa_list: There is no information about distances on the node.");
                     return;
                 }
                 /* fill list of numa nodes */
                 for (j = 0; j < distances->nbobjs; j++) {
                     latency = distances->values[close_node_index + distances->nbobjs * j];
-                    numa_node = PRRTE_NEW(prrte_rmaps_numa_node_t);
+                    numa_node = PRTE_NEW(prte_rmaps_numa_node_t);
                     numa_node->index = j;
                     numa_node->dist_from_closed = latency;
-                    prrte_list_append(sorted_list, &numa_node->super);
+                    prte_list_append(sorted_list, &numa_node->super);
                 }
                 hwloc_distances_release(topo, distances);
 #endif
                 /* sort numa nodes by distance from the closest one to PCI */
-                prrte_list_sort(sorted_list, dist_cmp_fn);
+                prte_list_sort(sorted_list, dist_cmp_fn);
                 return;
             }
         }
@@ -1702,30 +1702,30 @@ static int find_devices(hwloc_topology_t topo, char** device_name)
     return count;
 }
 
-int prrte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char* device_name, prrte_list_t *sorted_list)
+int prte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char* device_name, prte_list_t *sorted_list)
 {
     hwloc_obj_t obj;
-    prrte_hwloc_summary_t *sum;
-    prrte_hwloc_topo_data_t *data;
-    prrte_rmaps_numa_node_t *numa, *copy_numa;
+    prte_hwloc_summary_t *sum;
+    prte_hwloc_topo_data_t *data;
+    prte_rmaps_numa_node_t *numa, *copy_numa;
     int count;
 
     obj = hwloc_get_root_obj(topo);
 
     /* first see if the topology already has this info */
-    /* we call prrte_hwloc_base_get_nbobjs_by_type() before it to fill summary object so it should exist*/
-    data = (prrte_hwloc_topo_data_t*)obj->userdata;
+    /* we call prte_hwloc_base_get_nbobjs_by_type() before it to fill summary object so it should exist*/
+    data = (prte_hwloc_topo_data_t*)obj->userdata;
     if (NULL != data) {
-        PRRTE_LIST_FOREACH(sum, &data->summaries, prrte_hwloc_summary_t) {
+        PRTE_LIST_FOREACH(sum, &data->summaries, prte_hwloc_summary_t) {
             if (HWLOC_OBJ_NODE == sum->type) {
-                if (prrte_list_get_size(&sum->sorted_by_dist_list) > 0) {
-                    PRRTE_LIST_FOREACH(numa, &(sum->sorted_by_dist_list), prrte_rmaps_numa_node_t) {
-                        copy_numa = PRRTE_NEW(prrte_rmaps_numa_node_t);
+                if (prte_list_get_size(&sum->sorted_by_dist_list) > 0) {
+                    PRTE_LIST_FOREACH(numa, &(sum->sorted_by_dist_list), prte_rmaps_numa_node_t) {
+                        copy_numa = PRTE_NEW(prte_rmaps_numa_node_t);
                         copy_numa->index = numa->index;
                         copy_numa->dist_from_closed = numa->dist_from_closed;
-                        prrte_list_append(sorted_list, &copy_numa->super);
+                        prte_list_append(sorted_list, &copy_numa->super);
                     }
-                    return PRRTE_SUCCESS;
+                    return PRTE_SUCCESS;
                 }else {
                     /* don't already know it - go get it */
                     /* firstly we check if we need to autodetect OpenFabrics  devices or we have the specified one */
@@ -1739,31 +1739,31 @@ int prrte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char* device_name, p
                         free_device_name = true;
                     }
                     if (!device_name) {
-                        return PRRTE_ERR_NOT_FOUND;
+                        return PRTE_ERR_NOT_FOUND;
                     } else if (free_device_name && (0 == strlen(device_name))) {
                         free(device_name);
-                        return PRRTE_ERR_NOT_FOUND;
+                        return PRTE_ERR_NOT_FOUND;
                     }
                     sort_by_dist(topo, device_name, sorted_list);
                     if (free_device_name) {
                         free(device_name);
                     }
                     /* store this info in summary object for later usage */
-                    PRRTE_LIST_FOREACH(numa, sorted_list, prrte_rmaps_numa_node_t) {
-                        copy_numa = PRRTE_NEW(prrte_rmaps_numa_node_t);
+                    PRTE_LIST_FOREACH(numa, sorted_list, prte_rmaps_numa_node_t) {
+                        copy_numa = PRTE_NEW(prte_rmaps_numa_node_t);
                         copy_numa->index = numa->index;
                         copy_numa->dist_from_closed = numa->dist_from_closed;
-                        prrte_list_append(&(sum->sorted_by_dist_list), &copy_numa->super);
+                        prte_list_append(&(sum->sorted_by_dist_list), &copy_numa->super);
                     }
-                    return PRRTE_SUCCESS;
+                    return PRTE_SUCCESS;
                 }
             }
         }
     }
-    return PRRTE_ERR_NOT_FOUND;
+    return PRTE_ERR_NOT_FOUND;
 }
 
-char* prrte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
+char* prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
 {
     int nnuma, npackage, nl3, nl2, nl1, ncore, nhwt;
     char *sig=NULL, *arch = NULL, *endian, *pus, *cpus;
@@ -1771,13 +1771,13 @@ char* prrte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
     unsigned i;
     hwloc_bitmap_t complete, allowed;
 
-    nnuma = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NODE, 0, PRRTE_HWLOC_AVAILABLE);
-    npackage = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE, 0, PRRTE_HWLOC_AVAILABLE);
-    nl3 = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE, 3, PRRTE_HWLOC_AVAILABLE);
-    nl2 = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE, 2, PRRTE_HWLOC_AVAILABLE);
-    nl1 = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L1CACHE, 1, PRRTE_HWLOC_AVAILABLE);
-    ncore = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE, 0, PRRTE_HWLOC_AVAILABLE);
-    nhwt = prrte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PU, 0, PRRTE_HWLOC_AVAILABLE);
+    nnuma = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NODE, 0, PRTE_HWLOC_AVAILABLE);
+    npackage = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE, 0, PRTE_HWLOC_AVAILABLE);
+    nl3 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE, 3, PRTE_HWLOC_AVAILABLE);
+    nl2 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE, 2, PRTE_HWLOC_AVAILABLE);
+    nl1 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L1CACHE, 1, PRTE_HWLOC_AVAILABLE);
+    ncore = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE, 0, PRTE_HWLOC_AVAILABLE);
+    nhwt = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PU, 0, PRTE_HWLOC_AVAILABLE);
 
     /* get the root object so we can add the processor architecture */
     obj = hwloc_get_root_obj(topo);
@@ -1824,14 +1824,14 @@ char* prrte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
             cpus = strdup("unknown");
         }
     }
-    prrte_asprintf(&sig, "%dN:%dS:%dL3:%dL2:%dL1:%dC:%dH:%s:%s:%s:%s",
+    prte_asprintf(&sig, "%dN:%dS:%dL3:%dL2:%dL1:%dC:%dH:%s:%s:%s:%s",
              nnuma, npackage, nl3, nl2, nl1, ncore, nhwt, pus, cpus, arch, endian);
     free(pus);
     free(cpus);
     return sig;
 }
 
-static int prrte_hwloc_base_get_locality_string_by_depth(hwloc_topology_t topo,
+static int prte_hwloc_base_get_locality_string_by_depth(hwloc_topology_t topo,
                                                          int d,
                                                          hwloc_cpuset_t cpuset,
                                                          hwloc_cpuset_t result)
@@ -1860,7 +1860,7 @@ static int prrte_hwloc_base_get_locality_string_by_depth(hwloc_topology_t topo,
     return 0;
 }
 
-char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
+char* prte_hwloc_base_get_locality_string(hwloc_topology_t topo,
                                           char *bitmap)
 {
     char *locality=NULL, *tmp, *t2;
@@ -1907,7 +1907,7 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
             continue;
         }
 
-        if (prrte_hwloc_base_get_locality_string_by_depth(topo, d, cpuset, result) < 0) {
+        if (prte_hwloc_base_get_locality_string_by_depth(topo, d, cpuset, result) < 0) {
             continue;
         }
 
@@ -1917,14 +1917,14 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
             hwloc_bitmap_list_asprintf(&tmp, result);
             switch(type) {
                 case HWLOC_OBJ_NODE:
-                    prrte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
+                    prte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
                     locality = t2;
                     break;
                 case HWLOC_OBJ_PACKAGE:
-                    prrte_asprintf(&t2, "%sSK%s:", (NULL == locality) ? "" : locality, tmp);
+                    prte_asprintf(&t2, "%sSK%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
@@ -1935,21 +1935,21 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
                 {
                     unsigned cachedepth = hwloc_get_obj_by_depth(topo, d, 0)->attr->cache.depth;
                     if (3 == cachedepth) {
-                        prrte_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
+                        prte_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
                         if (NULL != locality) {
                             free(locality);
                         }
                         locality = t2;
                         break;
                     } else if (2 == cachedepth) {
-                        prrte_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
+                        prte_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
                         if (NULL != locality) {
                             free(locality);
                         }
                         locality = t2;
                         break;
                     } else {
-                        prrte_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
+                        prte_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
                         if (NULL != locality) {
                             free(locality);
                         }
@@ -1960,21 +1960,21 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
                     break;
 #else
                 case HWLOC_OBJ_L3CACHE:
-                    prrte_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
+                    prte_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
                     locality = t2;
                     break;
                 case HWLOC_OBJ_L2CACHE:
-                    prrte_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
+                    prte_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
                     locality = t2;
                     break;
                 case HWLOC_OBJ_L1CACHE:
-                    prrte_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
+                    prte_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
@@ -1982,14 +1982,14 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
                     break;
 #endif
                 case HWLOC_OBJ_CORE:
-                    prrte_asprintf(&t2, "%sCR%s:", (NULL == locality) ? "" : locality, tmp);
+                    prte_asprintf(&t2, "%sCR%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
                     locality = t2;
                     break;
                 case HWLOC_OBJ_PU:
-                    prrte_asprintf(&t2, "%sHT%s:", (NULL == locality) ? "" : locality, tmp);
+                    prte_asprintf(&t2, "%sHT%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
@@ -2005,12 +2005,12 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
     }
 
 #if HWLOC_API_VERSION >= 0x20000
-    if (prrte_hwloc_base_get_locality_string_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE, cpuset, result) == 0) {
+    if (prte_hwloc_base_get_locality_string_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE, cpuset, result) == 0) {
         /* it should be impossible, but allow for the possibility
          * that we came up empty at this depth */
         if (!hwloc_bitmap_iszero(result)) {
             hwloc_bitmap_list_asprintf(&tmp, result);
-            prrte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
+            prte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
             if (NULL != locality) {
                 free(locality);
             }
@@ -2031,7 +2031,7 @@ char* prrte_hwloc_base_get_locality_string(hwloc_topology_t topo,
     return locality;
 }
 
-char* prrte_hwloc_base_get_location(char *locality,
+char* prte_hwloc_base_get_location(char *locality,
                                    hwloc_obj_type_t type,
                                    unsigned index)
 {
@@ -2079,21 +2079,21 @@ char* prrte_hwloc_base_get_location(char *locality,
         default:
             return NULL;
     }
-    loc = prrte_argv_split(locality, ':');
+    loc = prte_argv_split(locality, ':');
     for (n=0; NULL != loc[n]; n++) {
         if (0 == strncmp(loc[n], srch, 2)) {
             ans = strdup(&loc[n][2]);
             break;
         }
     }
-    prrte_argv_free(loc);
+    prte_argv_free(loc);
 
     return ans;
 }
 
-prrte_hwloc_locality_t prrte_hwloc_compute_relative_locality(char *loc1, char *loc2)
+prte_hwloc_locality_t prte_hwloc_compute_relative_locality(char *loc1, char *loc2)
 {
-    prrte_hwloc_locality_t locality;
+    prte_hwloc_locality_t locality;
     char **set1, **set2;
     hwloc_bitmap_t bit1, bit2;
     size_t n1, n2;
@@ -2102,15 +2102,15 @@ prrte_hwloc_locality_t prrte_hwloc_compute_relative_locality(char *loc1, char *l
      * NOTE: we may alter that latter part as hwloc's ability to
      * sense multi-cu, multi-cluster systems grows
      */
-    locality = PRRTE_PROC_ON_NODE | PRRTE_PROC_ON_HOST | PRRTE_PROC_ON_CU | PRRTE_PROC_ON_CLUSTER;
+    locality = PRTE_PROC_ON_NODE | PRTE_PROC_ON_HOST | PRTE_PROC_ON_CU | PRTE_PROC_ON_CLUSTER;
 
     /* if either location is NULL, then that isn't bound */
     if (NULL == loc1 || NULL == loc2) {
         return locality;
     }
 
-    set1 = prrte_argv_split(loc1, ':');
-    set2 = prrte_argv_split(loc2, ':');
+    set1 = prte_argv_split(loc1, ':');
+    set2 = prte_argv_split(loc2, ':');
     bit1 = hwloc_bitmap_alloc();
     bit2 = hwloc_bitmap_alloc();
 
@@ -2127,34 +2127,34 @@ prrte_hwloc_locality_t prrte_hwloc_compute_relative_locality(char *loc1, char *l
                 if (hwloc_bitmap_intersects(bit1, bit2)) {
                     /* set the corresponding locality bit */
                     if (0 == strncmp(set1[n1], "SK", 2)) {
-                        locality |= PRRTE_PROC_ON_PACKAGE;
+                        locality |= PRTE_PROC_ON_PACKAGE;
                     } else if (0 == strncmp(set1[n1], "L3", 2)) {
-                        locality |= PRRTE_PROC_ON_L3CACHE;
+                        locality |= PRTE_PROC_ON_L3CACHE;
                     } else if (0 == strncmp(set1[n1], "L2", 2)) {
-                        locality |= PRRTE_PROC_ON_L2CACHE;
+                        locality |= PRTE_PROC_ON_L2CACHE;
                     } else if (0 == strncmp(set1[n1], "L1", 2)) {
-                        locality |= PRRTE_PROC_ON_L1CACHE;
+                        locality |= PRTE_PROC_ON_L1CACHE;
                     } else if (0 == strncmp(set1[n1], "CR", 2)) {
-                        locality |= PRRTE_PROC_ON_CORE;
+                        locality |= PRTE_PROC_ON_CORE;
                     } else if (0 == strncmp(set1[n1], "HT", 2)) {
-                        locality |= PRRTE_PROC_ON_HWTHREAD;
+                        locality |= PRTE_PROC_ON_HWTHREAD;
                     } else {
                         /* should never happen */
-                        prrte_output(0, "UNRECOGNIZED LOCALITY %s", set1[n1]);
+                        prte_output(0, "UNRECOGNIZED LOCALITY %s", set1[n1]);
                     }
                 }
                 break;
             }
         }
     }
-    prrte_argv_free(set1);
-    prrte_argv_free(set2);
+    prte_argv_free(set1);
+    prte_argv_free(set2);
     hwloc_bitmap_free(bit1);
     hwloc_bitmap_free(bit2);
     return locality;
 }
 
-int prrte_hwloc_base_topology_export_xmlbuffer(hwloc_topology_t topology, char **xmlpath, int *buflen) {
+int prte_hwloc_base_topology_export_xmlbuffer(hwloc_topology_t topology, char **xmlpath, int *buflen) {
 #if HWLOC_API_VERSION < 0x00020000
     return hwloc_topology_export_xmlbuffer(topology, xmlpath, buflen);
 #else
@@ -2162,7 +2162,7 @@ int prrte_hwloc_base_topology_export_xmlbuffer(hwloc_topology_t topology, char *
 #endif
 }
 
-int prrte_hwloc_base_topology_set_flags (hwloc_topology_t topology, unsigned long flags, bool io) {
+int prte_hwloc_base_topology_set_flags (hwloc_topology_t topology, unsigned long flags, bool io) {
     if (io) {
 #if HWLOC_API_VERSION < 0x00020000
         flags |= HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM;

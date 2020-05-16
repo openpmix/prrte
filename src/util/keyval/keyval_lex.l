@@ -17,6 +17,7 @@
  * Copyright (c) 2012      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,7 +25,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #ifdef HAVE_UNISTD_H
@@ -39,16 +40,16 @@
 
 BEGIN_C_DECLS
 
-int prrte_util_keyval_yywrap(void);
+int prte_util_keyval_yywrap(void);
 
 END_C_DECLS
 
 /*
  * global variables
  */
-int prrte_util_keyval_yynewlines = 1;
-bool prrte_util_keyval_parse_done = false;
-char *prrte_util_keyval_string = NULL;
+int prte_util_keyval_yynewlines = 1;
+bool prte_util_keyval_parse_done = false;
+char *prte_util_keyval_string = NULL;
 
 %}
 
@@ -61,36 +62,36 @@ CHAR        [A-Za-z0-9_\-\.]
 
 %%
 
-{WHITE}*\n          { prrte_util_keyval_yynewlines++; return PRRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
-#.*\n               { prrte_util_keyval_yynewlines++; return PRRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
-"//".*\n            { prrte_util_keyval_yynewlines++; return PRRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
+{WHITE}*\n          { prte_util_keyval_yynewlines++; return PRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
+#.*\n               { prte_util_keyval_yynewlines++; return PRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
+"//".*\n            { prte_util_keyval_yynewlines++; return PRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
 
 "/*"                { BEGIN(comment);
-                      return PRRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
+                      return PRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
 <comment>[^*\n]*       ; /* Eat up non '*'s */
 <comment>"*"+[^*/\n]*  ; /* Eat '*'s not followed by a '/' */
-<comment>\n         { prrte_util_keyval_yynewlines++;
-                      return PRRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
+<comment>\n         { prte_util_keyval_yynewlines++;
+                      return PRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
 <comment>"*"+"/"    { BEGIN(INITIAL); /* Done with Block Comment */
-                      return PRRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
+                      return PRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
 
-{WHITE}*"="{WHITE}* { BEGIN(VALUE); return PRRTE_UTIL_KEYVAL_PARSE_EQUAL; }
+{WHITE}*"="{WHITE}* { BEGIN(VALUE); return PRTE_UTIL_KEYVAL_PARSE_EQUAL; }
 {WHITE}+            ; /* whitespace */
-{CHAR}+             { return PRRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD; }
+{CHAR}+             { return PRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD; }
 
-<VALUE>{WHITE}*\n   { BEGIN(INITIAL); return PRRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
-<VALUE>[^\n]*[^\t \n]/[\t ]*      { return PRRTE_UTIL_KEYVAL_PARSE_VALUE; }
+<VALUE>{WHITE}*\n   { BEGIN(INITIAL); return PRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
+<VALUE>[^\n]*[^\t \n]/[\t ]*      { return PRTE_UTIL_KEYVAL_PARSE_VALUE; }
 
-<MCA_VALUE>[^\n \t]+      { BEGIN(INITIAL); return PRRTE_UTIL_KEYVAL_PARSE_VALUE; }
-<MCA_VALUE>"'"[^\n]*"'"{WHITE}+      { BEGIN(INITIAL); return PRRTE_UTIL_KEYVAL_PARSE_VALUE; }
-<MCA_VALUE>"\""[^\n]*"\""{WHITE}+      { BEGIN(INITIAL); return PRRTE_UTIL_KEYVAL_PARSE_VALUE; }
-<MCA_VALUE>{WHITE}*\n   { BEGIN(INITIAL); BEGIN(INITIAL); return PRRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
+<MCA_VALUE>[^\n \t]+      { BEGIN(INITIAL); return PRTE_UTIL_KEYVAL_PARSE_VALUE; }
+<MCA_VALUE>"'"[^\n]*"'"{WHITE}+      { BEGIN(INITIAL); return PRTE_UTIL_KEYVAL_PARSE_VALUE; }
+<MCA_VALUE>"\""[^\n]*"\""{WHITE}+      { BEGIN(INITIAL); return PRTE_UTIL_KEYVAL_PARSE_VALUE; }
+<MCA_VALUE>{WHITE}*\n   { BEGIN(INITIAL); BEGIN(INITIAL); return PRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
 
-"-"?"-mca"{WHITE}+{CHAR}+{WHITE}+ {BEGIN(MCA_VALUE); return PRRTE_UTIL_KEYVAL_PARSE_MCAVAR; }
-"-"?"-x"{WHITE}+{CHAR}+{WHITE}*"="{WHITE}* {BEGIN(MCA_VALUE); return PRRTE_UTIL_KEYVAL_PARSE_ENVEQL; }
-"-"?"-x"{WHITE}+{CHAR}+{WHITE}*/[^=] { return PRRTE_UTIL_KEYVAL_PARSE_ENVVAR; }
+"-"?"-mca"{WHITE}+{CHAR}+{WHITE}+ {BEGIN(MCA_VALUE); return PRTE_UTIL_KEYVAL_PARSE_MCAVAR; }
+"-"?"-x"{WHITE}+{CHAR}+{WHITE}*"="{WHITE}* {BEGIN(MCA_VALUE); return PRTE_UTIL_KEYVAL_PARSE_ENVEQL; }
+"-"?"-x"{WHITE}+{CHAR}+{WHITE}*/[^=] { return PRTE_UTIL_KEYVAL_PARSE_ENVVAR; }
 
-.	            { return PRRTE_UTIL_KEYVAL_PARSE_ERROR; }
+.	            { return PRTE_UTIL_KEYVAL_PARSE_ERROR; }
 
 %%
 
@@ -100,7 +101,7 @@ CHAR        [A-Za-z0-9_\-\.]
 #endif
 
 #if (YY_FLEX_MAJOR_VERSION < 2) || (YY_FLEX_MAJOR_VERSION == 2 && (YY_FLEX_MINOR_VERSION < 5 || (YY_FLEX_MINOR_VERSION == 5 && YY_FLEX_SUBMINOR_VERSION < 5)))
-int prrte_util_keyval_yylex_destroy(void)
+int prte_util_keyval_yylex_destroy(void)
 {
     if (NULL != YY_CURRENT_BUFFER) {
         yy_delete_buffer(YY_CURRENT_BUFFER);
@@ -114,9 +115,9 @@ int prrte_util_keyval_yylex_destroy(void)
 }
 #endif
 
-int prrte_util_keyval_yywrap(void)
+int prte_util_keyval_yywrap(void)
 {
-    prrte_util_keyval_parse_done = true;
+    prte_util_keyval_parse_done = true;
     return 1;
 }
 
@@ -129,7 +130,7 @@ int prrte_util_keyval_yywrap(void)
  * have a valid buffer.  Hence, here we ensure to give it a valid
  * buffer.
  */
-int prrte_util_keyval_init_buffer(FILE *file)
+int prte_util_keyval_init_buffer(FILE *file)
 {
     YY_BUFFER_STATE buf = yy_create_buffer(file, YY_BUF_SIZE);
     yy_switch_to_buffer(buf);

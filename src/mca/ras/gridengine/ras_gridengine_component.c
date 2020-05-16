@@ -17,6 +17,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,13 +29,13 @@
  * Resource allocation for Grid Engine
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include "src/mca/base/base.h"
 #include "src/util/output.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 
 #include "src/mca/ras/base/ras_private.h"
@@ -44,95 +45,95 @@
  * Local functions
  */
 
-static int prrte_ras_gridengine_register(void);
-static int prrte_ras_gridengine_open(void);
-static int prrte_ras_gridengine_close(void);
-static int prrte_ras_gridengine_component_query(prrte_mca_base_module_t **module, int *priority);
+static int prte_ras_gridengine_register(void);
+static int prte_ras_gridengine_open(void);
+static int prte_ras_gridengine_close(void);
+static int prte_ras_gridengine_component_query(prte_mca_base_module_t **module, int *priority);
 
-static int prrte_ras_gridengine_verbose;
+static int prte_ras_gridengine_verbose;
 
-prrte_ras_gridengine_component_t prrte_ras_gridengine_component = {
+prte_ras_gridengine_component_t prte_ras_gridengine_component = {
     {
-        /* First, the prrte_mca_base_component_t struct containing meta
+        /* First, the prte_mca_base_component_t struct containing meta
            information about the component itself */
 
         .base_version = {
-            PRRTE_RAS_BASE_VERSION_2_0_0,
+            PRTE_RAS_BASE_VERSION_2_0_0,
             .mca_component_name = "gridengine",
-            PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                        PRRTE_RELEASE_VERSION),
-            .mca_open_component = prrte_ras_gridengine_open,
-            .mca_close_component = prrte_ras_gridengine_close,
-            .mca_query_component = prrte_ras_gridengine_component_query,
-            .mca_register_component_params = prrte_ras_gridengine_register,
+            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                        PRTE_RELEASE_VERSION),
+            .mca_open_component = prte_ras_gridengine_open,
+            .mca_close_component = prte_ras_gridengine_close,
+            .mca_query_component = prte_ras_gridengine_component_query,
+            .mca_register_component_params = prte_ras_gridengine_register,
         },
         .base_data = {
             /* The component is checkpoint ready */
-            PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
         },
     }
 };
 
-static int prrte_ras_gridengine_register(void)
+static int prte_ras_gridengine_register(void)
 {
-    prrte_mca_base_component_t *c = &prrte_ras_gridengine_component.super.base_version;
+    prte_mca_base_component_t *c = &prte_ras_gridengine_component.super.base_version;
 
-    prrte_ras_gridengine_component.priority = 100;
-    (void) prrte_mca_base_component_var_register (c, "priority", "Priority of the gridengine ras component",
-                                            PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                            PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_ras_gridengine_component.priority);
+    prte_ras_gridengine_component.priority = 100;
+    (void) prte_mca_base_component_var_register (c, "priority", "Priority of the gridengine ras component",
+                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, PRTE_INFO_LVL_9,
+                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_gridengine_component.priority);
 
-    prrte_ras_gridengine_verbose = 0;
-    (void) prrte_mca_base_component_var_register (c, "verbose",
+    prte_ras_gridengine_verbose = 0;
+    (void) prte_mca_base_component_var_register (c, "verbose",
                                             "Enable verbose output for the gridengine ras component",
-                                            PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                            PRRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prrte_ras_gridengine_verbose);
+                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, PRTE_INFO_LVL_9,
+                                            PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_ras_gridengine_verbose);
 
-    prrte_ras_gridengine_component.show_jobid = false;
-    (void) prrte_mca_base_component_var_register (c, "show_jobid", "Show the JOB_ID of the Grid Engine job",
-                                            PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                            PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &prrte_ras_gridengine_component.show_jobid);
+    prte_ras_gridengine_component.show_jobid = false;
+    (void) prte_mca_base_component_var_register (c, "show_jobid", "Show the JOB_ID of the Grid Engine job",
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, PRTE_INFO_LVL_9,
+                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_gridengine_component.show_jobid);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /**
   * component open/close/init function
   */
-static int prrte_ras_gridengine_open(void)
+static int prte_ras_gridengine_open(void)
 {
-    if (prrte_ras_gridengine_verbose != 0) {
-        prrte_ras_gridengine_component.verbose = prrte_output_open(NULL);
+    if (prte_ras_gridengine_verbose != 0) {
+        prte_ras_gridengine_component.verbose = prte_output_open(NULL);
     } else {
-        prrte_ras_gridengine_component.verbose = -1;
+        prte_ras_gridengine_component.verbose = -1;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-static int prrte_ras_gridengine_component_query(prrte_mca_base_module_t **module, int *priority)
+static int prte_ras_gridengine_component_query(prte_mca_base_module_t **module, int *priority)
 {
-    *priority = prrte_ras_gridengine_component.priority;
+    *priority = prte_ras_gridengine_component.priority;
 
     if (NULL != getenv("SGE_ROOT") && NULL != getenv("ARC") &&
         NULL != getenv("PE_HOSTFILE") && NULL != getenv("JOB_ID")) {
-        PRRTE_OUTPUT_VERBOSE((2, prrte_ras_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
                              "%s ras:gridengine: available for selection",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
-        *module = (prrte_mca_base_module_t *) &prrte_ras_gridengine_module;
-        return PRRTE_SUCCESS;
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        *module = (prte_mca_base_module_t *) &prte_ras_gridengine_module;
+        return PRTE_SUCCESS;
     }
-    PRRTE_OUTPUT_VERBOSE((2, prrte_ras_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
                          "%s ras:gridengine: NOT available for selection",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     *module = NULL;
-    return PRRTE_ERROR;
+    return PRTE_ERROR;
 }
 
 /**
  *  Close all subsystems.
  */
-static int prrte_ras_gridengine_close(void)
+static int prte_ras_gridengine_close(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

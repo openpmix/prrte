@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,16 +23,16 @@
  *
  */
 
-#ifndef _PRRTE_PARSE_OPTIONS_H_
-#define _PRRTE_PARSE_OPTIONS_H_
+#ifndef _PRTE_PARSE_OPTIONS_H_
+#define _PRTE_PARSE_OPTIONS_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 BEGIN_C_DECLS
 
-PRRTE_EXPORT void prrte_util_parse_range_options(char *input, char ***output);
+PRTE_EXPORT void prte_util_parse_range_options(char *input, char ***output);
 
-PRRTE_EXPORT void prrte_util_get_ranges(char *inp, char ***startpts, char ***endpts);
+PRTE_EXPORT void prte_util_get_ranges(char *inp, char ***startpts, char ***endpts);
 
 END_C_DECLS
 #endif

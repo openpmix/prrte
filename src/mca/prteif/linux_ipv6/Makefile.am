@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -8,7 +8,7 @@
 # $HEADER$
 #
 
-dist_prrtedata_DATA = help-prrte-if-linux-ipv6.txt
+dist_prtedata_DATA = help-prte-if-linux-ipv6.txt
 
 noinst_LTLIBRARIES = libmca_prteif_linux_ipv6.la
 
