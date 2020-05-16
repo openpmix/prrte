@@ -22,7 +22,7 @@ MD2NROFF = $(PRTE_TOP_SRCDIR)/config/md2nroff.pl
 if !PRTE_ENABLE_MAN_PAGES
 dist-hook:
 	@echo "************************************************************************************"
-	@echo "ERROR: 'make dist' inoperable when PRTE is configured with --disable-man-pages"
+	@echo "ERROR: 'make dist' inoperable when PRRTE is configured with --disable-man-pages"
 	@echo "************************************************************************************"
 	@/bin/false
 endif
