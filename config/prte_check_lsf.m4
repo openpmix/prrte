@@ -145,7 +145,7 @@ AC_DEFUN([PRTE_CHECK_LSF],[
           prte_check_lsf_event_conflict=na
           # Split libs into an array, see if -levent is in that list
           prte_check_lsf_libevent_present=`echo $LIBS | awk '{split([$]0, a, " "); {for (k in a) {if (a[[k]] == "-levent") {print a[[k]]}}}}' | wc -l`
-          AS_IF([test "$prte_check_lsf_happy" = "no"],
+          AS_IF([test "$prte_check_lsf_happy" = "yes"],
                 [AS_IF([test "$prte_check_lsf_libevent_present" != 0],
                        [AS_IF([test "$prte_check_lsf_libdir" = "" ],
                               [],
@@ -164,9 +164,7 @@ AC_DEFUN([PRTE_CHECK_LSF],[
                        [AC_MSG_CHECKING([for libevent conflict])
                         AC_MSG_RESULT([No. -levent is not being explicitly used.])
                         prte_check_lsf_event_conflict=na])],
-                [AC_MSG_CHECKING([for libevent conflict])
-                 AC_MSG_RESULT([No. LSF checks passed.])
-                 prte_check_lsf_event_conflict=na])
+                [prte_check_lsf_event_conflict=na])
 
           AS_IF([test "$prte_check_lsf_event_conflict" = "yes"],
                 [AC_MSG_WARN([===================================================================])
