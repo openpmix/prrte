@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -23,7 +23,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/mca/base/base.h"
 
@@ -34,35 +34,35 @@
 /*
  * Local functions
  */
-static int prrte_iof_prted_open(void);
-static int prrte_iof_prted_close(void);
-static int prrte_iof_prted_query(prrte_mca_base_module_t **module, int *priority);
+static int prte_iof_prted_open(void);
+static int prte_iof_prted_close(void);
+static int prte_iof_prted_query(prte_mca_base_module_t **module, int *priority);
 
 
 /*
  * Public string showing the iof prted component version number
  */
-const char *prrte_iof_prted_component_version_string =
-"PRRTE prted iof MCA component version " PRRTE_VERSION;
+const char *prte_iof_prted_component_version_string =
+"PRTE prted iof MCA component version " PRTE_VERSION;
 
 
-prrte_iof_prted_component_t prrte_iof_prted_component = {
+prte_iof_prted_component_t prte_iof_prted_component = {
     {
         .iof_version = {
-            PRRTE_IOF_BASE_VERSION_2_0_0,
+            PRTE_IOF_BASE_VERSION_2_0_0,
 
             .mca_component_name = "prted",
-            PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                        PRRTE_RELEASE_VERSION),
+            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                        PRTE_RELEASE_VERSION),
 
             /* Component open, close, and query functions */
-            .mca_open_component = prrte_iof_prted_open,
-            .mca_close_component = prrte_iof_prted_close,
-            .mca_query_component = prrte_iof_prted_query,
+            .mca_open_component = prte_iof_prted_open,
+            .mca_close_component = prte_iof_prted_close,
+            .mca_query_component = prte_iof_prted_query,
         },
         .iof_data = {
             /* The component is checkpoint ready */
-            PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
         },
     }
 };
@@ -70,30 +70,30 @@ prrte_iof_prted_component_t prrte_iof_prted_component = {
 /**
   * component open/close/init function
   */
-static int prrte_iof_prted_open(void)
+static int prte_iof_prted_open(void)
 {
     /* Nothing to do */
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-static int prrte_iof_prted_close(void)
+static int prte_iof_prted_close(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-static int prrte_iof_prted_query(prrte_mca_base_module_t **module, int *priority)
+static int prte_iof_prted_query(prte_mca_base_module_t **module, int *priority)
 {
     /* if we are not a daemon, then don't use this module */
-    if (!PRRTE_PROC_IS_DAEMON) {
+    if (!PRTE_PROC_IS_DAEMON) {
         *module = NULL;
         *priority = -1;
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     *priority = 80;
-    *module = (prrte_mca_base_module_t *) &prrte_iof_prted_module;
+    *module = (prte_mca_base_module_t *) &prte_iof_prted_module;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 

@@ -9,11 +9,11 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2014      Los Alamos National Security, LLC.  All rights
 #                         reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
@@ -23,7 +23,7 @@
 # $HEADER$
 #
 
-dist_prrtedata_DATA = help-prrte-odls-alps.txt
+dist_prtedata_DATA = help-prte-odls-alps.txt
 
 sources = \
         odls_alps.h \
@@ -35,7 +35,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_odls_alps_DSO
+if MCA_BUILD_prte_odls_alps_DSO
 component_noinst =
 component_install = mca_odls_alps.la
 else
@@ -43,14 +43,14 @@ component_noinst = libmca_odls_alps.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_odls_alps_la_SOURCES = $(sources)
 mca_odls_alps_la_CPPFLAGS = $(odls_alps_CPPFLAGS)
 mca_odls_alps_la_LDFLAGS = -module -avoid-version $(odls_alps_LDFLAGS)
 mca_odls_alps_la_LIBADD = $(odls_alps_LIBS) \
     $(top_builddir)/src/libprrte.la  \
-    $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
+    $(PRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_odls_alps_la_SOURCES =$(sources)

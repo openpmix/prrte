@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -18,7 +18,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -38,7 +38,7 @@
 
 #include "src/util/show_help.h"
 
-#define PRRTE_max(a,b) (((a) > (b)) ? (a) : (b))
+#define PRTE_max(a,b) (((a) > (b)) ? (a) : (b))
 
 
 /*
@@ -51,7 +51,7 @@ static int screen_width = 78;
 /*
  * Prints the passed integer in a pretty or parsable format.
  */
-void prrte_info_out(const char *pretty_message, const char *plain_message, const char *value)
+void prte_info_out(const char *pretty_message, const char *plain_message, const char *value)
 {
     size_t i, len, max_value_width;
     char *spaces = NULL;
@@ -103,15 +103,15 @@ void prrte_info_out(const char *pretty_message, const char *plain_message, const
         v[i] = '\0';
     }
 
-    if (prrte_info_pretty && NULL != pretty_message) {
+    if (prte_info_pretty && NULL != pretty_message) {
         if (centerpoint > (int)strlen(pretty_message)) {
-            prrte_asprintf(&spaces, "%*s", centerpoint -
+            prte_asprintf(&spaces, "%*s", centerpoint -
                      (int)strlen(pretty_message), " ");
         } else {
             spaces = strdup("");
-#if PRRTE_ENABLE_DEBUG
+#if PRTE_ENABLE_DEBUG
             if (centerpoint < (int)strlen(pretty_message)) {
-                prrte_show_help("help-pinfo.txt",
+                prte_show_help("help-pinfo.txt",
                                "developer warning: field too long", false,
                                pretty_message, centerpoint);
             }
@@ -119,9 +119,9 @@ void prrte_info_out(const char *pretty_message, const char *plain_message, const
         }
         max_value_width = screen_width - strlen(spaces) - strlen(pretty_message) - 2;
         if (0 < strlen(pretty_message)) {
-            prrte_asprintf(&filler, "%s%s: ", spaces, pretty_message);
+            prte_asprintf(&filler, "%s%s: ", spaces, pretty_message);
         } else {
-            prrte_asprintf(&filler, "%s  ", spaces);
+            prte_asprintf(&filler, "%s  ", spaces);
         }
         free(spaces);
         spaces = NULL;
@@ -131,7 +131,7 @@ void prrte_info_out(const char *pretty_message, const char *plain_message, const
                 printf("%s%s\n", filler, v);
                 break;
             } else {
-                prrte_asprintf(&spaces, "%*s", centerpoint + 2, " ");
+                prte_asprintf(&spaces, "%*s", centerpoint + 2, " ");
 
                 /* Work backwards to find the first space before
                  * max_value_width
@@ -188,13 +188,13 @@ void prrte_info_out(const char *pretty_message, const char *plain_message, const
     }
 }
 
-void prrte_info_out_int(const char *pretty_message,
+void prte_info_out_int(const char *pretty_message,
                        const char *plain_message,
                        int value)
 {
     char *valstr;
 
-    prrte_asprintf(&valstr, "%d", (int)value);
-    prrte_info_out(pretty_message, plain_message, valstr);
+    prte_asprintf(&valstr, "%d", (int)value);
+    prte_info_out(pretty_message, plain_message, valstr);
     free(valstr);
 }

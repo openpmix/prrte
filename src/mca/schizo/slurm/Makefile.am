@@ -1,6 +1,7 @@
 #
-# Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -17,7 +18,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_schizo_slurm_DSO
+if MCA_BUILD_prte_schizo_slurm_DSO
 component_noinst =
 component_install = mca_schizo_slurm.la
 else
@@ -25,7 +26,7 @@ component_noinst = libmca_schizo_slurm.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_schizo_slurm_la_SOURCES = $(sources)
 mca_schizo_slurm_la_LDFLAGS = -module -avoid-version

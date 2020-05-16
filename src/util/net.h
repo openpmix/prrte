@@ -15,6 +15,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,10 +25,10 @@
 
 /* @file */
 
-#ifndef PRRTE_UTIL_NET_H
-#define PRRTE_UTIL_NET_H
+#ifndef PRTE_UTIL_NET_H
+#define PRTE_UTIL_NET_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -48,12 +49,12 @@ BEGIN_C_DECLS
  * once for any process that will use any function in the network
  * helper subsystem.
  *
- * @retval PRRTE_SUCCESS   Success
- * @retval PRRTE_ERR_TEMP_OUT_OF_RESOURCE Not enough memory for static
+ * @retval PRTE_SUCCESS   Success
+ * @retval PRTE_ERR_TEMP_OUT_OF_RESOURCE Not enough memory for static
  *                        buffer creation
  */
-PRRTE_EXPORT int prrte_net_init(void);
-PRRTE_EXPORT void prrte_net_finalize (void);
+PRTE_EXPORT int prte_net_init(void);
+PRTE_EXPORT void prte_net_finalize (void);
 
 /**
  * Calculate netmask in network byte order from CIDR notation
@@ -61,7 +62,7 @@ PRRTE_EXPORT void prrte_net_finalize (void);
  * @param prefixlen (IN)  CIDR prefixlen
  * @return                netmask in network byte order
  */
-PRRTE_EXPORT uint32_t prrte_net_prefix2netmask(uint32_t prefixlen);
+PRTE_EXPORT uint32_t prte_net_prefix2netmask(uint32_t prefixlen);
 
 
 /**
@@ -75,7 +76,7 @@ PRRTE_EXPORT uint32_t prrte_net_prefix2netmask(uint32_t prefixlen);
  * @return                 true if \c addr is a localhost address,
  *                         false otherwise.
  */
-PRRTE_EXPORT bool prrte_net_islocalhost(const struct sockaddr *addr);
+PRTE_EXPORT bool prte_net_islocalhost(const struct sockaddr *addr);
 
 
 /**
@@ -90,7 +91,7 @@ PRRTE_EXPORT bool prrte_net_islocalhost(const struct sockaddr *addr);
  * @return                  true if \c addr1 and \c addr2 are on the
  *                          same net, false otherwise.
  */
-PRRTE_EXPORT bool prrte_net_samenetwork(const struct sockaddr *addr1,
+PRTE_EXPORT bool prte_net_samenetwork(const struct sockaddr *addr1,
                                         const struct sockaddr *addr2,
                                         uint32_t prefixlen);
 
@@ -102,7 +103,7 @@ PRRTE_EXPORT bool prrte_net_samenetwork(const struct sockaddr *addr1,
  * @param addr      address as struct sockaddr
  * @return          true, if \c addr is IPv4 public, false otherwise
  */
-PRRTE_EXPORT bool prrte_net_addr_isipv4public(const struct sockaddr *addr);
+PRTE_EXPORT bool prte_net_addr_isipv4public(const struct sockaddr *addr);
 
 /**
  * Is the given address a link-local IPv6 address?  Returns false for IPv4
@@ -111,7 +112,7 @@ PRRTE_EXPORT bool prrte_net_addr_isipv4public(const struct sockaddr *addr);
  * @param addr      address as struct sockaddr
  * @return          true, if \c addr is IPv6 link-local, false otherwise
  */
-PRRTE_EXPORT bool prrte_net_addr_isipv6linklocal(const struct sockaddr *addr);
+PRTE_EXPORT bool prte_net_addr_isipv6linklocal(const struct sockaddr *addr);
 
 /**
  * Get string version of address
@@ -123,7 +124,7 @@ PRRTE_EXPORT bool prrte_net_addr_isipv6linklocal(const struct sockaddr *addr);
  * @param addr              struct sockaddr of address
  * @return                  literal representation of \c addr
  */
-PRRTE_EXPORT char* prrte_net_get_hostname(const struct sockaddr *addr);
+PRTE_EXPORT char* prte_net_get_hostname(const struct sockaddr *addr);
 
 
 /**
@@ -135,15 +136,15 @@ PRRTE_EXPORT char* prrte_net_get_hostname(const struct sockaddr *addr);
  * @param addr             struct sockaddr containing address
  * @return                 port number from \addr
  */
-PRRTE_EXPORT int prrte_net_get_port(const struct sockaddr *addr);
+PRTE_EXPORT int prte_net_get_port(const struct sockaddr *addr);
 
 /**
  * Test if a string is actually an IP address
  *
  * Returns true if the string is of IPv4 or IPv6 address form
  */
-PRRTE_EXPORT bool prrte_net_isaddr(const char *name);
+PRTE_EXPORT bool prte_net_isaddr(const char *name);
 
 END_C_DECLS
 
-#endif /* PRRTE_UTIL_NET_H */
+#endif /* PRTE_UTIL_NET_H */

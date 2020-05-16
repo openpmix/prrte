@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -25,12 +25,12 @@
 #ifndef _MCA_OOB_TCP_H_
 #define _MCA_OOB_TCP_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "types.h"
 
 #include "src/mca/base/base.h"
-#include "src/class/prrte_hash_table.h"
+#include "src/class/prte_hash_table.h"
 #include "src/event/event-internal.h"
 
 #include "src/mca/oob/oob.h"
@@ -44,31 +44,31 @@ BEGIN_C_DECLS
 #define OOB_TCP_DEBUG_CONNECT   7
 
 /* forward declare a couple of structures */
-struct prrte_oob_tcp_module_t;
-struct prrte_oob_tcp_msg_error_t;
+struct prte_oob_tcp_module_t;
+struct prte_oob_tcp_msg_error_t;
 
 /* define a struct for tracking NIC addresses */
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     uint16_t af_family;
     struct sockaddr addr;
-} prrte_oob_tcp_nicaddr_t;
-PRRTE_CLASS_DECLARATION(prrte_oob_tcp_nicaddr_t);
+} prte_oob_tcp_nicaddr_t;
+PRTE_CLASS_DECLARATION(prte_oob_tcp_nicaddr_t);
 
 /* Module definition */
-typedef void (*prrte_oob_tcp_module_accept_connection_fn_t)(const int accepted_fd,
+typedef void (*prte_oob_tcp_module_accept_connection_fn_t)(const int accepted_fd,
                                                           const struct sockaddr *addr);
-typedef void (*prrte_oob_tcp_module_ping_fn_t)(const prrte_process_name_t *proc);
-typedef void (*prrte_oob_tcp_module_send_nb_fn_t)(prrte_rml_send_t *msg);
-typedef void (*prrte_oob_tcp_module_ft_event_fn_t)(int state);
+typedef void (*prte_oob_tcp_module_ping_fn_t)(const prte_process_name_t *proc);
+typedef void (*prte_oob_tcp_module_send_nb_fn_t)(prte_rml_send_t *msg);
+typedef void (*prte_oob_tcp_module_ft_event_fn_t)(int state);
 
 typedef struct {
-    prrte_oob_tcp_module_accept_connection_fn_t  accept_connection;
-    prrte_oob_tcp_module_ping_fn_t               ping;
-    prrte_oob_tcp_module_send_nb_fn_t            send_nb;
-    prrte_oob_tcp_module_ft_event_fn_t           ft_event;
-} prrte_oob_tcp_module_t;
-PRRTE_MODULE_EXPORT extern prrte_oob_tcp_module_t prrte_oob_tcp_module;
+    prte_oob_tcp_module_accept_connection_fn_t  accept_connection;
+    prte_oob_tcp_module_ping_fn_t               ping;
+    prte_oob_tcp_module_send_nb_fn_t            send_nb;
+    prte_oob_tcp_module_ft_event_fn_t           ft_event;
+} prte_oob_tcp_module_t;
+PRTE_MODULE_EXPORT extern prte_oob_tcp_module_t prte_oob_tcp_module;
 
 /**
  * the state of the connection
@@ -82,12 +82,12 @@ typedef enum {
     MCA_OOB_TCP_CONNECTED,
     MCA_OOB_TCP_FAILED,
     MCA_OOB_TCP_ACCEPTING
-} prrte_oob_tcp_state_t;
+} prte_oob_tcp_state_t;
 
 /* module-level shared functions */
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_send_handler(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_recv_handler(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_queue_msg(int sd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_oob_tcp_send_handler(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_oob_tcp_recv_handler(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata);
 
 
 END_C_DECLS

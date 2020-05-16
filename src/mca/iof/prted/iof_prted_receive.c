@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
@@ -22,7 +22,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <errno.h>
@@ -37,46 +37,46 @@
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/util/name_fns.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/iof/iof_types.h"
 #include "src/mca/iof/base/base.h"
 
 #include "iof_prted.h"
 
-static void send_cb(int status, prrte_process_name_t *peer,
-                    prrte_buffer_t *buf, prrte_rml_tag_t tag,
+static void send_cb(int status, prte_process_name_t *peer,
+                    prte_buffer_t *buf, prte_rml_tag_t tag,
                     void *cbdata)
 {
     /* nothing to do here - just release buffer and return */
-    PRRTE_RELEASE(buf);
+    PRTE_RELEASE(buf);
 }
 
-void prrte_iof_prted_send_xonxoff(prrte_iof_tag_t tag)
+void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
 {
-    prrte_buffer_t *buf;
+    prte_buffer_t *buf;
     int rc;
 
-    buf = PRRTE_NEW(prrte_buffer_t);
+    buf = PRTE_NEW(prte_buffer_t);
 
     /* pack the tag - we do this first so that flow control messages can
      * consist solely of the tag
      */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buf, &tag, 1, PRRTE_IOF_TAG))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_RELEASE(buf);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &tag, 1, PRTE_IOF_TAG))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_RELEASE(buf);
         return;
     }
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s sending %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         (PRRTE_IOF_XON == tag) ? "xon" : "xoff"));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         (PRTE_IOF_XON == tag) ? "xon" : "xoff"));
 
     /* send the buffer to the HNP */
-    if (0 > (rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_HNP, buf, PRRTE_RML_TAG_IOF_HNP,
+    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP,
                                           send_cb, NULL))) {
-        PRRTE_ERROR_LOG(rc);
+        PRTE_ERROR_LOG(rc);
     }
 }
 
@@ -88,61 +88,61 @@ void prrte_iof_prted_send_xonxoff(prrte_iof_tag_t tag)
  *
  * (b) flow control messages
  */
-void prrte_iof_prted_recv(int status, prrte_process_name_t* sender,
-                         prrte_buffer_t* buffer, prrte_rml_tag_t tag,
+void prte_iof_prted_recv(int status, prte_process_name_t* sender,
+                         prte_buffer_t* buffer, prte_rml_tag_t tag,
                          void* cbdata)
 {
-    unsigned char data[PRRTE_IOF_BASE_MSG_MAX];
-    prrte_iof_tag_t stream;
+    unsigned char data[PRTE_IOF_BASE_MSG_MAX];
+    prte_iof_tag_t stream;
     int32_t count, numbytes;
-    prrte_process_name_t target;
-    prrte_iof_proc_t *proct;
+    prte_process_name_t target;
+    prte_iof_proc_t *proct;
     int rc;
 
     /* see what stream generated this data */
     count = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &stream, &count, PRRTE_IOF_TAG))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &stream, &count, PRTE_IOF_TAG))) {
+        PRTE_ERROR_LOG(rc);
         return;
     }
 
     /* if this isn't stdin, then we have an error */
-    if (PRRTE_IOF_STDIN != stream) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_COMM_FAILURE);
+    if (PRTE_IOF_STDIN != stream) {
+        PRTE_ERROR_LOG(PRTE_ERR_COMM_FAILURE);
         return;
     }
 
     /* unpack the intended target */
     count = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &target, &count, PRRTE_NAME))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &target, &count, PRTE_NAME))) {
+        PRTE_ERROR_LOG(rc);
         return;
     }
 
     /* unpack the data */
-    numbytes=PRRTE_IOF_BASE_MSG_MAX;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, data, &numbytes, PRRTE_BYTE))) {
-        PRRTE_ERROR_LOG(rc);
+    numbytes=PRTE_IOF_BASE_MSG_MAX;
+    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, data, &numbytes, PRTE_BYTE))) {
+        PRTE_ERROR_LOG(rc);
         return;
     }
     /* numbytes will contain the actual #bytes that were sent */
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s unpacked %d bytes for local proc %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), numbytes,
-                         PRRTE_NAME_PRINT(&target)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
+                         PRTE_NAME_PRINT(&target)));
 
     /* cycle through our list of procs */
-    PRRTE_LIST_FOREACH(proct, &prrte_iof_prted_component.procs, prrte_iof_proc_t) {
+    PRTE_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t) {
         /* is this intended for this jobid? */
         if (target.jobid == proct->name.jobid) {
             /* yes - is this intended for all vpids or this vpid? */
-            if (PRRTE_VPID_WILDCARD == target.vpid ||
+            if (PRTE_VPID_WILDCARD == target.vpid ||
                 proct->name.vpid == target.vpid) {
-                PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+                PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                      "%s writing data to local proc %s",
-                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                                     PRRTE_NAME_PRINT(&proct->name)));
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                     PRTE_NAME_PRINT(&proct->name)));
                 if (NULL == proct->stdinev) {
                     continue;
                 }
@@ -150,13 +150,13 @@ void prrte_iof_prted_recv(int status, prrte_process_name_t* sender,
                  * down the pipe so it forces out any preceding data before
                  * closing the output stream
                  */
-                if (PRRTE_IOF_MAX_INPUT_BUFFERS < prrte_iof_base_write_output(&target, stream, data, numbytes, proct->stdinev->wev)) {
+                if (PRTE_IOF_MAX_INPUT_BUFFERS < prte_iof_base_write_output(&target, stream, data, numbytes, proct->stdinev->wev)) {
                     /* getting too backed up - tell the HNP to hold off any more input if we
                      * haven't already told it
                      */
-                    if (!prrte_iof_prted_component.xoff) {
-                        prrte_iof_prted_component.xoff = true;
-                        prrte_iof_prted_send_xonxoff(PRRTE_IOF_XOFF);
+                    if (!prte_iof_prted_component.xoff) {
+                        prte_iof_prted_component.xoff = true;
+                        prte_iof_prted_send_xonxoff(PRTE_IOF_XOFF);
                     }
                 }
             }

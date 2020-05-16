@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2010 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
@@ -21,12 +21,12 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_INFO_TOOL_H
-#define PRRTE_INFO_TOOL_H
-#include "prrte_config.h"
+#ifndef PRTE_INFO_TOOL_H
+#define PRTE_INFO_TOOL_H
+#include "prte_config.h"
 
-#include "src/class/prrte_list.h"
-#include "src/class/prrte_pointer_array.h"
+#include "src/class/prte_list.h"
+#include "src/class/prte_pointer_array.h"
 #include "src/util/cmd_line.h"
 #include "src/util/printf.h"
 #include "src/mca/mca.h"
@@ -37,30 +37,30 @@ BEGIN_C_DECLS
  * Globals
  */
 
-extern bool prrte_info_pretty;
-extern prrte_cmd_line_t *prrte_info_cmd_line;
+extern bool prte_info_pretty;
+extern prte_cmd_line_t *prte_info_cmd_line;
 
-extern const char *prrte_info_type_all;
-extern const char *prrte_info_type_prrte;
-extern const char *prrte_info_type_base;
+extern const char *prte_info_type_all;
+extern const char *prte_info_type_prte;
+extern const char *prte_info_type_base;
 
-extern prrte_pointer_array_t mca_types;
+extern prte_pointer_array_t mca_types;
 
 
 /*
  * Version-related strings and functions
  */
 
-extern const char *prrte_info_ver_full;
-extern const char *prrte_info_ver_major;
-extern const char *prrte_info_ver_minor;
-extern const char *prrte_info_ver_release;
-extern const char *prrte_info_ver_greek;
-extern const char *prrte_info_ver_svn;
+extern const char *prte_info_ver_full;
+extern const char *prte_info_ver_major;
+extern const char *prte_info_ver_minor;
+extern const char *prte_info_ver_release;
+extern const char *prte_info_ver_greek;
+extern const char *prte_info_ver_svn;
 
-void prrte_info_do_version(bool want_all, prrte_cmd_line_t *cmd_line);
-void prrte_info_show_prrte_version(const char *scope);
-void prrte_info_show_component_version(const char *type_name,
+void prte_info_do_version(bool want_all, prte_cmd_line_t *cmd_line);
+void prte_info_show_prte_version(const char *scope);
+void prte_info_show_component_version(const char *type_name,
                                       const char *component_name,
                                       const char *scope,
                                       const char *ver_type);
@@ -69,64 +69,64 @@ void prrte_info_show_component_version(const char *type_name,
  * Parameter/configuration-related functions
  */
 
-extern const char *prrte_info_component_all;
-extern const char *prrte_info_param_all;
+extern const char *prte_info_component_all;
+extern const char *prte_info_param_all;
 
-extern const char *prrte_info_path_prefix;
-extern const char *prrte_info_path_bindir;
-extern const char *prrte_info_path_libdir;
-extern const char *prrte_info_path_incdir;
-extern const char *prrte_info_path_mandir;
-extern const char *prrte_info_path_pkglibdir;
-extern const char *prrte_info_path_sysconfdir;
-extern const char *prrte_info_path_exec_prefix;
-extern const char *prrte_info_path_sbindir;
-extern const char *prrte_info_path_libexecdir;
-extern const char *prrte_info_path_datarootdir;
-extern const char *prrte_info_path_datadir;
-extern const char *prrte_info_path_sharedstatedir;
-extern const char *prrte_info_path_localstatedir;
-extern const char *prrte_info_path_infodir;
-extern const char *prrte_info_path_pkgdatadir;
-extern const char *prrte_info_path_pkgincludedir;
+extern const char *prte_info_path_prefix;
+extern const char *prte_info_path_bindir;
+extern const char *prte_info_path_libdir;
+extern const char *prte_info_path_incdir;
+extern const char *prte_info_path_mandir;
+extern const char *prte_info_path_pkglibdir;
+extern const char *prte_info_path_sysconfdir;
+extern const char *prte_info_path_exec_prefix;
+extern const char *prte_info_path_sbindir;
+extern const char *prte_info_path_libexecdir;
+extern const char *prte_info_path_datarootdir;
+extern const char *prte_info_path_datadir;
+extern const char *prte_info_path_sharedstatedir;
+extern const char *prte_info_path_localstatedir;
+extern const char *prte_info_path_infodir;
+extern const char *prte_info_path_pkgdatadir;
+extern const char *prte_info_path_pkgincludedir;
 
-void prrte_info_do_params(bool want_all, bool want_internal);
-void prrte_info_show_mca_params(const char *type, const char *component,
+void prte_info_do_params(bool want_all, bool want_internal);
+void prte_info_show_mca_params(const char *type, const char *component,
                                bool want_internal);
 
-void prrte_info_do_path(bool want_all, prrte_cmd_line_t *cmd_line);
-void prrte_info_show_path(const char *type, const char *value);
+void prte_info_do_path(bool want_all, prte_cmd_line_t *cmd_line);
+void prte_info_show_path(const char *type, const char *value);
 
-void prrte_info_do_arch(void);
-void prrte_info_do_hostname(void);
-void prrte_info_do_config(bool want_all);
-void prrte_info_show_prrte_version(const char *scope);
+void prte_info_do_arch(void);
+void prte_info_do_hostname(void);
+void prte_info_do_config(bool want_all);
+void prte_info_show_prte_version(const char *scope);
 
 /*
  * Output-related functions
  */
-void prrte_info_out(const char *pretty_message,
+void prte_info_out(const char *pretty_message,
                    const char *plain_message,
                    const char *value);
-void prrte_info_out_int(const char *pretty_message,
+void prte_info_out_int(const char *pretty_message,
                        const char *plain_message,
                        int value);
 /*
  * Component-related functions
  */
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     char *type;
-    prrte_list_t *components;
-    prrte_list_t *failed_components;
-} prrte_info_component_map_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_info_component_map_t);
+    prte_list_t *components;
+    prte_list_t *failed_components;
+} prte_info_component_map_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_info_component_map_t);
 
-extern prrte_pointer_array_t prrte_component_map;
+extern prte_pointer_array_t prte_component_map;
 
-void prrte_info_components_open(void);
-void prrte_info_components_close(void);
+void prte_info_components_open(void);
+void prte_info_components_close(void);
 
 END_C_DECLS
 
-#endif /* PRRTE_INFO_H */
+#endif /* PRTE_INFO_H */

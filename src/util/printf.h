@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,10 +23,10 @@
  * Buffer safe printf functions for portability to archaic platforms.
  */
 
-#ifndef PRRTE_PRINTF_H
-#define PRRTE_PRINTF_H
+#ifndef PRTE_PRINTF_H
+#define PRTE_PRINTF_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdarg.h>
 #include <stdlib.h>
@@ -52,7 +53,7 @@ BEGIN_C_DECLS
  *
  * THIS IS A PORTABILITY FEATURE: USE snprintf() in CODE.
  */
-PRRTE_EXPORT int  prrte_snprintf(char *str, size_t size, const char *fmt, ...) __prrte_attribute_format__(__printf__, 3, 4);
+PRTE_EXPORT int  prte_snprintf(char *str, size_t size, const char *fmt, ...) __prte_attribute_format__(__printf__, 3, 4);
 
 
 /**
@@ -77,7 +78,7 @@ PRRTE_EXPORT int  prrte_snprintf(char *str, size_t size, const char *fmt, ...) _
  *
  * THIS IS A PORTABILITY FEATURE: USE vsnprintf() in CODE.
  */
-PRRTE_EXPORT int  prrte_vsnprintf(char *str, size_t size, const char *fmt, va_list ap) __prrte_attribute_format__(__printf__, 3, 0);
+PRTE_EXPORT int  prte_vsnprintf(char *str, size_t size, const char *fmt, va_list ap) __prte_attribute_format__(__printf__, 3, 0);
 
 /**
  * Allocates and writes to a string under the control of a format
@@ -96,14 +97,14 @@ PRRTE_EXPORT int  prrte_vsnprintf(char *str, size_t size, const char *fmt, va_li
  *
  * Returns the number of characters printed.
  *
- * Unlike prrte_snprintf and prrte_vsnprintf, prrte_asprintf() is always
+ * Unlike prte_snprintf and prte_vsnprintf, prte_asprintf() is always
  * available and guarantees that *ptr is NULL when the underlying
  * asprintf fails.  The standard does not require *ptr be set to NULL
  * on error and some implementations (modern Linux) do not guarantee
  * such behavior.
  *
  */
-PRRTE_EXPORT int  prrte_asprintf(char **ptr, const char *fmt, ...) __prrte_attribute_format__(__printf__, 2, 3);
+PRTE_EXPORT int  prte_asprintf(char **ptr, const char *fmt, ...) __prte_attribute_format__(__printf__, 2, 3);
 
 
 /**
@@ -125,17 +126,17 @@ PRRTE_EXPORT int  prrte_asprintf(char **ptr, const char *fmt, ...) __prrte_attri
  *
  * Returns the number of characters printed.
  *
- * Unlike prrte_snprintf and prrte_vsnprintf, prrte_vasprintf() is always
+ * Unlike prte_snprintf and prte_vsnprintf, prte_vasprintf() is always
  * available and guarantees that *ptr is NULL when the underlying
  * asprintf fails.  The standard does not require *ptr be set to NULL
  * on error and some implementations (modern Linux) do not guarantee
  * such behavior.
  *
  */
-PRRTE_EXPORT int  prrte_vasprintf(char **ptr, const char *fmt, va_list ap) __prrte_attribute_format__(__printf__, 2, 0);
+PRTE_EXPORT int  prte_vasprintf(char **ptr, const char *fmt, va_list ap) __prte_attribute_format__(__printf__, 2, 0);
 
 
 END_C_DECLS
 
-#endif /* PRRTE_PRINTF_H */
+#endif /* PRTE_PRINTF_H */
 

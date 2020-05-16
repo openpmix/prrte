@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
@@ -27,7 +27,7 @@
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/mca/mca.h"
 
@@ -39,15 +39,15 @@ BEGIN_C_DECLS
 /*
  * MCA framework
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_odls_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_odls_base_framework;
 /*
  * Select an available component.
  */
-PRRTE_EXPORT int prrte_odls_base_select(void);
+PRTE_EXPORT int prte_odls_base_select(void);
 
-PRRTE_EXPORT void prrte_odls_base_start_threads(prrte_job_t *jdata);
+PRTE_EXPORT void prte_odls_base_start_threads(prte_job_t *jdata);
 
-PRRTE_EXPORT void prrte_odls_base_harvest_threads(void);
+PRTE_EXPORT void prte_odls_base_harvest_threads(void);
 
 END_C_DECLS
 #endif

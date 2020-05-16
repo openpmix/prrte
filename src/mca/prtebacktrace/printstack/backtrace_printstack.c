@@ -12,13 +12,14 @@
  * Copyright (c) 2006      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
  *
  * $HEADER$
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #include <ucontext.h>
@@ -27,9 +28,9 @@
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 
 int
-prrte_backtrace_print(FILE *file, char *prefix, int strip)
+prte_backtrace_print(FILE *file, char *prefix, int strip)
 {
-    int fd = prrte_stacktrace_output_fileno;
+    int fd = prte_stacktrace_output_fileno;
 
     if( NULL != file ) {
         fd = fileno(file);
@@ -37,12 +38,12 @@ prrte_backtrace_print(FILE *file, char *prefix, int strip)
 
     printstack(fd);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
 int
-prrte_backtrace_buffer(char ***message_out, int *len_out)
+prte_backtrace_buffer(char ***message_out, int *len_out)
 {
     *message_out = NULL;
     *len_out = 0;
@@ -51,5 +52,5 @@ prrte_backtrace_buffer(char ***message_out, int *len_out)
        printstack is implemented.  I just don't have time right
        now. */
 
-    return PRRTE_ERR_NOT_IMPLEMENTED;
+    return PRTE_ERR_NOT_IMPLEMENTED;
 }

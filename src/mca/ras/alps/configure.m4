@@ -11,7 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2008      UT-Battelle, LLC
-# Copyright (c) 2009-2010 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2011-2016 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -24,22 +24,22 @@
 
 # MCA_ras_alps_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prrte_ras_alps_CONFIG],[
+AC_DEFUN([MCA_prte_ras_alps_CONFIG],[
     AC_CONFIG_FILES([src/mca/ras/alps/Makefile])
 
-    PRRTE_CHECK_ALPS([ras_alps], [ras_alps_happy="yes"], [ras_alps_happy="no"])
+    PRTE_CHECK_ALPS([ras_alps], [ras_alps_happy="yes"], [ras_alps_happy="no"])
 
     # check for alps/apInfo.h
     # save current CPPFLAGS
-    MCA_prrte_ras_save_CPPFLAGS="$CPPFLAGS"
+    MCA_prte_ras_save_CPPFLAGS="$CPPFLAGS"
 
-    # add flags obtained from PRRTE_CHECK_ALPS
+    # add flags obtained from PRTE_CHECK_ALPS
     CPPFLAGS="$CPPFLAGS $ras_alps_CPPFLAGS"
 
     AC_CHECK_HEADERS([alps/apInfo.h], [], [ras_alps_happy="no"])
 
     # restore CPPFLAGS
-    CPPFLAGS="$MCA_prrte_ras_save_CPPFLAGS"
+    CPPFLAGS="$MCA_prte_ras_save_CPPFLAGS"
 
     AC_SUBST([ras_alps_CPPFLAGS])
 

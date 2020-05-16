@@ -20,7 +20,7 @@
 # -n name
 #    This option will change the name of the produced RPM to the "name".
 #    It is useful to use with "-o" and "-m" options if you want to have
-#    multiple PRRTE versions installed simultaneously in the same
+#    multiple PRTE versions installed simultaneously in the same
 #    enviroment. Requires use of option "-b".
 #
 # -o
@@ -54,7 +54,7 @@
 #    Add custom RPM build parameter.
 #
 # -s
-#    If specified, the script will try to unpack the prrte.spec
+#    If specified, the script will try to unpack the prte.spec
 #    file from the tarball specified on the command line. By default,
 #    the script will look for the specfile in the current directory.
 #
@@ -115,7 +115,7 @@ usage="Usage: $0 [-b][-o][-m][-d][-u][-s][-h] [-n name][-f lf_location][-t tm_lo
 
   -n name
              name of the resulting RPM package set to name. Requires -b flag.
-             {default: prrte}
+             {default: prte}
 
   -o         install in /opt/_NAME_/_VERSION_. Requires -b flag.
              {default: install in /usr}
@@ -148,7 +148,7 @@ usage="Usage: $0 [-b][-o][-m][-d][-u][-s][-h] [-n name][-f lf_location][-t tm_lo
 
   -h         print this message and exit
 
-  tarball    path to PRRTE source tarball
+  tarball    path to PRTE source tarball
   "
 
 #
@@ -222,14 +222,14 @@ fi
 first="`basename $tarball | cut -d- -f2`"
 version="`echo $first | sed -e 's/\.tar\.'$extension'//'`"
 unset first
-echo "--> Found PRRTE version: $version"
+echo "--> Found PRTE version: $version"
 
 #
 # Try to unpack spec file from tarball
 #
 
 if test $unpack_spec -eq 1; then
-    tar -xf $tarball --wildcards --no-anchored 'prrte.spec' --strip=4
+    tar -xf $tarball --wildcards --no-anchored 'prte.spec' --strip=4
 fi
 
 #
@@ -388,7 +388,7 @@ fi
 #
 
 if test "$build_srpm" = "yes"; then
-    echo "--> Building the PRRTE SRPM"
+    echo "--> Building the PRTE SRPM"
     rpmbuild_options="$rpmbuild_options --define 'dist %{nil}'"
     cmd="$rpm_cmd $rpmbuild_options -bs $specdest"
     echo "--> $cmd"
@@ -407,7 +407,7 @@ fi
 #
 
 if test "$build_single" = "yes"; then
-    echo "--> Building the single PRRTE RPM"
+    echo "--> Building the single PRTE RPM"
     cmd="$rpm_cmd -bb $rpmbuild_options --define 'build_all_in_one_rpm 1'"
     if test "$configure_options" != ""; then
         cmd="$cmd --define 'configure_options $configure_options'"
@@ -429,7 +429,7 @@ fi
 #
 
 if test "$build_multiple" = "yes"; then
-    echo "--> Building the multiple PRRTE RPM"
+    echo "--> Building the multiple PRTE RPM"
     cmd="$rpm_cmd -bb $rpmbuild_options --define 'build_all_in_one_rpm 0'"
     if test "$configure_options" != ""; then
         cmd="$cmd --define 'configure_options $configure_options'"
@@ -453,7 +453,7 @@ fi
 cat <<EOF
 
 ------------------------------------------------------------------------------
-====                FINISHED BUILDING PRRTE RPM                        ====
+====                FINISHED BUILDING PRTE RPM                        ====
 ------------------------------------------------------------------------------
 A copy of the tarball is located in: $rpmtopdir/SOURCES/
 The completed rpms are located in:   $rpmtopdir/RPMS/i<something>86/

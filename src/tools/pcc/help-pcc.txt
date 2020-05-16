@@ -11,7 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2006-2010 Oracle and/or its affiliates.  All rights reserved.
-# Copyright (c) 2012-2014 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2012-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -19,16 +19,16 @@
 #
 # $HEADER$
 #
-# This is the US/English help file for PRRTE wrapper compiler error
+# This is the US/English help file for PRTE wrapper compiler error
 # messages.
 #
 [no-language-support]
-Unfortunately, this installation of PRRTE was not compiled with
+Unfortunately, this installation of PRTE was not compiled with
 %s support.  As such, the %s compiler is non-functional.
 #
 [no-profiling-support]
 Warning: the "-lpmpi" flag was included on the command line,
-indicating use of MPI profiling layer.  However, PRRTE was not
+indicating use of MPI profiling layer.  However, PRTE was not
 compiled with support for the MPI profiling layer.  This flag has
 therefore been ignored.
 #
@@ -37,7 +37,7 @@ No underlying compiler was specified in the wrapper compiler data file
 (e.g., mpicc-wrapper-data.txt)
 #
 [no-compiler-found]
-The PRRTE wrapper compiler was unable to find the specified compiler
+The PRTE wrapper compiler was unable to find the specified compiler
 %s in your PATH.
 
 Note that this compiler was either specified at configure time or in

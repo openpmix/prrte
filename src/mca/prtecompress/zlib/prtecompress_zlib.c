@@ -3,7 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  *
- * Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
@@ -15,7 +15,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <string.h>
 #include <sys/types.h>
@@ -26,10 +26,10 @@
 #endif  /* HAVE_UNISTD_H */
 #include <zlib.h>
 
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 #include "src/util/output.h"
 #include "src/util/argv.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 #include "src/util/printf.h"
 
 #include "constants.h"
@@ -40,17 +40,17 @@
 
 #include "prtecompress_zlib.h"
 
-int prrte_prtecompress_zlib_module_init(void)
+int prte_prtecompress_zlib_module_init(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_prtecompress_zlib_module_finalize(void)
+int prte_prtecompress_zlib_module_finalize(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-bool prrte_prtecompress_zlib_compress_block(uint8_t *inbytes,
+bool prte_prtecompress_zlib_compress_block(uint8_t *inbytes,
                                        size_t inlen,
                                        uint8_t **outbytes,
                                        size_t *olen)
@@ -59,10 +59,10 @@ bool prrte_prtecompress_zlib_compress_block(uint8_t *inbytes,
     size_t len;
     uint8_t *tmp;
 
-    if (inlen < prrte_prtecompress_base.prtecompress_limit) {
+    if (inlen < prte_prtecompress_base.prtecompress_limit) {
         return false;
     }
-    prrte_output_verbose(2, prrte_prtecompress_base_framework.framework_output,
+    prte_output_verbose(2, prte_prtecompress_base_framework.framework_output,
                         "COMPRESSING");
 
     /* set default output */
@@ -91,12 +91,12 @@ bool prrte_prtecompress_zlib_compress_block(uint8_t *inbytes,
 
     *outbytes = tmp;
     *olen = len - strm.avail_out;
-    prrte_output_verbose(2, prrte_prtecompress_base_framework.framework_output,
+    prte_output_verbose(2, prte_prtecompress_base_framework.framework_output,
                         "\tINSIZE %d OUTSIZE %d", (int)inlen, (int)*olen);
     return true;  // we did the prtecompression
 }
 
-bool prrte_prtecompress_zlib_uncompress_block(uint8_t **outbytes, size_t olen,
+bool prte_prtecompress_zlib_uncompress_block(uint8_t **outbytes, size_t olen,
                                          uint8_t *inbytes, size_t len)
 {
     uint8_t *dest;
@@ -104,7 +104,7 @@ bool prrte_prtecompress_zlib_uncompress_block(uint8_t **outbytes, size_t olen,
 
     /* set the default error answer */
     *outbytes = NULL;
-    prrte_output_verbose(2, prrte_prtecompress_base_framework.framework_output, "DECOMPRESS");
+    prte_output_verbose(2, prte_prtecompress_base_framework.framework_output, "DECOMPRESS");
 
     /* setting destination to the fully deprtecompressed size */
     dest = (uint8_t*)malloc(olen);
@@ -123,11 +123,11 @@ bool prrte_prtecompress_zlib_uncompress_block(uint8_t **outbytes, size_t olen,
     strm.next_out = dest;
 
     if (Z_STREAM_END != inflate (&strm, Z_FINISH)) {
-        prrte_output(0, "\tDECOMPRESS FAILED: %s", strm.msg);
+        prte_output(0, "\tDECOMPRESS FAILED: %s", strm.msg);
     }
     inflateEnd (&strm);
     *outbytes = dest;
-    prrte_output_verbose(2, prrte_prtecompress_base_framework.framework_output,
+    prte_output_verbose(2, prte_prtecompress_base_framework.framework_output,
                         "\tINSIZE: %d OUTSIZE %d", (int)len, (int)olen);
     return true;
 }

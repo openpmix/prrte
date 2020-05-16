@@ -7,6 +7,7 @@
  *                         All rights reserved.
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,7 +15,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "src/include/constants.h"
 #include "src/include/types.h"
 
@@ -35,10 +36,10 @@
 
 static int weighted_init(void);
 static int weighted_fini(void);
-static prrte_reachable_t* weighted_reachable(prrte_list_t *local_ifs,
-                                             prrte_list_t *remote_ifs);
+static prte_reachable_t* weighted_reachable(prte_list_t *local_ifs,
+                                             prte_list_t *remote_ifs);
 
-static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if);
+static int get_weights(prte_if_t *local_if, prte_if_t *remote_if);
 static int calculate_weight(int bandwidth_local, int bandwidth_remote,
                             int connection_quality);
 
@@ -58,7 +59,7 @@ enum connection_quality {
     CQ_PUBLIC_SAME_NETWORK = 100
 };
 
-const prrte_reachable_base_module_t prrte_prtereachable_weighted_module = {
+const prte_reachable_base_module_t prte_prtereachable_weighted_module = {
     weighted_init,
     weighted_fini,
     weighted_reachable
@@ -72,34 +73,34 @@ static int weighted_init(void)
 {
     ++init_cntr;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int weighted_fini(void)
 {
     --init_cntr;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-static prrte_reachable_t* weighted_reachable(prrte_list_t *local_ifs,
-                                             prrte_list_t *remote_ifs)
+static prte_reachable_t* weighted_reachable(prte_list_t *local_ifs,
+                                             prte_list_t *remote_ifs)
 {
-    prrte_reachable_t *reachable_results = NULL;
+    prte_reachable_t *reachable_results = NULL;
     int i, j;
-    prrte_if_t *local_iter, *remote_iter;
+    prte_if_t *local_iter, *remote_iter;
 
-    reachable_results = prrte_reachable_allocate(prrte_list_get_size(local_ifs),
-                                                prrte_list_get_size(remote_ifs));
+    reachable_results = prte_reachable_allocate(prte_list_get_size(local_ifs),
+                                                prte_list_get_size(remote_ifs));
     if (NULL == reachable_results) {
         return NULL;
     }
 
     i = 0;
-    PRRTE_LIST_FOREACH(local_iter, local_ifs, prrte_if_t) {
+    PRTE_LIST_FOREACH(local_iter, local_ifs, prte_if_t) {
         j = 0;
-        PRRTE_LIST_FOREACH(remote_iter, remote_ifs, prrte_if_t) {
+        PRTE_LIST_FOREACH(remote_iter, remote_ifs, prte_if_t) {
             reachable_results->weights[i][j] = get_weights(local_iter, remote_iter);
             j++;
         }
@@ -110,7 +111,7 @@ static prrte_reachable_t* weighted_reachable(prrte_list_t *local_ifs,
 }
 
 
-static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
+static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
 {
     char str_local[128], str_remote[128], *conn_type;
     struct sockaddr *local_sockaddr, *remote_sockaddr;
@@ -119,11 +120,11 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
     local_sockaddr = (struct sockaddr *)&local_if->if_addr;
     remote_sockaddr = (struct sockaddr *)&remote_if->if_addr;
 
-    /* prrte_net_get_hostname returns a static buffer.  Great for
+    /* prte_net_get_hostname returns a static buffer.  Great for
        single address printfs, need to copy in this case */
-    prrte_string_copy(str_local, prrte_net_get_hostname(local_sockaddr), sizeof(str_local));
+    prte_string_copy(str_local, prte_net_get_hostname(local_sockaddr), sizeof(str_local));
     str_local[sizeof(str_local) - 1] = '\0';
-    prrte_string_copy(str_remote, prrte_net_get_hostname(remote_sockaddr), sizeof(str_remote));
+    prte_string_copy(str_remote, prte_net_get_hostname(remote_sockaddr), sizeof(str_remote));
     str_remote[sizeof(str_remote) - 1] = '\0';
 
     /*  initially, assume no connection is possible */
@@ -132,9 +133,9 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
     if (AF_INET == local_sockaddr->sa_family &&
         AF_INET == remote_sockaddr->sa_family) {
 
-        if (prrte_net_addr_isipv4public(local_sockaddr) &&
-            prrte_net_addr_isipv4public(remote_sockaddr)) {
-            if (prrte_net_samenetwork(local_sockaddr,
+        if (prte_net_addr_isipv4public(local_sockaddr) &&
+            prte_net_addr_isipv4public(remote_sockaddr)) {
+            if (prte_net_samenetwork(local_sockaddr,
                                      remote_sockaddr,
                                      local_if->if_mask)) {
                 conn_type = "IPv4 PUBLIC SAME NETWORK";
@@ -147,9 +148,9 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
                                           remote_if->if_bandwidth,
                                           CQ_PUBLIC_DIFFERENT_NETWORK);
             }
-        } else if (!prrte_net_addr_isipv4public(local_sockaddr) &&
-                   !prrte_net_addr_isipv4public(remote_sockaddr)) {
-            if (prrte_net_samenetwork(local_sockaddr,
+        } else if (!prte_net_addr_isipv4public(local_sockaddr) &&
+                   !prte_net_addr_isipv4public(remote_sockaddr)) {
+            if (prte_net_samenetwork(local_sockaddr,
                                      remote_sockaddr,
                                      local_if->if_mask)) {
                 conn_type = "IPv4 PRIVATE SAME NETWORK";
@@ -170,11 +171,11 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
                                       CQ_NO_CONNECTION);
         }
 
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
     } else if (AF_INET6 == local_sockaddr->sa_family &&
                AF_INET6 == remote_sockaddr->sa_family) {
-        if (prrte_net_addr_isipv6linklocal(local_sockaddr) &&
-            prrte_net_addr_isipv6linklocal(remote_sockaddr)) {
+        if (prte_net_addr_isipv6linklocal(local_sockaddr) &&
+            prte_net_addr_isipv6linklocal(remote_sockaddr)) {
             /* we can't actually tell if link local addresses are on
              * the same network or not with the weighted component.
              * Assume they are on the same network, so that they'll be
@@ -182,7 +183,7 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
              * number of connections.
              *
              * There used to be a comment in this code (and one in the
-             * BTL TCP code as well) that the prrte_if code doesn't
+             * BTL TCP code as well) that the prte_if code doesn't
              * pass link-local addresses through.  However, this is
              * demonstratably not true on Linux, where link-local
              * interfaces are created.  Since it's easy to handle
@@ -192,9 +193,9 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
             weight = calculate_weight(local_if->if_bandwidth,
                                       remote_if->if_bandwidth,
                                       CQ_PRIVATE_SAME_NETWORK);
-        } else if (!prrte_net_addr_isipv6linklocal(local_sockaddr) &&
-                   !prrte_net_addr_isipv6linklocal(remote_sockaddr)) {
-            if (prrte_net_samenetwork(local_sockaddr,
+        } else if (!prte_net_addr_isipv6linklocal(local_sockaddr) &&
+                   !prte_net_addr_isipv6linklocal(remote_sockaddr)) {
+            if (prte_net_samenetwork(local_sockaddr,
                                      remote_sockaddr,
                                      local_if->if_mask)) {
                 conn_type = "IPv6 PUBLIC SAME NETWORK";
@@ -214,7 +215,7 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
                                       remote_if->if_bandwidth,
                                       CQ_NO_CONNECTION);
         }
-#endif /* #if PRRTE_ENABLE_IPV6 */
+#endif /* #if PRTE_ENABLE_IPV6 */
 
     } else {
         /* we don't have an address family match, so assume no
@@ -223,7 +224,7 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
         weight = calculate_weight(0, 0, CQ_NO_CONNECTION);
     }
 
-    prrte_output_verbose(20, prrte_prtereachable_base_framework.framework_output,
+    prte_output_verbose(20, prte_prtereachable_base_framework.framework_output,
                         "reachable:weighted: path from %s to %s: %s",
                         str_local, str_remote, conn_type);
 

@@ -1,6 +1,6 @@
 # NAME
 
-pcc - Back-end PRRTE wrapper command
+pcc - Back-end PRTE wrapper command
 
 # SYNOPSIS
 
@@ -11,12 +11,12 @@ pcc [options]
 # DESCRIPTION
 
 Compiler wrapper used to automatically insert compiler and linker
-flags needed to compile PRRTE applications.
+flags needed to compile PRTE applications.
 
 # AUTHORS
 
-The PRRTE maintainers -- see
-[https://github.com/openpmix/prrte](https://github.com/openpmix/prrte)
+The PRTE maintainers -- see
+[https://github.com/openpmix/prte](https://github.com/openpmix/prte)
 or the file `AUTHORS`.
 
 This manual page was originally contributed by Dirk Eddelbuettel

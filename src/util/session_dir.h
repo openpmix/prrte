@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,10 +19,10 @@
  */
 /** @file:
  *
- * Find and/or create PRRTE session directory.
+ * Find and/or create PRTE session directory.
  *
- * The prrte_session_dir() function searches for a temporary directory
- * that is used by the PRRTE system for storing system-critical
+ * The prte_session_dir() function searches for a temporary directory
+ * that is used by the PRTE system for storing system-critical
  * information. For a given system and user, the function attempts to
  * find (or create, if not found and create is requested) a directory
  * that will be used to independently house information for multiple
@@ -49,7 +50,7 @@
  * returns an error code.
  *
  * \par \em [openmpi-sessions]-[user-id]@[host]:[batchid] This serves
- * as a concentrator for all PRRTE session directories for this
+ * as a concentrator for all PRTE session directories for this
  * user on the local system. If it doesn't already exist, this
  * directory is created with read-write-execute permissions
  * exclusively restricted to the user. If it does exist, the access
@@ -61,9 +62,9 @@
  *
  * \par Note: The [prefix]/openmpi-sessions-[user-id]@[host]:[batchid]
  * directory is left on the system upon termination of an application
- * and/or an PRRTE universe for future use by the user. Thus, when
+ * and/or an PRTE universe for future use by the user. Thus, when
  * checking a potential location for the directory, the
- * prrte_session_tree_init() function first checks to see if an
+ * prte_session_tree_init() function first checks to see if an
  * appropriate directory already exists, and uses it if it does.
  *
  * \par \em [universe-name] A directory is created for the specified
@@ -85,10 +86,10 @@
  * proc_info structure will be updated.  If proc_info is false,
  */
 
-#ifndef PRRTE_SESSION_DIR_H_HAS_BEEN_INCLUDED
-#define PRRTE_SESSION_DIR_H_HAS_BEEN_INCLUDED
+#ifndef PRTE_SESSION_DIR_H_HAS_BEEN_INCLUDED
+#define PRTE_SESSION_DIR_H_HAS_BEEN_INCLUDED
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
 BEGIN_C_DECLS
@@ -103,21 +104,21 @@ BEGIN_C_DECLS
  * @param proc    Pointer to a process name for which the session
  *                dir name is desired
  *
- * @retval PRRTE_SUCCESS The directory was found and/or created with
+ * @retval PRTE_SUCCESS The directory was found and/or created with
  *                the proper permissions.
  * @retval OMPI_ERROR The directory cannot be found (if create is
  *                "false") or created (if create is "true").
  */
-PRRTE_EXPORT int prrte_session_dir(bool create, prrte_process_name_t *proc);
+PRTE_EXPORT int prte_session_dir(bool create, prte_process_name_t *proc);
 
 /*
  * Setup session-related directory paths
  */
-PRRTE_EXPORT int prrte_session_setup_base(prrte_process_name_t *proc);
+PRTE_EXPORT int prte_session_setup_base(prte_process_name_t *proc);
 
-PRRTE_EXPORT int prrte_setup_top_session_dir(void);
+PRTE_EXPORT int prte_setup_top_session_dir(void);
 
-/** The prrte_session_dir_finalize() function performs a cleanup of the
+/** The prte_session_dir_finalize() function performs a cleanup of the
  * session directory tree. It first removes the session directory for
  * the calling process. It then checks to see if the job-level session
  * directory is now empty - if so, it removes that level as
@@ -128,13 +129,13 @@ PRRTE_EXPORT int prrte_setup_top_session_dir(void);
  * universe have completed.
  *
  * @param None
- * @retval PRRTE_SUCCESS If the directory tree is properly cleaned up.
+ * @retval PRTE_SUCCESS If the directory tree is properly cleaned up.
  * @retval OMPI_ERROR If something prevents the tree from being
  *                properly cleaned up.
  */
-PRRTE_EXPORT int prrte_session_dir_finalize(prrte_process_name_t *proc);
+PRTE_EXPORT int prte_session_dir_finalize(prte_process_name_t *proc);
 
-/** The prrte_session_dir_cleanup() function performs a cleanup of the
+/** The prte_session_dir_cleanup() function performs a cleanup of the
  * session directory tree when a job is aborted. It cleans up all
  * process directories for a given job and then backs up the tree.
  *
@@ -143,8 +144,8 @@ PRRTE_EXPORT int prrte_session_dir_finalize(prrte_process_name_t *proc);
  * @retval OMPI_ERROR If something prevents the tree from being
  *                properly cleaned up.
  */
-PRRTE_EXPORT int prrte_session_dir_cleanup(prrte_jobid_t jobid);
+PRTE_EXPORT int prte_session_dir_cleanup(prte_jobid_t jobid);
 
 END_C_DECLS
 
-#endif  /* PRRTE_SESSION_DIR_H_HAS_BEEN_INCLUDED */
+#endif  /* PRTE_SESSION_DIR_H_HAS_BEEN_INCLUDED */

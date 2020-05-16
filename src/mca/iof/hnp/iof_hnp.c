@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2007      Sun Microsystems, Inc.  All rights reserved.
- * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
@@ -24,7 +24,7 @@
  *
  * $HEADER$
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "src/util/output.h"
 #include "constants.h"
 
@@ -45,7 +45,7 @@
 #include "src/event/event-internal.h"
 #include "src/pmix/pmix-internal.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/rml/rml.h"
@@ -63,26 +63,26 @@ static void stdin_write_handler(int fd, short event, void *cbdata);
 /* API FUNCTIONS */
 static int init(void);
 
-static int hnp_push(const prrte_process_name_t* dst_name, prrte_iof_tag_t src_tag, int fd);
+static int hnp_push(const prte_process_name_t* dst_name, prte_iof_tag_t src_tag, int fd);
 
-static int hnp_pull(const prrte_process_name_t* src_name,
-                prrte_iof_tag_t src_tag,
+static int hnp_pull(const prte_process_name_t* src_name,
+                prte_iof_tag_t src_tag,
                 int fd);
 
-static int hnp_close(const prrte_process_name_t* peer,
-                 prrte_iof_tag_t source_tag);
+static int hnp_close(const prte_process_name_t* peer,
+                 prte_iof_tag_t source_tag);
 
-static int hnp_output(const prrte_process_name_t* peer,
-                      prrte_iof_tag_t source_tag,
+static int hnp_output(const prte_process_name_t* peer,
+                      prte_iof_tag_t source_tag,
                       const char *msg);
 
-static void hnp_complete(const prrte_job_t *jdata);
+static void hnp_complete(const prte_job_t *jdata);
 
 static int finalize(void);
 
 static int hnp_ft_event(int state);
 
-static int push_stdin(const prrte_process_name_t* dst_name,
+static int push_stdin(const prte_process_name_t* dst_name,
                       uint8_t *data, size_t sz);
 
 /* The API's in this module are solely used to support LOCAL
@@ -91,7 +91,7 @@ static int push_stdin(const prrte_process_name_t* dst_name,
  * which operates independently and is in the iof_hnp_receive.c file
  */
 
-prrte_iof_base_module_t prrte_iof_hnp_module = {
+prte_iof_base_module_t prte_iof_hnp_module = {
     .init = init,
     .push = hnp_push,
     .pull = hnp_pull,
@@ -109,16 +109,16 @@ static int init(void)
     /* post non-blocking recv to catch forwarded IO from
      * the orteds
      */
-    prrte_rml.recv_buffer_nb(PRRTE_NAME_WILDCARD,
-                            PRRTE_RML_TAG_IOF_HNP,
-                            PRRTE_RML_PERSISTENT,
-                            prrte_iof_hnp_recv,
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD,
+                            PRTE_RML_TAG_IOF_HNP,
+                            PRTE_RML_PERSISTENT,
+                            prte_iof_hnp_recv,
                             NULL);
 
-    PRRTE_CONSTRUCT(&prrte_iof_hnp_component.procs, prrte_list_t);
-    prrte_iof_hnp_component.stdinev = NULL;
+    PRTE_CONSTRUCT(&prte_iof_hnp_component.procs, prte_list_t);
+    prte_iof_hnp_component.stdinev = NULL;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /* Setup to read local data. If the tag is other than STDIN,
@@ -130,70 +130,70 @@ static int init(void)
  *
  * (a) a specific name, usually vpid=0; or
  *
- * (b) all procs, specified by vpid=PRRTE_VPID_WILDCARD
+ * (b) all procs, specified by vpid=PRTE_VPID_WILDCARD
  *
- * The prrte_plm_base_launch_apps function calls iof.push after
+ * The prte_plm_base_launch_apps function calls iof.push after
  * the procs are launched and tells us how to distribute stdin. This
  * ensures that the procs are started -before- we begin reading stdin
  * and attempting to send it to remote procs
  */
-static int hnp_push(const prrte_process_name_t* dst_name, prrte_iof_tag_t src_tag, int fd)
+static int hnp_push(const prte_process_name_t* dst_name, prte_iof_tag_t src_tag, int fd)
 {
-    prrte_job_t *jdata;
-    prrte_iof_proc_t *proct, *pptr;
+    prte_job_t *jdata;
+    prte_iof_proc_t *proct, *pptr;
     int flags, rc;
-    prrte_ns_cmp_bitmask_t mask = PRRTE_NS_CMP_ALL;
+    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL;
 
     /* don't do this if the dst vpid is invalid or the fd is negative! */
-    if (PRRTE_VPID_INVALID == dst_name->vpid || fd < 0) {
-        return PRRTE_SUCCESS;
+    if (PRTE_VPID_INVALID == dst_name->vpid || fd < 0) {
+        return PRTE_SUCCESS;
     }
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:hnp pushing fd %d for process %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         fd, PRRTE_NAME_PRINT(dst_name)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         fd, PRTE_NAME_PRINT(dst_name)));
 
     /* do we already have this process in our list? */
-    PRRTE_LIST_FOREACH(proct, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
-        if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, dst_name)) {
+    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
+        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &proct->name, dst_name)) {
             /* found it */
             goto SETUP;
         }
     }
     /* if we get here, then we don't yet have this proc in our list */
-    proct = PRRTE_NEW(prrte_iof_proc_t);
+    proct = PRTE_NEW(prte_iof_proc_t);
     proct->name.jobid = dst_name->jobid;
     proct->name.vpid = dst_name->vpid;
-    prrte_list_append(&prrte_iof_hnp_component.procs, &proct->super);
+    prte_list_append(&prte_iof_hnp_component.procs, &proct->super);
 
   SETUP:
     /* set the file descriptor to non-blocking - do this before we setup
      * and activate the read event in case it fires right away
      */
     if((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-        prrte_output(prrte_iof_base_framework.framework_output, "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
+        prte_output(prte_iof_base_framework.framework_output, "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
                     __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
         fcntl(fd, F_SETFL, flags);
     }
     /* get the local jobdata for this proc */
-    if (NULL == (jdata = prrte_get_job_data_object(proct->name.jobid))) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+    if (NULL == (jdata = prte_get_job_data_object(proct->name.jobid))) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
     /* define a read event and activate it */
-    if (src_tag & PRRTE_IOF_STDOUT) {
-        PRRTE_IOF_READ_EVENT(&proct->revstdout, proct, fd, PRRTE_IOF_STDOUT,
-                            prrte_iof_hnp_read_local_handler, false);
-    } else if (src_tag & PRRTE_IOF_STDERR) {
-        PRRTE_IOF_READ_EVENT(&proct->revstderr, proct, fd, PRRTE_IOF_STDERR,
-                            prrte_iof_hnp_read_local_handler, false);
+    if (src_tag & PRTE_IOF_STDOUT) {
+        PRTE_IOF_READ_EVENT(&proct->revstdout, proct, fd, PRTE_IOF_STDOUT,
+                            prte_iof_hnp_read_local_handler, false);
+    } else if (src_tag & PRTE_IOF_STDERR) {
+        PRTE_IOF_READ_EVENT(&proct->revstderr, proct, fd, PRTE_IOF_STDERR,
+                            prte_iof_hnp_read_local_handler, false);
     }
     /* setup any requested output files */
-    if (PRRTE_SUCCESS != (rc = prrte_iof_base_setup_output_files(dst_name, jdata, proct))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_iof_base_setup_output_files(dst_name, jdata, proct))) {
+        PRTE_ERROR_LOG(rc);
         return rc;
     }
 
@@ -203,91 +203,91 @@ static int hnp_push(const prrte_process_name_t* dst_name, prrte_iof_tag_t src_ta
      * been defined!
      */
     if (NULL != proct->revstdout &&
-        (prrte_iof_base.redirect_app_stderr_to_stdout || NULL != proct->revstderr)) {
+        (prte_iof_base.redirect_app_stderr_to_stdout || NULL != proct->revstderr)) {
         if (proct->copy) {
             /* see if there are any wildcard subscribers out there that
              * apply to us */
-            PRRTE_LIST_FOREACH(pptr, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
+            PRTE_LIST_FOREACH(pptr, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
                 if (dst_name->jobid == pptr->name.jobid &&
-                    PRRTE_VPID_WILDCARD == pptr->name.vpid &&
+                    PRTE_VPID_WILDCARD == pptr->name.vpid &&
                     NULL != pptr->subscribers) {
-                    PRRTE_RETAIN(pptr->subscribers);
+                    PRTE_RETAIN(pptr->subscribers);
                     proct->subscribers = pptr->subscribers;
                     break;
                 }
             }
         }
-        PRRTE_IOF_READ_ACTIVATE(proct->revstdout);
-        if (!prrte_iof_base.redirect_app_stderr_to_stdout) {
-            PRRTE_IOF_READ_ACTIVATE(proct->revstderr);
+        PRTE_IOF_READ_ACTIVATE(proct->revstdout);
+        if (!prte_iof_base.redirect_app_stderr_to_stdout) {
+            PRTE_IOF_READ_ACTIVATE(proct->revstderr);
         }
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /* Push data to stdin of a client process
  *
  * (a) a specific name, usually vpid=0; or
  *
- * (b) all procs, specified by vpid=PRRTE_VPID_WILDCARD
+ * (b) all procs, specified by vpid=PRTE_VPID_WILDCARD
  *
  */
-static int push_stdin(const prrte_process_name_t* dst_name,
+static int push_stdin(const prte_process_name_t* dst_name,
                       uint8_t *data, size_t sz)
 {
-    prrte_iof_proc_t *proct, *pptr;
+    prte_iof_proc_t *proct, *pptr;
     int rc;
-    prrte_ns_cmp_bitmask_t mask = PRRTE_NS_CMP_ALL;
+    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL;
 
     /* don't do this if the dst vpid is invalid */
-    if (PRRTE_VPID_INVALID == dst_name->vpid) {
-        return PRRTE_SUCCESS;
+    if (PRTE_VPID_INVALID == dst_name->vpid) {
+        return PRTE_SUCCESS;
     }
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                           "%s iof:hnp pushing stdin for process %s (size %zu)",
-                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                          PRRTE_NAME_PRINT(dst_name),
+                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                          PRTE_NAME_PRINT(dst_name),
                           sz));
 
     /* do we already have this process in our list? */
     proct = NULL;
-    PRRTE_LIST_FOREACH(pptr, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
-        if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &pptr->name, dst_name)) {
+    PRTE_LIST_FOREACH(pptr, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
+        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &pptr->name, dst_name)) {
             /* found it */
             proct = pptr;
         }
     }
     if (NULL == proct) {
-        return PRRTE_ERR_NOT_FOUND;
+        return PRTE_ERR_NOT_FOUND;
     }
 
     /* pass the data to the sink */
 
     /* if the daemon is me, then this is a local sink */
-    if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, PRRTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
-        PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    if (PRTE_EQUAL == prte_util_compare_name_fields(mask, PRTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
+        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s read %d bytes from stdin - writing to %s",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), (int)sz,
-                             PRRTE_NAME_PRINT(&proct->name)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int)sz,
+                             PRTE_NAME_PRINT(&proct->name)));
         /* send the bytes down the pipe - we even send 0 byte events
          * down the pipe so it forces out any preceding data before
          * closing the output stream
          */
         if (NULL != proct->stdinev->wev) {
-            if (PRRTE_IOF_MAX_INPUT_BUFFERS < prrte_iof_base_write_output(&proct->name, PRRTE_IOF_STDIN, data, sz, proct->stdinev->wev)) {
+            if (PRTE_IOF_MAX_INPUT_BUFFERS < prte_iof_base_write_output(&proct->name, PRTE_IOF_STDIN, data, sz, proct->stdinev->wev)) {
                 /* getting too backed up - stop the read event for now if it is still active */
 
-                PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+                PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                      "buffer backed up - holding"));
-                return PRRTE_ERR_OUT_OF_RESOURCE;
+                return PRTE_ERR_OUT_OF_RESOURCE;
             }
         }
     } else {
-        PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s sending %d bytes from stdinev to daemon %s",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), (int)sz,
-                             PRRTE_NAME_PRINT(&proct->stdinev->daemon)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int)sz,
+                             PRTE_NAME_PRINT(&proct->stdinev->daemon)));
 
         /* send the data to the daemon so it can
          * write it to the proc's fd - in this case,
@@ -297,15 +297,15 @@ static int push_stdin(const prrte_process_name_t* dst_name,
          * sent - this will tell the daemon to close
          * the fd for stdin to that proc
          */
-        if( PRRTE_SUCCESS != (rc = prrte_iof_hnp_send_data_to_endpoint(&proct->stdinev->daemon, &proct->stdinev->name, PRRTE_IOF_STDIN, data, sz))) {
+        if( PRTE_SUCCESS != (rc = prte_iof_hnp_send_data_to_endpoint(&proct->stdinev->daemon, &proct->stdinev->name, PRTE_IOF_STDIN, data, sz))) {
             /* if the addressee is unknown, remove the sink from the list */
-            if( PRRTE_ERR_ADDRESSEE_UNKNOWN == rc ) {
-                PRRTE_RELEASE(proct->stdinev);
+            if( PRTE_ERR_ADDRESSEE_UNKNOWN == rc ) {
+                PRTE_RELEASE(proct->stdinev);
             }
         }
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /*
@@ -313,29 +313,29 @@ static int push_stdin(const prrte_process_name_t* dst_name,
  * process so we can record the file descriptor for its stdin.
  */
 
-static int hnp_pull(const prrte_process_name_t* dst_name,
-                    prrte_iof_tag_t src_tag,
+static int hnp_pull(const prte_process_name_t* dst_name,
+                    prte_iof_tag_t src_tag,
                     int fd)
 {
-    prrte_iof_proc_t *proct;
-    prrte_ns_cmp_bitmask_t mask = PRRTE_NS_CMP_ALL;
+    prte_iof_proc_t *proct;
+    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL;
     int flags;
 
     /* this is a local call - only stdin is supported */
-    if (PRRTE_IOF_STDIN != src_tag) {
-        return PRRTE_ERR_NOT_SUPPORTED;
+    if (PRTE_IOF_STDIN != src_tag) {
+        return PRTE_ERR_NOT_SUPPORTED;
     }
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:hnp pulling fd %d for process %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         fd, PRRTE_NAME_PRINT(dst_name)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         fd, PRTE_NAME_PRINT(dst_name)));
 
     /* set the file descriptor to non-blocking - do this before we setup
      * the sink in case it fires right away
      */
     if((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-        prrte_output(prrte_iof_base_framework.framework_output, "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
+        prte_output(prte_iof_base_framework.framework_output, "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
                     __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
@@ -343,62 +343,62 @@ static int hnp_pull(const prrte_process_name_t* dst_name,
     }
 
     /* do we already have this process in our list? */
-    PRRTE_LIST_FOREACH(proct, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
-        if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, dst_name)) {
+    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
+        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &proct->name, dst_name)) {
             /* found it */
             goto SETUP;
         }
     }
     /* if we get here, then we don't yet have this proc in our list */
-    proct = PRRTE_NEW(prrte_iof_proc_t);
+    proct = PRTE_NEW(prte_iof_proc_t);
     proct->name.jobid = dst_name->jobid;
     proct->name.vpid = dst_name->vpid;
-    prrte_list_append(&prrte_iof_hnp_component.procs, &proct->super);
+    prte_list_append(&prte_iof_hnp_component.procs, &proct->super);
 
   SETUP:
-    PRRTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, fd, PRRTE_IOF_STDIN,
+    PRTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, fd, PRTE_IOF_STDIN,
                          stdin_write_handler);
-    proct->stdinev->daemon.jobid = PRRTE_PROC_MY_NAME->jobid;
-    proct->stdinev->daemon.vpid = PRRTE_PROC_MY_NAME->vpid;
+    proct->stdinev->daemon.jobid = PRTE_PROC_MY_NAME->jobid;
+    proct->stdinev->daemon.vpid = PRTE_PROC_MY_NAME->vpid;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /*
  * One of our local procs wants us to close the specifed
  * stream(s), thus terminating any potential io to/from it.
  */
-static int hnp_close(const prrte_process_name_t* peer,
-                     prrte_iof_tag_t source_tag)
+static int hnp_close(const prte_process_name_t* peer,
+                     prte_iof_tag_t source_tag)
 {
-    prrte_iof_proc_t* proct;
-    prrte_ns_cmp_bitmask_t mask = PRRTE_NS_CMP_ALL;
+    prte_iof_proc_t* proct;
+    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL;
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                           "%s iof:hnp closing connection to process %s",
-                          PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                          PRRTE_NAME_PRINT(peer)));
+                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                          PRTE_NAME_PRINT(peer)));
 
-    PRRTE_LIST_FOREACH(proct, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
-        if (PRRTE_EQUAL == prrte_util_compare_name_fields(mask, &proct->name, peer)) {
-            if (PRRTE_IOF_STDIN & source_tag) {
+    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
+        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &proct->name, peer)) {
+            if (PRTE_IOF_STDIN & source_tag) {
                 if (NULL != proct->stdinev) {
-                    PRRTE_RELEASE(proct->stdinev);
+                    PRTE_RELEASE(proct->stdinev);
                 }
                 proct->stdinev = NULL;
             }
-            if ((PRRTE_IOF_STDOUT & source_tag) ||
-                (PRRTE_IOF_STDMERGE & source_tag)) {
+            if ((PRTE_IOF_STDOUT & source_tag) ||
+                (PRTE_IOF_STDMERGE & source_tag)) {
                 if (NULL != proct->revstdout) {
-                    prrte_iof_base_static_dump_output(proct->revstdout);
-                    PRRTE_RELEASE(proct->revstdout);
+                    prte_iof_base_static_dump_output(proct->revstdout);
+                    PRTE_RELEASE(proct->revstdout);
                 }
                 proct->revstdout = NULL;
             }
-            if (PRRTE_IOF_STDERR & source_tag) {
+            if (PRTE_IOF_STDERR & source_tag) {
                 if (NULL != proct->revstderr) {
-                    prrte_iof_base_static_dump_output(proct->revstderr);
-                    PRRTE_RELEASE(proct->revstderr);
+                    prte_iof_base_static_dump_output(proct->revstderr);
+                    PRTE_RELEASE(proct->revstderr);
                 }
                 proct->revstderr = NULL;
             }
@@ -406,52 +406,52 @@ static int hnp_close(const prrte_process_name_t* peer,
             if (NULL == proct->stdinev &&
                 NULL == proct->revstdout &&
                 NULL == proct->revstderr) {
-                prrte_list_remove_item(&prrte_iof_hnp_component.procs, &proct->super);
-                PRRTE_RELEASE(proct);
+                prte_list_remove_item(&prte_iof_hnp_component.procs, &proct->super);
+                PRTE_RELEASE(proct);
             }
             break;
         }
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-static void hnp_complete(const prrte_job_t *jdata)
+static void hnp_complete(const prte_job_t *jdata)
 {
-    prrte_iof_proc_t *proct, *next;
+    prte_iof_proc_t *proct, *next;
 
     /* cleanout any lingering sinks */
-    PRRTE_LIST_FOREACH_SAFE(proct, next, &prrte_iof_hnp_component.procs, prrte_iof_proc_t) {
+    PRTE_LIST_FOREACH_SAFE(proct, next, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
         if (jdata->jobid == proct->name.jobid) {
-            prrte_list_remove_item(&prrte_iof_hnp_component.procs, &proct->super);
+            prte_list_remove_item(&prte_iof_hnp_component.procs, &proct->super);
             if (NULL != proct->revstdout) {
-                prrte_iof_base_static_dump_output(proct->revstdout);
-                PRRTE_RELEASE(proct->revstdout);
+                prte_iof_base_static_dump_output(proct->revstdout);
+                PRTE_RELEASE(proct->revstdout);
             }
             proct->revstdout = NULL;
             if (NULL != proct->revstderr) {
-                prrte_iof_base_static_dump_output(proct->revstderr);
-                PRRTE_RELEASE(proct->revstderr);
+                prte_iof_base_static_dump_output(proct->revstderr);
+                PRTE_RELEASE(proct->revstderr);
             }
             proct->revstderr = NULL;
-            PRRTE_RELEASE(proct);
+            PRTE_RELEASE(proct);
         }
     }
 }
 
 static int finalize(void)
 {
-    prrte_iof_write_event_t *wev;
-    prrte_iof_proc_t *proct;
+    prte_iof_write_event_t *wev;
+    prte_iof_proc_t *proct;
     bool dump;
-    prrte_iof_write_output_t *output;
+    prte_iof_write_output_t *output;
     int num_written;
 
     /* check if anything is still trying to be written out */
-    wev = prrte_iof_base.iof_write_stdout->wev;
-    if (!prrte_list_is_empty(&wev->outputs)) {
+    wev = prte_iof_base.iof_write_stdout->wev;
+    if (!prte_list_is_empty(&wev->outputs)) {
         dump = false;
         /* make one last attempt to write this out */
-        while (NULL != (output = (prrte_iof_write_output_t*)prrte_list_remove_first(&wev->outputs))) {
+        while (NULL != (output = (prte_iof_write_output_t*)prte_list_remove_first(&wev->outputs))) {
             if (!dump) {
                 num_written = write(wev->fd, output->data, output->numbytes);
                 if (num_written < output->numbytes) {
@@ -459,16 +459,16 @@ static int finalize(void)
                     dump = true;
                 }
             }
-            PRRTE_RELEASE(output);
+            PRTE_RELEASE(output);
         }
     }
-    if (!prrte_xml_output) {
+    if (!prte_xml_output) {
         /* we only opened stderr channel if we are NOT doing xml output */
-        wev = prrte_iof_base.iof_write_stderr->wev;
-        if (!prrte_list_is_empty(&wev->outputs)) {
+        wev = prte_iof_base.iof_write_stderr->wev;
+        if (!prte_list_is_empty(&wev->outputs)) {
             dump = false;
             /* make one last attempt to write this out */
-            while (NULL != (output = (prrte_iof_write_output_t*)prrte_list_remove_first(&wev->outputs))) {
+            while (NULL != (output = (prte_iof_write_output_t*)prte_list_remove_first(&wev->outputs))) {
                 if (!dump) {
                     num_written = write(wev->fd, output->data, output->numbytes);
                     if (num_written < output->numbytes) {
@@ -476,32 +476,32 @@ static int finalize(void)
                         dump = true;
                     }
                 }
-                PRRTE_RELEASE(output);
+                PRTE_RELEASE(output);
             }
         }
     }
 
     /* cycle thru the procs and ensure all their output was delivered
      * if they were writing to files */
-    while (NULL != (proct = (prrte_iof_proc_t*)prrte_list_remove_first(&prrte_iof_hnp_component.procs))) {
+    while (NULL != (proct = (prte_iof_proc_t*)prte_list_remove_first(&prte_iof_hnp_component.procs))) {
         if (NULL != proct->revstdout) {
-            prrte_iof_base_static_dump_output(proct->revstdout);
+            prte_iof_base_static_dump_output(proct->revstdout);
         }
         if (NULL != proct->revstderr) {
-            prrte_iof_base_static_dump_output(proct->revstderr);
+            prte_iof_base_static_dump_output(proct->revstderr);
         }
-        PRRTE_RELEASE(proct);
+        PRTE_RELEASE(proct);
     }
-    PRRTE_DESTRUCT(&prrte_iof_hnp_component.procs);
+    PRTE_DESTRUCT(&prte_iof_hnp_component.procs);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 int hnp_ft_event(int state) {
     /*
      * Replica doesn't need to do anything for a checkpoint
      */
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
@@ -510,48 +510,48 @@ int hnp_ft_event(int state) {
  */
 static void stdin_write_handler(int fd, short event, void *cbdata)
 {
-    prrte_iof_sink_t *sink = (prrte_iof_sink_t*)cbdata;
-    prrte_iof_write_event_t *wev = sink->wev;
-    prrte_list_item_t *item;
-    prrte_iof_write_output_t *output;
+    prte_iof_sink_t *sink = (prte_iof_sink_t*)cbdata;
+    prte_iof_write_event_t *wev = sink->wev;
+    prte_list_item_t *item;
+    prte_iof_write_output_t *output;
     int num_written, total_written = 0;
 
-    PRRTE_ACQUIRE_OBJECT(sink);
+    PRTE_ACQUIRE_OBJECT(sink);
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s hnp:stdin:write:handler writing data to %d",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          wev->fd));
 
     wev->pending = false;
 
-    while (NULL != (item = prrte_list_remove_first(&wev->outputs))) {
-        output = (prrte_iof_write_output_t*)item;
+    while (NULL != (item = prte_list_remove_first(&wev->outputs))) {
+        output = (prte_iof_write_output_t*)item;
         /* if an abnormal termination has occurred, just dump
          * this data as we are aborting
          */
-        if (prrte_abnormal_term_ordered) {
-            PRRTE_RELEASE(output);
+        if (prte_abnormal_term_ordered) {
+            PRTE_RELEASE(output);
             continue;
         }
         if (0 == output->numbytes) {
             /* this indicates we are to close the fd - there is
              * nothing to write
              */
-            PRRTE_OUTPUT_VERBOSE((20, prrte_iof_base_framework.framework_output,
+            PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                                  "%s iof:hnp closing fd %d on write event due to zero bytes output",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), wev->fd));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
             goto finish;
         }
         num_written = write(wev->fd, output->data, output->numbytes);
-        PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s hnp:stdin:write:handler wrote %d bytes",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              num_written));
         if (num_written < 0) {
             if (EAGAIN == errno || EINTR == errno) {
                 /* push this item back on the front of the list */
-                prrte_list_prepend(&wev->outputs, item);
+                prte_list_prepend(&wev->outputs, item);
                 /* leave the write event running so it will call us again
                  * when the fd is ready.
                  */
@@ -560,85 +560,85 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
             /* otherwise, something bad happened so all we can do is declare an
              * error and abort
              */
-            PRRTE_RELEASE(output);
-            PRRTE_OUTPUT_VERBOSE((20, prrte_iof_base_framework.framework_output,
+            PRTE_RELEASE(output);
+            PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                                  "%s iof:hnp closing fd %d on write event due to negative bytes written",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), wev->fd));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
             goto finish;
         } else if (num_written < output->numbytes) {
-            PRRTE_OUTPUT_VERBOSE((1, prrte_iof_base_framework.framework_output,
+            PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                  "%s hnp:stdin:write:handler incomplete write %d - adjusting data",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), num_written));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_written));
             /* incomplete write - adjust data to avoid duplicate output */
             memmove(output->data, &output->data[num_written], output->numbytes - num_written);
             /* push this item back on the front of the list */
-            prrte_list_prepend(&wev->outputs, item);
+            prte_list_prepend(&wev->outputs, item);
             /* leave the write event running so it will call us again
              * when the fd is ready.
              */
             goto re_enter;
         }
-        PRRTE_RELEASE(output);
+        PRTE_RELEASE(output);
 
         total_written += num_written;
-        if ((PRRTE_IOF_SINK_BLOCKSIZE <= total_written) && wev->always_writable) {
+        if ((PRTE_IOF_SINK_BLOCKSIZE <= total_written) && wev->always_writable) {
             goto re_enter;
         }
     }
     goto check;
 
   re_enter:
-    PRRTE_IOF_SINK_ACTIVATE(wev);
+    PRTE_IOF_SINK_ACTIVATE(wev);
 
   check:
-    if (sink->closed && 0 == prrte_list_get_size(&wev->outputs)) {
+    if (sink->closed && 0 == prte_list_get_size(&wev->outputs)) {
         /* the sink has already been closed and everything was written, time to release it */
-        PRRTE_RELEASE(sink);
+        PRTE_RELEASE(sink);
     }
     return;
 
   finish:
-    PRRTE_RELEASE(wev);
+    PRTE_RELEASE(wev);
     sink->wev = NULL;
     return;
 }
 
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
-    prrte_pmix_lock_t *lk = (prrte_pmix_lock_t*)cbdata;
+    prte_pmix_lock_t *lk = (prte_pmix_lock_t*)cbdata;
 
-    PRRTE_POST_OBJECT(lk);
-    lk->status = prrte_pmix_convert_status(status);
-    PRRTE_PMIX_WAKEUP_THREAD(lk);
+    PRTE_POST_OBJECT(lk);
+    lk->status = prte_pmix_convert_status(status);
+    PRTE_PMIX_WAKEUP_THREAD(lk);
 }
 
-static int hnp_output(const prrte_process_name_t* peer,
-                      prrte_iof_tag_t source_tag,
+static int hnp_output(const prte_process_name_t* peer,
+                      prte_iof_tag_t source_tag,
                       const char *msg)
 {
     pmix_iof_channel_t pchan;
     pmix_proc_t source;
     pmix_byte_object_t bo;
-    prrte_pmix_lock_t lock;
+    prte_pmix_lock_t lock;
     pmix_status_t rc;
     int ret;
 
-    if (PRRTE_PROC_IS_MASTER) {
-        PRRTE_PMIX_CONVERT_NAME(ret, &source, peer);
-        if (PRRTE_SUCCESS != ret) {
-            PRRTE_ERROR_LOG(ret);
+    if (PRTE_PROC_IS_MASTER) {
+        PRTE_PMIX_CONVERT_NAME(ret, &source, peer);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
         }
         pchan = 0;
-        if (PRRTE_IOF_STDIN & source_tag) {
+        if (PRTE_IOF_STDIN & source_tag) {
             pchan |= PMIX_FWD_STDIN_CHANNEL;
         }
-        if (PRRTE_IOF_STDOUT & source_tag) {
+        if (PRTE_IOF_STDOUT & source_tag) {
             pchan |= PMIX_FWD_STDOUT_CHANNEL;
         }
-        if (PRRTE_IOF_STDERR & source_tag) {
+        if (PRTE_IOF_STDERR & source_tag) {
             pchan |= PMIX_FWD_STDERR_CHANNEL;
         }
-        if (PRRTE_IOF_STDDIAG & source_tag) {
+        if (PRTE_IOF_STDDIAG & source_tag) {
             pchan |= PMIX_FWD_STDDIAG_CHANNEL;
         }
         /* setup the byte object */
@@ -647,24 +647,24 @@ static int hnp_output(const prrte_process_name_t* peer,
             bo.bytes = (char*)msg;
             bo.size = strlen(msg)+1;
         }
-        PRRTE_PMIX_CONSTRUCT_LOCK(&lock);
+        PRTE_PMIX_CONSTRUCT_LOCK(&lock);
         rc = PMIx_server_IOF_deliver(&source, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
         if (PMIX_SUCCESS != rc) {
-            ret = prrte_pmix_convert_status(rc);
+            ret = prte_pmix_convert_status(rc);
         } else {
             /* wait for completion */
-            PRRTE_PMIX_WAIT_THREAD(&lock);
+            PRTE_PMIX_WAIT_THREAD(&lock);
             ret = lock.status;
         }
-        PRRTE_PMIX_DESTRUCT_LOCK(&lock);
+        PRTE_PMIX_DESTRUCT_LOCK(&lock);
         return ret;
     } else {
         /* output this to our local output */
-        if (PRRTE_IOF_STDOUT & source_tag || prrte_xml_output) {
-            prrte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), prrte_iof_base.iof_write_stdout->wev);
+        if (PRTE_IOF_STDOUT & source_tag || prte_xml_output) {
+            prte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), prte_iof_base.iof_write_stdout->wev);
         } else {
-            prrte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), prrte_iof_base.iof_write_stderr->wev);
+            prte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), prte_iof_base.iof_write_stderr->wev);
         }
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

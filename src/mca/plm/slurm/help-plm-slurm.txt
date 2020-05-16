@@ -11,6 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -18,28 +19,28 @@
 # $HEADER$
 #
 [multiple-prefixes]
-The SLURM process starter for PRRTE does not support multiple
+The SLURM process starter for PRTE does not support multiple
 different --prefix options to mpirun.  You can specify at most one
 unique value for the --prefix option (in any of the application
 contexts); it will be applied to all the application contexts of your
 parallel job.
 
-Put simply, you must have PRRTE installed in the same location on
+Put simply, you must have PRTE installed in the same location on
 all of your SLURM nodes.
 
 Multiple different --prefix options were specified to mpirun.  This is
-a fatal error for the SLURM process starter in PRRTE.
+a fatal error for the SLURM process starter in PRTE.
 
 The first two prefix values supplied were:
     %s
 and %s
 #
 [no-hosts-in-list]
-The SLURM process starter for PRRTE didn't find any hosts in
+The SLURM process starter for PRTE didn't find any hosts in
 the map for this application. This can be caused by a lack of
-an allocation, or by an error in the PRRTE code. Please check
+an allocation, or by an error in the PRTE code. Please check
 to ensure you have a SLURM allocation. If you do, then please pass
-the error to the PRRTE user's mailing list for assistance.
+the error to the PRTE user's mailing list for assistance.
 #
 [no-local-slave-support]
 A call was made to launch a local slave process, but no support

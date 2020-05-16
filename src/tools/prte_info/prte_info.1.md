@@ -1,6 +1,6 @@
 # NAME
 
-prte_info - Display information about the PRRTE installation
+prte_info - Display information about the PRTE installation
 
 # SYNOPSIS
 
@@ -10,13 +10,13 @@ prte-info [options]
 
 # DESCRIPTION
 
-`prte_info` provides detailed information about the PRRTE
+`prte_info` provides detailed information about the PRTE
 installation. It can be useful for at least three common scenarios:
 
-1. Checking local configuration and seeing how PRRTE was installed.
-1. Submitting bug reports / help requests to the PRRTE community (see
-   [https://github.com/openpmix/prrte/issues](https://github.com/openpmix/prrte/issues)).
-1. Seeing a list of installed PRRTE plugins and querying what MCA
+1. Checking local configuration and seeing how PRTE was installed.
+1. Submitting bug reports / help requests to the PRTE community (see
+   [https://github.com/openpmix/prte/issues](https://github.com/openpmix/prte/issues)).
+1. Seeing a list of installed PRTE plugins and querying what MCA
    parameters they support.
 
 # OPTIONS
@@ -29,7 +29,7 @@ installation. It can be useful for at least three common scenarios:
 
 `--arch`
 
-:   Show architecture PRRTE was compiled on
+:   Show architecture PRTE was compiled on
 
 `-c|--config`
 
@@ -45,7 +45,7 @@ installation. It can be useful for at least three common scenarios:
 
 `--hostname`
 
-:   Show the hostname on which PRRTE was configured and built.
+:   Show the hostname on which PRTE was configured and built.
 
 `--internal`
 
@@ -74,7 +74,7 @@ installation. It can be useful for at least three common scenarios:
 
 `--path <type>`
 
-:   Show paths that PRRTE was configured with. Accepts the following
+:   Show paths that PRTE was configured with. Accepts the following
     parameters: `prefix`, `bindir`, `libdir`, `incdir`, `pkglibdir`,
     `sysconfdir`.
 
@@ -85,7 +85,7 @@ installation. It can be useful for at least three common scenarios:
 
 `-v|--version <component> <scope>`
 
-:   Show version of PRRTE or a component. <component> can be the
+:   Show version of PRTE or a component. <component> can be the
     keywords `ompi` or `all`, the name of a framework (e.g., `coll`
     shows all components in the `coll` framework), or the name of a
     specific component (e.g., `pls:rsh` shows the information from the
@@ -116,11 +116,11 @@ installation. It can be useful for at least three common scenarios:
 
 `prte_info --path bindir`
 
-:   Show the "bindir" that PRRTE was configured with.
+:   Show the "bindir" that PRTE was configured with.
 
-`prte_info --version prrte full --parsable`
+`prte_info --version prte full --parsable`
 
-:   Show the full version numbers of PRRTE (including the PRRTE version
+:   Show the full version numbers of PRTE (including the PRTE version
     number) in a machine-readable format.
 
 `prte_info --version rmcast major`
@@ -135,14 +135,14 @@ installation. It can be useful for at least three common scenarios:
 
 `prte_info --all`
 
-:   Show `all` information about the PRRTE installation, including all
+:   Show `all` information about the PRTE installation, including all
     components that can be found, the MCA parameters that they support,
-    versions of PRRTE and the components, etc.
+    versions of PRTE and the components, etc.
 
 # AUTHORS
 
-The PRRTE maintainers -- see
-[https://github.com/openpmix/prrte](https://github.com/openpmix/prrte)
+The PRTE maintainers -- see
+[https://github.com/openpmix/prte](https://github.com/openpmix/prte)
 or the file `AUTHORS`.
 
 This manual page was originally contributed by Dirk Eddelbuettel

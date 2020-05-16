@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009      Institut National de Recherche en Informatique
  *                         et Automatique. All rights reserved.
- * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
@@ -25,7 +25,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <sys/types.h>
@@ -43,7 +43,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/mca/pstat/base/base.h"
 #include "src/util/arch.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 #include "src/util/os_path.h"
 
 #include "src/mca/rtc/base/base.h"
@@ -67,9 +67,9 @@
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
-#include "src/runtime/prrte_wait.h"
-#include "src/runtime/prrte_globals.h"
-#include "src/runtime/prrte_quit.h"
+#include "src/runtime/prte_wait.h"
+#include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_quit.h"
 #include "src/prted/pmix/pmix_server.h"
 
 #include "src/mca/ess/base/base.h"
@@ -77,38 +77,38 @@
 /* local globals */
 static bool plm_in_use=false;
 static bool signals_set=false;
-static prrte_event_t term_handler;
-static prrte_event_t int_handler;
-static prrte_event_t epipe_handler;
+static prte_event_t term_handler;
+static prte_event_t int_handler;
+static prte_event_t epipe_handler;
 static char *log_path = NULL;
 static void shutdown_signal(int fd, short flags, void *arg);
 static void epipe_signal_callback(int fd, short flags, void *arg);
 static void signal_forward_callback(int fd, short event, void *arg);
-static prrte_event_t *forward_signals_events = NULL;
+static prte_event_t *forward_signals_events = NULL;
 
-static void setup_sighandler(int signal, prrte_event_t *ev,
-                             prrte_event_cbfunc_t cbfunc)
+static void setup_sighandler(int signal, prte_event_t *ev,
+                             prte_event_cbfunc_t cbfunc)
 {
-    prrte_event_signal_set(prrte_event_base, ev, signal, cbfunc, ev);
-    prrte_event_set_priority(ev, PRRTE_ERROR_PRI);
-    prrte_event_signal_add(ev, NULL);
+    prte_event_signal_set(prte_event_base, ev, signal, cbfunc, ev);
+    prte_event_set_priority(ev, PRTE_ERROR_PRI);
+    prte_event_signal_add(ev, NULL);
 }
 
 
-int prrte_ess_base_prted_setup(void)
+int prte_ess_base_prted_setup(void)
 {
-    int ret = PRRTE_ERROR;
+    int ret = PRTE_ERROR;
     int fd;
     char log_file[PATH_MAX];
     char *error = NULL;
-    prrte_job_t *jdata;
-    prrte_proc_t *proc;
-    prrte_app_context_t *app;
+    prte_job_t *jdata;
+    prte_proc_t *proc;
+    prte_app_context_t *app;
     char *param;
     hwloc_obj_t obj;
     unsigned i, j;
-    prrte_topology_t *t;
-    prrte_ess_base_signal_t *sig;
+    prte_topology_t *t;
+    prte_ess_base_signal_t *sig;
     int idx;
     pmix_nspace_t nspace;
 
@@ -122,15 +122,15 @@ int prrte_ess_base_prted_setup(void)
     setup_sighandler(SIGTERM, &term_handler, shutdown_signal);
     setup_sighandler(SIGINT, &int_handler, shutdown_signal);
     /** setup callbacks for signals we should forward */
-    if (0 < (idx = prrte_list_get_size(&prrte_ess_base_signals))) {
-        forward_signals_events = (prrte_event_t*)malloc(sizeof(prrte_event_t) * idx);
+    if (0 < (idx = prte_list_get_size(&prte_ess_base_signals))) {
+        forward_signals_events = (prte_event_t*)malloc(sizeof(prte_event_t) * idx);
         if (NULL == forward_signals_events) {
-            ret = PRRTE_ERR_OUT_OF_RESOURCE;
+            ret = PRTE_ERR_OUT_OF_RESOURCE;
             error = "unable to malloc";
             goto error;
         }
         idx = 0;
-        PRRTE_LIST_FOREACH(sig, &prrte_ess_base_signals, prrte_ess_base_signal_t) {
+        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t) {
             setup_sighandler(sig->signal, forward_signals_events + idx, signal_forward_callback);
             ++idx;
         }
@@ -139,20 +139,20 @@ int prrte_ess_base_prted_setup(void)
 
 
     /* get the local topology */
-    if (NULL == prrte_hwloc_topology) {
-        if (PRRTE_SUCCESS != (ret = prrte_hwloc_base_get_topology())) {
+    if (NULL == prte_hwloc_topology) {
+        if (PRTE_SUCCESS != (ret = prte_hwloc_base_get_topology())) {
             error = "topology discovery";
             goto error;
         }
     }
     /* generate the signature */
-    prrte_topo_signature = prrte_hwloc_base_get_topo_signature(prrte_hwloc_topology);
+    prte_topo_signature = prte_hwloc_base_get_topo_signature(prte_hwloc_topology);
     /* remove the hostname from the topology. Unfortunately, hwloc
      * decided to add the source hostname to the "topology", thus
      * rendering it unusable as a pure topological description. So
      * we remove that information here.
      */
-    obj = hwloc_get_root_obj(prrte_hwloc_topology);
+    obj = hwloc_get_root_obj(prte_hwloc_topology);
     for (i=0; i < obj->infos_count; i++) {
         if (NULL == obj->infos[i].name ||
             NULL == obj->infos[i].value) {
@@ -171,107 +171,107 @@ int prrte_ess_base_prted_setup(void)
             break;
         }
     }
-    if (15 < prrte_output_get_verbosity(prrte_ess_base_framework.framework_output)) {
-        prrte_output(0, "%s Topology Info:", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-        prrte_dss.dump(0, prrte_hwloc_topology, PRRTE_HWLOC_TOPO);
+    if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+        prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        prte_dss.dump(0, prte_hwloc_topology, PRTE_HWLOC_TOPO);
     }
 
-    /* open and setup the prrte_pstat framework so we can provide
+    /* open and setup the prte_pstat framework so we can provide
      * process stats if requested
      */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_pstat_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_pstat_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_pstat_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_pstat_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_pstat_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_pstat_base_select";
+    if (PRTE_SUCCESS != (ret = prte_pstat_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_pstat_base_select";
         goto error;
     }
 
     /* define the HNP name */
-    PRRTE_PROC_MY_HNP->jobid = PRRTE_PROC_MY_NAME->jobid;
-    PRRTE_PROC_MY_HNP->vpid = 0;
+    PRTE_PROC_MY_HNP->jobid = PRTE_PROC_MY_NAME->jobid;
+    PRTE_PROC_MY_HNP->vpid = 0;
     /* get my nspace */
-    PRRTE_PMIX_CREATE_NSPACE(nspace, PRRTE_PROC_MY_NAME->jobid);
+    PRTE_PMIX_CREATE_NSPACE(nspace, PRTE_PROC_MY_NAME->jobid);
 
     /* open and setup the state machine */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_state_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_state_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_state_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_state_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_state_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_state_base_select";
+    if (PRTE_SUCCESS != (ret = prte_state_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_state_base_select";
         goto error;
     }
     /* open the errmgr */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_errmgr_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_errmgr_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_errmgr_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_errmgr_base_open";
         goto error;
     }
     /* some environments allow remote launches - e.g., ssh - so
      * open and select something -only- if we are given
      * a specific module to use
      */
-    (void) prrte_mca_base_var_env_name("plm", &param);
+    (void) prte_mca_base_var_env_name("plm", &param);
     plm_in_use = !!(getenv(param));
     free (param);
     if (plm_in_use)  {
-        if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_plm_base_framework, 0))) {
-            PRRTE_ERROR_LOG(ret);
-            error = "prrte_plm_base_open";
+        if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_plm_base_framework, 0))) {
+            PRTE_ERROR_LOG(ret);
+            error = "prte_plm_base_open";
             goto error;
         }
-        if (PRRTE_SUCCESS != (ret = prrte_plm_base_select())) {
-            PRRTE_ERROR_LOG(ret);
-            error = "prrte_plm_base_select";
+        if (PRTE_SUCCESS != (ret = prte_plm_base_select())) {
+            PRTE_ERROR_LOG(ret);
+            error = "prte_plm_base_select";
             goto error;
         }
     }
     /* setup my session directory here as the OOB may need it */
-    if (prrte_create_session_dirs) {
-        PRRTE_OUTPUT_VERBOSE((2, prrte_ess_base_framework.framework_output,
+    if (prte_create_session_dirs) {
+        PRTE_OUTPUT_VERBOSE((2, prte_ess_base_framework.framework_output,
                              "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                             (NULL == prrte_process_info.tmpdir_base) ? "UNDEF" : prrte_process_info.tmpdir_base,
-                             prrte_process_info.nodename));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
+                             prte_process_info.nodename));
 
         /* take a pass thru the session directory code to fillin the
          * tmpdir names - don't create anything yet
          */
-        if (PRRTE_SUCCESS != (ret = prrte_session_dir(false, PRRTE_PROC_MY_NAME))) {
-            PRRTE_ERROR_LOG(ret);
-            error = "prrte_session_dir define";
+        if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
+            PRTE_ERROR_LOG(ret);
+            error = "prte_session_dir define";
             goto error;
         }
         /* clear the session directory just in case there are
          * stale directories laying around
          */
-        prrte_session_dir_cleanup(PRRTE_JOBID_WILDCARD);
+        prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
         /* now actually create the directory tree */
-        if (PRRTE_SUCCESS != (ret = prrte_session_dir(true, PRRTE_PROC_MY_NAME))) {
-            PRRTE_ERROR_LOG(ret);
-            error = "prrte_session_dir";
+        if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
+            PRTE_ERROR_LOG(ret);
+            error = "prte_session_dir";
             goto error;
         }
-        /* set the prrte_output env file location to be in the
+        /* set the prte_output env file location to be in the
          * proc-specific session directory. */
-        prrte_output_set_output_file_info(prrte_process_info.proc_session_dir,
+        prte_output_set_output_file_info(prte_process_info.proc_session_dir,
                                          "output-", NULL, NULL);
         /* setup stdout/stderr */
-        if (prrte_debug_daemons_file_flag) {
+        if (prte_debug_daemons_file_flag) {
             /* if we are debugging to a file, then send stdout/stderr to
              * the prted log file
              */
 
             /* define a log file name in the session directory */
             snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log",
-                     nspace, prrte_process_info.nodename);
-            log_path = prrte_os_path(false, prrte_process_info.top_session_dir,
+                     nspace, prte_process_info.nodename);
+            log_path = prte_os_path(false, prte_process_info.top_session_dir,
                                     log_file, NULL);
 
             fd = open(log_path, O_RDWR|O_CREAT|O_TRUNC, 0640);
@@ -291,167 +291,167 @@ int prrte_ess_base_prted_setup(void)
     }
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
-    jdata = PRRTE_NEW(prrte_job_t);
-    jdata->jobid = PRRTE_PROC_MY_NAME->jobid;
+    jdata = PRTE_NEW(prte_job_t);
+    jdata->jobid = PRTE_PROC_MY_NAME->jobid;
     PMIX_LOAD_NSPACE(jdata->nspace, nspace);
-    prrte_hash_table_set_value_uint32(prrte_job_data, jdata->jobid, jdata);
+    prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, jdata);
     /* every job requires at least one app */
-    app = PRRTE_NEW(prrte_app_context_t);
-    prrte_pointer_array_set_item(jdata->apps, 0, app);
+    app = PRTE_NEW(prte_app_context_t);
+    prte_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps++;
 
     /* create and store a proc object for us */
-    proc = PRRTE_NEW(prrte_proc_t);
-    proc->name.jobid = PRRTE_PROC_MY_NAME->jobid;
-    proc->name.vpid = PRRTE_PROC_MY_NAME->vpid;
+    proc = PRTE_NEW(prte_proc_t);
+    proc->name.jobid = PRTE_PROC_MY_NAME->jobid;
+    proc->name.vpid = PRTE_PROC_MY_NAME->vpid;
     proc->job = jdata;
     proc->rank = proc->name.vpid;
-    proc->pid = prrte_process_info.pid;
-    proc->state = PRRTE_PROC_STATE_RUNNING;
-    prrte_pointer_array_set_item(jdata->procs, proc->name.vpid, proc);
+    proc->pid = prte_process_info.pid;
+    proc->state = PRTE_PROC_STATE_RUNNING;
+    prte_pointer_array_set_item(jdata->procs, proc->name.vpid, proc);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
-    jdata->state = PRRTE_JOB_STATE_RUNNING;
+    jdata->state = PRTE_JOB_STATE_RUNNING;
     /* obviously, we have "reported" */
     jdata->num_reported = 1;
 
     /* setup the PMIx server - we need this here in case the
      * communications infrastructure wants to register
      * information */
-    if (PRRTE_SUCCESS != (ret = pmix_server_init())) {
+    if (PRTE_SUCCESS != (ret = pmix_server_init())) {
         /* the server code already barked, so let's be quiet */
-        ret = PRRTE_ERR_SILENT;
+        ret = PRTE_ERR_SILENT;
         error = "pmix_server_init";
         goto error;
     }
 
     /* Setup the communication infrastructure */
     /* Routed system */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_routed_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_routed_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_routed_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_routed_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_routed_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_routed_base_select";
+    if (PRTE_SUCCESS != (ret = prte_routed_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_routed_base_select";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_prtereachable_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_prtereachable_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prtereachable_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_prtereachable_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_reachable_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_prtereachable_base_select";
+    if (PRTE_SUCCESS != (ret = prte_reachable_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_prtereachable_base_select";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_oob_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_oob_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_oob_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_oob_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_oob_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_oob_base_select";
+    if (PRTE_SUCCESS != (ret = prte_oob_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_oob_base_select";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_rml_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_rml_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_rml_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_rml_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_rml_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_rml_base_select";
+    if (PRTE_SUCCESS != (ret = prte_rml_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_rml_base_select";
         goto error;
     }
 
     /* it is now safe to start the pmix server */
     pmix_server_start();
 
-    if (NULL != prrte_process_info.my_hnp_uri) {
+    if (NULL != prte_process_info.my_hnp_uri) {
         pmix_value_t val;
         pmix_proc_t proc;
 
         /* extract the HNP's name so we can update the routing table */
-        if (PRRTE_SUCCESS != (ret = prrte_rml_base_parse_uris(prrte_process_info.my_hnp_uri,
-                                                              PRRTE_PROC_MY_HNP, NULL))) {
-            PRRTE_ERROR_LOG(ret);
-            error = "prrte_rml_parse_HNP";
+        if (PRTE_SUCCESS != (ret = prte_rml_base_parse_uris(prte_process_info.my_hnp_uri,
+                                                              PRTE_PROC_MY_HNP, NULL))) {
+            PRTE_ERROR_LOG(ret);
+            error = "prte_rml_parse_HNP";
             goto error;
         }
         /* Set the contact info in the RML - this won't actually establish
          * the connection, but just tells the RML how to reach the HNP
          * if/when we attempt to send to it
          */
-        PMIX_VALUE_LOAD(&val, prrte_process_info.my_hnp_uri, PRRTE_STRING);
-        PRRTE_PMIX_CONVERT_NAME(ret, &proc, PRRTE_PROC_MY_HNP);
-        if (PRRTE_SUCCESS != ret) {
-            PRRTE_ERROR_LOG(ret);
+        PMIX_VALUE_LOAD(&val, prte_process_info.my_hnp_uri, PRTE_STRING);
+        PRTE_PMIX_CONVERT_NAME(ret, &proc, PRTE_PROC_MY_HNP);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
             error = "convert_name";
             goto error;
         }
         if (PMIX_SUCCESS != PMIx_Store_internal(&proc, PMIX_PROC_URI, &val)) {
             PMIX_VALUE_DESTRUCT(&val);
             error = "store HNP URI";
-            ret = PRRTE_ERROR;
+            ret = PRTE_ERROR;
             goto error;
         }
         PMIX_VALUE_DESTRUCT(&val);
     }
 
     /* select the errmgr */
-    if (PRRTE_SUCCESS != (ret = prrte_errmgr_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_errmgr_base_select";
+    if (PRTE_SUCCESS != (ret = prte_errmgr_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_errmgr_base_select";
         goto error;
     }
 
     /*
      * Group communications
      */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_grpcomm_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_grpcomm_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_grpcomm_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_grpcomm_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_grpcomm_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_grpcomm_base_select";
+    if (PRTE_SUCCESS != (ret = prte_grpcomm_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_grpcomm_base_select";
         goto error;
     }
     /* Open/select the odls */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_odls_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_odls_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_odls_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_odls_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_odls_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_odls_base_select";
+    if (PRTE_SUCCESS != (ret = prte_odls_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_odls_base_select";
         goto error;
     }
     /* Open/select the rtc */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_rtc_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_rtc_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_rtc_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_rtc_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_rtc_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_rtc_base_select";
+    if (PRTE_SUCCESS != (ret = prte_rtc_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_rtc_base_select";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_rmaps_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_rmaps_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_rmaps_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_rmaps_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_rmaps_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_rmaps_base_select";
+    if (PRTE_SUCCESS != (ret = prte_rmaps_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_rmaps_base_select";
         goto error;
     }
 
@@ -459,16 +459,16 @@ int prrte_ess_base_prted_setup(void)
      * will have reset our topology. Ensure we always get the right
      * one by setting our node topology afterwards
      */
-    t = PRRTE_NEW(prrte_topology_t);
-    t->topo = prrte_hwloc_topology;
+    t = PRTE_NEW(prte_topology_t);
+    t->topo = prte_hwloc_topology;
     /* save the signature */
-    t->sig = strdup(prrte_topo_signature);
+    t->sig = strdup(prte_topo_signature);
     /* save the topology - note that this may have to be moved later
      * to ensure a common array position with the DVM master */
-    prrte_pointer_array_add(prrte_node_topologies, t);
-    if (15 < prrte_output_get_verbosity(prrte_ess_base_framework.framework_output)) {
-        prrte_output(0, "%s Topology Info:", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
-        prrte_dss.dump(0, prrte_hwloc_topology, PRRTE_HWLOC_TOPO);
+    prte_pointer_array_add(prte_node_topologies, t);
+    if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+        prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        prte_dss.dump(0, prte_hwloc_topology, PRTE_HWLOC_TOPO);
     }
 
     /* Now provide a chance for the PLM
@@ -479,62 +479,62 @@ int prrte_ess_base_prted_setup(void)
      * prted has no need of the proxy PLM at all
      */
     if (plm_in_use) {
-        if (PRRTE_SUCCESS != (ret = prrte_plm.init())) {
-            PRRTE_ERROR_LOG(ret);
-            error = "prrte_plm_init";
+        if (PRTE_SUCCESS != (ret = prte_plm.init())) {
+            PRTE_ERROR_LOG(ret);
+            error = "prte_plm_init";
             goto error;
         }
     }
 
     /* setup I/O forwarding system - must come after we init routes */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_iof_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_iof_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_iof_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_iof_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_iof_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_iof_base_select";
+    if (PRTE_SUCCESS != (ret = prte_iof_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_iof_base_select";
         goto error;
     }
     /* setup the FileM */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_filem_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_filem_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_filem_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_filem_base_open";
         goto error;
     }
-    if (PRRTE_SUCCESS != (ret = prrte_filem_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_filem_base_select";
+    if (PRTE_SUCCESS != (ret = prte_filem_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_filem_base_select";
         goto error;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 
   error:
-    prrte_show_help("help-prrte-runtime.txt",
-                   "prrte_init:startup:internal-failure",
-                   true, error, PRRTE_ERROR_NAME(ret), ret);
+    prte_show_help("help-prte-runtime.txt",
+                   "prte_init:startup:internal-failure",
+                   true, error, PRTE_ERROR_NAME(ret), ret);
     /* remove our use of the session directory tree */
-    prrte_session_dir_finalize(PRRTE_PROC_MY_NAME);
+    prte_session_dir_finalize(PRTE_PROC_MY_NAME);
     /* ensure we scrub the session directory tree */
-    prrte_session_dir_cleanup(PRRTE_JOBID_WILDCARD);
-    return PRRTE_ERR_SILENT;
+    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+    return PRTE_ERR_SILENT;
 }
 
-int prrte_ess_base_prted_finalize(void)
+int prte_ess_base_prted_finalize(void)
 {
-    prrte_ess_base_signal_t *sig;
+    prte_ess_base_signal_t *sig;
     unsigned int i;
 
     if (signals_set) {
-        prrte_event_del(&epipe_handler);
-        prrte_event_del(&term_handler);
-        prrte_event_del(&int_handler);
+        prte_event_del(&epipe_handler);
+        prte_event_del(&term_handler);
+        prte_event_del(&int_handler);
         /** Remove the USR signal handlers */
         i = 0;
-        PRRTE_LIST_FOREACH(sig, &prrte_ess_base_signals, prrte_ess_base_signal_t) {
-            prrte_event_signal_del(forward_signals_events + i);
+        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t) {
+            prte_event_signal_del(forward_signals_events + i);
             ++i;
         }
         free (forward_signals_events);
@@ -550,29 +550,29 @@ int prrte_ess_base_prted_finalize(void)
     pmix_server_finalize();
 
     /* close frameworks */
-    (void) prrte_mca_base_framework_close(&prrte_filem_base_framework);
-    (void) prrte_mca_base_framework_close(&prrte_grpcomm_base_framework);
-    (void) prrte_mca_base_framework_close(&prrte_iof_base_framework);
+    (void) prte_mca_base_framework_close(&prte_filem_base_framework);
+    (void) prte_mca_base_framework_close(&prte_grpcomm_base_framework);
+    (void) prte_mca_base_framework_close(&prte_iof_base_framework);
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
-    prrte_errmgr.finalize();
-    (void) prrte_mca_base_framework_close(&prrte_plm_base_framework);
+    prte_errmgr.finalize();
+    (void) prte_mca_base_framework_close(&prte_plm_base_framework);
     /* make sure our local procs are dead */
-    prrte_odls.kill_local_procs(NULL);
-    (void) prrte_mca_base_framework_close(&prrte_rtc_base_framework);
-    (void) prrte_mca_base_framework_close(&prrte_odls_base_framework);
-    (void) prrte_mca_base_framework_close(&prrte_routed_base_framework);
-    (void) prrte_mca_base_framework_close(&prrte_rml_base_framework);
-    (void) prrte_mca_base_framework_close(&prrte_oob_base_framework);
-    (void) prrte_mca_base_framework_close(&prrte_prtereachable_base_framework);
-    (void) prrte_mca_base_framework_close(&prrte_errmgr_base_framework);
-    (void) prrte_mca_base_framework_close(&prrte_state_base_framework);
+    prte_odls.kill_local_procs(NULL);
+    (void) prte_mca_base_framework_close(&prte_rtc_base_framework);
+    (void) prte_mca_base_framework_close(&prte_odls_base_framework);
+    (void) prte_mca_base_framework_close(&prte_routed_base_framework);
+    (void) prte_mca_base_framework_close(&prte_rml_base_framework);
+    (void) prte_mca_base_framework_close(&prte_oob_base_framework);
+    (void) prte_mca_base_framework_close(&prte_prtereachable_base_framework);
+    (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
+    (void) prte_mca_base_framework_close(&prte_state_base_framework);
     /* remove our use of the session directory tree */
-    prrte_session_dir_finalize(PRRTE_PROC_MY_NAME);
+    prte_session_dir_finalize(PRTE_PROC_MY_NAME);
     /* ensure we scrub the session directory tree */
-    prrte_session_dir_cleanup(PRRTE_JOBID_WILDCARD);
+    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static void shutdown_signal(int fd, short flags, void *arg)
@@ -581,8 +581,8 @@ static void shutdown_signal(int fd, short flags, void *arg)
      * against race conditions - the trigger event will
      * check the one-time lock
      */
-    PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-    PRRTE_ACTIVATE_JOB_STATE(NULL, PRRTE_JOB_STATE_FORCED_EXIT);
+    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
 }
 
 /**
@@ -597,46 +597,46 @@ static void epipe_signal_callback(int fd, short flags, void *arg)
 /* Pass user signals to the local application processes */
 static void signal_forward_callback(int fd, short event, void *arg)
 {
-    prrte_event_t *signal = (prrte_event_t*)arg;
+    prte_event_t *signal = (prte_event_t*)arg;
     int32_t signum, rc;
-    prrte_buffer_t *cmd;
-    prrte_daemon_cmd_flag_t command=PRRTE_DAEMON_SIGNAL_LOCAL_PROCS;
-    prrte_jobid_t job = PRRTE_JOBID_WILDCARD;
+    prte_buffer_t *cmd;
+    prte_daemon_cmd_flag_t command=PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
+    prte_jobid_t job = PRTE_JOBID_WILDCARD;
 
-    signum = PRRTE_EVENT_SIGNAL(signal);
-    if (!prrte_execute_quiet){
-        fprintf(stderr, "PRRTE: Forwarding signal %d to job\n", signum);
+    signum = PRTE_EVENT_SIGNAL(signal);
+    if (!prte_execute_quiet){
+        fprintf(stderr, "PRTE: Forwarding signal %d to job\n", signum);
     }
 
-    cmd = PRRTE_NEW(prrte_buffer_t);
+    cmd = PRTE_NEW(prte_buffer_t);
 
     /* pack the command */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(cmd, &command, 1, PRRTE_DAEMON_CMD))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_RELEASE(cmd);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(cmd, &command, 1, PRTE_DAEMON_CMD))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_RELEASE(cmd);
         return;
     }
 
     /* pack the jobid */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(cmd, &job, 1, PRRTE_JOBID))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_RELEASE(cmd);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(cmd, &job, 1, PRTE_JOBID))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_RELEASE(cmd);
         return;
     }
 
     /* pack the signal */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(cmd, &signum, 1, PRRTE_INT32))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_RELEASE(cmd);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(cmd, &signum, 1, PRTE_INT32))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_RELEASE(cmd);
         return;
     }
 
     /* send it to ourselves */
-    if (0 > (rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_NAME, cmd,
-                                          PRRTE_RML_TAG_DAEMON,
+    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_NAME, cmd,
+                                          PRTE_RML_TAG_DAEMON,
                                           NULL, NULL))) {
-        PRRTE_ERROR_LOG(rc);
-        PRRTE_RELEASE(cmd);
+        PRTE_ERROR_LOG(rc);
+        PRTE_RELEASE(cmd);
     }
 
 }

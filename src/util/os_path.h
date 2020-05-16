@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2018      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -21,7 +21,7 @@
 /** @file:
  * Creates an operating system-acceptable path name.
  *
- * The prrte_os_path() function takes a variable number of string arguments and
+ * The prte_os_path() function takes a variable number of string arguments and
  * concatenates them into a path name using the path separator character appropriate
  * to the local operating system. NOTE: the string returned by this function has been
  * malloc'd - thus, the user is responsible for free'ing the memory used by
@@ -40,10 +40,10 @@
  *
  */
 
-#ifndef PRRTE_OS_PATH_H
-#define PRRTE_OS_PATH_H
+#ifndef PRTE_OS_PATH_H
+#define PRTE_OS_PATH_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -70,14 +70,14 @@ BEGIN_C_DECLS
  * va_start() has undefined behavior (according to clang warnings on
  * MacOS High Sierra).
  */
-PRRTE_EXPORT char *prrte_os_path(int relative, ...) __prrte_attribute_malloc__ __prrte_attribute_sentinel__ __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_os_path(int relative, ...) __prte_attribute_malloc__ __prte_attribute_sentinel__ __prte_attribute_warn_unused_result__;
 
 /**
  * Convert the path to be OS friendly. On UNIX this function will
  * be empty.
  */
-#define prrte_make_filename_os_friendly(PATH)   (PATH)
+#define prte_make_filename_os_friendly(PATH)   (PATH)
 
 END_C_DECLS
 
-#endif /* PRRTE_OS_PATH_H */
+#endif /* PRTE_OS_PATH_H */

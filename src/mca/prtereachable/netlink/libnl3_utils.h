@@ -63,7 +63,7 @@ typedef struct nl_sock NL_HANDLE;
 	do { \
 		err = nl_recvmsgs_default(nlh); \
 		if (err < 0) { \
-                    prrte_output(0, "Failed to receive netlink reply message, error %s\n", \
+                    prte_output(0, "Failed to receive netlink reply message, error %s\n", \
 				NL_GETERROR(err)); \
 			if (err == -NLE_AGAIN) \
 				err = rc; \
@@ -71,12 +71,12 @@ typedef struct nl_sock NL_HANDLE;
 		} \
 	} while (0)
 
-struct prrte_reachable_netlink_rt_cb_arg {
+struct prte_reachable_netlink_rt_cb_arg {
 	int			oif;
 	int			found;
 	int			has_gateway;
 	int			replied;
-	struct prrte_reachable_netlink_sk	*unlsk;
+	struct prte_reachable_netlink_sk	*unlsk;
 };
 
 #endif /* LIBNL3_UTILS_H */

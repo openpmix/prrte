@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -23,22 +23,22 @@
 #ifndef _PMIX_SERVER_H_
 #define _PMIX_SERVER_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/pmix/pmix-internal.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 BEGIN_C_DECLS
 
-PRRTE_EXPORT int pmix_server_init(void);
-PRRTE_EXPORT void pmix_server_start(void);
-PRRTE_EXPORT void pmix_server_finalize(void);
-PRRTE_EXPORT void pmix_server_register_params(void);
+PRTE_EXPORT int pmix_server_init(void);
+PRTE_EXPORT void pmix_server_start(void);
+PRTE_EXPORT void pmix_server_finalize(void);
+PRTE_EXPORT void pmix_server_register_params(void);
 
 
-PRRTE_EXPORT int prrte_pmix_server_register_nspace(prrte_job_t *jdata);
+PRTE_EXPORT int prte_pmix_server_register_nspace(prte_job_t *jdata);
 
-PRRTE_EXPORT void prrte_pmix_server_clear(pmix_proc_t *pname);
+PRTE_EXPORT void prte_pmix_server_clear(pmix_proc_t *pname);
 
 
 END_C_DECLS

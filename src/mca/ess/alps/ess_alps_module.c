@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
@@ -23,7 +23,7 @@
  *
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include "src/util/show_help.h"
@@ -32,7 +32,7 @@
 #include "src/util/proc_info.h"
 #include "src/mca/errmgr/base/base.h"
 #include "src/util/name_fns.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/ess/ess.h"
@@ -45,7 +45,7 @@ static int alps_set_name(void);
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
-prrte_ess_base_module_t prrte_ess_alps_module = {
+prte_ess_base_module_t prte_ess_alps_module = {
     rte_init,
     rte_finalize,
     NULL,
@@ -53,7 +53,7 @@ prrte_ess_base_module_t prrte_ess_alps_module = {
 };
 
 /* Local variables */
-static prrte_vpid_t starting_vpid = 0;
+static prte_vpid_t starting_vpid = 0;
 
 
 static int rte_init(int argc, char **argv)
@@ -61,23 +61,23 @@ static int rte_init(int argc, char **argv)
     int ret;
     char *error = NULL;
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_ess_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
                          "ess:alps in rte_init"));
 
     /* run the prolog */
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_std_prolog())) {
-        error = "prrte_ess_base_std_prolog";
+    if (PRTE_SUCCESS != (ret = prte_ess_base_std_prolog())) {
+        error = "prte_ess_base_std_prolog";
         goto fn_fail;
     }
 
-    if (PRRTE_SUCCESS != (ret = alps_set_name())) {
+    if (PRTE_SUCCESS != (ret = alps_set_name())) {
         error = "alps_set_name";
         goto fn_fail;
     }
 
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_prted_setup())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_ess_base_prted_setup";
+    if (PRTE_SUCCESS != (ret = prte_ess_base_prted_setup())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_ess_base_prted_setup";
         goto fn_fail;
     }
 
@@ -85,34 +85,34 @@ static int rte_init(int argc, char **argv)
      * now synchronize with aprun.
      */
 
-    if (PRRTE_SUCCESS != (ret = prrte_ess_alps_sync_start())) {
-        error = "prrte_ess_alps_sync";
+    if (PRTE_SUCCESS != (ret = prte_ess_alps_sync_start())) {
+        error = "prte_ess_alps_sync";
         goto fn_fail;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 
    fn_fail:
-    if (PRRTE_ERR_SILENT != ret && !prrte_report_silent_errors) {
-        prrte_show_help("help-prrte-runtime.txt",
-                       "prrte_init:startup:internal-failure",
-                       true, error, PRRTE_ERROR_NAME(ret), ret);
+    if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
+        prte_show_help("help-prte-runtime.txt",
+                       "prte_init:startup:internal-failure",
+                       true, error, PRTE_ERROR_NAME(ret), ret);
     }
     return ret;
 }
 
 static int rte_finalize(void)
 {
-    int ret = PRRTE_SUCCESS;
+    int ret = PRTE_SUCCESS;
 
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_prted_finalize())) {
-        PRRTE_ERROR_LOG(ret);
+    if (PRTE_SUCCESS != (ret = prte_ess_base_prted_finalize())) {
+        PRTE_ERROR_LOG(ret);
         goto fn_exit;
     }
 
     /* notify alps that we're done */
-    if (PRRTE_SUCCESS != (ret = prrte_ess_alps_sync_complete())) {
-        PRRTE_ERROR_LOG(ret);
+    if (PRTE_SUCCESS != (ret = prte_ess_alps_sync_complete())) {
+        PRTE_ERROR_LOG(ret);
     }
 
    fn_exit:
@@ -124,30 +124,30 @@ static int alps_set_name(void)
     int rc;
     int rank;
 
-    if (NULL == prrte_ess_base_nspace) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+    if (NULL == prte_ess_base_nspace) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
 
-    PRRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRRTE_PROC_MY_NAME->jobid, prrte_ess_base_nspace);
-    PMIX_LOAD_NSPACE(prrte_process_info.myproc.nspace, prrte_ess_base_nspace);
+    PRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRTE_PROC_MY_NAME->jobid, prte_ess_base_nspace);
+    PMIX_LOAD_NSPACE(prte_process_info.myproc.nspace, prte_ess_base_nspace);
 
-    if (NULL == prrte_ess_base_vpid) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+    if (NULL == prte_ess_base_vpid) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
-    starting_vpid = strtoul(prrte_ess_base_vpid, NULL, 10);
+    starting_vpid = strtoul(prte_ess_base_vpid, NULL, 10);
 
-    if (PRRTE_SUCCESS != (rc = prrte_ess_alps_get_first_rank_on_node(&rank))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_ess_alps_get_first_rank_on_node(&rank))) {
+        PRTE_ERROR_LOG(rc);
         return(rc);
     }
 
-    PRRTE_PROC_MY_NAME->vpid = (prrte_vpid_t)rank + starting_vpid;
-    prrte_process_info.myproc.rank = PRRTE_PROC_MY_NAME->vpid;
+    PRTE_PROC_MY_NAME->vpid = (prte_vpid_t)rank + starting_vpid;
+    prte_process_info.myproc.rank = PRTE_PROC_MY_NAME->vpid;
 
     /* get the num procs as provided in the cmd line param */
-    prrte_process_info.num_daemons = prrte_ess_base_num_procs;
+    prte_process_info.num_daemons = prte_ess_base_num_procs;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

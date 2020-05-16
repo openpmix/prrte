@@ -10,7 +10,7 @@
  * Additional copyrights may follow
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "src/include/constants.h"
 
 #include "src/util/output.h"
@@ -19,9 +19,9 @@
 #include "src/dss/dss.h"
 #include "src/hwloc/hwloc-internal.h"
 
-int prrte_hwloc_pack(prrte_buffer_t *buffer, const void *src,
+int prte_hwloc_pack(prte_buffer_t *buffer, const void *src,
                     int32_t num_vals,
-                    prrte_data_type_t type)
+                    prte_data_type_t type)
 {
     /* NOTE: hwloc defines topology_t as a pointer to a struct! */
     hwloc_topology_t t, *tarray  = (hwloc_topology_t*)src;
@@ -34,12 +34,12 @@ int prrte_hwloc_pack(prrte_buffer_t *buffer, const void *src,
         t = tarray[i];
 
         /* extract an xml-buffer representation of the tree */
-        if (0 != prrte_hwloc_base_topology_export_xmlbuffer(t, &xmlbuffer, &len)) {
-            return PRRTE_ERROR;
+        if (0 != prte_hwloc_base_topology_export_xmlbuffer(t, &xmlbuffer, &len)) {
+            return PRTE_ERROR;
         }
 
         /* add to buffer */
-        if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buffer, &xmlbuffer, 1, PRRTE_STRING))) {
+        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &xmlbuffer, 1, PRTE_STRING))) {
             free(xmlbuffer);
             return rc;
         }
@@ -54,53 +54,53 @@ int prrte_hwloc_pack(prrte_buffer_t *buffer, const void *src,
          */
         support = (struct hwloc_topology_support*)hwloc_topology_get_support(t);
         /* pack the discovery support */
-        if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buffer, support->discovery,
+        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, support->discovery,
                                                 sizeof(struct hwloc_topology_discovery_support),
-                                                PRRTE_BYTE))) {
+                                                PRTE_BYTE))) {
             return rc;
         }
         /* pack the cpubind support */
-        if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buffer, support->cpubind,
+        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, support->cpubind,
                                                 sizeof(struct hwloc_topology_cpubind_support),
-                                                PRRTE_BYTE))) {
+                                                PRTE_BYTE))) {
             return rc;
         }
         /* pack the membind support */
-        if (PRRTE_SUCCESS != (rc = prrte_dss.pack(buffer, support->membind,
+        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, support->membind,
                                                 sizeof(struct hwloc_topology_membind_support),
-                                                PRRTE_BYTE))) {
+                                                PRTE_BYTE))) {
             return rc;
         }
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_hwloc_unpack(prrte_buffer_t *buffer, void *dest,
+int prte_hwloc_unpack(prte_buffer_t *buffer, void *dest,
                       int32_t *num_vals,
-                      prrte_data_type_t type)
+                      prte_data_type_t type)
 {
     /* NOTE: hwloc defines topology_t as a pointer to a struct! */
     hwloc_topology_t t, *tarray  = (hwloc_topology_t*)dest;
-    int rc=PRRTE_SUCCESS, i, cnt, j;
+    int rc=PRTE_SUCCESS, i, cnt, j;
     char *xmlbuffer;
     struct hwloc_topology_support *support;
 
     for (i=0, j=0; i < *num_vals; i++) {
         /* unpack the xml string */
         cnt=1;
-        if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &xmlbuffer, &cnt, PRRTE_STRING))) {
+        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &xmlbuffer, &cnt, PRTE_STRING))) {
             goto cleanup;
         }
 
         /* convert the xml */
         if (0 != hwloc_topology_init(&t)) {
-            rc = PRRTE_ERROR;
+            rc = PRTE_ERROR;
             free(xmlbuffer);
             goto cleanup;
         }
         if (0 != hwloc_topology_set_xmlbuffer(t, xmlbuffer, strlen(xmlbuffer))) {
-            rc = PRRTE_ERROR;
+            rc = PRTE_ERROR;
             free(xmlbuffer);
             hwloc_topology_destroy(t);
             goto cleanup;
@@ -109,14 +109,14 @@ int prrte_hwloc_unpack(prrte_buffer_t *buffer, void *dest,
         /* since we are loading this from an external source, we have to
          * explicitly set a flag so hwloc sets things up correctly
          */
-        if (0 != prrte_hwloc_base_topology_set_flags(t, HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM, true)) {
-            rc = PRRTE_ERROR;
+        if (0 != prte_hwloc_base_topology_set_flags(t, HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM, true)) {
+            rc = PRTE_ERROR;
             hwloc_topology_destroy(t);
             goto cleanup;
         }
         /* now load the topology */
         if (0 != hwloc_topology_load(t)) {
-            rc = PRRTE_ERROR;
+            rc = PRTE_ERROR;
             hwloc_topology_destroy(t);
             goto cleanup;
         }
@@ -126,15 +126,15 @@ int prrte_hwloc_unpack(prrte_buffer_t *buffer, void *dest,
          */
         support = (struct hwloc_topology_support*)hwloc_topology_get_support(t);
         cnt = sizeof(struct hwloc_topology_discovery_support);
-        if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, support->discovery, &cnt, PRRTE_BYTE))) {
+        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, support->discovery, &cnt, PRTE_BYTE))) {
             goto cleanup;
         }
         cnt = sizeof(struct hwloc_topology_cpubind_support);
-        if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, support->cpubind, &cnt, PRRTE_BYTE))) {
+        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, support->cpubind, &cnt, PRTE_BYTE))) {
             goto cleanup;
         }
         cnt = sizeof(struct hwloc_topology_membind_support);
-        if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, support->membind, &cnt, PRRTE_BYTE))) {
+        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, support->membind, &cnt, PRTE_BYTE))) {
             goto cleanup;
         }
 
@@ -150,21 +150,21 @@ int prrte_hwloc_unpack(prrte_buffer_t *buffer, void *dest,
     return rc;
 }
 
-int prrte_hwloc_copy(hwloc_topology_t *dest, hwloc_topology_t src, prrte_data_type_t type)
+int prte_hwloc_copy(hwloc_topology_t *dest, hwloc_topology_t src, prte_data_type_t type)
 {
 #if HAVE_HWLOC_TOPOLOGY_DUP
     /* use the hwloc dup function */
     return hwloc_topology_dup(dest, src);
 #else
     /* hwloc_topology_dup() was introduced in hwloc v1.8.0.
-     * Note that as of March 2017, prrte_hwloc_copy() is not (yet?) used in the code base anywhere. */
-    return PRRTE_ERR_NOT_SUPPORTED;
+     * Note that as of March 2017, prte_hwloc_copy() is not (yet?) used in the code base anywhere. */
+    return PRTE_ERR_NOT_SUPPORTED;
 #endif
 }
 
-int prrte_hwloc_compare(const hwloc_topology_t topo1,
+int prte_hwloc_compare(const hwloc_topology_t topo1,
                        const hwloc_topology_t topo2,
-                       prrte_data_type_t type)
+                       prte_data_type_t type)
 {
     hwloc_topology_t t1, t2;
     unsigned d1, d2;
@@ -181,9 +181,9 @@ int prrte_hwloc_compare(const hwloc_topology_t topo1,
     d1 = hwloc_topology_get_depth(t1);
     d2 = hwloc_topology_get_depth(t2);
     if (d1 > d2) {
-        return PRRTE_VALUE1_GREATER;
+        return PRTE_VALUE1_GREATER;
     } else if (d2 > d1) {
-        return PRRTE_VALUE2_GREATER;
+        return PRTE_VALUE2_GREATER;
     }
 
 
@@ -193,21 +193,21 @@ int prrte_hwloc_compare(const hwloc_topology_t topo1,
      * where we really need to do a tree-wise search so we only compare
      * the things we care about, and ignore stuff like MAC addresses
      */
-    if (0 != prrte_hwloc_base_topology_export_xmlbuffer(t1, &x1, &l1)) {
-        return PRRTE_EQUAL;
+    if (0 != prte_hwloc_base_topology_export_xmlbuffer(t1, &x1, &l1)) {
+        return PRTE_EQUAL;
     }
-    if (0 != prrte_hwloc_base_topology_export_xmlbuffer(t2, &x2, &l2)) {
+    if (0 != prte_hwloc_base_topology_export_xmlbuffer(t2, &x2, &l2)) {
         free(x1);
-        return PRRTE_EQUAL;
+        return PRTE_EQUAL;
     }
 
     s = strcmp(x1, x2);
     free(x1);
     free(x2);
     if (s > 0) {
-        return PRRTE_VALUE1_GREATER;
+        return PRTE_VALUE1_GREATER;
     } else if (s < 0) {
-        return PRRTE_VALUE2_GREATER;
+        return PRTE_VALUE2_GREATER;
     }
 
     /* compare the available support - hwloc unfortunately does
@@ -215,26 +215,26 @@ int prrte_hwloc_compare(const hwloc_topology_t topo1,
      */
     if (NULL == (s1 = (struct hwloc_topology_support*)hwloc_topology_get_support(t1)) ||
         NULL == s1->cpubind || NULL == s1->membind) {
-        return PRRTE_EQUAL;
+        return PRTE_EQUAL;
     }
     if (NULL == (s2 = (struct hwloc_topology_support*)hwloc_topology_get_support(t2)) ||
         NULL == s2->cpubind || NULL == s2->membind) {
-        return PRRTE_EQUAL;
+        return PRTE_EQUAL;
     }
     /* compare the fields we care about */
     if (s1->cpubind->set_thisproc_cpubind != s2->cpubind->set_thisproc_cpubind ||
         s1->cpubind->set_thisthread_cpubind != s2->cpubind->set_thisthread_cpubind ||
         s1->membind->set_thisproc_membind != s2->membind->set_thisproc_membind ||
         s1->membind->set_thisthread_membind != s2->membind->set_thisthread_membind) {
-        PRRTE_OUTPUT_VERBOSE((5, prrte_hwloc_base_output,
+        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base:compare BINDING CAPABILITIES DIFFER"));
-        return PRRTE_VALUE1_GREATER;
+        return PRTE_VALUE1_GREATER;
     }
 
-    return PRRTE_EQUAL;
+    return PRTE_EQUAL;
 }
 
-#define PRRTE_HWLOC_MAX_STRING   2048
+#define PRTE_HWLOC_MAX_STRING   2048
 
 static void print_hwloc_obj(char **output, char *prefix,
                             hwloc_topology_t topo, hwloc_obj_t obj)
@@ -246,13 +246,13 @@ static void print_hwloc_obj(char **output, char *prefix,
 
     /* print the object type */
     hwloc_obj_type_snprintf(string, 1024, obj, 1);
-    prrte_asprintf(&pfx, "\n%s\t", (NULL == prefix) ? "" : prefix);
-    prrte_asprintf(&tmp, "%sType: %s Number of child objects: %u%sName=%s",
+    prte_asprintf(&pfx, "\n%s\t", (NULL == prefix) ? "" : prefix);
+    prte_asprintf(&tmp, "%sType: %s Number of child objects: %u%sName=%s",
              (NULL == prefix) ? "" : prefix, string, obj->arity,
              pfx, (NULL == obj->name) ? "NULL" : obj->name);
     if (0 < hwloc_obj_attr_snprintf(string, 1024, obj, pfx, 1)) {
         /* print the attributes */
-        prrte_asprintf(&tmp2, "%s%s%s", tmp, pfx, string);
+        prte_asprintf(&tmp2, "%s%s%s", tmp, pfx, string);
         free(tmp);
         tmp = tmp2;
     }
@@ -260,29 +260,29 @@ static void print_hwloc_obj(char **output, char *prefix,
      * have cpusets, so protect ourselves here
      */
     if (NULL != obj->cpuset) {
-        hwloc_bitmap_snprintf(string, PRRTE_HWLOC_MAX_STRING, obj->cpuset);
-        prrte_asprintf(&tmp2, "%s%sCpuset:  %s", tmp, pfx, string);
+        hwloc_bitmap_snprintf(string, PRTE_HWLOC_MAX_STRING, obj->cpuset);
+        prte_asprintf(&tmp2, "%s%sCpuset:  %s", tmp, pfx, string);
         free(tmp);
         tmp = tmp2;
     }
     if (HWLOC_OBJ_MACHINE == obj->type) {
         /* root level object - add support values */
         support = (struct hwloc_topology_support*)hwloc_topology_get_support(topo);
-        prrte_asprintf(&tmp2, "%s%sBind CPU proc:   %s%sBind CPU thread: %s", tmp, pfx,
+        prte_asprintf(&tmp2, "%s%sBind CPU proc:   %s%sBind CPU thread: %s", tmp, pfx,
                  (support->cpubind->set_thisproc_cpubind) ? "TRUE" : "FALSE", pfx,
                  (support->cpubind->set_thisthread_cpubind) ? "TRUE" : "FALSE");
         free(tmp);
         tmp = tmp2;
-        prrte_asprintf(&tmp2, "%s%sBind MEM proc:   %s%sBind MEM thread: %s", tmp, pfx,
+        prte_asprintf(&tmp2, "%s%sBind MEM proc:   %s%sBind MEM thread: %s", tmp, pfx,
                  (support->membind->set_thisproc_membind) ? "TRUE" : "FALSE", pfx,
                  (support->membind->set_thisthread_membind) ? "TRUE" : "FALSE");
         free(tmp);
         tmp = tmp2;
     }
-    prrte_asprintf(&tmp2, "%s%s\n", (NULL == *output) ? "" : *output, tmp);
+    prte_asprintf(&tmp2, "%s%s\n", (NULL == *output) ? "" : *output, tmp);
     free(tmp);
     free(pfx);
-    prrte_asprintf(&pfx, "%s\t", (NULL == prefix) ? "" : prefix);
+    prte_asprintf(&pfx, "%s\t", (NULL == prefix) ? "" : prefix);
     for (i=0; i < obj->arity; i++) {
         obj2 = obj->children[i];
         /* print the object */
@@ -295,7 +295,7 @@ static void print_hwloc_obj(char **output, char *prefix,
     *output = tmp2;
 }
 
-int prrte_hwloc_print(char **output, char *prefix, hwloc_topology_t src, prrte_data_type_t type)
+int prte_hwloc_print(char **output, char *prefix, hwloc_topology_t src, prte_data_type_t type)
 {
     hwloc_obj_t obj;
     char *tmp=NULL;
@@ -305,5 +305,5 @@ int prrte_hwloc_print(char **output, char *prefix, hwloc_topology_t src, prrte_d
     /* print it */
     print_hwloc_obj(&tmp, prefix, src, obj);
     *output = tmp;
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

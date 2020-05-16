@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -24,22 +24,22 @@ headers = constants.h \
 		  frameworks.h \
 		  hash_string.h \
 		  prefetch.h \
-		  prrte_config_top.h \
-		  prrte_config_bottom.h \
-		  prrte_portable_platform.h \
-		  prrte_stdint.h \
-		  prrte_stdatomic.h \
-		  prrte_socket_errno.h \
+		  prte_config_top.h \
+		  prte_config_bottom.h \
+		  prte_portable_platform.h \
+		  prte_stdint.h \
+		  prte_stdatomic.h \
+		  prte_socket_errno.h \
 		  align.h
 
 nodist_headers = \
-		  prrte_config.h \
+		  prte_config.h \
 		  version.h
 
 EXTRA_DIST = $(headers)
 
 if WANT_INSTALL_HEADERS
-prrtedir = $(prrteincludedir)
-nobase_dist_prrte_HEADERS = $(headers)
-nobase_nodist_prrte_HEADERS = $(nodist_headers)
+prtedir = $(prteincludedir)
+nobase_dist_prte_HEADERS = $(headers)
+nobase_nodist_prte_HEADERS = $(nodist_headers)
 endif

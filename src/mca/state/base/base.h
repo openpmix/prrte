@@ -4,6 +4,7 @@
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -13,16 +14,16 @@
 /** @file:
  */
 
-#ifndef PRRTE_MCA_STATE_BASE_H
-#define PRRTE_MCA_STATE_BASE_H
+#ifndef PRTE_MCA_STATE_BASE_H
+#define PRTE_MCA_STATE_BASE_H
 
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 #include "src/util/printf.h"
 
 #include "src/mca/mca.h"
@@ -32,15 +33,15 @@
 BEGIN_C_DECLS
 
 /* select a component */
-PRRTE_EXPORT    int prrte_state_base_select(void);
+PRTE_EXPORT    int prte_state_base_select(void);
 
 /* debug tools */
-PRRTE_EXPORT void prrte_state_base_print_job_state_machine(void);
+PRTE_EXPORT void prte_state_base_print_job_state_machine(void);
 
-PRRTE_EXPORT void prrte_state_base_print_proc_state_machine(void);
+PRTE_EXPORT void prte_state_base_print_proc_state_machine(void);
 
-PRRTE_EXPORT extern int prrte_state_base_parent_fd;
-PRRTE_EXPORT extern bool prrte_state_base_ready_msg;
+PRTE_EXPORT extern int prte_state_base_parent_fd;
+PRTE_EXPORT extern bool prte_state_base_ready_msg;
 
 END_C_DECLS
 

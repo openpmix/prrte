@@ -1,6 +1,6 @@
 #
-# Copyright (c) 2011-2012 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2018      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
@@ -10,7 +10,7 @@
 # $HEADER$
 #
 
-dist_prrtedata_DATA += hwloc/help-prrte-hwloc-base.txt
+dist_prtedata_DATA += hwloc/help-prte-hwloc-base.txt
 
 headers += \
         hwloc/hwloc-internal.h

@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,10 +18,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_STRING_COPY_H
-#define PRRTE_STRING_COPY_H
+#ifndef PRTE_STRING_COPY_H
+#define PRTE_STRING_COPY_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
@@ -42,8 +43,8 @@ BEGIN_C_DECLS
  * It is invalid to pass NULL for either dest or src.
  *
  * If dest_len is larger than
- * PRRTE_MAX_SIZE_ALLOWED_BY_PRRTE_STRING_COPY, we assume that this is
- * a programmer error (because PRRTE does not generally need to do
+ * PRTE_MAX_SIZE_ALLOWED_BY_PRTE_STRING_COPY, we assume that this is
+ * a programmer error (because PRTE does not generally need to do
  * large string copies), and will assert() fail / abort.
  *
  * There is no return value.
@@ -60,17 +61,17 @@ BEGIN_C_DECLS
  *   (len-1) characters of the source string will be copied to the
  *   destination, and dest[len-1] will be set to '\0'.
  */
-PRRTE_EXPORT void prrte_string_copy(char *dest, const char *src,
+PRTE_EXPORT void prte_string_copy(char *dest, const char *src,
                                     size_t dest_len)
-    __prrte_attribute_nonnull__(1) __prrte_attribute_nonnull__(2);
+    __prte_attribute_nonnull__(1) __prte_attribute_nonnull__(2);
 
 /**
- * Max dest_size allowed by prrte_string_copy().
+ * Max dest_size allowed by prte_string_copy().
  *
- * See the description of prrte_string_copy() for an explanation.
+ * See the description of prte_string_copy() for an explanation.
  */
-#define PRRTE_MAX_SIZE_ALLOWED_BY_PRRTE_STRING_COPY (128 * 1024)
+#define PRTE_MAX_SIZE_ALLOWED_BY_PRTE_STRING_COPY (128 * 1024)
 
 END_C_DECLS
 
-#endif /* PRRTE_STRING_COPY_H */
+#endif /* PRTE_STRING_COPY_H */

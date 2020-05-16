@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
@@ -24,7 +24,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <stdio.h>
@@ -32,7 +32,7 @@
 #include <locale.h>
 #include <errno.h>
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/iof/iof.h"
 #include "src/mca/rml/rml.h"
@@ -44,7 +44,7 @@
 #include "src/util/output.h"
 #include "src/pmix/pmix-internal.h"
 
-bool prrte_help_want_aggregate = false;
+bool prte_help_want_aggregate = false;
 
 /*
  * Private variables
@@ -57,13 +57,13 @@ static bool show_help_initialized = false;
 
 /* List items for holding (filename, topic) tuples */
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     /* The filename */
     char *tli_filename;
     /* The topic */
     char *tli_topic;
     /* List of process names that have displayed this (filename, topic) */
-    prrte_list_t tli_processes;
+    prte_list_t tli_processes;
     /* Time this message was displayed */
     time_t tli_time_displayed;
     /* Count of processes since last display (i.e., "new" processes
@@ -76,7 +76,7 @@ static void tuple_list_item_constructor(tuple_list_item_t *obj)
 {
     obj->tli_filename = NULL;
     obj->tli_topic = NULL;
-    PRRTE_CONSTRUCT(&(obj->tli_processes), prrte_list_t);
+    PRTE_CONSTRUCT(&(obj->tli_processes), prte_list_t);
     obj->tli_time_displayed = time(NULL);
     obj->tli_count_since_last_display = 0;
     obj->tli_display = true;
@@ -90,14 +90,14 @@ static void tuple_list_item_destructor(tuple_list_item_t *obj)
     if (NULL != obj->tli_topic) {
         free(obj->tli_topic);
     }
-    PRRTE_LIST_DESTRUCT(&(obj->tli_processes));
+    PRTE_LIST_DESTRUCT(&(obj->tli_processes));
 }
-static PRRTE_CLASS_INSTANCE(tuple_list_item_t, prrte_list_item_t,
+static PRTE_CLASS_INSTANCE(tuple_list_item_t, prte_list_item_t,
                           tuple_list_item_constructor,
                           tuple_list_item_destructor);
 
 /* List of (filename, topic) tuples that have already been displayed */
-static prrte_list_t abd_tuples;
+static prte_list_t abd_tuples;
 
 /* How long to wait between displaying duplicate show_help notices */
 static struct timeval show_help_interval = { 5, 0 };
@@ -105,7 +105,7 @@ static struct timeval show_help_interval = { 5, 0 };
 /* Timer for displaying duplicate help message notices */
 static time_t show_help_time_last_displayed = 0;
 static bool show_help_timer_set = false;
-static prrte_event_t show_help_timer_event;
+static prte_event_t show_help_timer_event;
 
 /*
  * Local functions
@@ -113,52 +113,52 @@ static prrte_event_t show_help_timer_event;
 static void show_accumulated_duplicates(int fd, short event, void *context);
 static char* xml_format(unsigned char *input);
 static int show_help(const char *filename, const char *topic,
-                     const char *output, prrte_process_name_t *sender);
+                     const char *output, prte_process_name_t *sender);
 
-int prrte_show_help_init(void)
+int prte_show_help_init(void)
 {
-    prrte_output_stream_t lds;
+    prte_output_stream_t lds;
 
     if (show_help_initialized) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
-    PRRTE_CONSTRUCT(&lds, prrte_output_stream_t);
+    PRTE_CONSTRUCT(&lds, prte_output_stream_t);
     lds.lds_want_stderr = true;
-    output_stream = prrte_output_open(&lds);
-    PRRTE_DESTRUCT(&lds);
+    output_stream = prte_output_open(&lds);
+    PRTE_DESTRUCT(&lds);
 
-    PRRTE_CONSTRUCT(&abd_tuples, prrte_list_t);
+    PRTE_CONSTRUCT(&abd_tuples, prte_list_t);
 
-    prrte_argv_append_nosize(&search_dirs, prrte_install_dirs.prrtedatadir);
+    prte_argv_append_nosize(&search_dirs, prte_install_dirs.prtedatadir);
     show_help_initialized = true;
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-void prrte_show_help_finalize (void)
+void prte_show_help_finalize (void)
 {
     if (!show_help_initialized) {
         return;
     }
 
     /* Shutdown show_help, showing final messages */
-    if (PRRTE_PROC_IS_MASTER) {
+    if (PRTE_PROC_IS_MASTER) {
         show_accumulated_duplicates(0, 0, NULL);
-        PRRTE_LIST_DESTRUCT(&abd_tuples);
+        PRTE_LIST_DESTRUCT(&abd_tuples);
         if (show_help_timer_set) {
-            prrte_event_evtimer_del(&show_help_timer_event);
+            prte_event_evtimer_del(&show_help_timer_event);
         }
         show_help_initialized = false;
         return;
     }
 
-    prrte_output_close(output_stream);
+    prte_output_close(output_stream);
     output_stream = -1;
-    PRRTE_LIST_DESTRUCT(&abd_tuples);
+    PRTE_LIST_DESTRUCT(&abd_tuples);
 
     /* destruct the search list */
     if (NULL != search_dirs) {
-        prrte_argv_free(search_dirs);
+        prte_argv_free(search_dirs);
         search_dirs = NULL;
     }
     show_help_initialized = false;
@@ -178,7 +178,7 @@ static int array2string(char **outstring,
     /* See how much space we need */
 
     len = want_error_header ? 2 * strlen(dash_line) : 0;
-    count = prrte_argv_count(lines);
+    count = prte_argv_count(lines);
     for (i = 0; i < count; ++i) {
         if (NULL == lines[i]) {
             break;
@@ -190,7 +190,7 @@ static int array2string(char **outstring,
 
     (*outstring) = (char*) malloc(len + 1);
     if (NULL == *outstring) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     /* Fill the big string */
@@ -210,7 +210,7 @@ static int array2string(char **outstring,
         strcat(*outstring, dash_line);
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
@@ -238,29 +238,29 @@ static int open_file(const char *base, const char *topic)
          * extension.
          */
         for (i=0; NULL != search_dirs[i]; i++) {
-            filename = prrte_os_path( false, search_dirs[i], base, NULL );
-            prrte_show_help_yyin = fopen(filename, "r");
-            if (NULL == prrte_show_help_yyin) {
-                prrte_asprintf(&err_msg, "%s: %s", filename, strerror(errno));
+            filename = prte_os_path( false, search_dirs[i], base, NULL );
+            prte_show_help_yyin = fopen(filename, "r");
+            if (NULL == prte_show_help_yyin) {
+                prte_asprintf(&err_msg, "%s: %s", filename, strerror(errno));
                 base_len = strlen(base);
                 if (4 > base_len || 0 != strcmp(base + base_len - 4, ".txt")) {
                     free(filename);
-                    prrte_asprintf(&filename, "%s%s%s.txt", search_dirs[i], PRRTE_PATH_SEP, base);
-                    prrte_show_help_yyin = fopen(filename, "r");
+                    prte_asprintf(&filename, "%s%s%s.txt", search_dirs[i], PRTE_PATH_SEP, base);
+                    prte_show_help_yyin = fopen(filename, "r");
                 }
             }
             free(filename);
-            if (NULL != prrte_show_help_yyin) {
+            if (NULL != prte_show_help_yyin) {
                 break;
             }
         }
     }
 
     /* If we still couldn't open it, then something is wrong */
-    if (NULL == prrte_show_help_yyin) {
-        prrte_output(output_stream, "%sSorry!  You were supposed to get help about:\n    %s\nBut I couldn't open the help file:\n    %s.  Sorry!\n%s", dash_line, topic, err_msg, dash_line);
+    if (NULL == prte_show_help_yyin) {
+        prte_output(output_stream, "%sSorry!  You were supposed to get help about:\n    %s\nBut I couldn't open the help file:\n    %s.  Sorry!\n%s", dash_line, topic, err_msg, dash_line);
         free(err_msg);
-        return PRRTE_ERR_NOT_FOUND;
+        return PRTE_ERR_NOT_FOUND;
     }
 
     if (NULL != err_msg) {
@@ -269,11 +269,11 @@ static int open_file(const char *base, const char *topic)
 
     /* Set the buffer */
 
-    prrte_show_help_init_buffer(prrte_show_help_yyin);
+    prte_show_help_init_buffer(prte_show_help_yyin);
 
     /* Happiness */
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
@@ -289,27 +289,27 @@ static int find_topic(const char *base, const char *topic)
     /* Examine every topic */
 
     while (1) {
-        token = prrte_show_help_yylex();
+        token = prte_show_help_yylex();
         switch (token) {
-        case PRRTE_SHOW_HELP_PARSE_TOPIC:
-            tmp = strdup(prrte_show_help_yytext);
+        case PRTE_SHOW_HELP_PARSE_TOPIC:
+            tmp = strdup(prte_show_help_yytext);
             if (NULL == tmp) {
-                return PRRTE_ERR_OUT_OF_RESOURCE;
+                return PRTE_ERR_OUT_OF_RESOURCE;
             }
             tmp[strlen(tmp) - 1] = '\0';
             ret = strcmp(tmp + 1, topic);
             free(tmp);
             if (0 == ret) {
-                return PRRTE_SUCCESS;
+                return PRTE_SUCCESS;
             }
             break;
 
-        case PRRTE_SHOW_HELP_PARSE_MESSAGE:
+        case PRTE_SHOW_HELP_PARSE_MESSAGE:
             break;
 
-        case PRRTE_SHOW_HELP_PARSE_DONE:
-            prrte_output(output_stream, "%sSorry!  You were supposed to get help about:\n    %s\nfrom the file:\n    %s\nBut I couldn't find that topic in the file.  Sorry!\n%s", dash_line, topic, base, dash_line);
-            return PRRTE_ERR_NOT_FOUND;
+        case PRTE_SHOW_HELP_PARSE_DONE:
+            prte_output(output_stream, "%sSorry!  You were supposed to get help about:\n    %s\nfrom the file:\n    %s\nBut I couldn't find that topic in the file.  Sorry!\n%s", dash_line, topic, base, dash_line);
+            return PRTE_ERR_NOT_FOUND;
             break;
 
         default:
@@ -330,18 +330,18 @@ static int read_topic(char ***array)
     int token, rc;
 
     while (1) {
-        token = prrte_show_help_yylex();
+        token = prte_show_help_yylex();
         switch (token) {
-        case PRRTE_SHOW_HELP_PARSE_MESSAGE:
-            /* prrte_argv_append_nosize does strdup(prrte_show_help_yytext) */
-            rc = prrte_argv_append_nosize(array, prrte_show_help_yytext);
-            if (rc != PRRTE_SUCCESS) {
+        case PRTE_SHOW_HELP_PARSE_MESSAGE:
+            /* prte_argv_append_nosize does strdup(prte_show_help_yytext) */
+            rc = prte_argv_append_nosize(array, prte_show_help_yytext);
+            if (rc != PRTE_SUCCESS) {
                 return rc;
             }
             break;
 
         default:
-            return PRRTE_SUCCESS;
+            return PRTE_SUCCESS;
             break;
         }
     }
@@ -354,82 +354,82 @@ static int load_array(char ***array, const char *filename, const char *topic)
 {
     int ret;
 
-    if (PRRTE_SUCCESS != (ret = open_file(filename, topic))) {
+    if (PRTE_SUCCESS != (ret = open_file(filename, topic))) {
         return ret;
     }
 
     ret = find_topic(filename, topic);
-    if (PRRTE_SUCCESS == ret) {
+    if (PRTE_SUCCESS == ret) {
         ret = read_topic(array);
     }
 
-    fclose(prrte_show_help_yyin);
-    prrte_show_help_yylex_destroy ();
+    fclose(prte_show_help_yyin);
+    prte_show_help_yylex_destroy ();
 
-    if (PRRTE_SUCCESS != ret) {
-        prrte_argv_free(*array);
+    if (PRTE_SUCCESS != ret) {
+        prte_argv_free(*array);
     }
 
     return ret;
 }
 
-char *prrte_show_help_vstring(const char *filename, const char *topic,
+char *prte_show_help_vstring(const char *filename, const char *topic,
                              int want_error_header, va_list arglist)
 {
     int rc;
     char *single_string, *output, **array = NULL;
 
     /* Load the message */
-    if (PRRTE_SUCCESS != (rc = load_array(&array, filename, topic))) {
+    if (PRTE_SUCCESS != (rc = load_array(&array, filename, topic))) {
         return NULL;
     }
 
     /* Convert it to a single raw string */
     rc = array2string(&single_string, want_error_header, array);
 
-    if (PRRTE_SUCCESS == rc) {
+    if (PRTE_SUCCESS == rc) {
         /* Apply the formatting to make the final output string */
-        prrte_vasprintf(&output, single_string, arglist);
+        prte_vasprintf(&output, single_string, arglist);
         free(single_string);
     }
 
-    prrte_argv_free(array);
-    return (PRRTE_SUCCESS == rc) ? output : NULL;
+    prte_argv_free(array);
+    return (PRTE_SUCCESS == rc) ? output : NULL;
 }
 
-char *prrte_show_help_string(const char *filename, const char *topic,
+char *prte_show_help_string(const char *filename, const char *topic,
                             int want_error_handler, ...)
 {
     char *output;
     va_list arglist;
 
     va_start(arglist, want_error_handler);
-    output = prrte_show_help_vstring(filename, topic, want_error_handler,
+    output = prte_show_help_vstring(filename, topic, want_error_handler,
                                     arglist);
     va_end(arglist);
 
     return output;
 }
 
-int prrte_show_vhelp(const char *filename, const char *topic,
+int prte_show_vhelp(const char *filename, const char *topic,
                      int want_error_header, va_list arglist)
 {
     char *output;
 
     /* Convert it to a single string */
-    output = prrte_show_help_vstring(filename, topic, want_error_header,
+    output = prte_show_help_vstring(filename, topic, want_error_header,
                                     arglist);
 
     /* If we got a single string, output it with formatting */
     if (NULL != output) {
-        prrte_output(output_stream, "%s", output);
+        prte_output(output_stream, "%s", output);
         free(output);
     }
 
-    return (NULL == output) ? PRRTE_ERROR : PRRTE_SUCCESS;
+    return (NULL == output) ? PRTE_ERROR : PRTE_SUCCESS;
 }
 
-int prrte_show_help(const char *filename, const char *topic,
+int prte_show_help(const char *filename, const char *topic,
                     int want_error_header, ...)
 {
     va_list arglist;
@@ -437,43 +437,43 @@ int prrte_show_help(const char *filename, const char *topic,
     char *output;
 
     va_start(arglist, want_error_header);
-    output = prrte_show_help_vstring(filename, topic, want_error_header,
+    output = prte_show_help_vstring(filename, topic, want_error_header,
                                     arglist);
     va_end(arglist);
 
     /* If nothing came back, there's nothing to do */
     if (NULL == output) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
-    rc = prrte_show_help_norender(filename, topic, want_error_header, output);
+    rc = prte_show_help_norender(filename, topic, want_error_header, output);
     free(output);
     return rc;
 }
 
-int prrte_show_help_add_dir(const char *directory)
+int prte_show_help_add_dir(const char *directory)
 {
-    prrte_argv_append_nosize(&search_dirs, directory);
-    return PRRTE_SUCCESS;
+    prte_argv_append_nosize(&search_dirs, directory);
+    return PRTE_SUCCESS;
 }
 
-int prrte_show_help_norender(const char *filename, const char *topic,
+int prte_show_help_norender(const char *filename, const char *topic,
                             int want_error_header, const char *output)
 {
-    int rc = PRRTE_SUCCESS;
+    int rc = PRTE_SUCCESS;
     int8_t have_output = 1;
-    prrte_buffer_t *buf;
+    prte_buffer_t *buf;
     bool am_inside = false;
 
     /* if we are the HNP, or the RML has not yet been setup,
      * or ROUTED has not been setup,
      * or we weren't given an HNP, then all we can do is process this locally
      */
-    if (PRRTE_PROC_IS_MASTER ||
-        NULL == prrte_rml.send_buffer_nb ||
-        NULL == prrte_routed.get_route ||
-        NULL == prrte_process_info.my_hnp_uri) {
-        rc = show_help(filename, topic, output, PRRTE_PROC_MY_NAME);
+    if (PRTE_PROC_IS_MASTER ||
+        NULL == prte_rml.send_buffer_nb ||
+        NULL == prte_routed.get_route ||
+        NULL == prte_process_info.my_hnp_uri) {
+        rc = show_help(filename, topic, output, PRTE_PROC_MY_NAME);
         goto CLEANUP;
     }
 
@@ -486,31 +486,31 @@ int prrte_show_help_norender(const char *filename, const char *topic,
        properly, but put a safeguard in here for sure for the time
        being. */
     if (am_inside) {
-        rc = show_help(filename, topic, output, PRRTE_PROC_MY_NAME);
+        rc = show_help(filename, topic, output, PRTE_PROC_MY_NAME);
     } else {
         am_inside = true;
 
         /* build the message to the HNP */
-        buf = PRRTE_NEW(prrte_buffer_t);
+        buf = PRTE_NEW(prte_buffer_t);
         /* pack the filename of the show_help text file */
-        prrte_dss.pack(buf, &filename, 1, PRRTE_STRING);
+        prte_dss.pack(buf, &filename, 1, PRTE_STRING);
         /* pack the topic tag */
-        prrte_dss.pack(buf, &topic, 1, PRRTE_STRING);
+        prte_dss.pack(buf, &topic, 1, PRTE_STRING);
         /* pack the flag that we have a string */
-        prrte_dss.pack(buf, &have_output, 1, PRRTE_INT8);
+        prte_dss.pack(buf, &have_output, 1, PRTE_INT8);
         /* pack the resulting string */
-        prrte_dss.pack(buf, &output, 1, PRRTE_STRING);
+        prte_dss.pack(buf, &output, 1, PRTE_STRING);
 
         /* send it via RML to the HNP */
 
-        if (PRRTE_SUCCESS != (rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_HNP, buf,
-                                                          PRRTE_RML_TAG_SHOW_HELP,
-                                                          prrte_rml_send_callback, NULL))) {
-            PRRTE_RELEASE(buf);
+        if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
+                                                          PRTE_RML_TAG_SHOW_HELP,
+                                                          prte_rml_send_callback, NULL))) {
+            PRTE_RELEASE(buf);
             /* okay, that didn't work, output locally  */
-            prrte_output(output_stream, "%s", output);
+            prte_output(output_stream, "%s", output);
         } else {
-            rc = PRRTE_SUCCESS;
+            rc = PRTE_SUCCESS;
         }
         am_inside = false;
     }
@@ -519,25 +519,25 @@ int prrte_show_help_norender(const char *filename, const char *topic,
     return rc;
 }
 
-int prrte_show_help_suppress(const char *filename, const char *topic)
+int prte_show_help_suppress(const char *filename, const char *topic)
 {
-    int rc = PRRTE_SUCCESS;
+    int rc = PRTE_SUCCESS;
     int8_t have_output = 0;
-    prrte_buffer_t *buf;
+    prte_buffer_t *buf;
     static bool am_inside = false;
 
-    if (prrte_execute_quiet) {
-        return PRRTE_SUCCESS;
+    if (prte_execute_quiet) {
+        return PRTE_SUCCESS;
     }
 
     /* If we are the HNP, or the RML has not yet been setup, or ROUTED
        has not been setup, or we weren't given an HNP, then all we can
        do is process this locally. */
-    if (PRRTE_PROC_IS_MASTER ||
-        NULL == prrte_rml.send_buffer_nb ||
-        NULL == prrte_routed.get_route ||
-        NULL == prrte_process_info.my_hnp_uri) {
-        rc = show_help(filename, topic, NULL, PRRTE_PROC_MY_NAME);
+    if (PRTE_PROC_IS_MASTER ||
+        NULL == prte_rml.send_buffer_nb ||
+        NULL == prte_routed.get_route ||
+        NULL == prte_process_info.my_hnp_uri) {
+        rc = show_help(filename, topic, NULL, PRTE_PROC_MY_NAME);
         return rc;
     }
 
@@ -550,54 +550,54 @@ int prrte_show_help_suppress(const char *filename, const char *topic)
        properly, but put a safeguard in here for sure for the time
        being. */
     if (am_inside) {
-        rc = show_help(filename, topic, NULL, PRRTE_PROC_MY_NAME);
+        rc = show_help(filename, topic, NULL, PRTE_PROC_MY_NAME);
     } else {
         am_inside = true;
 
         /* build the message to the HNP */
-        buf = PRRTE_NEW(prrte_buffer_t);
+        buf = PRTE_NEW(prte_buffer_t);
         /* pack the filename of the show_help text file */
-        prrte_dss.pack(buf, &filename, 1, PRRTE_STRING);
+        prte_dss.pack(buf, &filename, 1, PRTE_STRING);
         /* pack the topic tag */
-        prrte_dss.pack(buf, &topic, 1, PRRTE_STRING);
+        prte_dss.pack(buf, &topic, 1, PRTE_STRING);
         /* pack the flag that we DO NOT have a string */
-        prrte_dss.pack(buf, &have_output, 1, PRRTE_INT8);
+        prte_dss.pack(buf, &have_output, 1, PRTE_INT8);
         /* send it to the HNP */
-        if (PRRTE_SUCCESS != (rc = prrte_rml.send_buffer_nb(PRRTE_PROC_MY_HNP, buf,
-                                                          PRRTE_RML_TAG_SHOW_HELP,
-                                                          prrte_rml_send_callback, NULL))) {
-            PRRTE_ERROR_LOG(rc);
-            PRRTE_RELEASE(buf);
+        if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
+                                                          PRTE_RML_TAG_SHOW_HELP,
+                                                          prte_rml_send_callback, NULL))) {
+            PRTE_ERROR_LOG(rc);
+            PRTE_RELEASE(buf);
             /* okay, that didn't work, just process locally error, just ignore return  */
-            show_help(filename, topic, NULL, PRRTE_PROC_MY_NAME);
+            show_help(filename, topic, NULL, PRTE_PROC_MY_NAME);
         }
         am_inside = false;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /*
- * Returns PRRTE_SUCCESS if the strings match; PRRTE_ERROR otherwise.
+ * Returns PRTE_SUCCESS if the strings match; PRTE_ERROR otherwise.
  */
 static int match(const char *a, const char *b)
 {
-    int rc = PRRTE_ERROR;
+    int rc = PRTE_ERROR;
     char *p1, *p2, *tmp1 = NULL, *tmp2 = NULL;
     size_t min;
 
     /* Check straight string match first */
-    if (0 == strcmp(a, b)) return PRRTE_SUCCESS;
+    if (0 == strcmp(a, b)) return PRTE_SUCCESS;
 
     if (NULL != strchr(a, '*') || NULL != strchr(b, '*')) {
         tmp1 = strdup(a);
         if (NULL == tmp1) {
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
         tmp2 = strdup(b);
         if (NULL == tmp2) {
             free(tmp1);
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
         p1 = strchr(tmp1, '*');
         p2 = strchr(tmp2, '*');
@@ -613,7 +613,7 @@ static int match(const char *a, const char *b)
             min = strlen(tmp2);
         }
         if (0 == min || 0 == strncmp(tmp1, tmp2, min)) {
-            rc = PRRTE_SUCCESS;
+            rc = PRTE_SUCCESS;
         }
         free(tmp1);
         free(tmp2);
@@ -621,12 +621,12 @@ static int match(const char *a, const char *b)
     }
 
     /* No match */
-    return PRRTE_ERROR;
+    return PRTE_ERROR;
 }
 
 /*
  * Check to see if a given (filename, topic) tuple has been displayed
- * already.  Return PRRTE_SUCCESS if so, or PRRTE_ERR_NOT_FOUND if not.
+ * already.  Return PRTE_SUCCESS if so, or PRTE_ERR_NOT_FOUND if not.
  *
  * Always return a tuple_list_item_t representing this (filename,
  * topic) entry in the list of "already been displayed tuples" (if it
@@ -642,22 +642,22 @@ static int get_tli(const char *filename, const char *topic,
                    tuple_list_item_t **tli)
 {
     /* Search the list for a duplicate. */
-    PRRTE_LIST_FOREACH(*tli, &abd_tuples, tuple_list_item_t) {
-        if (PRRTE_SUCCESS == match((*tli)->tli_filename, filename) &&
-            PRRTE_SUCCESS == match((*tli)->tli_topic, topic)) {
-            return PRRTE_SUCCESS;
+    PRTE_LIST_FOREACH(*tli, &abd_tuples, tuple_list_item_t) {
+        if (PRTE_SUCCESS == match((*tli)->tli_filename, filename) &&
+            PRTE_SUCCESS == match((*tli)->tli_topic, topic)) {
+            return PRTE_SUCCESS;
         }
     }
 
     /* Nope, we didn't find it -- make a new one */
-    *tli = PRRTE_NEW(tuple_list_item_t);
+    *tli = PRTE_NEW(tuple_list_item_t);
     if (NULL == *tli) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
     (*tli)->tli_filename = strdup(filename);
     (*tli)->tli_topic = strdup(topic);
-    prrte_list_append(&abd_tuples, &((*tli)->super));
-    return PRRTE_ERR_NOT_FOUND;
+    prte_list_append(&abd_tuples, &((*tli)->super));
+    return PRTE_ERR_NOT_FOUND;
 }
 
 static void show_accumulated_duplicates(int fd, short event, void *context)
@@ -669,21 +669,21 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
     /* Loop through all the messages we've displayed and see if any
        processes have sent duplicates that have not yet been displayed
        yet */
-    PRRTE_LIST_FOREACH(tli, &abd_tuples, tuple_list_item_t) {
+    PRTE_LIST_FOREACH(tli, &abd_tuples, tuple_list_item_t) {
         if (tli->tli_display &&
             tli->tli_count_since_last_display > 0) {
             static bool first = true;
-            if (prrte_xml_output) {
-                prrte_asprintf(&tmp, "%d more process%s sent help message %s / %s",
+            if (prte_xml_output) {
+                prte_asprintf(&tmp, "%d more process%s sent help message %s / %s",
                          tli->tli_count_since_last_display,
                          (tli->tli_count_since_last_display > 1) ? "es have" : " has",
                          tli->tli_filename, tli->tli_topic);
                 output = xml_format((unsigned char*)tmp);
                 free(tmp);
-                fprintf(prrte_xml_fp, "%s", output);
+                fprintf(prte_xml_fp, "%s", output);
                 free(output);
             } else {
-                prrte_output(0, "%d more process%s sent help message %s / %s",
+                prte_output(0, "%d more process%s sent help message %s / %s",
                             tli->tli_count_since_last_display,
                             (tli->tli_count_since_last_display > 1) ? "es have" : " has",
                             tli->tli_filename, tli->tli_topic);
@@ -691,11 +691,11 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
             tli->tli_count_since_last_display = 0;
 
             if (first) {
-               if (prrte_xml_output) {
-                    fprintf(prrte_xml_fp, "<stderr>Set MCA parameter \"prrte_base_help_aggregate\" to 0 to see all help / error messages</stderr>\n");
-                    fflush(prrte_xml_fp);
+               if (prte_xml_output) {
+                    fprintf(prte_xml_fp, "<stderr>Set MCA parameter \"prte_base_help_aggregate\" to 0 to see all help / error messages</stderr>\n");
+                    fflush(prte_xml_fp);
                 } else {
-                    prrte_output(0, "Set MCA parameter \"prrte_base_help_aggregate\" to 0 to see all help / error messages");
+                    prte_output(0, "Set MCA parameter \"prte_base_help_aggregate\" to 0 to see all help / error messages");
                 }
                 first = false;
             }
@@ -720,7 +720,7 @@ static char* xml_format(unsigned char *input)
     /* add some arbitrary size padding */
     output = (char*)malloc((len+1024)*sizeof(char));
     if (NULL == output) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return (char*)input; /* default to no xml formatting */
     }
     memset(output, 0, len+1024);
@@ -739,7 +739,7 @@ static char* xml_format(unsigned char *input)
     for (i=0; i < len; i++) {
         if ('&' == input[i]) {
             if (k+5 >= outlen) {
-                PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 goto error;
             }
             snprintf(qprint, 10, "&amp;");
@@ -748,7 +748,7 @@ static char* xml_format(unsigned char *input)
             }
         } else if ('<' == input[i]) {
             if (k+4 >= outlen) {
-                PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 goto error;
             }
             snprintf(qprint, 10, "&lt;");
@@ -757,7 +757,7 @@ static char* xml_format(unsigned char *input)
             }
         } else if ('>' == input[i]) {
             if (k+4 >= outlen) {
-                PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 goto error;
             }
             snprintf(qprint, 10, "&gt;");
@@ -767,7 +767,7 @@ static char* xml_format(unsigned char *input)
         } else if (input[i] < 32 || input[i] > 127) {
             /* this is a non-printable character, so escape it too */
             if (k+7 >= outlen) {
-                PRRTE_ERROR_LOG(PRRTE_ERR_OUT_OF_RESOURCE);
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 goto error;
             }
             snprintf(qprint, 10, "&#%03d;", (int)input[i]);
@@ -817,19 +817,19 @@ error:
 }
 
 static int show_help(const char *filename, const char *topic,
-                     const char *output, prrte_process_name_t *sender)
+                     const char *output, prte_process_name_t *sender)
 {
     int rc;
     tuple_list_item_t *tli = NULL;
-    prrte_namelist_t *pnli;
+    prte_namelist_t *pnli;
     time_t now = time(NULL);
 
     /* If we're aggregating, check for duplicates.  Otherwise, don't
        track duplicates at all and always display the message. */
-    if (prrte_help_want_aggregate) {
+    if (prte_help_want_aggregate) {
         rc = get_tli(filename, topic, &tli);
     } else {
-        rc = PRRTE_ERR_NOT_FOUND;
+        rc = PRTE_ERR_NOT_FOUND;
     }
 
     /* If there's no output string (i.e., this is a control message
@@ -840,7 +840,7 @@ static int show_help(const char *filename, const char *topic,
     }
 
     /* Was it already displayed? */
-    if (PRRTE_SUCCESS == rc) {
+    if (PRTE_SUCCESS == rc) {
         /* Yes.  But do we want to print anything?  That's complicated.
 
            We always show the first message of a given (filename,
@@ -870,26 +870,26 @@ static int show_help(const char *filename, const char *topic,
         if (now > show_help_time_last_displayed + 5 && !show_help_timer_set) {
             show_accumulated_duplicates(0, 0, NULL);
         } else if (!show_help_timer_set) {
-            prrte_event_evtimer_set(prrte_event_base, &show_help_timer_event,
+            prte_event_evtimer_set(prte_event_base, &show_help_timer_event,
                                    show_accumulated_duplicates, NULL);
-            prrte_event_evtimer_add(&show_help_timer_event, &show_help_interval);
+            prte_event_evtimer_add(&show_help_timer_event, &show_help_interval);
             show_help_timer_set = true;
         }
     }
     /* Not already displayed */
-    else if (PRRTE_ERR_NOT_FOUND == rc) {
-        if (NULL != prrte_iof.output) {
+    else if (PRTE_ERR_NOT_FOUND == rc) {
+        if (NULL != prte_iof.output) {
             /* send it to any connected tools */
-            prrte_iof.output(sender, PRRTE_IOF_STDDIAG, output);
+            prte_iof.output(sender, PRTE_IOF_STDDIAG, output);
         }
-        if (prrte_xml_output) {
+        if (prte_xml_output) {
             char *tmp;
             tmp = xml_format((unsigned char*)output);
-            fprintf(prrte_xml_fp, "%s", tmp);
-            fflush(prrte_xml_fp);
+            fprintf(prte_xml_fp, "%s", tmp);
+            fflush(prte_xml_fp);
             free(tmp);
         } else {
-            prrte_output(output_stream, "%s", output);
+            prte_output(output_stream, "%s", output);
         }
         if (!show_help_timer_set) {
             show_help_time_last_displayed = now;
@@ -897,29 +897,29 @@ static int show_help(const char *filename, const char *topic,
     }
     /* Some other error occurred */
     else {
-        PRRTE_ERROR_LOG(rc);
+        PRTE_ERROR_LOG(rc);
         return rc;
     }
 
  after_output:
     /* If we're aggregating, add this process name to the list */
-    if (prrte_help_want_aggregate) {
-        pnli = PRRTE_NEW(prrte_namelist_t);
+    if (prte_help_want_aggregate) {
+        pnli = PRTE_NEW(prte_namelist_t);
         if (NULL == pnli) {
-            rc = PRRTE_ERR_OUT_OF_RESOURCE;
-            PRRTE_ERROR_LOG(rc);
+            rc = PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_ERROR_LOG(rc);
             return rc;
         }
         pnli->name = *sender;
-        prrte_list_append(&(tli->tli_processes), &(pnli->super));
+        prte_list_append(&(tli->tli_processes), &(pnli->super));
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /* Note that this function is called from ess/hnp, so don't make it
    static */
-void prrte_show_help_recv(int status, prrte_process_name_t* sender,
-                         prrte_buffer_t *buffer, prrte_rml_tag_t tag,
+void prte_show_help_recv(int status, prte_process_name_t* sender,
+                         prte_buffer_t *buffer, prte_rml_tag_t tag,
                          void* cbdata)
 {
     char *output=NULL;
@@ -928,35 +928,35 @@ void prrte_show_help_recv(int status, prrte_process_name_t* sender,
     int8_t have_output;
     int rc;
 
-    PRRTE_OUTPUT_VERBOSE((5, prrte_debug_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_debug_output,
                          "%s got show_help from %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         PRRTE_NAME_PRINT(sender)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(sender)));
 
     /* unpack the filename of the show_help text file */
     n = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &filename, &n, PRRTE_STRING))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &filename, &n, PRTE_STRING))) {
+        PRTE_ERROR_LOG(rc);
         goto cleanup;
     }
     /* unpack the topic tag */
     n = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &topic, &n, PRRTE_STRING))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &topic, &n, PRTE_STRING))) {
+        PRTE_ERROR_LOG(rc);
         goto cleanup;
     }
     /* unpack the flag */
     n = 1;
-    if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &have_output, &n, PRRTE_INT8))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &have_output, &n, PRTE_INT8))) {
+        PRTE_ERROR_LOG(rc);
         goto cleanup;
     }
 
     /* If we have an output string, unpack it */
     if (have_output) {
         n = 1;
-        if (PRRTE_SUCCESS != (rc = prrte_dss.unpack(buffer, &output, &n, PRRTE_STRING))) {
-            PRRTE_ERROR_LOG(rc);
+        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &output, &n, PRTE_STRING))) {
+            PRTE_ERROR_LOG(rc);
             goto cleanup;
         }
     }

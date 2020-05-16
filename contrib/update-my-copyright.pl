@@ -9,7 +9,7 @@
 # Short version:
 #
 # This script automates the tedious task of updating copyright notices
-# in the tops of OMPI/PRRTE/OPAL source files before committing back to
+# in the tops of OMPI/PRTE/OPAL source files before committing back to
 # the respository.  Set the environment variable
 # OMPI_COPYRIGHT_SEARCH_NAME to a short (case-insensitive) name that
 # indicates your copyright line (e.g., "cisco"), and set the env

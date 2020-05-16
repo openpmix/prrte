@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2009-2017 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2010      IBM Corporation.  All rights reserved.
 # Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
 # Copyright (c) 2013-2018 Los Alamos National Security, Inc.  All rights
@@ -40,4 +40,4 @@ EXTRA_DIST = \
 	platform/intel/bend/linux-optimized \
 	platform/intel/bend/linux-optimized.conf
 
-dist_prrtedata_DATA = openmpi-valgrind.supp
+dist_prtedata_DATA = openmpi-valgrind.supp

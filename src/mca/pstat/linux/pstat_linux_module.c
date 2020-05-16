@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2006-2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
@@ -22,7 +22,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 /* This component will only be compiled on Linux, where we are
@@ -52,21 +52,21 @@
  */
 static int linux_module_init(void);
 static int query(pid_t pid,
-                 prrte_pstats_t *stats,
-                 prrte_node_stats_t *nstats);
+                 prte_pstats_t *stats,
+                 prte_node_stats_t *nstats);
 static int linux_module_fini(void);
 
 /*
  * Linux pstat module
  */
-const prrte_pstat_base_module_t prrte_pstat_linux_module = {
+const prte_pstat_base_module_t prte_pstat_linux_module = {
     /* Initialization function */
     linux_module_init,
     query,
     linux_module_fini
 };
 
-#define PRRTE_STAT_MAX_LENGTH   1024
+#define PRTE_STAT_MAX_LENGTH   1024
 
 /* Local functions */
 static char *local_getline(FILE *fp);
@@ -74,16 +74,16 @@ static char *local_stripper(char *data);
 static void local_getfields(char *data, char ***fields);
 
 /* Local data */
-static char input[PRRTE_STAT_MAX_LENGTH];
+static char input[PRTE_STAT_MAX_LENGTH];
 
 static int linux_module_init(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int linux_module_fini(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static char *next_field(char *ptr, int barrier)
@@ -122,8 +122,8 @@ static float convert_value(char *value)
 }
 
 static int query(pid_t pid,
-                 prrte_pstats_t *stats,
-                 prrte_node_stats_t *nstats)
+                 prte_pstats_t *stats,
+                 prte_node_stats_t *nstats)
 {
     char data[4096];
     int fd;
@@ -135,8 +135,8 @@ static int query(pid_t pid,
     FILE *fp;
     char *dptr, *value;
     char **fields;
-    prrte_diskstats_t *ds;
-    prrte_netstats_t *ns;
+    prte_diskstats_t *ds;
+    prte_netstats_t *ns;
 
     if (NULL != stats) {
         /* record the time of this sample */
@@ -157,7 +157,7 @@ static int query(pid_t pid,
         /* create the stat filename for this proc */
         numchars = snprintf(data, sizeof(data), "/proc/%d/stat", pid);
         if (numchars >= sizeof(data)) {
-            return PRRTE_ERR_VALUE_OUT_OF_BOUNDS;
+            return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
         }
 
         if (0 > (fd = open(data, O_RDONLY))) {
@@ -165,7 +165,7 @@ static int query(pid_t pid,
              * aren't really on a supported system, or the proc no
              * longer exists. Just return an error
              */
-            return PRRTE_ERR_FILE_OPEN_FAILURE;
+            return PRTE_ERR_FILE_OPEN_FAILURE;
         }
 
         /* absorb all of the file's contents in one gulp - we'll process
@@ -176,7 +176,7 @@ static int query(pid_t pid,
         if (len < 0) {
             /* This shouldn't happen! */
             close(fd);
-            return PRRTE_ERR_FILE_OPEN_FAILURE;
+            return PRTE_ERR_FILE_OPEN_FAILURE;
         }
         close(fd);
 
@@ -193,7 +193,7 @@ static int query(pid_t pid,
         /* the cmd is surrounded by parentheses - find the start */
         if (NULL == (ptr = strchr(data, '('))) {
             /* no cmd => something wrong with data, return error */
-            return PRRTE_ERR_BAD_PARAM;
+            return PRTE_ERR_BAD_PARAM;
         }
         /* step over the paren */
         ptr++;
@@ -201,12 +201,12 @@ static int query(pid_t pid,
         /* find the ending paren */
         if (NULL == (eptr = strchr(ptr, ')'))) {
             /* no end to cmd => something wrong with data, return error */
-            return PRRTE_ERR_BAD_PARAM;
+            return PRTE_ERR_BAD_PARAM;
         }
 
         /* save the cmd name, up to the limit of the array */
         i = 0;
-        while (ptr < eptr && i < PRRTE_PSTAT_MAX_STRING_LEN) {
+        while (ptr < eptr && i < PRTE_PSTAT_MAX_STRING_LEN) {
             stats->cmd[i++] = *ptr++;
         }
 
@@ -286,12 +286,12 @@ static int query(pid_t pid,
         memset(data, 0, sizeof(data));
         numchars = snprintf(data, sizeof(data), "/proc/%d/status", pid);
         if (numchars >= sizeof(data)) {
-            return PRRTE_ERR_VALUE_OUT_OF_BOUNDS;
+            return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
         }
 
         if (NULL == (fp = fopen(data, "r"))) {
             /* ignore this */
-            return PRRTE_SUCCESS;
+            return PRTE_SUCCESS;
         }
 
         /* parse it according to proc(3) */
@@ -315,12 +315,12 @@ static int query(pid_t pid,
         memset(data, 0, sizeof(data));
         numchars = snprintf(data, sizeof(data), "/proc/%d/smaps", pid);
         if (numchars >= sizeof(data)) {
-            return PRRTE_ERR_VALUE_OUT_OF_BOUNDS;
+            return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
         }
 
         if (NULL == (fp = fopen(data, "r"))) {
             /* ignore this */
-            return PRRTE_SUCCESS;
+            return PRTE_SUCCESS;
         }
 
         /* parse it to find lines that start with "Pss" */
@@ -416,12 +416,12 @@ static int query(pid_t pid,
             if (NULL == fields) {
                 continue;
             }
-            if (14 < prrte_argv_count(fields)) {
-                prrte_argv_free(fields);
+            if (14 < prte_argv_count(fields)) {
+                prte_argv_free(fields);
                 continue;
             }
             /* pack the ones of interest into the struct */
-            ds = PRRTE_NEW(prrte_diskstats_t);
+            ds = PRTE_NEW(prte_diskstats_t);
             ds->disk = strdup(fields[2]);
             ds->num_reads_completed = strtoul(fields[3], NULL, 10);
             ds->num_reads_merged = strtoul(fields[4], NULL, 10);
@@ -434,8 +434,8 @@ static int query(pid_t pid,
             ds->num_ios_in_progress = strtoul(fields[11], NULL, 10);
             ds->milliseconds_io = strtoul(fields[12], NULL, 10);
             ds->weighted_milliseconds_io = strtoul(fields[13], NULL, 10);
-            prrte_list_append(&nstats->diskstats, &ds->super);
-            prrte_argv_free(fields);
+            prte_list_append(&nstats->diskstats, &ds->super);
+            prte_argv_free(fields);
         }
         fclose(fp);
 
@@ -465,7 +465,7 @@ static int query(pid_t pid,
                 continue;
             }
             /* pack the ones of interest into the struct */
-            ns = PRRTE_NEW(prrte_netstats_t);
+            ns = PRTE_NEW(prte_netstats_t);
             ns->net_interface = strdup(dptr);
             ns->num_bytes_recvd = strtoul(fields[0], NULL, 10);
             ns->num_packets_recvd = strtoul(fields[1], NULL, 10);
@@ -473,21 +473,21 @@ static int query(pid_t pid,
             ns->num_bytes_sent = strtoul(fields[8], NULL, 10);
             ns->num_packets_sent = strtoul(fields[9], NULL, 10);
             ns->num_send_errs = strtoul(fields[10], NULL, 10);
-            prrte_list_append(&nstats->netstats, &ns->super);
-            prrte_argv_free(fields);
+            prte_list_append(&nstats->netstats, &ns->super);
+            prte_argv_free(fields);
         }
         fclose(fp);
     }
 
  complete:
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static char *local_getline(FILE *fp)
 {
     char *ret, *ptr;
 
-    ret = fgets(input, PRRTE_STAT_MAX_LENGTH, fp);
+    ret = fgets(input, PRTE_STAT_MAX_LENGTH, fp);
     if (NULL != ret) {
         input[strlen(input)-1] = '\0';  /* remove newline */
         /* strip leading white space */
@@ -558,7 +558,7 @@ static void local_getfields(char *dptr, char ***fields)
         /* terminate it */
         *end = '\0';
         /* store it on the stack */
-        prrte_argv_append_nosize(fields, ptr);
+        prte_argv_append_nosize(fields, ptr);
         /* step across any white space */
         end++;
         while ('\0' != *end && !isalnum(*end)) {
@@ -573,6 +573,6 @@ static void local_getfields(char *dptr, char ***fields)
     }
     if (NULL != ptr) {
         /* have a hanging field */
-        prrte_argv_append_nosize(fields, ptr);
+        prte_argv_append_nosize(fields, ptr);
     }
 }

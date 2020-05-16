@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,10 +21,10 @@
  * @file
  */
 
-#ifndef PRRTE_NUMTOSTR_UTIL
-#define PRRTE_NUMTOSTR_UTIL
+#ifndef PRTE_NUMTOSTR_UTIL
+#define PRTE_NUMTOSTR_UTIL
 
-#include "prrte_config.h"
+#include "prte_config.h"
 /**
  * Convert a long integer to a char* string.  The returned buffer is
  * allocated by calling malloc() and must be freed by the caller.
@@ -31,7 +32,7 @@
  *  @param num (IN)      Input number
  *  @return              String containing number (NULL on failure)
  */
-PRRTE_EXPORT char* prrte_ltostr(long num);
+PRTE_EXPORT char* prte_ltostr(long num);
 
 
 /**
@@ -41,6 +42,6 @@ PRRTE_EXPORT char* prrte_ltostr(long num);
  * @param num (IN)       Input number
  * @return               String containing number (NULL on failure)
  */
-PRRTE_EXPORT char* prrte_dtostr(double num);
+PRTE_EXPORT char* prte_dtostr(double num);
 
-#endif /* PRRTE_NUMTOSTR_UTIL */
+#endif /* PRTE_NUMTOSTR_UTIL */

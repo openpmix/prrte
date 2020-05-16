@@ -9,8 +9,8 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2008-2010 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2019      Triad National Security, LLC. All rights
 #                         reserved.
@@ -33,7 +33,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_ess_alps_DSO
+if MCA_BUILD_prte_ess_alps_DSO
 component_noinst =
 component_install = mca_ess_alps.la
 else
@@ -41,14 +41,14 @@ component_noinst = libmca_ess_alps.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_ess_alps_la_SOURCES = $(sources)
 mca_ess_alps_la_CPPFLAGS = $(ess_alps_CPPFLAGS)
 mca_ess_alps_la_LDFLAGS = -module -avoid-version $(ess_alps_LDFLAGS)
 mca_ess_alps_la_LIBADD = $(ess_alps_LIBS) \
                          $(top_builddir)/src/libprrte.la \
-                         $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
+                         $(PRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
 
 
 noinst_LTLIBRARIES = $(component_noinst)

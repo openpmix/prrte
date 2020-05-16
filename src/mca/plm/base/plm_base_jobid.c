@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +19,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <stdio.h>
@@ -29,7 +30,7 @@
 #include "src/util/proc_info.h"
 #include "src/util/printf.h"
 #include "src/util/name_fns.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/mca/plm/base/plm_private.h"
 
@@ -37,51 +38,51 @@
  * attempt to create a globally unique name - do a hash
  * of the hostname plus pid
  */
-int prrte_plm_base_set_hnp_name(void)
+int prte_plm_base_set_hnp_name(void)
 {
     char *evar;
     int rc;
 
     /* we may have been passed a PMIx nspace to use */
     if (NULL != (evar = getenv("PMIX_SERVER_NSPACE"))) {
-        PMIX_LOAD_PROCID(&prrte_process_info.myproc, evar, 0);
+        PMIX_LOAD_PROCID(&prte_process_info.myproc, evar, 0);
         /* setup the corresponding numerical jobid and add the
          * job to the hash table */
-        PRRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRRTE_PROC_MY_NAME->jobid, evar);
+        PRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRTE_PROC_MY_NAME->jobid, evar);
 
         if (NULL != (evar = getenv("PMIX_SERVER_RANK"))) {
-            PRRTE_PROC_MY_NAME->vpid = strtoul(evar, NULL, 10);
+            PRTE_PROC_MY_NAME->vpid = strtoul(evar, NULL, 10);
         } else {
-            PRRTE_PROC_MY_NAME->vpid = 0;
+            PRTE_PROC_MY_NAME->vpid = 0;
         }
         /* copy it to the HNP field */
-        PRRTE_PROC_MY_HNP->jobid = PRRTE_PROC_MY_NAME->jobid;
-        PRRTE_PROC_MY_HNP->vpid = PRRTE_PROC_MY_NAME->vpid;
-        return PRRTE_SUCCESS;
+        PRTE_PROC_MY_HNP->jobid = PRTE_PROC_MY_NAME->jobid;
+        PRTE_PROC_MY_HNP->vpid = PRTE_PROC_MY_NAME->vpid;
+        return PRTE_SUCCESS;
     }
 
     /* for our nspace, we will use the nodename+pid */
-    prrte_asprintf(&evar, "%s-%s%u", prrte_tool_basename, prrte_process_info.nodename, (uint32_t)prrte_process_info.pid);
+    prte_asprintf(&evar, "%s-%s%u", prte_tool_basename, prte_process_info.nodename, (uint32_t)prte_process_info.pid);
 
-    PRRTE_PMIX_CONVERT_NSPACE(rc, &PRRTE_PROC_MY_NAME->jobid, evar);
-    if (PRRTE_SUCCESS != rc) {
+    PRTE_PMIX_CONVERT_NSPACE(rc, &PRTE_PROC_MY_NAME->jobid, evar);
+    if (PRTE_SUCCESS != rc) {
         free(evar);
         return rc;
     }
-    PRRTE_PROC_MY_NAME->vpid = 0;
+    PRTE_PROC_MY_NAME->vpid = 0;
 
     /* copy it to the HNP field */
-    PRRTE_PROC_MY_HNP->jobid = PRRTE_PROC_MY_NAME->jobid;
-    PRRTE_PROC_MY_HNP->vpid = PRRTE_PROC_MY_NAME->vpid;
+    PRTE_PROC_MY_HNP->jobid = PRTE_PROC_MY_NAME->jobid;
+    PRTE_PROC_MY_HNP->vpid = PRTE_PROC_MY_NAME->vpid;
 
     /* set the nspace */
-    PMIX_LOAD_NSPACE(prrte_process_info.myproc.nspace, evar);
-    prrte_process_info.myproc.rank = 0;
+    PMIX_LOAD_NSPACE(prte_process_info.myproc.nspace, evar);
+    prte_process_info.myproc.rank = 0;
 
 
     /* done */
     free(evar);
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /*
@@ -89,20 +90,20 @@ int prrte_plm_base_set_hnp_name(void)
  */
 static bool reuse = false;
 
-int prrte_plm_base_create_jobid(prrte_job_t *jdata)
+int prte_plm_base_create_jobid(prte_job_t *jdata)
 {
     int16_t i;
-    prrte_jobid_t pjid;
-    prrte_job_t *ptr;
+    prte_jobid_t pjid;
+    prte_job_t *ptr;
     bool found;
     char *tmp;
     int rc;
 
-    if (PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_RESTART)) {
+    if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         /* this job is being restarted - do not assign it
          * a new jobid
          */
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     if (reuse) {
@@ -110,39 +111,39 @@ int prrte_plm_base_create_jobid(prrte_job_t *jdata)
         found = false;
         for (i=1; i < INT16_MAX; i++) {
             ptr = NULL;
-            pjid = PRRTE_CONSTRUCT_LOCAL_JOBID(PRRTE_PROC_MY_NAME->jobid, prrte_plm_globals.next_jobid);
-            prrte_hash_table_get_value_uint32(prrte_job_data, pjid, (void**)&ptr);
+            pjid = PRTE_CONSTRUCT_LOCAL_JOBID(PRTE_PROC_MY_NAME->jobid, prte_plm_globals.next_jobid);
+            prte_hash_table_get_value_uint32(prte_job_data, pjid, (void**)&ptr);
             if (NULL == ptr) {
                 found = true;
                 break;
             }
 
-            if (INT16_MAX == prrte_plm_globals.next_jobid) {
-                prrte_plm_globals.next_jobid = 1;
+            if (INT16_MAX == prte_plm_globals.next_jobid) {
+                prte_plm_globals.next_jobid = 1;
             } else {
-                prrte_plm_globals.next_jobid++;
+                prte_plm_globals.next_jobid++;
             }
         }
         if (!found) {
             /* we have run out of jobids! */
-            prrte_output(0, "Whoa! What are you doing starting that many jobs concurrently? We are out of jobids!");
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            prte_output(0, "Whoa! What are you doing starting that many jobs concurrently? We are out of jobids!");
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
 
     /* the new nspace is our nspace with a ".N" extension */
-    prrte_asprintf(&tmp, "%s.%u", prrte_process_info.myproc.nspace, (unsigned)prrte_plm_globals.next_jobid);
+    prte_asprintf(&tmp, "%s.%u", prte_process_info.myproc.nspace, (unsigned)prte_plm_globals.next_jobid);
     PMIX_LOAD_NSPACE(jdata->nspace, tmp);
     free(tmp);
-    PRRTE_PMIX_CONVERT_NSPACE(rc, &jdata->jobid, jdata->nspace);
-    if (PRRTE_SUCCESS != rc) {
+    PRTE_PMIX_CONVERT_NSPACE(rc, &jdata->jobid, jdata->nspace);
+    if (PRTE_SUCCESS != rc) {
         return rc;
     }
-    prrte_plm_globals.next_jobid++;
-    if (INT16_MAX == prrte_plm_globals.next_jobid) {
+    prte_plm_globals.next_jobid++;
+    if (INT16_MAX == prte_plm_globals.next_jobid) {
         reuse = true;
-        prrte_plm_globals.next_jobid = 1;
+        prte_plm_globals.next_jobid = 1;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

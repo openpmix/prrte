@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -27,16 +27,16 @@
 #ifndef _MCA_OOB_TCP_COMPONENT_H_
 #define _MCA_OOB_TCP_COMPONENT_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
 
-#include "src/class/prrte_bitmap.h"
-#include "src/class/prrte_list.h"
-#include "src/class/prrte_pointer_array.h"
-#include "src/class/prrte_hash_table.h"
+#include "src/class/prte_bitmap.h"
+#include "src/class/prte_list.h"
+#include "src/class/prte_pointer_array.h"
+#include "src/class/prte_hash_table.h"
 #include "src/event/event-internal.h"
 
 #include "src/mca/oob/oob.h"
@@ -46,13 +46,13 @@
  *  OOB TCP Component
  */
 typedef struct {
-    prrte_oob_base_component_t super;          /**< base OOB component */
+    prte_oob_base_component_t super;          /**< base OOB component */
     uint32_t addr_count;                     /**< total number of addresses */
     int num_links;                           /**< number of logical links per physical device */
     int                  max_retries;        /**< max number of retries before declaring peer gone */
-    prrte_list_t          events;             /**< events for monitoring connections */
+    prte_list_t          events;             /**< events for monitoring connections */
     int                  peer_limit;         /**< max size of tcp peer cache */
-    prrte_hash_table_t    peers;              // connection addresses for peers
+    prte_hash_table_t    peers;              // connection addresses for peers
 
     /* Port specifications */
     char*              if_include;           /**< list of ip interfaces to include */
@@ -75,12 +75,12 @@ typedef struct {
     char**             ipv6ports;
 
     /* connection support */
-    prrte_list_t       local_ifs;              /**< prrte list of local prrte_if_t interfaces */
+    prte_list_t       local_ifs;              /**< prte list of local prte_if_t interfaces */
     char**             if_masks;
     char*              my_uri;                 /**< uri for connecting to the TCP module */
     int                num_hnp_ports;          /**< number of ports the HNP should listen on */
-    prrte_list_t        listeners;              /**< List of sockets being monitored by event or thread */
-    prrte_thread_t      listen_thread;          /**< handle to the listening thread */
+    prte_list_t        listeners;              /**< List of sockets being monitored by event or thread */
+    prte_thread_t      listen_thread;          /**< handle to the listening thread */
     bool               listen_thread_active;
     struct timeval     listen_thread_tv;       /**< Timeout when using listen thread */
     int                stop_thread[2];         /**< pipe used to exit the listen thread */
@@ -89,14 +89,14 @@ typedef struct {
     int                keepalive_intvl;        /**< time between keepalives, in seconds */
     int                retry_delay;            /**< time to wait before retrying connection */
     int                max_recon_attempts;     /**< maximum number of times to attempt connect before giving up (-1 for never) */
-} prrte_oob_tcp_component_t;
+} prte_oob_tcp_component_t;
 
-PRRTE_MODULE_EXPORT extern prrte_oob_tcp_component_t prrte_oob_tcp_component;
+PRTE_MODULE_EXPORT extern prte_oob_tcp_component_t prte_oob_tcp_component;
 
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_component_set_module(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_component_no_route(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata);
 
 #endif /* _MCA_OOB_TCP_COMPONENT_H_ */

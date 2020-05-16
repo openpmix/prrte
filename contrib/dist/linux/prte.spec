@@ -153,19 +153,19 @@
 %define _libdir /opt/%{name}/%{version}/lib
 %define _includedir /opt/%{name}/%{version}/include
 %define _mandir /opt/%{name}/%{version}/man
-# Note that the name "prrte" is hard-coded in
+# Note that the name "prte" is hard-coded in
 # opal/mca/installdirs/config for pkgdatadir; there is currently no
 # easy way to have OMPI change this directory name internally.  So we
 # just hard-code that name here as well (regardless of the value of
 # %{name} or %{_name}).
-%define _pkgdatadir /opt/%{name}/%{version}/share/prrte
+%define _pkgdatadir /opt/%{name}/%{version}/share/prte
 # Per advice from Doug Ledford at Red Hat, docdir is supposed to be in
 # a fixed location.  But if you're installing a package in /opt, all
 # bets are off.  So feel free to install it anywhere in your tree.  He
 # suggests $prefix/doc.
 %define _defaultdocdir /opt/%{name}/%{version}/doc
 # Also put the modulefile in /opt.
-%define modulefile_path /opt/%{name}/%{version}/share/prrte/modulefiles
+%define modulefile_path /opt/%{name}/%{version}/share/prte/modulefiles
 %endif
 
 %if !%{build_debuginfo_rpm}
@@ -183,7 +183,7 @@
 # below.
 %define sysconfdir_in_prefix %(test "`echo %{_sysconfdir} | grep %{_prefix}`" = "" && echo 0 || echo 1)
 
-%{!?_pkgdatadir: %define _pkgdatadir %{_datadir}/prrte}
+%{!?_pkgdatadir: %define _pkgdatadir %{_datadir}/prte}
 
 %if !%{use_check_files}
 %define __check_files %{nil}
@@ -206,18 +206,18 @@
 #############################################################################
 
 Summary: Reference RunTime Environment for PMIx
-Name: %{?_name:%{_name}}%{!?_name:prrte}
+Name: %{?_name:%{_name}}%{!?_name:prte}
 Version: $VERSION
 Release: 1%{?dist}
 License: BSD
 Group: Development/Libraries
-Source: prrte-%{version}.tar.$EXTENSION
+Source: prte-%{version}.tar.$EXTENSION
 Packager: %{?_packager:%{_packager}}%{!?_packager:%{_vendor}}
 Vendor: %{?_vendorinfo:%{_vendorinfo}}%{!?_vendorinfo:%{_vendor}}
 Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}
 Prefix: %{_prefix}
 Provides: mpi
-Provides: prrte = %{version}
+Provides: prte = %{version}
 BuildRoot: /var/tmp/%{name}-%{version}-%{release}-root
 %if %{disable_auto_requires}
 AutoReq: no
@@ -256,8 +256,8 @@ Open MPI and OpenSHMEM jobs.
 Summary: Tools and plugin modules for running Open MPI/SHMEM jobs
 Group: Development/Libraries
 Provides: mpi
-Provides: prrte = %{version}
-Provides: prrte-runtime = %{version}
+Provides: prte = %{version}
+Provides: prte-runtime = %{version}
 %if %{disable_auto_requires}
 AutoReq: no
 %endif
@@ -295,7 +295,7 @@ Group: Development/Libraries
 %if %{disable_auto_requires}
 AutoReq: no
 %endif
-Provides: prrte-devel = %{version}
+Provides: prte-devel = %{version}
 Requires: %{name}-runtime
 
 %description devel
@@ -326,7 +326,7 @@ Group: Development/Documentation
 %if %{disable_auto_requires}
 AutoReq: no
 %endif
-Provides: prrte-docs = %{version}
+Provides: prte-docs = %{version}
 Requires: %{name}-runtime
 
 %description docs
@@ -355,7 +355,7 @@ This subpackage provides the documentation for Open MPI/OpenSHMEM.
 # there that are not meant to be packaged.
 rm -rf $RPM_BUILD_ROOT
 
-%setup -q -n prrte-%{version}
+%setup -q -n prte-%{version}
 
 #############################################################################
 #
@@ -571,7 +571,7 @@ find $RPM_BUILD_ROOT -type f -o -type l | \
 cat all.files | egrep '/lib/|/lib64/|/lib32/|/bin/|/etc/|/help-' > tmp.files | /bin/true
 # Snip out a bunch of executables (e.g., wrapper compilers, pkgconfig
 # files, .la and .a files)
-egrep -vi 'mpic|mpif|prrtec|f77|f90|pkgconfig|\.la$|\.a$' tmp.files > runtime.files | /bin/true
+egrep -vi 'mpic|mpif|prtec|f77|f90|pkgconfig|\.la$|\.a$' tmp.files > runtime.files | /bin/true
 rm -f tmp.files
 
 # Now take the runtime files out of all.files so that we don't get
@@ -687,8 +687,8 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %{_sysconfdir}
 %endif
 # If %{install_in_opt}, then we're instaling OMPI to
-# /opt/prrte/<version>.  But be sure to also explicitly mention
-# /opt/prrte so that it can be removed by RPM when everything under
+# /opt/prte/<version>.  But be sure to also explicitly mention
+# /opt/prte so that it can be removed by RPM when everything under
 # there is also removed.
 %if %{install_in_opt}
 %dir /opt/%{name}
@@ -729,9 +729,9 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %{_sysconfdir}
 %endif
 # If %{install_in_opt}, then we're instaling OMPI to
-# /opt/prrte/<version>.  But be sure to also explicitly mention
-# /opt/prrte so that it can be removed by RPM when everything under
-# there is also removed.  Also list /opt/prrte/<version>/share so
+# /opt/prte/<version>.  But be sure to also explicitly mention
+# /opt/prte so that it can be removed by RPM when everything under
+# there is also removed.  Also list /opt/prte/<version>/share so
 # that it can be removed as well.
 %if %{install_in_opt}
 %dir /opt/%{name}
@@ -834,7 +834,7 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
   leave_build_root kludge nastyness.  W00t!
 
 * Fri Jan 18 2008 Jeff Squyres <jsquyres@cisco.com>
-- Remove the hard-coded "prrte" name from two Requires statements
+- Remove the hard-coded "prte" name from two Requires statements
   and use %{name} instead (FWIW, %{_name} caused rpmbuild to barf).
 
 * Wed Jan  2 2008 Jeff Squyres <jsquyres@cisco.com>
@@ -842,7 +842,7 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
   building the sub-packages.
 - When building the sub-packages, ensure that devel.files also picks
   up the F90 module.
-- Hard-code the directory name "prrte" into _pkglibdir (vs. using
+- Hard-code the directory name "prte" into _pkglibdir (vs. using
   %{name}) because the OMPI code base has it hard-coded as well.
   Thanks to Jim Kusznir for noticing the problem.
 

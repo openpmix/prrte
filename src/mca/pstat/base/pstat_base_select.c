@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007      Cisco Systems, Inc. All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -22,7 +22,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "constants.h"
 #include "src/mca/mca.h"
@@ -34,19 +34,19 @@
  * Globals
  */
 
-int prrte_pstat_base_select(void)
+int prte_pstat_base_select(void)
 {
-    int ret, exit_status = PRRTE_SUCCESS;
-    prrte_pstat_base_component_t *best_component = NULL;
-    prrte_pstat_base_module_t *best_module = NULL;
+    int ret, exit_status = PRTE_SUCCESS;
+    prte_pstat_base_component_t *best_component = NULL;
+    prte_pstat_base_module_t *best_module = NULL;
 
     /*
      * Select the best component
      */
-    if( PRRTE_SUCCESS != prrte_mca_base_select("pstat", prrte_pstat_base_framework.framework_output,
-                                                &prrte_pstat_base_framework.framework_components,
-                                                (prrte_mca_base_module_t **) &best_module,
-                                                (prrte_mca_base_component_t **) &best_component, NULL) ) {
+    if( PRTE_SUCCESS != prte_mca_base_select("pstat", prte_pstat_base_framework.framework_output,
+                                                &prte_pstat_base_framework.framework_components,
+                                                (prte_mca_base_module_t **) &best_module,
+                                                (prte_mca_base_component_t **) &best_component, NULL) ) {
         /* It is okay if we don't find a runnable component - default
          * to the unsupported default.
          */
@@ -54,11 +54,11 @@ int prrte_pstat_base_select(void)
     }
 
     /* Save the winner */
-    prrte_pstat_base_component = best_component;
-    prrte_pstat                = *best_module;
+    prte_pstat_base_component = best_component;
+    prte_pstat                = *best_module;
 
     /* Initialize the winner */
-    if (PRRTE_SUCCESS != (ret = prrte_pstat.init()) ) {
+    if (PRTE_SUCCESS != (ret = prte_pstat.init()) ) {
         exit_status = ret;
         goto cleanup;
     }

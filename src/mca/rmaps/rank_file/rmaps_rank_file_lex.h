@@ -13,6 +13,7 @@
  * Copyright (c) 2008      Voltaire. All rights reserved
  *
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,9 +21,9 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_MCA_RANK_FILE_RANKFILE_LEX_H_
-#define PRRTE_MCA_RANK_FILE_RANKFILE_LEX_H_
-#include "prrte_config.h"
+#ifndef PRTE_MCA_RANK_FILE_RANKFILE_LEX_H_
+#define PRTE_MCA_RANK_FILE_RANKFILE_LEX_H_
+#include "prte_config.h"
 
 #ifdef malloc
 #undef malloc
@@ -41,15 +42,15 @@ BEGIN_C_DECLS
 typedef union {
     int ival;
     char* sval;
-} prrte_rmaps_rank_file_value_t;
+} prte_rmaps_rank_file_value_t;
 
-extern int   prrte_rmaps_rank_file_lex(void);
-extern FILE *prrte_rmaps_rank_file_in;
-extern int   prrte_rmaps_rank_file_line;
-extern bool  prrte_rmaps_rank_file_done;
-extern prrte_rmaps_rank_file_value_t prrte_rmaps_rank_file_value;
+extern int   prte_rmaps_rank_file_lex(void);
+extern FILE *prte_rmaps_rank_file_in;
+extern int   prte_rmaps_rank_file_line;
+extern bool  prte_rmaps_rank_file_done;
+extern prte_rmaps_rank_file_value_t prte_rmaps_rank_file_value;
 
-int prrte_rmaps_rank_file_wrap(void);
+int prte_rmaps_rank_file_wrap(void);
 
 /*
  * Make lex-generated files not issue compiler warnings
@@ -61,20 +62,20 @@ int prrte_rmaps_rank_file_wrap(void);
 #define YY_NO_UNPUT 1
 #define YY_SKIP_YYWRAP 1
 
-#define PRRTE_RANKFILE_DONE           0
-#define PRRTE_RANKFILE_ERROR          1
-#define PRRTE_RANKFILE_QUOTED_STRING  2
-#define PRRTE_RANKFILE_EQUAL          3
-#define PRRTE_RANKFILE_INT            4
-#define PRRTE_RANKFILE_STRING         5
-#define PRRTE_RANKFILE_RANK           6
-#define PRRTE_RANKFILE_USERNAME       10
-#define PRRTE_RANKFILE_IPV4           11
-#define PRRTE_RANKFILE_HOSTNAME       12
-#define PRRTE_RANKFILE_NEWLINE        13
-#define PRRTE_RANKFILE_IPV6           14
-#define PRRTE_RANKFILE_SLOT           15
-#define PRRTE_RANKFILE_RELATIVE       16
+#define PRTE_RANKFILE_DONE           0
+#define PRTE_RANKFILE_ERROR          1
+#define PRTE_RANKFILE_QUOTED_STRING  2
+#define PRTE_RANKFILE_EQUAL          3
+#define PRTE_RANKFILE_INT            4
+#define PRTE_RANKFILE_STRING         5
+#define PRTE_RANKFILE_RANK           6
+#define PRTE_RANKFILE_USERNAME       10
+#define PRTE_RANKFILE_IPV4           11
+#define PRTE_RANKFILE_HOSTNAME       12
+#define PRTE_RANKFILE_NEWLINE        13
+#define PRTE_RANKFILE_IPV6           14
+#define PRTE_RANKFILE_SLOT           15
+#define PRTE_RANKFILE_RELATIVE       16
 
 END_C_DECLS
 

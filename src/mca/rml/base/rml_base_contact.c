@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +19,7 @@
  */
 /** @file */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 #include "types.h"
 
@@ -30,15 +31,15 @@
 #include "src/mca/routed/routed.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/base/rml_contact.h"
 #include "src/mca/rml/base/base.h"
 
 
-int prrte_rml_base_parse_uris(const char* uri,
-                             prrte_process_name_t* peer,
+int prte_rml_base_parse_uris(const char* uri,
+                             prte_process_name_t* peer,
                              char*** uris)
 {
     int rc;
@@ -47,22 +48,22 @@ int prrte_rml_base_parse_uris(const char* uri,
     char* cinfo = strdup(uri);
     char* ptr = strchr(cinfo, ';');
     if(NULL == ptr) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         free(cinfo);
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
     *ptr = '\0';
     ptr++;
-    if (PRRTE_SUCCESS != (rc = prrte_util_convert_string_to_process_name(peer, cinfo))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_util_convert_string_to_process_name(peer, cinfo))) {
+        PRTE_ERROR_LOG(rc);
         free(cinfo);
         return rc;
     }
 
     if (NULL != uris) {
         /* parse the remainder of the string into an array of uris */
-        *uris = prrte_argv_split(ptr, ';');
+        *uris = prte_argv_split(ptr, ';');
     }
     free(cinfo);
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

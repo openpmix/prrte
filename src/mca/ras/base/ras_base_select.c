@@ -13,6 +13,7 @@
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,7 +21,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include "src/mca/mca.h"
@@ -34,31 +35,31 @@
 /*
  * Select one RAS component from all those that are available.
  */
-int prrte_ras_base_select(void)
+int prte_ras_base_select(void)
 {
     /* For all other systems, provide the following support */
 
-    prrte_ras_base_component_t *best_component = NULL;
-    prrte_ras_base_module_t *best_module = NULL;
+    prte_ras_base_component_t *best_component = NULL;
+    prte_ras_base_module_t *best_module = NULL;
 
     /*
      * Select the best component
      */
-    if( PRRTE_SUCCESS != prrte_mca_base_select("ras", prrte_ras_base_framework.framework_output,
-                                                &prrte_ras_base_framework.framework_components,
-                                                (prrte_mca_base_module_t **) &best_module,
-                                                (prrte_mca_base_component_t **) &best_component, NULL) ) {
+    if( PRTE_SUCCESS != prte_mca_base_select("ras", prte_ras_base_framework.framework_output,
+                                                &prte_ras_base_framework.framework_components,
+                                                (prte_mca_base_module_t **) &best_module,
+                                                (prte_mca_base_component_t **) &best_component, NULL) ) {
         /* This will only happen if no component was selected */
         /* If we didn't find one to select, that is okay */
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* Save the winner */
     /* No component saved */
-    prrte_ras_base.active_module = best_module;
-    if (NULL != prrte_ras_base.active_module->init) {
-        return prrte_ras_base.active_module->init();
+    prte_ras_base.active_module = best_module;
+    if (NULL != prte_ras_base.active_module->init) {
+        return prte_ras_base.active_module->init();
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

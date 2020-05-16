@@ -15,6 +15,7 @@
 # Copyright (c) 2016      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -24,42 +25,42 @@
 # This is the US/English general help file for hostfile utilities.
 #
 [no-hostfile]
-PRRTE was unable to open the hostfile:
+PRTE was unable to open the hostfile:
     %s
 Check to make sure the path and filename are correct.
 [port]
-PRRTE detected a bad parameter in the hostfile:
+PRTE detected a bad parameter in the hostfile:
     %s
 The port parameter is less than 0:
     port=%d
 [slots]
-PRRTE detected a bad parameter in the hostfile:
+PRTE detected a bad parameter in the hostfile:
     %s
 The slots parameter is less than 0:
     slots=%d
 [max_slots]
-PRRTE detected a bad parameter in the hostfile:
+PRTE detected a bad parameter in the hostfile:
     %s
 The max_slots parameter is less than 0:
     max_slots=%d
 [max_slots_lt]
-PRRTE detected a bad parameter in the hostfile:
+PRTE detected a bad parameter in the hostfile:
     %s
 The max_slots parameter is less than the slots parameter:
     slots=%d
     max_slots=%d
 [parse_error_string]
-PRRTE detected a parse error in the hostfile:
+PRTE detected a parse error in the hostfile:
     %s
 It occured on line number %d on token %d:
     %s
 [parse_error_int]
-PRRTE detected a parse error in the hostfile:
+PRTE detected a parse error in the hostfile:
     %s
 It occured on line number %d on token %d:
     %d
 [parse_error]
-PRRTE detected a parse error in the hostfile:
+PRTE detected a parse error in the hostfile:
     %s
 It occured on line number %d on token %d.
 [not-all-mapped-alloc]
@@ -77,7 +78,7 @@ Thus, there is no way to determine the proper host to be used.
 
 hostfile entry: %s
 
-Please see the prrte_hosts man page for further information.
+Please see the prte_hosts man page for further information.
 #
 [hostfile:relative-node-not-found]
 A relative host was specified, but was not found. The requested host was
@@ -88,7 +89,7 @@ Syntax given: %s
 
 This is most likely due to the relative index being out of bounds. You
 could obtain a larger allocation or reduce the relative host index.
-Please see the prrte_hosts man page for further information.
+Please see the prte_hosts man page for further information.
 #
 [hostfile:invalid-relative-node-syntax]
 A relative host was improperly specified - the value provided was.
@@ -96,25 +97,25 @@ A relative host was improperly specified - the value provided was.
 hostfile entry: %s
 
 You may have forgotten to preface a node with 'N' or 'n', or used the 'e' or 'E' to indicate
-empty nodes. Please see the prrte_hosts man page for further information.
+empty nodes. Please see the prte_hosts man page for further information.
 #
 [hostfile:not-enough-empty]
 The requested number of empty hosts was not available - the system was short by %d hosts.
 
 Please recheck your allocation - further information is available on the
-prrte_hosts man page.
+prte_hosts man page.
 [boards]
-PRRTE detected a bad parameter in the hostfile:
+PRTE detected a bad parameter in the hostfile:
     %s
 The boards parameter is less than 0:
     boards=%d
 [sockets]
-PRRTE detected a bad parameter in the hostfile:
+PRTE detected a bad parameter in the hostfile:
     %s
 The sockets parameter is less than 0:
     sockets=%d
 [cores]
-PRRTE detected a bad parameter in the hostfile:
+PRTE detected a bad parameter in the hostfile:
     %s
 The cores parameter is less than 0:
     cores=%d
@@ -130,7 +131,7 @@ present in the allocation:
 If you are operating in a resource-managed environment, then only
 nodes that are in the allocation can be used in the hostfile. You
 may find relative node syntax to be a useful alternative to
-specifying absolute node names see the prrte_hosts man page for
+specifying absolute node names see the prte_hosts man page for
 further information.
 #
 [slots-given]

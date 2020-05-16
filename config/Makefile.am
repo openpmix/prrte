@@ -24,13 +24,13 @@
 
 EXTRA_DIST = \
         distscript.sh \
-        prrte_get_version.m4sh \
+        prte_get_version.m4sh \
         ltmain_nag_pthread.diff \
         ltmain_pgi_tp.diff \
-        prrte_mca_priority_sort.pl \
+        prte_mca_priority_sort.pl \
         find_common_syms \
         make_manpage.pl \
         md2nroff.pl
 
 maintainer-clean-local:
-	rm -f prrte_get_version.sh
+	rm -f prte_get_version.sh

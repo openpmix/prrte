@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
@@ -23,7 +23,7 @@
 /**
  * @file
  *
- * The "show help" subsystem (SHS) in PRRTE is intended to help the
+ * The "show help" subsystem (SHS) in PRTE is intended to help the
  * developer convey meaningful information to the user (read longer
  * than is convenient in a single printf), particularly when errors
  * occur.  The SHS allows the storage of arbitrary-length help
@@ -33,7 +33,7 @@
  * display help messages, but it can actually be used to display any
  * arbitrary text messages.
  *
- * The function prrte_show_help() is used to find a help message and
+ * The function prte_show_help() is used to find a help message and
  * display it.  Its important parameters are a filename, message name,
  * and printf()-style varargs parameters used to substitute into the
  * message.
@@ -50,7 +50,7 @@
  * appropriate help message to display.  It looks for the message name
  * in the file, reads in the message, and displays it.  printf()-like
  * substitutions are performed (e.g., %d, %s, etc.) --
- * prrte_show_help() takes a variable legnth argument list that are
+ * prte_show_help() takes a variable legnth argument list that are
  * used for these substitutions.
  *
  * The format of the help file is simplistic:
@@ -78,8 +78,8 @@
  *
  * It is expected that help messages will be grouped by filename;
  * similar messages should be in a single file.  For example, an MCA
- * component may install its own helpfile in PRRTE's $pkgdatadir,
- * and therefore the component can invoke prrte_show_help() to display
+ * component may install its own helpfile in PRTE's $pkgdatadir,
+ * and therefore the component can invoke prte_show_help() to display
  * its own help messages.
  *
  * Message files in $pkgdatadir have a naming convention: they
@@ -90,10 +90,10 @@
  * previously.
  */
 
-#ifndef PRRTE_SHOW_HELP_H
-#define PRRTE_SHOW_HELP_H
+#ifndef PRTE_SHOW_HELP_H
+#define PRTE_SHOW_HELP_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdarg.h>
 #include "types.h"
@@ -106,8 +106,8 @@ BEGIN_C_DECLS
  *
  * Initialization of show_help subsystem
  */
-PRRTE_EXPORT int prrte_show_help_init(void);
-PRRTE_EXPORT void prrte_show_help_finalize (void);
+PRTE_EXPORT int prte_show_help_init(void);
+PRTE_EXPORT void prte_show_help_finalize (void);
 
 /**
  * Look up a text message in a text file and display it to the
@@ -131,37 +131,37 @@ PRRTE_EXPORT void prrte_show_help_finalize (void);
  * promotion to va_start() has undefined behavior (according to clang
  * warnings on MacOS High Sierra).
  */
-PRRTE_EXPORT int prrte_show_help(const char *filename, const char *topic,
+PRTE_EXPORT int prte_show_help(const char *filename, const char *topic,
                                  int want_error_header, ...);
 
 /**
- * This function does the same thing as prrte_show_help(), but accepts
+ * This function does the same thing as prte_show_help(), but accepts
  * a va_list form of varargs.
  */
-PRRTE_EXPORT int prrte_show_vhelp(const char *filename, const char *topic,
+PRTE_EXPORT int prte_show_vhelp(const char *filename, const char *topic,
                                   int want_error_header, va_list ap);
 
 /**
- * This function does the same thing as prrte_show_help(), but returns
+ * This function does the same thing as prte_show_help(), but returns
  * its output in a string (that must be freed by the caller).
  */
-PRRTE_EXPORT char* prrte_show_help_string(const char *filename,
+PRTE_EXPORT char* prte_show_help_string(const char *filename,
                                           const char *topic,
                                           int want_error_header, ...);
 
 /**
- * This function does the same thing as prrte_show_help_string(), but
+ * This function does the same thing as prte_show_help_string(), but
  * accepts a va_list form of varargs.
  */
-PRRTE_EXPORT char* prrte_show_help_vstring(const char *filename,
+PRTE_EXPORT char* prte_show_help_vstring(const char *filename,
                                            const char *topic,
                                            int want_error_header, va_list ap);
 
 /**
- * Exactly the same as prrte_show_help, but pass in a rendered string,
+ * Exactly the same as prte_show_help, but pass in a rendered string,
  * rather than a varargs list which must be rendered.
  */
-PRRTE_EXPORT int prrte_show_help_norender(const char *filename,
+PRTE_EXPORT int prte_show_help_norender(const char *filename,
                                           const char *topic,
                                           int want_error_header,
                                           const char *output);
@@ -177,9 +177,9 @@ PRRTE_EXPORT int prrte_show_help_norender(const char *filename,
  * based on where OMPI was installed. However, if the library wants to
  * use show_help to provide error output specific to itself, then it
  * nees to tell show_help how to find its own show_help files - without
- * interfering with the linked PRRTE libs when they need to do show_help.
+ * interfering with the linked PRTE libs when they need to do show_help.
  */
-PRRTE_EXPORT int prrte_show_help_add_dir(const char *directory);
+PRTE_EXPORT int prte_show_help_add_dir(const char *directory);
 
 /**
  * Pretend that this message has already been shown.
@@ -188,11 +188,11 @@ PRRTE_EXPORT int prrte_show_help_add_dir(const char *directory);
  * this message from being shown.  Primitive *-wildcarding is
  * possible.
  */
-PRRTE_EXPORT int prrte_show_help_suppress(const char *filename,
+PRTE_EXPORT int prte_show_help_suppress(const char *filename,
                                           const char *topic);
 
-PRRTE_EXPORT void prrte_show_help_recv(int status, prrte_process_name_t* sender,
-                                       prrte_buffer_t *buffer, prrte_rml_tag_t tag,
+PRTE_EXPORT void prte_show_help_recv(int status, prte_process_name_t* sender,
+                                       prte_buffer_t *buffer, prte_rml_tag_t tag,
                                        void* cbdata);
 
 END_C_DECLS

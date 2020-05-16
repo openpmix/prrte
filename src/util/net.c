@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2007      Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -27,7 +27,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -69,10 +69,10 @@
 #include "src/util/show_help.h"
 #include "constants.h"
 #include "src/threads/tsd.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 /* this function doesn't depend on sockaddr_h */
-bool prrte_net_isaddr(const char *name)
+bool prte_net_isaddr(const char *name)
 {
     struct addrinfo hint, *res = NULL;
 
@@ -103,8 +103,8 @@ typedef struct private_ipv4_t {
 
 static private_ipv4_t* private_ipv4 = NULL;
 
-#if PRRTE_ENABLE_IPV6
-static prrte_tsd_key_t hostname_tsd_key;
+#if PRTE_ENABLE_IPV6
+static prte_tsd_key_t hostname_tsd_key;
 
 
 static void
@@ -120,12 +120,12 @@ get_hostname_buffer(void)
     void *buffer;
     int ret;
 
-    ret = prrte_tsd_getspecific(hostname_tsd_key, &buffer);
-    if (PRRTE_SUCCESS != ret) return NULL;
+    ret = prte_tsd_getspecific(hostname_tsd_key, &buffer);
+    if (PRTE_SUCCESS != ret) return NULL;
 
     if (NULL == buffer) {
         buffer = (void*) malloc((NI_MAXHOST + 1) * sizeof(char));
-        ret = prrte_tsd_setspecific(hostname_tsd_key, buffer);
+        ret = prte_tsd_setspecific(hostname_tsd_key, buffer);
     }
 
     return (char*) buffer;
@@ -139,28 +139,28 @@ get_hostname_buffer(void)
  * once for any process that will use any function in the network
  * helper subsystem.
  *
- * @retval PRRTE_SUCCESS   Success
+ * @retval PRTE_SUCCESS   Success
  */
-void prrte_net_finalize (void)
+void prte_net_finalize (void)
 {
     free(private_ipv4);
     private_ipv4 = NULL;
 }
 
 int
-prrte_net_init(void)
+prte_net_init(void)
 {
     char **args, *arg;
     uint32_t a, b, c, d, bits, addr;
     int i, count, found_bad = 0;
 
-    args = prrte_argv_split( prrte_net_private_ipv4, ';' );
+    args = prte_argv_split( prte_net_private_ipv4, ';' );
     if( NULL != args ) {
-        count = prrte_argv_count(args);
+        count = prte_argv_count(args);
         private_ipv4 = (private_ipv4_t*)malloc( (count + 1) * sizeof(private_ipv4_t));
         if( NULL == private_ipv4 ) {
-            prrte_output(0, "Unable to allocate memory for the private addresses array" );
-            prrte_argv_free(args);
+            prte_output(0, "Unable to allocate memory for the private addresses array" );
+            prte_argv_free(args);
             goto do_local_init;
         }
         for( i = 0; i < count; i++ ) {
@@ -171,7 +171,7 @@ prrte_net_init(void)
             if( (a > 255) || (b > 255) || (c > 255) ||
                 (d > 255) || (bits > 32) ) {
                 if (0 == found_bad) {
-                    prrte_show_help("help-prrte-util.txt",
+                    prte_show_help("help-prte-util.txt",
                                    "malformed net_private_ipv4",
                                    true, args[i]);
                     found_bad = 1;
@@ -184,27 +184,27 @@ prrte_net_init(void)
         }
         private_ipv4[i].addr         = 0;
         private_ipv4[i].netmask_bits = 0;
-        prrte_argv_free(args);
+        prte_argv_free(args);
     }
 
  do_local_init:
-#if PRRTE_ENABLE_IPV6
-    return prrte_tsd_key_create(&hostname_tsd_key, hostname_cleanup);
+#if PRTE_ENABLE_IPV6
+    return prte_tsd_key_create(&hostname_tsd_key, hostname_cleanup);
 #else
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 #endif
 }
 
 /* convert a CIDR prefixlen to netmask (in network byte order) */
 uint32_t
-prrte_net_prefix2netmask(uint32_t prefixlen)
+prte_net_prefix2netmask(uint32_t prefixlen)
 {
     return htonl (((1 << prefixlen) - 1) << (32 - prefixlen));
 }
 
 
 bool
-prrte_net_islocalhost(const struct sockaddr *addr)
+prte_net_islocalhost(const struct sockaddr *addr)
 {
     switch (addr->sa_family) {
     case AF_INET:
@@ -218,7 +218,7 @@ prrte_net_islocalhost(const struct sockaddr *addr)
             return false;
         }
         break;
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
     case AF_INET6:
         {
             const struct sockaddr_in6 *inaddr = (struct sockaddr_in6*) addr;
@@ -231,7 +231,7 @@ prrte_net_islocalhost(const struct sockaddr *addr)
 #endif
 
     default:
-        prrte_output(0, "unhandled sa_family %d passed to prrte_net_islocalhost",
+        prte_output(0, "unhandled sa_family %d passed to prte_net_islocalhost",
                     addr->sa_family);
         return false;
         break;
@@ -240,7 +240,7 @@ prrte_net_islocalhost(const struct sockaddr *addr)
 
 
 bool
-prrte_net_samenetwork(const struct sockaddr *addr1,
+prte_net_samenetwork(const struct sockaddr *addr1,
                      const struct sockaddr *addr2,
                      uint32_t plen)
 {
@@ -263,7 +263,7 @@ prrte_net_samenetwork(const struct sockaddr *addr1,
                run into bus errors on Solaris/SPARC */
             memcpy(&inaddr1, addr1, sizeof(inaddr1));
             memcpy(&inaddr2, addr2, sizeof(inaddr2));
-            uint32_t netmask = prrte_net_prefix2netmask (prefixlen);
+            uint32_t netmask = prte_net_prefix2netmask (prefixlen);
 
             if((inaddr1.sin_addr.s_addr & netmask) ==
                (inaddr2.sin_addr.s_addr & netmask)) {
@@ -272,7 +272,7 @@ prrte_net_samenetwork(const struct sockaddr *addr1,
             return false;
         }
         break;
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
     case AF_INET6:
         {
             struct sockaddr_in6 inaddr1, inaddr2;
@@ -306,7 +306,7 @@ prrte_net_samenetwork(const struct sockaddr *addr1,
         break;
 #endif
     default:
-        prrte_output(0, "unhandled sa_family %d passed to prrte_samenetwork",
+        prte_output(0, "unhandled sa_family %d passed to prte_samenetwork",
                     addr1->sa_family);
     }
 
@@ -318,10 +318,10 @@ prrte_net_samenetwork(const struct sockaddr *addr1,
  * Returns true if the given address is a public IPv4 address.
  */
 bool
-prrte_net_addr_isipv4public(const struct sockaddr *addr)
+prte_net_addr_isipv4public(const struct sockaddr *addr)
 {
     switch (addr->sa_family) {
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
         case AF_INET6:
             return false;
 #endif
@@ -336,15 +336,15 @@ prrte_net_addr_isipv4public(const struct sockaddr *addr)
 
                 for( i = 0; private_ipv4[i].addr != 0; i++ ) {
                     if( private_ipv4[i].addr == (inaddr->sin_addr.s_addr &
-                                                 prrte_net_prefix2netmask(private_ipv4[i].netmask_bits)) )
+                                                 prte_net_prefix2netmask(private_ipv4[i].netmask_bits)) )
                         return false;
                 }
 
             }
             return true;
         default:
-            prrte_output (0,
-                         "unhandled sa_family %d passed to prrte_net_addr_isipv4public\n",
+            prte_output (0,
+                         "unhandled sa_family %d passed to prte_net_addr_isipv4public\n",
                          addr->sa_family);
     }
 
@@ -352,26 +352,26 @@ prrte_net_addr_isipv4public(const struct sockaddr *addr)
 }
 
 bool
-prrte_net_addr_isipv6linklocal(const struct sockaddr *addr)
+prte_net_addr_isipv6linklocal(const struct sockaddr *addr)
 {
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
     struct sockaddr_in6 if_addr;
 #endif
 
     switch (addr->sa_family) {
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
         case AF_INET6:
             if_addr.sin6_family = AF_INET6;
             if (1 != inet_pton(AF_INET6, "fe80::0000", &if_addr.sin6_addr)) {
                 return false;
             }
-            return prrte_net_samenetwork(addr, (struct sockaddr*)&if_addr, 64);
+            return prte_net_samenetwork(addr, (struct sockaddr*)&if_addr, 64);
 #endif
         case AF_INET:
             return false;
         default:
-            prrte_output (0,
-                         "unhandled sa_family %d passed to prrte_net_addr_isipv6linklocal\n",
+            prte_output (0,
+                         "unhandled sa_family %d passed to prte_net_addr_isipv6linklocal\n",
                          addr->sa_family);
     }
 
@@ -379,19 +379,19 @@ prrte_net_addr_isipv6linklocal(const struct sockaddr *addr)
 }
 
 char*
-prrte_net_get_hostname(const struct sockaddr *addr)
+prte_net_get_hostname(const struct sockaddr *addr)
 {
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
     char *name = get_hostname_buffer();
     int error;
     socklen_t addrlen;
     char *p;
 
     if (NULL == name) {
-        prrte_output(0, "prrte_sockaddr2str: malloc() failed\n");
+        prte_output(0, "prte_sockaddr2str: malloc() failed\n");
         return NULL;
     }
-    PRRTE_DEBUG_ZERO(*name);
+    PRTE_DEBUG_ZERO(*name);
 
     switch (addr->sa_family) {
     case AF_INET:
@@ -403,7 +403,7 @@ prrte_net_get_hostname(const struct sockaddr *addr)
            returns an unkown error code. */
         if(NULL == inet_ntop(AF_INET6, &((struct sockaddr_in6*) addr)->sin6_addr,
                              name, NI_MAXHOST)) {
-            prrte_output(0, "prrte_sockaddr2str failed with error code %d", errno);
+            prte_output(0, "prte_sockaddr2str failed with error code %d", errno);
             return NULL;
         }
         return name;
@@ -420,7 +420,7 @@ prrte_net_get_hostname(const struct sockaddr *addr)
 
     if (error) {
        int err = errno;
-       prrte_output (0, "prrte_sockaddr2str failed:%s (return code %i)\n",
+       prte_output (0, "prte_sockaddr2str failed:%s (return code %i)\n",
                     gai_strerror(err), error);
        return NULL;
     }
@@ -436,13 +436,13 @@ prrte_net_get_hostname(const struct sockaddr *addr)
 
 
 int
-prrte_net_get_port(const struct sockaddr *addr)
+prte_net_get_port(const struct sockaddr *addr)
 {
     switch (addr->sa_family) {
     case AF_INET:
         return ntohs(((struct sockaddr_in*) addr)->sin_port);
         break;
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
     case AF_INET6:
         return ntohs(((struct sockaddr_in6*) addr)->sin6_port);
         break;
@@ -456,35 +456,35 @@ prrte_net_get_port(const struct sockaddr *addr)
 #else /* HAVE_STRUCT_SOCKADDR_IN */
 
 int
-prrte_net_init()
+prte_net_init()
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
 int
-prrte_net_finalize()
+prte_net_finalize()
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
 uint32_t
-prrte_net_prefix2netmask(uint32_t prefixlen)
+prte_net_prefix2netmask(uint32_t prefixlen)
 {
     return 0;
 }
 
 
 bool
-prrte_net_islocalhost(const struct sockaddr *addr)
+prte_net_islocalhost(const struct sockaddr *addr)
 {
     return false;
 }
 
 
 bool
-prrte_net_samenetwork(const struct sockaddr *addr1,
+prte_net_samenetwork(const struct sockaddr *addr1,
                      const struct sockaddr *addr2,
                      uint32_t prefixlen)
 {
@@ -493,21 +493,21 @@ prrte_net_samenetwork(const struct sockaddr *addr1,
 
 
 bool
-prrte_net_addr_isipv4public(const struct sockaddr *addr)
+prte_net_addr_isipv4public(const struct sockaddr *addr)
 {
     return false;
 }
 
 
 char*
-prrte_net_get_hostname(const struct sockaddr *addr)
+prte_net_get_hostname(const struct sockaddr *addr)
 {
     return NULL;
 }
 
 
 int
-prrte_net_get_port(const struct sockaddr *addr)
+prte_net_get_port(const struct sockaddr *addr)
 {
     return -1;
 }

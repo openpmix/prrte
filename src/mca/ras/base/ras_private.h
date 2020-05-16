@@ -15,6 +15,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,17 +25,17 @@
 /** @file:
  */
 
-#ifndef PRRTE_RAS_PRIVATE_H
-#define PRRTE_RAS_PRIVATE_H
+#ifndef PRTE_RAS_PRIVATE_H
+#define PRTE_RAS_PRIVATE_H
 
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 #include "types.h"
 
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 
 #include "src/mca/ras/ras.h"
 #include "src/mca/ras/base/base.h"
@@ -45,7 +46,7 @@ BEGIN_C_DECLS
 /**
 * Add the specified node definitions to the registry
  */
-PRRTE_EXPORT int prrte_ras_base_node_insert(prrte_list_t*, prrte_job_t*);
+PRTE_EXPORT int prte_ras_base_node_insert(prte_list_t*, prte_job_t*);
 
 END_C_DECLS
 

@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2006-2007 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2008      Institut National de Recherche en Informatique
  *                         et Automatique. All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
@@ -31,7 +31,7 @@
  * entire components just to query their version and parameters.
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <lsf/lsbatch.h>
@@ -48,8 +48,8 @@
 /*
  * Public string showing the plm lsf component version number
  */
-const char *prrte_plm_lsf_component_version_string =
-  "PRRTE lsf plm MCA component version " PRRTE_VERSION;
+const char *prte_plm_lsf_component_version_string =
+  "PRTE lsf plm MCA component version " PRTE_VERSION;
 
 
 
@@ -58,7 +58,7 @@ const char *prrte_plm_lsf_component_version_string =
  */
 static int plm_lsf_open(void);
 static int plm_lsf_close(void);
-static int prrte_plm_lsf_component_query(prrte_mca_base_module_t **module, int *priority);
+static int prte_plm_lsf_component_query(prte_mca_base_module_t **module, int *priority);
 
 
 /*
@@ -66,27 +66,27 @@ static int prrte_plm_lsf_component_query(prrte_mca_base_module_t **module, int *
  * and pointers to our public functions in it
  */
 
-prrte_plm_lsf_component_t prrte_plm_lsf_component = {
+prte_plm_lsf_component_t prte_plm_lsf_component = {
     {
         /* First, the mca_component_t struct containing meta information
            about the component itself */
 
         .base_version = {
-            PRRTE_PLM_BASE_VERSION_2_0_0,
+            PRTE_PLM_BASE_VERSION_2_0_0,
 
             /* Component name and version */
             .mca_component_name = "lsf",
-            PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                        PRRTE_RELEASE_VERSION),
+            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                        PRTE_RELEASE_VERSION),
 
             /* Component open and close functions */
             .mca_open_component = plm_lsf_open,
             .mca_close_component = plm_lsf_close,
-            .mca_query_component = prrte_plm_lsf_component_query,
+            .mca_query_component = prte_plm_lsf_component_query,
         },
         .base_data = {
             /* The component is checkpoint ready */
-            PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
         },
     }
 };
@@ -94,29 +94,29 @@ prrte_plm_lsf_component_t prrte_plm_lsf_component = {
 
 static int plm_lsf_open(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
 static int plm_lsf_close(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-static int prrte_plm_lsf_component_query(prrte_mca_base_module_t **module, int *priority)
+static int prte_plm_lsf_component_query(prte_mca_base_module_t **module, int *priority)
 {
 
     /* check if lsf is running here and make sure IBM CSM is NOT enabled */
-    if (NULL == getenv("LSB_JOBID") || getenv("CSM_ALLOCATION_ID") || lsb_init("PRRTE launcher") < 0) {
+    if (NULL == getenv("LSB_JOBID") || getenv("CSM_ALLOCATION_ID") || lsb_init("PRTE launcher") < 0) {
         /* nope, not here */
-        prrte_output_verbose(10, prrte_plm_base_framework.framework_output,
+        prte_output_verbose(10, prte_plm_base_framework.framework_output,
                             "plm:lsf: NOT available for selection");
         *module = NULL;
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     *priority = 75;
-    *module = (prrte_mca_base_module_t *) &prrte_plm_lsf_module;
-    return PRRTE_SUCCESS;
+    *module = (prte_mca_base_module_t *) &prte_plm_lsf_module;
+    return PRTE_SUCCESS;
 }

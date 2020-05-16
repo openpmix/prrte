@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -21,10 +21,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_UTIL_HOSTFILE_LEX_H_
-#define PRRTE_UTIL_HOSTFILE_LEX_H_
+#ifndef PRTE_UTIL_HOSTFILE_LEX_H_
+#define PRTE_UTIL_HOSTFILE_LEX_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef malloc
 #undef malloc
@@ -41,14 +41,14 @@
 typedef union {
     int ival;
     char* sval;
-} prrte_hostfile_value_t;
+} prte_hostfile_value_t;
 
-extern int   prrte_util_hostfile_lex(void);
-extern FILE *prrte_util_hostfile_in;
-extern int   prrte_util_hostfile_line;
-extern bool  prrte_util_hostfile_done;
-extern prrte_hostfile_value_t  prrte_util_hostfile_value;
-extern int prrte_util_hostfile_lex_destroy (void );
+extern int   prte_util_hostfile_lex(void);
+extern FILE *prte_util_hostfile_in;
+extern int   prte_util_hostfile_line;
+extern bool  prte_util_hostfile_done;
+extern prte_hostfile_value_t  prte_util_hostfile_value;
+extern int prte_util_hostfile_lex_destroy (void );
 
 /*
  * Make lex-generated files not issue compiler warnings
@@ -60,28 +60,28 @@ extern int prrte_util_hostfile_lex_destroy (void );
 #define YY_NO_UNPUT 1
 #define YY_SKIP_YYWRAP 1
 
-#define PRRTE_HOSTFILE_DONE                   0
-#define PRRTE_HOSTFILE_ERROR                  1
-#define PRRTE_HOSTFILE_QUOTED_STRING          2
-#define PRRTE_HOSTFILE_EQUAL                  3
-#define PRRTE_HOSTFILE_INT                    4
-#define PRRTE_HOSTFILE_STRING                 5
-#define PRRTE_HOSTFILE_CPU                    6
-#define PRRTE_HOSTFILE_COUNT                  7
-#define PRRTE_HOSTFILE_SLOTS                  8
-#define PRRTE_HOSTFILE_SLOTS_MAX              9
-#define PRRTE_HOSTFILE_USERNAME              10
-#define PRRTE_HOSTFILE_IPV4                  11
-#define PRRTE_HOSTFILE_HOSTNAME              12
-#define PRRTE_HOSTFILE_NEWLINE               13
-#define PRRTE_HOSTFILE_IPV6                  14
-#define PRRTE_HOSTFILE_SLOT                  15
-#define PRRTE_HOSTFILE_RELATIVE              16
-#define PRRTE_HOSTFILE_BOARDS                17
-#define PRRTE_HOSTFILE_SOCKETS_PER_BOARD     18
-#define PRRTE_HOSTFILE_CORES_PER_SOCKET      19
+#define PRTE_HOSTFILE_DONE                   0
+#define PRTE_HOSTFILE_ERROR                  1
+#define PRTE_HOSTFILE_QUOTED_STRING          2
+#define PRTE_HOSTFILE_EQUAL                  3
+#define PRTE_HOSTFILE_INT                    4
+#define PRTE_HOSTFILE_STRING                 5
+#define PRTE_HOSTFILE_CPU                    6
+#define PRTE_HOSTFILE_COUNT                  7
+#define PRTE_HOSTFILE_SLOTS                  8
+#define PRTE_HOSTFILE_SLOTS_MAX              9
+#define PRTE_HOSTFILE_USERNAME              10
+#define PRTE_HOSTFILE_IPV4                  11
+#define PRTE_HOSTFILE_HOSTNAME              12
+#define PRTE_HOSTFILE_NEWLINE               13
+#define PRTE_HOSTFILE_IPV6                  14
+#define PRTE_HOSTFILE_SLOT                  15
+#define PRTE_HOSTFILE_RELATIVE              16
+#define PRTE_HOSTFILE_BOARDS                17
+#define PRTE_HOSTFILE_SOCKETS_PER_BOARD     18
+#define PRTE_HOSTFILE_CORES_PER_SOCKET      19
 /* ensure we can handle a rank_file input */
-#define PRRTE_HOSTFILE_RANK                  20
-#define PRRTE_HOSTFILE_PORT                  21
+#define PRTE_HOSTFILE_RANK                  20
+#define PRTE_HOSTFILE_PORT                  21
 
 #endif

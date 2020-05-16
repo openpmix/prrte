@@ -11,6 +11,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,10 +19,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_UTIL_KEYVAL_LEX_H_
-#define PRRTE_UTIL_KEYVAL_LEX_H_
+#ifndef PRTE_UTIL_KEYVAL_LEX_H_
+#define PRTE_UTIL_KEYVAL_LEX_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef malloc
 #undef malloc
@@ -35,15 +36,15 @@
 
 #include <stdio.h>
 
-int prrte_util_keyval_yylex(void);
-int prrte_util_keyval_init_buffer(FILE *file);
-int prrte_util_keyval_yylex_destroy(void);
+int prte_util_keyval_yylex(void);
+int prte_util_keyval_init_buffer(FILE *file);
+int prte_util_keyval_yylex_destroy(void);
 
-extern FILE *prrte_util_keyval_yyin;
-extern bool prrte_util_keyval_parse_done;
-extern char *prrte_util_keyval_yytext;
-extern int prrte_util_keyval_yynewlines;
-extern int prrte_util_keyval_yylineno;
+extern FILE *prte_util_keyval_yyin;
+extern bool prte_util_keyval_parse_done;
+extern char *prte_util_keyval_yytext;
+extern int prte_util_keyval_yynewlines;
+extern int prte_util_keyval_yylineno;
 
 /*
  * Make lex-generated files not issue compiler warnings
@@ -55,20 +56,20 @@ extern int prrte_util_keyval_yylineno;
 #define YY_NO_UNPUT 1
 #define YY_SKIP_YYWRAP 1
 
-enum prrte_keyval_parse_state_t {
-    PRRTE_UTIL_KEYVAL_PARSE_DONE,
-    PRRTE_UTIL_KEYVAL_PARSE_ERROR,
+enum prte_keyval_parse_state_t {
+    PRTE_UTIL_KEYVAL_PARSE_DONE,
+    PRTE_UTIL_KEYVAL_PARSE_ERROR,
 
-    PRRTE_UTIL_KEYVAL_PARSE_NEWLINE,
-    PRRTE_UTIL_KEYVAL_PARSE_EQUAL,
-    PRRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD,
-    PRRTE_UTIL_KEYVAL_PARSE_VALUE,
-    PRRTE_UTIL_KEYVAL_PARSE_MCAVAR,
-    PRRTE_UTIL_KEYVAL_PARSE_ENVVAR,
-    PRRTE_UTIL_KEYVAL_PARSE_ENVEQL,
+    PRTE_UTIL_KEYVAL_PARSE_NEWLINE,
+    PRTE_UTIL_KEYVAL_PARSE_EQUAL,
+    PRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD,
+    PRTE_UTIL_KEYVAL_PARSE_VALUE,
+    PRTE_UTIL_KEYVAL_PARSE_MCAVAR,
+    PRTE_UTIL_KEYVAL_PARSE_ENVVAR,
+    PRTE_UTIL_KEYVAL_PARSE_ENVEQL,
 
-    PRRTE_UTIL_KEYVAL_PARSE_MAX
+    PRTE_UTIL_KEYVAL_PARSE_MAX
 };
-typedef enum prrte_keyval_parse_state_t prrte_keyval_parse_state_t;
+typedef enum prte_keyval_parse_state_t prte_keyval_parse_state_t;
 
 #endif

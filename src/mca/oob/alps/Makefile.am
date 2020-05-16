@@ -9,10 +9,10 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2012-2015 Los Alamos National Security, LLC.
 #                         All rights reserved
-# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
@@ -26,7 +26,7 @@
 sources = \
           oob_alps_component.c
 
-if MCA_BUILD_prrte_oob_alps_DSO
+if MCA_BUILD_prte_oob_alps_DSO
 component_noinst =
 component_install = mca_oob_alps.la
 else
@@ -34,14 +34,14 @@ component_noinst = libmca_oob_alps.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_oob_alps_la_SOURCES = $(sources)
 mca_oob_alps_la_LDFLAGS = -module -avoid-version
 mca_oob_alps_la_LIBADD = $(top_builddir)/src/libprrte.la \
 	$(ooob_alps_LIBS) \
     $(top_builddir)/src/libprrte.la  \
-    $(PRRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
+    $(PRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
 
 
 noinst_LTLIBRARIES = $(component_noinst)

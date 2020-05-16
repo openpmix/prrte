@@ -11,11 +11,11 @@
 #                         All rights reserved.
 # Copyright (c) 2008      Voltaire. All rights reserved
 #
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2016      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -23,9 +23,9 @@
 # $HEADER$
 #
 
-AM_LFLAGS = -Pprrte_rmaps_rank_file_
-LEX_OUTPUT_ROOT = lex.prrte_rmaps_rank_file_
-dist_prrtedata_DATA = help-rmaps_rank_file.txt
+AM_LFLAGS = -Pprte_rmaps_rank_file_
+LEX_OUTPUT_ROOT = lex.prte_rmaps_rank_file_
+dist_prtedata_DATA = help-rmaps_rank_file.txt
 
 sources = \
         rmaps_rank_file.c \
@@ -38,7 +38,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_rmaps_rank_file_DSO
+if MCA_BUILD_prte_rmaps_rank_file_DSO
 component_noinst =
 component_install = mca_rmaps_rank_file.la
 else
@@ -46,7 +46,7 @@ component_noinst = libmca_rmaps_rank_file.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_rmaps_rank_file_la_SOURCES = $(sources)
 mca_rmaps_rank_file_la_LDFLAGS = -module -avoid-version

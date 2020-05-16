@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
@@ -25,14 +25,14 @@
  */
 
 /** @file
- * PRRTE output stream facility.
+ * PRTE output stream facility.
  *
- * The PRRTE output stream facility is used to send output from the PRRTE
+ * The PRTE output stream facility is used to send output from the PRTE
  * libraries to output devices.  It is meant to fully replace all
  * forms of printf() (and friends).  Output streams are opened via the
- * prrte_output_open() function call, and then sent output via
- * prrte_output_verbose(), PRRTE_OUTPUT(), and prrte_output().  Streams are
- * closed with prrte_output_close().
+ * prte_output_open() function call, and then sent output via
+ * prte_output_verbose(), PRTE_OUTPUT(), and prte_output().  Streams are
+ * closed with prte_output_close().
  *
  * Streams can multiplex output to several kinds of outputs (one of
  * each):
@@ -42,23 +42,23 @@
  * - standard error
  * - file
  *
- * Which outputs to use are specified during prrte_output_open().
+ * Which outputs to use are specified during prte_output_open().
  *
  * WARNING: When using "file" as an output destination, be aware that
  * the file may not exist until the session directory for the process
  * exists.  This is at least part of the way through MPI_INIT (for
- * example).  Most MCA components and internals of PRRTE won't be
- * affected by this, but some RTE / startup aspects of PRRTE will
- * not be able to write to a file for output.  See prrte_output() for
+ * example).  Most MCA components and internals of PRTE won't be
+ * affected by this, but some RTE / startup aspects of PRTE will
+ * not be able to write to a file for output.  See prte_output() for
  * details on what happens in these cases.
  *
- * prrte_output_open() returns an integer handle that is used in
- * successive calls to PRRTE_OUTPUT() and prrte_output() to send output to
+ * prte_output_open() returns an integer handle that is used in
+ * successive calls to PRTE_OUTPUT() and prte_output() to send output to
  * the stream.
  *
  * The default "verbose" stream is opened after invoking
- * prrte_output_init() (and closed after invoking
- * prrte_output_finalize()).  This stream outputs to stderr only, and
+ * prte_output_init() (and closed after invoking
+ * prte_output_finalize()).  This stream outputs to stderr only, and
  * has a stream handle ID of 0.
  *
  * It is erroneous to have one thread close a stream and have another
@@ -66,14 +66,14 @@
  * will be serialized in an unspecified order.
  */
 
-#ifndef PRRTE_OUTPUT_H_
-#define PRRTE_OUTPUT_H_
+#ifndef PRTE_OUTPUT_H_
+#define PRTE_OUTPUT_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdarg.h>
 
-#include "src/class/prrte_object.h"
+#include "src/class/prte_object.h"
 
 BEGIN_C_DECLS
 
@@ -81,14 +81,14 @@ BEGIN_C_DECLS
  * and away from stdout/stderr or files - e.g., embedded systems whose
  * sole file system is in flash. To support such systems, we provide
  * the following environmental variables that support redirecting -all-
- * output (both from prrte_output and stdout/stderr of processes) to
+ * output (both from prte_output and stdout/stderr of processes) to
  * syslog:
  *
- * PRRTE_OUTPUT_REDIRECT - set to "syslog" to redirect to syslog. Other
+ * PRTE_OUTPUT_REDIRECT - set to "syslog" to redirect to syslog. Other
  *                        options may someday be supported
- * PRRTE_OUTPUT_SYSLOG_PRI - set to "info", "error", or "warn" to have
+ * PRTE_OUTPUT_SYSLOG_PRI - set to "info", "error", or "warn" to have
  *                        output sent to syslog at that priority
- * PRRTE_OUTPUT_SYSLOG_IDENT - a string identifier for the log
+ * PRTE_OUTPUT_SYSLOG_IDENT - a string identifier for the log
  *
  * We also define two global variables that notify all other
  * layers that output is being redirected to syslog at the given
@@ -96,34 +96,34 @@ BEGIN_C_DECLS
  * subsystem to tell it to dump any collected output directly to
  * syslog instead of forwarding it to another location.
  */
-PRRTE_EXPORT extern bool prrte_output_redirected_to_syslog;
-PRRTE_EXPORT extern int prrte_output_redirected_syslog_pri;
+PRTE_EXPORT extern bool prte_output_redirected_to_syslog;
+PRTE_EXPORT extern int prte_output_redirected_syslog_pri;
 
 /**
- * \class prrte_output_stream_t
+ * \class prte_output_stream_t
  *
- * Structure used to request the opening of a PRRTE output stream.  A
- * pointer to this structure is passed to prrte_output_open() to tell
- * the prrte_output subsystem where to send output for a given stream.
+ * Structure used to request the opening of a PRTE output stream.  A
+ * pointer to this structure is passed to prte_output_open() to tell
+ * the prte_output subsystem where to send output for a given stream.
  * It is valid to specify multiple destinations of output for a stream
  * -- output streams can be multiplexed to multiple different
- * destinations through the prrte_output facility.
+ * destinations through the prte_output facility.
  *
  * Note that all strings in this struct are cached on the stream by
  * value; there is no need to keep them allocated after the return
- * from prrte_output_open().
+ * from prte_output_open().
  */
-struct prrte_output_stream_t {
+struct prte_output_stream_t {
     /** Class parent */
-    prrte_object_t super;
+    prte_object_t super;
 
     /**
      * Indicate the starting verbosity level of the stream.
      *
      * Verbose levels are a convenience mechanisms, and are only
      * consulted when output is sent to a stream through the
-     * prrte_output_verbose() function.  Verbose levels are ignored in
-     * PRRTE_OUTPUT() and prrte_output().
+     * prte_output_verbose() function.  Verbose levels are ignored in
+     * PRTE_OUTPUT() and prte_output().
      *
      * Valid verbose levels typically start at 0 (meaning "minimal
      * information").  Higher verbosity levels generally indicate that
@@ -132,7 +132,7 @@ struct prrte_output_stream_t {
     int lds_verbose_level;
 
     /**
-     * When prrte_output_stream_t::lds_want_syslog is true, this field is
+     * When prte_output_stream_t::lds_want_syslog is true, this field is
      * examined to see what priority output from the stream should be
      * sent to the syslog.
      *
@@ -142,10 +142,10 @@ struct prrte_output_stream_t {
      */
     int lds_syslog_priority;
     /**
-     * When prrte_output_stream_t::lds_want_syslog is true, this field is
+     * When prte_output_stream_t::lds_want_syslog is true, this field is
      * examined to see what ident value should be passed to openlog(3).
      *
-     * If a NULL value is given, the string "prrte" is used.
+     * If a NULL value is given, the string "prte" is used.
      */
 #if !defined(__WINDOWS__)
     char *lds_syslog_ident;
@@ -161,7 +161,7 @@ struct prrte_output_stream_t {
      * When this field is non-NULL, it is prefixed to all lines of
      * output on the stream.  When this field is NULL, no prefix is
      * added to each line of output in the stream. The prefix is copied
-     * to an internal structure in the call to prrte_output_open()!
+     * to an internal structure in the call to prte_output_open()!
      */
     char *lds_prefix;
 
@@ -171,7 +171,7 @@ struct prrte_output_stream_t {
      * When this field is non-NULL, it is appended to all lines of
      * output on the stream.  When this field is NULL, no suffix is
      * added to each line of output in the stream. The suffix is copied
-     * to an internal structure in the call to prrte_output_open()!
+     * to an internal structure in the call to prte_output_open()!
      */
     char *lds_suffix;
 
@@ -181,7 +181,7 @@ struct prrte_output_stream_t {
      *
      * This field should be "true" if the output is for debugging
      * purposes only.  In that case, the output will never be sent to
-     * the stream unless PRRTE was configured with --enable-debug.
+     * the stream unless PRTE was configured with --enable-debug.
      */
     bool lds_is_debugging;
 
@@ -224,7 +224,7 @@ struct prrte_output_stream_t {
      */
     bool lds_want_file;
     /**
-     * When prrte_output_stream_t::lds_want_file is true, this field
+     * When prte_output_stream_t::lds_want_file is true, this field
      * indicates whether to append the file (if it exists) or overwrite
      * it.
      *
@@ -232,16 +232,16 @@ struct prrte_output_stream_t {
      */
     bool lds_want_file_append;
     /**
-     * When prrte_output_stream_t::lds_want_file is true, this field
+     * When prte_output_stream_t::lds_want_file is true, this field
      * indicates the string suffix to add to the filename.
      *
      * The output file will be in the directory and begin with the
-     * prefix set by prrte_output_set_output_file_info() (e.g.,
+     * prefix set by prte_output_set_output_file_info() (e.g.,
      * "$dir/$prefix$suffix").  If this field is NULL and
      * lds_want_file is true, then the suffix "output.txt" is used.
      *
      * Note that it is possible that the output directory may not
-     * exist when prrte_output_open() is invoked.  See prrte_output()
+     * exist when prte_output_open() is invoked.  See prte_output()
      * for details on what happens in this situation.
      */
     char *lds_file_suffix;
@@ -251,7 +251,7 @@ struct prrte_output_stream_t {
     /**
      * Convenience typedef
      */
-    typedef struct prrte_output_stream_t prrte_output_stream_t;
+    typedef struct prte_output_stream_t prte_output_stream_t;
 
     /**
      * Initializes the output stream system and opens a default
@@ -262,25 +262,25 @@ struct prrte_output_stream_t {
      *
      * This should be the first function invoked in the output
      * subsystem.  After this call, the default "verbose" stream is open
-     * and can be written to via calls to prrte_output_verbose() and
-     * prrte_output_error().
+     * and can be written to via calls to prte_output_verbose() and
+     * prte_output_error().
      *
      * By definition, the default verbose stream has a handle ID of 0,
      * and has a verbose level of 0.
      */
-    PRRTE_EXPORT bool prrte_output_init(void);
-    PRRTE_EXPORT void prrte_output_finalize(void);
+    PRTE_EXPORT bool prte_output_init(void);
+    PRTE_EXPORT void prte_output_finalize(void);
 
     /**
      * Opens an output stream.
      *
-     * @param lds A pointer to prrte_output_stream_t describing what the
+     * @param lds A pointer to prte_output_stream_t describing what the
      * characteristics of the output stream should be.
      *
      * This function opens an output stream and returns an integer
      * handle.  The caller is responsible for maintaining the handle and
-     * using it in successive calls to PRRTE_OUTPUT(), prrte_output(),
-     * prrte_output_switch(), and prrte_output_close().
+     * using it in successive calls to PRTE_OUTPUT(), prte_output(),
+     * prte_output_switch(), and prte_output_close().
      *
      * If lds is NULL, the default descriptions will be used, meaning
      * that output will only be sent to stderr.
@@ -289,17 +289,17 @@ struct prrte_output_stream_t {
      * simultaneously; their execution will be serialized in an
      * unspecified manner.
      *
-     * Be sure to see prrte_output() for a description of what happens
-     * when open_open() / prrte_output() is directed to send output to a
+     * Be sure to see prte_output() for a description of what happens
+     * when open_open() / prte_output() is directed to send output to a
      * file but the process session directory does not yet exist.
      */
-    PRRTE_EXPORT int prrte_output_open(prrte_output_stream_t *lds);
+    PRTE_EXPORT int prte_output_open(prte_output_stream_t *lds);
 
     /**
      * Re-opens / redirects an output stream.
      *
      * @param output_id Stream handle to reopen
-     * @param lds A pointer to prrte_output_stream_t describing what the
+     * @param lds A pointer to prte_output_stream_t describing what the
      * characteristics of the reopened output stream should be.
      *
      * This function redirects an existing stream into a new [set of]
@@ -307,7 +307,7 @@ struct prrte_output_stream_t {
      * passed is invalid, this call is effectively the same as opening a
      * new stream with a specific stream handle.
      */
-    PRRTE_EXPORT int prrte_output_reopen(int output_id, prrte_output_stream_t *lds);
+    PRTE_EXPORT int prte_output_reopen(int output_id, prte_output_stream_t *lds);
 
     /**
      * Enables and disables output streams.
@@ -322,11 +322,11 @@ struct prrte_output_stream_t {
      * The output of a stream can be temporarily disabled by passing an
      * enable value to false, and later resumed by passing an enable
      * value of true.  This does not close the stream -- it simply tells
-     * the prrte_output subsystem to intercept and discard any output sent
-     * to the stream via PRRTE_OUTPUT() or prrte_output() until the output
+     * the prte_output subsystem to intercept and discard any output sent
+     * to the stream via PRTE_OUTPUT() or prte_output() until the output
      * is re-enabled.
      */
-    PRRTE_EXPORT bool prrte_output_switch(int output_id, bool enable);
+    PRTE_EXPORT bool prte_output_switch(int output_id, bool enable);
 
     /**
      * \internal
@@ -337,7 +337,7 @@ struct prrte_output_stream_t {
      * typically only invoked after a restart (i.e., in a new process)
      * where output streams need to be re-initialized.
      */
-    PRRTE_EXPORT void prrte_output_reopen_all(void);
+    PRTE_EXPORT void prte_output_reopen_all(void);
 
     /**
      * Close an output stream.
@@ -349,19 +349,19 @@ struct prrte_output_stream_t {
      * re-used; it is possible that after a stream is closed, if another
      * stream is opened, it will get the same handle value.
      */
-    PRRTE_EXPORT void prrte_output_close(int output_id);
+    PRTE_EXPORT void prte_output_close(int output_id);
 
     /**
      * Main function to send output to a stream.
      *
-     * @param output_id Stream id returned from prrte_output_open().
+     * @param output_id Stream id returned from prte_output_open().
      * @param format printf-style format string.
      * @param varargs printf-style varargs list to fill the string
      * specified by the format parameter.
      *
      * This is the main function to send output to custom streams (note
      * that output to the default "verbose" stream is handled through
-     * prrte_output_verbose() and prrte_output_error()).
+     * prte_output_verbose() and prte_output_error()).
      *
      * It is never necessary to send a trailing "\n" in the strings to
      * this function; some streams requires newlines, others do not --
@@ -371,18 +371,18 @@ struct prrte_output_stream_t {
      *
      * Note that for output streams that are directed to files, the
      * files are stored under the process' session directory.  If the
-     * session directory does not exist when prrte_output() is invoked,
+     * session directory does not exist when prte_output() is invoked,
      * the output will be discarded!  Once the session directory is
-     * created, prrte_output() will automatically create the file and
+     * created, prte_output() will automatically create the file and
      * writing to it.
      */
-    PRRTE_EXPORT void prrte_output(int output_id, const char *format, ...) __prrte_attribute_format__(__printf__, 2, 3);
+    PRTE_EXPORT void prte_output(int output_id, const char *format, ...) __prte_attribute_format__(__printf__, 2, 3);
 
     /**
      * Send output to a stream only if the passed verbosity level is
      * high enough.
      *
-     * @param output_id Stream id returned from prrte_output_open().
+     * @param output_id Stream id returned from prte_output_open().
      * @param level Target verbosity level.
      * @param format printf-style format string.
      * @param varargs printf-style varargs list to fill the string
@@ -401,67 +401,67 @@ struct prrte_output_stream_t {
      * This function is really a convenience wrapper around checking the
      * current verbosity level set on the stream, and if the passed
      * level is less than or equal to the stream's verbosity level, this
-     * function will effectively invoke prrte_output to send the output to
+     * function will effectively invoke prte_output to send the output to
      * the stream.
      *
-     * @see prrte_output_set_verbosity()
+     * @see prte_output_set_verbosity()
      */
-#define prrte_output_verbose(verbose_level, output_id, ...)           \
+#define prte_output_verbose(verbose_level, output_id, ...)           \
     do {                                                             \
-        if (prrte_output_check_verbosity(verbose_level, output_id)) { \
-            prrte_output(output_id, __VA_ARGS__);                     \
+        if (prte_output_check_verbosity(verbose_level, output_id)) { \
+            prte_output(output_id, __VA_ARGS__);                     \
         }                                                            \
     } while(0)
 
-    PRRTE_EXPORT bool prrte_output_check_verbosity(int verbose_level, int output_id);
+    PRTE_EXPORT bool prte_output_check_verbosity(int verbose_level, int output_id);
 
    /**
-    * Same as prrte_output_verbose(), but takes a va_list form of varargs.
+    * Same as prte_output_verbose(), but takes a va_list form of varargs.
     */
-    PRRTE_EXPORT void prrte_output_vverbose(int verbose_level, int output_id,
-                                            const char *format, va_list ap) __prrte_attribute_format__(__printf__, 3, 0);
+    PRTE_EXPORT void prte_output_vverbose(int verbose_level, int output_id,
+                                            const char *format, va_list ap) __prte_attribute_format__(__printf__, 3, 0);
 
     /**
      * Send output to a string if the verbosity level is high enough.
      *
-     * @param output_id Stream id returned from prrte_output_open().
+     * @param output_id Stream id returned from prte_output_open().
      * @param level Target verbosity level.
      * @param format printf-style format string.
      * @param varargs printf-style varargs list to fill the string
      * specified by the format parameter.
      *
-     * Exactly the same as prrte_output_verbose(), except the output it
+     * Exactly the same as prte_output_verbose(), except the output it
      * sent to a string instead of to the stream.  If the verbose
      * level is not high enough, NULL is returned.  The caller is
      * responsible for free()'ing the returned string.
      */
-    PRRTE_EXPORT char *prrte_output_string(int verbose_level, int output_id,
-                                           const char *format, ...) __prrte_attribute_format__(__printf__, 3, 4);
+    PRTE_EXPORT char *prte_output_string(int verbose_level, int output_id,
+                                           const char *format, ...) __prte_attribute_format__(__printf__, 3, 4);
 
    /**
-    * Same as prrte_output_string, but accepts a va_list form of varargs.
+    * Same as prte_output_string, but accepts a va_list form of varargs.
     */
-    PRRTE_EXPORT char *prrte_output_vstring(int verbose_level, int output_id,
-                                            const char *format, va_list ap) __prrte_attribute_format__(__printf__, 3, 0);
+    PRTE_EXPORT char *prte_output_vstring(int verbose_level, int output_id,
+                                            const char *format, va_list ap) __prte_attribute_format__(__printf__, 3, 0);
 
     /**
      * Set the verbosity level for a stream.
      *
-     * @param output_id Stream id returned from prrte_output_open().
+     * @param output_id Stream id returned from prte_output_open().
      * @param level New verbosity level
      *
      * This function sets the verbosity level on a given stream.  It
-     * will be used for all future invocations of prrte_output_verbose().
+     * will be used for all future invocations of prte_output_verbose().
      */
-    PRRTE_EXPORT void prrte_output_set_verbosity(int output_id, int level);
+    PRTE_EXPORT void prte_output_set_verbosity(int output_id, int level);
 
     /**
      * Get the verbosity level for a stream
      *
-     * @param output_id Stream id returned from prrte_output_open()
+     * @param output_id Stream id returned from prte_output_open()
      * @returns Verbosity of stream
      */
-    PRRTE_EXPORT int prrte_output_get_verbosity(int output_id);
+    PRTE_EXPORT int prte_output_get_verbosity(int output_id);
 
     /**
      * Set characteristics for output files.
@@ -474,7 +474,7 @@ struct prrte_output_stream_t {
      *
      * This function controls the final filename used for all new
      * output streams that request output files.  Specifically, when
-     * prrte_output_stream_t::lds_want_file is true, the output
+     * prte_output_stream_t::lds_want_file is true, the output
      * filename will be of the form $dir/$prefix$suffix.
      *
      * The default value for the output directory is whatever is
@@ -486,7 +486,7 @@ struct prrte_output_stream_t {
      * If dir or prefix are NULL, new values are not set.  The strings
      * represented by dir and prefix are copied into internal storage;
      * it is safe to pass string constants or free() these values
-     * after prrte_output_set_output_file_info() returns.
+     * after prte_output_set_output_file_info() returns.
      *
      * If olddir or oldprefix are not NULL, copies of the old
      * directory and prefix (respectively) are returned in these
@@ -498,52 +498,52 @@ struct prrte_output_stream_t {
      * Note that this function only affects the creation of \em new
      * streams -- streams that have already started writing to output
      * files are not affected (i.e., their output files are not moved
-     * to the new directory).  More specifically, the prrte_output
+     * to the new directory).  More specifically, the prte_output
      * system only opens/creates output files lazily -- so calling
      * this function affects both new streams \em and any stream that
      * was previously opened but had not yet output anything.
      */
-    PRRTE_EXPORT void prrte_output_set_output_file_info(const char *dir,
+    PRTE_EXPORT void prte_output_set_output_file_info(const char *dir,
                                                         const char *prefix,
                                                         char **olddir,
                                                         char **oldprefix);
 
-#if PRRTE_ENABLE_DEBUG
+#if PRTE_ENABLE_DEBUG
     /**
      * Main macro for use in sending debugging output to output streams;
-     * will be "compiled out" when PRRTE is configured without
+     * will be "compiled out" when PRTE is configured without
      * --enable-debug.
      *
-     * @see prrte_output()
+     * @see prte_output()
      */
-#define PRRTE_OUTPUT(a) prrte_output a
+#define PRTE_OUTPUT(a) prte_output a
 
     /**
      * Macro for use in sending debugging output to the output
-     * streams.  Will be "compiled out" when PRRTE is configured
+     * streams.  Will be "compiled out" when PRTE is configured
      * without --enable-debug.
      *
-     * @see prrte_output_verbose()
+     * @see prte_output_verbose()
      */
-#define PRRTE_OUTPUT_VERBOSE(a) prrte_output_verbose a
+#define PRTE_OUTPUT_VERBOSE(a) prte_output_verbose a
 #else
     /**
      * Main macro for use in sending debugging output to output streams;
-     * will be "compiled out" when PRRTE is configured without
+     * will be "compiled out" when PRTE is configured without
      * --enable-debug.
      *
-     * @see prrte_output()
+     * @see prte_output()
      */
-#define PRRTE_OUTPUT(a)
+#define PRTE_OUTPUT(a)
 
     /**
      * Macro for use in sending debugging output to the output
-     * streams.  Will be "compiled out" when PRRTE is configured
+     * streams.  Will be "compiled out" when PRTE is configured
      * without --enable-debug.
      *
-     * @see prrte_output_verbose()
+     * @see prte_output_verbose()
      */
-#define PRRTE_OUTPUT_VERBOSE(a)
+#define PRTE_OUTPUT_VERBOSE(a)
 #endif
 
 /**
@@ -554,9 +554,9 @@ struct prrte_output_stream_t {
  * The intended usage is to invoke the constructor and then enable
  * the output fields that you want.
  */
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_output_stream_t);
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_output_stream_t);
 
 END_C_DECLS
 
-#endif /* PRRTE_OUTPUT_H_ */
+#endif /* PRTE_OUTPUT_H_ */
 

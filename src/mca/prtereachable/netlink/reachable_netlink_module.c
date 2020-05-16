@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2015 Cisco Systems.  All rights reserved.
+ * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017 Amazon.com, Inc. or its affiliates.
  *                    All Rights reserved.
  * $COPYRIGHT$
@@ -11,7 +11,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "src/include/constants.h"
 #include "src/include/types.h"
 
@@ -34,7 +34,7 @@ enum connection_quality {
 /* Local variables */
 static int init_counter = 0;
 
-static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if);
+static int get_weights(prte_if_t *local_if, prte_if_t *remote_if);
 static int calculate_weight(int bandwidth_local, int bandwidth_remote,
                             int connection_quality);
 
@@ -42,14 +42,14 @@ static int netlink_init(void)
 {
     ++init_counter;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int netlink_fini(void)
 {
     --init_counter;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /*
@@ -59,23 +59,23 @@ static int netlink_fini(void)
  * Higher weightings are given to connections on the same
  * network.
  */
-static prrte_reachable_t* netlink_reachable(prrte_list_t *local_ifs,
-                                            prrte_list_t *remote_ifs)
+static prte_reachable_t* netlink_reachable(prte_list_t *local_ifs,
+                                            prte_list_t *remote_ifs)
 {
-    prrte_reachable_t *reachable_results = NULL;
+    prte_reachable_t *reachable_results = NULL;
     int i, j;
-    prrte_if_t *local_iter, *remote_iter;
+    prte_if_t *local_iter, *remote_iter;
 
-    reachable_results = prrte_reachable_allocate(local_ifs->prrte_list_length,
-                                                remote_ifs->prrte_list_length);
+    reachable_results = prte_reachable_allocate(local_ifs->prte_list_length,
+                                                remote_ifs->prte_list_length);
     if (NULL == reachable_results) {
         return NULL;
     }
 
     i = 0;
-    PRRTE_LIST_FOREACH(local_iter, local_ifs, prrte_if_t) {
+    PRTE_LIST_FOREACH(local_iter, local_ifs, prte_if_t) {
         j = 0;
-        PRRTE_LIST_FOREACH(remote_iter, remote_ifs, prrte_if_t) {
+        PRTE_LIST_FOREACH(remote_iter, remote_ifs, prte_if_t) {
             reachable_results->weights[i][j] = get_weights(local_iter, remote_iter);
             j++;
         }
@@ -86,19 +86,19 @@ static prrte_reachable_t* netlink_reachable(prrte_list_t *local_ifs,
 }
 
 
-static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
+static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
 {
     char str_local[128], str_remote[128], *conn_type;
     int outgoing_interface, ret, weight, has_gateway;
 
-    /* prrte_net_get_hostname returns a static buffer.  Great for
+    /* prte_net_get_hostname returns a static buffer.  Great for
        single address printfs, need to copy in this case */
-    prrte_string_copy(str_local,
-            prrte_net_get_hostname((struct sockaddr *)&local_if->if_addr),
+    prte_string_copy(str_local,
+            prte_net_get_hostname((struct sockaddr *)&local_if->if_addr),
             sizeof(str_local));
     str_local[sizeof(str_local) - 1] = '\0';
-    prrte_string_copy(str_remote,
-            prrte_net_get_hostname((struct sockaddr *)&remote_if->if_addr),
+    prte_string_copy(str_remote,
+            prte_net_get_hostname((struct sockaddr *)&remote_if->if_addr),
             sizeof(str_remote));
     str_remote[sizeof(str_remote) - 1] = '\0';
 
@@ -123,7 +123,7 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
             goto out;
         }
 
-        ret = prrte_reachable_netlink_rt_lookup(local_ip,
+        ret = prte_reachable_netlink_rt_lookup(local_ip,
                                                remote_ip,
                                                outgoing_interface,
                                                &has_gateway);
@@ -144,7 +144,7 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
             weight = calculate_weight(0, 0, CQ_NO_CONNECTION);
         }
 
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
     } else if (AF_INET6 == local_if->af_family && AF_INET6 == remote_if->af_family) {
         struct in6_addr *local_ip, *remote_ip;
 
@@ -163,7 +163,7 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
             goto out;
         }
 
-        ret = prrte_reachable_netlink_rt_lookup6(local_ip,
+        ret = prte_reachable_netlink_rt_lookup6(local_ip,
                                                 remote_ip,
                                                 outgoing_interface,
                                                 &has_gateway);
@@ -184,7 +184,7 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
             conn_type = "IPv6 NO CONNECTION";
             weight = calculate_weight(0, 0, CQ_NO_CONNECTION);
         }
-#endif /* #if PRRTE_ENABLE_IPV6 */
+#endif /* #if PRTE_ENABLE_IPV6 */
 
     } else {
         /* we don't have an address family match, so assume no
@@ -194,7 +194,7 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
     }
 
   out:
-    prrte_output_verbose(20, prrte_prtereachable_base_framework.framework_output,
+    prte_output_verbose(20, prte_prtereachable_base_framework.framework_output,
                         "reachable:netlink: path from %s to %s: %s",
                         str_local, str_remote, conn_type);
 
@@ -202,7 +202,7 @@ static int get_weights(prrte_if_t *local_if, prrte_if_t *remote_if)
 }
 
 
-const prrte_reachable_base_module_t prrte_prtereachable_netlink_module = {
+const prte_reachable_base_module_t prte_prtereachable_netlink_module = {
     netlink_init,
     netlink_fini,
     netlink_reachable

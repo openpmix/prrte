@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
@@ -32,7 +32,7 @@
 #ifndef MCA_IOF_BASE_H
 #define MCA_IOF_BASE_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
@@ -47,14 +47,14 @@
 #endif
 #include <signal.h>
 
-#include "src/class/prrte_list.h"
-#include "src/class/prrte_bitmap.h"
+#include "src/class/prte_list.h"
+#include "src/class/prte_bitmap.h"
 #include "src/mca/mca.h"
 #include "src/event/event-internal.h"
 #include "src/util/fd.h"
 
 #include "src/mca/iof/iof.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/threads/threads.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -64,219 +64,219 @@ BEGIN_C_DECLS
 /*
  * MCA framework
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_iof_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_iof_base_framework;
 /*
  * Select an available component.
  */
-PRRTE_EXPORT int prrte_iof_base_select(void);
+PRTE_EXPORT int prte_iof_base_select(void);
 
 /* track xon/xoff of processes */
 typedef struct {
-    prrte_object_t super;
-    prrte_job_t *jdata;
-    prrte_bitmap_t xoff;
-} prrte_iof_job_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_iof_job_t);
+    prte_object_t super;
+    prte_job_t *jdata;
+    prte_bitmap_t xoff;
+} prte_iof_job_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_job_t);
 
 /*
  * Maximum size of single msg
  */
-#define PRRTE_IOF_BASE_MSG_MAX           4096
-#define PRRTE_IOF_BASE_TAG_MAX             50
-#define PRRTE_IOF_BASE_TAGGED_OUT_MAX    8192
-#define PRRTE_IOF_MAX_INPUT_BUFFERS        50
+#define PRTE_IOF_BASE_MSG_MAX           4096
+#define PRTE_IOF_BASE_TAG_MAX             50
+#define PRTE_IOF_BASE_TAGGED_OUT_MAX    8192
+#define PRTE_IOF_MAX_INPUT_BUFFERS        50
 
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     bool pending;
     bool always_writable;
-    prrte_event_t *ev;
+    prte_event_t *ev;
     struct timeval tv;
     int fd;
-    prrte_list_t outputs;
-} prrte_iof_write_event_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_iof_write_event_t);
+    prte_list_t outputs;
+} prte_iof_write_event_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_write_event_t);
 
 typedef struct {
-    prrte_list_item_t super;
-    prrte_process_name_t name;
-    prrte_process_name_t daemon;
-    prrte_iof_tag_t tag;
-    prrte_iof_write_event_t *wev;
+    prte_list_item_t super;
+    prte_process_name_t name;
+    prte_process_name_t daemon;
+    prte_iof_tag_t tag;
+    prte_iof_write_event_t *wev;
     bool xoff;
     bool exclusive;
     bool closed;
-} prrte_iof_sink_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_iof_sink_t);
+} prte_iof_sink_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_sink_t);
 
-struct prrte_iof_proc_t;
+struct prte_iof_proc_t;
 typedef struct {
-    prrte_object_t super;
-    struct prrte_iof_proc_t *proc;
-    prrte_event_t *ev;
+    prte_object_t super;
+    struct prte_iof_proc_t *proc;
+    prte_event_t *ev;
     struct timeval tv;
     int fd;
-    prrte_iof_tag_t tag;
+    prte_iof_tag_t tag;
     bool active;
     bool always_readable;
-    prrte_iof_sink_t *sink;
-} prrte_iof_read_event_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_iof_read_event_t);
+    prte_iof_sink_t *sink;
+} prte_iof_read_event_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_read_event_t);
 
 typedef struct {
-    prrte_list_item_t super;
-    prrte_process_name_t name;
-    prrte_iof_sink_t *stdinev;
-    prrte_iof_read_event_t *revstdout;
-    prrte_iof_read_event_t *revstderr;
-    prrte_list_t *subscribers;
+    prte_list_item_t super;
+    prte_process_name_t name;
+    prte_iof_sink_t *stdinev;
+    prte_iof_read_event_t *revstdout;
+    prte_iof_read_event_t *revstderr;
+    prte_list_t *subscribers;
     bool copy;
-} prrte_iof_proc_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_iof_proc_t);
+} prte_iof_proc_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_proc_t);
 
 typedef struct {
-    prrte_list_item_t super;
-    char data[PRRTE_IOF_BASE_TAGGED_OUT_MAX];
+    prte_list_item_t super;
+    char data[PRTE_IOF_BASE_TAGGED_OUT_MAX];
     int numbytes;
-} prrte_iof_write_output_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_iof_write_output_t);
+} prte_iof_write_output_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_write_output_t);
 
 /* the iof globals struct */
-struct prrte_iof_base_t {
+struct prte_iof_base_t {
     size_t                  output_limit;
-    prrte_iof_sink_t         *iof_write_stdout;
-    prrte_iof_sink_t         *iof_write_stderr;
+    prte_iof_sink_t         *iof_write_stdout;
+    prte_iof_sink_t         *iof_write_stderr;
     bool                    redirect_app_stderr_to_stdout;
 };
-typedef struct prrte_iof_base_t prrte_iof_base_t;
+typedef struct prte_iof_base_t prte_iof_base_t;
 
 /* Write event macro's */
 
 static inline bool
-prrte_iof_base_fd_always_ready(int fd)
+prte_iof_base_fd_always_ready(int fd)
 {
-    return prrte_fd_is_regular(fd) ||
-           (prrte_fd_is_chardev(fd) && !isatty(fd)) ||
-           prrte_fd_is_blkdev(fd);
+    return prte_fd_is_regular(fd) ||
+           (prte_fd_is_chardev(fd) && !isatty(fd)) ||
+           prte_fd_is_blkdev(fd);
 }
 
-#define PRRTE_IOF_SINK_BLOCKSIZE (1024)
+#define PRTE_IOF_SINK_BLOCKSIZE (1024)
 
-#define PRRTE_IOF_SINK_ACTIVATE(wev)                                     \
+#define PRTE_IOF_SINK_ACTIVATE(wev)                                     \
     do {                                                                \
         struct timeval *tv = NULL;                                      \
         wev->pending = true;                                            \
-        PRRTE_POST_OBJECT(wev);                                          \
+        PRTE_POST_OBJECT(wev);                                          \
         if (wev->always_writable) {                                     \
             /* Regular is always write ready. Use timer to activate */  \
             tv = &wev->tv;                                        \
         }                                                               \
-        if (prrte_event_add(wev->ev, tv)) {                              \
-            PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);                         \
+        if (prte_event_add(wev->ev, tv)) {                              \
+            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);                         \
         }                                                               \
     } while(0);
 
 
 /* define an output "sink", adding it to the provided
  * endpoint list for this proc */
-#define PRRTE_IOF_SINK_DEFINE(snk, nm, fid, tg, wrthndlr)                \
+#define PRTE_IOF_SINK_DEFINE(snk, nm, fid, tg, wrthndlr)                \
     do {                                                                \
-        prrte_iof_sink_t *ep;                                            \
-        PRRTE_OUTPUT_VERBOSE((1,                                         \
-                            prrte_iof_base_framework.framework_output,   \
+        prte_iof_sink_t *ep;                                            \
+        PRTE_OUTPUT_VERBOSE((1,                                         \
+                            prte_iof_base_framework.framework_output,   \
                             "defining endpt: file %s line %d fd %d",    \
                             __FILE__, __LINE__, (fid)));                \
-        ep = PRRTE_NEW(prrte_iof_sink_t);                                  \
+        ep = PRTE_NEW(prte_iof_sink_t);                                  \
         ep->name.jobid = (nm)->jobid;                                   \
         ep->name.vpid = (nm)->vpid;                                     \
         ep->tag = (tg);                                                 \
         if (0 <= (fid)) {                                               \
             ep->wev->fd = (fid);                                        \
             ep->wev->always_writable =                                  \
-                    prrte_iof_base_fd_always_ready(fid);                 \
+                    prte_iof_base_fd_always_ready(fid);                 \
             if(ep->wev->always_writable) {                              \
-                prrte_event_evtimer_set(prrte_event_base,                 \
+                prte_event_evtimer_set(prte_event_base,                 \
                                        ep->wev->ev,  wrthndlr, ep);     \
             } else {                                                    \
-                prrte_event_set(prrte_event_base,                         \
+                prte_event_set(prte_event_base,                         \
                                ep->wev->ev, ep->wev->fd,                \
-                               PRRTE_EV_WRITE,                           \
+                               PRTE_EV_WRITE,                           \
                                wrthndlr, ep);                           \
             }                                                           \
-            prrte_event_set_priority(ep->wev->ev, PRRTE_MSG_PRI);         \
+            prte_event_set_priority(ep->wev->ev, PRTE_MSG_PRI);         \
         }                                                               \
         *(snk) = ep;                                                    \
-        PRRTE_POST_OBJECT(ep);                                           \
+        PRTE_POST_OBJECT(ep);                                           \
     } while(0);
 
 /* Read event macro's */
-#define PRRTE_IOF_READ_ADDEV(rev)                                \
+#define PRTE_IOF_READ_ADDEV(rev)                                \
     do {                                                        \
         struct timeval *tv = NULL;                              \
         if (rev->always_readable) {                             \
             tv = &rev->tv;                                      \
         }                                                       \
-        if (prrte_event_add(rev->ev, tv)) {                      \
-            PRRTE_ERROR_LOG(PRRTE_ERR_BAD_PARAM);                 \
+        if (prte_event_add(rev->ev, tv)) {                      \
+            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);                 \
         }                                                       \
     } while(0);
 
-#define PRRTE_IOF_READ_ACTIVATE(rev)                             \
+#define PRTE_IOF_READ_ACTIVATE(rev)                             \
     do {                                                        \
         rev->active = true;                                     \
-        PRRTE_POST_OBJECT(rev);                                  \
-        PRRTE_IOF_READ_ADDEV(rev);                               \
+        PRTE_POST_OBJECT(rev);                                  \
+        PRTE_IOF_READ_ADDEV(rev);                               \
     } while(0);
 
 
-/* add list of structs that has name of proc + prrte_iof_tag_t - when
+/* add list of structs that has name of proc + prte_iof_tag_t - when
  * defining a read event, search list for proc, add flag to the tag.
  * when closing a read fd, find proc on list and zero out that flag
  * when all flags = 0, then iof is complete - set message event to
  * daemon processor indicating proc iof is terminated
  */
-#define PRRTE_IOF_READ_EVENT(rv, p, fid, tg, cbfunc, actv)               \
+#define PRTE_IOF_READ_EVENT(rv, p, fid, tg, cbfunc, actv)               \
     do {                                                                \
-        prrte_iof_read_event_t *rev;                                     \
-        PRRTE_OUTPUT_VERBOSE((1,                                         \
-                            prrte_iof_base_framework.framework_output,   \
+        prte_iof_read_event_t *rev;                                     \
+        PRTE_OUTPUT_VERBOSE((1,                                         \
+                            prte_iof_base_framework.framework_output,   \
                             "%s defining read event for %s: %s %d",     \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),         \
-                            PRRTE_NAME_PRINT(&(p)->name),                \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
+                            PRTE_NAME_PRINT(&(p)->name),                \
                             __FILE__, __LINE__));                       \
-        rev = PRRTE_NEW(prrte_iof_read_event_t);                           \
-        PRRTE_RETAIN((p));                                                \
-        rev->proc = (struct prrte_iof_proc_t*)(p);                       \
+        rev = PRTE_NEW(prte_iof_read_event_t);                           \
+        PRTE_RETAIN((p));                                                \
+        rev->proc = (struct prte_iof_proc_t*)(p);                       \
         rev->tag = (tg);                                                \
         rev->fd = (fid);                                                \
-        rev->always_readable = prrte_iof_base_fd_always_ready(fid);      \
+        rev->always_readable = prte_iof_base_fd_always_ready(fid);      \
         *(rv) = rev;                                                    \
         if(rev->always_readable) {                                      \
-            prrte_event_evtimer_set(prrte_event_base,                     \
+            prte_event_evtimer_set(prte_event_base,                     \
                                    rev->ev, (cbfunc), rev);             \
         } else {                                                        \
-            prrte_event_set(prrte_event_base,                             \
+            prte_event_set(prte_event_base,                             \
                            rev->ev, (fid),                              \
-                           PRRTE_EV_READ,                                \
+                           PRTE_EV_READ,                                \
                            (cbfunc), rev);                              \
         }                                                               \
-        prrte_event_set_priority(rev->ev, PRRTE_MSG_PRI);                 \
+        prte_event_set_priority(rev->ev, PRTE_MSG_PRI);                 \
         if ((actv)) {                                                   \
-            PRRTE_IOF_READ_ACTIVATE(rev)                                 \
+            PRTE_IOF_READ_ACTIVATE(rev)                                 \
         }                                                               \
     } while(0);
 
 
-PRRTE_EXPORT int prrte_iof_base_flush(void);
+PRTE_EXPORT int prte_iof_base_flush(void);
 
-PRRTE_EXPORT extern prrte_iof_base_t prrte_iof_base;
+PRTE_EXPORT extern prte_iof_base_t prte_iof_base;
 
 /* base functions */
-PRRTE_EXPORT int prrte_iof_base_write_output(const prrte_process_name_t *name, prrte_iof_tag_t stream,
+PRTE_EXPORT int prte_iof_base_write_output(const prte_process_name_t *name, prte_iof_tag_t stream,
                                              const unsigned char *data, int numbytes,
-                                             prrte_iof_write_event_t *channel);
-PRRTE_EXPORT void prrte_iof_base_static_dump_output(prrte_iof_read_event_t *rev);
-PRRTE_EXPORT void prrte_iof_base_write_handler(int fd, short event, void *cbdata);
+                                             prte_iof_write_event_t *channel);
+PRTE_EXPORT void prte_iof_base_static_dump_output(prte_iof_read_event_t *rev);
+PRTE_EXPORT void prte_iof_base_write_handler(int fd, short event, void *cbdata);
 
 END_C_DECLS
 

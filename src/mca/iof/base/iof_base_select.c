@@ -13,6 +13,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,7 +21,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include "src/mca/mca.h"
@@ -37,33 +38,33 @@
  * they want to run.  Select the single component with the highest
  * priority.
  */
-int prrte_iof_base_select(void)
+int prte_iof_base_select(void)
 {
-    prrte_iof_base_component_t *best_component = NULL;
-    prrte_iof_base_module_t *best_module = NULL;
+    prte_iof_base_component_t *best_component = NULL;
+    prte_iof_base_module_t *best_module = NULL;
     int rc;
 
     /*
      * Select the best component
      */
-    if( PRRTE_SUCCESS != prrte_mca_base_select("iof", prrte_iof_base_framework.framework_output,
-                                                &prrte_iof_base_framework.framework_components,
-                                                (prrte_mca_base_module_t **) &best_module,
-                                                (prrte_mca_base_component_t **) &best_component, NULL) ) {
+    if( PRTE_SUCCESS != prte_mca_base_select("iof", prte_iof_base_framework.framework_output,
+                                                &prte_iof_base_framework.framework_components,
+                                                (prte_mca_base_module_t **) &best_module,
+                                                (prte_mca_base_component_t **) &best_component, NULL) ) {
         /* this is a problem */
-        return PRRTE_ERR_NOT_FOUND;
+        return PRTE_ERR_NOT_FOUND;
     }
 
     /* Save the winner */
-    prrte_iof = *best_module;
+    prte_iof = *best_module;
     /* init it */
-    if (NULL != prrte_iof.init) {
-        if (PRRTE_SUCCESS != (rc = prrte_iof.init())) {
-            PRRTE_ERROR_LOG(rc);
+    if (NULL != prte_iof.init) {
+        if (PRTE_SUCCESS != (rc = prte_iof.init())) {
+            PRTE_ERROR_LOG(rc);
             return rc;
         }
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 

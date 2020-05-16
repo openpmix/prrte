@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2011      Los Alamos National Security, LLC.
 #                         All rights reserved.
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -23,7 +23,7 @@
 
 # MCA_odls_default_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prrte_odls_default_CONFIG],[
+AC_DEFUN([MCA_prte_odls_default_CONFIG],[
     AC_CONFIG_FILES([src/mca/odls/default/Makefile])
 
     AC_CHECK_FUNC([fork], [odls_default_happy="yes"], [odls_default_happy="no"])

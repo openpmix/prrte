@@ -1,8 +1,8 @@
 /***************************************************************************
  *                                                                         *
- *          PRRTE: PMIx Reference RunTime Environment (PRRTE)              *
+ *          PRTE: PMIx Reference RunTime Environment (PRTE)              *
  *                                                                         *
- *                   https://github.com/openpmix/prrte                     *
+ *                   https://github.com/openpmix/prte                     *
  *                                                                         *
  ***************************************************************************/
 

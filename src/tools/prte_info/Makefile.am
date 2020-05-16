@@ -22,29 +22,29 @@
 #
 
 AM_CFLAGS = \
-            -DPRRTE_CONFIGURE_USER="\"@PRRTE_CONFIGURE_USER@\"" \
-            -DPRRTE_CONFIGURE_HOST="\"@PRRTE_CONFIGURE_HOST@\"" \
-            -DPRRTE_CONFIGURE_DATE="\"@PRRTE_CONFIGURE_DATE@\"" \
-            -DPRRTE_BUILD_USER="\"$$USER\"" \
-            -DPRRTE_BUILD_HOST="\"$${HOSTNAME:-`(hostname || uname -n) | sed 1q`}\"" \
-            -DPRRTE_BUILD_DATE="\"`date`\"" \
-            -DPRRTE_BUILD_CFLAGS="\"@CFLAGS@\"" \
-            -DPRRTE_BUILD_CPPFLAGS="\"@CPPFLAGS@\"" \
-            -DPRRTE_BUILD_CXXFLAGS="\"@CXXFLAGS@\"" \
-            -DPRRTE_BUILD_CXXCPPFLAGS="\"@CXXCPPFLAGS@\"" \
-            -DPRRTE_BUILD_FFLAGS="\"@FFLAGS@\"" \
-            -DPRRTE_BUILD_FCFLAGS="\"@FCFLAGS@\"" \
-            -DPRRTE_BUILD_LDFLAGS="\"@LDFLAGS@\"" \
-            -DPRRTE_BUILD_LIBS="\"@LIBS@\"" \
-            -DPRRTE_CC_ABSOLUTE="\"@PRRTE_CC_ABSOLUTE@\"" \
-            -DPRRTE_CXX_ABSOLUTE="\"@PRRTE_CXX_ABSOLUTE@\"" \
-            -DPRRTE_WRAPPER_EXTRA_CFLAGS="\"@PRRTE_WRAPPER_EXTRA_CFLAGS@\"" \
-            -DPRRTE_WRAPPER_EXTRA_LDFLAGS="\"@PRRTE_WRAPPER_EXTRA_LDFLAGS@\"" \
-            -DPRRTE_WRAPPER_EXTRA_LIBS="\"@PRRTE_WRAPPER_EXTRA_LIBS@\""
+            -DPRTE_CONFIGURE_USER="\"@PRTE_CONFIGURE_USER@\"" \
+            -DPRTE_CONFIGURE_HOST="\"@PRTE_CONFIGURE_HOST@\"" \
+            -DPRTE_CONFIGURE_DATE="\"@PRTE_CONFIGURE_DATE@\"" \
+            -DPRTE_BUILD_USER="\"$$USER\"" \
+            -DPRTE_BUILD_HOST="\"$${HOSTNAME:-`(hostname || uname -n) | sed 1q`}\"" \
+            -DPRTE_BUILD_DATE="\"`date`\"" \
+            -DPRTE_BUILD_CFLAGS="\"@CFLAGS@\"" \
+            -DPRTE_BUILD_CPPFLAGS="\"@CPPFLAGS@\"" \
+            -DPRTE_BUILD_CXXFLAGS="\"@CXXFLAGS@\"" \
+            -DPRTE_BUILD_CXXCPPFLAGS="\"@CXXCPPFLAGS@\"" \
+            -DPRTE_BUILD_FFLAGS="\"@FFLAGS@\"" \
+            -DPRTE_BUILD_FCFLAGS="\"@FCFLAGS@\"" \
+            -DPRTE_BUILD_LDFLAGS="\"@LDFLAGS@\"" \
+            -DPRTE_BUILD_LIBS="\"@LIBS@\"" \
+            -DPRTE_CC_ABSOLUTE="\"@PRTE_CC_ABSOLUTE@\"" \
+            -DPRTE_CXX_ABSOLUTE="\"@PRTE_CXX_ABSOLUTE@\"" \
+            -DPRTE_WRAPPER_EXTRA_CFLAGS="\"@PRTE_WRAPPER_EXTRA_CFLAGS@\"" \
+            -DPRTE_WRAPPER_EXTRA_LDFLAGS="\"@PRTE_WRAPPER_EXTRA_LDFLAGS@\"" \
+            -DPRTE_WRAPPER_EXTRA_LIBS="\"@PRTE_WRAPPER_EXTRA_LIBS@\""
 
-AM_LDFLAGS = $(PRRTE_EXTRA_LIB_LDFLAGS) $(prrte_hwloc_LDFLAGS) $(prrte_libevent_LDFLAGS) $(prrte_pmix_LDFLAGS)
+AM_LDFLAGS = $(PRTE_EXTRA_LIB_LDFLAGS) $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 
-include $(top_srcdir)/Makefile.prrte-rules
+include $(top_srcdir)/Makefile.prte-rules
 
 MD_FILES = prte_info.1.md
 man_pages_from_md = $(MD_FILES:.1.md=.1)
@@ -52,9 +52,9 @@ EXTRA_DIST = $(MD_FILES) $(man_pages_from_md)
 
 bin_PROGRAMS = prte_info
 
-dist_prrtedata_DATA = help-prrte-info.txt
+dist_prtedata_DATA = help-prte-info.txt
 
-if PRRTE_ENABLE_MAN_PAGES
+if PRTE_ENABLE_MAN_PAGES
 man_MANS = $(man_pages_from_md)
 endif
 
@@ -67,8 +67,8 @@ prte_info_SOURCES = \
         version.c
 
 prte_info_LDADD = \
-    $(PRRTE_EXTRA_LTLIB) \
-    $(prrte_libevent_LIBS) \
-    $(prrte_hwloc_LIBS) \
-    $(prrte_pmix_LIBS) \
+    $(PRTE_EXTRA_LTLIB) \
+    $(prte_libevent_LIBS) \
+    $(prte_hwloc_LIBS) \
+    $(prte_pmix_LIBS) \
 	$(top_builddir)/src/libprrte.la

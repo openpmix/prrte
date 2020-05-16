@@ -13,6 +13,7 @@
 # Copyright (c) 2014      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -29,7 +30,7 @@ at the beginning of the string:
     regexp: %s
 
 We do not know how to parse this character - please contact the
-PRRTE help list for assistance.
+PRTE help list for assistance.
 
 #
 [regex:end-range-missing]
@@ -39,7 +40,7 @@ of node names, the regex parser could not find the end of a range:
     regexp: %s
 
 A range must end with a ']' - please contact the
-PRRTE help list for assistance.
+PRTE help list for assistance.
 
 #
 [regex:bad-value]
@@ -49,7 +50,7 @@ not know how to parse:
 
     regexp: %s
 
-Please contact the PRRTE help list for assistance.
+Please contact the PRTE help list for assistance.
 
 #
 [regex:bad-ppn]
@@ -59,7 +60,7 @@ it does not know how to parse:
 
     regexp: %s
 
-Please contact the PRRTE help list for assistance.
+Please contact the PRTE help list for assistance.
 #
 [regex:num-digits-missing]
 While trying to parse a regular expression to extract the node
@@ -68,7 +69,7 @@ digits in the names:
 
    regexp: %s
 
-Please contact the PRRTE help list for assistance.
+Please contact the PRTE help list for assistance.
 #
 [regex:invalid-name]
 While trying to create a regular expression of the node names

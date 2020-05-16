@@ -11,8 +11,8 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
-# Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow

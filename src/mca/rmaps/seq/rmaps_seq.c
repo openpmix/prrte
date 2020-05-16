@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2006-2017 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
@@ -23,7 +23,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 #include "types.h"
 
@@ -45,22 +45,22 @@
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/base/base.h"
 #include "rmaps_seq.h"
 
-static int prrte_rmaps_seq_map(prrte_job_t *jdata);
+static int prte_rmaps_seq_map(prte_job_t *jdata);
 
 /* define the module */
-prrte_rmaps_base_module_t prrte_rmaps_seq_module = {
-    .map_job = prrte_rmaps_seq_map
+prte_rmaps_base_module_t prte_rmaps_seq_module = {
+    .map_job = prte_rmaps_seq_map
 };
 
 /* local object for tracking rank locations */
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     char *hostname;
     char *cpuset;
 } seq_node_t;
@@ -80,75 +80,75 @@ static void sn_des(seq_node_t *p)
         p->cpuset = NULL;
     }
 }
-PRRTE_CLASS_INSTANCE(seq_node_t,
-                   prrte_list_item_t,
+PRTE_CLASS_INSTANCE(seq_node_t,
+                   prte_list_item_t,
                    sn_con, sn_des);
 
-static char *prrte_getline(FILE *fp);
+static char *prte_getline(FILE *fp);
 
 /*
  * Sequentially map the ranks according to the placement in the
  * specified hostfile
  */
-static int prrte_rmaps_seq_map(prrte_job_t *jdata)
+static int prte_rmaps_seq_map(prte_job_t *jdata)
 {
-    prrte_job_map_t *map;
-    prrte_app_context_t *app;
+    prte_job_map_t *map;
+    prte_app_context_t *app;
     int i, n;
-    prrte_std_cntr_t j;
-    prrte_list_item_t *item;
-    prrte_node_t *node, *nd;
+    prte_std_cntr_t j;
+    prte_list_item_t *item;
+    prte_node_t *node, *nd;
     seq_node_t *sq, *save=NULL, *seq;;
-    prrte_vpid_t vpid;
-    prrte_std_cntr_t num_nodes;
+    prte_vpid_t vpid;
+    prte_std_cntr_t num_nodes;
     int rc;
-    prrte_list_t default_seq_list;
-    prrte_list_t node_list, *seq_list, sq_list;
-    prrte_proc_t *proc;
-    prrte_mca_base_component_t *c = &prrte_rmaps_seq_component.base_version;
+    prte_list_t default_seq_list;
+    prte_list_t node_list, *seq_list, sq_list;
+    prte_proc_t *proc;
+    prte_mca_base_component_t *c = &prte_rmaps_seq_component.base_version;
     char *hosts = NULL, *sep, *eptr;
     FILE *fp;
-    prrte_hwloc_resource_type_t rtype;
+    prte_hwloc_resource_type_t rtype;
     bool use_hwthread_cpus;
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_rmaps_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
                          "%s rmaps:seq called on job %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
-                         PRRTE_JOBID_PRINT(jdata->jobid)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_JOBID_PRINT(jdata->jobid)));
 
     /* this mapper can only handle initial launch
      * when seq mapping is desired - allow
      * restarting of failed apps
      */
-    if (PRRTE_FLAG_TEST(jdata, PRRTE_JOB_FLAG_RESTART)) {
-        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+    if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
+        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:seq: job %s is being restarted - seq cannot map",
-                            PRRTE_JOBID_PRINT(jdata->jobid));
-        return PRRTE_ERR_TAKE_NEXT_OPTION;
+                            PRTE_JOBID_PRINT(jdata->jobid));
+        return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper) {
         if (0 != strcasecmp(jdata->map->req_mapper, c->mca_component_name)) {
             /* a mapper has been specified, and it isn't me */
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: job %s not using sequential mapper",
-                                PRRTE_JOBID_PRINT(jdata->jobid));
-            return PRRTE_ERR_TAKE_NEXT_OPTION;
+                                PRTE_JOBID_PRINT(jdata->jobid));
+            return PRTE_ERR_TAKE_NEXT_OPTION;
         }
         /* we need to process it */
         goto process;
     }
-    if (PRRTE_MAPPING_SEQ != PRRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+    if (PRTE_MAPPING_SEQ != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         /* I don't know how to do these - defer */
-        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:seq: job %s not using seq mapper",
-                            PRRTE_JOBID_PRINT(jdata->jobid));
-        return PRRTE_ERR_TAKE_NEXT_OPTION;
+                            PRTE_JOBID_PRINT(jdata->jobid));
+        return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
  process:
-    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:seq: mapping job %s",
-                        PRRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->jobid));
 
     /* flag that I did the mapping */
     if (NULL != jdata->map->last_mapper) {
@@ -160,17 +160,17 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
     map = jdata->map;
 
     /* if there is a default hostfile, go and get its ordered list of nodes */
-    PRRTE_CONSTRUCT(&default_seq_list, prrte_list_t);
-    if (NULL != prrte_default_hostfile) {
+    PRTE_CONSTRUCT(&default_seq_list, prte_list_t);
+    if (NULL != prte_default_hostfile) {
         char *hstname = NULL;
         /* open the file */
-        fp = fopen(prrte_default_hostfile, "r");
+        fp = fopen(prte_default_hostfile, "r");
         if (NULL == fp) {
-            PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-            rc = PRRTE_ERR_NOT_FOUND;
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            rc = PRTE_ERR_NOT_FOUND;
             goto error;
         }
-        while (NULL != (hstname = prrte_getline(fp))) {
+        while (NULL != (hstname = prte_getline(fp))) {
             if (0 == strlen(hstname)) {
                 free(hstname);
                 /* blank line - ignore */
@@ -181,7 +181,7 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                 /* Comment line - ignore */
                 continue;
             }
-            sq = PRRTE_NEW(seq_node_t);
+            sq = PRTE_NEW(seq_node_t);
             if (NULL != (sep = strchr(hstname, ' '))) {
                 *sep = '\0';
                 sep++;
@@ -195,7 +195,7 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
             }
 
             // Strip off the FQDN if present, ignore IP addresses
-            if( !prrte_keep_fqdn_hostnames && !prrte_net_isaddr(hstname) ) {
+            if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(hstname) ) {
                 char *ptr;
                 if (NULL != (ptr = strchr(hstname, '.'))) {
                     *ptr = '\0';
@@ -203,14 +203,14 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
             }
 
             sq->hostname = hstname;
-            prrte_list_append(&default_seq_list, &sq->super);
+            prte_list_append(&default_seq_list, &sq->super);
         }
         fclose(fp);
     }
 
     /* check for type of cpu being used */
-    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_HWT_CPUS, NULL, PRRTE_BOOL) &&
-        PRRTE_BIND_TO_HWTHREAD == PRRTE_GET_BINDING_POLICY(jdata->map->binding)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL) &&
+        PRTE_BIND_TO_HWTHREAD == PRTE_GET_BINDING_POLICY(jdata->map->binding)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
@@ -219,74 +219,74 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
     /* start at the beginning... */
     vpid = 0;
     jdata->num_procs = 0;
-    if (0 < prrte_list_get_size(&default_seq_list)) {
-        save = (seq_node_t*)prrte_list_get_first(&default_seq_list);
+    if (0 < prte_list_get_size(&default_seq_list)) {
+        save = (seq_node_t*)prte_list_get_first(&default_seq_list);
     }
 
     /* default to LOGICAL processors */
-    if (prrte_get_attribute(&jdata->attributes, PRRTE_JOB_PHYSICAL_CPUIDS, NULL, PRRTE_BOOL)) {
-        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PHYSICAL_CPUIDS, NULL, PRTE_BOOL)) {
+        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:seq: using PHYSICAL processors");
-        rtype = PRRTE_HWLOC_PHYSICAL;
+        rtype = PRTE_HWLOC_PHYSICAL;
     } else {
-        prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:seq: using LOGICAL processors");
-        rtype = PRRTE_HWLOC_LOGICAL;
+        rtype = PRTE_HWLOC_LOGICAL;
     }
 
     /* initialize all the nodes as not included in this job map */
-    for (j=0; j < prrte_node_pool->size; j++) {
-        if (NULL != (node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, j))) {
-            PRRTE_FLAG_UNSET(node, PRRTE_NODE_FLAG_MAPPED);
+    for (j=0; j < prte_node_pool->size; j++) {
+        if (NULL != (node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, j))) {
+            PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         }
     }
 
     /* cycle through the app_contexts, mapping them sequentially */
     for(i=0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prrte_app_context_t*)prrte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
 
         /* dash-host trumps hostfile */
-        if (prrte_get_attribute(&app->attributes, PRRTE_APP_DASH_HOST, (void**)&hosts, PRRTE_STRING)) {
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using dash-host nodes on app %s", app->app);
-            PRRTE_CONSTRUCT(&node_list, prrte_list_t);
+            PRTE_CONSTRUCT(&node_list, prte_list_t);
             /* dash host entries cannot specify cpusets, so used the std function to retrieve the list */
-            if (PRRTE_SUCCESS != (rc = prrte_util_get_ordered_dash_host_list(&node_list, hosts))) {
-                PRRTE_ERROR_LOG(rc);
+            if (PRTE_SUCCESS != (rc = prte_util_get_ordered_dash_host_list(&node_list, hosts))) {
+                PRTE_ERROR_LOG(rc);
                 free(hosts);
                 goto error;
             }
             free(hosts);
             /* transfer the list to a seq_node_t list */
-            PRRTE_CONSTRUCT(&sq_list, prrte_list_t);
-            while (NULL != (nd = (prrte_node_t*)prrte_list_remove_first(&node_list))) {
-                sq = PRRTE_NEW(seq_node_t);
+            PRTE_CONSTRUCT(&sq_list, prte_list_t);
+            while (NULL != (nd = (prte_node_t*)prte_list_remove_first(&node_list))) {
+                sq = PRTE_NEW(seq_node_t);
                 sq->hostname = strdup(nd->name);
-                prrte_list_append(&sq_list, &sq->super);
-                PRRTE_RELEASE(nd);
+                prte_list_append(&sq_list, &sq->super);
+                PRTE_RELEASE(nd);
             }
-            PRRTE_DESTRUCT(&node_list);
+            PRTE_DESTRUCT(&node_list);
             seq_list = &sq_list;
-        } else if (prrte_get_attribute(&app->attributes, PRRTE_APP_HOSTFILE, (void**)&hosts, PRRTE_STRING)) {
+        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PRTE_STRING)) {
             char *hstname;
             if (NULL == hosts) {
-                rc = PRRTE_ERR_NOT_FOUND;
+                rc = PRTE_ERR_NOT_FOUND;
                 goto error;
             }
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts, app->app);
-            PRRTE_CONSTRUCT(&sq_list, prrte_list_t);
+            PRTE_CONSTRUCT(&sq_list, prte_list_t);
             /* open the file */
             fp = fopen(hosts, "r");
             if (NULL == fp) {
-                PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-                rc = PRRTE_ERR_NOT_FOUND;
-                PRRTE_DESTRUCT(&sq_list);
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                rc = PRTE_ERR_NOT_FOUND;
+                PRTE_DESTRUCT(&sq_list);
                 goto error;
             }
-            while (NULL != (hstname = prrte_getline(fp))) {
+            while (NULL != (hstname = prte_getline(fp))) {
                 if (0 == strlen(hstname)) {
                     free(hstname);
                     /* blank line - ignore */
@@ -297,7 +297,7 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                     /* Comment line - ignore */
                     continue;
                 }
-                sq = PRRTE_NEW(seq_node_t);
+                sq = PRTE_NEW(seq_node_t);
                 if (NULL != (sep = strchr(hstname, ' '))) {
                     *sep = '\0';
                     sep++;
@@ -311,7 +311,7 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                 }
 
                 // Strip off the FQDN if present, ignore IP addresses
-                if( !prrte_keep_fqdn_hostnames && !prrte_net_isaddr(hstname) ) {
+                if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(hstname) ) {
                     char *ptr;
                     if (NULL != (ptr = strchr(hstname, '.'))) {
                         (*ptr) = '\0';
@@ -319,65 +319,65 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                 }
 
                 sq->hostname = hstname;
-                prrte_list_append(&sq_list, &sq->super);
+                prte_list_append(&sq_list, &sq->super);
             }
             fclose(fp);
             free(hosts);
             seq_list = &sq_list;
-        } else if (0 < prrte_list_get_size(&default_seq_list)) {
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+        } else if (0 < prte_list_get_size(&default_seq_list)) {
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using default hostfile nodes on app %s", app->app);
             seq_list = &default_seq_list;
         } else {
             /* can't do anything - no nodes available! */
-            prrte_show_help("help-prrte-rmaps-base.txt",
-                           "prrte-rmaps-base:no-available-resources",
+            prte_show_help("help-prte-rmaps-base.txt",
+                           "prte-rmaps-base:no-available-resources",
                            true);
-            return PRRTE_ERR_SILENT;
+            return PRTE_ERR_SILENT;
         }
 
         /* check for nolocal and remove the head node, if required */
-        if (PRRTE_GET_MAPPING_DIRECTIVE(map->mapping) & PRRTE_MAPPING_NO_USE_LOCAL) {
-            for (item  = prrte_list_get_first(seq_list);
-                 item != prrte_list_get_end(seq_list);
-                 item  = prrte_list_get_next(item) ) {
+        if (PRTE_GET_MAPPING_DIRECTIVE(map->mapping) & PRTE_MAPPING_NO_USE_LOCAL) {
+            for (item  = prte_list_get_first(seq_list);
+                 item != prte_list_get_end(seq_list);
+                 item  = prte_list_get_next(item) ) {
                 seq = (seq_node_t*)item;
                 /* need to check ifislocal because the name in the
                  * hostfile may not have been FQDN, while name returned
                  * by gethostname may have been (or vice versa)
                  */
-                if (prrte_check_host_is_local(seq->hostname)) {
-                    prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                if (prte_check_host_is_local(seq->hostname)) {
+                    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:seq: removing head node %s", seq->hostname);
-                    prrte_list_remove_item(seq_list, item);
-                    PRRTE_RELEASE(item);  /* "un-retain" it */
+                    prte_list_remove_item(seq_list, item);
+                    PRTE_RELEASE(item);  /* "un-retain" it */
                 }
             }
         }
 
-        if (NULL == seq_list || 0 == (num_nodes = (prrte_std_cntr_t)prrte_list_get_size(seq_list))) {
-            prrte_show_help("help-prrte-rmaps-base.txt",
-                           "prrte-rmaps-base:no-available-resources",
+        if (NULL == seq_list || 0 == (num_nodes = (prte_std_cntr_t)prte_list_get_size(seq_list))) {
+            prte_show_help("help-prte-rmaps-base.txt",
+                           "prte-rmaps-base:no-available-resources",
                            true);
-            return PRRTE_ERR_SILENT;
+            return PRTE_ERR_SILENT;
         }
 
         /* if num_procs wasn't specified, set it now */
         if (0 == app->num_procs) {
             app->num_procs = num_nodes;
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: setting num procs to %s for app %s",
-                                PRRTE_VPID_PRINT(app->num_procs), app->app);
+                                PRTE_VPID_PRINT(app->num_procs), app->app);
         } else if (num_nodes < app->num_procs) {
-            prrte_show_help("help-prrte-rmaps-base.txt", "seq:not-enough-resources", true,
+            prte_show_help("help-prte-rmaps-base.txt", "seq:not-enough-resources", true,
                            app->num_procs, num_nodes);
-            return PRRTE_ERR_SILENT;
+            return PRTE_ERR_SILENT;
         }
 
         if (seq_list == &default_seq_list) {
             sq = save;
         } else {
-            sq = (seq_node_t*)prrte_list_get_first(seq_list);
+            sq = (seq_node_t*)prte_list_get_first(seq_list);
         }
         for (n=0; n < app->num_procs; n++) {
             /* find this node on the global array - this is necessary so
@@ -385,8 +385,8 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
              * returned by the hostfile function are -not- on the array
              */
             node = NULL;
-            for (j=0; j < prrte_node_pool->size; j++) {
-                if (NULL == (node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, j))) {
+            for (j=0; j < prte_node_pool->size; j++) {
+                if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, j))) {
                     continue;
                 }
                 if (0 == strcmp(sq->hostname, node->name)) {
@@ -395,58 +395,58 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
             }
             if (NULL == node) {
                 /* wasn't found - that is an error */
-                prrte_show_help("help-prrte-rmaps-seq.txt",
-                               "prrte-rmaps-seq:resource-not-found",
+                prte_show_help("help-prte-rmaps-seq.txt",
+                               "prte-rmaps-seq:resource-not-found",
                                true, sq->hostname);
-                rc = PRRTE_ERR_SILENT;
+                rc = PRTE_ERR_SILENT;
                 goto error;
             }
             /* ensure the node is in the map */
-            if (!PRRTE_FLAG_TEST(node, PRRTE_NODE_FLAG_MAPPED)) {
-                PRRTE_RETAIN(node);
-                prrte_pointer_array_add(map->nodes, node);
+            if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
+                PRTE_RETAIN(node);
+                prte_pointer_array_add(map->nodes, node);
                 jdata->map->num_nodes++;
-                PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_MAPPED);
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
             }
-            proc = prrte_rmaps_base_setup_proc(jdata, node, i);
+            proc = prte_rmaps_base_setup_proc(jdata, node, i);
             if ((node->slots < (int)node->num_procs) ||
                 (0 < node->slots_max && node->slots_max < (int)node->num_procs)) {
-                if (PRRTE_MAPPING_NO_OVERSUBSCRIBE & PRRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                    prrte_show_help("help-prrte-rmaps-base.txt", "prrte-rmaps-base:alloc-error",
+                if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
+                    prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                    true, node->num_procs, app->app);
-                    PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-                    rc = PRRTE_ERR_SILENT;
+                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    rc = PRTE_ERR_SILENT;
                     goto error;
                 }
                 /* flag the node as oversubscribed so that sched-yield gets
                  * properly set
                  */
-                PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_OVERSUBSCRIBED);
-                PRRTE_FLAG_SET(jdata, PRRTE_JOB_FLAG_OVERSUBSCRIBED);
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
                 /* check for permission */
-                if (PRRTE_FLAG_TEST(node, PRRTE_NODE_FLAG_SLOTS_GIVEN)) {
+                if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
                     /* if we weren't given a directive either way, then we will error out
                      * as the #slots were specifically given, either by the host RM or
                      * via hostfile/dash-host */
-                    if (!(PRRTE_MAPPING_SUBSCRIBE_GIVEN & PRRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-                        prrte_show_help("help-prrte-rmaps-base.txt", "prrte-rmaps-base:alloc-error",
+                    if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
+                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                        true, app->num_procs, app->app);
-                        PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-                        return PRRTE_ERR_SILENT;
-                    } else if (PRRTE_MAPPING_NO_OVERSUBSCRIBE & PRRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                        return PRTE_ERR_SILENT;
+                    } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                         /* if we were explicitly told not to oversubscribe, then don't */
-                        prrte_show_help("help-prrte-rmaps-base.txt", "prrte-rmaps-base:alloc-error",
+                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                        true, app->num_procs, app->app);
-                        PRRTE_UPDATE_EXIT_STATUS(PRRTE_ERROR_DEFAULT_EXIT_CODE);
-                        return PRRTE_ERR_SILENT;
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                        return PRTE_ERR_SILENT;
                     }
                 }
             }
             /* assign the vpid */
             proc->name.vpid = vpid++;
-            prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: assign proc %s to node %s for app %s",
-                                PRRTE_VPID_PRINT(proc->name.vpid), sq->hostname, app->app);
+                                PRTE_VPID_PRINT(proc->name.vpid), sq->hostname, app->app);
 
             /* record the cpuset, if given */
             if (NULL != sq->cpuset) {
@@ -456,8 +456,8 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                     /* not allowed - for sequential cpusets, we must have
                      * the topology info
                      */
-                    prrte_show_help("help-prrte-rmaps-base.txt", "rmaps:no-topology", true, node->name);
-                    rc = PRRTE_ERR_SILENT;
+                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true, node->name);
+                    rc = PRTE_ERR_SILENT;
                     goto error;
                 }
                 /* if we are using hwthreads as cpus and binding to hwthreads, then
@@ -469,8 +469,8 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                     /* setup the bitmap */
                     bitmap = hwloc_bitmap_alloc();
                     /* parse the slot_list to find the package and core */
-                    if (PRRTE_SUCCESS != (rc = prrte_hwloc_base_cpu_list_parse(sq->cpuset, node->topology->topo, rtype, bitmap))) {
-                        PRRTE_ERROR_LOG(rc);
+                    if (PRTE_SUCCESS != (rc = prte_hwloc_base_cpu_list_parse(sq->cpuset, node->topology->topo, rtype, bitmap))) {
+                        PRTE_ERROR_LOG(rc);
                         hwloc_bitmap_free(bitmap);
                         goto error;
                     }
@@ -482,13 +482,13 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                     hwloc_bitmap_list_asprintf(&cpu_bitmap, bitmap);
                     hwloc_bitmap_free(bitmap);
                 }
-                prrte_set_attribute(&proc->attributes, PRRTE_PROC_CPU_BITMAP, PRRTE_ATTR_GLOBAL, cpu_bitmap, PRRTE_STRING);
-                prrte_output_verbose(5, prrte_rmaps_base_framework.framework_output,
+                prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PRTE_STRING);
+                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:seq: binding proc %s to cpuset %s bitmap %s",
-                                    PRRTE_VPID_PRINT(proc->name.vpid), sq->cpuset, cpu_bitmap);
+                                    PRTE_VPID_PRINT(proc->name.vpid), sq->cpuset, cpu_bitmap);
                 /* note that the user specified the mapping */
-                PRRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRRTE_MAPPING_BYUSER);
-                PRRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRRTE_MAPPING_GIVEN);
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYUSER);
+                PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_GIVEN);
                 /* cleanup */
                 free(cpu_bitmap);
             } else {
@@ -499,18 +499,18 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
                  */
                 if (NULL != node->topology && NULL != node->topology->topo) {
                     locale = hwloc_get_root_obj(node->topology->topo);
-                    prrte_set_attribute(&proc->attributes, PRRTE_PROC_HWLOC_LOCALE,
-                                       PRRTE_ATTR_LOCAL, locale, PRRTE_PTR);
+                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
+                                       PRTE_ATTR_LOCAL, locale, PRTE_PTR);
                 }
             }
 
             /* add to the jdata proc array */
-            if (PRRTE_SUCCESS != (rc = prrte_pointer_array_set_item(jdata->procs, proc->name.vpid, proc))) {
-                PRRTE_ERROR_LOG(rc);
+            if (PRTE_SUCCESS != (rc = prte_pointer_array_set_item(jdata->procs, proc->name.vpid, proc))) {
+                PRTE_ERROR_LOG(rc);
                 goto error;
             }
             /* move to next node */
-            sq = (seq_node_t*)prrte_list_get_next(&sq->super);
+            sq = (seq_node_t*)prte_list_get_next(&sq->super);
         }
 
         /** track the total number of processes we mapped */
@@ -518,7 +518,7 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
 
         /* cleanup the node list if it came from this app_context */
         if (seq_list != &default_seq_list) {
-            PRRTE_LIST_DESTRUCT(seq_list);
+            PRTE_LIST_DESTRUCT(seq_list);
         } else {
             save = sq;
         }
@@ -526,16 +526,16 @@ static int prrte_rmaps_seq_map(prrte_job_t *jdata)
 
     /* mark that this job is to be fully
      * described in the launch msg */
-    prrte_set_attribute(&jdata->attributes, PRRTE_JOB_FULLY_DESCRIBED, PRRTE_ATTR_GLOBAL, NULL, PRRTE_BOOL);
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PRTE_BOOL);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 
  error:
-    PRRTE_LIST_DESTRUCT(&default_seq_list);
+    PRTE_LIST_DESTRUCT(&default_seq_list);
     return rc;
 }
 
-static char *prrte_getline(FILE *fp)
+static char *prte_getline(FILE *fp)
 {
     char *ret, *buff;
     char input[1024];

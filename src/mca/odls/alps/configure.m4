@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2011-2016 Los Alamos National Security, LLC.
 #                         All rights reserved.
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -23,10 +23,10 @@
 
 # MCA_odls_alps_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prrte_odls_alps_CONFIG],[
+AC_DEFUN([MCA_prte_odls_alps_CONFIG],[
     AC_CONFIG_FILES([src/mca/odls/alps/Makefile])
 
-    PRRTE_CHECK_ALPS([odls_alps], [odls_alps_happy="yes"], [odls_alps_happy="no"])
+    PRTE_CHECK_ALPS([odls_alps], [odls_alps_happy="yes"], [odls_alps_happy="no"])
 
     AS_IF([test "$odls_alps_happy" = "yes"],
           [$1

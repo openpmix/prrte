@@ -9,11 +9,11 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2007-2010 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2008      Institut National de Recherche en Informatique
 #                         et Automatique. All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -23,7 +23,7 @@
 
 AM_CPPFLAGS = $(plm_lsf_CPPFLAGS)
 
-dist_prrtedata_DATA = help-plm-lsf.txt
+dist_prtedata_DATA = help-plm-lsf.txt
 
 sources = \
         plm_lsf.h \
@@ -34,7 +34,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_plm_lsf_DSO
+if MCA_BUILD_prte_plm_lsf_DSO
 component_noinst =
 component_install = mca_plm_lsf.la
 else
@@ -42,7 +42,7 @@ component_noinst = libmca_plm_lsf.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_plm_lsf_la_SOURCES = $(sources)
 mca_plm_lsf_la_LDFLAGS = -module -avoid-version $(plm_lsf_LDFLAGS)

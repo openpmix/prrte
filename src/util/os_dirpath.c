@@ -12,6 +12,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,7 +21,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <errno.h>
 #include <string.h>
@@ -45,9 +46,9 @@
 #include "src/util/os_path.h"
 #include "constants.h"
 
-static const char path_sep[] = PRRTE_PATH_SEP;
+static const char path_sep[] = PRTE_PATH_SEP;
 
-int prrte_os_dirpath_create(const char *path, const mode_t mode)
+int prte_os_dirpath_create(const char *path, const mode_t mode)
 {
     struct stat buf;
     char **parts, *tmp;
@@ -55,30 +56,30 @@ int prrte_os_dirpath_create(const char *path, const mode_t mode)
     int ret;
 
     if (NULL == path) { /* protect ourselves from errors */
-        return(PRRTE_ERR_BAD_PARAM);
+        return(PRTE_ERR_BAD_PARAM);
     }
 
     if (0 == (ret = stat(path, &buf))) { /* already exists */
         if (mode == (mode & buf.st_mode)) { /* has correct mode */
-            return(PRRTE_SUCCESS);
+            return(PRTE_SUCCESS);
         }
         if (0 == (ret = chmod(path, (buf.st_mode | mode)))) { /* successfully change mode */
-            return(PRRTE_SUCCESS);
+            return(PRTE_SUCCESS);
         }
-        prrte_show_help("help-prrte-util.txt", "dir-mode", true,
+        prte_show_help("help-prte-util.txt", "dir-mode", true,
                     path, mode, strerror(errno));
-        return(PRRTE_ERR_PERM); /* can't set correct mode */
+        return(PRTE_ERR_PERM); /* can't set correct mode */
     }
 
     /* quick -- try to make directory */
     if (0 == mkdir(path, mode)) {
-        return(PRRTE_SUCCESS);
+        return(PRTE_SUCCESS);
     }
 
     /* didnt work, so now have to build our way down the tree */
     /* Split the requested path up into its individual parts */
 
-    parts = prrte_argv_split(path, path_sep[0]);
+    parts = prte_argv_split(path, path_sep[0]);
 
     /* Ensure to allocate enough space for tmp: the strlen of the
        incoming path + 1 (for \0) */
@@ -90,7 +91,7 @@ int prrte_os_dirpath_create(const char *path, const mode_t mode)
        building up a directory name.  Check to see if that dirname
        exists.  If it doesn't, create it. */
 
-    len = prrte_argv_count(parts);
+    len = prte_argv_count(parts);
     for (i = 0; i < len; ++i) {
         if (i == 0) {
             /* If in POSIX-land, ensure that we never end a directory
@@ -116,25 +117,25 @@ int prrte_os_dirpath_create(const char *path, const mode_t mode)
         mkdir(tmp, mode);
         ret = errno;  // save the errno for an error msg, if needed
         if (0 != stat(tmp, &buf)) {
-            prrte_show_help("help-prrte-util.txt", "mkdir-failed", true,
+            prte_show_help("help-prte-util.txt", "mkdir-failed", true,
                         tmp, strerror(ret));
-            prrte_argv_free(parts);
+            prte_argv_free(parts);
             free(tmp);
-            return PRRTE_ERROR;
+            return PRTE_ERROR;
         } else if (i == (len-1) && (mode != (mode & buf.st_mode)) && (0 > chmod(tmp, (buf.st_mode | mode)))) {
-            prrte_show_help("help-prrte-util.txt", "dir-mode", true,
+            prte_show_help("help-prte-util.txt", "dir-mode", true,
                            tmp, mode, strerror(errno));
-            prrte_argv_free(parts);
+            prte_argv_free(parts);
             free(tmp);
-            return(PRRTE_ERR_PERM); /* can't set correct mode */
+            return(PRTE_ERR_PERM); /* can't set correct mode */
         }
     }
 
     /* All done */
 
-    prrte_argv_free(parts);
+    prte_argv_free(parts);
     free(tmp);
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /**
@@ -145,11 +146,11 @@ int prrte_os_dirpath_create(const char *path, const mode_t mode)
  * removed.  If the callback returns non-zero, then no removal is
  * done.
  */
-int prrte_os_dirpath_destroy(const char *path,
+int prte_os_dirpath_destroy(const char *path,
                             bool recursive,
-                            prrte_os_dirpath_destroy_callback_fn_t cbfunc)
+                            prte_os_dirpath_destroy_callback_fn_t cbfunc)
 {
-    int rc, exit_status = PRRTE_SUCCESS;
+    int rc, exit_status = PRTE_SUCCESS;
     bool is_dir = false;
     DIR *dp;
     struct dirent *ep;
@@ -157,13 +158,13 @@ int prrte_os_dirpath_destroy(const char *path,
     struct stat buf;
 
     if (NULL == path) {  /* protect against error */
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     /*
      * Make sure we have access to the the base directory
      */
-    if (PRRTE_SUCCESS != (rc = prrte_os_dirpath_access(path, 0))) {
+    if (PRTE_SUCCESS != (rc = prte_os_dirpath_access(path, 0))) {
         exit_status = rc;
         goto cleanup;
     }
@@ -171,7 +172,7 @@ int prrte_os_dirpath_destroy(const char *path,
     /* Open up the directory */
     dp = opendir(path);
     if (NULL == dp) {
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     while (NULL != (ep = readdir(dp))) {
@@ -190,7 +191,7 @@ int prrte_os_dirpath_destroy(const char *path,
          * for cleaner code just to create it here.  Note that we are
          * allocating memory here, so we need to free it later on.
          */
-        filenm = prrte_os_path(false, path, ep->d_name, NULL);
+        filenm = prte_os_path(false, path, ep->d_name, NULL);
 
         rc = stat(filenm, &buf);
         if (0 > rc) {
@@ -214,7 +215,7 @@ int prrte_os_dirpath_destroy(const char *path,
             /* Set the error indicating that we found a directory,
              * but continue removing files
              */
-            exit_status = PRRTE_ERROR;
+            exit_status = PRTE_ERROR;
             free(filenm);
             continue;
         }
@@ -232,9 +233,9 @@ int prrte_os_dirpath_destroy(const char *path,
         }
         /* Directories are recursively destroyed */
         if (is_dir) {
-            rc = prrte_os_dirpath_destroy(filenm, recursive, cbfunc);
+            rc = prte_os_dirpath_destroy(filenm, recursive, cbfunc);
             free(filenm);
-            if (PRRTE_SUCCESS != rc) {
+            if (PRTE_SUCCESS != rc) {
                 exit_status = rc;
                 closedir(dp);
                 goto cleanup;
@@ -242,7 +243,7 @@ int prrte_os_dirpath_destroy(const char *path,
         } else {
             /* Files are removed right here */
             if (0 != (rc = unlink(filenm))) {
-                exit_status = PRRTE_ERROR;
+                exit_status = PRTE_ERROR;
             }
             free(filenm);
         }
@@ -256,14 +257,14 @@ int prrte_os_dirpath_destroy(const char *path,
     /*
      * If the directory is empty, them remove it
      */
-    if(prrte_os_dirpath_is_empty(path)) {
+    if(prte_os_dirpath_is_empty(path)) {
         rmdir(path);
     }
 
     return exit_status;
 }
 
-bool prrte_os_dirpath_is_empty(const char *path ) {
+bool prte_os_dirpath_is_empty(const char *path ) {
     DIR *dp;
     struct dirent *ep;
 
@@ -286,7 +287,7 @@ bool prrte_os_dirpath_is_empty(const char *path ) {
     return true;
 }
 
-int prrte_os_dirpath_access(const char *path, const mode_t in_mode ) {
+int prte_os_dirpath_access(const char *path, const mode_t in_mode ) {
     struct stat buf;
     mode_t loc_mode = S_IRWXU;  /* looking for full rights */
 
@@ -299,13 +300,13 @@ int prrte_os_dirpath_access(const char *path, const mode_t in_mode ) {
 
     if (0 == stat(path, &buf)) { /* exists - check access */
         if ((buf.st_mode & loc_mode) == loc_mode) { /* okay, I can work here */
-            return(PRRTE_SUCCESS);
+            return(PRTE_SUCCESS);
         } else {
             /* Don't have access rights to the existing path */
-            return(PRRTE_ERROR);
+            return(PRTE_ERROR);
         }
     } else {
         /* We could not find the path */
-        return( PRRTE_ERR_NOT_FOUND );
+        return( PRTE_ERR_NOT_FOUND );
     }
 }

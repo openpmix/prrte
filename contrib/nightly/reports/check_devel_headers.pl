@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -18,7 +18,7 @@
 #
 # $HEADER$
 #
-# Check headers in the core opal, prrte, and ompi trees and ensure that
+# Check headers in the core opal, prte, and ompi trees and ensure that
 # they exist in the installation tree (assuming that the software was
 # configured --with-devel-headers).
 #
@@ -28,7 +28,7 @@ use File::Find;
 use Getopt::Long;
 use Data::Dumper;
 
-my @projects = qw(opal prrte ompi);
+my @projects = qw(opal prte ompi);
 our $prefix_arg;
 
 &Getopt::Long::Configure("bundling", "require_order");

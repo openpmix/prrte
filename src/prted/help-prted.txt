@@ -11,36 +11,37 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
-# This is the US/English general help file for PRRTE's prted.
+# This is the US/English general help file for PRTE's prted.
 #
 [prted:usage]
 Usage: %s [OPTION]...
-Start an PRRTE Daemon
+Start an PRTE Daemon
 
 %s
 [prted:environ]
-PRRTE Daemon was unable to set
+PRTE Daemon was unable to set
  %s = %s
-in the environment. Returned value %d instead of PRRTE_SUCCESS.
+in the environment. Returned value %d instead of PRTE_SUCCESS.
 [prted:init-failure]
-PRRTE was unable to initialize properly.  The error occured while
-attempting to %s.  Returned value %d instead of PRRTE_SUCCESS.
+PRTE was unable to initialize properly.  The error occured while
+attempting to %s.  Returned value %d instead of PRTE_SUCCESS.
 
 #
 [prted:cannot-bind]
-A request was made to bind the PRRTE daemons to
+A request was made to bind the PRTE daemons to
 a core that does not exist on this node:
 
   node:  %s
   cores: %s
 
-The MCA param directing this behavior is prrte_daemon_cores.
+The MCA param directing this behavior is prte_daemon_cores.
 Please correct the request and try again.
 #
 [cwd]
@@ -91,18 +92,18 @@ is alive:
   Connection:  %s
 #
 [mpir-debugger-detected]
-PRRTE has detected that you have attached a debugger to this MPI
+PRTE has detected that you have attached a debugger to this MPI
 job, and that debugger is using the legacy "MPIR" method of
 attachment.
 
-Please note that PRRTE has deprecated the "MPIR" debugger
+Please note that PRTE has deprecated the "MPIR" debugger
 attachment method in favor of the new "PMIx" debugger attchment
 mechanisms.
 
-*** This means that future versions of PRRTE may not support the
+*** This means that future versions of PRTE may not support the
 *** "MPIR" debugger attachment method at all.  Specifically: the
 *** debugger you just attached may not work with future versions of
-*** PRRTE.
+*** PRTE.
 
 You may wish to contact your debugger vendor to inquire about support
 for PMIx-based debugger attachment mechanisms. Meantime, you can

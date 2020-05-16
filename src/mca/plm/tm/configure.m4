@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
-# Copyright (c) 2009-2010 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -23,10 +23,10 @@
 
 # MCA_plm_tm_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prrte_plm_tm_CONFIG],[
+AC_DEFUN([MCA_prte_plm_tm_CONFIG],[
     AC_CONFIG_FILES([src/mca/plm/tm/Makefile])
 
-    PRRTE_CHECK_TM([plm_tm], [plm_tm_good=1], [plm_tm_good=0])
+    PRTE_CHECK_TM([plm_tm], [plm_tm_good=1], [plm_tm_good=0])
 
     # if check worked, set wrapper flags if so.
     # Evaluate succeed / fail

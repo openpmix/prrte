@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -32,7 +32,7 @@ use Cwd;
 my $verbose = 0;
 my @skip_dirs;
 
-my @code_dirs = ( "ompi", "prrte", "opal", "test" );
+my @code_dirs = ( "ompi", "prte", "opal", "test" );
 my @doc_dirs = ( );
 
 my @meta_dirs = ( ".svn", ".deps", ".libs", "libltdl" );

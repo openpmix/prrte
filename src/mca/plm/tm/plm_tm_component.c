@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2006      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
@@ -29,11 +29,11 @@
  * entire components just to query their version and parameters.
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include "src/util/argv.h"
-#include "src/mca/base/prrte_mca_base_var.h"
+#include "src/mca/base/prte_mca_base_var.h"
 
 #include "src/mca/plm/plm.h"
 #include "src/mca/plm/base/base.h"
@@ -44,8 +44,8 @@
 /*
  * Public string showing the plm ompi_tm component version number
  */
-const char *prrte_plm_tm_component_version_string =
-  "PRRTE tm plm MCA component version " PRRTE_VERSION;
+const char *prte_plm_tm_component_version_string =
+  "PRTE tm plm MCA component version " PRTE_VERSION;
 
 
 
@@ -55,7 +55,7 @@ const char *prrte_plm_tm_component_version_string =
 static int plm_tm_register(void);
 static int plm_tm_open(void);
 static int plm_tm_close(void);
-static int prrte_plm_tm_component_query(prrte_mca_base_module_t **module, int *priority);
+static int prte_plm_tm_component_query(prte_mca_base_module_t **module, int *priority);
 
 
 /*
@@ -63,66 +63,66 @@ static int prrte_plm_tm_component_query(prrte_mca_base_module_t **module, int *p
  * and pointers to our public functions in it
  */
 
-prrte_plm_tm_component_t prrte_plm_tm_component = {
+prte_plm_tm_component_t prte_plm_tm_component = {
     {
         /* First, the mca_component_t struct containing meta information
            about the component itself */
 
         .base_version = {
-            PRRTE_PLM_BASE_VERSION_2_0_0,
+            PRTE_PLM_BASE_VERSION_2_0_0,
 
             /* Component name and version */
             .mca_component_name = "tm",
-            PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                        PRRTE_RELEASE_VERSION),
+            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                        PRTE_RELEASE_VERSION),
 
             /* Component open and close functions */
             .mca_open_component = plm_tm_open,
             .mca_close_component = plm_tm_close,
-            .mca_query_component = prrte_plm_tm_component_query,
+            .mca_query_component = prte_plm_tm_component_query,
             .mca_register_component_params = plm_tm_register,
         },
         .base_data = {
             /* The component is checkpoint ready */
-            PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
         },
     }
 };
 
 static int plm_tm_register(void)
 {
-    prrte_mca_base_component_t *comp = &prrte_plm_tm_component.super.base_version;
+    prte_mca_base_component_t *comp = &prte_plm_tm_component.super.base_version;
 
-    prrte_plm_tm_component.want_path_check = true;
-    (void) prrte_mca_base_component_var_register (comp, "want_path_check",
+    prte_plm_tm_component.want_path_check = true;
+    (void) prte_mca_base_component_var_register (comp, "want_path_check",
                                             "Whether the launching process should check for the plm_tm_orted executable in the PATH before launching (the TM API does not give an indication of failure; this is a somewhat-lame workaround; non-zero values enable this check)",
-                                            PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                            PRRTE_INFO_LVL_9,
-                                            PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prrte_plm_tm_component.want_path_check);
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_INFO_LVL_9,
+                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                            &prte_plm_tm_component.want_path_check);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int plm_tm_open(void)
 {
-    prrte_plm_tm_component.checked_paths = NULL;
+    prte_plm_tm_component.checked_paths = NULL;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
 static int plm_tm_close(void)
 {
-    if (NULL != prrte_plm_tm_component.checked_paths) {
-        prrte_argv_free(prrte_plm_tm_component.checked_paths);
+    if (NULL != prte_plm_tm_component.checked_paths) {
+        prte_argv_free(prte_plm_tm_component.checked_paths);
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-static int prrte_plm_tm_component_query(prrte_mca_base_module_t **module, int *priority)
+static int prte_plm_tm_component_query(prte_mca_base_module_t **module, int *priority)
 {
     /* Are we running under a TM job? */
 
@@ -130,11 +130,11 @@ static int prrte_plm_tm_component_query(prrte_mca_base_module_t **module, int *p
         NULL != getenv("PBS_JOBID")) {
 
         *priority = 75;
-        *module = (prrte_mca_base_module_t *) &prrte_plm_tm_module;
-        return PRRTE_SUCCESS;
+        *module = (prte_mca_base_module_t *) &prte_plm_tm_module;
+        return PRTE_SUCCESS;
     }
 
     /* Sadly, no */
     *module = NULL;
-    return PRRTE_ERROR;
+    return PRTE_ERROR;
 }

@@ -13,6 +13,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,44 +30,44 @@
 #ifndef MCA_FILEM_H
 #define MCA_FILEM_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 #include "types.h"
 
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
 
-#include "src/class/prrte_object.h"
+#include "src/class/prte_object.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 BEGIN_C_DECLS
 
 /**
  * A set of flags that determine the type of the file
  * in question
  */
-#define PRRTE_FILEM_TYPE_FILE      0
-#define PRRTE_FILEM_TYPE_DIR       1
-#define PRRTE_FILEM_TYPE_UNKNOWN   2
-#define PRRTE_FILEM_TYPE_TAR       3
-#define PRRTE_FILEM_TYPE_BZIP      4
-#define PRRTE_FILEM_TYPE_GZIP      5
-#define PRRTE_FILEM_TYPE_EXE       6
+#define PRTE_FILEM_TYPE_FILE      0
+#define PRTE_FILEM_TYPE_DIR       1
+#define PRTE_FILEM_TYPE_UNKNOWN   2
+#define PRTE_FILEM_TYPE_TAR       3
+#define PRTE_FILEM_TYPE_BZIP      4
+#define PRTE_FILEM_TYPE_GZIP      5
+#define PRTE_FILEM_TYPE_EXE       6
 
 /**
  * Type of movement
  */
-#define PRRTE_FILEM_MOVE_TYPE_PUT       0
-#define PRRTE_FILEM_MOVE_TYPE_GET       1
-#define PRRTE_FILEM_MOVE_TYPE_RM        2
-#define PRRTE_FILEM_MOVE_TYPE_UNKNOWN   3
+#define PRTE_FILEM_MOVE_TYPE_PUT       0
+#define PRTE_FILEM_MOVE_TYPE_GET       1
+#define PRTE_FILEM_MOVE_TYPE_RM        2
+#define PRTE_FILEM_MOVE_TYPE_UNKNOWN   3
 
 /**
  * Hints that describe the local or remote file target for
  * optimization purposes.
  */
-#define PRRTE_FILEM_HINT_NONE   0
-#define PRRTE_FILEM_HINT_SHARED 1
+#define PRTE_FILEM_HINT_NONE   0
+#define PRTE_FILEM_HINT_SHARED 1
 
 /**
  * Define a Process Set
@@ -74,20 +75,20 @@ BEGIN_C_DECLS
  * Source: A single source of the operation.
  * Sink: Desitination of the operation.
  */
-struct prrte_filem_base_process_set_1_0_0_t {
+struct prte_filem_base_process_set_1_0_0_t {
     /** This is an object, so must have a super */
-    prrte_list_item_t super;
+    prte_list_item_t super;
 
     /** Source Process */
-    prrte_process_name_t source;
+    prte_process_name_t source;
 
     /** Sink Process */
-    prrte_process_name_t sink;
+    prte_process_name_t sink;
 };
-typedef struct prrte_filem_base_process_set_1_0_0_t prrte_filem_base_process_set_1_0_0_t;
-typedef struct prrte_filem_base_process_set_1_0_0_t prrte_filem_base_process_set_t;
+typedef struct prte_filem_base_process_set_1_0_0_t prte_filem_base_process_set_1_0_0_t;
+typedef struct prte_filem_base_process_set_1_0_0_t prte_filem_base_process_set_t;
 
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_filem_base_process_set_t);
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_filem_base_process_set_t);
 
 /**
  * Define a File Pair
@@ -99,12 +100,12 @@ PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_filem_base_process_set_t);
  * file reference is the same for each of the sinks. If this is not
  * true then more than one filem request needs to be created.
  */
-struct prrte_filem_base_file_set_1_0_0_t {
+struct prte_filem_base_file_set_1_0_0_t {
     /** This is an object, so must have a super */
-    prrte_list_item_t super;
+    prte_list_item_t super;
 
     /* the app_index this pertains to, if applicable */
-    prrte_app_idx_t app_idx;
+    prte_app_idx_t app_idx;
 
     /* Local file reference */
     char * local_target;
@@ -121,10 +122,10 @@ struct prrte_filem_base_file_set_1_0_0_t {
     /* Type of file to move */
     int target_flag;
 };
-typedef struct prrte_filem_base_file_set_1_0_0_t prrte_filem_base_file_set_1_0_0_t;
-typedef struct prrte_filem_base_file_set_1_0_0_t prrte_filem_base_file_set_t;
+typedef struct prte_filem_base_file_set_1_0_0_t prte_filem_base_file_set_1_0_0_t;
+typedef struct prte_filem_base_file_set_1_0_0_t prte_filem_base_file_set_t;
 
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_filem_base_file_set_t);
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_filem_base_file_set_t);
 
 /**
  * Definition of a file movement request
@@ -136,9 +137,9 @@ PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_filem_base_file_set_t);
  * Used for the following:
  *
  */
-struct prrte_filem_base_request_1_0_0_t {
+struct prte_filem_base_request_1_0_0_t {
     /** This is an object, so must have a super */
-    prrte_list_item_t super;
+    prte_list_item_t super;
 
     /*
      * A list of process sets - use WILDCARD to
@@ -152,12 +153,12 @@ struct prrte_filem_base_request_1_0_0_t {
      * in the file sets so we don't copy them over
      * multiple times
      */
-    prrte_list_t process_sets;
+    prte_list_t process_sets;
 
     /*
      * A list of file pairings
      */
-    prrte_list_t file_sets;
+    prte_list_t file_sets;
 
     /*
      * Internal use:
@@ -189,23 +190,23 @@ struct prrte_filem_base_request_1_0_0_t {
      */
     int movement_type;
 };
-typedef struct prrte_filem_base_request_1_0_0_t prrte_filem_base_request_1_0_0_t;
-typedef struct prrte_filem_base_request_1_0_0_t prrte_filem_base_request_t;
+typedef struct prte_filem_base_request_1_0_0_t prte_filem_base_request_1_0_0_t;
+typedef struct prte_filem_base_request_1_0_0_t prte_filem_base_request_t;
 
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_filem_base_request_t);
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_filem_base_request_t);
 
 /**
  * Module initialization function.
- * Returns PRRTE_SUCCESS
+ * Returns PRTE_SUCCESS
  */
-typedef int (*prrte_filem_base_module_init_fn_t)
+typedef int (*prte_filem_base_module_init_fn_t)
      (void);
 
 /**
  * Module finalization function.
- * Returns PRRTE_SUCCESS
+ * Returns PRTE_SUCCESS
  */
-typedef int (*prrte_filem_base_module_finalize_fn_t)
+typedef int (*prte_filem_base_module_finalize_fn_t)
      (void);
 
 /**
@@ -218,11 +219,11 @@ typedef int (*prrte_filem_base_module_finalize_fn_t)
  * @param request FileM request describing the files/directories to send,
  *        the remote files/directories to use, and the processes to see the change.
  *
- * @return PRRTE_SUCCESS on successful file transer
- * @return PRRTE_ERROR on failed file transfer
+ * @return PRTE_SUCCESS on successful file transer
+ * @return PRTE_ERROR on failed file transfer
  */
-typedef int (*prrte_filem_base_put_fn_t)
-     (prrte_filem_base_request_t *request);
+typedef int (*prte_filem_base_put_fn_t)
+     (prte_filem_base_request_t *request);
 
 /**
  * Put a file or directory on the remote machine (Async)
@@ -234,11 +235,11 @@ typedef int (*prrte_filem_base_put_fn_t)
  * @param request FileM request describing the files/directories to send,
  *        the remote files/directories to use, and the processes to see the change.
  *
- * @return PRRTE_SUCCESS on successful file transer
- * @return PRRTE_ERROR on failed file transfer
+ * @return PRTE_SUCCESS on successful file transer
+ * @return PRTE_ERROR on failed file transfer
  */
-typedef int (*prrte_filem_base_put_nb_fn_t)
-     (prrte_filem_base_request_t *request);
+typedef int (*prte_filem_base_put_nb_fn_t)
+     (prte_filem_base_request_t *request);
 
 /**
  * Get a file from the remote machine
@@ -250,11 +251,11 @@ typedef int (*prrte_filem_base_put_nb_fn_t)
  * @param request FileM request describing the files/directories to receive,
  *        the remote files/directories to use, and the processes to see the change.
  *
- * @return PRRTE_SUCCESS on successful file transer
- * @return PRRTE_ERROR on failed file transfer
+ * @return PRTE_SUCCESS on successful file transer
+ * @return PRTE_ERROR on failed file transfer
  */
-typedef int (*prrte_filem_base_get_fn_t)
-     (prrte_filem_base_request_t *request);
+typedef int (*prte_filem_base_get_fn_t)
+     (prte_filem_base_request_t *request);
 
 /**
  * Get a file from the remote machine (Async)
@@ -266,11 +267,11 @@ typedef int (*prrte_filem_base_get_fn_t)
  * @param request FileM request describing the files/directories to receive,
  *        the remote files/directories to use, and the processes to see the change.
  *
- * @return PRRTE_SUCCESS on successful file transer
- * @return PRRTE_ERROR on failed file transfer
+ * @return PRTE_SUCCESS on successful file transer
+ * @return PRTE_ERROR on failed file transfer
  */
-typedef int (*prrte_filem_base_get_nb_fn_t)
-     (prrte_filem_base_request_t *request);
+typedef int (*prte_filem_base_get_nb_fn_t)
+     (prte_filem_base_request_t *request);
 
 /**
  * Remove a file from the remote machine
@@ -282,11 +283,11 @@ typedef int (*prrte_filem_base_get_nb_fn_t)
  * @param request FileM request describing the remote files/directories to remove,
  *        the processes to see the change.
  *
- * @return PRRTE_SUCCESS on success
- * @return PRRTE_ERROR on fail
+ * @return PRTE_SUCCESS on success
+ * @return PRTE_ERROR on fail
  */
-typedef int (*prrte_filem_base_rm_fn_t)
-     (prrte_filem_base_request_t *request);
+typedef int (*prte_filem_base_rm_fn_t)
+     (prte_filem_base_request_t *request);
 
 /**
  * Remove a file from the remote machine (Async)
@@ -298,11 +299,11 @@ typedef int (*prrte_filem_base_rm_fn_t)
  * @param request FileM request describing the remote files/directories to remove,
  *        the processes to see the change.
  *
- * @return PRRTE_SUCCESS on success
- * @return PRRTE_ERROR on fail
+ * @return PRTE_SUCCESS on success
+ * @return PRTE_ERROR on fail
  */
-typedef int (*prrte_filem_base_rm_nb_fn_t)
-     (prrte_filem_base_request_t *request);
+typedef int (*prte_filem_base_rm_nb_fn_t)
+     (prte_filem_base_request_t *request);
 
 /**
  * Wait for a single file movement request to finish
@@ -310,94 +311,94 @@ typedef int (*prrte_filem_base_rm_nb_fn_t)
  * @param request FileM request describing the remote files/directories.
  *
  * The request must have been passed through one of the non-blocking functions
- * before calling wait or wait_all otherwise PRRTE_ERROR will be returned.
+ * before calling wait or wait_all otherwise PRTE_ERROR will be returned.
  *
- * @return PRRTE_SUCCESS on success
- * @return PRRTE_ERROR on fail
+ * @return PRTE_SUCCESS on success
+ * @return PRTE_ERROR on fail
  */
-typedef int (*prrte_filem_base_wait_fn_t)
-     (prrte_filem_base_request_t *request);
+typedef int (*prte_filem_base_wait_fn_t)
+     (prte_filem_base_request_t *request);
 
 /**
  * Wait for a multiple file movement requests to finish
  *
- * @param request_list prrte_list_t of FileM requests describing the remote files/directories.
+ * @param request_list prte_list_t of FileM requests describing the remote files/directories.
  *
  * The request must have been passed through one of the non-blocking functions
- * before calling wait or wait_all otherwise PRRTE_ERROR will be returned.
+ * before calling wait or wait_all otherwise PRTE_ERROR will be returned.
  *
- * @return PRRTE_SUCCESS on success
- * @return PRRTE_ERROR on fail
+ * @return PRTE_SUCCESS on success
+ * @return PRTE_ERROR on fail
  */
-typedef int (*prrte_filem_base_wait_all_fn_t)
-     (prrte_list_t *request_list);
+typedef int (*prte_filem_base_wait_all_fn_t)
+     (prte_list_t *request_list);
 
-typedef void (*prrte_filem_completion_cbfunc_t)(int status, void *cbdata);
+typedef void (*prte_filem_completion_cbfunc_t)(int status, void *cbdata);
 
 /* Pre-position files
  */
-typedef int (*prrte_filem_base_preposition_files_fn_t)(prrte_job_t *jdata,
-                                                      prrte_filem_completion_cbfunc_t cbfunc,
+typedef int (*prte_filem_base_preposition_files_fn_t)(prte_job_t *jdata,
+                                                      prte_filem_completion_cbfunc_t cbfunc,
                                                       void *cbdata);
 
 /* link local files */
-typedef int (*prrte_filem_base_link_local_files_fn_t)(prrte_job_t *jdata,
-                                                     prrte_app_context_t *app);
+typedef int (*prte_filem_base_link_local_files_fn_t)(prte_job_t *jdata,
+                                                     prte_app_context_t *app);
 
 /**
  * Structure for FILEM components.
  */
-struct prrte_filem_base_component_2_0_0_t {
+struct prte_filem_base_component_2_0_0_t {
     /** MCA base component */
-    prrte_mca_base_component_t base_version;
+    prte_mca_base_component_t base_version;
     /** MCA base data */
-    prrte_mca_base_component_data_t base_data;
+    prte_mca_base_component_data_t base_data;
 };
-typedef struct prrte_filem_base_component_2_0_0_t prrte_filem_base_component_2_0_0_t;
-typedef struct prrte_filem_base_component_2_0_0_t prrte_filem_base_component_t;
+typedef struct prte_filem_base_component_2_0_0_t prte_filem_base_component_2_0_0_t;
+typedef struct prte_filem_base_component_2_0_0_t prte_filem_base_component_t;
 
 /**
  * Structure for FILEM  modules
  */
-struct prrte_filem_base_module_1_0_0_t {
+struct prte_filem_base_module_1_0_0_t {
     /** Initialization Function */
-    prrte_filem_base_module_init_fn_t           filem_init;
+    prte_filem_base_module_init_fn_t           filem_init;
     /** Finalization Function */
-    prrte_filem_base_module_finalize_fn_t       filem_finalize;
+    prte_filem_base_module_finalize_fn_t       filem_finalize;
 
     /** Put a file on the remote machine */
-    prrte_filem_base_put_fn_t                   put;
-    prrte_filem_base_put_nb_fn_t                put_nb;
+    prte_filem_base_put_fn_t                   put;
+    prte_filem_base_put_nb_fn_t                put_nb;
     /** Get a file from the remote machine */
-    prrte_filem_base_get_fn_t                   get;
-    prrte_filem_base_get_nb_fn_t                get_nb;
+    prte_filem_base_get_fn_t                   get;
+    prte_filem_base_get_nb_fn_t                get_nb;
 
     /** Remove a file on the remote machine */
-    prrte_filem_base_rm_fn_t                    rm;
-    prrte_filem_base_rm_nb_fn_t                 rm_nb;
+    prte_filem_base_rm_fn_t                    rm;
+    prte_filem_base_rm_nb_fn_t                 rm_nb;
 
     /** Test functions for the non-blocking versions */
-    prrte_filem_base_wait_fn_t                  wait;
-    prrte_filem_base_wait_all_fn_t              wait_all;
+    prte_filem_base_wait_fn_t                  wait;
+    prte_filem_base_wait_all_fn_t              wait_all;
 
     /* pre-position files to every node */
-    prrte_filem_base_preposition_files_fn_t     preposition_files;
+    prte_filem_base_preposition_files_fn_t     preposition_files;
     /* create local links for all shared files */
-    prrte_filem_base_link_local_files_fn_t      link_local_files;
+    prte_filem_base_link_local_files_fn_t      link_local_files;
 
 };
-typedef struct prrte_filem_base_module_1_0_0_t prrte_filem_base_module_1_0_0_t;
-typedef struct prrte_filem_base_module_1_0_0_t prrte_filem_base_module_t;
+typedef struct prte_filem_base_module_1_0_0_t prte_filem_base_module_1_0_0_t;
+typedef struct prte_filem_base_module_1_0_0_t prte_filem_base_module_t;
 
-PRRTE_EXPORT extern prrte_filem_base_module_t prrte_filem;
+PRTE_EXPORT extern prte_filem_base_module_t prte_filem;
 
 /**
  * Macro for use in components that are of type FILEM
  */
-#define PRRTE_FILEM_BASE_VERSION_2_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("filem", 2, 0, 0)
+#define PRTE_FILEM_BASE_VERSION_2_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("filem", 2, 0, 0)
 
 END_C_DECLS
 
-#endif /* PRRTE_FILEM_H */
+#endif /* PRTE_FILEM_H */
 

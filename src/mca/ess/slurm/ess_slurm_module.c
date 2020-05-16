@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008-2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -21,7 +21,7 @@
  *
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #ifdef HAVE_UNISTD_H
@@ -31,10 +31,10 @@
 #include <ctype.h>
 
 
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 #include "src/util/output.h"
 #include "src/util/argv.h"
-#include "src/class/prrte_pointer_array.h"
+#include "src/class/prte_pointer_array.h"
 #include "src/dss/dss.h"
 
 #include "src/util/proc_info.h"
@@ -42,7 +42,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rml/rml.h"
 #include "src/util/name_fns.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/ess/ess.h"
@@ -54,7 +54,7 @@ static int slurm_set_name(void);
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
-prrte_ess_base_module_t prrte_ess_slurm_module = {
+prte_ess_base_module_t prte_ess_slurm_module = {
     rte_init,
     rte_finalize,
     NULL,
@@ -67,26 +67,26 @@ static int rte_init(int argc, char **argv)
     char *error = NULL;
 
     /* run the prolog */
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_std_prolog())) {
-        error = "prrte_ess_base_std_prolog";
+    if (PRTE_SUCCESS != (ret = prte_ess_base_std_prolog())) {
+        error = "prte_ess_base_std_prolog";
         goto error;
     }
 
     /* Start by getting a unique name */
     slurm_set_name();
 
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_prted_setup())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_ess_base_prted_setup";
+    if (PRTE_SUCCESS != (ret = prte_ess_base_prted_setup())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_ess_base_prted_setup";
         goto error;
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 
 error:
-    if (PRRTE_ERR_SILENT != ret && !prrte_report_silent_errors) {
-        prrte_show_help("help-prrte-runtime.txt",
-                       "prrte_init:startup:internal-failure",
-                       true, error, PRRTE_ERROR_NAME(ret), ret);
+    if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
+        prte_show_help("help-prte-runtime.txt",
+                       "prte_init:startup:internal-failure",
+                       true, error, PRTE_ERROR_NAME(ret), ret);
     }
 
     return ret;
@@ -96,8 +96,8 @@ static int rte_finalize(void)
 {
     int ret;
 
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_prted_finalize())) {
-        PRRTE_ERROR_LOG(ret);
+    if (PRTE_SUCCESS != (ret = prte_ess_base_prted_finalize())) {
+        PRTE_ERROR_LOG(ret);
     }
 
     return ret;
@@ -106,51 +106,51 @@ static int rte_finalize(void)
 static int slurm_set_name(void)
 {
     int slurm_nodeid;
-    prrte_vpid_t vpid;
+    prte_vpid_t vpid;
     char *tmp;
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_ess_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
                          "ess:slurm setting name"));
 
-    if (NULL == prrte_ess_base_nspace) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+    if (NULL == prte_ess_base_nspace) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
 
-    PRRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRRTE_PROC_MY_NAME->jobid, prrte_ess_base_nspace);
-    PMIX_LOAD_NSPACE(prrte_process_info.myproc.nspace, prrte_ess_base_nspace);
+    PRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRTE_PROC_MY_NAME->jobid, prte_ess_base_nspace);
+    PMIX_LOAD_NSPACE(prte_process_info.myproc.nspace, prte_ess_base_nspace);
 
-    if (NULL == prrte_ess_base_vpid) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+    if (NULL == prte_ess_base_vpid) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
-    vpid = strtoul(prrte_ess_base_vpid, NULL, 10);
+    vpid = strtoul(prte_ess_base_vpid, NULL, 10);
 
     /* fix up the vpid and make it the "real" vpid */
     slurm_nodeid = atoi(getenv("SLURM_NODEID"));
-    PRRTE_PROC_MY_NAME->vpid = vpid + slurm_nodeid;
-    prrte_process_info.myproc.rank = PRRTE_PROC_MY_NAME->vpid;
+    PRTE_PROC_MY_NAME->vpid = vpid + slurm_nodeid;
+    prte_process_info.myproc.rank = PRTE_PROC_MY_NAME->vpid;
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_ess_base_framework.framework_output,
-                         "ess:slurm set name to %s", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
+                         "ess:slurm set name to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* fix up the system info nodename to match exactly what slurm returned */
-    if (NULL != prrte_process_info.nodename) {
-        free(prrte_process_info.nodename);
+    if (NULL != prte_process_info.nodename) {
+        free(prte_process_info.nodename);
     }
     if (NULL == (tmp = getenv("SLURMD_NODENAME"))) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
-    prrte_process_info.nodename = strdup(tmp);
+    prte_process_info.nodename = strdup(tmp);
 
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_ess_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
                          "ess:slurm set nodename to %s",
-                         (NULL == prrte_process_info.nodename) ? "NULL" : prrte_process_info.nodename));
+                         (NULL == prte_process_info.nodename) ? "NULL" : prte_process_info.nodename));
 
     /* get the num procs as provided in the cmd line param */
-    prrte_process_info.num_daemons = prrte_ess_base_num_procs;
+    prte_process_info.num_daemons = prte_ess_base_num_procs;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

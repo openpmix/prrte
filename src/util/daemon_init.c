@@ -13,6 +13,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,7 +22,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
@@ -36,14 +37,14 @@
 #include "constants.h"
 
 
-int prrte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
+int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
 {
 #if defined(HAVE_FORK)
     pid_t pid;
     int fd;
 
     if ((pid = fork()) < 0) {
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     } else if (pid != 0) {
         /* parent goes bye-bye */
         int rc = 0;
@@ -60,14 +61,14 @@ int prrte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
 
     if (NULL != working_dir) {
         if (-1 == chdir(working_dir)) {  /* change working directory */
-            return PRRTE_ERR_FATAL;
+            return PRTE_ERR_FATAL;
 	}
     }
 
     /* connect input to /dev/null */
     fd = open("/dev/null", O_RDONLY);
     if (0 > fd) {
-        return PRRTE_ERR_FATAL;
+        return PRTE_ERR_FATAL;
     }
     dup2(fd, STDIN_FILENO);
     if(fd != STDIN_FILENO) {
@@ -89,12 +90,12 @@ int prrte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
            close(fd);
         }
     } else {
-        return PRRTE_ERR_FATAL;
+        return PRTE_ERR_FATAL;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 
 #else /* HAVE_FORK */
-    return PRRTE_ERR_NOT_SUPPORTED;
+    return PRTE_ERR_NOT_SUPPORTED;
 #endif
 }

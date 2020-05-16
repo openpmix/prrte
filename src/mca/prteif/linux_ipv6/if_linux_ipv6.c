@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2019 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
@@ -13,7 +13,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <string.h>
 #ifdef HAVE_UNISTD_H
@@ -62,17 +62,17 @@
 static int if_linux_ipv6_open(void);
 
 /* Discovers Linux IPv6 interfaces */
-prrte_if_base_component_t prrte_prteif_linux_ipv6_component = {
+prte_if_base_component_t prte_prteif_linux_ipv6_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     {
-        PRRTE_IF_BASE_VERSION_2_0_0,
+        PRTE_IF_BASE_VERSION_2_0_0,
 
         /* Component name and version */
         "linux_ipv6",
-        PRRTE_MAJOR_VERSION,
-        PRRTE_MINOR_VERSION,
-        PRRTE_RELEASE_VERSION,
+        PRTE_MAJOR_VERSION,
+        PRTE_MINOR_VERSION,
+        PRTE_RELEASE_VERSION,
 
         /* Component open and close functions */
         if_linux_ipv6_open,
@@ -80,11 +80,11 @@ prrte_if_base_component_t prrte_prteif_linux_ipv6_component = {
     },
     {
         /* This component is checkpointable */
-        PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
     },
 };
 
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
 static bool hex2int(char hex, int *dst)
 {
     if ('0' <= hex && hex <= '9') {
@@ -116,10 +116,10 @@ static bool hexdecode(const char *src, uint8_t *dst, size_t dstsize)
 
 static int if_linux_ipv6_open(void)
 {
-#if PRRTE_ENABLE_IPV6
+#if PRTE_ENABLE_IPV6
     FILE *f;
     if ((f = fopen("/proc/net/if_inet6", "r"))) {
-        char ifname[PRRTE_IF_NAMESIZE];
+        char ifname[PRTE_IF_NAMESIZE];
         unsigned int idx, pfxlen, scope, dadstat;
         struct in6_addr a6;
         uint32_t flag;
@@ -128,46 +128,46 @@ static int if_linux_ipv6_open(void)
 
         while (fscanf(f, "%s %x %x %x %x %s\n", addrhex,
                       &idx, &pfxlen, &scope, &dadstat, ifname) != EOF) {
-            prrte_if_t *intf;
+            prte_if_t *intf;
 
             if (!hexdecode(addrhex, a6.s6_addr, sizeof a6.s6_addr)) {
-                 prrte_show_help("help-prrte-if-linux-ipv6.txt",
+                 prte_show_help("help-prte-if-linux-ipv6.txt",
                                "fail to parse if_inet6", true,
-                               prrte_process_info.nodename, ifname, addrhex);
+                               prte_process_info.nodename, ifname, addrhex);
                 continue;
             };
             inet_ntop(AF_INET6, a6.s6_addr, addrstr, sizeof addrstr);
 
-            prrte_output_verbose(1, prrte_prteif_base_framework.framework_output,
+            prte_output_verbose(1, prte_prteif_base_framework.framework_output,
                                 LOG_PREFIX "found interface %s inet6 %s scope %x\n",
                                 ifname, addrstr, scope);
 
             /* Only interested in global (0x00) scope */
             if (scope != 0x00)  {
-                prrte_output_verbose(1, prrte_prteif_base_framework.framework_output,
+                prte_output_verbose(1, prte_prteif_base_framework.framework_output,
                                     LOG_PREFIX "skipped interface %s inet6 %s scope %x\n",
                                     ifname, addrstr, scope);
                 continue;
             }
 
-            intf = PRRTE_NEW(prrte_if_t);
+            intf = PRTE_NEW(prte_if_t);
             if (NULL == intf) {
-                prrte_output(0, LOG_PREFIX "unable to allocate %lu bytes\n",
-                            (unsigned long)sizeof(prrte_if_t));
+                prte_output(0, LOG_PREFIX "unable to allocate %lu bytes\n",
+                            (unsigned long)sizeof(prte_if_t));
                 fclose(f);
-                return PRRTE_ERR_OUT_OF_RESOURCE;
+                return PRTE_ERR_OUT_OF_RESOURCE;
             }
             intf->af_family = AF_INET6;
 
-            /* now construct the prrte_if_t */
-            prrte_string_copy(intf->if_name, ifname, PRRTE_IF_NAMESIZE);
-            intf->if_index = prrte_list_get_size(&prrte_if_list)+1;
+            /* now construct the prte_if_t */
+            prte_string_copy(intf->if_name, ifname, PRTE_IF_NAMESIZE);
+            intf->if_index = prte_list_get_size(&prte_if_list)+1;
             intf->if_kernel_index = (uint16_t) idx;
             ((struct sockaddr_in6*) &intf->if_addr)->sin6_addr = a6;
             ((struct sockaddr_in6*) &intf->if_addr)->sin6_family = AF_INET6;
             ((struct sockaddr_in6*) &intf->if_addr)->sin6_scope_id = scope;
             intf->if_mask = pfxlen;
-            if (PRRTE_SUCCESS == prrte_ifindextoflags(prrte_ifnametoindex (ifname), &flag)) {
+            if (PRTE_SUCCESS == prte_ifindextoflags(prte_ifnametoindex (ifname), &flag)) {
                 intf->if_flags = flag;
             } else {
                 intf->if_flags = IFF_UP;
@@ -175,14 +175,14 @@ static int if_linux_ipv6_open(void)
 
             /* copy new interface information to heap and append
                to list */
-            prrte_list_append(&prrte_if_list, &(intf->super));
-            prrte_output_verbose(1, prrte_prteif_base_framework.framework_output,
+            prte_list_append(&prte_if_list, &(intf->super));
+            prte_output_verbose(1, prte_prteif_base_framework.framework_output,
                                 LOG_PREFIX "added interface %s inet6 %s scope %x\n",
                                 ifname, addrstr, scope);
         } /* of while */
         fclose(f);
     }
-#endif  /* PRRTE_ENABLE_IPV6 */
+#endif  /* PRTE_ENABLE_IPV6 */
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

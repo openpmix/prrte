@@ -13,6 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2016      University of Houston. All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,10 +23,10 @@
  * @file
  */
 
-#ifndef PRRTE_PATH_H
-#define PRRTE_PATH_H
+#ifndef PRTE_PATH_H
+#define PRTE_PATH_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "constants.h"
 
@@ -54,8 +55,8 @@ BEGIN_C_DECLS
  *
  * The caller is responsible for freeing the returned string.
  */
-PRRTE_EXPORT char *prrte_path_find(char *fname, char **pathv, int mode,
-                                   char **envv) __prrte_attribute_malloc__ __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_path_find(char *fname, char **pathv, int mode,
+                                   char **envv) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 /**
  *  Locates a file with certain permissions from a list of search
@@ -75,8 +76,8 @@ PRRTE_EXPORT char *prrte_path_find(char *fname, char **pathv, int mode,
  *
  * The caller is responsible for freeing the returned string.
  */
-PRRTE_EXPORT char *prrte_path_findv(char *fname, int mode,
-                                    char **envv, char *wrkdir) __prrte_attribute_malloc__ __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_path_findv(char *fname, int mode,
+                                    char **envv, char *wrkdir) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 /**
  *  Detect if the requested path is absolute or relative.
  *
@@ -89,7 +90,7 @@ PRRTE_EXPORT char *prrte_path_findv(char *fname, int mode,
  *  with special care as an absolute path on Windows starts
  *  with [A-Za-z]: or \\ instead of the usual / on UNIX.
  */
-PRRTE_EXPORT bool prrte_path_is_absolute( const char *path );
+PRTE_EXPORT bool prte_path_is_absolute( const char *path );
 
 /**
  * Find the absolute path for an executable and return it.
@@ -108,7 +109,7 @@ PRRTE_EXPORT bool prrte_path_is_absolute( const char *path );
  * function will return NULL. Otherwise, an newly allocated string
  * will be returned.
  */
-PRRTE_EXPORT char* prrte_find_absolute_path( char* app_name ) __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT char* prte_find_absolute_path( char* app_name ) __prte_attribute_warn_unused_result__;
 
 /**
  * Forms a complete pathname and checks it for existance and
@@ -123,7 +124,7 @@ PRRTE_EXPORT char* prrte_find_absolute_path( char* app_name ) __prrte_attribute_
  *
  * The caller is responsible for freeing the returned string.
  */
-PRRTE_EXPORT char *prrte_path_access(char *fname, char *path, int mode) __prrte_attribute_malloc__ __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_path_access(char *fname, char *path, int mode) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 
 /**
@@ -143,7 +144,7 @@ PRRTE_EXPORT char *prrte_path_access(char *fname, char *path, int mode) __prrte_
  * @retval true                If fname is on NFS, Lustre or Panasas
  * @retval false               otherwise
  */
-PRRTE_EXPORT bool prrte_path_nfs(char *fname, char **fstype) __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT bool prte_path_nfs(char *fname, char **fstype) __prte_attribute_warn_unused_result__;
 
 /**
  * @brief Returns the disk usage of path.
@@ -151,12 +152,12 @@ PRRTE_EXPORT bool prrte_path_nfs(char *fname, char **fstype) __prrte_attribute_w
  * @param[in] path       Path to check
  * @out_avail[out]       Amount of free space available on path (if successful)
  *
- * @retval PRRTE_SUCCESS  If the operation was successful
- * @retval PRRTE_ERROR    otherwise
+ * @retval PRTE_SUCCESS  If the operation was successful
+ * @retval PRTE_ERROR    otherwise
  */
-PRRTE_EXPORT int
-prrte_path_df(const char *path,
-             uint64_t *out_avail)__prrte_attribute_warn_unused_result__;
+PRTE_EXPORT int
+prte_path_df(const char *path,
+             uint64_t *out_avail)__prte_attribute_warn_unused_result__;
 
 END_C_DECLS
-#endif /* PRRTE_PATH_H */
+#endif /* PRTE_PATH_H */

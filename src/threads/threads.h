@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2010      Cisco Systems, Inc. All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -21,16 +21,16 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_THREAD_H
-#define PRRTE_THREAD_H 1
+#ifndef PRTE_THREAD_H
+#define PRTE_THREAD_H 1
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <pthread.h>
 #include <signal.h>
 
-#include "src/class/prrte_object.h"
-#if PRRTE_ENABLE_DEBUG
+#include "src/class/prte_object.h"
+#if PRTE_ENABLE_DEBUG
 #include "src/util/output.h"
 #endif
 
@@ -38,156 +38,156 @@
 
 BEGIN_C_DECLS
 
-typedef void *(*prrte_thread_fn_t) (prrte_object_t *);
+typedef void *(*prte_thread_fn_t) (prte_object_t *);
 
-#define PRRTE_THREAD_CANCELLED   ((void*)1);
+#define PRTE_THREAD_CANCELLED   ((void*)1);
 
-struct prrte_thread_t {
-    prrte_object_t super;
-    prrte_thread_fn_t t_run;
+struct prte_thread_t {
+    prte_object_t super;
+    prte_thread_fn_t t_run;
     void* t_arg;
     pthread_t t_handle;
 };
 
-typedef struct prrte_thread_t prrte_thread_t;
+typedef struct prte_thread_t prte_thread_t;
 
-#if PRRTE_ENABLE_DEBUG
-PRRTE_EXPORT extern bool prrte_debug_threads;
+#if PRTE_ENABLE_DEBUG
+PRTE_EXPORT extern bool prte_debug_threads;
 #endif
 
 
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_thread_t);
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_thread_t);
 
-#define prrte_condition_wait(a,b)    pthread_cond_wait(a, &(b)->m_lock_pthread)
-typedef pthread_cond_t prrte_condition_t;
-#define prrte_condition_broadcast(a) pthread_cond_broadcast(a)
-#define prrte_condition_signal(a)    pthread_cond_signal(a)
-#define PRRTE_CONDITION_STATIC_INIT PTHREAD_COND_INITIALIZER
+#define prte_condition_wait(a,b)    pthread_cond_wait(a, &(b)->m_lock_pthread)
+typedef pthread_cond_t prte_condition_t;
+#define prte_condition_broadcast(a) pthread_cond_broadcast(a)
+#define prte_condition_signal(a)    pthread_cond_signal(a)
+#define PRTE_CONDITION_STATIC_INIT PTHREAD_COND_INITIALIZER
 
 /* define a threadshift macro */
-#define PRRTE_THREADSHIFT(x, eb, f, p)                                   \
+#define PRTE_THREADSHIFT(x, eb, f, p)                                   \
     do {                                                                \
-        prrte_event_set((eb), &((x)->ev), -1, PRRTE_EV_WRITE, (f), (x));  \
-        prrte_event_set_priority(&((x)->ev), (p));                       \
-        PRRTE_POST_OBJECT((x));                                          \
-        prrte_event_active(&((x)->ev), PRRTE_EV_WRITE, 1);                \
+        prte_event_set((eb), &((x)->ev), -1, PRTE_EV_WRITE, (f), (x));  \
+        prte_event_set_priority(&((x)->ev), (p));                       \
+        PRTE_POST_OBJECT((x));                                          \
+        prte_event_active(&((x)->ev), PRTE_EV_WRITE, 1);                \
     } while(0)
 
 
 typedef struct {
     int status;
-    prrte_mutex_t mutex;
-    prrte_condition_t cond;
+    prte_mutex_t mutex;
+    prte_condition_t cond;
     volatile bool active;
-} prrte_lock_t;
+} prte_lock_t;
 
-#define PRRTE_CONSTRUCT_LOCK(l)                          \
+#define PRTE_CONSTRUCT_LOCK(l)                          \
     do {                                                \
-        PRRTE_CONSTRUCT(&(l)->mutex, prrte_mutex_t);      \
+        PRTE_CONSTRUCT(&(l)->mutex, prte_mutex_t);      \
         pthread_cond_init(&(l)->cond, NULL);            \
         /* coverity[missing_lock : FALSE] */            \
         (l)->active = true;                             \
     } while(0)
 
-#define PRRTE_DESTRUCT_LOCK(l)               \
+#define PRTE_DESTRUCT_LOCK(l)               \
     do {                                    \
-        PRRTE_DESTRUCT(&(l)->mutex);         \
+        PRTE_DESTRUCT(&(l)->mutex);         \
         pthread_cond_destroy(&(l)->cond);   \
     } while(0)
 
 
-#if PRRTE_ENABLE_DEBUG
-#define PRRTE_ACQUIRE_THREAD(lck)                                \
+#if PRTE_ENABLE_DEBUG
+#define PRTE_ACQUIRE_THREAD(lck)                                \
     do {                                                        \
-        prrte_mutex_lock(&(lck)->mutex);                         \
-        if (prrte_debug_threads) {                               \
-            prrte_output(0, "Waiting for thread %s:%d",          \
+        prte_mutex_lock(&(lck)->mutex);                         \
+        if (prte_debug_threads) {                               \
+            prte_output(0, "Waiting for thread %s:%d",          \
                         __FILE__, __LINE__);                    \
         }                                                       \
         while ((lck)->active) {                                 \
-            prrte_condition_wait(&(lck)->cond, &(lck)->mutex);   \
+            prte_condition_wait(&(lck)->cond, &(lck)->mutex);   \
         }                                                       \
-        if (prrte_debug_threads) {                               \
-            prrte_output(0, "Thread obtained %s:%d",             \
+        if (prte_debug_threads) {                               \
+            prte_output(0, "Thread obtained %s:%d",             \
                         __FILE__, __LINE__);                    \
         }                                                       \
-        PRRTE_ACQUIRE_OBJECT(lck);                               \
+        PRTE_ACQUIRE_OBJECT(lck);                               \
         (lck)->active = true;                                   \
     } while(0)
 #else
-#define PRRTE_ACQUIRE_THREAD(lck)                                \
+#define PRTE_ACQUIRE_THREAD(lck)                                \
     do {                                                        \
-        prrte_mutex_lock(&(lck)->mutex);                         \
+        prte_mutex_lock(&(lck)->mutex);                         \
         while ((lck)->active) {                                 \
-            prrte_condition_wait(&(lck)->cond, &(lck)->mutex);   \
+            prte_condition_wait(&(lck)->cond, &(lck)->mutex);   \
         }                                                       \
-        PRRTE_ACQUIRE_OBJECT(lck);                               \
+        PRTE_ACQUIRE_OBJECT(lck);                               \
         (lck)->active = true;                                   \
     } while(0)
 #endif
 
 
-#if PRRTE_ENABLE_DEBUG
-#define PRRTE_WAIT_THREAD(lck)                                   \
+#if PRTE_ENABLE_DEBUG
+#define PRTE_WAIT_THREAD(lck)                                   \
     do {                                                        \
-        prrte_mutex_lock(&(lck)->mutex);                         \
-        if (prrte_debug_threads) {                               \
-            prrte_output(0, "Waiting for thread %s:%d",          \
+        prte_mutex_lock(&(lck)->mutex);                         \
+        if (prte_debug_threads) {                               \
+            prte_output(0, "Waiting for thread %s:%d",          \
                         __FILE__, __LINE__);                    \
         }                                                       \
         while ((lck)->active) {                                 \
-            prrte_condition_wait(&(lck)->cond, &(lck)->mutex);   \
+            prte_condition_wait(&(lck)->cond, &(lck)->mutex);   \
         }                                                       \
-        if (prrte_debug_threads) {                               \
-            prrte_output(0, "Thread obtained %s:%d",             \
+        if (prte_debug_threads) {                               \
+            prte_output(0, "Thread obtained %s:%d",             \
                         __FILE__, __LINE__);                    \
         }                                                       \
-        PRRTE_ACQUIRE_OBJECT(lck);                               \
-        prrte_mutex_unlock(&(lck)->mutex);                       \
+        PRTE_ACQUIRE_OBJECT(lck);                               \
+        prte_mutex_unlock(&(lck)->mutex);                       \
     } while(0)
 #else
-#define PRRTE_WAIT_THREAD(lck)                                   \
+#define PRTE_WAIT_THREAD(lck)                                   \
     do {                                                        \
-        prrte_mutex_lock(&(lck)->mutex);                         \
+        prte_mutex_lock(&(lck)->mutex);                         \
         while ((lck)->active) {                                 \
-            prrte_condition_wait(&(lck)->cond, &(lck)->mutex);   \
+            prte_condition_wait(&(lck)->cond, &(lck)->mutex);   \
         }                                                       \
-        PRRTE_ACQUIRE_OBJECT(lck);                               \
-        prrte_mutex_unlock(&(lck)->mutex);                       \
+        PRTE_ACQUIRE_OBJECT(lck);                               \
+        prte_mutex_unlock(&(lck)->mutex);                       \
     } while(0)
 #endif
 
 
-#if PRRTE_ENABLE_DEBUG
-#define PRRTE_RELEASE_THREAD(lck)                        \
+#if PRTE_ENABLE_DEBUG
+#define PRTE_RELEASE_THREAD(lck)                        \
     do {                                                \
-        if (prrte_debug_threads) {                       \
-            prrte_output(0, "Releasing thread %s:%d",    \
+        if (prte_debug_threads) {                       \
+            prte_output(0, "Releasing thread %s:%d",    \
                         __FILE__, __LINE__);            \
         }                                               \
         (lck)->active = false;                          \
-        PRRTE_POST_OBJECT(lck);                  \
-        prrte_condition_broadcast(&(lck)->cond);         \
-        prrte_mutex_unlock(&(lck)->mutex);               \
+        PRTE_POST_OBJECT(lck);                  \
+        prte_condition_broadcast(&(lck)->cond);         \
+        prte_mutex_unlock(&(lck)->mutex);               \
     } while(0)
 #else
-#define PRRTE_RELEASE_THREAD(lck)                \
+#define PRTE_RELEASE_THREAD(lck)                \
     do {                                        \
         (lck)->active = false;                  \
-        PRRTE_POST_OBJECT(lck);                  \
-        prrte_condition_broadcast(&(lck)->cond); \
-        prrte_mutex_unlock(&(lck)->mutex);       \
+        PRTE_POST_OBJECT(lck);                  \
+        prte_condition_broadcast(&(lck)->cond); \
+        prte_mutex_unlock(&(lck)->mutex);       \
     } while(0)
 #endif
 
 
-#define PRRTE_WAKEUP_THREAD(lck)                 \
+#define PRTE_WAKEUP_THREAD(lck)                 \
     do {                                        \
-        prrte_mutex_lock(&(lck)->mutex);         \
+        prte_mutex_lock(&(lck)->mutex);         \
         (lck)->active = false;                  \
-        PRRTE_POST_OBJECT(lck);                  \
-        prrte_condition_broadcast(&(lck)->cond); \
-        prrte_mutex_unlock(&(lck)->mutex);       \
+        PRTE_POST_OBJECT(lck);                  \
+        prte_condition_broadcast(&(lck)->cond); \
+        prte_mutex_unlock(&(lck)->mutex);       \
     } while(0)
 
 
@@ -197,20 +197,20 @@ typedef struct {
 
 /* post an object to another thread - for now, we
  * only have a memory barrier */
-#define PRRTE_POST_OBJECT(o)     prrte_atomic_wmb()
+#define PRTE_POST_OBJECT(o)     prte_atomic_wmb()
 
 /* acquire an object from another thread - for now,
  * we only have a memory barrier */
-#define PRRTE_ACQUIRE_OBJECT(o)  prrte_atomic_rmb()
+#define PRTE_ACQUIRE_OBJECT(o)  prte_atomic_rmb()
 
 
-PRRTE_EXPORT int  prrte_thread_start(prrte_thread_t *);
-PRRTE_EXPORT int  prrte_thread_join(prrte_thread_t *, void **thread_return);
-PRRTE_EXPORT bool prrte_thread_self_compare(prrte_thread_t*);
-PRRTE_EXPORT prrte_thread_t *prrte_thread_get_self(void);
-PRRTE_EXPORT void prrte_thread_kill(prrte_thread_t *, int sig);
-PRRTE_EXPORT void prrte_thread_set_main(void);
+PRTE_EXPORT int  prte_thread_start(prte_thread_t *);
+PRTE_EXPORT int  prte_thread_join(prte_thread_t *, void **thread_return);
+PRTE_EXPORT bool prte_thread_self_compare(prte_thread_t*);
+PRTE_EXPORT prte_thread_t *prte_thread_get_self(void);
+PRTE_EXPORT void prte_thread_kill(prte_thread_t *, int sig);
+PRTE_EXPORT void prte_thread_set_main(void);
 
 END_C_DECLS
 
-#endif /* PRRTE_THREAD_H */
+#endif /* PRTE_THREAD_H */

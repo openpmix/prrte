@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2004-2010 The Trustees of Indiana University.
 #                         All rights reserved.
-# Copyright (c) 2014-2015 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -20,8 +20,8 @@ sources = \
 noinst_LTLIBRARIES = libmca_prtedl_libltdl.la
 
 libmca_prtedl_libltdl_la_SOURCES = $(sources)
-libmca_prtedl_libltdl_la_CPPFLAGS = $(prrte_prtedl_libltdl_CPPFLAGS)
+libmca_prtedl_libltdl_la_CPPFLAGS = $(prte_prtedl_libltdl_CPPFLAGS)
 libmca_prtedl_libltdl_la_LDFLAGS = \
-        $(prrte_prtedl_libltdl_LDFLAGS) \
+        $(prte_prtedl_libltdl_LDFLAGS) \
         -module -avoid-version
-libmca_prtedl_libltdl_la_LIBADD = $(prrte_prtedl_libltdl_LIBS)
+libmca_prtedl_libltdl_la_LIBADD = $(prte_prtedl_libltdl_LIBS)

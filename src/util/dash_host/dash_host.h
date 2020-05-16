@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,29 +21,29 @@
  * @file
  *
  */
-#ifndef PRRTE_UTIL_DASH_HOST_H
-#define PRRTE_UTIL_DASH_HOST_H
+#ifndef PRTE_UTIL_DASH_HOST_H
+#define PRTE_UTIL_DASH_HOST_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 BEGIN_C_DECLS
 
-PRRTE_EXPORT int prrte_util_add_dash_host_nodes(prrte_list_t *nodes,
+PRTE_EXPORT int prte_util_add_dash_host_nodes(prte_list_t *nodes,
                                                 char *hosts,
                                                 bool allocating);
 
-PRRTE_EXPORT int prrte_util_filter_dash_host_nodes(prrte_list_t *nodes,
+PRTE_EXPORT int prte_util_filter_dash_host_nodes(prte_list_t *nodes,
                                                    char *hosts,
                                                    bool remove);
 
-PRRTE_EXPORT int prrte_util_get_ordered_dash_host_list(prrte_list_t *nodes,
+PRTE_EXPORT int prte_util_get_ordered_dash_host_list(prte_list_t *nodes,
                                                        char *hosts);
 
-PRRTE_EXPORT int prrte_util_dash_host_compute_slots(prrte_node_t *node, char *hosts);
+PRTE_EXPORT int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts);
 
 END_C_DECLS
 

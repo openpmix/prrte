@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2013      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -21,7 +21,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -38,17 +38,17 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/mca/errmgr/errmgr.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "dash_host.h"
 
-int prrte_util_dash_host_compute_slots(prrte_node_t *node, char *hosts)
+int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
 {
     char **specs, *cptr;
     int slots = 0;
     int n;
 
-    specs = prrte_argv_split(hosts, ',');
+    specs = prte_argv_split(hosts, ',');
 
     /* see if this node appears in the list */
     for (n=0; NULL != specs[n]; n++) {
@@ -59,7 +59,7 @@ int prrte_util_dash_host_compute_slots(prrte_node_t *node, char *hosts)
         } else {
             cptr = NULL;
         }
-        if (prrte_node_match(node, specs[n])) {
+        if (prte_node_match(node, specs[n])) {
             if (NULL != cptr) {
                 if ('*' == *cptr || 0 == strcmp(cptr, "auto")) {
                     slots += node->slots - node->slots_inuse;
@@ -71,7 +71,7 @@ int prrte_util_dash_host_compute_slots(prrte_node_t *node, char *hosts)
             }
         }
     }
-    prrte_argv_free(specs);
+    prte_argv_free(specs);
     return slots;
 }
 
@@ -79,53 +79,53 @@ int prrte_util_dash_host_compute_slots(prrte_node_t *node, char *hosts)
  * was found, so we only need to know that finding any
  * relative node syntax should generate an immediate error
  */
-int prrte_util_add_dash_host_nodes(prrte_list_t *nodes,
+int prte_util_add_dash_host_nodes(prte_list_t *nodes,
                                   char *hosts, bool allocating)
 {
-    prrte_list_item_t *item, *itm;
-    prrte_std_cntr_t i, j, k;
+    prte_list_item_t *item, *itm;
+    prte_std_cntr_t i, j, k;
     int rc, nodeidx;
     char **host_argv=NULL;
     char **mapped_nodes = NULL, **mini_map, *ndname;
-    prrte_node_t *node, *nd;
-    prrte_list_t adds;
+    prte_node_t *node, *nd;
+    prte_list_t adds;
     bool found;
     int slots=0;
     bool slots_given;
     char *cptr, *ptr;
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_ras_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s dashhost: parsing args %s",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), hosts));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
 
-    PRRTE_CONSTRUCT(&adds, prrte_list_t);
-    host_argv = prrte_argv_split(hosts, ',');
+    PRTE_CONSTRUCT(&adds, prte_list_t);
+    host_argv = prte_argv_split(hosts, ',');
 
     /* Accumulate all of the host name mappings */
-    for (j = 0; j < prrte_argv_count(host_argv); ++j) {
-        mini_map = prrte_argv_split(host_argv[j], ',');
+    for (j = 0; j < prte_argv_count(host_argv); ++j) {
+        mini_map = prte_argv_split(host_argv[j], ',');
 
         if (mapped_nodes == NULL) {
             mapped_nodes = mini_map;
         } else {
             for (k = 0; NULL != mini_map[k]; ++k) {
-                rc = prrte_argv_append_nosize(&mapped_nodes,
+                rc = prte_argv_append_nosize(&mapped_nodes,
                                              mini_map[k]);
-                if (PRRTE_SUCCESS != rc) {
-                    prrte_argv_free(host_argv);
-                    prrte_argv_free(mini_map);
+                if (PRTE_SUCCESS != rc) {
+                    prte_argv_free(host_argv);
+                    prte_argv_free(mini_map);
                     goto cleanup;
                 }
             }
-            prrte_argv_free(mini_map);
+            prte_argv_free(mini_map);
         }
     }
-    prrte_argv_free(host_argv);
+    prte_argv_free(host_argv);
     mini_map = NULL;
 
     /* Did we find anything? If not, then do nothing */
     if (NULL == mapped_nodes) {
-        rc = PRRTE_SUCCESS;
+        rc = PRTE_SUCCESS;
         goto cleanup;
     }
 
@@ -148,12 +148,12 @@ int prrte_util_add_dash_host_nodes(prrte_list_t *nodes,
                         j = strtoul(&mapped_nodes[0][2], NULL, 10);
                     } else {
                         /* add them all */
-                        j = prrte_node_pool->size;
+                        j = prte_node_pool->size;
                     }
-                    for (k=0; 0 < j && k < prrte_node_pool->size; k++) {
-                        if (NULL != (node = (prrte_node_t*)prrte_pointer_array_get_item(prrte_node_pool, k))) {
+                    for (k=0; 0 < j && k < prte_node_pool->size; k++) {
+                        if (NULL != (node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, k))) {
                             if (0 == node->num_procs) {
-                                prrte_argv_append_nosize(&mini_map, node->name);
+                                prte_argv_append_nosize(&mini_map, node->name);
                                 --j;
                             }
                         }
@@ -165,53 +165,53 @@ int prrte_util_add_dash_host_nodes(prrte_list_t *nodes,
                      */
                     if ('\0' == mapped_nodes[i][2]) {
                         /* they forgot to tell us the # */
-                        prrte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
+                        prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
                                        true, mapped_nodes[i]);
-                        rc = PRRTE_ERR_SILENT;
+                        rc = PRTE_ERR_SILENT;
                         goto cleanup;
                     }
                     nodeidx = strtol(&mapped_nodes[i][2], NULL, 10);
                     if (nodeidx < 0 ||
-                        nodeidx > (int)prrte_node_pool->size) {
+                        nodeidx > (int)prte_node_pool->size) {
                         /* this is an error */
-                        prrte_show_help("help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
+                        prte_show_help("help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
                                        true, nodeidx, mapped_nodes[i]);
-                        rc = PRRTE_ERR_SILENT;
+                        rc = PRTE_ERR_SILENT;
                         goto cleanup;
                     }
                     /* if the HNP is not allocated, then we need to
                      * adjust the index as the node pool is offset
                      * by one
                      */
-                    if (!prrte_hnp_is_allocated) {
+                    if (!prte_hnp_is_allocated) {
                         nodeidx++;
                     }
                     /* see if that location is filled */
 
-                    if (NULL == (node = (prrte_node_t *) prrte_pointer_array_get_item(prrte_node_pool, nodeidx))) {
+                    if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, nodeidx))) {
                         /* this is an error */
-                        prrte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
+                        prte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
                                        true, nodeidx, mapped_nodes[i]);
-                        rc = PRRTE_ERR_SILENT;
+                        rc = PRTE_ERR_SILENT;
                         goto cleanup;
                     }
                     /* add this node to the list */
-                    prrte_argv_append_nosize(&mini_map, node->name);
+                    prte_argv_append_nosize(&mini_map, node->name);
                 } else {
                     /* invalid relative node syntax */
-                    prrte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
+                    prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
                                    true, mapped_nodes[i]);
-                    rc = PRRTE_ERR_SILENT;
+                    rc = PRTE_ERR_SILENT;
                     goto cleanup;
                 }
             }
         } else {
             /* just one node was given */
-            prrte_argv_append_nosize(&mini_map, mapped_nodes[i]);
+            prte_argv_append_nosize(&mini_map, mapped_nodes[i]);
         }
     }
     if (NULL == mini_map) {
-        rc = PRRTE_SUCCESS;
+        rc = PRTE_SUCCESS;
         goto cleanup;
     }
 
@@ -219,9 +219,9 @@ int prrte_util_add_dash_host_nodes(prrte_list_t *nodes,
         add them to the host list. If they're not unique, then
         bump the slots count for each duplicate */
     for (i=0; NULL != mini_map[i]; i++) {
-        PRRTE_OUTPUT_VERBOSE((1, prrte_ras_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s dashhost: working node %s",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), mini_map[i]));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), mini_map[i]));
 
         /* see if the node contains the number of slots */
         slots_given = false;
@@ -239,13 +239,13 @@ int prrte_util_add_dash_host_nodes(prrte_list_t *nodes,
         }
 
         /* check for local name */
-        if (prrte_check_host_is_local(mini_map[i])) {
-            ndname = prrte_process_info.nodename;
+        if (prte_check_host_is_local(mini_map[i])) {
+            ndname = prte_process_info.nodename;
         } else {
             ndname = mini_map[i];
 
             // Strip off the FQDN if present, ignore IP addresses
-            if( !prrte_keep_fqdn_hostnames && !prrte_net_isaddr(ndname) ) {
+            if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(ndname) ) {
                 if (NULL != (ptr = strchr(ndname, '.'))) {
                     *ptr = '\0';
                 }
@@ -253,94 +253,94 @@ int prrte_util_add_dash_host_nodes(prrte_list_t *nodes,
         }
         /* see if the node is already on the list */
         found = false;
-        PRRTE_LIST_FOREACH(node, &adds, prrte_node_t) {
+        PRTE_LIST_FOREACH(node, &adds, prte_node_t) {
             if (0 == strcmp(node->name, ndname)) {
                 found = true;
                 if (slots_given) {
                     node->slots += slots;
                     if (0 < slots) {
-                        PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_SLOTS_GIVEN);
+                        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                     }
                 } else {
                     ++node->slots;
-                    PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_SLOTS_GIVEN);
+                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 }
-                PRRTE_OUTPUT_VERBOSE((1, prrte_ras_base_framework.framework_output,
+                PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                      "%s dashhost: node %s already on list - slots %d",
-                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), node->name, node->slots));
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots));
                 break;
             }
         }
 
         /* If we didn't find it, add it to the list */
         if (!found) {
-            node = PRRTE_NEW(prrte_node_t);
+            node = PRTE_NEW(prte_node_t);
             if (NULL == node) {
-                prrte_argv_free(mapped_nodes);
-                return PRRTE_ERR_OUT_OF_RESOURCE;
+                prte_argv_free(mapped_nodes);
+                return PRTE_ERR_OUT_OF_RESOURCE;
             }
             node->name = strdup(ndname);
-            PRRTE_OUTPUT_VERBOSE((1, prrte_ras_base_framework.framework_output,
+            PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: added node %s to list - slots %d",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), node->name, slots));
-            node->state = PRRTE_NODE_STATE_UP;
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, slots));
+            node->state = PRTE_NODE_STATE_UP;
             node->slots_inuse = 0;
             node->slots_max = 0;
             if (slots_given) {
                 node->slots = slots;
                 if (0 < slots) {
-                    PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_SLOTS_GIVEN);
+                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 }
             } else if (slots < 0) {
                 node->slots = 0;
-                PRRTE_FLAG_UNSET(node, PRRTE_NODE_FLAG_SLOTS_GIVEN);
+                PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             } else {
                 node->slots = 1;
-                PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_SLOTS_GIVEN);
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             }
-            prrte_list_append(&adds, &node->super);
+            prte_list_append(&adds, &node->super);
         }
     }
-    prrte_argv_free(mini_map);
+    prte_argv_free(mini_map);
 
     /* transfer across all unique nodes */
-    while (NULL != (item = prrte_list_remove_first(&adds))) {
-        nd = (prrte_node_t*)item;
+    while (NULL != (item = prte_list_remove_first(&adds))) {
+        nd = (prte_node_t*)item;
         found = false;
-        for (itm = prrte_list_get_first(nodes);
-             itm != prrte_list_get_end(nodes);
-             itm = prrte_list_get_next(itm)) {
-            node = (prrte_node_t*)itm;
+        for (itm = prte_list_get_first(nodes);
+             itm != prte_list_get_end(nodes);
+             itm = prte_list_get_next(itm)) {
+            node = (prte_node_t*)itm;
             if (0 == strcmp(nd->name, node->name)) {
                 found = true;
-                PRRTE_OUTPUT_VERBOSE((1, prrte_ras_base_framework.framework_output,
+                PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                      "%s dashhost: found existing node %s on input list - adding slots",
-                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), node->name));
-                if (PRRTE_FLAG_TEST(nd, PRRTE_NODE_FLAG_SLOTS_GIVEN)) {
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
+                if (PRTE_FLAG_TEST(nd, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
                     /* transfer across the number of slots */
                     node->slots += nd->slots;
-                    PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_SLOTS_GIVEN);
+                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 }
                 break;
             }
         }
         if (!found) {
-            PRRTE_OUTPUT_VERBOSE((1, prrte_ras_base_framework.framework_output,
+            PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: adding node %s with %d slots to final list",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), nd->name, nd->slots));
-            prrte_list_append(nodes, &nd->super);
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nd->name, nd->slots));
+            prte_list_append(nodes, &nd->super);
         } else {
-            PRRTE_RELEASE(item);
+            PRTE_RELEASE(item);
         }
     }
 
-    rc = PRRTE_SUCCESS;
+    rc = PRTE_SUCCESS;
 
  cleanup:
     if (NULL != mapped_nodes) {
-        prrte_argv_free(mapped_nodes);
+        prte_argv_free(mapped_nodes);
     }
-    PRRTE_LIST_DESTRUCT(&adds);
+    PRTE_LIST_DESTRUCT(&adds);
 
     return rc;
 }
@@ -352,18 +352,18 @@ int prrte_util_add_dash_host_nodes(prrte_list_t *nodes,
  */
 static int parse_dash_host(char ***mapped_nodes, char *hosts)
 {
-    prrte_std_cntr_t j, k;
-    int rc=PRRTE_SUCCESS;
+    prte_std_cntr_t j, k;
+    int rc=PRTE_SUCCESS;
     char **mini_map=NULL, *cptr;
     int nodeidx;
-    prrte_node_t *node;
+    prte_node_t *node;
     char **host_argv=NULL;
 
-    host_argv = prrte_argv_split(hosts, ',');
+    host_argv = prte_argv_split(hosts, ',');
 
     /* Accumulate all of the host name mappings */
-    for (j = 0; j < prrte_argv_count(host_argv); ++j) {
-        mini_map = prrte_argv_split(host_argv[j], ',');
+    for (j = 0; j < prte_argv_count(host_argv); ++j) {
+        mini_map = prte_argv_split(host_argv[j], ',');
 
         for (k = 0; NULL != mini_map[k]; ++k) {
             if ('+' == mini_map[k][0]) {
@@ -376,10 +376,10 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                     if (NULL != (cptr = strchr(mini_map[k], ':'))) {
                         /* the colon indicates a specific # are requested */
                         *cptr = '*';
-                        prrte_argv_append_nosize(mapped_nodes, cptr);
+                        prte_argv_append_nosize(mapped_nodes, cptr);
                     } else {
                         /* add a marker to the list */
-                        prrte_argv_append_nosize(mapped_nodes, "*");
+                        prte_argv_append_nosize(mapped_nodes, "*");
                     }
                 } else if ('n' == mini_map[k][1] ||
                            'N' == mini_map[k][1]) {
@@ -388,36 +388,36 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                      */
                     nodeidx = strtol(&mini_map[k][2], NULL, 10);
                     if (nodeidx < 0 ||
-                        nodeidx > (int)prrte_node_pool->size) {
+                        nodeidx > (int)prte_node_pool->size) {
                         /* this is an error */
-                        prrte_show_help("help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
+                        prte_show_help("help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
                                        true, nodeidx, mini_map[k]);
-                        rc = PRRTE_ERR_SILENT;
+                        rc = PRTE_ERR_SILENT;
                         goto cleanup;
                     }
                     /* if the HNP is not allocated, then we need to
                      * adjust the index as the node pool is offset
                      * by one
                      */
-                    if (!prrte_hnp_is_allocated) {
+                    if (!prte_hnp_is_allocated) {
                         nodeidx++;
                     }
                     /* see if that location is filled */
 
-                    if (NULL == (node = (prrte_node_t *) prrte_pointer_array_get_item(prrte_node_pool, nodeidx))) {
+                    if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, nodeidx))) {
                         /* this is an error */
-                        prrte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
+                        prte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
                                        true, nodeidx, mini_map[k]);
-                        rc = PRRTE_ERR_SILENT;
+                        rc = PRTE_ERR_SILENT;
                         goto cleanup;
                     }
                     /* add this node to the list */
-                    prrte_argv_append_nosize(mapped_nodes, node->name);
+                    prte_argv_append_nosize(mapped_nodes, node->name);
                 } else {
                     /* invalid relative node syntax */
-                    prrte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
+                    prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
                                    true, mini_map[k]);
-                    rc = PRRTE_ERR_SILENT;
+                    rc = PRTE_ERR_SILENT;
                     goto cleanup;
                 }
             } else { /* non-relative syntax - add to list */
@@ -426,39 +426,39 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                     *cptr = '\0';
                 }
                 /* check for local alias */
-                if (prrte_check_host_is_local(mini_map[k])) {
-                    prrte_argv_append_nosize(mapped_nodes, prrte_process_info.nodename);
+                if (prte_check_host_is_local(mini_map[k])) {
+                    prte_argv_append_nosize(mapped_nodes, prte_process_info.nodename);
                 } else {
-                    prrte_argv_append_nosize(mapped_nodes, mini_map[k]);
+                    prte_argv_append_nosize(mapped_nodes, mini_map[k]);
                 }
             }
         }
-        prrte_argv_free(mini_map);
+        prte_argv_free(mini_map);
         mini_map = NULL;
     }
 
 cleanup:
     if (NULL != host_argv) {
-        prrte_argv_free(host_argv);
+        prte_argv_free(host_argv);
     }
     if (NULL != mini_map) {
-        prrte_argv_free(mini_map);
+        prte_argv_free(mini_map);
     }
     return rc;
 }
 
-int prrte_util_filter_dash_host_nodes(prrte_list_t *nodes,
+int prte_util_filter_dash_host_nodes(prte_list_t *nodes,
                                      char *hosts,
                                      bool remove)
 {
-    prrte_list_item_t* item;
-    prrte_list_item_t *next;
-    prrte_std_cntr_t i, j, len_mapped_node=0;
+    prte_list_item_t* item;
+    prte_list_item_t *next;
+    prte_std_cntr_t i, j, len_mapped_node=0;
     int rc, test;
     char **mapped_nodes = NULL;
-    prrte_node_t *node;
+    prte_node_t *node;
     int num_empty=0;
-    prrte_list_t keep;
+    prte_list_t keep;
     bool want_all_empty=false;
     char *cptr;
     size_t lst, lmn;
@@ -466,17 +466,17 @@ int prrte_util_filter_dash_host_nodes(prrte_list_t *nodes,
     /* if the incoming node list is empty, then there
      * is nothing to filter!
      */
-    if (prrte_list_is_empty(nodes)) {
-        return PRRTE_SUCCESS;
+    if (prte_list_is_empty(nodes)) {
+        return PRTE_SUCCESS;
     }
 
-    if (PRRTE_SUCCESS != (rc = parse_dash_host(&mapped_nodes, hosts))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = parse_dash_host(&mapped_nodes, hosts))) {
+        PRTE_ERROR_LOG(rc);
         return rc;
     }
     /* Did we find anything? If not, then do nothing */
     if (NULL == mapped_nodes) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* NOTE: The following logic is based on knowing that
@@ -484,14 +484,14 @@ int prrte_util_filter_dash_host_nodes(prrte_list_t *nodes,
      * nodes list ONCE.
      */
 
-    len_mapped_node = prrte_argv_count(mapped_nodes);
+    len_mapped_node = prte_argv_count(mapped_nodes);
     /* setup a working list so we can put the final list
      * of nodes in order. This way, if the user specifies a
      * set of nodes, we will use them in the order in which
      * they were specifed. Note that empty node requests
      * will always be appended to the end
      */
-    PRRTE_CONSTRUCT(&keep, prrte_list_t);
+    PRTE_CONSTRUCT(&keep, prte_list_t);
 
     for (i = 0; i < len_mapped_node; ++i) {
         /* check if we are supposed to add some number of empty
@@ -510,10 +510,10 @@ int prrte_util_filter_dash_host_nodes(prrte_list_t *nodes,
                 num_empty = strtol(&mapped_nodes[i][1], NULL, 10);
             }
             /* search for empty nodes and take them */
-            item = prrte_list_get_first(nodes);
-            while (0 < num_empty && item != prrte_list_get_end(nodes)) {
-                next = prrte_list_get_next(item);  /* save this position */
-                node = (prrte_node_t*)item;
+            item = prte_list_get_first(nodes);
+            while (0 < num_empty && item != prte_list_get_end(nodes)) {
+                next = prte_list_get_next(item);  /* save this position */
+                node = (prte_node_t*)item;
                 /* see if this node is empty */
                 if (0 == node->slots_inuse) {
                     /* check to see if it is specified later */
@@ -525,12 +525,12 @@ int prrte_util_filter_dash_host_nodes(prrte_list_t *nodes,
                     }
                     if (remove) {
                         /* remove item from list */
-                        prrte_list_remove_item(nodes, item);
+                        prte_list_remove_item(nodes, item);
                         /* xfer to keep list */
-                        prrte_list_append(&keep, item);
+                        prte_list_append(&keep, item);
                     } else {
                         /* mark the node as found */
-                        PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_MAPPED);
+                        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
                     }
                     --num_empty;
                 }
@@ -547,12 +547,12 @@ int prrte_util_filter_dash_host_nodes(prrte_list_t *nodes,
              * alias, so we only have to do a strcmp here. */
             cptr = NULL;
             lmn = strtoul(mapped_nodes[i], &cptr, 10);
-            item = prrte_list_get_first(nodes);
-            while (item != prrte_list_get_end(nodes)) {
-                next = prrte_list_get_next(item);  /* save this position */
-                node = (prrte_node_t*)item;
+            item = prte_list_get_first(nodes);
+            while (item != prte_list_get_end(nodes)) {
+                next = prte_list_get_next(item);  /* save this position */
+                node = (prte_node_t*)item;
                 /* search -host list to see if this one is found */
-                if (prrte_managed_allocation &&
+                if (prte_managed_allocation &&
                     (NULL == cptr || 0 == strlen(cptr))) {
                     /* if we are only given a number, then we test the
                      * value against the number in the node name. This allows support for
@@ -576,12 +576,12 @@ int prrte_util_filter_dash_host_nodes(prrte_list_t *nodes,
                 if (0 == test) {
                     if (remove) {
                         /* remove item from list */
-                        prrte_list_remove_item(nodes, item);
+                        prte_list_remove_item(nodes, item);
                         /* xfer to keep list */
-                        prrte_list_append(&keep, item);
+                        prte_list_append(&keep, item);
                     } else {
                         /* mark the node as found */
-                        PRRTE_FLAG_SET(node, PRRTE_NODE_FLAG_MAPPED);
+                        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
                     }
                     break;
                 }
@@ -596,38 +596,38 @@ int prrte_util_filter_dash_host_nodes(prrte_list_t *nodes,
     /* was something specified that was -not- found? */
     for (i=0; i < len_mapped_node; i++) {
         if (NULL != mapped_nodes[i]) {
-            prrte_show_help("help-dash-host.txt", "not-all-mapped-alloc",
+            prte_show_help("help-dash-host.txt", "not-all-mapped-alloc",
                            true, mapped_nodes[i]);
-            rc = PRRTE_ERR_SILENT;
+            rc = PRTE_ERR_SILENT;
             goto cleanup;
         }
     }
 
     if (!remove) {
         /* all done */
-        rc = PRRTE_SUCCESS;
+        rc = PRTE_SUCCESS;
         goto cleanup;
     }
 
     /* clear the rest of the nodes list */
-    while (NULL != (item = prrte_list_remove_first(nodes))) {
-        PRRTE_RELEASE(item);
+    while (NULL != (item = prte_list_remove_first(nodes))) {
+        PRTE_RELEASE(item);
     }
 
     /* the nodes list has been cleared - rebuild it in order */
-    while (NULL != (item = prrte_list_remove_first(&keep))) {
-        prrte_list_append(nodes, item);
+    while (NULL != (item = prte_list_remove_first(&keep))) {
+        prte_list_append(nodes, item);
     }
 
     /* did they ask for more than we could provide */
     if (!want_all_empty && 0 < num_empty) {
-        prrte_show_help("help-dash-host.txt", "dash-host:not-enough-empty",
+        prte_show_help("help-dash-host.txt", "dash-host:not-enough-empty",
                        true, num_empty);
-        rc = PRRTE_ERR_SILENT;
+        rc = PRTE_ERR_SILENT;
         goto cleanup;
     }
 
-    rc = PRRTE_SUCCESS;
+    rc = PRTE_SUCCESS;
     /* done filtering existing list */
 
 cleanup:
@@ -644,25 +644,25 @@ cleanup:
     return rc;
 }
 
-int prrte_util_get_ordered_dash_host_list(prrte_list_t *nodes,
+int prte_util_get_ordered_dash_host_list(prte_list_t *nodes,
                                          char *hosts)
 {
     int rc, i;
     char **mapped_nodes = NULL;
-    prrte_node_t *node;
+    prte_node_t *node;
 
-    if (PRRTE_SUCCESS != (rc = parse_dash_host(&mapped_nodes, hosts))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = parse_dash_host(&mapped_nodes, hosts))) {
+        PRTE_ERROR_LOG(rc);
     }
 
     /* for each entry, create a node entry on the list */
     for (i=0; NULL != mapped_nodes[i]; i++) {
-        node = PRRTE_NEW(prrte_node_t);
+        node = PRTE_NEW(prte_node_t);
         node->name = strdup(mapped_nodes[i]);
-        prrte_list_append(nodes, &node->super);
+        prte_list_append(nodes, &node->super);
     }
 
     /* cleanup */
-    prrte_argv_free(mapped_nodes);
+    prte_argv_free(mapped_nodes);
     return rc;
 }

@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -25,7 +25,7 @@
 #ifndef _MCA_OOB_TCP_CONNECTION_H_
 #define _MCA_OOB_TCP_CONNECTION_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -40,11 +40,11 @@
 
 /* State machine for connection operations */
 typedef struct {
-    prrte_object_t super;
-    prrte_oob_tcp_peer_t *peer;
-    prrte_event_t ev;
-} prrte_oob_tcp_conn_op_t;
-PRRTE_CLASS_DECLARATION(prrte_oob_tcp_conn_op_t);
+    prte_object_t super;
+    prte_oob_tcp_peer_t *peer;
+    prte_event_t ev;
+} prte_oob_tcp_conn_op_t;
+PRTE_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
 
 #define CLOSE_THE_SOCKET(socket)    \
     do {                            \
@@ -52,53 +52,53 @@ PRRTE_CLASS_DECLARATION(prrte_oob_tcp_conn_op_t);
         close(socket);              \
     } while(0)
 
-#define PRRTE_ACTIVATE_TCP_CONN_STATE(p, cbfunc)                         \
+#define PRTE_ACTIVATE_TCP_CONN_STATE(p, cbfunc)                         \
     do {                                                                \
-        prrte_oob_tcp_conn_op_t *cop;                                     \
-        prrte_output_verbose(5, prrte_oob_base_framework.framework_output, \
+        prte_oob_tcp_conn_op_t *cop;                                     \
+        prte_output_verbose(5, prte_oob_base_framework.framework_output, \
                             "%s:[%s:%d] connect to %s",                 \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),         \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
                             __FILE__, __LINE__,                         \
-                            PRRTE_NAME_PRINT((&(p)->name)));             \
-        cop = PRRTE_NEW(prrte_oob_tcp_conn_op_t);                           \
+                            PRTE_NAME_PRINT((&(p)->name)));             \
+        cop = PRTE_NEW(prte_oob_tcp_conn_op_t);                           \
         cop->peer = (p);                                                \
-        PRRTE_THREADSHIFT(cop, prrte_event_base, (cbfunc), PRRTE_MSG_PRI);    \
+        PRTE_THREADSHIFT(cop, prte_event_base, (cbfunc), PRTE_MSG_PRI);    \
     } while(0);
 
-#define PRRTE_ACTIVATE_TCP_ACCEPT_STATE(s, a, cbfunc)            \
+#define PRTE_ACTIVATE_TCP_ACCEPT_STATE(s, a, cbfunc)            \
     do {                                                        \
-        prrte_oob_tcp_conn_op_t *cop;                             \
-        cop = PRRTE_NEW(prrte_oob_tcp_conn_op_t);                   \
-        prrte_event_set(prrte_event_base, &cop->ev, s,      \
-                       PRRTE_EV_READ, (cbfunc), cop);            \
-        prrte_event_set_priority(&cop->ev, PRRTE_MSG_PRI);        \
-        PRRTE_POST_OBJECT(cop);                                  \
-        prrte_event_add(&cop->ev, 0);                            \
+        prte_oob_tcp_conn_op_t *cop;                             \
+        cop = PRTE_NEW(prte_oob_tcp_conn_op_t);                   \
+        prte_event_set(prte_event_base, &cop->ev, s,      \
+                       PRTE_EV_READ, (cbfunc), cop);            \
+        prte_event_set_priority(&cop->ev, PRTE_MSG_PRI);        \
+        PRTE_POST_OBJECT(cop);                                  \
+        prte_event_add(&cop->ev, 0);                            \
     } while(0);
 
-#define PRRTE_RETRY_TCP_CONN_STATE(p, cbfunc, tv)                        \
+#define PRTE_RETRY_TCP_CONN_STATE(p, cbfunc, tv)                        \
     do {                                                                \
-        prrte_oob_tcp_conn_op_t *cop;                                     \
-        prrte_output_verbose(5, prrte_oob_base_framework.framework_output, \
+        prte_oob_tcp_conn_op_t *cop;                                     \
+        prte_output_verbose(5, prte_oob_base_framework.framework_output, \
                             "%s:[%s:%d] retry connect to %s",           \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),         \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
                             __FILE__, __LINE__,                         \
-                            PRRTE_NAME_PRINT((&(p)->name)));             \
-        cop = PRRTE_NEW(prrte_oob_tcp_conn_op_t);                           \
+                            PRTE_NAME_PRINT((&(p)->name)));             \
+        cop = PRTE_NEW(prte_oob_tcp_conn_op_t);                           \
         cop->peer = (p);                                                \
-        prrte_event_evtimer_set(prrte_event_base,                            \
+        prte_event_evtimer_set(prte_event_base,                            \
                                &cop->ev,                                \
                                (cbfunc), cop);                          \
-        PRRTE_POST_OBJECT(cop);                                          \
-        prrte_event_evtimer_add(&cop->ev, (tv));                         \
+        PRTE_POST_OBJECT(cop);                                          \
+        prte_event_evtimer_add(&cop->ev, (tv));                         \
     } while(0);
 
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata);
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_peer_dump(prrte_oob_tcp_peer_t* peer, const char* msg);
-PRRTE_MODULE_EXPORT bool prrte_oob_tcp_peer_accept(prrte_oob_tcp_peer_t* peer);
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_peer_complete_connect(prrte_oob_tcp_peer_t* peer);
-PRRTE_MODULE_EXPORT int prrte_oob_tcp_peer_recv_connect_ack(prrte_oob_tcp_peer_t* peer,
-                                                           int sd, prrte_oob_tcp_hdr_t *dhdr);
-PRRTE_MODULE_EXPORT void prrte_oob_tcp_peer_close(prrte_oob_tcp_peer_t *peer);
+PRTE_MODULE_EXPORT void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_oob_tcp_peer_dump(prte_oob_tcp_peer_t* peer, const char* msg);
+PRTE_MODULE_EXPORT bool prte_oob_tcp_peer_accept(prte_oob_tcp_peer_t* peer);
+PRTE_MODULE_EXPORT void prte_oob_tcp_peer_complete_connect(prte_oob_tcp_peer_t* peer);
+PRTE_MODULE_EXPORT int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t* peer,
+                                                           int sd, prte_oob_tcp_hdr_t *dhdr);
+PRTE_MODULE_EXPORT void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer);
 
 #endif /* _MCA_OOB_TCP_CONNECTION_H_ */

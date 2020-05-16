@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2010-2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -20,10 +20,10 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_LISTENER_H
-#define PRRTE_LISTENER_H
+#ifndef PRTE_LISTENER_H
+#define PRTE_LISTENER_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -32,36 +32,36 @@
 #include <sys/socket.h>
 #endif
 
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
 #include "src/include/types.h"
 
 /* callback prototype */
-typedef void (*prrte_listener_callback_fn_t)(int sd, short args, void *cbdata);
+typedef void (*prte_listener_callback_fn_t)(int sd, short args, void *cbdata);
 
 /*
  * Data structure for accepting connections.
  */
-typedef struct prrte_listener_t {
-    prrte_list_item_t item;
+typedef struct prte_listener_t {
+    prte_list_item_t item;
     int sd;
-    prrte_event_base_t *evbase;
-    prrte_listener_callback_fn_t handler;
-} prrte_listener_t;
-PRRTE_CLASS_DECLARATION(prrte_listener_t);
+    prte_event_base_t *evbase;
+    prte_listener_callback_fn_t handler;
+} prte_listener_t;
+PRTE_CLASS_DECLARATION(prte_listener_t);
 
 typedef struct {
-    prrte_object_t super;
-    prrte_event_t ev;
+    prte_object_t super;
+    prte_event_t ev;
     int fd;
     struct sockaddr_storage addr;
-} prrte_pending_connection_t;
-PRRTE_CLASS_DECLARATION(prrte_pending_connection_t);
+} prte_pending_connection_t;
+PRTE_CLASS_DECLARATION(prte_pending_connection_t);
 
-PRRTE_EXPORT int prrte_start_listening(void);
-PRRTE_EXPORT void prrte_stop_listening(void);
-PRRTE_EXPORT int prrte_register_listener(struct sockaddr* address, prrte_socklen_t addrlen,
-                                         prrte_event_base_t *evbase,
-                                         prrte_listener_callback_fn_t handler);
+PRTE_EXPORT int prte_start_listening(void);
+PRTE_EXPORT void prte_stop_listening(void);
+PRTE_EXPORT int prte_register_listener(struct sockaddr* address, prte_socklen_t addrlen,
+                                         prte_event_base_t *evbase,
+                                         prte_listener_callback_fn_t handler);
 
-#endif /* PRRTE_LISTENER_H */
+#endif /* PRTE_LISTENER_H */

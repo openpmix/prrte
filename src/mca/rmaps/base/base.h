@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
@@ -23,21 +23,21 @@
  * rmaps framework base functionality.
  */
 
-#ifndef PRRTE_MCA_RMAPS_BASE_H
-#define PRRTE_MCA_RMAPS_BASE_H
+#ifndef PRTE_MCA_RMAPS_BASE_H
+#define PRTE_MCA_RMAPS_BASE_H
 
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 #include "src/util/printf.h"
 #include "src/mca/mca.h"
 
-#include "src/mca/base/prrte_mca_base_framework.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/rmaps/rmaps.h"
 
@@ -46,9 +46,9 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_rmaps_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_rmaps_base_framework;
 /* select a component */
-PRRTE_EXPORT    int prrte_rmaps_base_select(void);
+PRTE_EXPORT    int prte_rmaps_base_select(void);
 
 /*
  * Global functions for MCA overall collective open and close
@@ -59,65 +59,65 @@ PRRTE_EXPORT    int prrte_rmaps_base_select(void);
  */
 typedef struct {
     /* list of selected modules */
-    prrte_list_t selected_modules;
+    prte_list_t selected_modules;
     /* default mapping/ranking directives */
-    prrte_mapping_policy_t mapping;
-    prrte_ranking_policy_t ranking;
+    prte_mapping_policy_t mapping;
+    prte_ranking_policy_t ranking;
     /* default device for dist mapping */
     char *device;
     /* whether or not child jobs should inherit mapping/ranking/binding directives from their parent by default */
     bool inherit;
     /* whether or not we are using hwthreads as independent cpus by default */
     bool hwthread_cpus;
-} prrte_rmaps_base_t;
+} prte_rmaps_base_t;
 
 /**
  * Global instance of rmaps-wide framework data
  */
-PRRTE_EXPORT extern prrte_rmaps_base_t prrte_rmaps_base;
+PRTE_EXPORT extern prte_rmaps_base_t prte_rmaps_base;
 
 /**
  * Select an rmaps component / module
  */
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     int pri;
-    prrte_rmaps_base_module_t *module;
-    prrte_mca_base_component_t *component;
-} prrte_rmaps_base_selected_module_t;
-PRRTE_CLASS_DECLARATION(prrte_rmaps_base_selected_module_t);
+    prte_rmaps_base_module_t *module;
+    prte_mca_base_component_t *component;
+} prte_rmaps_base_selected_module_t;
+PRTE_CLASS_DECLARATION(prte_rmaps_base_selected_module_t);
 
 /*
  * Map a job
  */
-PRRTE_EXPORT void prrte_rmaps_base_map_job(int sd, short args, void *cbdata);
-PRRTE_EXPORT int prrte_rmaps_base_assign_locations(prrte_job_t *jdata);
+PRTE_EXPORT void prte_rmaps_base_map_job(int sd, short args, void *cbdata);
+PRTE_EXPORT int prte_rmaps_base_assign_locations(prte_job_t *jdata);
 
 /**
  * Utility routines to get/set vpid mapping for the job
  */
 
-PRRTE_EXPORT int prrte_rmaps_base_get_vpid_range(prrte_jobid_t jobid,
-                                                 prrte_vpid_t *start,
-                                                 prrte_vpid_t *range);
-PRRTE_EXPORT int prrte_rmaps_base_set_vpid_range(prrte_jobid_t jobid,
-                                                 prrte_vpid_t start,
-                                                 prrte_vpid_t range);
+PRTE_EXPORT int prte_rmaps_base_get_vpid_range(prte_jobid_t jobid,
+                                                 prte_vpid_t *start,
+                                                 prte_vpid_t *range);
+PRTE_EXPORT int prte_rmaps_base_set_vpid_range(prte_jobid_t jobid,
+                                                 prte_vpid_t start,
+                                                 prte_vpid_t range);
 
 /* pretty-print functions */
-PRRTE_EXPORT char* prrte_rmaps_base_print_mapping(prrte_mapping_policy_t mapping);
-PRRTE_EXPORT char* prrte_rmaps_base_print_ranking(prrte_ranking_policy_t ranking);
+PRTE_EXPORT char* prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping);
+PRTE_EXPORT char* prte_rmaps_base_print_ranking(prte_ranking_policy_t ranking);
 
-PRRTE_EXPORT int prrte_rmaps_base_prep_topology(hwloc_topology_t topo);
+PRTE_EXPORT int prte_rmaps_base_prep_topology(hwloc_topology_t topo);
 
-PRRTE_EXPORT int prrte_rmaps_base_filter_nodes(prrte_app_context_t *app,
-                                               prrte_list_t *nodes,
+PRTE_EXPORT int prte_rmaps_base_filter_nodes(prte_app_context_t *app,
+                                               prte_list_t *nodes,
                                                bool remove);
 
-PRRTE_EXPORT int prrte_rmaps_base_set_mapping_policy(prrte_job_t *jdata, char *spec);
-PRRTE_EXPORT int prrte_rmaps_base_set_ranking_policy(prrte_job_t *jdata, char *spec);
+PRTE_EXPORT int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *spec);
+PRTE_EXPORT int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec);
 
-PRRTE_EXPORT void prrte_rmaps_base_display_map(prrte_job_t *jdata);
+PRTE_EXPORT void prte_rmaps_base_display_map(prte_job_t *jdata);
 
 END_C_DECLS
 

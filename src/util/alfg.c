@@ -4,6 +4,7 @@
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -11,7 +12,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <string.h>
 
@@ -57,16 +58,16 @@ static uint32_t galois(unsigned int *seed){
     return lsb;
 }
 
-/* PRRTE global rng buffer */
-static prrte_rng_buff_t alfg_buffer;
+/* PRTE global rng buffer */
+static prte_rng_buff_t alfg_buffer;
 
 /**
  * @brief   Routine to seed the ALFG register
  *
  * @param[in]   uint32_t seed
- * @param[out]  prrte_rng_buff_t *buff: handle to ALFG buffer state
+ * @param[out]  prte_rng_buff_t *buff: handle to ALFG buffer state
  */
-int prrte_srand(prrte_rng_buff_t *buff, uint32_t seed) {
+int prte_srand(prte_rng_buff_t *buff, uint32_t seed) {
 
     int i, j;
     uint32_t seed_cpy = seed;
@@ -98,11 +99,11 @@ int prrte_srand(prrte_rng_buff_t *buff, uint32_t seed) {
 /**
  * @brief       The additive lagged Fibonnaci PRNG
  *
- * @param[in]   prrte_rng_buff_t *buff: handle to ALFG buffer state
+ * @param[in]   prte_rng_buff_t *buff: handle to ALFG buffer state
  * @param[out]  32-bit unsigned random integer
  */
 
-uint32_t prrte_rand(prrte_rng_buff_t *buff){
+uint32_t prte_rand(prte_rng_buff_t *buff){
 
     int *tap1 = &(buff->tap1);
     int *tap2 = &(buff->tap2);
@@ -125,12 +126,12 @@ uint32_t prrte_rand(prrte_rng_buff_t *buff){
 }
 
 /**
- * @brief      A wrapper for prrte_rand() with our global ALFG buffer;
+ * @brief      A wrapper for prte_rand() with our global ALFG buffer;
  *
  * @param[in]  none
  * @param[out] int, the same as normal rand(3)
  */
-int prrte_random(void){
+int prte_random(void){
     /* always return a positive int */
-    return (int)(prrte_rand(&alfg_buffer) & 0x7FFFFFFF);
+    return (int)(prte_rand(&alfg_buffer) & 0x7FFFFFFF);
 }

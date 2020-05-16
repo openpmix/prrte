@@ -1,6 +1,6 @@
 # NAME
 
-pterm - Terminate an instance of the PMIx Reference RTE (PRRTE)
+pterm - Terminate an instance of the PMIx Reference RTE (PRTE)
 
 # SYNOPSIS
 
@@ -11,7 +11,7 @@ pterm JMS write some more here
 # DESCRIPTION
 
 `pterm` terminates an instance of the PMIx reference run time
-environment (PRRTE).
+environment (PRTE).
 
 JMS write more here
 
@@ -20,10 +20,10 @@ JMS write more here
 JMS `pterm --help` shows this:
 
 ```
-pterm (PRRTE) 2.0.0a1
+pterm (PRTE) 2.0.0a1
 
 Usage: pterm [OPTION]...
-Terminate an instance of the PMIx Reference RTE (PRRTE)
+Terminate an instance of the PMIx Reference RTE (PRTE)
 
 /*****      General Options      *****/
 
@@ -46,6 +46,6 @@ Terminate an instance of the PMIx Reference RTE (PRRTE)
 
 # AUTHORS
 
-The PRRTE maintainers -- see
-[https://github.com/openpmix/prrte](https://github.com/openpmix/prrte)
+The PRTE maintainers -- see
+[https://github.com/openpmix/prte](https://github.com/openpmix/prte)
 or the file `AUTHORS`.

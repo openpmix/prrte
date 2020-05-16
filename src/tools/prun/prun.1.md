@@ -469,7 +469,7 @@ For debugging:
 `-debug, --debug`
 
 :   Invoke the user-level debugger indicated by the
-    `prrte_base_user_debugger` MCA parameter.
+    `prte_base_user_debugger` MCA parameter.
 
 `--get-stack-traces`
 
@@ -482,7 +482,7 @@ For debugging:
 `-debugger, --debugger <args>`
 
 :   Sequence of debuggers to search for when `--debug` is used (i.e. a
-    synonym for `prrte_base_user_debugger` MCA parameter).
+    synonym for `prte_base_user_debugger` MCA parameter).
 
 `--timeout <seconds>`
 
@@ -1245,7 +1245,7 @@ PMIX_MCA_<key>=<value>
 
 Thus, the `-pmca` switch overrides any previously set environment
 variables. The `-pmca` settings similarly override MCA parameters set in
-the $PRRTE_PREFIX/etc/psrvr-mca-params.conf or
+the $PRTE_PREFIX/etc/psrvr-mca-params.conf or
 $HOME/.psrvr/mca-params.conf file.
 
 Unknown `<key>` arguments are still set as environment variable --
@@ -1328,7 +1328,7 @@ It is not anticipated that this situation will occur frequently.
 However, in the interest of serving the broader community, PSRVR now has
 a means for allowing users to direct that jobs be aborted upon any
 process exiting with non-zero status. Setting the MCA parameter
-"prrte_abort_on_non_zero_status" to 1 will cause PSRVR to abort
+"prte_abort_on_non_zero_status" to 1 will cause PSRVR to abort
 all processes once any process exits with non-zero status.
 
 Terminations caused in this manner will be reported on the console as an

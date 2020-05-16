@@ -13,6 +13,7 @@
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,12 +21,12 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
-#include "src/mca/base/prrte_mca_base_component_repository.h"
+#include "src/mca/base/prte_mca_base_component_repository.h"
 
 #include "src/util/proc_info.h"
 
@@ -38,21 +39,21 @@
  * available.
  */
 
-int prrte_plm_base_select(void)
+int prte_plm_base_select(void)
 {
     int rc;
-    prrte_plm_base_component_t *best_component = NULL;
-    prrte_plm_base_module_t *best_module = NULL;
+    prte_plm_base_component_t *best_component = NULL;
+    prte_plm_base_module_t *best_module = NULL;
 
     /*
      * Select the best component
      */
-    if (PRRTE_SUCCESS == (rc = prrte_mca_base_select("plm", prrte_plm_base_framework.framework_output,
-                                                     &prrte_plm_base_framework.framework_components,
-                                                     (prrte_mca_base_module_t **) &best_module,
-                                                     (prrte_mca_base_component_t **) &best_component, NULL))) {
+    if (PRTE_SUCCESS == (rc = prte_mca_base_select("plm", prte_plm_base_framework.framework_output,
+                                                     &prte_plm_base_framework.framework_components,
+                                                     (prte_mca_base_module_t **) &best_module,
+                                                     (prte_mca_base_component_t **) &best_component, NULL))) {
         /* Save the winner */
-        prrte_plm = *best_module;
+        prte_plm = *best_module;
     }
 
     return rc;

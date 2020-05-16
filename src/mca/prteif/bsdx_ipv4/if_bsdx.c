@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
@@ -9,7 +9,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -27,17 +27,17 @@ static int if_bsdx_open(void);
  * OpenBSD
  * DragonFly
  */
-prrte_if_base_component_t prrte_prteif_bsdx_ipv4_component = {
+prte_if_base_component_t prte_prteif_bsdx_ipv4_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     {
-        PRRTE_IF_BASE_VERSION_2_0_0,
+        PRTE_IF_BASE_VERSION_2_0_0,
 
         /* Component name and version */
         "bsdx_ipv4",
-        PRRTE_MAJOR_VERSION,
-        PRRTE_MINOR_VERSION,
-        PRRTE_RELEASE_VERSION,
+        PRTE_MAJOR_VERSION,
+        PRTE_MINOR_VERSION,
+        PRTE_RELEASE_VERSION,
 
         /* Component open and close functions */
         if_bsdx_open,
@@ -45,7 +45,7 @@ prrte_if_base_component_t prrte_prteif_bsdx_ipv4_component = {
     },
     {
         /* This component is checkpointable */
-        PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
     },
 };
 
@@ -83,14 +83,14 @@ static int if_bsdx_open(void)
 
     /* create the linked list of ifaddrs structs */
     if (getifaddrs(ifadd_list) < 0) {
-        prrte_output(0, "prrte_ifinit: getifaddrs() failed with error=%d\n",
+        prte_output(0, "prte_ifinit: getifaddrs() failed with error=%d\n",
                     errno);
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     for (cur_ifaddrs = *ifadd_list; NULL != cur_ifaddrs;
          cur_ifaddrs = cur_ifaddrs->ifa_next) {
-        prrte_if_t *intf;
+        prte_if_t *intf;
         struct in_addr a4;
 
         /* skip non- af_inet interface addresses */
@@ -104,7 +104,7 @@ static int if_bsdx_open(void)
         }
 
         /* skip interface if it is a loopback device (IFF_LOOPBACK set) */
-        if (!prrte_if_retain_loopback && 0 != (cur_ifaddrs->ifa_flags & IFF_LOOPBACK)) {
+        if (!prte_if_retain_loopback && 0 != (cur_ifaddrs->ifa_flags & IFF_LOOPBACK)) {
             continue;
         }
 
@@ -116,19 +116,19 @@ static int if_bsdx_open(void)
 
         sin_addr = (struct sockaddr_in *) cur_ifaddrs->ifa_addr;
 
-        intf = PRRTE_NEW(prrte_if_t);
+        intf = PRTE_NEW(prte_if_t);
         if (NULL == intf) {
-            prrte_output(0, "prrte_ifinit: unable to allocate %d bytes\n",
-                        (int) sizeof(prrte_if_t));
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            prte_output(0, "prte_ifinit: unable to allocate %d bytes\n",
+                        (int) sizeof(prte_if_t));
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
         intf->af_family = AF_INET;
 
-        /* fill values into the prrte_if_t */
+        /* fill values into the prte_if_t */
         memcpy(&a4, &(sin_addr->sin_addr), sizeof(struct in_addr));
 
-        prrte_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PRRTE_IF_NAMESIZE);
-        intf->if_index = prrte_list_get_size(&prrte_if_list) + 1;
+        prte_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PRTE_IF_NAMESIZE);
+        intf->if_index = prte_list_get_size(&prte_if_list) + 1;
         ((struct sockaddr_in*) &intf->if_addr)->sin_addr = a4;
         ((struct sockaddr_in*) &intf->if_addr)->sin_family = AF_INET;
         ((struct sockaddr_in*) &intf->if_addr)->sin_len =  cur_ifaddrs->ifa_addr->sa_len;
@@ -139,10 +139,10 @@ static int if_bsdx_open(void)
         intf->if_kernel_index =
             (uint16_t) if_nametoindex(cur_ifaddrs->ifa_name);
 
-        prrte_list_append(&prrte_if_list, &(intf->super));
+        prte_list_append(&prte_if_list, &(intf->super));
     }   /*  of for loop over ifaddrs list */
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 

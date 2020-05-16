@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2009      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
@@ -24,7 +24,7 @@
  */
 /** @file:
  *
- * The PRRTE Error and Recovery Manager (ErrMgr)
+ * The PRTE Error and Recovery Manager (ErrMgr)
  *
  * This framework is the logically central clearing house for process/daemon
  * state updates. In particular when a process fails and another process detects
@@ -39,26 +39,26 @@
  *
  */
 
-#ifndef PRRTE_MCA_ERRMGR_H
-#define PRRTE_MCA_ERRMGR_H
+#ifndef PRTE_MCA_ERRMGR_H
+#define PRTE_MCA_ERRMGR_H
 
 /*
  * includes
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 #include "types.h"
 
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
 
-#include "src/class/prrte_object.h"
-#include "src/class/prrte_pointer_array.h"
+#include "src/class/prte_object.h"
+#include "src/class/prte_pointer_array.h"
 #include "src/util/output.h"
 #include "src/util/error.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/plm/plm_types.h"
 
 BEGIN_C_DECLS
@@ -71,7 +71,7 @@ BEGIN_C_DECLS
  * messages.
  */
 
-#define PRRTE_ERROR_NAME(n)  prrte_strerror(n)
+#define PRTE_ERROR_NAME(n)  prte_strerror(n)
 
 /*
  * Framework Interfaces
@@ -79,23 +79,23 @@ BEGIN_C_DECLS
 /**
  * Module initialization function.
  *
- * @retval PRRTE_SUCCESS The operation completed successfully
- * @retval PRRTE_ERROR   An unspecifed error occurred
+ * @retval PRTE_SUCCESS The operation completed successfully
+ * @retval PRTE_ERROR   An unspecifed error occurred
  */
-typedef int (*prrte_errmgr_base_module_init_fn_t)(void);
+typedef int (*prte_errmgr_base_module_init_fn_t)(void);
 
 /**
  * Module finalization function.
  *
- * @retval PRRTE_SUCCESS The operation completed successfully
- * @retval PRRTE_ERROR   An unspecifed error occurred
+ * @retval PRTE_SUCCESS The operation completed successfully
+ * @retval PRTE_ERROR   An unspecifed error occurred
  */
-typedef int (*prrte_errmgr_base_module_finalize_fn_t)(void);
+typedef int (*prte_errmgr_base_module_finalize_fn_t)(void);
 
 /**
  * This is not part of any module so it can be used at any time!
  */
-typedef void (*prrte_errmgr_base_module_log_fn_t)(int error_code, char *filename, int line);
+typedef void (*prte_errmgr_base_module_log_fn_t)(int error_code, char *filename, int line);
 
 /**
  * Alert - self aborting
@@ -104,8 +104,8 @@ typedef void (*prrte_errmgr_base_module_log_fn_t)(int error_code, char *filename
  * itself, and then exit - it takes no other actions. The intent here is to provide
  * a last-ditch exit procedure that attempts to clean up a little.
  */
-typedef void (*prrte_errmgr_base_module_abort_fn_t)(int error_code, char *fmt, ...)
-__prrte_attribute_format_funcptr__(__printf__, 2, 3);
+typedef void (*prte_errmgr_base_module_abort_fn_t)(int error_code, char *fmt, ...)
+__prte_attribute_format_funcptr__(__printf__, 2, 3);
 
 /**
  * Alert - abort peers
@@ -113,51 +113,51 @@ __prrte_attribute_format_funcptr__(__printf__, 2, 3);
  *  For example, MPI_Abort(comm) will use this function to terminate peers in the
  *  communicator group before aborting itself.
  */
-typedef int (*prrte_errmgr_base_module_abort_peers_fn_t)(prrte_process_name_t *procs,
-                                                        prrte_std_cntr_t num_procs,
+typedef int (*prte_errmgr_base_module_abort_peers_fn_t)(prte_process_name_t *procs,
+                                                        prte_std_cntr_t num_procs,
                                                         int error_code);
 
 /*
  * Module Structure
  */
-struct prrte_errmgr_base_module_2_3_0_t {
+struct prte_errmgr_base_module_2_3_0_t {
     /** Initialization Function */
-    prrte_errmgr_base_module_init_fn_t                       init;
+    prte_errmgr_base_module_init_fn_t                       init;
     /** Finalization Function */
-    prrte_errmgr_base_module_finalize_fn_t                   finalize;
+    prte_errmgr_base_module_finalize_fn_t                   finalize;
 
-    prrte_errmgr_base_module_log_fn_t                        logfn;
-    prrte_errmgr_base_module_abort_fn_t                      abort;
-    prrte_errmgr_base_module_abort_peers_fn_t                abort_peers;
+    prte_errmgr_base_module_log_fn_t                        logfn;
+    prte_errmgr_base_module_abort_fn_t                      abort;
+    prte_errmgr_base_module_abort_peers_fn_t                abort_peers;
 };
-typedef struct prrte_errmgr_base_module_2_3_0_t prrte_errmgr_base_module_2_3_0_t;
-typedef prrte_errmgr_base_module_2_3_0_t prrte_errmgr_base_module_t;
-PRRTE_EXPORT extern prrte_errmgr_base_module_t prrte_errmgr;
+typedef struct prte_errmgr_base_module_2_3_0_t prte_errmgr_base_module_2_3_0_t;
+typedef prte_errmgr_base_module_2_3_0_t prte_errmgr_base_module_t;
+PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr;
 
 /*
  * ErrMgr Component
  */
-struct prrte_errmgr_base_component_3_0_0_t {
+struct prte_errmgr_base_component_3_0_0_t {
     /** MCA base component */
-    prrte_mca_base_component_t base_version;
+    prte_mca_base_component_t base_version;
     /** MCA base data */
-    prrte_mca_base_component_data_t base_data;
+    prte_mca_base_component_data_t base_data;
 
     /** Verbosity Level */
     int verbose;
-    /** Output Handle for prrte_output */
+    /** Output Handle for prte_output */
     int output_handle;
     /** Default Priority */
     int priority;
 };
-typedef struct prrte_errmgr_base_component_3_0_0_t prrte_errmgr_base_component_3_0_0_t;
-typedef prrte_errmgr_base_component_3_0_0_t prrte_errmgr_base_component_t;
+typedef struct prte_errmgr_base_component_3_0_0_t prte_errmgr_base_component_3_0_0_t;
+typedef prte_errmgr_base_component_3_0_0_t prte_errmgr_base_component_t;
 
 /*
  * Macro for use in components that are of type errmgr
  */
-#define PRRTE_ERRMGR_BASE_VERSION_3_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("errmgr", 3, 0, 0)
+#define PRTE_ERRMGR_BASE_VERSION_3_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("errmgr", 3, 0, 0)
 
 END_C_DECLS
 

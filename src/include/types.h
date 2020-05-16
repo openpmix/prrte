@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,10 +19,10 @@
  */
 /** @file */
 
-#ifndef PRRTE_TYPES_H
-#define PRRTE_TYPES_H
+#ifndef PRTE_TYPES_H
+#define PRTE_TYPES_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdint.h>
 #ifdef HAVE_SYS_TYPES_H
@@ -40,7 +41,7 @@
 #include <arpa/inet.h>
 #endif
 
-#if PRRTE_ENABLE_DEBUG
+#if PRTE_ENABLE_DEBUG
 #include "src/util/output.h"
 #endif
 
@@ -50,11 +51,11 @@
  * Supported datatypes for messaging and storage operations.
  */
 
-typedef int32_t prrte_std_cntr_t;  /** standard counters used in PRRTE */
-#define PRRTE_STD_CNTR_T         PRRTE_INT32
-#define PRRTE_STD_CNTR_MAX       INT32_MAX
-#define PRRTE_STD_CNTR_MIN       INT32_MIN
-#define PRRTE_STD_CNTR_INVALID   -1
+typedef int32_t prte_std_cntr_t;  /** standard counters used in PRTE */
+#define PRTE_STD_CNTR_T         PRTE_INT32
+#define PRTE_STD_CNTR_MAX       INT32_MAX
+#define PRTE_STD_CNTR_MIN       INT32_MIN
+#define PRTE_STD_CNTR_INVALID   -1
 
 /** rank on node, used for both local and node rank. We
  * don't send these around on their own, so don't create
@@ -62,40 +63,40 @@ typedef int32_t prrte_std_cntr_t;  /** standard counters used in PRRTE */
  * here solely for readability in the code and so we have
  * one place where any future changes can be made
  */
-typedef uint16_t prrte_local_rank_t;
-typedef uint16_t prrte_node_rank_t;
-#define PRRTE_LOCAL_RANK         PRRTE_UINT16
-#define PRRTE_NODE_RANK          PRRTE_UINT16
-#define PRRTE_LOCAL_RANK_MAX     UINT16_MAX-1
-#define PRRTE_NODE_RANK_MAX      UINT16_MAX-1
-#define PRRTE_LOCAL_RANK_INVALID UINT16_MAX
-#define PRRTE_NODE_RANK_INVALID  UINT16_MAX
+typedef uint16_t prte_local_rank_t;
+typedef uint16_t prte_node_rank_t;
+#define PRTE_LOCAL_RANK         PRTE_UINT16
+#define PRTE_NODE_RANK          PRTE_UINT16
+#define PRTE_LOCAL_RANK_MAX     UINT16_MAX-1
+#define PRTE_NODE_RANK_MAX      UINT16_MAX-1
+#define PRTE_LOCAL_RANK_INVALID UINT16_MAX
+#define PRTE_NODE_RANK_INVALID  UINT16_MAX
 
 /* index for app_contexts */
-typedef uint32_t prrte_app_idx_t;
-#define PRRTE_APP_IDX        PRRTE_UINT32
-#define PRRTE_APP_IDX_MAX    UINT32_MAX
+typedef uint32_t prte_app_idx_t;
+#define PRTE_APP_IDX        PRTE_UINT32
+#define PRTE_APP_IDX_MAX    UINT32_MAX
 
 /* general typedefs & structures */
 
 #if !defined(WORDS_BIGENDIAN)
-#define PRRTE_PROCESS_NAME_NTOH(guid) prrte_process_name_ntoh_intr(&(guid))
-static inline __prrte_attribute_always_inline__ void
-prrte_process_name_ntoh_intr(prrte_process_name_t *name)
+#define PRTE_PROCESS_NAME_NTOH(guid) prte_process_name_ntoh_intr(&(guid))
+static inline __prte_attribute_always_inline__ void
+prte_process_name_ntoh_intr(prte_process_name_t *name)
 {
     name->jobid = ntohl(name->jobid);
     name->vpid = ntohl(name->vpid);
 }
-#define PRRTE_PROCESS_NAME_HTON(guid) prrte_process_name_hton_intr(&(guid))
-static inline __prrte_attribute_always_inline__ void
-prrte_process_name_hton_intr(prrte_process_name_t *name)
+#define PRTE_PROCESS_NAME_HTON(guid) prte_process_name_hton_intr(&(guid))
+static inline __prte_attribute_always_inline__ void
+prte_process_name_hton_intr(prte_process_name_t *name)
 {
     name->jobid = htonl(name->jobid);
     name->vpid = htonl(name->vpid);
 }
 #else
-#define PRRTE_PROCESS_NAME_NTOH(guid)
-#define PRRTE_PROCESS_NAME_HTON(guid)
+#define PRTE_PROCESS_NAME_NTOH(guid)
+#define PRTE_PROCESS_NAME_HTON(guid)
 #endif
 
 /*
@@ -110,18 +111,18 @@ typedef union {
        uint32_t uval;
        uint32_t lval;
    } sval;
-} prrte_ptr_t;
+} prte_ptr_t;
 
 /*
  * handle differences in iovec
  */
 
 #if defined(__APPLE__) || defined(__WINDOWS__)
-typedef char* prrte_iov_base_ptr_t;
-#define PRRTE_IOVBASE char
+typedef char* prte_iov_base_ptr_t;
+#define PRTE_IOVBASE char
 #else
-#define PRRTE_IOVBASE void
-typedef void* prrte_iov_base_ptr_t;
+#define PRTE_IOVBASE void
+typedef void* prte_iov_base_ptr_t;
 #endif
 
 /*
@@ -129,16 +130,16 @@ typedef void* prrte_iov_base_ptr_t;
  */
 
 #if defined(HAVE_SOCKLEN_T)
-typedef socklen_t prrte_socklen_t;
+typedef socklen_t prte_socklen_t;
 #else
-typedef int prrte_socklen_t;
+typedef int prte_socklen_t;
 #endif
 
 /*
  * Convert a 64 bit value to network byte order.
  */
-static inline uint64_t prrte_hton64(uint64_t val) __prrte_attribute_const__;
-static inline uint64_t prrte_hton64(uint64_t val)
+static inline uint64_t prte_hton64(uint64_t val) __prte_attribute_const__;
+static inline uint64_t prte_hton64(uint64_t val)
 {
 #ifdef HAVE_UNIX_BYTESWAP
     union { uint64_t ll;
@@ -161,8 +162,8 @@ static inline uint64_t prrte_hton64(uint64_t val)
  * Convert a 64 bit value from network to host byte order.
  */
 
-static inline uint64_t prrte_ntoh64(uint64_t val) __prrte_attribute_const__;
-static inline uint64_t prrte_ntoh64(uint64_t val)
+static inline uint64_t prte_ntoh64(uint64_t val) __prte_attribute_const__;
+static inline uint64_t prte_ntoh64(uint64_t val)
 {
 #ifdef HAVE_UNIX_BYTESWAP
     union { uint64_t ll;
@@ -185,26 +186,26 @@ static inline uint64_t prrte_ntoh64(uint64_t val)
 /**
  * Convert between a local representation of pointer and a 64 bits value.
  */
-static inline uint64_t prrte_ptr_ptol( void* ptr ) __prrte_attribute_const__;
-static inline uint64_t prrte_ptr_ptol( void* ptr )
+static inline uint64_t prte_ptr_ptol( void* ptr ) __prte_attribute_const__;
+static inline uint64_t prte_ptr_ptol( void* ptr )
 {
     return (uint64_t)(uintptr_t) ptr;
 }
 
-static inline void* prrte_ptr_ltop( uint64_t value ) __prrte_attribute_const__;
-static inline void* prrte_ptr_ltop( uint64_t value )
+static inline void* prte_ptr_ltop( uint64_t value ) __prte_attribute_const__;
+static inline void* prte_ptr_ltop( uint64_t value )
 {
-#if SIZEOF_VOID_P == 4 && PRRTE_ENABLE_DEBUG
+#if SIZEOF_VOID_P == 4 && PRTE_ENABLE_DEBUG
     if (value > ((1ULL << 32) - 1ULL)) {
-        prrte_output(0, "Warning: truncating value in prrte_ptr_ltop");
+        prte_output(0, "Warning: truncating value in prte_ptr_ltop");
     }
 #endif
     return (void*)(uintptr_t) value;
 }
 
 #if defined(WORDS_BIGENDIAN) || !defined(HAVE_UNIX_BYTESWAP)
-static inline uint16_t prrte_swap_bytes2(uint16_t val) __prrte_attribute_const__;
-static inline uint16_t prrte_swap_bytes2(uint16_t val)
+static inline uint16_t prte_swap_bytes2(uint16_t val) __prte_attribute_const__;
+static inline uint16_t prte_swap_bytes2(uint16_t val)
 {
     union { uint16_t bigval;
             uint8_t  arrayval[2];
@@ -217,8 +218,8 @@ static inline uint16_t prrte_swap_bytes2(uint16_t val)
     return r.bigval;
 }
 
-static inline uint32_t prrte_swap_bytes4(uint32_t val) __prrte_attribute_const__;
-static inline uint32_t prrte_swap_bytes4(uint32_t val)
+static inline uint32_t prte_swap_bytes4(uint32_t val) __prte_attribute_const__;
+static inline uint32_t prte_swap_bytes4(uint32_t val)
 {
     union { uint32_t bigval;
             uint8_t  arrayval[4];
@@ -233,8 +234,8 @@ static inline uint32_t prrte_swap_bytes4(uint32_t val)
     return r.bigval;
 }
 
-static inline uint64_t prrte_swap_bytes8(uint64_t val) __prrte_attribute_const__;
-static inline uint64_t prrte_swap_bytes8(uint64_t val)
+static inline uint64_t prte_swap_bytes8(uint64_t val) __prte_attribute_const__;
+static inline uint64_t prte_swap_bytes8(uint64_t val)
 {
     union { uint64_t bigval;
             uint8_t  arrayval[8];
@@ -254,36 +255,36 @@ static inline uint64_t prrte_swap_bytes8(uint64_t val)
 }
 
 #else
-#define prrte_swap_bytes2 htons
-#define prrte_swap_bytes4 htonl
-#define prrte_swap_bytes8 prrte_hton64
+#define prte_swap_bytes2 htons
+#define prte_swap_bytes4 htonl
+#define prte_swap_bytes8 prte_hton64
 #endif /* WORDS_BIGENDIAN || !HAVE_UNIX_BYTESWAP */
 
-#define PRRTE_NAME_ARGS(n) \
-    (unsigned long) ((NULL == n) ? (unsigned long)PRRTE_JOBID_INVALID : (unsigned long)(n)->jobid), \
-    (unsigned long) ((NULL == n) ? (unsigned long)PRRTE_VPID_INVALID : (unsigned long)(n)->vpid) \
+#define PRTE_NAME_ARGS(n) \
+    (unsigned long) ((NULL == n) ? (unsigned long)PRTE_JOBID_INVALID : (unsigned long)(n)->jobid), \
+    (unsigned long) ((NULL == n) ? (unsigned long)PRTE_VPID_INVALID : (unsigned long)(n)->vpid) \
 
 /*
  * define invalid values
  */
-#define PRRTE_JOBID_INVALID          (PRRTE_JOBID_MAX + 2)
-#define PRRTE_VPID_INVALID           (PRRTE_VPID_MAX + 2)
-#define PRRTE_LOCAL_JOBID_INVALID    (PRRTE_JOBID_INVALID & 0x0000FFFF)
+#define PRTE_JOBID_INVALID          (PRTE_JOBID_MAX + 2)
+#define PRTE_VPID_INVALID           (PRTE_VPID_MAX + 2)
+#define PRTE_LOCAL_JOBID_INVALID    (PRTE_JOBID_INVALID & 0x0000FFFF)
 
 /*
  * define wildcard values
  */
-#define PRRTE_JOBID_WILDCARD         (PRRTE_JOBID_MAX + 1)
-#define PRRTE_VPID_WILDCARD          (PRRTE_VPID_MAX + 1)
-#define PRRTE_LOCAL_JOBID_WILDCARD   (PRRTE_JOBID_WILDCARD & 0x0000FFFF)
+#define PRTE_JOBID_WILDCARD         (PRTE_JOBID_MAX + 1)
+#define PRTE_VPID_WILDCARD          (PRTE_VPID_MAX + 1)
+#define PRTE_LOCAL_JOBID_WILDCARD   (PRTE_JOBID_WILDCARD & 0x0000FFFF)
 
-/* PRRTE attribute */
-typedef uint16_t prrte_attribute_key_t;
-#define PRRTE_ATTR_KEY_T   PRRTE_UINT16
+/* PRTE attribute */
+typedef uint16_t prte_attribute_key_t;
+#define PRTE_ATTR_KEY_T   PRTE_UINT16
 typedef struct {
-    prrte_list_item_t super;             /* required for this to be on lists */
-    prrte_attribute_key_t key;           /* key identifier */
-    prrte_data_type_t type;              /* the type of value stored */
+    prte_list_item_t super;             /* required for this to be on lists */
+    prte_attribute_key_t key;           /* key identifier */
+    prte_data_type_t type;              /* the type of value stored */
     bool local;                         // whether or not to pack/send this value
     union {
         bool flag;
@@ -301,17 +302,17 @@ typedef struct {
         uint16_t uint16;
         uint32_t uint32;
         uint64_t uint64;
-        prrte_byte_object_t bo;
-        prrte_buffer_t buf;
+        prte_byte_object_t bo;
+        prte_buffer_t buf;
         float fval;
         struct timeval tv;
         void *ptr;  // never packed or passed anywhere
-        prrte_vpid_t vpid;
-        prrte_jobid_t jobid;
-        prrte_process_name_t name;
-        prrte_envar_t envar;
+        prte_vpid_t vpid;
+        prte_jobid_t jobid;
+        prte_process_name_t name;
+        prte_envar_t envar;
     } data;
-} prrte_attribute_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_attribute_t);
+} prte_attribute_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_attribute_t);
 
 #endif

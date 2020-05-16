@@ -12,6 +12,7 @@
  * Copyright (c) 2014      Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,7 +28,7 @@
 
 #include "types.h"
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 #include "src/mca/common/alps/common_alps.h"
 
@@ -40,15 +41,15 @@
  * determine whether or not calling process is in a Cray PAGG container
  */
 
-int prrte_common_alps_proc_in_pagg(bool *flag)
+int prte_common_alps_proc_in_pagg(bool *flag)
 {
-    int rc = PRRTE_SUCCESS;
+    int rc = PRTE_SUCCESS;
     const char proc_job_file[]="/proc/job";
     FILE *fd = NULL, *fd_task_is_app = NULL;
     char task_is_app_fname[PATH_MAX];
 
     if (flag == NULL) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
 
     fd = fopen(proc_job_file, "r");

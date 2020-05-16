@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
@@ -31,7 +31,7 @@
  * installation).  Meaning: the static_components of the prtedl framework
  * will always contain 0 or 1 components.
  *
- * SIDENOTE: PRRTE used to embed libltprtedl.  However, as of early
+ * SIDENOTE: PRTE used to embed libltprtedl.  However, as of early
  * 2015, this became problematic, for a variety of complex and
  * uninteresting reasons (see the following if you care about the
  * details: https://github.com/open-mpi/ompi/issues/311,
@@ -45,10 +45,10 @@
  * like a good solution.
  */
 
-#ifndef PRRTE_MCA_DL_DL_H
-#define PRRTE_MCA_DL_DL_H
+#ifndef PRTE_MCA_DL_DL_H
+#define PRTE_MCA_DL_DL_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
@@ -58,8 +58,8 @@ BEGIN_C_DECLS
 /**
  * Handle for an opened file
  */
-struct prrte_dl_handle_t;
-typedef struct prrte_dl_handle_t prrte_dl_handle_t;
+struct prte_dl_handle_t;
+typedef struct prte_dl_handle_t prte_dl_handle_t;
 
 /**
  * Dynamically open the file specified.
@@ -73,22 +73,22 @@ typedef struct prrte_dl_handle_t prrte_dl_handle_t;
  *       Otherwise, open the file in a global namespace.
  *   handle = Upon successful open, a handle to the opened file will
  *       be returned.
- *   err_msg= if non-NULL and !=PRRTE_SUCCESS is returned, will point to a
+ *   err_msg= if non-NULL and !=PRTE_SUCCESS is returned, will point to a
  *       string error message
  *
  * Returns:
- *   PRRTE_SUCCESS on success, or PRRTE_ERROR
+ *   PRTE_SUCCESS on success, or PRTE_ERROR
  *
  * Space for the handle must be allocated by the module (it can be
- * freed during the call to prrte_prtedl_base_module_prtedlclose_fn_t).
+ * freed during the call to prte_prtedl_base_module_prtedlclose_fn_t).
  *
  * The err_msg points to an internal string and should not be altered
  * or freed by the caller.  The contents of the err_msg string may
- * change after successive calls to prrte_prtedl API calls.
+ * change after successive calls to prte_prtedl API calls.
  */
-typedef int (*prrte_prtedl_base_module_open_fn_t)
+typedef int (*prte_prtedl_base_module_open_fn_t)
     (const char *fname, bool use_ext, bool private_namespace,
-     prrte_dl_handle_t **handle, char **err_msg);
+     prte_dl_handle_t **handle, char **err_msg);
 
 /**
  * Lookup a symbol in an opened file.
@@ -97,18 +97,18 @@ typedef int (*prrte_prtedl_base_module_open_fn_t)
  *   handle = handle of a previously dynamically opened file
  *   symbol = name of the symbol to lookup
  *   ptr    = if found, a pointer to the symbol.  Otherwise, NULL.
- *   err_msg= if non-NULL and !=PRRTE_SUCCESS is returned, will point to a
+ *   err_msg= if non-NULL and !=PRTE_SUCCESS is returned, will point to a
  *            string error message
  * Returns:
- *   PRRTE_SUCCESS on success, or PRRTE_ERROR
+ *   PRTE_SUCCESS on success, or PRTE_ERROR
  *
  *
  * The err_msg points to an internal string and should not be altered
  * or freed by the caller.  The contents of the err_msg string may
- * change after successive calls to prrte_prtedl API calls.
+ * change after successive calls to prte_prtedl API calls.
  */
-typedef int (*prrte_prtedl_base_module_lookup_fn_t)
-    (prrte_dl_handle_t *handle, const char *symbol, void **ptr, char **err_msg);
+typedef int (*prte_prtedl_base_module_lookup_fn_t)
+    (prte_dl_handle_t *handle, const char *symbol, void **ptr, char **err_msg);
 
 /**
  * Dynamically close a previously dynamically-opened file.
@@ -116,13 +116,13 @@ typedef int (*prrte_prtedl_base_module_lookup_fn_t)
  * Arguments:
  *   handle = handle of a previously dynamically opened file.
  * Returns:
- *   PRRTE_SUCCESS on success, or PRRTE_ERROR
+ *   PRTE_SUCCESS on success, or PRTE_ERROR
  *
  * This function should close the file and free and resources
  * associated with it (e.g., whatever is cached on the handle).
  */
-typedef int (*prrte_prtedl_base_module_close_fn_t)
-    (prrte_dl_handle_t *handle);
+typedef int (*prte_prtedl_base_module_close_fn_t)
+    (prte_dl_handle_t *handle);
 
 /**
  * Search through a path of directories, invoking a callback on each
@@ -131,13 +131,13 @@ typedef int (*prrte_prtedl_base_module_close_fn_t)
  * parameter "foo").
  *
  * Arguments:
- *   path   = PRRTE_ENV_SEP-delimited list of directories
+ *   path   = PRTE_ENV_SEP-delimited list of directories
  *   cb_func= function to invoke on each filename found
  *   data   = context for callback function
  * Returns:
- *   PRRTE_SUCESS on success, PRRTE_ERR* otherwise
+ *   PRTE_SUCESS on success, PRTE_ERR* otherwise
  */
-typedef int (*prrte_prtedl_base_module_foreachfile_fn_t)
+typedef int (*prte_prtedl_base_module_foreachfile_fn_t)
     (const char *search_path,
      int (*cb_func)(const char *filename, void *context),
      void *context);
@@ -145,43 +145,43 @@ typedef int (*prrte_prtedl_base_module_foreachfile_fn_t)
 /**
  * Structure for DL components.
  */
-struct prrte_prtedl_base_component_1_0_0_t {
+struct prte_prtedl_base_component_1_0_0_t {
     /** MCA base component */
-    prrte_mca_base_component_t base_version;
+    prte_mca_base_component_t base_version;
     /** MCA base data */
-    prrte_mca_base_component_data_t base_data;
+    prte_mca_base_component_data_t base_data;
 
     /** Default priority */
     int priority;
 };
-typedef struct prrte_prtedl_base_component_1_0_0_t prrte_prtedl_base_component_1_0_0_t;
-typedef struct prrte_prtedl_base_component_1_0_0_t prrte_prtedl_base_component_t;
+typedef struct prte_prtedl_base_component_1_0_0_t prte_prtedl_base_component_1_0_0_t;
+typedef struct prte_prtedl_base_component_1_0_0_t prte_prtedl_base_component_t;
 
 /**
  * Structure for DL modules
  */
-struct prrte_prtedl_base_module_1_0_0_t {
-    prrte_mca_base_module_2_0_0_t                 super;
+struct prte_prtedl_base_module_1_0_0_t {
+    prte_mca_base_module_2_0_0_t                 super;
 
     /** Open / close */
-    prrte_prtedl_base_module_open_fn_t           open;
-    prrte_prtedl_base_module_close_fn_t          close;
+    prte_prtedl_base_module_open_fn_t           open;
+    prte_prtedl_base_module_close_fn_t          close;
 
     /** Lookup a symbol */
-    prrte_prtedl_base_module_lookup_fn_t         lookup;
+    prte_prtedl_base_module_lookup_fn_t         lookup;
 
     /** Iterate looking for files */
-    prrte_prtedl_base_module_foreachfile_fn_t    foreachfile;
+    prte_prtedl_base_module_foreachfile_fn_t    foreachfile;
 };
-typedef struct prrte_prtedl_base_module_1_0_0_t prrte_prtedl_base_module_1_0_0_t;
-typedef struct prrte_prtedl_base_module_1_0_0_t prrte_prtedl_base_module_t;
+typedef struct prte_prtedl_base_module_1_0_0_t prte_prtedl_base_module_1_0_0_t;
+typedef struct prte_prtedl_base_module_1_0_0_t prte_prtedl_base_module_t;
 
 /**
  * Macro for use in components that are of type DL
  */
-#define PRRTE_DL_BASE_VERSION_1_0_0              \
-    PRRTE_MCA_BASE_VERSION_2_1_0("prtedl", 1, 0, 0)
+#define PRTE_DL_BASE_VERSION_1_0_0              \
+    PRTE_MCA_BASE_VERSION_2_1_0("prtedl", 1, 0, 0)
 
 END_C_DECLS
 
-#endif /* PRRTE_MCA_DL_DL_H */
+#endif /* PRTE_MCA_DL_DL_H */

@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -18,12 +18,12 @@
 #
 # $HEADER$
 #
-AC_DEFUN([MCA_prrte_pstat_linux_PRIORITY], [60])
+AC_DEFUN([MCA_prte_pstat_linux_PRIORITY], [60])
 
 # MCA_pstat_linux_CONFIG(action-if-can-compile,
 #                        [action-if-cant-compile])
 # ------------------------------------------------
-AC_DEFUN([MCA_prrte_pstat_linux_CONFIG],[
+AC_DEFUN([MCA_prte_pstat_linux_CONFIG],[
     AC_CONFIG_FILES([src/mca/pstat/linux/Makefile])
 
    case "${host}" in

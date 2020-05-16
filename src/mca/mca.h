@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008-2012 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2016 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
@@ -28,12 +28,12 @@
  *
  * Historical notes:
  *
- * PRRTE originally used a v1.0.0 of the MCA component structs, but
+ * PRTE originally used a v1.0.0 of the MCA component structs, but
  * did not have a version number in the struct name.  If I recall
  * correctly, this is because we simply didn't think through (or never
  * envisioned) changing the MCA base component struct itself.  Oops.
  *
- * We made some changes in the base struct in PRRTE v1.3, and
+ * We made some changes in the base struct in PRTE v1.3, and
  * decided the following at the same time:
  *
  * - Bump the MCA version number to 2.0.0 and add some "reserved"
@@ -45,14 +45,14 @@
  *   the change).  If we need to add more space to the struct, we'll
  *   increment the major version number.
  * - The MCA base component struct now has a version number in it
- *   (starting with PRRTE v1.3, it is 2.0.0).
- * - As was an unstated assumption in prior versions of PRRTE, the
+ *   (starting with PRTE v1.3, it is 2.0.0).
+ * - As was an unstated assumption in prior versions of PRTE, the
  *   unversioned versions of struct names (both in the MCA base and in
  *   individual framework bases) are intended for components who want
  *   to be forward source-compatible.  That is, the unversioned struct
  *   name always represents the most recent interface version.  If you
  *   need to use an older version, you can explicitly use that older
- *   struct version name.  Please note, however, the PRRTE
+ *   struct version name.  Please note, however, the PRTE
  *   developers may not generally provide older versions of framework
  *   interface structs unless they know if someone outside of the Open
  *   MPI community needs it.
@@ -65,7 +65,7 @@
  *   are major changes coming in the v1.3 series, and does not expect to
  *   be able to use his v1.2 DSO binaries in v1.3.  As such, we are
  *   breaking backwards binary compatibility in v1.3: there is no
- *   possibility of loading an MCA v1.0 binary component in PRRTE
+ *   possibility of loading an MCA v1.0 binary component in PRTE
  *   v1.3 or beyond (source compatibility is much easier -- the binary
  *   "refuse to load MCA components <v2.0.0" policy is enforced in
  *   mca_base_component_find.c).
@@ -88,10 +88,10 @@
  *   the end that may account for future version data fields.
  */
 
-#ifndef PRRTE_MCA_H
-#define PRRTE_MCA_H
+#ifndef PRTE_MCA_H
+#define PRTE_MCA_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 /**
  * Common type for all MCA modules.
@@ -101,22 +101,22 @@
  * particular version of a specific framework, and to publish its own
  * name and version.
  */
-struct prrte_mca_base_module_2_0_0_t {
+struct prte_mca_base_module_2_0_0_t {
     int dummy_value;
 };
 /** Unversioned convenience typedef; use this name in
     frameworks/components to stay forward source-compatible */
-typedef struct prrte_mca_base_module_2_0_0_t prrte_mca_base_module_t;
+typedef struct prte_mca_base_module_2_0_0_t prte_mca_base_module_t;
 /** Versioned convenience typedef */
-typedef struct prrte_mca_base_module_2_0_0_t prrte_mca_base_module_2_0_0_t;
+typedef struct prte_mca_base_module_2_0_0_t prte_mca_base_module_2_0_0_t;
 
 
 /**
  * MCA component open function.
  *
- * @retval PRRTE_SUCCESS This component can be used in the process.
+ * @retval PRTE_SUCCESS This component can be used in the process.
  *
- * @retval PRRTE_ERR_NOT_AVAILABLE Silently ignore this component for
+ * @retval PRTE_ERR_NOT_AVAILABLE Silently ignore this component for
  * the duration of the process (it may even be unloaded from the
  * process).
  *
@@ -137,7 +137,7 @@ typedef struct prrte_mca_base_module_2_0_0_t prrte_mca_base_module_2_0_0_t;
  * This function can also be used to allocate any resources necessary
  * for the component (e.g., heap memory).
  *
- * This function should return PRRTE_SUCCESS if it wishes to remain
+ * This function should return PRTE_SUCCESS if it wishes to remain
  * loaded in the process.  Any other return value will cause the MCA
  * base to unload the component.  Although most components do not use
  * this mechanism to force themselves to be unloaded (because if they
@@ -148,14 +148,14 @@ typedef struct prrte_mca_base_module_2_0_0_t prrte_mca_base_module_2_0_0_t;
  * resources to allocate, and c) can always be used in a process
  * (albiet perhaps not selected), it may provide NULL for this
  * function.  In this cause, the MCA will act as if it called the open
- * function and it returned PRRTE_SUCCESS.
+ * function and it returned PRTE_SUCCESS.
  */
-typedef int (*prrte_mca_base_open_component_1_0_0_fn_t)(void);
+typedef int (*prte_mca_base_open_component_1_0_0_fn_t)(void);
 
 /**
  * MCA component close function.
  *
- * @retval PRRTE_SUCCESS The component successfully shut down.
+ * @retval PRTE_SUCCESS The component successfully shut down.
  *
  * @retval any_other_value Some error occurred, but is likely to be
  * ignored.
@@ -171,14 +171,14 @@ typedef int (*prrte_mca_base_open_component_1_0_0_fn_t)(void);
  *
  * If the component has no resources to free, it may provide NULL for
  * this function.  In this case, the MCA will act as if it called the
- * close function and it returned PRRTE_SUCCESS.
+ * close function and it returned PRTE_SUCCESS.
  */
-typedef int (*prrte_mca_base_close_component_1_0_0_fn_t)(void);
+typedef int (*prte_mca_base_close_component_1_0_0_fn_t)(void);
 
 /**
  * MCA component query function.
  *
- * @retval PRRTE_SUCCESS The component successfully queried.
+ * @retval PRTE_SUCCESS The component successfully queried.
  *
  * @retval any_other_value Some error occurred, but is likely to be
  * ignored.
@@ -192,14 +192,14 @@ typedef int (*prrte_mca_base_close_component_1_0_0_fn_t)(void);
  * implement their own query function, but must also implment their
  * own select function as a result.
  */
-typedef int (*prrte_mca_base_query_component_2_0_0_fn_t)(prrte_mca_base_module_2_0_0_t **module, int *priority);
+typedef int (*prte_mca_base_query_component_2_0_0_fn_t)(prte_mca_base_module_2_0_0_t **module, int *priority);
 
 /**
  * MCA component parameter registration function.
  *
- * @retval PRRTE_SUCCESS This component successfully registered its
+ * @retval PRTE_SUCCESS This component successfully registered its
  * parameters and can be used in this process.
- * @retval PRRTE_ERR_BAD_PARAM Indicates that the register function
+ * @retval PRTE_ERR_BAD_PARAM Indicates that the register function
  * failed because an MCA parameter got an invalid/incorrect value.
  *
  * @retval anything_else The MCA will ignore this component for the
@@ -219,14 +219,14 @@ typedef int (*prrte_mca_base_query_component_2_0_0_fn_t)(prrte_mca_base_module_2
  * function invoked on a component; component authors should take care
  * that no resources are leaked in this case.
  *
- * This function should return PRRTE_SUCCESS if it wishes to remain
+ * This function should return PRTE_SUCCESS if it wishes to remain
  * loaded in the process.  Any other return value will cause the MCA
  * base to unload the component.  Although most components do not use
  * this mechanism to force themselves to be unloaded (because if they
  * are immediately unloaded, ompi_info will not display them), the
  * mechanism is available should the need arise.
  *
- * Note that if the function returns PRRTE_ERR_BAD_PARAM, it is
+ * Note that if the function returns PRTE_ERR_BAD_PARAM, it is
  * possible (likely?) that the component didn't register all of its
  * parameters.  When this happens, ompi_info (and friends) will stop
  * execution and print out all existing registered parameters from the
@@ -239,27 +239,27 @@ typedef int (*prrte_mca_base_query_component_2_0_0_fn_t)(prrte_mca_base_module_2
  * resources to allocate, and c) can always be used in a process
  * (albiet perhaps not selected), it may provide NULL for this
  * function.  In this cause, the MCA will act as if it called the
- * registration function and it returned PRRTE_SUCCESS.
+ * registration function and it returned PRTE_SUCCESS.
  */
-typedef int (*prrte_mca_base_register_component_params_2_0_0_fn_t)(void);
+typedef int (*prte_mca_base_register_component_params_2_0_0_fn_t)(void);
 
 
 /**
  * Maximum length of MCA project string names.
  */
-#define PRRTE_MCA_BASE_MAX_PROJECT_NAME_LEN 15
+#define PRTE_MCA_BASE_MAX_PROJECT_NAME_LEN 15
 /**
  * Maximum length of MCA framework string names.
  */
-#define PRRTE_MCA_BASE_MAX_TYPE_NAME_LEN 31
+#define PRTE_MCA_BASE_MAX_TYPE_NAME_LEN 31
 /**
  * Maximum length of MCA component string names.
  */
-#define PRRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN 63
+#define PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN 63
 /**
  * Maximum length of MCA component variable names.
  */
-#define PRRTE_MCA_BASE_MAX_VARIABLE_NAME_LEN 63
+#define PRTE_MCA_BASE_MAX_VARIABLE_NAME_LEN 63
 
 /**
  * Component flags (mca_component_flags field)
@@ -269,9 +269,9 @@ enum {
      * work properly the component must always be built statically.
      *
      * Enforecement of this flag is left to the individual frameworks
-     * so as to limit its use. See discussion from the PRRTE
+     * so as to limit its use. See discussion from the PRTE
      * face-to-face meeting Jan. 2017 */
-    PRRTE_MCA_BASE_COMPONENT_FLAG_REQUIRED = 1,
+    PRTE_MCA_BASE_COMPONENT_FLAG_REQUIRED = 1,
 };
 
 /**
@@ -282,7 +282,7 @@ enum {
  * particular version of a specific framework, and to publish its own
  * name and version.
  */
-struct prrte_mca_base_component_2_1_0_t {
+struct prte_mca_base_component_2_1_0_t {
 
   int mca_major_version;
   /**< Major number of the MCA. */
@@ -291,7 +291,7 @@ struct prrte_mca_base_component_2_1_0_t {
   int mca_release_version;
   /**< Release number of the MCA. */
 
-  char mca_project_name[PRRTE_MCA_BASE_MAX_PROJECT_NAME_LEN + 1];
+  char mca_project_name[PRTE_MCA_BASE_MAX_PROJECT_NAME_LEN + 1];
   /**< String name of the project that this component belongs to. */
   int mca_project_major_version;
   /**< Major version number of the project that this component
@@ -303,7 +303,7 @@ struct prrte_mca_base_component_2_1_0_t {
   /**< Release version number of the project that this component
      belongs to. */
 
-  char mca_type_name[PRRTE_MCA_BASE_MAX_TYPE_NAME_LEN + 1];
+  char mca_type_name[PRTE_MCA_BASE_MAX_TYPE_NAME_LEN + 1];
   /**< String name of the framework that this component belongs to. */
   int mca_type_major_version;
   /**< Major version number of the framework that this component
@@ -315,7 +315,7 @@ struct prrte_mca_base_component_2_1_0_t {
   /**< Release version number of the framework that this component
      belongs to. */
 
-  char mca_component_name[PRRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN + 1];
+  char mca_component_name[PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN + 1];
   /**< This comopnent's string name. */
   int mca_component_major_version;
   /**< This component's major version number. */
@@ -324,13 +324,13 @@ struct prrte_mca_base_component_2_1_0_t {
   int mca_component_release_version;
   /**< This component's release version number. */
 
-  prrte_mca_base_open_component_1_0_0_fn_t mca_open_component;
+  prte_mca_base_open_component_1_0_0_fn_t mca_open_component;
   /**< Method for opening this component. */
-  prrte_mca_base_close_component_1_0_0_fn_t mca_close_component;
+  prte_mca_base_close_component_1_0_0_fn_t mca_close_component;
   /**< Method for closing this component. */
-  prrte_mca_base_query_component_2_0_0_fn_t mca_query_component;
+  prte_mca_base_query_component_2_0_0_fn_t mca_query_component;
   /**< Method for querying this component. */
-  prrte_mca_base_register_component_params_2_0_0_fn_t mca_register_component_params;
+  prte_mca_base_register_component_params_2_0_0_fn_t mca_register_component_params;
   /**< Method for registering the component's MCA parameters */
 
   int32_t mca_component_flags;
@@ -342,21 +342,21 @@ struct prrte_mca_base_component_2_1_0_t {
 };
 /** Unversioned convenience typedef; use this name in
     frameworks/components to stay forward source-compatible */
-typedef struct prrte_mca_base_component_2_1_0_t prrte_mca_base_component_t;
+typedef struct prte_mca_base_component_2_1_0_t prte_mca_base_component_t;
 /** Versioned convenience typedef */
-typedef struct prrte_mca_base_component_2_1_0_t prrte_mca_base_component_2_1_0_t;
+typedef struct prte_mca_base_component_2_1_0_t prte_mca_base_component_2_1_0_t;
 
 /*
  * Metadata Bit field parameters
  */
-#define PRRTE_MCA_BASE_METADATA_PARAM_NONE        (uint32_t)0x00 /**< No Metadata flags */
-#define PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT  (uint32_t)0x02 /**< Checkpoint enabled Component */
-#define PRRTE_MCA_BASE_METADATA_PARAM_DEBUG       (uint32_t)0x04 /**< Debug enabled/only Component */
+#define PRTE_MCA_BASE_METADATA_PARAM_NONE        (uint32_t)0x00 /**< No Metadata flags */
+#define PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT  (uint32_t)0x02 /**< Checkpoint enabled Component */
+#define PRTE_MCA_BASE_METADATA_PARAM_DEBUG       (uint32_t)0x04 /**< Debug enabled/only Component */
 
 /**
  * Meta data for MCA v2.0.0 components.
  */
-struct prrte_mca_base_component_data_2_0_0_t {
+struct prte_mca_base_component_data_2_0_0_t {
     uint32_t param_field;
     /**< Metadata parameter bit field filled in by the parameters
          defined above */
@@ -367,9 +367,9 @@ struct prrte_mca_base_component_data_2_0_0_t {
 };
 /** Unversioned convenience typedef; use this name in
     frameworks/components to stay forward source-compatible */
-typedef struct prrte_mca_base_component_data_2_0_0_t prrte_mca_base_component_data_t;
+typedef struct prte_mca_base_component_data_2_0_0_t prte_mca_base_component_data_t;
 /** Versioned convenience typedef */
-typedef struct prrte_mca_base_component_data_2_0_0_t prrte_mca_base_component_data_2_0_0_t;
+typedef struct prte_mca_base_component_data_2_0_0_t prte_mca_base_component_data_2_0_0_t;
 
 /**
  * Macro for framework author convenience.
@@ -378,26 +378,26 @@ typedef struct prrte_mca_base_component_data_2_0_0_t prrte_mca_base_component_da
  * indicating that they subscribe to the MCA version 2.0.0.  See
  * component header files (e.g., coll.h) for examples of its usage.
  */
-#define PRRTE_MCA_BASE_VERSION_MAJOR 2
-#define PRRTE_MCA_BASE_VERSION_MINOR 1
-#define PRRTE_MCA_BASE_VERSION_RELEASE 0
+#define PRTE_MCA_BASE_VERSION_MAJOR 2
+#define PRTE_MCA_BASE_VERSION_MINOR 1
+#define PRTE_MCA_BASE_VERSION_RELEASE 0
 
-#define PRRTE_MCA_BASE_MAKE_VERSION(level, MAJOR, MINOR, RELEASE) \
+#define PRTE_MCA_BASE_MAKE_VERSION(level, MAJOR, MINOR, RELEASE) \
     .mca_## level ##_major_version = MAJOR,                 \
     .mca_## level ##_minor_version = MINOR,                 \
     .mca_## level ##_release_version = RELEASE
 
 
-#define _PRRTE_MCA_BASE_VERSION_2_1_0(PROJECT, project_major, project_minor, project_release, TYPE, type_major, type_minor, type_release) \
-    .mca_major_version = PRRTE_MCA_BASE_VERSION_MAJOR,                        \
-    .mca_minor_version = PRRTE_MCA_BASE_VERSION_MINOR,                        \
-    .mca_release_version = PRRTE_MCA_BASE_VERSION_RELEASE,                    \
+#define _PRTE_MCA_BASE_VERSION_2_1_0(PROJECT, project_major, project_minor, project_release, TYPE, type_major, type_minor, type_release) \
+    .mca_major_version = PRTE_MCA_BASE_VERSION_MAJOR,                        \
+    .mca_minor_version = PRTE_MCA_BASE_VERSION_MINOR,                        \
+    .mca_release_version = PRTE_MCA_BASE_VERSION_RELEASE,                    \
     .mca_project_name = PROJECT,                                        \
-    PRRTE_MCA_BASE_MAKE_VERSION(project, project_major, project_minor, project_release), \
+    PRTE_MCA_BASE_MAKE_VERSION(project, project_major, project_minor, project_release), \
     .mca_type_name = TYPE,                                              \
-    PRRTE_MCA_BASE_MAKE_VERSION(type, type_major, type_minor, type_release)
+    PRTE_MCA_BASE_MAKE_VERSION(type, type_major, type_minor, type_release)
 
-#define PRRTE_MCA_BASE_VERSION_2_1_0(type, type_major, type_minor, type_release) \
-    _PRRTE_MCA_BASE_VERSION_2_1_0("prrte", PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION, PRRTE_RELEASE_VERSION, type, type_major, type_minor, type_release)
+#define PRTE_MCA_BASE_VERSION_2_1_0(type, type_major, type_minor, type_release) \
+    _PRTE_MCA_BASE_VERSION_2_1_0("prte", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION, type, type_major, type_minor, type_release)
 
-#endif /* PRRTE_MCA_H */
+#endif /* PRTE_MCA_H */

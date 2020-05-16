@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2011-2016 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -23,10 +23,10 @@
 
 # MCA_ess_alps_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prrte_ess_alps_CONFIG],[
+AC_DEFUN([MCA_prte_ess_alps_CONFIG],[
     AC_CONFIG_FILES([src/mca/ess/alps/Makefile])
 
-    PRRTE_CHECK_ALPS([ess_alps], [ess_alps_happy="yes"], [ess_alps_happy="no"])
+    PRTE_CHECK_ALPS([ess_alps], [ess_alps_happy="yes"], [ess_alps_happy="no"])
 
     AS_IF([test "$ess_alps_happy" = "yes"],
           [$1

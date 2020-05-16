@@ -15,6 +15,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +24,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <string.h>
@@ -37,7 +38,7 @@
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
 
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 #include "src/util/output.h"
 
 #include "src/util/show_help.h"
@@ -49,57 +50,57 @@
 /*
  * Globals
  */
-prrte_errmgr_base_t prrte_errmgr_base = {{{0}}};
+prte_errmgr_base_t prte_errmgr_base = {{{0}}};
 
 /* Public module provides a wrapper around previous functions */
-prrte_errmgr_base_module_t prrte_errmgr_default_fns = {
+prte_errmgr_base_module_t prte_errmgr_default_fns = {
     .init = NULL, /* init     */
     .finalize = NULL, /* finalize */
-    .logfn = prrte_errmgr_base_log,
-    .abort = prrte_errmgr_base_abort,
-    .abort_peers = prrte_errmgr_base_abort_peers
+    .logfn = prte_errmgr_base_log,
+    .abort = prte_errmgr_base_abort,
+    .abort_peers = prte_errmgr_base_abort_peers
 };
 /* NOTE: ABSOLUTELY MUST initialize this
  * struct to include the log function as it
  * gets called even if the errmgr hasn't been
  * opened yet due to error
  */
-prrte_errmgr_base_module_t prrte_errmgr = {
-    .logfn = prrte_errmgr_base_log
+prte_errmgr_base_module_t prte_errmgr = {
+    .logfn = prte_errmgr_base_log
 };
 
-static int prrte_errmgr_base_close(void)
+static int prte_errmgr_base_close(void)
 {
     /* Close selected component */
-    if (NULL != prrte_errmgr.finalize) {
-        prrte_errmgr.finalize();
+    if (NULL != prte_errmgr.finalize) {
+        prte_errmgr.finalize();
     }
 
     /* always leave a default set of fn pointers */
-    prrte_errmgr = prrte_errmgr_default_fns;
+    prte_errmgr = prte_errmgr_default_fns;
 
     /* destruct the callback list */
-    PRRTE_LIST_DESTRUCT(&prrte_errmgr_base.error_cbacks);
+    PRTE_LIST_DESTRUCT(&prte_errmgr_base.error_cbacks);
 
-    return prrte_mca_base_framework_components_close(&prrte_errmgr_base_framework, NULL);
+    return prte_mca_base_framework_components_close(&prte_errmgr_base_framework, NULL);
 }
 
 /**
  *  * Function for finding and opening either all MCA components, or the one
  *   * that was specifically requested via a MCA parameter.
  *    */
-static int prrte_errmgr_base_open(prrte_mca_base_open_flag_t flags)
+static int prte_errmgr_base_open(prte_mca_base_open_flag_t flags)
 {
     /* load the default fns */
-    prrte_errmgr = prrte_errmgr_default_fns;
+    prte_errmgr = prte_errmgr_default_fns;
 
     /* initialize the error callback list */
-    PRRTE_CONSTRUCT(&prrte_errmgr_base.error_cbacks, prrte_list_t);
+    PRTE_CONSTRUCT(&prte_errmgr_base.error_cbacks, prte_list_t);
 
     /* Open up all available components */
-    return prrte_mca_base_framework_components_open(&prrte_errmgr_base_framework, flags);
+    return prte_mca_base_framework_components_open(&prte_errmgr_base_framework, flags);
 }
 
-PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, errmgr, "PRRTE Error Manager", NULL,
-                                 prrte_errmgr_base_open, prrte_errmgr_base_close,
-                                 prrte_errmgr_base_static_components, 0);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, errmgr, "PRTE Error Manager", NULL,
+                                 prte_errmgr_base_open, prte_errmgr_base_close,
+                                 prte_errmgr_base_static_components, 0);

@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2006      Sun Microsystems, Inc.  All rights reserved.
 #                         Use is subject to license terms.
-# Copyright (c) 2009-2010 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -25,10 +25,10 @@
 
 # MCA_ras_sge_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prrte_ras_gridengine_CONFIG],[
+AC_DEFUN([MCA_prte_ras_gridengine_CONFIG],[
     AC_CONFIG_FILES([src/mca/ras/gridengine/Makefile])
 
-    PRRTE_CHECK_GRIDENGINE([ras_gridengine], [ras_gridengine_happy="yes"], [ras_gridengine_happy="no"])
+    PRTE_CHECK_GRIDENGINE([ras_gridengine], [ras_gridengine_happy="yes"], [ras_gridengine_happy="no"])
 
     AS_IF([test "$ras_gridengine_happy" = "yes"], [$1], [$2])
 ])dnl

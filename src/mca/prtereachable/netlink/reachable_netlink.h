@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -8,20 +8,20 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_MCA_REACHABLE_NETLINK_H
-#define PRRTE_MCA_REACHABLE_NETLINK_H
+#ifndef PRTE_MCA_REACHABLE_NETLINK_H
+#define PRTE_MCA_REACHABLE_NETLINK_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/mca/prtereachable/prtereachable.h"
 
 BEGIN_C_DECLS
 
-PRRTE_EXPORT extern prrte_reachable_base_component_t
-    prrte_prtereachable_netlink_component;
+PRTE_EXPORT extern prte_reachable_base_component_t
+    prte_prtereachable_netlink_component;
 
-PRRTE_EXPORT extern const prrte_reachable_base_module_t
-    prrte_prtereachable_netlink_module;
+PRTE_EXPORT extern const prte_reachable_base_module_t
+    prte_prtereachable_netlink_module;
 
 END_C_DECLS
 

@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2012-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2012-2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2012-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
@@ -24,22 +24,22 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 
-#include "src/class/prrte_object.h"
-#include "src/class/prrte_list.h"
+#include "src/class/prte_object.h"
+#include "src/class/prte_list.h"
 #include "src/dss/dss_types.h"
 #include "src/threads/mutex.h"
 #include "src/util/argv.h"
 #include "src/util/cmd_line.h"
 #include "src/util/output.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 
-#include "src/mca/base/prrte_mca_base_var.h"
+#include "src/mca/base/prte_mca_base_var.h"
 #include "constants.h"
 
 
@@ -55,26 +55,26 @@
  */
 #define MAX_WIDTH 110
 
-static void option_constructor(prrte_cmd_line_option_t *cmd);
-static void option_destructor(prrte_cmd_line_option_t *cmd);
+static void option_constructor(prte_cmd_line_option_t *cmd);
+static void option_destructor(prte_cmd_line_option_t *cmd);
 
-PRRTE_CLASS_INSTANCE(prrte_cmd_line_option_t,
-                     prrte_list_item_t,
+PRTE_CLASS_INSTANCE(prte_cmd_line_option_t,
+                     prte_list_item_t,
                      option_constructor, option_destructor);
 
-static void param_constructor(prrte_cmd_line_param_t *cmd);
-static void param_destructor(prrte_cmd_line_param_t *cmd);
-PRRTE_CLASS_INSTANCE(prrte_cmd_line_param_t,
-                     prrte_list_item_t,
+static void param_constructor(prte_cmd_line_param_t *cmd);
+static void param_destructor(prte_cmd_line_param_t *cmd);
+PRTE_CLASS_INSTANCE(prte_cmd_line_param_t,
+                     prte_list_item_t,
                      param_constructor, param_destructor);
 
 /*
- * Instantiate the prrte_cmd_line_t class
+ * Instantiate the prte_cmd_line_t class
  */
-static void cmd_line_constructor(prrte_cmd_line_t *cmd);
-static void cmd_line_destructor(prrte_cmd_line_t *cmd);
-PRRTE_CLASS_INSTANCE(prrte_cmd_line_t,
-                     prrte_object_t,
+static void cmd_line_constructor(prte_cmd_line_t *cmd);
+static void cmd_line_destructor(prte_cmd_line_t *cmd);
+PRTE_CLASS_INSTANCE(prte_cmd_line_t,
+                     prte_object_t,
                      cmd_line_constructor,
                      cmd_line_destructor);
 
@@ -88,44 +88,44 @@ static char special_empty_token[] = {
 /*
  * Private functions
  */
-static int make_opt(prrte_cmd_line_t *cmd, prrte_cmd_line_init_t *e);
-static void free_parse_results(prrte_cmd_line_t *cmd);
-static prrte_value_t*  set_dest(prrte_cmd_line_option_t *option, char *sval);
-static void fill(const prrte_cmd_line_option_t *a, char result[3][BUFSIZ]);
+static int make_opt(prte_cmd_line_t *cmd, prte_cmd_line_init_t *e);
+static void free_parse_results(prte_cmd_line_t *cmd);
+static prte_value_t*  set_dest(prte_cmd_line_option_t *option, char *sval);
+static void fill(const prte_cmd_line_option_t *a, char result[3][BUFSIZ]);
 static int qsort_callback(const void *a, const void *b);
-static char *build_parsable(prrte_cmd_line_option_t *option);
+static char *build_parsable(prte_cmd_line_option_t *option);
 
 
 /*
  * Create an entire command line handle from a table
  */
-int prrte_cmd_line_create(prrte_cmd_line_t *cmd,
-                         prrte_cmd_line_init_t *table)
+int prte_cmd_line_create(prte_cmd_line_t *cmd,
+                         prte_cmd_line_init_t *table)
 {
-    int ret = PRRTE_SUCCESS;
+    int ret = PRTE_SUCCESS;
 
     /* Check bozo case */
 
     if (NULL == cmd) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
-    PRRTE_CONSTRUCT(cmd, prrte_cmd_line_t);
+    PRTE_CONSTRUCT(cmd, prte_cmd_line_t);
 
     if (NULL != table) {
-        ret = prrte_cmd_line_add(cmd, table);
+        ret = prte_cmd_line_add(cmd, table);
     }
     return ret;
 }
 
 /* Add a table to an existing cmd line object */
-int prrte_cmd_line_add(prrte_cmd_line_t *cmd,
-                      prrte_cmd_line_init_t *table)
+int prte_cmd_line_add(prte_cmd_line_t *cmd,
+                      prte_cmd_line_init_t *table)
 {
     int i, ret;
 
     /* Ensure we got a table */
     if (NULL == table) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* Loop through the table */
@@ -139,23 +139,23 @@ int prrte_cmd_line_add(prrte_cmd_line_t *cmd,
 
         /* Nope -- it's an entry.  Process it. */
         ret = make_opt(cmd, &table[i]);
-        if (PRRTE_SUCCESS != ret) {
+        if (PRTE_SUCCESS != ret) {
             return ret;
         }
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 /*
  * Append a command line entry to the previously constructed command line
  */
-int prrte_cmd_line_make_opt_mca(prrte_cmd_line_t *cmd,
-                               prrte_cmd_line_init_t entry)
+int prte_cmd_line_make_opt_mca(prte_cmd_line_t *cmd,
+                               prte_cmd_line_init_t entry)
 {
     /* Ensure we got an entry */
     if ('\0' == entry.ocl_cmd_short_name &&
         NULL == entry.ocl_cmd_long_name) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     return make_opt(cmd, &entry);
@@ -165,19 +165,19 @@ int prrte_cmd_line_make_opt_mca(prrte_cmd_line_t *cmd,
 /*
  * Create a command line option, --long-name and/or -s (short name).
  */
-int prrte_cmd_line_make_opt3(prrte_cmd_line_t *cmd, char short_name,
+int prte_cmd_line_make_opt3(prte_cmd_line_t *cmd, char short_name,
                             const char *long_name,
                             int num_params, const char *desc,
-                            prrte_cmd_line_otype_t otype)
+                            prte_cmd_line_otype_t otype)
 {
-    prrte_cmd_line_init_t e;
+    prte_cmd_line_init_t e;
 
     e.ocl_cmd_short_name = short_name;
     e.ocl_cmd_long_name = long_name;
 
     e.ocl_num_params = num_params;
 
-    e.ocl_variable_type = PRRTE_CMD_LINE_TYPE_NULL;
+    e.ocl_variable_type = PRTE_CMD_LINE_TYPE_NULL;
 
     e.ocl_description = desc;
     e.ocl_otype = otype;
@@ -187,33 +187,33 @@ int prrte_cmd_line_make_opt3(prrte_cmd_line_t *cmd, char short_name,
 
 
 /*
- * Parse a command line according to a pre-built PRRTE command line
+ * Parse a command line according to a pre-built PRTE command line
  * handle.
  */
-int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
+int prte_cmd_line_parse(prte_cmd_line_t *cmd, bool ignore_unknown,
                          bool ignore_unknown_option, int argc, char **argv)
 {
     int i, j, orig;
-    prrte_cmd_line_option_t *option;
-    prrte_cmd_line_param_t *param;
+    prte_cmd_line_option_t *option;
+    prte_cmd_line_param_t *param;
     bool is_unknown_option;
     bool is_unknown_token;
     bool is_option;
     bool have_help_option = false;
     bool printed_error = false;
     bool help_without_arg = false;
-    prrte_cmd_line_init_t e;
-    prrte_value_t *val;
+    prte_cmd_line_init_t e;
+    prte_value_t *val;
 
     /* Bozo check */
 
     if (0 == argc || NULL == argv) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* Thread serialization */
 
-    prrte_mutex_lock(&cmd->lcl_mutex);
+    prte_mutex_lock(&cmd->lcl_mutex);
 
     /* Free any parsed results that are already on this handle */
 
@@ -222,12 +222,12 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
     /* Analyze each token */
 
     cmd->lcl_argc = argc;
-    cmd->lcl_argv = prrte_argv_copy(argv);
+    cmd->lcl_argv = prte_argv_copy(argv);
 
     /* Check up front: do we have a --help option? */
-    memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+    memset(&e, 0, sizeof(prte_cmd_line_init_t));
     e.ocl_cmd_long_name = "help";
-    option = prrte_cmd_line_find_option(cmd, &e);
+    option = prte_cmd_line_find_option(cmd, &e);
     if (NULL != option) {
         have_help_option = true;
     }
@@ -250,7 +250,7 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
         if (0 == strcmp(cmd->lcl_argv[i], "--")) {
             ++i;
             while (i < cmd->lcl_argc) {
-                prrte_argv_append(&cmd->lcl_tail_argc, &cmd->lcl_tail_argv,
+                prte_argv_append(&cmd->lcl_tail_argc, &cmd->lcl_tail_argv,
                                  cmd->lcl_argv[i]);
                 ++i;
             }
@@ -270,17 +270,17 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
 
         else if (0 == strncmp(cmd->lcl_argv[i], "--", 2)) {
             is_option = true;
-            memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+            memset(&e, 0, sizeof(prte_cmd_line_init_t));
             e.ocl_cmd_long_name = &cmd->lcl_argv[i][2];
-            option = prrte_cmd_line_find_option(cmd, &e);
+            option = prte_cmd_line_find_option(cmd, &e);
         }
 
         /* Is it the special-cased "-np" name? */
         else if (0 == strcmp(cmd->lcl_argv[i], "-np")) {
             is_option = true;
-            memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+            memset(&e, 0, sizeof(prte_cmd_line_init_t));
             e.ocl_cmd_long_name = &cmd->lcl_argv[i][1];
-            option = prrte_cmd_line_find_option(cmd, &e);
+            option = prte_cmd_line_find_option(cmd, &e);
         }
 
         /* It could be a short name.  Is it? */
@@ -289,9 +289,9 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
             if (2 < strlen(cmd->lcl_argv[i])) {
                 is_unknown_option = true;
             } else {
-                memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+                memset(&e, 0, sizeof(prte_cmd_line_init_t));
                 e.ocl_cmd_short_name = cmd->lcl_argv[i][1];
-                option = prrte_cmd_line_find_option(cmd, &e);
+                option = prte_cmd_line_find_option(cmd, &e);
 
                 /* If we didn't find it, then it is an unknown option */
                 if (NULL == option) {
@@ -316,10 +316,10 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
                    this option.  If we run out of parameters, then
                    print an error and return. */
 
-                param = PRRTE_NEW(prrte_cmd_line_param_t);
+                param = PRTE_NEW(prte_cmd_line_param_t);
                 if (NULL == param) {
-                    prrte_mutex_unlock(&cmd->lcl_mutex);
-                    return PRRTE_ERR_OUT_OF_RESOURCE;
+                    prte_mutex_unlock(&cmd->lcl_mutex);
+                    return PRTE_ERR_OUT_OF_RESOURCE;
                 }
                 param->clp_arg = cmd->lcl_argv[i];
                 param->clp_option = option;
@@ -348,7 +348,7 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
                             fprintf(stderr, "Type '%s --help' for usage.\n",
                                     cmd->lcl_argv[0]);
                         }
-                        PRRTE_RELEASE(param);
+                        PRTE_RELEASE(param);
                         printed_error = true;
                         goto error;
                     } else {
@@ -363,7 +363,7 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
                                 fprintf(stderr, "Type '%s --help' for usage.\n",
                                         cmd->lcl_argv[0]);
                             }
-                            PRRTE_RELEASE(param);
+                            PRTE_RELEASE(param);
                             printed_error = true;
                             goto error;
                         }
@@ -373,11 +373,11 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
                         else {
                             /* Save in the argv on the param entry */
                             if (NULL == (val = set_dest(option, cmd->lcl_argv[i]))) {
-                                PRRTE_RELEASE(param);
+                                PRTE_RELEASE(param);
                                 printed_error = true;
                                 goto error;
                             }
-                            prrte_list_append(&param->clp_values, &val->super);
+                            prte_list_append(&param->clp_values, &val->super);
                         }
                     }
                 }
@@ -386,23 +386,23 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
                    a help request with no argument, check if it is a
                    boolean option and set it accordingly. */
 
-                if (PRRTE_CMD_LINE_TYPE_BOOL == option->clo_type &&
+                if (PRTE_CMD_LINE_TYPE_BOOL == option->clo_type &&
                     (0 == option->clo_num_params || help_without_arg)) {
-                    val = PRRTE_NEW(prrte_value_t);
-                    val->type = PRRTE_BOOL;
+                    val = PRTE_NEW(prte_value_t);
+                    val->type = PRTE_BOOL;
                     if (0 == strncasecmp(cmd->lcl_argv[orig], "t", 1) || 0 != atoi(cmd->lcl_argv[orig])) {
                         val->data.flag = true;
                     } else {
                         val->data.flag = false;
                     }
-                    prrte_list_append(&param->clp_values, &val->super);
+                    prte_list_append(&param->clp_values, &val->super);
                 }
 
                 /* If we succeeded in all that, save the param to the
-                   list on the prrte_cmd_line_t handle */
+                   list on the prte_cmd_line_t handle */
 
                 if (NULL != param) {
-                    prrte_list_append(&cmd->lcl_params, &param->super);
+                    prte_list_append(&cmd->lcl_params, &param->super);
                 }
             }
         }
@@ -423,7 +423,7 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
             }
         error:
             while (i < cmd->lcl_argc) {
-                prrte_argv_append(&cmd->lcl_tail_argc, &cmd->lcl_tail_argv,
+                prte_argv_append(&cmd->lcl_tail_argc, &cmd->lcl_tail_argv,
                                  cmd->lcl_argv[i]);
                 ++i;
             }
@@ -434,14 +434,14 @@ int prrte_cmd_line_parse(prrte_cmd_line_t *cmd, bool ignore_unknown,
 
     /* Thread serialization */
 
-    prrte_mutex_unlock(&cmd->lcl_mutex);
+    prte_mutex_unlock(&cmd->lcl_mutex);
 
     /* All done */
     if (printed_error) {
-        return PRRTE_ERR_SILENT;
+        return PRTE_ERR_SILENT;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
@@ -461,56 +461,56 @@ static char *headers[] = {
 };
 
 /*
- * Return a consolidated "usage" message for a PRRTE command line handle.
+ * Return a consolidated "usage" message for a PRTE command line handle.
  */
-char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
+char *prte_cmd_line_get_usage_msg(prte_cmd_line_t *cmd, bool parseable)
 {
     size_t i, len;
     size_t j;
     char **argv;
     char *ret, temp[MAX_WIDTH * 2 - 1], line[MAX_WIDTH * 2];
     char *start, *desc, *ptr;
-    prrte_list_item_t *item;
-    prrte_cmd_line_option_t *option, **sorted;
-    prrte_cmd_line_otype_t otype;
+    prte_list_item_t *item;
+    prte_cmd_line_option_t *option, **sorted;
+    prte_cmd_line_otype_t otype;
     bool found;
 
     /* Thread serialization */
 
-    prrte_mutex_lock(&cmd->lcl_mutex);
+    prte_mutex_lock(&cmd->lcl_mutex);
 
     /* Make an argv of all the usage strings */
     argv = NULL;
     ret = NULL;
 
-    for (otype=0; otype < PRRTE_CMD_LINE_OTYPE_NULL; otype++) {
+    for (otype=0; otype < PRTE_CMD_LINE_OTYPE_NULL; otype++) {
         found = false;
         /* First, take the original list and sort it */
-        sorted = (prrte_cmd_line_option_t**)malloc(sizeof(prrte_cmd_line_option_t *) *
-                                             prrte_list_get_size(&cmd->lcl_options[otype]));
+        sorted = (prte_cmd_line_option_t**)malloc(sizeof(prte_cmd_line_option_t *) *
+                                             prte_list_get_size(&cmd->lcl_options[otype]));
         if (NULL == sorted) {
-            prrte_mutex_unlock(&cmd->lcl_mutex);
-            prrte_argv_free(argv);
+            prte_mutex_unlock(&cmd->lcl_mutex);
+            prte_argv_free(argv);
             return NULL;
         }
         i = 0;
-        PRRTE_LIST_FOREACH(item, &cmd->lcl_options[otype], prrte_list_item_t) {
-            sorted[i++] = (prrte_cmd_line_option_t *) item;
+        PRTE_LIST_FOREACH(item, &cmd->lcl_options[otype], prte_list_item_t) {
+            sorted[i++] = (prte_cmd_line_option_t *) item;
         }
-        qsort(sorted, i, sizeof(prrte_cmd_line_option_t*), qsort_callback);
+        qsort(sorted, i, sizeof(prte_cmd_line_option_t*), qsort_callback);
 
         /* add all non-NULL descriptions */
-        for (j=0; j < prrte_list_get_size(&cmd->lcl_options[otype]); j++) {
+        for (j=0; j < prte_list_get_size(&cmd->lcl_options[otype]); j++) {
             option = sorted[j];
             if (parseable) {
                 if (!found) {
                     /* we have at least one instance, so add the header for this type */
-                    prrte_argv_append_nosize(&argv, headers[otype]);
-                    prrte_argv_append_nosize(&argv, " ");
+                    prte_argv_append_nosize(&argv, headers[otype]);
+                    prte_argv_append_nosize(&argv, " ");
                     found = true;
                 }
                 ret = build_parsable(option);
-                prrte_argv_append_nosize(&argv, ret);
+                prte_argv_append_nosize(&argv, ret);
                 free(ret);
                 ret = NULL;
             } else if (NULL != option->clo_description) {
@@ -518,8 +518,8 @@ char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
 
                 if (!found) {
                     /* we have at least one instance, so add the header for this type */
-                    prrte_argv_append_nosize(&argv, headers[otype]);
-                    prrte_argv_append_nosize(&argv, " ");
+                    prte_argv_append_nosize(&argv, headers[otype]);
+                    prte_argv_append_nosize(&argv, " ");
                     found = true;
                 }
                 /* Build up the output line */
@@ -556,7 +556,7 @@ char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
                    and start adding the description on the next line. */
 
                 if (strlen(line) > PARAM_WIDTH) {
-                    prrte_argv_append_nosize(&argv, line);
+                    prte_argv_append_nosize(&argv, line);
 
                     /* Now reset the line to be all blanks up to
                        PARAM_WIDTH so that we can start adding the
@@ -585,8 +585,8 @@ char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
                 desc = strdup(option->clo_description);
                 if (NULL == desc) {
                     free(sorted);
-                    prrte_argv_free(argv);
-                    prrte_mutex_unlock(&cmd->lcl_mutex);
+                    prte_argv_free(argv);
+                    prte_mutex_unlock(&cmd->lcl_mutex);
                     return strdup("");
                 }
                 start = desc;
@@ -606,7 +606,7 @@ char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
 
                     if (strlen(start) < (MAX_WIDTH - PARAM_WIDTH)) {
                         strncat(line, start, sizeof(line) - 1);
-                        prrte_argv_append_nosize(&argv, line);
+                        prte_argv_append_nosize(&argv, line);
                         break;
                     }
 
@@ -619,7 +619,7 @@ char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
                         if (isspace(*ptr)) {
                             *ptr = '\0';
                             strncat(line, start, sizeof(line) - 1);
-                            prrte_argv_append_nosize(&argv, line);
+                            prte_argv_append_nosize(&argv, line);
 
                             start = ptr + 1;
                             memset(line, ' ', PARAM_WIDTH);
@@ -639,7 +639,7 @@ char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
                                 *ptr = '\0';
 
                                 strncat(line, start, sizeof(line) - 1);
-                                prrte_argv_append_nosize(&argv, line);
+                                prte_argv_append_nosize(&argv, line);
 
                                 start = ptr + 1;
                                 memset(line, ' ', PARAM_WIDTH);
@@ -653,7 +653,7 @@ char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
 
                         if (ptr >= start + len) {
                             strncat(line, start, sizeof(line) - 1);
-                            prrte_argv_append_nosize(&argv, line);
+                            prte_argv_append_nosize(&argv, line);
                             start = desc + len + 1;
                         }
                     }
@@ -664,20 +664,20 @@ char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
         free(sorted);
         if (found) {
             /* add a spacer */
-            prrte_argv_append_nosize(&argv, " ");
-            prrte_argv_append_nosize(&argv, " ");
-            prrte_argv_append_nosize(&argv, " ");
+            prte_argv_append_nosize(&argv, " ");
+            prte_argv_append_nosize(&argv, " ");
+            prte_argv_append_nosize(&argv, " ");
         }
     }
     if (NULL != argv) {
-        ret = prrte_argv_join(argv, '\n');
-        prrte_argv_free(argv);
+        ret = prte_argv_join(argv, '\n');
+        prte_argv_free(argv);
     } else {
         ret = strdup("");
     }
 
     /* Thread serialization */
-    prrte_mutex_unlock(&cmd->lcl_mutex);
+    prte_mutex_unlock(&cmd->lcl_mutex);
 
     /* All done */
     return ret;
@@ -687,39 +687,39 @@ char *prrte_cmd_line_get_usage_msg(prrte_cmd_line_t *cmd, bool parseable)
 /*
  * Test if a given option was taken on the parsed command line.
  */
-bool prrte_cmd_line_is_taken(prrte_cmd_line_t *cmd, const char *opt)
+bool prte_cmd_line_is_taken(prte_cmd_line_t *cmd, const char *opt)
 {
-    return (prrte_cmd_line_get_ninsts(cmd, opt) > 0);
+    return (prte_cmd_line_get_ninsts(cmd, opt) > 0);
 }
 
 
 /*
  * Return the number of instances of an option found during parsing.
  */
-int prrte_cmd_line_get_ninsts(prrte_cmd_line_t *cmd, const char *opt)
+int prte_cmd_line_get_ninsts(prte_cmd_line_t *cmd, const char *opt)
 {
     int ret;
-    prrte_cmd_line_param_t *param;
-    prrte_cmd_line_option_t *option;
-    prrte_cmd_line_init_t e;
+    prte_cmd_line_param_t *param;
+    prte_cmd_line_option_t *option;
+    prte_cmd_line_init_t e;
 
     /* Thread serialization */
 
-    prrte_mutex_lock(&cmd->lcl_mutex);
+    prte_mutex_lock(&cmd->lcl_mutex);
 
     /* Find the corresponding option.  If we find it, look through all
        the parsed params and see if we have any matches. */
 
     ret = 0;
-    memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+    memset(&e, 0, sizeof(prte_cmd_line_init_t));
     if (1 < strlen(opt)) {
         e.ocl_cmd_long_name = opt;
     } else {
         e.ocl_cmd_short_name = opt[0];
     }
-    option = prrte_cmd_line_find_option(cmd, &e);
+    option = prte_cmd_line_find_option(cmd, &e);
     if (NULL != option) {
-        PRRTE_LIST_FOREACH(param, &cmd->lcl_params, prrte_cmd_line_param_t) {
+        PRTE_LIST_FOREACH(param, &cmd->lcl_params, prte_cmd_line_param_t) {
             if (param->clp_option == option) {
                 ++ret;
             }
@@ -728,7 +728,7 @@ int prrte_cmd_line_get_ninsts(prrte_cmd_line_t *cmd, const char *opt)
 
     /* Thread serialization */
 
-    prrte_mutex_unlock(&cmd->lcl_mutex);
+    prte_mutex_unlock(&cmd->lcl_mutex);
 
     /* All done */
 
@@ -740,40 +740,40 @@ int prrte_cmd_line_get_ninsts(prrte_cmd_line_t *cmd, const char *opt)
  * Return a specific parameter for a specific instance of a option
  * from the parsed command line.
  */
-prrte_value_t *prrte_cmd_line_get_param(prrte_cmd_line_t *cmd,
+prte_value_t *prte_cmd_line_get_param(prte_cmd_line_t *cmd,
                                         const char *opt,
                                         int inst, int idx)
 {
     int num_found, ninst;
-    prrte_cmd_line_param_t *param;
-    prrte_cmd_line_option_t *option;
-    prrte_cmd_line_init_t e;
-    prrte_value_t *val;
+    prte_cmd_line_param_t *param;
+    prte_cmd_line_option_t *option;
+    prte_cmd_line_init_t e;
+    prte_value_t *val;
 
     /* Thread serialization */
-    prrte_mutex_lock(&cmd->lcl_mutex);
+    prte_mutex_lock(&cmd->lcl_mutex);
 
     /* Find the corresponding option.  If we find it, look through all
        the parsed params and see if we have any matches. */
 
-    memset(&e, 0, sizeof(prrte_cmd_line_init_t));
+    memset(&e, 0, sizeof(prte_cmd_line_init_t));
     if (1 < strlen(opt)) {
         e.ocl_cmd_long_name = opt;
     } else {
         e.ocl_cmd_short_name = opt[0];
     }
-    option = prrte_cmd_line_find_option(cmd, &e);
+    option = prte_cmd_line_find_option(cmd, &e);
     if (NULL != option) {
         ninst = 0;
         /* scan thru the found params */
-        PRRTE_LIST_FOREACH(param, &cmd->lcl_params, prrte_cmd_line_param_t) {
+        PRTE_LIST_FOREACH(param, &cmd->lcl_params, prte_cmd_line_param_t) {
             if (param->clp_option == option) {
                 if (ninst == inst) {
                     /* scan thru the found values for this option */
                     num_found = 0;
-                    PRRTE_LIST_FOREACH(val, &param->clp_values, prrte_value_t) {
+                    PRTE_LIST_FOREACH(val, &param->clp_values, prte_value_t) {
                         if (num_found == idx) {
-                            prrte_mutex_unlock(&cmd->lcl_mutex);
+                            prte_mutex_unlock(&cmd->lcl_mutex);
                             return val;
                         }
                         ++num_found;
@@ -785,7 +785,7 @@ prrte_value_t *prrte_cmd_line_get_param(prrte_cmd_line_t *cmd,
     }
 
     /* Thread serialization */
-    prrte_mutex_unlock(&cmd->lcl_mutex);
+    prte_mutex_unlock(&cmd->lcl_mutex);
 
     /* All done */
     return NULL;
@@ -793,19 +793,19 @@ prrte_value_t *prrte_cmd_line_get_param(prrte_cmd_line_t *cmd,
 
 
 /*
- * Return the entire "tail" of unprocessed argv from a PRRTE command
+ * Return the entire "tail" of unprocessed argv from a PRTE command
  * line handle.
  */
-int prrte_cmd_line_get_tail(prrte_cmd_line_t *cmd, int *tailc, char ***tailv)
+int prte_cmd_line_get_tail(prte_cmd_line_t *cmd, int *tailc, char ***tailv)
 {
     if (NULL != cmd) {
-        prrte_mutex_lock(&cmd->lcl_mutex);
+        prte_mutex_lock(&cmd->lcl_mutex);
         *tailc = cmd->lcl_tail_argc;
-        *tailv = prrte_argv_copy(cmd->lcl_tail_argv);
-        prrte_mutex_unlock(&cmd->lcl_mutex);
-        return PRRTE_SUCCESS;
+        *tailv = prte_argv_copy(cmd->lcl_tail_argv);
+        prte_mutex_unlock(&cmd->lcl_mutex);
+        return PRTE_SUCCESS;
     } else {
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 }
 
@@ -814,19 +814,19 @@ int prrte_cmd_line_get_tail(prrte_cmd_line_t *cmd, int *tailc, char ***tailv)
  * Static functions
  **************************************************************************/
 
-static void option_constructor(prrte_cmd_line_option_t *o)
+static void option_constructor(prte_cmd_line_option_t *o)
 {
     o->clo_short_name = '\0';
     o->clo_long_name = NULL;
     o->clo_num_params = 0;
     o->clo_description = NULL;
 
-    o->clo_type = PRRTE_CMD_LINE_TYPE_NULL;
-    o->clo_otype = PRRTE_CMD_LINE_OTYPE_NULL;
+    o->clo_type = PRTE_CMD_LINE_TYPE_NULL;
+    o->clo_otype = PRTE_CMD_LINE_OTYPE_NULL;
 }
 
 
-static void option_destructor(prrte_cmd_line_option_t *o)
+static void option_destructor(prte_cmd_line_option_t *o)
 {
     if (NULL != o->clo_long_name) {
         free(o->clo_long_name);
@@ -837,21 +837,21 @@ static void option_destructor(prrte_cmd_line_option_t *o)
 }
 
 
-static void param_constructor(prrte_cmd_line_param_t *p)
+static void param_constructor(prte_cmd_line_param_t *p)
 {
     p->clp_arg = NULL;
     p->clp_option = NULL;
-    PRRTE_CONSTRUCT(&p->clp_values, prrte_list_t);
+    PRTE_CONSTRUCT(&p->clp_values, prte_list_t);
 }
 
 
-static void param_destructor(prrte_cmd_line_param_t *p)
+static void param_destructor(prte_cmd_line_param_t *p)
 {
-    PRRTE_LIST_DESTRUCT(&p->clp_values);
+    PRTE_LIST_DESTRUCT(&p->clp_values);
 }
 
 
-static void cmd_line_constructor(prrte_cmd_line_t *cmd)
+static void cmd_line_constructor(prte_cmd_line_t *cmd)
 {
     int i;
 
@@ -859,13 +859,13 @@ static void cmd_line_constructor(prrte_cmd_line_t *cmd)
        only thread that has this instance), there's no need to lock it
        right now. */
 
-    PRRTE_CONSTRUCT(&cmd->lcl_mutex, prrte_recursive_mutex_t);
+    PRTE_CONSTRUCT(&cmd->lcl_mutex, prte_recursive_mutex_t);
 
     /* Initialize the lists */
-    for (i=0; i < PRRTE_CMD_OPTIONS_MAX; i++) {
-        PRRTE_CONSTRUCT(&cmd->lcl_options[i], prrte_list_t);
+    for (i=0; i < PRTE_CMD_OPTIONS_MAX; i++) {
+        PRTE_CONSTRUCT(&cmd->lcl_options[i], prte_list_t);
     }
-    PRRTE_CONSTRUCT(&cmd->lcl_params, prrte_list_t);
+    PRTE_CONSTRUCT(&cmd->lcl_params, prte_list_t);
 
     /* Initialize the argc/argv pairs */
 
@@ -876,52 +876,52 @@ static void cmd_line_constructor(prrte_cmd_line_t *cmd)
 }
 
 
-static void cmd_line_destructor(prrte_cmd_line_t *cmd)
+static void cmd_line_destructor(prte_cmd_line_t *cmd)
 {
     int i;
 
     /* Free the contents of the options list (do not free the list
        itself; it was not allocated from the heap) */
-    for (i=0; i < PRRTE_CMD_OPTIONS_MAX; i++) {
-        PRRTE_LIST_DESTRUCT(&cmd->lcl_options[i]);
+    for (i=0; i < PRTE_CMD_OPTIONS_MAX; i++) {
+        PRTE_LIST_DESTRUCT(&cmd->lcl_options[i]);
     }
 
     /* Free any parsed results - destructs the list object */
     free_parse_results(cmd);
-    PRRTE_DESTRUCT(&cmd->lcl_params);
+    PRTE_DESTRUCT(&cmd->lcl_params);
 
     /* Destroy the mutex */
-    PRRTE_DESTRUCT(&cmd->lcl_mutex);
+    PRTE_DESTRUCT(&cmd->lcl_mutex);
 }
 
 
-static int make_opt(prrte_cmd_line_t *cmd, prrte_cmd_line_init_t *e)
+static int make_opt(prte_cmd_line_t *cmd, prte_cmd_line_init_t *e)
 {
-    prrte_cmd_line_option_t *option;
+    prte_cmd_line_option_t *option;
 
     /* Bozo checks */
 
     if (NULL == cmd) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     } else if ('\0' == e->ocl_cmd_short_name &&
                NULL == e->ocl_cmd_long_name) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     } else if (e->ocl_num_params < 0) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
 
     /* see if the option already exists */
-    if (NULL != prrte_cmd_line_find_option(cmd, e)) {
-        prrte_output(0, "Duplicate cmd line entry %c:%s",
+    if (NULL != prte_cmd_line_find_option(cmd, e)) {
+        prte_output(0, "Duplicate cmd line entry %c:%s",
                      ('\0' == e->ocl_cmd_short_name) ? ' ' : e->ocl_cmd_short_name,
                      (NULL == e->ocl_cmd_long_name) ? "NULL" : e->ocl_cmd_long_name);
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
 
     /* Allocate and fill an option item */
-    option = PRRTE_NEW(prrte_cmd_line_option_t);
+    option = PRTE_NEW(prte_cmd_line_option_t);
     if (NULL == option) {
-        return PRRTE_ERR_OUT_OF_RESOURCE;
+        return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     option->clo_short_name = e->ocl_cmd_short_name;
@@ -938,49 +938,49 @@ static int make_opt(prrte_cmd_line_t *cmd, prrte_cmd_line_init_t *e)
 
     /* Append the item, serializing thread access */
 
-    prrte_mutex_lock(&cmd->lcl_mutex);
-    prrte_list_append(&cmd->lcl_options[option->clo_otype], &option->super);
-    prrte_mutex_unlock(&cmd->lcl_mutex);
+    prte_mutex_lock(&cmd->lcl_mutex);
+    prte_list_append(&cmd->lcl_options[option->clo_otype], &option->super);
+    prte_mutex_unlock(&cmd->lcl_mutex);
 
     /* All done */
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-static void free_parse_results(prrte_cmd_line_t *cmd)
+static void free_parse_results(prte_cmd_line_t *cmd)
 {
     /* Free the contents of the params list (do not free the list
        itself; it was not allocated from the heap) */
-    PRRTE_LIST_DESTRUCT(&cmd->lcl_params);
-    PRRTE_CONSTRUCT(&cmd->lcl_params, prrte_list_t);
+    PRTE_LIST_DESTRUCT(&cmd->lcl_params);
+    PRTE_CONSTRUCT(&cmd->lcl_params, prte_list_t);
 
     /* Free the argv's */
     if (NULL != cmd->lcl_argv) {
-        prrte_argv_free(cmd->lcl_argv);
+        prte_argv_free(cmd->lcl_argv);
     }
     cmd->lcl_argv = NULL;
     cmd->lcl_argc = 0;
 
     if (NULL != cmd->lcl_tail_argv) {
-        prrte_argv_free(cmd->lcl_tail_argv);
+        prte_argv_free(cmd->lcl_tail_argv);
     }
     cmd->lcl_tail_argv = NULL;
     cmd->lcl_tail_argc = 0;
 }
 
 
-prrte_cmd_line_option_t *prrte_cmd_line_find_option(prrte_cmd_line_t *cmd,
-                                                    prrte_cmd_line_init_t *e)
+prte_cmd_line_option_t *prte_cmd_line_find_option(prte_cmd_line_t *cmd,
+                                                    prte_cmd_line_init_t *e)
 {
     int i;
-    prrte_cmd_line_option_t *option;
+    prte_cmd_line_option_t *option;
 
     /* Iterate through the list of options hanging off the
-     * prrte_cmd_line_t and see if we find a match in single-char
+     * prte_cmd_line_t and see if we find a match in single-char
      * or long names */
-    for (i=0; i < PRRTE_CMD_OPTIONS_MAX; i++) {
-        PRRTE_LIST_FOREACH(option, &cmd->lcl_options[i], prrte_cmd_line_option_t) {
+    for (i=0; i < PRTE_CMD_OPTIONS_MAX; i++) {
+        PRTE_LIST_FOREACH(option, &cmd->lcl_options[i], prte_cmd_line_option_t) {
             if ((NULL != option->clo_long_name &&
                  NULL != e->ocl_cmd_long_name &&
                  0 == strcmp(e->ocl_cmd_long_name, option->clo_long_name))||
@@ -997,16 +997,16 @@ prrte_cmd_line_option_t *prrte_cmd_line_find_option(prrte_cmd_line_t *cmd,
 }
 
 
-static prrte_value_t* set_dest(prrte_cmd_line_option_t *option, char *sval)
+static prte_value_t* set_dest(prte_cmd_line_option_t *option, char *sval)
 {
     size_t i;
-    prrte_value_t *val;
+    prte_value_t *val;
 
     /* Set variable */
     switch(option->clo_type) {
-        case PRRTE_CMD_LINE_TYPE_STRING:
-            val = PRRTE_NEW(prrte_value_t);
-            val->type = PRRTE_STRING;
+        case PRTE_CMD_LINE_TYPE_STRING:
+            val = PRTE_NEW(prte_value_t);
+            val->type = PRTE_STRING;
             /* check for quotes and remove them */
             if ('\"' == sval[0] && '\"' == sval[strlen(sval)-1]) {
                 val->data.string = strdup(&sval[1]);
@@ -1016,7 +1016,7 @@ static prrte_value_t* set_dest(prrte_cmd_line_option_t *option, char *sval)
             }
             return val;
 
-        case PRRTE_CMD_LINE_TYPE_INT:
+        case PRTE_CMD_LINE_TYPE_INT:
             /* check to see that the value given to us truly is an int */
             for (i=0; i < strlen(sval); i++) {
                 if (!isdigit(sval[i]) && '-' != sval[i]) {
@@ -1024,7 +1024,7 @@ static prrte_value_t* set_dest(prrte_cmd_line_option_t *option, char *sval)
                      * print the msg
                      */
                     fprintf(stderr, "----------------------------------------------------------------------------\n");
-                    fprintf(stderr, "PRRTE has detected that a parameter given to a command line\n");
+                    fprintf(stderr, "PRTE has detected that a parameter given to a command line\n");
                     fprintf(stderr, "option does not match the expected format:\n\n");
                     if (NULL != option->clo_long_name) {
                         fprintf(stderr, "  Option: %s\n", option->clo_long_name);
@@ -1040,12 +1040,12 @@ static prrte_value_t* set_dest(prrte_cmd_line_option_t *option, char *sval)
                     return NULL;
                 }
             }
-            val = PRRTE_NEW(prrte_value_t);
-            val->type = PRRTE_INT;
+            val = PRTE_NEW(prte_value_t);
+            val->type = PRTE_INT;
             val->data.integer = strtol(sval, NULL, 10);
             return val;
 
-        case PRRTE_CMD_LINE_TYPE_SIZE_T:
+        case PRTE_CMD_LINE_TYPE_SIZE_T:
             /* check to see that the value given to us truly is a size_t */
             for (i=0; i < strlen(sval); i++) {
                 if (!isdigit(sval[i]) && '-' != sval[i]) {
@@ -1053,7 +1053,7 @@ static prrte_value_t* set_dest(prrte_cmd_line_option_t *option, char *sval)
                      * print the msg
                      */
                     fprintf(stderr, "----------------------------------------------------------------------------\n");
-                    fprintf(stderr, "PRRTE has detected that a parameter given to a command line\n");
+                    fprintf(stderr, "PRTE has detected that a parameter given to a command line\n");
                     fprintf(stderr, "option does not match the expected format:\n\n");
                     if (NULL != option->clo_long_name) {
                         fprintf(stderr, "  Option: %s\n", option->clo_long_name);
@@ -1069,14 +1069,14 @@ static prrte_value_t* set_dest(prrte_cmd_line_option_t *option, char *sval)
                     return NULL;
                 }
             }
-            val = PRRTE_NEW(prrte_value_t);
-            val->type = PRRTE_SIZE;
+            val = PRTE_NEW(prte_value_t);
+            val->type = PRTE_SIZE;
             val->data.integer = strtol(sval, NULL, 10);
             return val;
 
-        case PRRTE_CMD_LINE_TYPE_BOOL:
-            val = PRRTE_NEW(prrte_value_t);
-            val->type = PRRTE_BOOL;
+        case PRTE_CMD_LINE_TYPE_BOOL:
+            val = PRTE_NEW(prte_value_t);
+            val->type = PRTE_BOOL;
             if (0 == strncasecmp(sval, "t", 1) || 0 != atoi(sval)) {
                 val->data.flag = true;
             } else {
@@ -1095,7 +1095,7 @@ static prrte_value_t* set_dest(prrte_cmd_line_option_t *option, char *sval)
 /*
  * Helper function to qsort_callback
  */
-static void fill(const prrte_cmd_line_option_t *a, char result[3][BUFSIZ])
+static void fill(const prte_cmd_line_option_t *a, char result[3][BUFSIZ])
 {
     int i = 0;
 
@@ -1118,8 +1118,8 @@ static int qsort_callback(const void *aa, const void *bb)
 {
     int ret, i;
     char str1[3][BUFSIZ], str2[3][BUFSIZ];
-    const prrte_cmd_line_option_t *a = *((const prrte_cmd_line_option_t**) aa);
-    const prrte_cmd_line_option_t *b = *((const prrte_cmd_line_option_t**) bb);
+    const prte_cmd_line_option_t *a = *((const prte_cmd_line_option_t**) aa);
+    const prte_cmd_line_option_t *b = *((const prte_cmd_line_option_t**) bb);
 
     /* Icky comparison of command line options.  There are multiple
        forms of each command line option, so we first have to check
@@ -1145,7 +1145,7 @@ static int qsort_callback(const void *aa, const void *bb)
  * Helper function to build a parsable string for the help
  * output.
  */
-static char *build_parsable(prrte_cmd_line_option_t *option) {
+static char *build_parsable(prte_cmd_line_option_t *option) {
     char *line;
     int length;
 

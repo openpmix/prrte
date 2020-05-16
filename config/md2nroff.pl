@@ -103,7 +103,7 @@ $source_content =~ s/\[(.+)\]\((.+)\)/\1/g;
 $source_content = "---
 section: $man_section
 title: $shortfile
-header: PRRTE
+header: PRTE
 footer: $today
 ---
 

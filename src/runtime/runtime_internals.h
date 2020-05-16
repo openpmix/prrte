@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2007-2008 Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,21 +22,21 @@
 /**
  * @file
  *
- * Interface into the PRRTE Run Time Environment
+ * Interface into the PRTE Run Time Environment
  */
-#ifndef PRRTE_RUNTIME_INTERNALS_H
-#define PRRTE_RUNTIME_INTERNALS_H
+#ifndef PRTE_RUNTIME_INTERNALS_H
+#define PRTE_RUNTIME_INTERNALS_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 BEGIN_C_DECLS
 
 /**
- * Init the PRRTE datatype support
+ * Init the PRTE datatype support
  */
-PRRTE_EXPORT   int prrte_dt_init(void);
+PRTE_EXPORT   int prte_dt_init(void);
 
 
 END_C_DECLS
 
-#endif /* PRRTE_RUNTIME_INTERNALS_H */
+#endif /* PRTE_RUNTIME_INTERNALS_H */

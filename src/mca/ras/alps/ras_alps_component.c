@@ -18,6 +18,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,10 +26,10 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/mca/base/base.h"
-#include "src/mca/base/prrte_mca_base_var.h"
+#include "src/mca/base/prte_mca_base_var.h"
 #include "src/util/output.h"
 #include "constants.h"
 #include "src/util/proc_info.h"
@@ -43,31 +44,31 @@ static int ras_alps_read_attempts;
 /* Local functions */
 static int ras_alps_register(void);
 static int ras_alps_open(void);
-static int prrte_ras_alps_component_query(prrte_mca_base_module_t **module,
+static int prte_ras_alps_component_query(prte_mca_base_module_t **module,
                                          int *priority);
-unsigned long int prrte_ras_alps_res_id = 0UL;
+unsigned long int prte_ras_alps_res_id = 0UL;
 char *ras_alps_apstat_cmd = NULL;
 
-prrte_ras_base_component_t prrte_ras_alps_component = {
-    /* First, the prrte_mca_base_component_t struct containing meta information about
+prte_ras_base_component_t prte_ras_alps_component = {
+    /* First, the prte_mca_base_component_t struct containing meta information about
      * the component itself
      * */
     .base_version = {
-        PRRTE_RAS_BASE_VERSION_2_0_0,
+        PRTE_RAS_BASE_VERSION_2_0_0,
 
         /* Component name and version */
         .mca_component_name = "alps",
-        PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                    PRRTE_RELEASE_VERSION),
+        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                    PRTE_RELEASE_VERSION),
 
         /* Component open and close functions */
         .mca_open_component = ras_alps_open,
-        .mca_query_component = prrte_ras_alps_component_query,
+        .mca_query_component = prte_ras_alps_component_query,
         .mca_register_component_params = ras_alps_register,
     },
     .base_data = {
         /* The component is checkpoint ready */
-        PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
     },
 };
 
@@ -117,7 +118,7 @@ get_res_id(void)
             return 0;
         }
 
-        ret = prrte_asprintf (&apstat_cmd, "%s -r", ras_alps_apstat_cmd);
+        ret = prte_asprintf (&apstat_cmd, "%s -r", ras_alps_apstat_cmd);
         if (0 > ret) {
             return 0;
         }
@@ -154,49 +155,49 @@ static int
 ras_alps_register(void)
 {
     param_priority = 75;
-    (void) prrte_mca_base_component_var_register (&prrte_ras_alps_component.base_version,
+    (void) prte_mca_base_component_var_register (&prte_ras_alps_component.base_version,
                                                   "priority", "Priority of the alps ras component",
-                                                  PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
-                                                  PRRTE_INFO_LVL_9,
-                                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                                  PRTE_INFO_LVL_9,
+                                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                                   &param_priority);
 
     ras_alps_read_attempts = 10;
-    (void) prrte_mca_base_component_var_register (&prrte_ras_alps_component.base_version,
+    (void) prte_mca_base_component_var_register (&prte_ras_alps_component.base_version,
                                                   "appinfo_read_attempts",
                                                   "Maximum number of attempts to read ALPS "
-                                                  "appinfo file", PRRTE_MCA_BASE_VAR_TYPE_INT,
-                                                  NULL, 0, 0, PRRTE_INFO_LVL_9,
-                                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_read_attempts);
+                                                  "appinfo file", PRTE_MCA_BASE_VAR_TYPE_INT,
+                                                  NULL, 0, 0, PRTE_INFO_LVL_9,
+                                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_read_attempts);
 
     ras_alps_apstat_cmd = "apstat";         /* by default apstat is in a user's path on a Cray XE/XC if
                                                alps is the site's job launcher  */
-    (void) prrte_mca_base_component_var_register (&prrte_ras_alps_component.base_version,
+    (void) prte_mca_base_component_var_register (&prte_ras_alps_component.base_version,
                                                   "apstat_cmd", "Location of the apstat command",
-                                                  PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRRTE_INFO_LVL_6,
-                                                  PRRTE_MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_apstat_cmd);
+                                                  PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRTE_INFO_LVL_6,
+                                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_apstat_cmd);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int
 ras_alps_open(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int
-prrte_ras_alps_component_query(prrte_mca_base_module_t **module,
+prte_ras_alps_component_query(prte_mca_base_module_t **module,
                               int *priority)
 {
     char *jid_str = NULL;
     /* default to an invalid value */
-    prrte_ras_alps_res_id = 0;
+    prte_ras_alps_res_id = 0;
 
     /* if we are not an HNP, then we must not be selected */
-    if (!PRRTE_PROC_IS_MASTER) {
+    if (!PRTE_PROC_IS_MASTER) {
         *module = NULL;
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     /* Are we running under a ALPS job? */
@@ -205,34 +206,34 @@ prrte_ras_alps_component_query(prrte_mca_base_module_t **module,
      */
     if ((NULL == (jid_str = getenv("OMPI_ALPS_RESID"))) &&
         (NULL == (jid_str = getenv("BASIL_RESERVATION_ID")))) {
-            prrte_ras_alps_res_id = get_res_id();
+            prte_ras_alps_res_id = get_res_id();
     }
     else {
-        prrte_ras_alps_res_id = strtoul(jid_str, NULL, 10);
+        prte_ras_alps_res_id = strtoul(jid_str, NULL, 10);
     }
-    if (0 != prrte_ras_alps_res_id) {
+    if (0 != prte_ras_alps_res_id) {
         *priority = param_priority;
-        prrte_output_verbose(2, prrte_ras_base_framework.framework_output,
+        prte_output_verbose(2, prte_ras_base_framework.framework_output,
                              "ras:alps: available for selection");
-        *module = (prrte_mca_base_module_t *) &prrte_ras_alps_module;
-        return PRRTE_SUCCESS;
+        *module = (prte_mca_base_module_t *) &prte_ras_alps_module;
+        return PRTE_SUCCESS;
     }
 
     /* Sadly, no */
 
-    prrte_output(prrte_ras_base_framework.framework_output,
+    prte_output(prte_ras_base_framework.framework_output,
                 "ras:alps: NOT available for selection -- "
                 "OMPI_ALPS_RESID or BASIL_RESERVATION_ID not set?");
     *module = NULL;
-    return PRRTE_ERROR;
+    return PRTE_ERROR;
 }
 
 int
-prrte_ras_alps_get_appinfo_attempts(int *attempts)
+prte_ras_alps_get_appinfo_attempts(int *attempts)
 {
     *attempts = ras_alps_read_attempts;
-    prrte_output_verbose(2, prrte_ras_base_framework.framework_output,
-                         "ras:alps:prrte_ras_alps_get_appinfo_attempts: %d",
+    prte_output_verbose(2, prte_ras_base_framework.framework_output,
+                         "ras:alps:prte_ras_alps_get_appinfo_attempts: %d",
                          *attempts);
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

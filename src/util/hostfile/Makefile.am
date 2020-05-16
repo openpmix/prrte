@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2016      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -21,8 +21,8 @@
 #
 
 
-AM_LFLAGS = -Pprrte_util_hostfile_
-LEX_OUTPUT_ROOT = lex.prrte_util_hostfile_
+AM_LFLAGS = -Pprte_util_hostfile_
+LEX_OUTPUT_ROOT = lex.prte_util_hostfile_
 
 noinst_LTLIBRARIES = libprrteutilhostfile.la
 

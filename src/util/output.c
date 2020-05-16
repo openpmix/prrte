@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2006 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2008 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
@@ -28,7 +28,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <stdio.h>
@@ -46,7 +46,7 @@
 #include <sys/param.h>
 #endif
 
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 #include "src/util/output.h"
 #include "src/util/string_copy.h"
 #include "src/util/printf.h"
@@ -59,7 +59,7 @@
  * Private data
  */
 static int verbose_stream = -1;
-static prrte_output_stream_t verbose;
+static prte_output_stream_t verbose;
 static char *output_dir = NULL;
 static char *output_prefix = NULL;
 
@@ -96,9 +96,9 @@ typedef struct {
 /*
  * Private functions
  */
-static void construct(prrte_object_t *stream);
-static void destruct(prrte_object_t *stream);
-static int do_open(int output_id, prrte_output_stream_t * lds);
+static void construct(prte_object_t *stream);
+static void destruct(prte_object_t *stream);
+static int do_open(int output_id, prte_output_stream_t * lds);
 static int open_file(int i);
 static void free_descriptor(int output_id);
 static int make_string(char **no_newline_string, output_desc_t *ldi,
@@ -106,7 +106,7 @@ static int make_string(char **no_newline_string, output_desc_t *ldi,
 static int output(int output_id, const char *format, va_list arglist);
 
 
-#define PRRTE_OUTPUT_MAX_STREAMS 64
+#define PRTE_OUTPUT_MAX_STREAMS 64
 #if defined(HAVE_SYSLOG)
 #define USE_SYSLOG 1
 #else
@@ -114,29 +114,29 @@ static int output(int output_id, const char *format, va_list arglist);
 #endif
 
 /* global state */
-bool prrte_output_redirected_to_syslog = false;
-int prrte_output_redirected_syslog_pri = -1;
+bool prte_output_redirected_to_syslog = false;
+int prte_output_redirected_syslog_pri = -1;
 
 /*
  * Local state
  */
 static bool initialized = false;
 static int default_stderr_fd = -1;
-static output_desc_t info[PRRTE_OUTPUT_MAX_STREAMS];
+static output_desc_t info[PRTE_OUTPUT_MAX_STREAMS];
 static char *temp_str = 0;
 static size_t temp_str_len = 0;
-static prrte_mutex_t mutex;
+static prte_mutex_t mutex;
 #if defined(HAVE_SYSLOG)
 static bool syslog_opened = false;
 #endif
 static char *redirect_syslog_ident = NULL;
 
-PRRTE_CLASS_INSTANCE(prrte_output_stream_t, prrte_object_t, construct, destruct);
+PRTE_CLASS_INSTANCE(prte_output_stream_t, prte_object_t, construct, destruct);
 
 /*
  * Setup the output stream infrastructure
  */
-bool prrte_output_init(void)
+bool prte_output_init(void)
 {
     int i;
     char *str;
@@ -145,48 +145,48 @@ bool prrte_output_init(void)
         return true;
     }
 
-    str = getenv("PRRTE_OUTPUT_STDERR_FD");
+    str = getenv("PRTE_OUTPUT_STDERR_FD");
     if (NULL != str) {
         default_stderr_fd = atoi(str);
     }
-    str = getenv("PRRTE_OUTPUT_REDIRECT");
+    str = getenv("PRTE_OUTPUT_REDIRECT");
     if (NULL != str) {
         if (0 == strcasecmp(str, "syslog")) {
-            prrte_output_redirected_to_syslog = true;
+            prte_output_redirected_to_syslog = true;
         }
     }
-    str = getenv("PRRTE_OUTPUT_SYSLOG_PRI");
+    str = getenv("PRTE_OUTPUT_SYSLOG_PRI");
 #ifdef HAVE_SYSLOG_H
     if (NULL != str) {
         if (0 == strcasecmp(str, "info")) {
-            prrte_output_redirected_syslog_pri = LOG_INFO;
+            prte_output_redirected_syslog_pri = LOG_INFO;
         } else if (0 == strcasecmp(str, "error")) {
-            prrte_output_redirected_syslog_pri = LOG_ERR;
+            prte_output_redirected_syslog_pri = LOG_ERR;
         } else if (0 == strcasecmp(str, "warn")) {
-            prrte_output_redirected_syslog_pri = LOG_WARNING;
+            prte_output_redirected_syslog_pri = LOG_WARNING;
         } else {
-            prrte_output_redirected_syslog_pri = LOG_ERR;
+            prte_output_redirected_syslog_pri = LOG_ERR;
         }
     } else {
-        prrte_output_redirected_syslog_pri = LOG_ERR;
+        prte_output_redirected_syslog_pri = LOG_ERR;
     }
 #endif  /* HAVE_SYSLOG_H */
-    str = getenv("PRRTE_OUTPUT_SYSLOG_IDENT");
+    str = getenv("PRTE_OUTPUT_SYSLOG_IDENT");
     if (NULL != str) {
         redirect_syslog_ident = strdup(str);
     }
 
-    PRRTE_CONSTRUCT(&verbose, prrte_output_stream_t);
-    if (prrte_output_redirected_to_syslog) {
+    PRTE_CONSTRUCT(&verbose, prte_output_stream_t);
+    if (prte_output_redirected_to_syslog) {
         verbose.lds_want_syslog = true;
-        verbose.lds_syslog_priority = prrte_output_redirected_syslog_pri;
+        verbose.lds_syslog_priority = prte_output_redirected_syslog_pri;
         if (NULL != str) {
             verbose.lds_syslog_ident = strdup(redirect_syslog_ident);
         }
         verbose.lds_want_stderr = false;
         verbose.lds_want_stdout = false;
     } else {
-        str = getenv("PRRTE_OUTPUT_INTERNAL_TO_STDOUT");
+        str = getenv("PRTE_OUTPUT_INTERNAL_TO_STDOUT");
         if (NULL != str && str[0] == '1') {
             verbose.lds_want_stdout = true;
         }
@@ -194,13 +194,13 @@ bool prrte_output_init(void)
             verbose.lds_want_stderr = true;
         }
     }
-    prrte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prrte_process_info.nodename, getpid());
+    prte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prte_process_info.nodename, getpid());
 
-    for (i = 0; i < PRRTE_OUTPUT_MAX_STREAMS; ++i) {
+    for (i = 0; i < PRTE_OUTPUT_MAX_STREAMS; ++i) {
         info[i].ldi_used = false;
         info[i].ldi_enabled = false;
 
-        info[i].ldi_syslog = prrte_output_redirected_to_syslog;
+        info[i].ldi_syslog = prte_output_redirected_to_syslog;
         info[i].ldi_file = false;
         info[i].ldi_file_suffix = NULL;
         info[i].ldi_file_want_append = false;
@@ -210,16 +210,16 @@ bool prrte_output_init(void)
 
     /* Initialize the mutex that protects the output */
 
-    PRRTE_CONSTRUCT(&mutex, prrte_mutex_t);
+    PRTE_CONSTRUCT(&mutex, prte_mutex_t);
     initialized = true;
 
     /* Set some defaults */
 
-    prrte_asprintf(&output_prefix, "output-pid%d-", getpid());
-    output_dir = strdup(prrte_tmp_directory());
+    prte_asprintf(&output_prefix, "output-pid%d-", getpid());
+    output_dir = strdup(prte_tmp_directory());
 
     /* Open the default verbose stream */
-    verbose_stream = prrte_output_open(&verbose);
+    verbose_stream = prte_output_open(&verbose);
 
     return true;
 }
@@ -228,7 +228,7 @@ bool prrte_output_init(void)
 /*
  * Open a stream
  */
-int prrte_output_open(prrte_output_stream_t * lds)
+int prte_output_open(prte_output_stream_t * lds)
 {
     return do_open(-1, lds);
 }
@@ -237,7 +237,7 @@ int prrte_output_open(prrte_output_stream_t * lds)
 /*
  * Reset the parameters on a stream
  */
-int prrte_output_reopen(int output_id, prrte_output_stream_t * lds)
+int prte_output_reopen(int output_id, prte_output_stream_t * lds)
 {
     return do_open(output_id, lds);
 }
@@ -246,17 +246,17 @@ int prrte_output_reopen(int output_id, prrte_output_stream_t * lds)
 /*
  * Enable and disable output streams
  */
-bool prrte_output_switch(int output_id, bool enable)
+bool prte_output_switch(int output_id, bool enable)
 {
     bool ret = false;
 
     /* Setup */
 
     if (!initialized) {
-        prrte_output_init();
+        prte_output_init();
     }
 
-    if (output_id >= 0 && output_id < PRRTE_OUTPUT_MAX_STREAMS) {
+    if (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS) {
         ret = info[output_id].ldi_enabled;
         info[output_id].ldi_enabled = enable;
     }
@@ -268,11 +268,11 @@ bool prrte_output_switch(int output_id, bool enable)
 /*
  * Reopen all the streams; used during checkpoint/restart.
  */
-void prrte_output_reopen_all(void)
+void prte_output_reopen_all(void)
 {
     char *str;
 
-    str = getenv("PRRTE_OUTPUT_STDERR_FD");
+    str = getenv("PRTE_OUTPUT_STDERR_FD");
     if (NULL != str) {
         default_stderr_fd = atoi(str);
     } else {
@@ -283,12 +283,12 @@ void prrte_output_reopen_all(void)
         free(verbose.lds_prefix);
         verbose.lds_prefix = NULL;
     }
-    prrte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prrte_process_info.nodename, getpid());
+    prte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prte_process_info.nodename, getpid());
 #if 0
     int i;
-    prrte_output_stream_t lds;
+    prte_output_stream_t lds;
 
-    for (i = 0; i < PRRTE_OUTPUT_MAX_STREAMS; ++i) {
+    for (i = 0; i < PRTE_OUTPUT_MAX_STREAMS; ++i) {
 
         /* scan till we find ldi_used == 0, which is the end-marker */
 
@@ -297,7 +297,7 @@ void prrte_output_reopen_all(void)
         }
 
         /*
-         * set this to zero to ensure that prrte_output_open will
+         * set this to zero to ensure that prte_output_open will
          * return this same index as the output stream id
          */
         info[i].ldi_used = false;
@@ -319,10 +319,10 @@ void prrte_output_reopen_all(void)
         lds.lds_file_suffix = info[i].ldi_file_suffix;
 
         /*
-         * call prrte_output_open to open the stream. The return value
+         * call prte_output_open to open the stream. The return value
          * is guaranteed to be i.  So we can ignore it.
          */
-        prrte_output_open(&lds);
+        prte_output_open(&lds);
     }
 #endif
 }
@@ -331,7 +331,7 @@ void prrte_output_reopen_all(void)
 /*
  * Close a stream
  */
-void prrte_output_close(int output_id)
+void prte_output_close(int output_id)
 {
     int i;
 
@@ -344,36 +344,36 @@ void prrte_output_close(int output_id)
     /* If it's valid, used, enabled, and has an open file descriptor,
      * free the resources associated with the descriptor */
 
-    prrte_mutex_lock(&mutex);
-    if (output_id < PRRTE_OUTPUT_MAX_STREAMS &&
+    prte_mutex_lock(&mutex);
+    if (output_id < PRTE_OUTPUT_MAX_STREAMS &&
         info[output_id].ldi_used && info[output_id].ldi_enabled) {
         free_descriptor(output_id);
 
         /* If no one has the syslog open, we should close it */
 
-        for (i = 0; i < PRRTE_OUTPUT_MAX_STREAMS; ++i) {
+        for (i = 0; i < PRTE_OUTPUT_MAX_STREAMS; ++i) {
             if (info[i].ldi_used && info[i].ldi_syslog) {
                 break;
             }
         }
 
 #if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
-        if (i >= PRRTE_OUTPUT_MAX_STREAMS && syslog_opened) {
+        if (i >= PRTE_OUTPUT_MAX_STREAMS && syslog_opened) {
             closelog();
         }
 #endif
     }
 
-    prrte_mutex_unlock(&mutex);
+    prte_mutex_unlock(&mutex);
 }
 
 
 /*
  * Main function to send output to a stream
  */
-void prrte_output(int output_id, const char *format, ...)
+void prte_output(int output_id, const char *format, ...)
 {
-    if (output_id >= 0 && output_id < PRRTE_OUTPUT_MAX_STREAMS) {
+    if (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS) {
         va_list arglist;
         va_start(arglist, format);
         output(output_id, format, arglist);
@@ -385,9 +385,9 @@ void prrte_output(int output_id, const char *format, ...)
 /*
  * Check whether the verbose level is high enough for the given stream
  */
-bool prrte_output_check_verbosity(int level, int output_id)
+bool prte_output_check_verbosity(int level, int output_id)
 {
-    return (output_id >= 0 && output_id < PRRTE_OUTPUT_MAX_STREAMS &&
+    return (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS &&
         info[output_id].ldi_verbose_level >= level);
 }
 
@@ -395,10 +395,10 @@ bool prrte_output_check_verbosity(int level, int output_id)
 /*
  * Send a message to a stream if the verbose level is high enough
  */
-void prrte_output_vverbose(int level, int output_id, const char *format,
+void prte_output_vverbose(int level, int output_id, const char *format,
                           va_list arglist)
 {
-    if (output_id >= 0 && output_id < PRRTE_OUTPUT_MAX_STREAMS &&
+    if (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS &&
         info[output_id].ldi_verbose_level >= level) {
         output(output_id, format, arglist);
     }
@@ -408,18 +408,18 @@ void prrte_output_vverbose(int level, int output_id, const char *format,
 /*
  * Send a message to a string if the verbose level is high enough
  */
-char *prrte_output_string(int level, int output_id, const char *format, ...)
+char *prte_output_string(int level, int output_id, const char *format, ...)
 {
     int rc;
     char *ret = NULL;
 
-    if (output_id >= 0 && output_id < PRRTE_OUTPUT_MAX_STREAMS &&
+    if (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS &&
         info[output_id].ldi_verbose_level >= level) {
         va_list arglist;
         va_start(arglist, format);
         rc = make_string(&ret, &info[output_id], format, arglist);
         va_end(arglist);
-        if (PRRTE_SUCCESS != rc) {
+        if (PRTE_SUCCESS != rc) {
             ret = NULL;
         }
     }
@@ -431,16 +431,16 @@ char *prrte_output_string(int level, int output_id, const char *format, ...)
 /*
  * Send a message to a string if the verbose level is high enough
  */
-char *prrte_output_vstring(int level, int output_id, const char *format,
+char *prte_output_vstring(int level, int output_id, const char *format,
                           va_list arglist)
 {
     int rc;
     char *ret = NULL;
 
-    if (output_id >= 0 && output_id < PRRTE_OUTPUT_MAX_STREAMS &&
+    if (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS &&
         info[output_id].ldi_verbose_level >= level) {
         rc = make_string(&ret, &info[output_id], format, arglist);
-        if (PRRTE_SUCCESS != rc) {
+        if (PRTE_SUCCESS != rc) {
             ret = NULL;
         }
     }
@@ -452,9 +452,9 @@ char *prrte_output_vstring(int level, int output_id, const char *format,
 /*
  * Set the verbosity level of a stream
  */
-void prrte_output_set_verbosity(int output_id, int level)
+void prte_output_set_verbosity(int output_id, int level)
 {
-    if (output_id >= 0 && output_id < PRRTE_OUTPUT_MAX_STREAMS) {
+    if (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS) {
         info[output_id].ldi_verbose_level = level;
     }
 }
@@ -463,7 +463,7 @@ void prrte_output_set_verbosity(int output_id, int level)
 /*
  * Control where output flies will go
  */
-void prrte_output_set_output_file_info(const char *dir,
+void prte_output_set_output_file_info(const char *dir,
                                       const char *prefix,
                                       char **olddir,
                                       char **oldprefix)
@@ -489,11 +489,11 @@ void prrte_output_set_output_file_info(const char *dir,
 /*
  * Shut down the output stream system
  */
-void prrte_output_finalize(void)
+void prte_output_finalize(void)
 {
     if (initialized) {
         if (verbose_stream != -1) {
-            prrte_output_close(verbose_stream);
+            prte_output_close(verbose_stream);
         }
         free(verbose.lds_prefix);
         verbose.lds_prefix = NULL;
@@ -511,8 +511,8 @@ void prrte_output_finalize(void)
             temp_str = NULL;
             temp_str_len = 0;
         }
-        PRRTE_DESTRUCT(&verbose);
-        PRRTE_DESTRUCT(&mutex);
+        PRTE_DESTRUCT(&verbose);
+        PRTE_DESTRUCT(&mutex);
     }
 
     initialized = false;
@@ -523,9 +523,9 @@ void prrte_output_finalize(void)
 /*
  * Constructor
  */
-static void construct(prrte_object_t *obj)
+static void construct(prte_object_t *obj)
 {
-    prrte_output_stream_t *stream = (prrte_output_stream_t*) obj;
+    prte_output_stream_t *stream = (prte_output_stream_t*) obj;
 
     stream->lds_verbose_level = 0;
     stream->lds_syslog_priority = 0;
@@ -540,9 +540,9 @@ static void construct(prrte_object_t *obj)
     stream->lds_want_file_append = false;
     stream->lds_file_suffix = NULL;
 }
-static void destruct(prrte_object_t *obj)
+static void destruct(prte_object_t *obj)
 {
-    prrte_output_stream_t *stream = (prrte_output_stream_t*) obj;
+    prte_output_stream_t *stream = (prte_output_stream_t*) obj;
 
     if( NULL != stream->lds_file_suffix ) {
         free(stream->lds_file_suffix);
@@ -555,7 +555,7 @@ static void destruct(prrte_object_t *obj)
  * back-end function so that we can do the thread locking properly
  * (especially upon reopen).
  */
-static int do_open(int output_id, prrte_output_stream_t * lds)
+static int do_open(int output_id, prte_output_stream_t * lds)
 {
     int i;
     bool redirect_to_file = false;
@@ -564,28 +564,28 @@ static int do_open(int output_id, prrte_output_stream_t * lds)
     /* Setup */
 
     if (!initialized) {
-        prrte_output_init();
+        prte_output_init();
     }
 
-    str = getenv("PRRTE_OUTPUT_REDIRECT");
+    str = getenv("PRTE_OUTPUT_REDIRECT");
     if (NULL != str && 0 == strcasecmp(str, "file")) {
         redirect_to_file = true;
     }
-    sfx = getenv("PRRTE_OUTPUT_SUFFIX");
+    sfx = getenv("PRTE_OUTPUT_SUFFIX");
 
     /* If output_id == -1, find an available stream, or return
-     * PRRTE_ERROR */
+     * PRTE_ERROR */
 
     if (-1 == output_id) {
-        prrte_mutex_lock(&mutex);
-        for (i = 0; i < PRRTE_OUTPUT_MAX_STREAMS; ++i) {
+        prte_mutex_lock(&mutex);
+        for (i = 0; i < PRTE_OUTPUT_MAX_STREAMS; ++i) {
             if (!info[i].ldi_used) {
                 break;
             }
         }
-        if (i >= PRRTE_OUTPUT_MAX_STREAMS) {
-            prrte_mutex_unlock(&mutex);
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+        if (i >= PRTE_OUTPUT_MAX_STREAMS) {
+            prte_mutex_unlock(&mutex);
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
 
@@ -608,23 +608,23 @@ static int do_open(int output_id, prrte_output_stream_t * lds)
 
     info[i].ldi_used = true;
     if (-1 == output_id) {
-        prrte_mutex_unlock(&mutex);
+        prte_mutex_unlock(&mutex);
     }
     info[i].ldi_enabled = lds->lds_is_debugging ?
-        (bool) PRRTE_ENABLE_DEBUG : true;
+        (bool) PRTE_ENABLE_DEBUG : true;
     info[i].ldi_verbose_level = lds->lds_verbose_level;
 
 #if USE_SYSLOG
 #if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
-    if (prrte_output_redirected_to_syslog) {
+    if (prte_output_redirected_to_syslog) {
         info[i].ldi_syslog = true;
-        info[i].ldi_syslog_priority = prrte_output_redirected_syslog_pri;
+        info[i].ldi_syslog_priority = prte_output_redirected_syslog_pri;
         if (NULL != redirect_syslog_ident) {
             info[i].ldi_syslog_ident = strdup(redirect_syslog_ident);
             openlog(redirect_syslog_ident, LOG_PID, LOG_USER);
         } else {
             info[i].ldi_syslog_ident = NULL;
-            openlog("prrte", LOG_PID, LOG_USER);
+            openlog("prte", LOG_PID, LOG_USER);
         }
         syslog_opened = true;
     } else {
@@ -638,7 +638,7 @@ static int do_open(int output_id, prrte_output_stream_t * lds)
                 openlog(lds->lds_syslog_ident, LOG_PID, LOG_USER);
             } else {
                 info[i].ldi_syslog_ident = NULL;
-                openlog("prrte", LOG_PID, LOG_USER);
+                openlog("prte", LOG_PID, LOG_USER);
             }
 #endif
             syslog_opened = true;
@@ -669,7 +669,7 @@ static int do_open(int output_id, prrte_output_stream_t * lds)
         info[i].ldi_suffix_len = 0;
     }
 
-    if (prrte_output_redirected_to_syslog) {
+    if (prte_output_redirected_to_syslog) {
         /* since all is redirected to syslog, ensure
          * we don't duplicate the output to the std places
          */
@@ -731,7 +731,7 @@ static int open_file(int i)
      * on someone else's stream - if so, we don't want
      * to open it twice
      */
-    for (n=0; n < PRRTE_OUTPUT_MAX_STREAMS; n++) {
+    for (n=0; n < PRTE_OUTPUT_MAX_STREAMS; n++) {
         if (i == n) {
             continue;
         }
@@ -759,17 +759,17 @@ static int open_file(int i)
             break;
         }
         info[i].ldi_fd = info[n].ldi_fd;
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* Setup the filename and open flags */
 
     if (NULL != output_dir) {
-        filename = (char *) malloc(PRRTE_PATH_MAX);
+        filename = (char *) malloc(PRTE_PATH_MAX);
         if (NULL == filename) {
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        prrte_string_copy(filename, output_dir, PRRTE_PATH_MAX);
+        prte_string_copy(filename, output_dir, PRTE_PATH_MAX);
         strcat(filename, "/");
         if (NULL != output_prefix) {
             strcat(filename, output_prefix);
@@ -790,25 +790,25 @@ static int open_file(int i)
         if (-1 == info[i].ldi_fd) {
             info[i].ldi_used = false;
             free(filename);  /* release the filename in all cases */
-            return PRRTE_ERR_IN_ERRNO;
+            return PRTE_ERR_IN_ERRNO;
         }
 
         /* Make the file be close-on-exec to prevent child inheritance
          * problems */
         if (-1 == fcntl(info[i].ldi_fd, F_SETFD, 1)) {
             free(filename);  /* release the filename in all cases */
-            return PRRTE_ERR_IN_ERRNO;
+            return PRTE_ERR_IN_ERRNO;
         }
 
         /* register it to be ignored */
-        prrte_pmix_register_cleanup(filename, false, true, false);
+        prte_pmix_register_cleanup(filename, false, true, false);
         free(filename);  /* release the filename in all cases */
     }
 
     /* Return successfully even if the session dir did not exist yet;
      * we'll try opening it later */
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
@@ -819,7 +819,7 @@ static void free_descriptor(int output_id)
 {
     output_desc_t *ldi;
 
-    if (output_id >= 0 && output_id < PRRTE_OUTPUT_MAX_STREAMS &&
+    if (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS &&
         info[output_id].ldi_used && info[output_id].ldi_enabled) {
         ldi = &info[output_id];
 
@@ -861,7 +861,7 @@ static int make_string(char **no_newline_string, output_desc_t *ldi,
 
     /* Make the formatted string */
 
-    prrte_vasprintf(no_newline_string, format, arglist);
+    prte_vasprintf(no_newline_string, format, arglist);
     total_len = len = strlen(*no_newline_string);
     if ('\n' != (*no_newline_string)[len - 1]) {
         want_newline = true;
@@ -888,7 +888,7 @@ static int make_string(char **no_newline_string, output_desc_t *ldi,
         }
         temp_str = (char *) malloc(total_len * 2);
         if (NULL == temp_str) {
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
         temp_str_len = total_len * 2;
     }
@@ -924,7 +924,7 @@ static int make_string(char **no_newline_string, output_desc_t *ldi,
         }
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /*
@@ -934,26 +934,26 @@ static int make_string(char **no_newline_string, output_desc_t *ldi,
  */
 static int output(int output_id, const char *format, va_list arglist)
 {
-    int rc = PRRTE_SUCCESS;
+    int rc = PRTE_SUCCESS;
     char *str, *out = NULL;
     output_desc_t *ldi;
 
     /* Setup */
 
     if (!initialized) {
-        prrte_output_init();
+        prte_output_init();
     }
 
     /* If it's valid, used, and enabled, output */
 
-    if (output_id >= 0 && output_id < PRRTE_OUTPUT_MAX_STREAMS &&
+    if (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS &&
         info[output_id].ldi_used && info[output_id].ldi_enabled) {
-        prrte_mutex_lock(&mutex);
+        prte_mutex_lock(&mutex);
         ldi = &info[output_id];
 
         /* Make the strings */
-        if (PRRTE_SUCCESS != (rc = make_string(&str, ldi, format, arglist))) {
-            prrte_mutex_unlock(&mutex);
+        if (PRTE_SUCCESS != (rc = make_string(&str, ldi, format, arglist))) {
+            prte_mutex_unlock(&mutex);
             return rc;
         }
 
@@ -972,8 +972,8 @@ static int output(int output_id, const char *format, va_list arglist)
         /* stdout output */
         if (ldi->ldi_stdout) {
             if (-1 == write(fileno(stdout), out, (int)strlen(out))) {
-                prrte_mutex_unlock(&mutex);
-                return PRRTE_ERR_FATAL;
+                prte_mutex_unlock(&mutex);
+                return PRTE_ERR_FATAL;
             }
             fflush(stdout);
         }
@@ -989,22 +989,22 @@ static int output(int output_id, const char *format, va_list arglist)
         /* File output -- first check to see if the file opening was
          * delayed.  If so, try to open it.  If we failed to open it,
          * then just discard (there are big warnings in the
-         * prrte_output.h docs about this!). */
+         * prte_output.h docs about this!). */
 
         if (ldi->ldi_file) {
             if (ldi->ldi_fd == -1) {
-                if (PRRTE_SUCCESS != open_file(output_id)) {
+                if (PRTE_SUCCESS != open_file(output_id)) {
                     ++ldi->ldi_file_num_lines_lost;
                 } else if (ldi->ldi_file_num_lines_lost > 0) {
                     char buffer[BUFSIZ];
                     char *out = buffer;
                     memset(buffer, 0, BUFSIZ);
                     snprintf(buffer, BUFSIZ - 1,
-                             "[WARNING: %d lines lost because the PRRTE process session directory did\n not exist when prrte_output() was invoked]\n",
+                             "[WARNING: %d lines lost because the PRTE process session directory did\n not exist when prte_output() was invoked]\n",
                              ldi->ldi_file_num_lines_lost);
                     if (-1 == write(ldi->ldi_fd, buffer, (int)strlen(buffer))) {
-                        prrte_mutex_unlock(&mutex);
-                        return PRRTE_ERR_FATAL;
+                        prte_mutex_unlock(&mutex);
+                        return PRTE_ERR_FATAL;
                     }
                     ldi->ldi_file_num_lines_lost = 0;
                     if (out != buffer) {
@@ -1014,21 +1014,21 @@ static int output(int output_id, const char *format, va_list arglist)
             }
             if (ldi->ldi_fd != -1) {
                 if (-1 == write(ldi->ldi_fd, out, (int)strlen(out))) {
-                    prrte_mutex_unlock(&mutex);
-                    return PRRTE_ERR_FATAL;
+                    prte_mutex_unlock(&mutex);
+                    return PRTE_ERR_FATAL;
                 }
             }
         }
-        prrte_mutex_unlock(&mutex);
+        prte_mutex_unlock(&mutex);
         free(str);
     }
 
     return rc;
 }
 
-int prrte_output_get_verbosity(int output_id)
+int prte_output_get_verbosity(int output_id)
 {
-    if (output_id >= 0 && output_id < PRRTE_OUTPUT_MAX_STREAMS && info[output_id].ldi_used) {
+    if (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS && info[output_id].ldi_used) {
         return info[output_id].ldi_verbose_level;
     } else {
         return -1;

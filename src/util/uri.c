@@ -5,6 +5,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -12,7 +13,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,13 +31,13 @@
 
 const static char *uri_reserved_path_chars="!$&'()*+,;=:@ ";
 
-char *prrte_uri_get_scheme(const char *uri)
+char *prte_uri_get_scheme(const char *uri)
 {
     char *turi = strdup(uri);
     char *ptr;
 
     if (NULL == (ptr = strchr(turi, ':'))) {
-        prrte_show_help("help-prrte-util.txt", "malformed-uri",
+        prte_show_help("help-prte-util.txt", "malformed-uri",
                        true, uri);
         free(turi);
         return NULL;
@@ -45,15 +46,15 @@ char *prrte_uri_get_scheme(const char *uri)
     return turi;
 }
 
-char *prrte_filename_to_uri(const char *filename,
+char *prte_filename_to_uri(const char *filename,
                            const char *hostname)
 {
     char *uri, *fn;
     size_t i, j, k, n;
 
     /* filename must be an absolute path */
-    if (!prrte_path_is_absolute(filename)) {
-        prrte_show_help("help-prrte-util.txt", "relative-path",
+    if (!prte_path_is_absolute(filename)) {
+        prte_show_help("help-prte-util.txt", "relative-path",
                        true, filename);
         return NULL;
     }
@@ -62,7 +63,7 @@ char *prrte_filename_to_uri(const char *filename,
      * the scheme can either be missing or given as "localhost"
      */
     if (NULL == hostname) {
-        prrte_asprintf(&uri, "file://%s", filename);
+        prte_asprintf(&uri, "file://%s", filename);
         return uri;
     }
 
@@ -99,12 +100,12 @@ char *prrte_filename_to_uri(const char *filename,
      * ensure it was absolute, so the required separator should
      * already be present
      */
-    prrte_asprintf(&uri, "file://%s%s", hostname, fn);
+    prte_asprintf(&uri, "file://%s%s", hostname, fn);
     free(fn);
     return uri;
 }
 
-char *prrte_filename_from_uri(const char *uri,
+char *prte_filename_from_uri(const char *uri,
                              char **hostname)
 {
     char *turi;
@@ -121,7 +122,7 @@ char *prrte_filename_from_uri(const char *uri,
 
     /* extract the scheme */
     if (NULL == (ptr = strchr(turi, ':'))) {
-        prrte_show_help("help-prrte-util.txt", "malformed-uri",
+        prte_show_help("help-prte-util.txt", "malformed-uri",
                        true, uri);
         free(turi);
         return NULL;
@@ -141,13 +142,13 @@ char *prrte_filename_from_uri(const char *uri,
         fn = strdup(ptr);
     } else if (0 != strncmp(ptr, "//", 2)) {
         /* error */
-        prrte_show_help("help-prrte-util.txt", "malformed-uri",
+        prte_show_help("help-prte-util.txt", "malformed-uri",
                        true, uri);
     } else {
         ptr += 2;  /* step to the hostname */
         /* find the separator to the filename */
         if (NULL == (sp = strchr(ptr, '/'))) {
-            prrte_show_help("help-prrte-util.txt", "malformed-uri",
+            prte_show_help("help-prte-util.txt", "malformed-uri",
                            true, uri);
         } else {
             *sp = '\0';

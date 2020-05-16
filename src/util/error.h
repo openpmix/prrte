@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,20 +19,20 @@
  * $HEADER$
  */
 
-#ifndef PRRTE_UTIL_ERROR_H
-#define PRRTE_UTIL_ERROR_H
+#ifndef PRTE_UTIL_ERROR_H
+#define PRTE_UTIL_ERROR_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/util/output.h"
 
 BEGIN_C_DECLS
 
-#define PRRTE_ERROR_LOG(r)                                          \
+#define PRTE_ERROR_LOG(r)                                          \
     do {                                                            \
-        if (PRRTE_ERR_SILENT != (r)) {                              \
-            prrte_output(0, "PRRTE ERROR: %s in file %s at line %d", \
-                         prrte_strerror((r)), __FILE__, __LINE__);      \
+        if (PRTE_ERR_SILENT != (r)) {                              \
+            prte_output(0, "PRTE ERROR: %s in file %s at line %d", \
+                         prte_strerror((r)), __FILE__, __LINE__);      \
         }                                                               \
     } while(0)
 
@@ -42,15 +43,15 @@ BEGIN_C_DECLS
  * the corresponding message string.  The result is returned in a
  * static buffer that should not be released with free().
  *
- * If errnum is \c PRRTE_ERR_IN_ERRNO, the system strerror is called
+ * If errnum is \c PRTE_ERR_IN_ERRNO, the system strerror is called
  * with an argument of the current value of \c errno and the resulting
  * string is returned.
  *
  * If the errnum is not a known value, the returned value may be
- * overwritten by subsequent calls to prrte_strerror.
+ * overwritten by subsequent calls to prte_strerror.
  */
-PRRTE_EXPORT const char *prrte_strerror(int errnum);
+PRTE_EXPORT const char *prte_strerror(int errnum);
 
 END_C_DECLS
 
-#endif /* PRRTE_UTIL_ERROR_H */
+#endif /* PRTE_UTIL_ERROR_H */

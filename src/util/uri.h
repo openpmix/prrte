@@ -2,6 +2,7 @@
  * Copyright (c) 2012      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,10 +49,10 @@
    though the code is NOT in any way based on thoat code.
 */
 
-#ifndef PRRTE_URI_H
-#define PRRTE_URI_H
+#ifndef PRTE_URI_H
+#define PRTE_URI_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -64,15 +65,15 @@ BEGIN_C_DECLS
  *
  * The caller is responsible for freeing the returned string.
  */
-PRRTE_EXPORT char *prrte_uri_get_scheme(const char *uri) __prrte_attribute_malloc__ __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_uri_get_scheme(const char *uri) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 /**
  *  Create a uri from a hostname and filename
  *
  * The caller is responsible for freeing the returned string.
  */
-PRRTE_EXPORT char *prrte_filename_to_uri(const char *filename,
-                                         const char *hostname) __prrte_attribute_malloc__ __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_filename_to_uri(const char *filename,
+                                         const char *hostname) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 /**
  * Extract the filename (and hostname) from a uri
  *
@@ -84,8 +85,8 @@ PRRTE_EXPORT char *prrte_filename_to_uri(const char *filename,
  *
  * The caller is responsible for freeing the returned string.
  */
-PRRTE_EXPORT char *prrte_filename_from_uri(const char *uri,
-                                           char **hostname) __prrte_attribute_malloc__ __prrte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_filename_from_uri(const char *uri,
+                                           char **hostname) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 END_C_DECLS
-#endif /* PRRTE_URI_H */
+#endif /* PRTE_URI_H */

@@ -17,6 +17,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +31,7 @@
  * entire components just to query their version and parameters.
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <stdlib.h>
@@ -53,46 +54,46 @@
  * and pointers to our public functions in it
  */
 
-prrte_odls_base_component_t prrte_odls_alps_component = {
+prte_odls_base_component_t prte_odls_alps_component = {
     /* First, the mca_component_t struct containing meta information
     about the component itself */
     .version = {
-        PRRTE_ODLS_BASE_VERSION_2_0_0,
+        PRTE_ODLS_BASE_VERSION_2_0_0,
         /* Component name and version */
         .mca_component_name = "alps",
-        PRRTE_MCA_BASE_MAKE_VERSION(component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                    PRRTE_RELEASE_VERSION),
+        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                    PRTE_RELEASE_VERSION),
 
         /* Component open and close functions */
-        .mca_open_component = prrte_odls_alps_component_open,
-        .mca_close_component = prrte_odls_alps_component_close,
-        .mca_query_component = prrte_odls_alps_component_query,
+        .mca_open_component = prte_odls_alps_component_open,
+        .mca_close_component = prte_odls_alps_component_close,
+        .mca_query_component = prte_odls_alps_component_query,
     },
     .base_data = {
         /* The component is checkpoint ready */
-        PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
     },
 };
 
 
-int prrte_odls_alps_component_open(void)
+int prte_odls_alps_component_open(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
-int prrte_odls_alps_component_query(prrte_mca_base_module_t **module, int *priority)
+int prte_odls_alps_component_query(prte_mca_base_module_t **module, int *priority)
 {
-    int rc = PRRTE_SUCCESS;
+    int rc = PRTE_SUCCESS;
     bool flag;
 
     /*
      * make sure we're in a daemon process
      */
 
-    if (!PRRTE_PROC_IS_DAEMON) {
+    if (!PRTE_PROC_IS_DAEMON) {
         *priority = 0;
         *module = NULL;
-        rc = PRRTE_ERROR;
+        rc = PRTE_ERROR;
     }
 
     /*
@@ -101,19 +102,19 @@ int prrte_odls_alps_component_query(prrte_mca_base_module_t **module, int *prior
      * the cray job kernel module  - the thing that creates the PAGG
      */
 
-    rc = prrte_common_alps_proc_in_pagg(&flag);
-    if ((PRRTE_SUCCESS == rc) && flag) {
+    rc = prte_common_alps_proc_in_pagg(&flag);
+    if ((PRTE_SUCCESS == rc) && flag) {
         *priority = 80; /* take precendence over base and default */
-        *module = (prrte_mca_base_module_t *) &prrte_odls_alps_module;
+        *module = (prte_mca_base_module_t *) &prte_odls_alps_module;
     }
 
     return rc;
 }
 
 
-int prrte_odls_alps_component_close(void)
+int prte_odls_alps_component_close(void)
 {
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 

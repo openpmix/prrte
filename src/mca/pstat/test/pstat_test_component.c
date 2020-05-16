@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
@@ -29,7 +29,7 @@
  * entire components just to query their version and parameters.
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "constants.h"
 #include "src/mca/pstat/pstat.h"
@@ -38,13 +38,13 @@
 /*
  * Public string showing the pstat ompi_test component version number
  */
-const char *prrte_pstat_test_component_version_string =
-    "PRRTE test pstat MCA component version " PRRTE_VERSION;
+const char *prte_pstat_test_component_version_string =
+    "PRTE test pstat MCA component version " PRTE_VERSION;
 
 /*
  * Local function
  */
-static int pstat_test_component_query(prrte_mca_base_module_t **module, int *priority);
+static int pstat_test_component_query(prte_mca_base_module_t **module, int *priority);
 
 
 /*
@@ -52,7 +52,7 @@ static int pstat_test_component_query(prrte_mca_base_module_t **module, int *pri
  * and pointers to our public functions in it
  */
 
-const prrte_pstat_base_component_t prrte_pstat_test_component = {
+const prte_pstat_base_component_t prte_pstat_test_component = {
 
     /* First, the mca_component_t struct containing meta information
        about the component itself */
@@ -61,28 +61,28 @@ const prrte_pstat_base_component_t prrte_pstat_test_component = {
         /* Indicate that we are a pstat v1.1.0 component (which also
            implies a specific MCA version) */
 
-        PRRTE_PSTAT_BASE_VERSION_2_0_0,
+        PRTE_PSTAT_BASE_VERSION_2_0_0,
 
         /* Component name and version */
 
         .mca_component_name = "test",
-        PRRTE_MCA_BASE_MAKE_VERSION (component, PRRTE_MAJOR_VERSION, PRRTE_MINOR_VERSION,
-                                    PRRTE_RELEASE_VERSION),
+        PRTE_MCA_BASE_MAKE_VERSION (component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                    PRTE_RELEASE_VERSION),
 
         .mca_query_component = pstat_test_component_query,
     },
     /* Next the MCA v1.0.0 component meta data */
     .base_data = {
         /* The component is checkpoint ready */
-        PRRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
     }
 };
 
 
-static int pstat_test_component_query(prrte_mca_base_module_t **module, int *priority)
+static int pstat_test_component_query(prte_mca_base_module_t **module, int *priority)
 {
     *priority = 20;
-    *module = (prrte_mca_base_module_t *)&prrte_pstat_test_module;
+    *module = (prte_mca_base_module_t *)&prte_pstat_test_module;
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

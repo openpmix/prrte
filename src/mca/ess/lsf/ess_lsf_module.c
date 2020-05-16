@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -21,7 +21,7 @@
  *
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #ifdef HAVE_UNISTD_H
@@ -32,13 +32,13 @@
 
 #include <lsf/lsbatch.h>
 
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 #include "src/util/argv.h"
 
 #include "src/util/show_help.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/pmix/pmix-internal.h"
 
@@ -51,7 +51,7 @@ static int lsf_set_name(void);
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
-prrte_ess_base_module_t prrte_ess_lsf_module = {
+prte_ess_base_module_t prte_ess_lsf_module = {
     rte_init,
     rte_finalize,
     NULL,
@@ -61,7 +61,7 @@ prrte_ess_base_module_t prrte_ess_lsf_module = {
 /*
  * Local variables
  */
-static prrte_node_rank_t my_node_rank=PRRTE_NODE_RANK_INVALID;
+static prte_node_rank_t my_node_rank=PRTE_NODE_RANK_INVALID;
 
 
 static int rte_init(int argc, char **argv)
@@ -70,27 +70,27 @@ static int rte_init(int argc, char **argv)
     char *error = NULL;
 
     /* run the prolog */
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_std_prolog())) {
-        error = "prrte_ess_base_std_prolog";
+    if (PRTE_SUCCESS != (ret = prte_ess_base_std_prolog())) {
+        error = "prte_ess_base_std_prolog";
         goto error;
     }
 
     /* Start by getting a unique name */
     lsf_set_name();
 
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_prted_setup())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_ess_base_prted_setup";
+    if (PRTE_SUCCESS != (ret = prte_ess_base_prted_setup())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_ess_base_prted_setup";
         goto error;
     }
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 
 
 error:
-    if (PRRTE_ERR_SILENT != ret && !prrte_report_silent_errors) {
-        prrte_show_help("help-prrte-runtime.txt",
-                       "prrte_init:startup:internal-failure",
-                       true, error, PRRTE_ERROR_NAME(ret), ret);
+    if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
+        prte_show_help("help-prte-runtime.txt",
+                       "prte_init:startup:internal-failure",
+                       true, error, PRTE_ERROR_NAME(ret), ret);
     }
 
     return ret;
@@ -100,8 +100,8 @@ static int rte_finalize(void)
 {
     int ret;
 
-    if (PRRTE_SUCCESS != (ret = prrte_ess_base_prted_finalize())) {
-        PRRTE_ERROR_LOG(ret);
+    if (PRTE_SUCCESS != (ret = prte_ess_base_prted_finalize())) {
+        PRTE_ERROR_LOG(ret);
     }
 
     return ret;;
@@ -110,32 +110,32 @@ static int rte_finalize(void)
 static int lsf_set_name(void)
 {
     int lsf_nodeid;
-    prrte_vpid_t vpid;
+    prte_vpid_t vpid;
 
-    if (NULL == prrte_ess_base_nspace) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+    if (NULL == prte_ess_base_nspace) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
 
-    PRRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRRTE_PROC_MY_NAME->jobid, prrte_ess_base_nspace);
-    PMIX_LOAD_NSPACE(prrte_process_info.myproc.nspace, prrte_ess_base_nspace);
+    PRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRTE_PROC_MY_NAME->jobid, prte_ess_base_nspace);
+    PMIX_LOAD_NSPACE(prte_process_info.myproc.nspace, prte_ess_base_nspace);
 
-    if (NULL == prrte_ess_base_vpid) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+    if (NULL == prte_ess_base_vpid) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
-    vpid = strtoul(prrte_ess_base_vpid, NULL, 10);
+    vpid = strtoul(prte_ess_base_vpid, NULL, 10);
 
     lsf_nodeid = atoi(getenv("LSF_PM_TASKID"));
-    prrte_output_verbose(1, prrte_ess_base_framework.framework_output,
+    prte_output_verbose(1, prte_ess_base_framework.framework_output,
                         "ess:lsf found LSF_PM_TASKID set to %d",
                         lsf_nodeid);
-    PRRTE_PROC_MY_NAME->vpid = vpid + lsf_nodeid - 1;
-    prrte_process_info.myproc.rank = PRRTE_PROC_MY_NAME->vpid;
+    PRTE_PROC_MY_NAME->vpid = vpid + lsf_nodeid - 1;
+    prte_process_info.myproc.rank = PRTE_PROC_MY_NAME->vpid;
 
     /* get the num procs as provided in the cmd line param */
-    prrte_process_info.num_daemons = prrte_ess_base_num_procs;
+    prte_process_info.num_daemons = prte_ess_base_num_procs;
 
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

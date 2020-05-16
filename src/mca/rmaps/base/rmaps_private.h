@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
@@ -22,16 +22,16 @@
 /** @file:
  */
 
-#ifndef PRRTE_MCA_RMAPS_PRIVATE_H
-#define PRRTE_MCA_RMAPS_PRIVATE_H
+#ifndef PRTE_MCA_RMAPS_PRIVATE_H
+#define PRTE_MCA_RMAPS_PRIVATE_H
 
 /*
  * includes
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/rmaps/rmaps.h"
 
@@ -43,29 +43,29 @@ BEGIN_C_DECLS
 
 /* LOCAL FUNCTIONS for use by RMAPS components */
 
-PRRTE_EXPORT int prrte_rmaps_base_get_target_nodes(prrte_list_t* node_list,
-                                                   prrte_std_cntr_t *total_num_slots,
-                                                   prrte_app_context_t *app,
-                                                   prrte_mapping_policy_t policy,
+PRTE_EXPORT int prte_rmaps_base_get_target_nodes(prte_list_t* node_list,
+                                                   prte_std_cntr_t *total_num_slots,
+                                                   prte_app_context_t *app,
+                                                   prte_mapping_policy_t policy,
                                                    bool initial_map, bool silent);
 
-PRRTE_EXPORT prrte_proc_t* prrte_rmaps_base_setup_proc(prrte_job_t *jdata,
-                                                      prrte_node_t *node,
-                                                      prrte_app_idx_t idx);
+PRTE_EXPORT prte_proc_t* prte_rmaps_base_setup_proc(prte_job_t *jdata,
+                                                      prte_node_t *node,
+                                                      prte_app_idx_t idx);
 
-PRRTE_EXPORT prrte_node_t* prrte_rmaps_base_get_starting_point(prrte_list_t *node_list,
-                                                              prrte_job_t *jdata);
+PRTE_EXPORT prte_node_t* prte_rmaps_base_get_starting_point(prte_list_t *node_list,
+                                                              prte_job_t *jdata);
 
-PRRTE_EXPORT int prrte_rmaps_base_compute_vpids(prrte_job_t *jdata);
+PRTE_EXPORT int prte_rmaps_base_compute_vpids(prte_job_t *jdata);
 
-PRRTE_EXPORT int prrte_rmaps_base_compute_local_ranks(prrte_job_t *jdata);
+PRTE_EXPORT int prte_rmaps_base_compute_local_ranks(prte_job_t *jdata);
 
-PRRTE_EXPORT int prrte_rmaps_base_compute_bindings(prrte_job_t *jdata);
+PRTE_EXPORT int prte_rmaps_base_compute_bindings(prte_job_t *jdata);
 
-PRRTE_EXPORT void prrte_rmaps_base_update_local_ranks(prrte_job_t *jdata, prrte_node_t *oldnode,
-                                                      prrte_node_t *newnode, prrte_proc_t *newproc);
+PRTE_EXPORT void prte_rmaps_base_update_local_ranks(prte_job_t *jdata, prte_node_t *oldnode,
+                                                      prte_node_t *newnode, prte_proc_t *newproc);
 
-PRRTE_EXPORT int prrte_rmaps_base_rearrange_map(prrte_app_context_t *app, prrte_job_map_t *map, prrte_list_t *procs);
+PRTE_EXPORT int prte_rmaps_base_rearrange_map(prte_app_context_t *app, prte_job_map_t *map, prte_list_t *procs);
 
 END_C_DECLS
 

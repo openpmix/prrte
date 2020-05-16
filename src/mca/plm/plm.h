@@ -15,6 +15,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,21 +30,21 @@
  * monitoring.
  */
 
-#ifndef PRRTE_PLM_H
-#define PRRTE_PLM_H
+#ifndef PRTE_PLM_H
+#define PRTE_PLM_H
 
 /*
  * includes
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
 #include "src/mca/mca.h"
 #include "src/dss/dss_types.h"
-#include "src/class/prrte_pointer_array.h"
+#include "src/class/prte_pointer_array.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 #include "plm_types.h"
 
@@ -56,95 +57,95 @@ BEGIN_C_DECLS
 /*
  * allow the selected module to initialize
  */
-typedef int (*prrte_plm_base_module_init_fn_t)(void);
+typedef int (*prte_plm_base_module_init_fn_t)(void);
 
 /*
  * Spawn a job - this is a non-blocking function!
  */
-typedef int (*prrte_plm_base_module_spawn_fn_t)(prrte_job_t *jdata);
+typedef int (*prte_plm_base_module_spawn_fn_t)(prte_job_t *jdata);
 
 /*
  * Remote spawn - spawn called by a daemon to launch a process on its own
  */
-typedef int (*prrte_plm_base_module_remote_spawn_fn_t)(void);
+typedef int (*prte_plm_base_module_remote_spawn_fn_t)(void);
 
 /*
  * Entry point to set the HNP name
  */
-typedef int (*prrte_plm_base_module_set_hnp_name_fn_t)(void);
+typedef int (*prte_plm_base_module_set_hnp_name_fn_t)(void);
 
 /**
     * Cleanup resources held by module.
  */
 
-typedef int (*prrte_plm_base_module_finalize_fn_t)(void);
+typedef int (*prte_plm_base_module_finalize_fn_t)(void);
 
 /**
  * Terminate any processes launched for the respective jobid by
  * this component.
  */
-typedef int (*prrte_plm_base_module_terminate_job_fn_t)(prrte_jobid_t);
+typedef int (*prte_plm_base_module_terminate_job_fn_t)(prte_jobid_t);
 
 /**
  * Terminate the daemons
  */
-typedef int (*prrte_plm_base_module_terminate_orteds_fn_t)(void);
+typedef int (*prte_plm_base_module_terminate_orteds_fn_t)(void);
 
 /**
  * Terminate an array of specific procs
  */
-typedef int (*prrte_plm_base_module_terminate_procs_fn_t)(prrte_pointer_array_t *procs);
+typedef int (*prte_plm_base_module_terminate_procs_fn_t)(prte_pointer_array_t *procs);
 
     /**
  * Signal any processes launched for the respective jobid by
  * this component.
  */
-typedef int (*prrte_plm_base_module_signal_job_fn_t)(prrte_jobid_t, int32_t);
+typedef int (*prte_plm_base_module_signal_job_fn_t)(prte_jobid_t, int32_t);
 
 /**
  * plm module version 1.0.0
  */
-struct prrte_plm_base_module_1_0_0_t {
-    prrte_plm_base_module_init_fn_t               init;
-    prrte_plm_base_module_set_hnp_name_fn_t       set_hnp_name;
-    prrte_plm_base_module_spawn_fn_t              spawn;
-    prrte_plm_base_module_remote_spawn_fn_t       remote_spawn;
-    prrte_plm_base_module_terminate_job_fn_t      terminate_job;
-    prrte_plm_base_module_terminate_orteds_fn_t   terminate_orteds;
-    prrte_plm_base_module_terminate_procs_fn_t    terminate_procs;
-    prrte_plm_base_module_signal_job_fn_t         signal_job;
-    prrte_plm_base_module_finalize_fn_t           finalize;
+struct prte_plm_base_module_1_0_0_t {
+    prte_plm_base_module_init_fn_t               init;
+    prte_plm_base_module_set_hnp_name_fn_t       set_hnp_name;
+    prte_plm_base_module_spawn_fn_t              spawn;
+    prte_plm_base_module_remote_spawn_fn_t       remote_spawn;
+    prte_plm_base_module_terminate_job_fn_t      terminate_job;
+    prte_plm_base_module_terminate_orteds_fn_t   terminate_orteds;
+    prte_plm_base_module_terminate_procs_fn_t    terminate_procs;
+    prte_plm_base_module_signal_job_fn_t         signal_job;
+    prte_plm_base_module_finalize_fn_t           finalize;
 };
 
-/** shprrten prrte_plm_base_module_1_0_0_t declaration */
-typedef struct prrte_plm_base_module_1_0_0_t prrte_plm_base_module_1_0_0_t;
-/** shprrten prrte_plm_base_module_t declaration */
-typedef struct prrte_plm_base_module_1_0_0_t prrte_plm_base_module_t;
+/** shprten prte_plm_base_module_1_0_0_t declaration */
+typedef struct prte_plm_base_module_1_0_0_t prte_plm_base_module_1_0_0_t;
+/** shprten prte_plm_base_module_t declaration */
+typedef struct prte_plm_base_module_1_0_0_t prte_plm_base_module_t;
 
 
 /**
  * plm component
  */
-struct prrte_plm_base_component_2_0_0_t {
+struct prte_plm_base_component_2_0_0_t {
     /** component version */
-    prrte_mca_base_component_t base_version;
+    prte_mca_base_component_t base_version;
     /** component data */
-    prrte_mca_base_component_data_t base_data;
+    prte_mca_base_component_data_t base_data;
 };
 /** Convenience typedef */
-typedef struct prrte_plm_base_component_2_0_0_t prrte_plm_base_component_2_0_0_t;
+typedef struct prte_plm_base_component_2_0_0_t prte_plm_base_component_2_0_0_t;
 /** Convenience typedef */
-typedef prrte_plm_base_component_2_0_0_t prrte_plm_base_component_t;
+typedef prte_plm_base_component_2_0_0_t prte_plm_base_component_t;
 
 
 /**
  * Macro for use in modules that are of type plm
  */
-#define PRRTE_PLM_BASE_VERSION_2_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("plm", 2, 0, 0)
+#define PRTE_PLM_BASE_VERSION_2_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("plm", 2, 0, 0)
 
 /* Global structure for accessing PLM functions */
-PRRTE_EXPORT extern prrte_plm_base_module_t prrte_plm;  /* holds selected module's function pointers */
+PRTE_EXPORT extern prte_plm_base_module_t prte_plm;  /* holds selected module's function pointers */
 
 END_C_DECLS
 

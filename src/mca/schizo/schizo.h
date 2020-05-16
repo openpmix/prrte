@@ -4,6 +4,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -12,37 +13,37 @@
  */
 /** @file:
  *
- * The PRRTE Personality Framework (schizo)
+ * The PRTE Personality Framework (schizo)
  *
  * Multi-select framework so that multiple personalities can be
  * simultaneously supported
  *
  */
 
-#ifndef PRRTE_MCA_SCHIZO_H
-#define PRRTE_MCA_SCHIZO_H
+#ifndef PRTE_MCA_SCHIZO_H
+#define PRTE_MCA_SCHIZO_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 #include "src/util/cmd_line.h"
 
 #include "src/mca/mca.h"
 
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 
 
 BEGIN_C_DECLS
 
-typedef int (*prrte_schizo_convertor_fn_t)(char *option, char ***argv, int idx);
+typedef int (*prte_schizo_convertor_fn_t)(char *option, char ***argv, int idx);
 
 typedef struct {
-    prrte_list_item_t super;
+    prte_list_item_t super;
     char **options;
-    prrte_schizo_convertor_fn_t convert;
-} prrte_convertor_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_convertor_t);
+    prte_schizo_convertor_fn_t convert;
+} prte_convertor_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_convertor_t);
 
 /*
  * schizo module functions
@@ -55,10 +56,10 @@ PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_convertor_t);
 
 /* initialize the module - allow it to do whatever one-time
  * things it requires */
-typedef int (*prrte_schizo_base_module_init_fn_t)(void);
+typedef int (*prte_schizo_base_module_init_fn_t)(void);
 
 /* provide an opportunity for components to add personality and/or
- * environment-specific command line options. The PRRTE cli tools
+ * environment-specific command line options. The PRTE cli tools
  * will add provided options to the CLI definition, and so the
  * resulting CLI array will include the _union_ of options provided
  * by the various components. Where there is overlap (i.e., an option
@@ -66,47 +67,47 @@ typedef int (*prrte_schizo_base_module_init_fn_t)(void);
  * first definition is used. This reflects the higher priority of
  * the original definition - note that this only impacts the help
  * message that will be displayed */
-typedef int (*prrte_schizo_base_module_define_cli_fn_t)(prrte_cmd_line_t *cli);
+typedef int (*prte_schizo_base_module_define_cli_fn_t)(prte_cmd_line_t *cli);
 
 /* parse a tool command line
  * starting from the given location according to the cmd line options
  * known to this module's personality. First, of course, check that
  * this module is included in the base array of personalities, or is
  * automatically recognizable! */
-typedef int (*prrte_schizo_base_module_parse_cli_fn_t)(int argc, int start,
+typedef int (*prte_schizo_base_module_parse_cli_fn_t)(int argc, int start,
                                                       char **argv,
                                                       char *personality,
                                                       char ***target);
 
-typedef void (*prrte_schizo_base_module_register_deprecated_cli_fn_t)(prrte_list_t *convertors);
+typedef void (*prte_schizo_base_module_register_deprecated_cli_fn_t)(prte_list_t *convertors);
 
 /* detect if we are running as a proxy
  * Check the environment to determine what, if any, host we are running
  * under. Check the argv to see if we are running as a proxy for some
  * other command and to see which environment we are proxying.
  */
-typedef int (*prrte_schizo_base_detect_proxy_fn_t)(char **argv);
+typedef int (*prte_schizo_base_detect_proxy_fn_t)(char **argv);
 
 /* define a (hopefully) unique session directory we can use */
-typedef int (*prrte_schizo_base_define_session_dir_fn_t)(char **tmpdir);
+typedef int (*prte_schizo_base_define_session_dir_fn_t)(char **tmpdir);
 
 /* parse the environment for proxy cmd line entries */
-typedef void (*prrte_schizo_base_module_parse_proxy_cli_fn_t)(prrte_cmd_line_t *cmd_line,
+typedef void (*prte_schizo_base_module_parse_proxy_cli_fn_t)(prte_cmd_line_t *cmd_line,
                                                               char ***argv);
 
 /* parse the environment of the
  * tool to extract any personality-specific envars that need to be
  * forward to the app's environment upon execution */
-typedef int (*prrte_schizo_base_module_parse_env_fn_t)(prrte_cmd_line_t *cmd_line,
+typedef int (*prte_schizo_base_module_parse_env_fn_t)(prte_cmd_line_t *cmd_line,
                                                        char **srcenv,
                                                        char ***dstenv,
                                                        bool cmdline);
 
 /* check if running as root is allowed in this environment */
-typedef int (*prrte_schizo_base_module_allow_run_as_root_fn_t)(prrte_cmd_line_t *cmd_line);
+typedef int (*prte_schizo_base_module_allow_run_as_root_fn_t)(prte_cmd_line_t *cmd_line);
 
 /* wrap cmd line args */
-typedef void (*prrte_schizo_base_module_wrap_args_fn_t)(char **args);
+typedef void (*prte_schizo_base_module_wrap_args_fn_t)(char **args);
 
 /* do whatever preparation work
  * is required to setup the app for execution. This is intended to be
@@ -114,82 +115,82 @@ typedef void (*prrte_schizo_base_module_wrap_args_fn_t)(char **args);
  * an executable's relative-path to an absolute-path, or add a command
  * required for starting a particular kind of application (e.g., adding
  * "java" to start a Java application) */
-typedef int (*prrte_schizo_base_module_setup_app_fn_t)(prrte_app_context_t *app);
+typedef int (*prte_schizo_base_module_setup_app_fn_t)(prte_app_context_t *app);
 
 /* add any personality-specific envars required at the job level prior
  * to beginning to execute local procs */
-typedef int (*prrte_schizo_base_module_setup_fork_fn_t)(prrte_job_t *jdata,
-                                                       prrte_app_context_t *context);
+typedef int (*prte_schizo_base_module_setup_fork_fn_t)(prte_job_t *jdata,
+                                                       prte_app_context_t *context);
 
 /* add any personality-specific envars required for this specific local
  * proc upon execution */
-typedef int (*prrte_schizo_base_module_setup_child_fn_t)(prrte_job_t *jdata,
-                                                        prrte_proc_t *child,
-                                                        prrte_app_context_t *app,
+typedef int (*prte_schizo_base_module_setup_child_fn_t)(prte_job_t *jdata,
+                                                        prte_proc_t *child,
+                                                        prte_app_context_t *app,
                                                         char ***env);
 
 
 /* give the component a chance to cleanup */
-typedef void (*prrte_schizo_base_module_finalize_fn_t)(void);
+typedef void (*prte_schizo_base_module_finalize_fn_t)(void);
 
 /* request time remaining in this allocation - only one module
  * capable of supporting this operation should be available
  * in a given environment. However, if a module is available
  * and decides it cannot provide the info in the current situation,
- * then it can return PRRTE_ERR_TAKE_NEXT_OPTION to indicate that
+ * then it can return PRTE_ERR_TAKE_NEXT_OPTION to indicate that
  * another module should be tried */
-typedef int (*prrte_schizo_base_module_get_rem_time_fn_t)(uint32_t *timeleft);
+typedef int (*prte_schizo_base_module_get_rem_time_fn_t)(uint32_t *timeleft);
 
 
 /* give the components a chance to add job info */
-typedef void (*prrte_schizo_base_module_job_info_fn_t)(prrte_cmd_line_t *cmdline, prrte_list_t *jobinfo);
+typedef void (*prte_schizo_base_module_job_info_fn_t)(prte_cmd_line_t *cmdline, prte_list_t *jobinfo);
 
 /*
  * schizo module version 1.3.0
  */
 typedef struct {
-    prrte_schizo_base_module_init_fn_t                      init;
-    prrte_schizo_base_module_define_cli_fn_t                define_cli;
-    prrte_schizo_base_module_parse_cli_fn_t                 parse_cli;
-    prrte_schizo_base_module_register_deprecated_cli_fn_t   register_deprecated_cli;
-    prrte_schizo_base_module_parse_proxy_cli_fn_t           parse_proxy_cli;
-    prrte_schizo_base_module_parse_env_fn_t                 parse_env;
-    prrte_schizo_base_detect_proxy_fn_t                     detect_proxy;
-    prrte_schizo_base_define_session_dir_fn_t               define_session_dir;
-    prrte_schizo_base_module_allow_run_as_root_fn_t         allow_run_as_root;
-    prrte_schizo_base_module_wrap_args_fn_t                 wrap_args;
-    prrte_schizo_base_module_setup_app_fn_t                 setup_app;
-    prrte_schizo_base_module_setup_fork_fn_t                setup_fork;
-    prrte_schizo_base_module_setup_child_fn_t               setup_child;
-    prrte_schizo_base_module_get_rem_time_fn_t              get_remaining_time;
-    prrte_schizo_base_module_job_info_fn_t                  job_info;
-    prrte_schizo_base_module_finalize_fn_t                  finalize;
-} prrte_schizo_base_module_t;
+    prte_schizo_base_module_init_fn_t                      init;
+    prte_schizo_base_module_define_cli_fn_t                define_cli;
+    prte_schizo_base_module_parse_cli_fn_t                 parse_cli;
+    prte_schizo_base_module_register_deprecated_cli_fn_t   register_deprecated_cli;
+    prte_schizo_base_module_parse_proxy_cli_fn_t           parse_proxy_cli;
+    prte_schizo_base_module_parse_env_fn_t                 parse_env;
+    prte_schizo_base_detect_proxy_fn_t                     detect_proxy;
+    prte_schizo_base_define_session_dir_fn_t               define_session_dir;
+    prte_schizo_base_module_allow_run_as_root_fn_t         allow_run_as_root;
+    prte_schizo_base_module_wrap_args_fn_t                 wrap_args;
+    prte_schizo_base_module_setup_app_fn_t                 setup_app;
+    prte_schizo_base_module_setup_fork_fn_t                setup_fork;
+    prte_schizo_base_module_setup_child_fn_t               setup_child;
+    prte_schizo_base_module_get_rem_time_fn_t              get_remaining_time;
+    prte_schizo_base_module_job_info_fn_t                  job_info;
+    prte_schizo_base_module_finalize_fn_t                  finalize;
+} prte_schizo_base_module_t;
 
 
-typedef int (*prrte_schizo_base_API_parse_deprecated_cli_fn_t)(prrte_cmd_line_t *cmdline,
+typedef int (*prte_schizo_base_API_parse_deprecated_cli_fn_t)(prte_cmd_line_t *cmdline,
                                                                int *argc, char ***argv);
 
 typedef struct {
-    prrte_schizo_base_module_init_fn_t                      init;
-    prrte_schizo_base_module_define_cli_fn_t                define_cli;
-    prrte_schizo_base_module_parse_cli_fn_t                 parse_cli;
-    prrte_schizo_base_API_parse_deprecated_cli_fn_t         parse_deprecated_cli;
-    prrte_schizo_base_module_parse_proxy_cli_fn_t           parse_proxy_cli;
-    prrte_schizo_base_module_parse_env_fn_t                 parse_env;
-    prrte_schizo_base_detect_proxy_fn_t                     detect_proxy;
-    prrte_schizo_base_define_session_dir_fn_t               define_session_dir;
-    prrte_schizo_base_module_allow_run_as_root_fn_t         allow_run_as_root;
-    prrte_schizo_base_module_wrap_args_fn_t                 wrap_args;
-    prrte_schizo_base_module_setup_app_fn_t                 setup_app;
-    prrte_schizo_base_module_setup_fork_fn_t                setup_fork;
-    prrte_schizo_base_module_setup_child_fn_t               setup_child;
-    prrte_schizo_base_module_get_rem_time_fn_t              get_remaining_time;
-    prrte_schizo_base_module_job_info_fn_t                  job_info;
-    prrte_schizo_base_module_finalize_fn_t                  finalize;
-} prrte_schizo_API_module_t;
+    prte_schizo_base_module_init_fn_t                      init;
+    prte_schizo_base_module_define_cli_fn_t                define_cli;
+    prte_schizo_base_module_parse_cli_fn_t                 parse_cli;
+    prte_schizo_base_API_parse_deprecated_cli_fn_t         parse_deprecated_cli;
+    prte_schizo_base_module_parse_proxy_cli_fn_t           parse_proxy_cli;
+    prte_schizo_base_module_parse_env_fn_t                 parse_env;
+    prte_schizo_base_detect_proxy_fn_t                     detect_proxy;
+    prte_schizo_base_define_session_dir_fn_t               define_session_dir;
+    prte_schizo_base_module_allow_run_as_root_fn_t         allow_run_as_root;
+    prte_schizo_base_module_wrap_args_fn_t                 wrap_args;
+    prte_schizo_base_module_setup_app_fn_t                 setup_app;
+    prte_schizo_base_module_setup_fork_fn_t                setup_fork;
+    prte_schizo_base_module_setup_child_fn_t               setup_child;
+    prte_schizo_base_module_get_rem_time_fn_t              get_remaining_time;
+    prte_schizo_base_module_job_info_fn_t                  job_info;
+    prte_schizo_base_module_finalize_fn_t                  finalize;
+} prte_schizo_API_module_t;
 
-PRRTE_EXPORT extern prrte_schizo_API_module_t prrte_schizo;
+PRTE_EXPORT extern prte_schizo_API_module_t prte_schizo;
 /*
  * schizo component
  */
@@ -199,16 +200,16 @@ PRRTE_EXPORT extern prrte_schizo_API_module_t prrte_schizo;
  */
 typedef struct {
     /** Base MCA structure */
-    prrte_mca_base_component_t base_version;
+    prte_mca_base_component_t base_version;
     /** Base MCA data */
-    prrte_mca_base_component_data_t base_data;
-} prrte_schizo_base_component_t;
+    prte_mca_base_component_data_t base_data;
+} prte_schizo_base_component_t;
 
 /**
  * Macro for use in components that are of type schizo
  */
-#define PRRTE_MCA_SCHIZO_BASE_VERSION_1_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("schizo", 1, 0, 0)
+#define PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("schizo", 1, 0, 0)
 
 
 END_C_DECLS

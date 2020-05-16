@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2007-2016 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
@@ -19,11 +19,11 @@
 #
 # $HEADER$
 #
-# This is the US/English general help file for PRRTE's prun.
+# This is the US/English general help file for PRTE's prun.
 #
 [prun:init-failure]
 The PMIx Reference RTE was unable to initialize properly.  The error occured while
-attempting to %s.  Returned value %d instead of PRRTE_SUCCESS.
+attempting to %s.  Returned value %d instead of PRTE_SUCCESS.
 [prun:usage]
 %s (%s) %s
 
@@ -43,7 +43,7 @@ This might be a transient error (too many nodes in the cluster were
 unavailable at the time of the request) or a permenant error (you
 requsted more nodes than exist in your cluster).
 
-While probably only useful to PRRTE developers, the error returned
+While probably only useful to PRTE developers, the error returned
 was %d.
 [prun:error-spawning]
 %s was unable to start the specified application.  An attempt has been
@@ -81,13 +81,13 @@ that was returned: %d.
 [prun:environ]
 %s was unable to set
  %s = %s
-in the environment. Returned value %d instead of PRRTE_SUCCESS.
+in the environment. Returned value %d instead of PRTE_SUCCESS.
 [prun:precondition]
 %s was unable to precondition transports
-Returned value %d instead of PRRTE_SUCCESS.
+Returned value %d instead of PRTE_SUCCESS.
 [prun:attr-failed]
 %s was unable to define an attribute
-Returned value %d instead of PRRTE_SUCCESS.
+Returned value %d instead of PRTE_SUCCESS.
 #
 [prun:proc-ordered-abort]
 %s has exited due to process rank %lu with PID %lu on
@@ -108,8 +108,8 @@ then ALL processes must call "init" prior to termination.
 By rule, all processes that call "init" MUST call "finalize" prior to
 exiting or it will be considered an "abnormal termination"
 
-3. this process called "MPI_Abort" or "prrte_abort" and the mca parameter
-prrte_create_session_dirs is set to false. In this case, the run-time cannot
+3. this process called "MPI_Abort" or "prte_abort" and the mca parameter
+prte_create_session_dirs is set to false. In this case, the run-time cannot
 detect that the abort call was an abnormal termination. Hence, the only
 error message you will receive is this one.
 
@@ -180,18 +180,18 @@ A prefix was supplied to %s that only contained slashes.
 This is a fatal error; %s will now abort.  No processes were launched.
 #
 [debugger-mca-param-not-found]
-Internal error -- the prrte_base_user_debugger MCA parameter was not able to
-be found.  Please contact the PRRTE developers; this should not
+Internal error -- the prte_base_user_debugger MCA parameter was not able to
+be found.  Please contact the PRTE developers; this should not
 happen.
 #
-[debugger-prrte_base_user_debugger-empty]
-The MCA parameter "prrte_base_user_debugger" was empty, indicating that
+[debugger-prte_base_user_debugger-empty]
+The MCA parameter "prte_base_user_debugger" was empty, indicating that
 no user-level debuggers have been defined.  Please set this MCA
 parameter to a value and try again.
 #
 [debugger-not-found]
 A suitable debugger could not be found in your PATH.  Check the values
-specified in the prrte_base_user_debugger MCA parameter for the list of
+specified in the prte_base_user_debugger MCA parameter for the list of
 debuggers that was searched.
 #
 [debugger-exec-failed]
@@ -352,18 +352,18 @@ Skipping the %s debugger for now.
 %s has detected that a required daemon terminated during execution
 of the application with a non-zero status. This is a fatal error.
 A best-effort attempt has been made to cleanup. However, it is
--strongly- recommended that you execute the prrte-clean utility
+-strongly- recommended that you execute the prte-clean utility
 to ensure full cleanup is accomplished.
 #
 [prun:no-orted-object-exit]
 %s was unable to determine the status of the daemons used to
 launch this application. Additional manual cleanup may be required.
-Please refer to the "prrte-clean" tool for assistance.
+Please refer to the "prte-clean" tool for assistance.
 #
 [prun:unclean-exit]
 %s was unable to cleanly terminate the daemons on the nodes shown
 below. Additional manual cleanup may be required - please refer to
-the "prrte-clean" tool for assistance.
+the "prte-clean" tool for assistance.
 #
 [prun:event-def-failed]
 %s was unable to define an event required for proper operation of
@@ -371,7 +371,7 @@ the system. The reason for this error was:
 
 Error: %s
 
-Please report this to the PRRTE mailing list users@open-mpi.org.
+Please report this to the PRTE mailing list users@open-mpi.org.
 #
 [prun:ompi-server-filename-bad]
 %s was unable to parse the filename where contact info for the
@@ -424,9 +424,9 @@ Please remember that the correct format for this command line option is:
 --ompi-server file:path-to-file
 
 where path-to-file can be either relative to the cwd or absolute, and that
-the file must have a single line in it that contains the PRRTE
+the file must have a single line in it that contains the PRTE
 uri for the ompi-server. Note that this is *not* a standard uri, but
-a special format used internally by PRRTE for communications. It can
+a special format used internally by PRTE for communications. It can
 best be generated by simply directing the ompi-server to put its
 uri in a file, and then giving %s that filename.
 [prun:multiple-hostfiles]
@@ -640,7 +640,7 @@ the job to be terminated. The first process to do so was:
 #
 [prun:unrecognized-mr-type]
 %s does not recognize the type of job. This should not happen and
-indicates an PRRTE internal problem.
+indicates an PRTE internal problem.
 #
 [multiple-combiners]
 More than one combiner was specified. The combiner takes the output
@@ -667,10 +667,10 @@ adjust/remove the job execution time limit (as specified by --timeout
 command line option or MPIEXEC_TIMEOUT environment variable).
 #
 [prun:conflict-env-set]
-ERROR: You have attempted to pass environment variables to PRRTE
+ERROR: You have attempted to pass environment variables to PRTE
 with both the "-x" method and by setting the MCA parameter "mca_base_env_list".
 
-PRRTE does not support mixing these two methods.  Please choose one
+PRTE does not support mixing these two methods.  Please choose one
 method and try launching your job again.
 
 Your job will now abort.
@@ -679,7 +679,7 @@ Your job will now abort.
 The call to pmix_init_server() failed. This may be due to your
 system's restriction for Unix's socket's path-length.
 
-   prrte_proc_session_dir: %s
+   prte_proc_session_dir: %s
 
 Please try to set TMPDIR to something short (like /tmp) or change
 Your computer's name (see uname -n).
@@ -701,7 +701,7 @@ correct and retry.
   Rank:      %lu
 #
 [use-pterm]
-Use of %s to terminate the PRRTE DVM has been deprecated. Please use
+Use of %s to terminate the PRTE DVM has been deprecated. Please use
 the "pterm" tool instead in the future.
 #
 [bad-pause-for-tool]

@@ -9,10 +9,10 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2010      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2012-2013 Los Alamos National Security, LLC.
 #                         All rights reserved
-# Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -21,7 +21,7 @@
 # $HEADER$
 #
 
-dist_prrtedata_DATA = help-oob-tcp.txt
+dist_prtedata_DATA = help-oob-tcp.txt
 
 sources = \
           oob_tcp_component.h \
@@ -43,7 +43,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_oob_tcp_DSO
+if MCA_BUILD_prte_oob_tcp_DSO
 component_noinst =
 component_install = mca_oob_tcp.la
 else
@@ -51,7 +51,7 @@ component_noinst = libmca_oob_tcp.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_oob_tcp_la_SOURCES = $(sources)
 mca_oob_tcp_la_LDFLAGS = -module -avoid-version

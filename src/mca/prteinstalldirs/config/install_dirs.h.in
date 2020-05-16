@@ -12,6 +12,7 @@
  * Copyright (c) 2007      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,20 +35,20 @@
  * datarootdir=foo
  */
 
-#ifndef PRRTE_INST_DIRS_H
-#define PRRTE_INST_DIRS_H
+#ifndef PRTE_INST_DIRS_H
+#define PRTE_INST_DIRS_H
 
-#define PRRTE_PREFIX "@prefix@"
-#define PRRTE_EXEC_PREFIX "@exec_prefix@"
+#define PRTE_PREFIX "@prefix@"
+#define PRTE_EXEC_PREFIX "@exec_prefix@"
 
 /* The directory for installing executable programs that users can
    run. */
-#define PRRTE_BINDIR "@bindir@"
+#define PRTE_BINDIR "@bindir@"
 
 /* The directory for installing executable programs that can be run
    from the shell, but are only generally useful to system
    administrators. */
-#define PRRTE_SBINDIR "@sbindir@"
+#define PRTE_SBINDIR "@sbindir@"
 
 /* The directory for installing executable programs to be run by other
    programs rather than by users.
@@ -57,15 +58,15 @@
    packages install their data under $(libexecdir)/package-name/,
    possibly within additional subdirectories thereof, such as
    $(libexecdir)/package-name/machine/version. */
-#define PRRTE_LIBEXECDIR "@libexecdir@"
+#define PRTE_LIBEXECDIR "@libexecdir@"
 
 /* The root of the directory tree for read-only
    architecture-independent data files.
 
-   See not about PRRTE_DATADIR.  And you probably want that one, not
+   See not about PRTE_DATADIR.  And you probably want that one, not
    this one.  This is one of those "building block" paths, that is
    really only used for defining other paths. */
-#define PRRTE_DATAROOTDIR "@datarootdir@"
+#define PRTE_DATAROOTDIR "@datarootdir@"
 
 /* The directory for installing idiosyncratic read-only
   architecture-independent data files for this program.
@@ -73,11 +74,11 @@
   The definition of ‘datadir’ is the same for all packages, so you
   should install your data in a subdirectory thereof. Most packages
   install their data under $(datadir)/package-name/. */
-#define PRRTE_DATADIR "@datadir@"
+#define PRTE_DATADIR "@datadir@"
 
 /* $(datadir)/package-name/.  You probably want to use this instead of
-   PRRTE_DATADIR */
-#define PRRTE_PKGDATADIR "@prrtedatadir@"
+   PRTE_DATADIR */
+#define PRTE_PKGDATADIR "@prtedatadir@"
 
 /* The directory for installing read-only data files that pertain to a
    single machine–that is to say, files for configuring a host. Mailer
@@ -90,11 +91,11 @@
    that are modified in the normal course of their use (programs whose
    purpose is to change the configuration of the system
    excluded). Those probably belong in $(localstatedir).  */
-#define PRRTE_SYSCONFDIR "@sysconfdir@"
+#define PRTE_SYSCONFDIR "@sysconfdir@"
 
 /* The directory for installing architecture-independent data files
    which the programs modify while they run. */
-#define PRRTE_SHAREDSTATEDIR "@sharedstatedir@"
+#define PRTE_SHAREDSTATEDIR "@sharedstatedir@"
 
 /* The directory for installing data files which the programs modify
    while they run, and that pertain to one specific machine. Users
@@ -102,28 +103,28 @@
    the package's operation; put such configuration information in
    separate files that go in $(datadir) or
    $(sysconfdir). */
-#define PRRTE_LOCALSTATEDIR "@localstatedir@"
+#define PRTE_LOCALSTATEDIR "@localstatedir@"
 
 /* The directory for object files and libraries of object code. Do not
    install executables here, they probably ought to go in
    $(libexecdir) instead. */
-#define PRRTE_LIBDIR "@libdir@"
+#define PRTE_LIBDIR "@libdir@"
 
 /* $(libdir)/package-name/.  This is where components should go */
-#define PRRTE_PKGLIBDIR "@prrtelibdir@"
+#define PRTE_PKGLIBDIR "@prtelibdir@"
 
 /* The directory for installing header files to be included by user
    programs with the C ‘#include’ preprocessor directive. */
-#define PRRTE_INCLUDEDIR "@includedir@"
+#define PRTE_INCLUDEDIR "@includedir@"
 
 /* $(includedir)/package-name/.  The devel headers go in here */
-#define PRRTE_PKGINCLUDEDIR "@prrteincludedir@"
+#define PRTE_PKGINCLUDEDIR "@prteincludedir@"
 
 /* The directory for installing the Info files for this package. */
-#define PRRTE_INFODIR "@infodir@"
+#define PRTE_INFODIR "@infodir@"
 
 /* The top-level directory for installing the man pages (if any) for
    this package. */
-#define PRRTE_MANDIR "@mandir@"
+#define PRTE_MANDIR "@mandir@"
 
 #endif

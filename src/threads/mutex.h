@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2007-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2007      Voltaire. All rights reserved.
@@ -24,10 +24,10 @@
  * $HEADER$
  */
 
-#ifndef  PRRTE_MUTEX_H
-#define  PRRTE_MUTEX_H 1
+#ifndef  PRTE_MUTEX_H
+#define  PRTE_MUTEX_H 1
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/threads/thread_usage.h"
 
@@ -44,8 +44,8 @@ BEGIN_C_DECLS
 /**
  * Opaque mutex object
  */
-typedef struct prrte_mutex_t prrte_mutex_t;
-typedef struct prrte_mutex_t prrte_recursive_mutex_t;
+typedef struct prte_mutex_t prte_mutex_t;
+typedef struct prte_mutex_t prte_recursive_mutex_t;
 
 /**
  * Try to acquire a mutex.
@@ -53,7 +53,7 @@ typedef struct prrte_mutex_t prrte_recursive_mutex_t;
  * @param mutex         Address of the mutex.
  * @return              0 if the mutex was acquired, 1 otherwise.
  */
-static inline int prrte_mutex_trylock(prrte_mutex_t *mutex);
+static inline int prte_mutex_trylock(prte_mutex_t *mutex);
 
 
 /**
@@ -61,7 +61,7 @@ static inline int prrte_mutex_trylock(prrte_mutex_t *mutex);
  *
  * @param mutex         Address of the mutex.
  */
-static inline void prrte_mutex_lock(prrte_mutex_t *mutex);
+static inline void prte_mutex_lock(prte_mutex_t *mutex);
 
 
 /**
@@ -69,7 +69,7 @@ static inline void prrte_mutex_lock(prrte_mutex_t *mutex);
  *
  * @param mutex         Address of the mutex.
  */
-static inline void prrte_mutex_unlock(prrte_mutex_t *mutex);
+static inline void prte_mutex_unlock(prte_mutex_t *mutex);
 
 
 /**
@@ -78,7 +78,7 @@ static inline void prrte_mutex_unlock(prrte_mutex_t *mutex);
  * @param mutex         Address of the mutex.
  * @return              0 if the mutex was acquired, 1 otherwise.
  */
-static inline int prrte_mutex_atomic_trylock(prrte_mutex_t *mutex);
+static inline int prte_mutex_atomic_trylock(prte_mutex_t *mutex);
 
 
 /**
@@ -86,7 +86,7 @@ static inline int prrte_mutex_atomic_trylock(prrte_mutex_t *mutex);
  *
  * @param mutex         Address of the mutex.
  */
-static inline void prrte_mutex_atomic_lock(prrte_mutex_t *mutex);
+static inline void prte_mutex_atomic_lock(prte_mutex_t *mutex);
 
 
 /**
@@ -94,10 +94,10 @@ static inline void prrte_mutex_atomic_lock(prrte_mutex_t *mutex);
  *
  * @param mutex         Address of the mutex.
  */
-static inline void prrte_mutex_atomic_unlock(prrte_mutex_t *mutex);
+static inline void prte_mutex_atomic_unlock(prte_mutex_t *mutex);
 
 END_C_DECLS
 
 #include "mutex_unix.h"
 
-#endif                          /* PRRTE_MUTEX_H */
+#endif                          /* PRTE_MUTEX_H */

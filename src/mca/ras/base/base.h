@@ -12,6 +12,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,17 +22,17 @@
 /** @file:
  */
 
-#ifndef PRRTE_MCA_RAS_BASE_H
-#define PRRTE_MCA_RAS_BASE_H
+#ifndef PRTE_MCA_RAS_BASE_H
+#define PRTE_MCA_RAS_BASE_H
 
 /*
  * includes
  */
-#include "prrte_config.h"
-#include "src/mca/base/prrte_mca_base_framework.h"
+#include "prte_config.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 
 #include "src/util/printf.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/ras/ras.h"
 /*
  * Global functions for MCA overall collective open and close
@@ -42,30 +43,30 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_ras_base_framework;
+PRTE_EXPORT extern prte_mca_base_framework_t prte_ras_base_framework;
 /* select a component */
-PRRTE_EXPORT    int prrte_ras_base_select(void);
+PRTE_EXPORT    int prte_ras_base_select(void);
 
 /*
  * globals that might be needed
  */
-typedef struct prrte_ras_base_t {
+typedef struct prte_ras_base_t {
     bool allocation_read;
-    prrte_ras_base_module_t *active_module;
+    prte_ras_base_module_t *active_module;
     int total_slots_alloc;
     int multiplier;
     bool launch_orted_on_hn;
-} prrte_ras_base_t;
+} prte_ras_base_t;
 
-PRRTE_EXPORT extern prrte_ras_base_t prrte_ras_base;
+PRTE_EXPORT extern prte_ras_base_t prte_ras_base;
 
-PRRTE_EXPORT void prrte_ras_base_display_alloc(prrte_job_t *jdata);
+PRTE_EXPORT void prte_ras_base_display_alloc(prte_job_t *jdata);
 
-PRRTE_EXPORT void prrte_ras_base_allocate(int fd, short args, void *cbdata);
+PRTE_EXPORT void prte_ras_base_allocate(int fd, short args, void *cbdata);
 
-PRRTE_EXPORT int prrte_ras_base_add_hosts(prrte_job_t *jdata);
+PRTE_EXPORT int prte_ras_base_add_hosts(prte_job_t *jdata);
 
-PRRTE_EXPORT char *prrte_ras_base_flag_string(prrte_node_t *node);
+PRTE_EXPORT char *prte_ras_base_flag_string(prte_node_t *node);
 
 END_C_DECLS
 

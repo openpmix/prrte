@@ -15,6 +15,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,7 +23,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "constants.h"
 #include "src/runtime/runtime.h"
@@ -34,77 +35,77 @@
 #include <string.h>
 #include <ctype.h>
 
-int prrte_util_keyval_parse_lineno = 0;
+int prte_util_keyval_parse_lineno = 0;
 
 static char *key_buffer = NULL;
 static size_t key_buffer_len = 0;
-static prrte_mutex_t keyval_mutex;
+static prte_mutex_t keyval_mutex;
 
 static int parse_line(const char *filename, char ***dstenv,
-                      prrte_keyval_parse_fn_t callback);
+                      prte_keyval_parse_fn_t callback);
 static int parse_line_new(const char *filename,
-                          prrte_keyval_parse_state_t first_val,
+                          prte_keyval_parse_state_t first_val,
                           char ***dstenv,
-                          prrte_keyval_parse_fn_t callback);
+                          prte_keyval_parse_fn_t callback);
 static void parse_error(int num, const char *filename);
 
 static char *env_str = NULL;
 static int envsize = 1024;
 
-void prrte_util_keyval_parse_finalize (void)
+void prte_util_keyval_parse_finalize (void)
 {
     free(key_buffer);
     key_buffer = NULL;
     key_buffer_len = 0;
 
-    PRRTE_DESTRUCT(&keyval_mutex);
+    PRTE_DESTRUCT(&keyval_mutex);
 }
 
-int prrte_util_keyval_parse_init(void)
+int prte_util_keyval_parse_init(void)
 {
-    PRRTE_CONSTRUCT(&keyval_mutex, prrte_mutex_t);
+    PRTE_CONSTRUCT(&keyval_mutex, prte_mutex_t);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 int
-prrte_util_keyval_parse(const char *filename, char ***dstenv,
-                       prrte_keyval_parse_fn_t callback)
+prte_util_keyval_parse(const char *filename, char ***dstenv,
+                       prte_keyval_parse_fn_t callback)
 {
     int val;
-    int ret = PRRTE_SUCCESS;;
+    int ret = PRTE_SUCCESS;;
 
-    prrte_mutex_lock(&keyval_mutex);
+    prte_mutex_lock(&keyval_mutex);
 
-    /* Open the prrte */
-    prrte_util_keyval_yyin = fopen(filename, "r");
-    if (NULL == prrte_util_keyval_yyin) {
-        ret = PRRTE_ERR_NOT_FOUND;
+    /* Open the prte */
+    prte_util_keyval_yyin = fopen(filename, "r");
+    if (NULL == prte_util_keyval_yyin) {
+        ret = PRTE_ERR_NOT_FOUND;
         goto cleanup;
     }
 
-    prrte_util_keyval_parse_done = false;
-    prrte_util_keyval_yynewlines = 1;
-    prrte_util_keyval_init_buffer(prrte_util_keyval_yyin);
-    while (!prrte_util_keyval_parse_done) {
-        val = prrte_util_keyval_yylex();
+    prte_util_keyval_parse_done = false;
+    prte_util_keyval_yynewlines = 1;
+    prte_util_keyval_init_buffer(prte_util_keyval_yyin);
+    while (!prte_util_keyval_parse_done) {
+        val = prte_util_keyval_yylex();
         switch (val) {
-        case PRRTE_UTIL_KEYVAL_PARSE_DONE:
-            /* This will also set prrte_util_keyval_parse_done to true, so just
+        case PRTE_UTIL_KEYVAL_PARSE_DONE:
+            /* This will also set prte_util_keyval_parse_done to true, so just
                break here */
             break;
 
-        case PRRTE_UTIL_KEYVAL_PARSE_NEWLINE:
+        case PRTE_UTIL_KEYVAL_PARSE_NEWLINE:
             /* blank line!  ignore it */
             break;
 
-        case PRRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD:
+        case PRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD:
             parse_line(filename, dstenv, callback);
             break;
 
-        case PRRTE_UTIL_KEYVAL_PARSE_MCAVAR:
-        case PRRTE_UTIL_KEYVAL_PARSE_ENVVAR:
-        case PRRTE_UTIL_KEYVAL_PARSE_ENVEQL:
+        case PRTE_UTIL_KEYVAL_PARSE_MCAVAR:
+        case PRTE_UTIL_KEYVAL_PARSE_ENVVAR:
+        case PRTE_UTIL_KEYVAL_PARSE_ENVEQL:
             parse_line_new(filename, val, dstenv, callback);
             break;
 
@@ -114,82 +115,82 @@ prrte_util_keyval_parse(const char *filename, char ***dstenv,
             break;
         }
     }
-    fclose(prrte_util_keyval_yyin);
-    prrte_util_keyval_yylex_destroy ();
+    fclose(prte_util_keyval_yyin);
+    prte_util_keyval_yylex_destroy ();
 
 cleanup:
-    prrte_mutex_unlock(&keyval_mutex);
+    prte_mutex_unlock(&keyval_mutex);
     return ret;
 }
 
 
 
 static int parse_line(const char *filename, char ***dstenv,
-                      prrte_keyval_parse_fn_t callback)
+                      prte_keyval_parse_fn_t callback)
 {
     int val;
 
-    prrte_util_keyval_parse_lineno = prrte_util_keyval_yylineno;
+    prte_util_keyval_parse_lineno = prte_util_keyval_yylineno;
 
     /* Save the name name */
-    if (key_buffer_len < strlen(prrte_util_keyval_yytext) + 1) {
+    if (key_buffer_len < strlen(prte_util_keyval_yytext) + 1) {
         char *tmp;
-        key_buffer_len = strlen(prrte_util_keyval_yytext) + 1;
+        key_buffer_len = strlen(prte_util_keyval_yytext) + 1;
         tmp = (char*)realloc(key_buffer, key_buffer_len);
         if (NULL == tmp) {
             free(key_buffer);
             key_buffer_len = 0;
             key_buffer = NULL;
-            return PRRTE_ERR_TEMP_OUT_OF_RESOURCE;
+            return PRTE_ERR_TEMP_OUT_OF_RESOURCE;
         }
         key_buffer = tmp;
     }
 
-    prrte_string_copy(key_buffer, prrte_util_keyval_yytext, key_buffer_len);
+    prte_string_copy(key_buffer, prte_util_keyval_yytext, key_buffer_len);
 
     /* The first thing we have to see is an "=" */
 
-    val = prrte_util_keyval_yylex();
-    if (prrte_util_keyval_parse_done || PRRTE_UTIL_KEYVAL_PARSE_EQUAL != val) {
+    val = prte_util_keyval_yylex();
+    if (prte_util_keyval_parse_done || PRTE_UTIL_KEYVAL_PARSE_EQUAL != val) {
         parse_error(2, filename);
-        return PRRTE_ERROR;
+        return PRTE_ERROR;
     }
 
     /* Next we get the value */
 
-    val = prrte_util_keyval_yylex();
-    if (PRRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD == val ||
-        PRRTE_UTIL_KEYVAL_PARSE_VALUE == val) {
-        callback(key_buffer, prrte_util_keyval_yytext, dstenv);
+    val = prte_util_keyval_yylex();
+    if (PRTE_UTIL_KEYVAL_PARSE_SINGLE_WORD == val ||
+        PRTE_UTIL_KEYVAL_PARSE_VALUE == val) {
+        callback(key_buffer, prte_util_keyval_yytext, dstenv);
 
         /* Now we need to see the newline */
 
-        val = prrte_util_keyval_yylex();
-        if (PRRTE_UTIL_KEYVAL_PARSE_NEWLINE == val ||
-            PRRTE_UTIL_KEYVAL_PARSE_DONE == val) {
-            return PRRTE_SUCCESS;
+        val = prte_util_keyval_yylex();
+        if (PRTE_UTIL_KEYVAL_PARSE_NEWLINE == val ||
+            PRTE_UTIL_KEYVAL_PARSE_DONE == val) {
+            return PRTE_SUCCESS;
         }
     }
 
     /* Did we get an EOL or EOF? */
 
-    else if (PRRTE_UTIL_KEYVAL_PARSE_DONE == val ||
-             PRRTE_UTIL_KEYVAL_PARSE_NEWLINE == val) {
+    else if (PRTE_UTIL_KEYVAL_PARSE_DONE == val ||
+             PRTE_UTIL_KEYVAL_PARSE_NEWLINE == val) {
         callback(key_buffer, NULL, dstenv);
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     /* Nope -- we got something unexpected.  Bonk! */
     parse_error(3, filename);
-    return PRRTE_ERROR;
+    return PRTE_ERROR;
 }
 
 
 static void parse_error(int num, const char *filename)
 {
     /* JMS need better error/warning message here */
-    prrte_output(0, "keyval parser: error %d reading file %s at line %d:\n  %s\n",
-                num, filename, prrte_util_keyval_yynewlines, prrte_util_keyval_yytext);
+    prte_output(0, "keyval parser: error %d reading file %s at line %d:\n  %s\n",
+                num, filename, prte_util_keyval_yynewlines, prte_util_keyval_yytext);
 }
 
 static void trim_name(char *buffer, const char* prefix, const char* suffix)
@@ -245,22 +246,22 @@ static void trim_name(char *buffer, const char* prefix, const char* suffix)
 
 static int save_param_name (void)
 {
-    if (key_buffer_len < strlen(prrte_util_keyval_yytext) + 1) {
+    if (key_buffer_len < strlen(prte_util_keyval_yytext) + 1) {
         char *tmp;
-        key_buffer_len = strlen(prrte_util_keyval_yytext) + 1;
+        key_buffer_len = strlen(prte_util_keyval_yytext) + 1;
         tmp = (char*)realloc(key_buffer, key_buffer_len);
         if (NULL == tmp) {
             free(key_buffer);
             key_buffer_len = 0;
             key_buffer = NULL;
-            return PRRTE_ERR_TEMP_OUT_OF_RESOURCE;
+            return PRTE_ERR_TEMP_OUT_OF_RESOURCE;
         }
         key_buffer = tmp;
     }
 
-    prrte_string_copy (key_buffer, prrte_util_keyval_yytext, key_buffer_len);
+    prte_string_copy (key_buffer, prte_util_keyval_yytext, key_buffer_len);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int add_to_env_str(char *var, char *val)
@@ -269,7 +270,7 @@ static int add_to_env_str(char *var, char *val)
     void *tmp;
 
     if (NULL == var) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
 
     if (NULL != env_str) {
@@ -281,7 +282,7 @@ static int add_to_env_str(char *var, char *val)
 
             tmp = realloc(env_str, envsize);
             if (NULL == tmp) {
-                return PRRTE_ERR_OUT_OF_RESOURCE;
+                return PRTE_ERR_OUT_OF_RESOURCE;
             }
             env_str = tmp;
         }
@@ -289,7 +290,7 @@ static int add_to_env_str(char *var, char *val)
     } else {
         env_str = calloc(1, envsize);
         if (NULL == env_str) {
-            return PRRTE_ERR_OUT_OF_RESOURCE;
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
 
@@ -299,33 +300,33 @@ static int add_to_env_str(char *var, char *val)
         strcat(env_str, val);
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static int parse_line_new(const char *filename,
-                          prrte_keyval_parse_state_t first_val,
+                          prte_keyval_parse_state_t first_val,
                           char ***dstenv,
-                          prrte_keyval_parse_fn_t callback)
+                          prte_keyval_parse_fn_t callback)
 {
-    prrte_keyval_parse_state_t val;
+    prte_keyval_parse_state_t val;
     char *tmp;
     int rc;
 
     val = first_val;
-    while (PRRTE_UTIL_KEYVAL_PARSE_NEWLINE != val && PRRTE_UTIL_KEYVAL_PARSE_DONE != val) {
+    while (PRTE_UTIL_KEYVAL_PARSE_NEWLINE != val && PRTE_UTIL_KEYVAL_PARSE_DONE != val) {
         rc = save_param_name ();
-        if (PRRTE_SUCCESS != rc) {
+        if (PRTE_SUCCESS != rc) {
             return rc;
         }
 
-        if (PRRTE_UTIL_KEYVAL_PARSE_MCAVAR == val) {
+        if (PRTE_UTIL_KEYVAL_PARSE_MCAVAR == val) {
             trim_name (key_buffer, "-mca", NULL);
             trim_name (key_buffer, "--mca", NULL);
 
-            val = prrte_util_keyval_yylex();
-            if (PRRTE_UTIL_KEYVAL_PARSE_VALUE == val) {
-                if (NULL != prrte_util_keyval_yytext) {
-                    tmp = strdup(prrte_util_keyval_yytext);
+            val = prte_util_keyval_yylex();
+            if (PRTE_UTIL_KEYVAL_PARSE_VALUE == val) {
+                if (NULL != prte_util_keyval_yytext) {
+                    tmp = strdup(prte_util_keyval_yytext);
                     if ('\'' == tmp[0] || '\"' == tmp[0]) {
                         trim_name (tmp, "\'", "\'");
                         trim_name (tmp, "\"", "\"");
@@ -335,31 +336,31 @@ static int parse_line_new(const char *filename,
                 }
             } else {
                 parse_error(4, filename);
-                return PRRTE_ERROR;
+                return PRTE_ERROR;
             }
-        } else if (PRRTE_UTIL_KEYVAL_PARSE_ENVEQL == val) {
+        } else if (PRTE_UTIL_KEYVAL_PARSE_ENVEQL == val) {
             trim_name (key_buffer, "-x", "=");
             trim_name (key_buffer, "--x", NULL);
 
-            val = prrte_util_keyval_yylex();
-            if (PRRTE_UTIL_KEYVAL_PARSE_VALUE == val) {
-                add_to_env_str(key_buffer, prrte_util_keyval_yytext);
+            val = prte_util_keyval_yylex();
+            if (PRTE_UTIL_KEYVAL_PARSE_VALUE == val) {
+                add_to_env_str(key_buffer, prte_util_keyval_yytext);
             } else {
                 parse_error(5, filename);
-                return PRRTE_ERROR;
+                return PRTE_ERROR;
             }
-        } else if (PRRTE_UTIL_KEYVAL_PARSE_ENVVAR == val) {
+        } else if (PRTE_UTIL_KEYVAL_PARSE_ENVVAR == val) {
             trim_name (key_buffer, "-x", "=");
             trim_name (key_buffer, "--x", NULL);
             add_to_env_str(key_buffer, NULL);
         } else {
             /* we got something unexpected.  Bonk! */
             parse_error(6, filename);
-            return PRRTE_ERROR;
+            return PRTE_ERROR;
         }
 
-        val = prrte_util_keyval_yylex();
+        val = prte_util_keyval_yylex();
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

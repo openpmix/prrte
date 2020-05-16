@@ -14,6 +14,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,7 +22,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include <stdio.h>
 #ifdef HAVE_UNISTD_H
@@ -35,20 +36,20 @@ BEGIN_C_DECLS
 /*
  * public functions
  */
-extern int prrte_show_help_finish_parsing(void);
+extern int prte_show_help_finish_parsing(void);
 
 /*
  * local functions
  */
-int prrte_show_help_yywrap(void);
+int prte_show_help_yywrap(void);
 
 END_C_DECLS
 
 /*
  * global variables
  */
-int prrte_show_help_yynewlines = 1;
-bool prrte_show_help_parse_done = false;
+int prte_show_help_yynewlines = 1;
+bool prte_show_help_parse_done = false;
 
 %}
 
@@ -61,11 +62,11 @@ CHAR        [A-Za-z0-9_\-\.]
 
 #.*\n               ; /* comment line */
 
-^\[.+\]/[^\]\n]*\n { BEGIN(CHOMP); return PRRTE_SHOW_HELP_PARSE_TOPIC; }
+^\[.+\]/[^\]\n]*\n { BEGIN(CHOMP); return PRTE_SHOW_HELP_PARSE_TOPIC; }
 
 <CHOMP>.*\n { BEGIN(INITIAL); }
 
-.*/\n { BEGIN(CHOMP); return PRRTE_SHOW_HELP_PARSE_MESSAGE; }
+.*/\n { BEGIN(CHOMP); return PRTE_SHOW_HELP_PARSE_MESSAGE; }
 
 %%
 
@@ -75,7 +76,7 @@ CHAR        [A-Za-z0-9_\-\.]
 #endif
 
 #if (YY_FLEX_MAJOR_VERSION < 2) || (YY_FLEX_MAJOR_VERSION == 2 && (YY_FLEX_MINOR_VERSION < 5 || (YY_FLEX_MINOR_VERSION == 5 && YY_FLEX_SUBMINOR_VERSION < 5)))
-int prrte_show_help_yylex_destroy(void)
+int prte_show_help_yylex_destroy(void)
 {
     if (NULL != YY_CURRENT_BUFFER) {
         yy_delete_buffer(YY_CURRENT_BUFFER);
@@ -89,9 +90,9 @@ int prrte_show_help_yylex_destroy(void)
 }
 #endif
 
-int prrte_show_help_yywrap(void)
+int prte_show_help_yywrap(void)
 {
-    prrte_show_help_parse_done = true;
+    prte_show_help_parse_done = true;
     return 1;
 }
 
@@ -105,7 +106,7 @@ int prrte_show_help_yywrap(void)
  * have a valid buffer.  Hence, here we ensure to give it a valid
  * buffer.
  */
-int prrte_show_help_init_buffer(FILE *file)
+int prte_show_help_init_buffer(FILE *file)
 {
     YY_BUFFER_STATE buf = yy_create_buffer(file, YY_BUF_SIZE);
     yy_switch_to_buffer(buf);

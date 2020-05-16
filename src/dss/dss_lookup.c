@@ -10,6 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,16 +18,16 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/dss/dss_internal.h"
 
-char *prrte_dss_lookup_data_type(prrte_data_type_t type)
+char *prte_dss_lookup_data_type(prte_data_type_t type)
 {
-    prrte_dss_type_info_t *info;
+    prte_dss_type_info_t *info;
     char *name;
 
-    info = (prrte_dss_type_info_t*)prrte_pointer_array_get_item(&prrte_dss_types, type);
+    info = (prte_dss_type_info_t*)prte_pointer_array_get_item(&prte_dss_types, type);
     if (NULL != info) { /* type found on list */
         name = strdup(info->odti_name);
         return name;

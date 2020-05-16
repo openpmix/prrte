@@ -10,8 +10,8 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2008      UT-Battelle, LLC
-# Copyright (c) 2008-2010 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -22,11 +22,11 @@
 
 AM_CPPFLAGS = $(ras_alps_CPPFLAGS)
 
-dist_prrtedata_DATA = help-ras-alps.txt \
+dist_prtedata_DATA = help-ras-alps.txt \
 		  ras-alps-command.sh
 
 install-data-hook:
-	chmod +x $(prrtedatadir)/ras-alps-command.sh
+	chmod +x $(prtedatadir)/ras-alps-command.sh
 
 sources = \
         ras_alps.h \
@@ -38,7 +38,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_ras_alps_DSO
+if MCA_BUILD_prte_ras_alps_DSO
 lib =
 lib_sources =
 component = mca_ras_alps.la
@@ -50,7 +50,7 @@ component =
 component_sources =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component)
 mca_ras_alps_la_SOURCES = $(component_sources)
 mca_ras_alps_la_LDFLAGS = -module -avoid-version $(ras_alps_LDFLAGS)

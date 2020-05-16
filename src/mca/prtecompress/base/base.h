@@ -4,18 +4,19 @@
  *                         Corporation.  All rights reserved.
  *
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
  *
  * $HEADER$
  */
-#ifndef PRRTE_COMPRESS_BASE_H
-#define PRRTE_COMPRESS_BASE_H
+#ifndef PRTE_COMPRESS_BASE_H
+#define PRTE_COMPRESS_BASE_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "src/mca/prtecompress/prtecompress.h"
-#include "src/util/prrte_environ.h"
+#include "src/util/prte_environ.h"
 
 #include "src/mca/base/base.h"
 
@@ -29,55 +30,55 @@ extern "C" {
 
 typedef struct {
     size_t prtecompress_limit;
-} prrte_prtecompress_base_t;
+} prte_prtecompress_base_t;
 
-PRRTE_EXPORT extern prrte_prtecompress_base_t prrte_prtecompress_base;
+PRTE_EXPORT extern prte_prtecompress_base_t prte_prtecompress_base;
 
     /**
      * Initialize the COMPRESS MCA framework
      *
-     * @retval PRRTE_SUCCESS Upon success
-     * @retval PRRTE_ERROR   Upon failures
+     * @retval PRTE_SUCCESS Upon success
+     * @retval PRTE_ERROR   Upon failures
      *
-     * This function is invoked during prrte_init();
+     * This function is invoked during prte_init();
      */
-    PRRTE_EXPORT int prrte_prtecompress_base_open(prrte_mca_base_open_flag_t flags);
+    PRTE_EXPORT int prte_prtecompress_base_open(prte_mca_base_open_flag_t flags);
 
     /**
      * Select an available component.
      *
-     * @retval PRRTE_SUCCESS Upon Success
-     * @retval PRRTE_NOT_FOUND If no component can be selected
-     * @retval PRRTE_ERROR Upon other failure
+     * @retval PRTE_SUCCESS Upon Success
+     * @retval PRTE_NOT_FOUND If no component can be selected
+     * @retval PRTE_ERROR Upon other failure
      *
      */
-    PRRTE_EXPORT int prrte_prtecompress_base_select(void);
+    PRTE_EXPORT int prte_prtecompress_base_select(void);
 
     /**
      * Finalize the COMPRESS MCA framework
      *
-     * @retval PRRTE_SUCCESS Upon success
-     * @retval PRRTE_ERROR   Upon failures
+     * @retval PRTE_SUCCESS Upon success
+     * @retval PRTE_ERROR   Upon failures
      *
-     * This function is invoked during prrte_finalize();
+     * This function is invoked during prte_finalize();
      */
-    PRRTE_EXPORT int prrte_prtecompress_base_close(void);
+    PRTE_EXPORT int prte_prtecompress_base_close(void);
 
     /**
      * Globals
      */
-    PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_prtecompress_base_framework;
-    PRRTE_EXPORT extern prrte_prtecompress_base_component_t prrte_prtecompress_base_selected_component;
-    PRRTE_EXPORT extern prrte_prtecompress_base_module_t prrte_compress;
+    PRTE_EXPORT extern prte_mca_base_framework_t prte_prtecompress_base_framework;
+    PRTE_EXPORT extern prte_prtecompress_base_component_t prte_prtecompress_base_selected_component;
+    PRTE_EXPORT extern prte_prtecompress_base_module_t prte_compress;
 
     /**
      *
      */
-    PRRTE_EXPORT int prrte_prtecompress_base_tar_create(char ** target);
-    PRRTE_EXPORT int prrte_prtecompress_base_tar_extract(char ** target);
+    PRTE_EXPORT int prte_prtecompress_base_tar_create(char ** target);
+    PRTE_EXPORT int prte_prtecompress_base_tar_extract(char ** target);
 
 #if defined(c_plusplus) || defined(__cplusplus)
 }
 #endif
 
-#endif /* PRRTE_COMPRESS_BASE_H */
+#endif /* PRTE_COMPRESS_BASE_H */

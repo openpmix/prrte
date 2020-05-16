@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2009-2016 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
@@ -21,7 +21,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <stdio.h>
@@ -36,7 +36,7 @@
 #include <ctype.h>
 
 #include "src/mca/base/base.h"
-#include "src/mca/base/prrte_mca_base_var.h"
+#include "src/mca/base/prte_mca_base_var.h"
 #include "src/util/argv.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
@@ -47,23 +47,23 @@
 #include "src/util/proc_info.h"
 
 /* provide a connection to a reqd variable */
-extern bool prrte_keep_fqdn_hostnames;
+extern bool prte_keep_fqdn_hostnames;
 
-#define PRRTE_NAME_INVALID {PRRTE_JOBID_INVALID, PRRTE_VPID_INVALID}
+#define PRTE_NAME_INVALID {PRTE_JOBID_INVALID, PRTE_VPID_INVALID}
 
-PRRTE_EXPORT prrte_process_info_t prrte_process_info = {
-    .my_name =                         PRRTE_NAME_INVALID,
+PRTE_EXPORT prte_process_info_t prte_process_info = {
+    .my_name =                         PRTE_NAME_INVALID,
     .myproc =                          {{0}, 0},
-    .my_hnp =                          PRRTE_NAME_INVALID,
+    .my_hnp =                          PRTE_NAME_INVALID,
     .my_hnp_uri =                      NULL,
-    .my_parent =                       PRRTE_NAME_INVALID,
+    .my_parent =                       PRTE_NAME_INVALID,
     .hnp_pid =                         0,
     .num_daemons =                     1,
     .num_nodes =                       1,
     .nodename =                        NULL,
     .aliases =                         NULL,
     .pid =                             0,
-    .proc_type =                       PRRTE_PROC_TYPE_NONE,
+    .proc_type =                       PRTE_PROC_TYPE_NONE,
     .my_port =                         0,
     .num_restarts =                    0,
     .tmpdir_base =                     NULL,
@@ -78,50 +78,50 @@ PRRTE_EXPORT prrte_process_info_t prrte_process_info = {
 };
 
 static bool init=false;
-static char *prrte_strip_prefix;
+static char *prte_strip_prefix;
 
-void prrte_setup_hostname(void)
+void prte_setup_hostname(void)
 {
     char *ptr;
-    char hostname[PRRTE_MAXHOSTNAMELEN];
+    char hostname[PRTE_MAXHOSTNAMELEN];
     char **prefixes;
     bool match;
     int i, idx;
 
     /* whether or not to keep FQDN hostnames */
-    prrte_keep_fqdn_hostnames = false;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "keep_fqdn_hostnames",
+    prte_keep_fqdn_hostnames = false;
+    (void) prte_mca_base_var_register ("prte", "prte", NULL, "keep_fqdn_hostnames",
                                   "Whether or not to keep FQDN hostnames [default: no]",
-                                  PRRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prrte_keep_fqdn_hostnames);
+                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                  PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                  &prte_keep_fqdn_hostnames);
 
     /* get the nodename */
     gethostname(hostname, sizeof(hostname));
     /* add this to our list of aliases */
-    prrte_argv_append_nosize(&prrte_process_info.aliases, hostname);
+    prte_argv_append_nosize(&prte_process_info.aliases, hostname);
 
     // Strip off the FQDN if present, ignore IP addresses
-    if( !prrte_keep_fqdn_hostnames && !prrte_net_isaddr(hostname) ) {
+    if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(hostname) ) {
         if (NULL != (ptr = strchr(hostname, '.'))) {
             *ptr = '\0';
             /* add this to our list of aliases */
-            prrte_argv_append_nosize(&prrte_process_info.aliases, hostname);
+            prte_argv_append_nosize(&prte_process_info.aliases, hostname);
         }
     }
 
-    prrte_strip_prefix = NULL;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "strip_prefix",
+    prte_strip_prefix = NULL;
+    (void) prte_mca_base_var_register ("prte", "prte", NULL, "strip_prefix",
                                         "Prefix(es) to match when deciding whether to strip leading characters and zeroes from "
-                                        "node names returned by daemons", PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
-                                        PRRTE_INFO_LVL_9, PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                        &prrte_strip_prefix);
+                                        "node names returned by daemons", PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                        PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                        &prte_strip_prefix);
 
     /* we have to strip node names here, if user directs, to ensure that
      * the names exchanged in the modex match the names found locally
      */
-    if (NULL != prrte_strip_prefix && !prrte_net_isaddr(hostname)) {
-        prefixes = prrte_argv_split(prrte_strip_prefix, ',');
+    if (NULL != prte_strip_prefix && !prte_net_isaddr(hostname)) {
+        prefixes = prte_argv_split(prte_strip_prefix, ',');
         match = false;
         for (i=0; NULL != prefixes[i]; i++) {
             if (0 == strncmp(hostname, prefixes[i], strlen(prefixes[i]))) {
@@ -133,64 +133,64 @@ void prrte_setup_hostname(void)
                 }
                 if ((int)strlen(hostname) <= idx) {
                     /* there were no non-zero numbers in the name */
-                    prrte_process_info.nodename = strdup(&hostname[strlen(prefixes[i])]);
+                    prte_process_info.nodename = strdup(&hostname[strlen(prefixes[i])]);
                 } else {
-                    prrte_process_info.nodename = strdup(&hostname[idx]);
+                    prte_process_info.nodename = strdup(&hostname[idx]);
                 }
                 /* add this to our list of aliases */
-                prrte_argv_append_nosize(&prrte_process_info.aliases, prrte_process_info.nodename);
+                prte_argv_append_nosize(&prte_process_info.aliases, prte_process_info.nodename);
                 match = true;
                 break;
             }
         }
         /* if we didn't find a match, then just use the hostname as-is */
         if (!match) {
-            prrte_process_info.nodename = strdup(hostname);
+            prte_process_info.nodename = strdup(hostname);
         }
-        prrte_argv_free(prefixes);
+        prte_argv_free(prefixes);
     } else {
-        prrte_process_info.nodename = strdup(hostname);
+        prte_process_info.nodename = strdup(hostname);
     }
 
     /* add "localhost" to our list of aliases */
-    prrte_argv_append_nosize(&prrte_process_info.aliases, "localhost");
+    prte_argv_append_nosize(&prte_process_info.aliases, "localhost");
 
 }
 
-bool prrte_check_host_is_local(char *name)
+bool prte_check_host_is_local(char *name)
 {
     int i;
 
-    for (i=0; NULL != prrte_process_info.aliases[i]; i++) {
-        if (0 == strcmp(name, prrte_process_info.aliases[i])) {
+    for (i=0; NULL != prte_process_info.aliases[i]; i++) {
+        if (0 == strcmp(name, prte_process_info.aliases[i])) {
             return true;
         }
     }
     return false;
 }
 
-int prrte_proc_info(void)
+int prte_proc_info(void)
 {
 
     char *ptr;
 
     if (init) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
     init = true;
 
-    prrte_process_info.my_hnp_uri = NULL;
-    prrte_mca_base_var_register ("prrte", "prrte", NULL, "hnp_uri",
+    prte_process_info.my_hnp_uri = NULL;
+    prte_mca_base_var_register ("prte", "prte", NULL, "hnp_uri",
                                  "HNP contact info",
-                                 PRRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                 PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                 PRRTE_INFO_LVL_9,
-                                 PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                 &prrte_process_info.my_hnp_uri);
+                                 PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                 PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
+                                 PRTE_INFO_LVL_9,
+                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                 &prte_process_info.my_hnp_uri);
 
-    if (NULL != prrte_process_info.my_hnp_uri) {
-        ptr = prrte_process_info.my_hnp_uri;
+    if (NULL != prte_process_info.my_hnp_uri) {
+        ptr = prte_process_info.my_hnp_uri;
         /* the uri value passed to us will have quote marks around it to protect
         * the value if passed on the command line. We must remove those
         * to have a correct uri string
@@ -203,92 +203,92 @@ int prrte_proc_info(void)
     }
 
     /* get the process id */
-    prrte_process_info.pid = getpid();
+    prte_process_info.pid = getpid();
 
     /* get the number of nodes in the job */
-    prrte_process_info.num_nodes = 1;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "num_nodes",
+    prte_process_info.num_nodes = 1;
+    (void) prte_mca_base_var_register ("prte", "prte", NULL, "num_nodes",
                                         "Number of nodes in the job",
-                                        PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                        PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                        PRRTE_INFO_LVL_9,
-                                        PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                        &prrte_process_info.num_nodes);
+                                        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                        PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
+                                        PRTE_INFO_LVL_9,
+                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                        &prte_process_info.num_nodes);
 
     /* get the number of times this proc has restarted */
-    prrte_process_info.num_restarts = 0;
-    (void) prrte_mca_base_var_register ("prrte", "prrte", NULL, "num_restarts",
+    prte_process_info.num_restarts = 0;
+    (void) prte_mca_base_var_register ("prte", "prte", NULL, "num_restarts",
                                         "Number of times this proc has restarted",
-                                        PRRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                        PRRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                        PRRTE_INFO_LVL_9,
-                                        PRRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                        &prrte_process_info.num_restarts);
+                                        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                        PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
+                                        PRTE_INFO_LVL_9,
+                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                        &prte_process_info.num_restarts);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 
-int prrte_proc_info_finalize(void)
+int prte_proc_info_finalize(void)
 {
     if (!init) {
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
 
-    if (NULL != prrte_process_info.tmpdir_base) {
-        free(prrte_process_info.tmpdir_base);
-        prrte_process_info.tmpdir_base = NULL;
+    if (NULL != prte_process_info.tmpdir_base) {
+        free(prte_process_info.tmpdir_base);
+        prte_process_info.tmpdir_base = NULL;
     }
 
-    if (NULL != prrte_process_info.top_session_dir) {
-        free(prrte_process_info.top_session_dir);
-        prrte_process_info.top_session_dir = NULL;
+    if (NULL != prte_process_info.top_session_dir) {
+        free(prte_process_info.top_session_dir);
+        prte_process_info.top_session_dir = NULL;
     }
 
-    if (NULL != prrte_process_info.jobfam_session_dir) {
-        free(prrte_process_info.jobfam_session_dir);
-        prrte_process_info.jobfam_session_dir = NULL;
+    if (NULL != prte_process_info.jobfam_session_dir) {
+        free(prte_process_info.jobfam_session_dir);
+        prte_process_info.jobfam_session_dir = NULL;
     }
 
-    if (NULL != prrte_process_info.job_session_dir) {
-        free(prrte_process_info.job_session_dir);
-        prrte_process_info.job_session_dir = NULL;
+    if (NULL != prte_process_info.job_session_dir) {
+        free(prte_process_info.job_session_dir);
+        prte_process_info.job_session_dir = NULL;
     }
 
-    if (NULL != prrte_process_info.proc_session_dir) {
-        free(prrte_process_info.proc_session_dir);
-        prrte_process_info.proc_session_dir = NULL;
+    if (NULL != prte_process_info.proc_session_dir) {
+        free(prte_process_info.proc_session_dir);
+        prte_process_info.proc_session_dir = NULL;
     }
 
-    if (NULL != prrte_process_info.nodename) {
-        free(prrte_process_info.nodename);
-        prrte_process_info.nodename = NULL;
+    if (NULL != prte_process_info.nodename) {
+        free(prte_process_info.nodename);
+        prte_process_info.nodename = NULL;
     }
 
-    if (NULL != prrte_process_info.cpuset) {
-        free(prrte_process_info.cpuset);
-        prrte_process_info.cpuset = NULL;
+    if (NULL != prte_process_info.cpuset) {
+        free(prte_process_info.cpuset);
+        prte_process_info.cpuset = NULL;
     }
 
-    if (NULL != prrte_process_info.sock_stdin) {
-        free(prrte_process_info.sock_stdin);
-        prrte_process_info.sock_stdin = NULL;
+    if (NULL != prte_process_info.sock_stdin) {
+        free(prte_process_info.sock_stdin);
+        prte_process_info.sock_stdin = NULL;
     }
 
-    if (NULL != prrte_process_info.sock_stdout) {
-        free(prrte_process_info.sock_stdout);
-        prrte_process_info.sock_stdout = NULL;
+    if (NULL != prte_process_info.sock_stdout) {
+        free(prte_process_info.sock_stdout);
+        prte_process_info.sock_stdout = NULL;
     }
 
-    if (NULL != prrte_process_info.sock_stderr) {
-        free(prrte_process_info.sock_stderr);
-        prrte_process_info.sock_stderr = NULL;
+    if (NULL != prte_process_info.sock_stderr) {
+        free(prte_process_info.sock_stderr);
+        prte_process_info.sock_stderr = NULL;
     }
 
-    prrte_process_info.proc_type = PRRTE_PROC_TYPE_NONE;
+    prte_process_info.proc_type = PRTE_PROC_TYPE_NONE;
 
-    prrte_argv_free(prrte_process_info.aliases);
+    prte_argv_free(prte_process_info.aliases);
 
     init = false;
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

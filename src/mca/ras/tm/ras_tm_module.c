@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2006      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
@@ -20,7 +20,7 @@
  *
  * $HEADER$
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 #include "types.h"
 
@@ -33,7 +33,7 @@
 #include "src/util/net.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 
 #include "src/mca/ras/base/ras_private.h"
@@ -43,10 +43,10 @@
 /*
  * Local functions
  */
-static int allocate(prrte_job_t *jdata, prrte_list_t *nodes);
+static int allocate(prte_job_t *jdata, prte_list_t *nodes);
 static int finalize(void);
 
-static int discover(prrte_list_t* nodelist, char *pbs_jobid);
+static int discover(prte_list_t* nodelist, char *pbs_jobid);
 static char *tm_getline(FILE *fp);
 
 #define TM_FILE_MAX_LINE_LENGTH 512
@@ -56,7 +56,7 @@ static char *filename;
 /*
  * Global variable
  */
-prrte_ras_base_module_t prrte_ras_tm_module = {
+prte_ras_base_module_t prte_ras_tm_module = {
     NULL,
     allocate,
     NULL,
@@ -69,37 +69,37 @@ prrte_ras_base_module_t prrte_ras_tm_module = {
  * them back to the caller.
  *
  */
-static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
+static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 {
     int ret;
     char *pbs_jobid;
 
     /* get our PBS jobid from the environment */
     if (NULL == (pbs_jobid = getenv("PBS_JOBID"))) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_NOT_FOUND);
-        return PRRTE_ERR_NOT_FOUND;
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
     }
 
     /* save that value in the global job ident string for
      * later use in any error reporting
      */
-    prrte_job_ident = strdup(pbs_jobid);
+    prte_job_ident = strdup(pbs_jobid);
 
-    if (PRRTE_SUCCESS != (ret = discover(nodes, pbs_jobid))) {
-        PRRTE_ERROR_LOG(ret);
+    if (PRTE_SUCCESS != (ret = discover(nodes, pbs_jobid))) {
+        PRTE_ERROR_LOG(ret);
         return ret;
     }
 
     /* in the TM world, if we didn't find anything, then this
      * is an unrecoverable error - report it
      */
-    if (prrte_list_is_empty(nodes)) {
-        prrte_show_help("help-ras-tm.txt", "no-nodes-found", true, filename);
-        return PRRTE_ERR_NOT_FOUND;
+    if (prte_list_is_empty(nodes)) {
+        prte_show_help("help-ras-tm.txt", "no-nodes-found", true, filename);
+        return PRTE_ERR_NOT_FOUND;
     }
 
     /* All done */
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 /*
@@ -107,10 +107,10 @@ static int allocate(prrte_job_t *jdata, prrte_list_t *nodes)
  */
 static int finalize(void)
 {
-    PRRTE_OUTPUT_VERBOSE((1, prrte_ras_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s ras:tm:finalize: success (nothing to do)",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
-    return PRRTE_SUCCESS;
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    return PRTE_SUCCESS;
 }
 
 
@@ -123,11 +123,11 @@ static int finalize(void)
  *  - check for additional nodes that have already been allocated
  */
 
-static int discover(prrte_list_t* nodelist, char *pbs_jobid)
+static int discover(prte_list_t* nodelist, char *pbs_jobid)
 {
     int32_t nodeid;
-    prrte_node_t *node;
-    prrte_list_item_t* item;
+    prte_node_t *node;
+    prte_list_item_t* item;
     FILE *fp;
     char *hostname, *cppn;
     int ppn;
@@ -146,10 +146,10 @@ static int discover(prrte_list_t* nodelist, char *pbs_jobid)
     /* if we are in SMP mode, then read the environment to get the
      * number of cpus for each node read in the file
      */
-    if (prrte_ras_tm_component.smp_mode) {
+    if (prte_ras_tm_component.smp_mode) {
         if (NULL == (cppn = getenv("PBS_PPN"))) {
-            prrte_show_help("help-ras-tm.txt", "smp-error", true);
-            return PRRTE_ERR_NOT_FOUND;
+            prte_show_help("help-ras-tm.txt", "smp-error", true);
+            return PRTE_ERR_NOT_FOUND;
         }
         ppn = strtol(cppn, NULL, 10);
     } else {
@@ -157,13 +157,13 @@ static int discover(prrte_list_t* nodelist, char *pbs_jobid)
     }
 
     /* setup the full path to the PBS file */
-    filename = prrte_os_path(false, prrte_ras_tm_component.nodefile_dir,
+    filename = prte_os_path(false, prte_ras_tm_component.nodefile_dir,
                             pbs_jobid, NULL);
     fp = fopen(filename, "r");
     if (NULL == fp) {
-        PRRTE_ERROR_LOG(PRRTE_ERR_FILE_OPEN_FAILURE);
+        PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
         free(filename);
-        return PRRTE_ERR_FILE_OPEN_FAILURE;
+        return PRTE_ERR_FILE_OPEN_FAILURE;
     }
 
     /* Iterate through all the nodes and make an entry for each.  TM
@@ -173,34 +173,34 @@ static int discover(prrte_list_t* nodelist, char *pbs_jobid)
 
     nodeid=0;
     while (NULL != (hostname = tm_getline(fp))) {
-        if( !prrte_keep_fqdn_hostnames && !prrte_net_isaddr(hostname) ) {
+        if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(hostname) ) {
             if (NULL != (ptr = strchr(hostname, '.'))) {
                 *ptr = '\0';
             }
         }
 
-        PRRTE_OUTPUT_VERBOSE((1, prrte_ras_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s ras:tm:allocate:discover: got hostname %s",
-                             PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), hostname));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hostname));
 
         /* Remember that TM may list the same node more than once.  So
            we have to check for duplicates. */
 
-        for (item = prrte_list_get_first(nodelist);
-             prrte_list_get_end(nodelist) != item;
-             item = prrte_list_get_next(item)) {
-            node = (prrte_node_t*) item;
+        for (item = prte_list_get_first(nodelist);
+             prte_list_get_end(nodelist) != item;
+             item = prte_list_get_next(item)) {
+            node = (prte_node_t*) item;
             if (0 == strcmp(node->name, hostname)) {
-                if (prrte_ras_tm_component.smp_mode) {
+                if (prte_ras_tm_component.smp_mode) {
                     /* this cannot happen in smp mode */
-                    prrte_show_help("help-ras-tm.txt", "smp-multi", true);
-                    return PRRTE_ERR_BAD_PARAM;
+                    prte_show_help("help-ras-tm.txt", "smp-multi", true);
+                    return PRTE_ERR_BAD_PARAM;
                 }
                 ++node->slots;
 
-                PRRTE_OUTPUT_VERBOSE((1, prrte_ras_base_framework.framework_output,
+                PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                      "%s ras:tm:allocate:discover: found -- bumped slots to %d",
-                                     PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), node->slots));
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->slots));
 
                 break;
             }
@@ -208,22 +208,22 @@ static int discover(prrte_list_t* nodelist, char *pbs_jobid)
 
         /* Did we find it? */
 
-        if (prrte_list_get_end(nodelist) == item) {
+        if (prte_list_get_end(nodelist) == item) {
 
             /* Nope -- didn't find it, so add a new item to the list */
 
-            PRRTE_OUTPUT_VERBOSE((1, prrte_ras_base_framework.framework_output,
+            PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s ras:tm:allocate:discover: not found -- added to list",
-                                 PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-            node = PRRTE_NEW(prrte_node_t);
+            node = PRTE_NEW(prte_node_t);
             node->name = hostname;
-            prrte_set_attribute(&node->attributes, PRRTE_NODE_LAUNCH_ID, PRRTE_ATTR_LOCAL, &nodeid, PRRTE_INT32);
+            prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL, &nodeid, PRTE_INT32);
             node->slots_inuse = 0;
             node->slots_max = 0;
             node->slots = ppn;
-            node->state = PRRTE_NODE_STATE_UP;
-            prrte_list_append(nodelist, &node->super);
+            node->state = PRTE_NODE_STATE_UP;
+            prte_list_append(nodelist, &node->super);
         } else {
 
             /* Yes, so we need to free the hostname that came back */
@@ -235,7 +235,7 @@ static int discover(prrte_list_t* nodelist, char *pbs_jobid)
     }
     fclose(fp);
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static char *tm_getline(FILE *fp)

@@ -1,6 +1,6 @@
 # NAME
 
-prted - Start an PRRTE User-Level Daemon
+prted - Start an PRTE User-Level Daemon
 
 # SYNOPSIS
 
@@ -10,12 +10,12 @@ prted [options]
 
 # DESCRIPTION
 
-`prted` starts an PRRTE daemon for the PRRTE system.
+`prted` starts an PRTE daemon for the PRTE system.
 
 # NOTE
 
 The `prted` command is _not intended to be manually invoked by end
-users._ It is part of the PRRTE architecture and is invoked
+users._ It is part of the PRTE architecture and is invoked
 automatically as necessary. This man page is mainly intended for those
 adventerous end users and system administrators who have noticed an
 `prted` process and wondered what it is.
@@ -27,8 +27,8 @@ with the `--help` command line option will show all available options.
 
 # AUTHORS
 
-The PRRTE maintainers -- see
-[https://github.com/openpmix/prrte](https://github.com/openpmix/prrte)
+The PRTE maintainers -- see
+[https://github.com/openpmix/prte](https://github.com/openpmix/prte)
 or the file `AUTHORS`.
 
 This manual page was originally contributed by Dirk Eddelbuettel

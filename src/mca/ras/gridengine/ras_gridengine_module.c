@@ -14,6 +14,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,7 +25,7 @@
  * @file:
  * Resource Allocation for Grid Engine
  */
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <errno.h>
@@ -35,15 +36,15 @@
 #include "src/util/net.h"
 #include "src/util/show_help.h"
 #include "src/mca/errmgr/errmgr.h"
-#include "src/runtime/prrte_globals.h"
+#include "src/runtime/prte_globals.h"
 #include "src/mca/ras/base/ras_private.h"
 #include "src/mca/ras/gridengine/ras_gridengine.h"
 
 /*
  * Local functions
  */
-static int prrte_ras_gridengine_allocate(prrte_job_t *jdata, prrte_list_t *nodes);
-static int prrte_ras_gridengine_finalize(void);
+static int prte_ras_gridengine_allocate(prte_job_t *jdata, prte_list_t *nodes);
+static int prte_ras_gridengine_finalize(void);
 #if 0
 static int get_slot_count(char* node_name, int* slot_cnt);
 #endif
@@ -51,11 +52,11 @@ static int get_slot_count(char* node_name, int* slot_cnt);
 /*
  * Global variable
  */
-prrte_ras_base_module_t prrte_ras_gridengine_module = {
+prte_ras_base_module_t prte_ras_gridengine_module = {
     NULL,
-    prrte_ras_gridengine_allocate,
+    prte_ras_gridengine_allocate,
     NULL,
-    prrte_ras_gridengine_finalize
+    prte_ras_gridengine_finalize
 };
 
 /**
@@ -63,36 +64,36 @@ prrte_ras_base_module_t prrte_ras_gridengine_module = {
  *  requested number of nodes/process slots to the job.
  *
  */
-static int prrte_ras_gridengine_allocate(prrte_job_t *jdata, prrte_list_t *nodelist)
+static int prte_ras_gridengine_allocate(prte_job_t *jdata, prte_list_t *nodelist)
 {
     char *pe_hostfile = getenv("PE_HOSTFILE");
     char *job_id = getenv("JOB_ID");
     char buf[1024], *tok, *num, *queue, *arch, *ptr, *tmp;
     int rc;
     FILE *fp;
-    prrte_node_t *node;
-    prrte_list_item_t *item;
+    prte_node_t *node;
+    prte_list_item_t *item;
     bool found;
 
     /* show the Grid Engine's JOB_ID */
-    if (prrte_ras_gridengine_component.show_jobid ||
-        prrte_ras_gridengine_component.verbose != -1) {
-        prrte_output(0, "ras:gridengine: JOB_ID: %s", job_id);
+    if (prte_ras_gridengine_component.show_jobid ||
+        prte_ras_gridengine_component.verbose != -1) {
+        prte_output(0, "ras:gridengine: JOB_ID: %s", job_id);
     }
 
     /* check the PE_HOSTFILE before continuing on */
     if (!(fp = fopen(pe_hostfile, "r"))) {
-        prrte_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile",
+        prte_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile",
             true, pe_hostfile, strerror(errno));
-        rc = PRRTE_ERROR;
-        PRRTE_ERROR_LOG(rc);
+        rc = PRTE_ERROR;
+        PRTE_ERROR_LOG(rc);
         goto cleanup;
     }
 
     /* parse the pe_hostfile for hostname, slots, etc, then compare the
      * current node with a list of hosts in the nodelist, if the current
      * node is not found in nodelist, add it in */
-    prrte_output(prrte_ras_gridengine_component.verbose,
+    prte_output(prte_ras_gridengine_component.verbose,
 		"ras:gridengine: PE_HOSTFILE: %s", pe_hostfile);
 
     while (fgets(buf, sizeof(buf), fp)) {
@@ -101,7 +102,7 @@ static int prrte_ras_gridengine_allocate(prrte_job_t *jdata, prrte_list_t *nodel
         queue = strtok_r(NULL, " \n", &tok);
         arch = strtok_r(NULL, " \n", &tok);
 
-        if( !prrte_keep_fqdn_hostnames && !prrte_net_isaddr(ptr) ) {
+        if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(ptr) ) {
             if (NULL != (tmp = strchr(ptr, '.'))) {
                 *tmp = '\0';
             }
@@ -109,10 +110,10 @@ static int prrte_ras_gridengine_allocate(prrte_job_t *jdata, prrte_list_t *nodel
 
         /* see if we already have this node */
         found = false;
-        for (item = prrte_list_get_first(nodelist);
-             item != prrte_list_get_end(nodelist);
-             item = prrte_list_get_next(item)) {
-            node = (prrte_node_t*)item;
+        for (item = prte_list_get_first(nodelist);
+             item != prte_list_get_end(nodelist);
+             item = prte_list_get_next(item)) {
+            node = (prte_node_t*)item;
             if (0 == strcmp(ptr, node->name)) {
                 /* just add the slots */
                 node->slots += (int)strtol(num, (char **)NULL, 10);
@@ -122,20 +123,20 @@ static int prrte_ras_gridengine_allocate(prrte_job_t *jdata, prrte_list_t *nodel
         }
         if (!found) {
             /* create a new node entry */
-            node = PRRTE_NEW(prrte_node_t);
+            node = PRTE_NEW(prte_node_t);
             if (NULL == node) {
                 fclose(fp);
-                return PRRTE_ERR_OUT_OF_RESOURCE;
+                return PRTE_ERR_OUT_OF_RESOURCE;
             }
             node->name = strdup(ptr);
-            node->state = PRRTE_NODE_STATE_UP;
+            node->state = PRTE_NODE_STATE_UP;
             node->slots_inuse = 0;
             node->slots_max = 0;
             node->slots = (int)strtol(num, (char **)NULL, 10);
-            prrte_output(prrte_ras_gridengine_component.verbose,
+            prte_output(prte_ras_gridengine_component.verbose,
                         "ras:gridengine: %s: PE_HOSTFILE shows slots=%d",
                         node->name, node->slots);
-            prrte_list_append(nodelist, &node->super);
+            prte_list_append(nodelist, &node->super);
         }
     } /* finished reading the $PE_HOSTFILE */
 
@@ -147,12 +148,12 @@ cleanup:
      * job, or may not have an allocation at all. In any case, this
      * is considered an unrecoverable error and we need to report it
      */
-    if (prrte_list_is_empty(nodelist)) {
-        prrte_show_help("help-ras-gridengine.txt", "no-nodes-found", true);
-        return PRRTE_ERR_NOT_FOUND;
+    if (prte_list_is_empty(nodelist)) {
+        prte_show_help("help-ras-gridengine.txt", "no-nodes-found", true);
+        return PRTE_ERR_NOT_FOUND;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 
 }
 
@@ -170,10 +171,10 @@ static int get_slot_count(char* node_name, int* slot_cnt)
 
     /* check the PE_HOSTFILE before continuing on */
     if (!(fp = fopen(pe_hostfile, "r"))) {
-        prrte_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile",
+        prte_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile",
             true, pe_hostfile, strerror(errno));
-        PRRTE_ERROR_LOG(PRRTE_ERROR);
-        return(PRRTE_ERROR);
+        PRTE_ERROR_LOG(PRTE_ERROR);
+        return(PRTE_ERROR);
     }
 
     while (fgets(buf, sizeof(buf), fp)) {
@@ -184,27 +185,27 @@ static int get_slot_count(char* node_name, int* slot_cnt)
 
         if(strcmp(node_name,name) == 0) {
             *slot_cnt = (int) strtol(num, (char **)NULL, 10);
-            prrte_output(prrte_ras_gridengine_component.verbose,
+            prte_output(prte_ras_gridengine_component.verbose,
                 "ras:gridengine: %s: PE_HOSTFILE shows slots=%d",
                 node_name, *slot_cnt);
             fclose(fp);
-            return PRRTE_SUCCESS;
+            return PRTE_SUCCESS;
         }
     }
 
     /* when there is no match */
     fclose(fp);
-    return PRRTE_ERROR;
+    return PRTE_ERROR;
 }
 #endif
 
 /**
  * finalize
  */
-static int prrte_ras_gridengine_finalize(void)
+static int prte_ras_gridengine_finalize(void)
 {
     /* Nothing to do */
-    prrte_output(prrte_ras_gridengine_component.verbose,
+    prte_output(prte_ras_gridengine_component.verbose,
         "ras:gridengine:finalize: success (nothing to do)");
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

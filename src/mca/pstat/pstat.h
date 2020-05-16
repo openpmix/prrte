@@ -8,6 +8,7 @@
  *                         reserved.
  *
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,10 +27,10 @@
  *
  */
 
-#ifndef PRRTE_MCA_PSTAT_H
-#define PRRTE_MCA_PSTAT_H
+#ifndef PRTE_MCA_PSTAT_H
+#define PRTE_MCA_PSTAT_H
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
@@ -38,57 +39,57 @@
 BEGIN_C_DECLS
 
 /**
- * Module initialization function.  Should return PRRTE_SUCCESS.
+ * Module initialization function.  Should return PRTE_SUCCESS.
  */
-typedef int (*prrte_pstat_base_module_init_fn_t)(void);
+typedef int (*prte_pstat_base_module_init_fn_t)(void);
 
-typedef int (*prrte_pstat_base_module_query_fn_t)(pid_t pid,
-                                                 prrte_pstats_t *stats,
-                                                 prrte_node_stats_t *nstats);
+typedef int (*prte_pstat_base_module_query_fn_t)(pid_t pid,
+                                                 prte_pstats_t *stats,
+                                                 prte_node_stats_t *nstats);
 
-typedef int (*prrte_pstat_base_module_fini_fn_t)(void);
+typedef int (*prte_pstat_base_module_fini_fn_t)(void);
 
 /**
  * Structure for pstat components.
  */
-struct prrte_pstat_base_component_2_0_0_t {
+struct prte_pstat_base_component_2_0_0_t {
     /** MCA base component */
-    prrte_mca_base_component_t base_version;
+    prte_mca_base_component_t base_version;
     /** MCA base data */
-    prrte_mca_base_component_data_t base_data;
+    prte_mca_base_component_data_t base_data;
 };
 
 /**
  * Convenience typedef
  */
-typedef struct prrte_pstat_base_component_2_0_0_t prrte_pstat_base_component_2_0_0_t;
-typedef struct prrte_pstat_base_component_2_0_0_t prrte_pstat_base_component_t;
+typedef struct prte_pstat_base_component_2_0_0_t prte_pstat_base_component_2_0_0_t;
+typedef struct prte_pstat_base_component_2_0_0_t prte_pstat_base_component_t;
 
 /**
  * Structure for pstat modules
  */
-struct prrte_pstat_base_module_1_0_0_t {
-    prrte_pstat_base_module_init_fn_t    init;
-    prrte_pstat_base_module_query_fn_t   query;
-    prrte_pstat_base_module_fini_fn_t    finalize;
+struct prte_pstat_base_module_1_0_0_t {
+    prte_pstat_base_module_init_fn_t    init;
+    prte_pstat_base_module_query_fn_t   query;
+    prte_pstat_base_module_fini_fn_t    finalize;
 };
 
 /**
  * Convenience typedef
  */
-typedef struct prrte_pstat_base_module_1_0_0_t prrte_pstat_base_module_1_0_0_t;
-typedef struct prrte_pstat_base_module_1_0_0_t prrte_pstat_base_module_t;
+typedef struct prte_pstat_base_module_1_0_0_t prte_pstat_base_module_1_0_0_t;
+typedef struct prte_pstat_base_module_1_0_0_t prte_pstat_base_module_t;
 
 
 /**
  * Macro for use in components that are of type pstat
  */
-#define PRRTE_PSTAT_BASE_VERSION_2_0_0 \
-    PRRTE_MCA_BASE_VERSION_2_1_0("pstat", 2, 0, 0)
+#define PRTE_PSTAT_BASE_VERSION_2_0_0 \
+    PRTE_MCA_BASE_VERSION_2_1_0("pstat", 2, 0, 0)
 
 /* Global structure for accessing pstat functions */
-PRRTE_EXPORT extern prrte_pstat_base_module_t prrte_pstat;
+PRTE_EXPORT extern prte_pstat_base_module_t prte_pstat;
 
 END_C_DECLS
 
-#endif /* PRRTE_MCA_PSTAT_H */
+#endif /* PRTE_MCA_PSTAT_H */

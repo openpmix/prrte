@@ -2,6 +2,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -12,7 +13,7 @@
 #ifndef _MCA_SCHIZO_OMPI_H_
 #define _MCA_SCHIZO_OMPI_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #include "types.h"
 
@@ -22,8 +23,8 @@
 
 BEGIN_C_DECLS
 
-PRRTE_MODULE_EXPORT extern prrte_schizo_base_component_t prrte_schizo_ompi_component;
-extern prrte_schizo_base_module_t prrte_schizo_ompi_module;
+PRTE_MODULE_EXPORT extern prte_schizo_base_component_t prte_schizo_ompi_component;
+extern prte_schizo_base_module_t prte_schizo_ompi_module;
 
 END_C_DECLS
 

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -7,7 +8,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include <string.h>
@@ -23,56 +24,56 @@ static bool selected = false;
  * Function for selecting one component from all those that are
  * available.
  */
-int prrte_rtc_base_select(void)
+int prte_rtc_base_select(void)
 {
-    prrte_mca_base_component_list_item_t *cli = NULL;
-    prrte_mca_base_component_t *component = NULL;
-    prrte_mca_base_module_t *module = NULL;
-    prrte_rtc_base_module_t *nmodule;
-    prrte_rtc_base_selected_module_t *newmodule, *mod;
+    prte_mca_base_component_list_item_t *cli = NULL;
+    prte_mca_base_component_t *component = NULL;
+    prte_mca_base_module_t *module = NULL;
+    prte_rtc_base_module_t *nmodule;
+    prte_rtc_base_selected_module_t *newmodule, *mod;
     int rc, priority;
     bool inserted;
 
     if (selected) {
         /* ensure we don't do this twice */
-        return PRRTE_SUCCESS;
+        return PRTE_SUCCESS;
     }
     selected = true;
 
     /* Query all available components and ask if they have a module */
-    PRRTE_LIST_FOREACH(cli, &prrte_rtc_base_framework.framework_components, prrte_mca_base_component_list_item_t) {
-        component = (prrte_mca_base_component_t *) cli->cli_component;
+    PRTE_LIST_FOREACH(cli, &prte_rtc_base_framework.framework_components, prte_mca_base_component_list_item_t) {
+        component = (prte_mca_base_component_t *) cli->cli_component;
 
-        prrte_output_verbose(5, prrte_rtc_base_framework.framework_output,
+        prte_output_verbose(5, prte_rtc_base_framework.framework_output,
                             "mca:rtc:select: checking available component %s", component->mca_component_name);
 
         /* If there's no query function, skip it */
         if (NULL == component->mca_query_component) {
-            prrte_output_verbose(5, prrte_rtc_base_framework.framework_output,
+            prte_output_verbose(5, prte_rtc_base_framework.framework_output,
                                 "mca:rtc:select: Skipping component [%s]. It does not implement a query function",
                                 component->mca_component_name );
             continue;
         }
 
         /* Query the component */
-        prrte_output_verbose(5, prrte_rtc_base_framework.framework_output,
+        prte_output_verbose(5, prte_rtc_base_framework.framework_output,
                             "mca:rtc:select: Querying component [%s]",
                             component->mca_component_name);
         rc = component->mca_query_component(&module, &priority);
 
         /* If no module was returned, then skip component */
-        if (PRRTE_SUCCESS != rc || NULL == module) {
-            prrte_output_verbose(5, prrte_rtc_base_framework.framework_output,
+        if (PRTE_SUCCESS != rc || NULL == module) {
+            prte_output_verbose(5, prte_rtc_base_framework.framework_output,
                                 "mca:rtc:select: Skipping component [%s]. Query failed to return a module",
                                 component->mca_component_name );
             continue;
         }
-        nmodule = (prrte_rtc_base_module_t*) module;
+        nmodule = (prte_rtc_base_module_t*) module;
 
         /* give the module a chance to init */
         if (NULL != nmodule->init) {
-            if (PRRTE_SUCCESS != (rc = nmodule->init())) {
-                prrte_output_verbose(5, prrte_rtc_base_framework.framework_output,
+            if (PRTE_SUCCESS != (rc = nmodule->init())) {
+                prte_output_verbose(5, prte_rtc_base_framework.framework_output,
                                     "mca:rtc:select: Skipping component [%s]. Failed to init",
                                     component->mca_component_name );
                 continue;
@@ -80,34 +81,34 @@ int prrte_rtc_base_select(void)
         }
 
         /* add to the list of selected modules */
-        newmodule = PRRTE_NEW(prrte_rtc_base_selected_module_t);
+        newmodule = PRTE_NEW(prte_rtc_base_selected_module_t);
         newmodule->pri = priority;
         newmodule->module = nmodule;
         newmodule->component = component;
 
         /* maintain priority order */
         inserted = false;
-        PRRTE_LIST_FOREACH(mod, &prrte_rtc_base.actives, prrte_rtc_base_selected_module_t) {
+        PRTE_LIST_FOREACH(mod, &prte_rtc_base.actives, prte_rtc_base_selected_module_t) {
             if (priority > mod->pri) {
-                prrte_list_insert_pos(&prrte_rtc_base.actives,
-                                     (prrte_list_item_t*)mod, &newmodule->super);
+                prte_list_insert_pos(&prte_rtc_base.actives,
+                                     (prte_list_item_t*)mod, &newmodule->super);
                 inserted = true;
                 break;
             }
         }
         if (!inserted) {
             /* must be lowest priority - add to end */
-            prrte_list_append(&prrte_rtc_base.actives, &newmodule->super);
+            prte_list_append(&prte_rtc_base.actives, &newmodule->super);
         }
     }
 
-    if (4 < prrte_output_get_verbosity(prrte_rtc_base_framework.framework_output)) {
-        prrte_output(0, "%s: Final RTC priorities", PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME));
+    if (4 < prte_output_get_verbosity(prte_rtc_base_framework.framework_output)) {
+        prte_output(0, "%s: Final RTC priorities", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         /* show the prioritized list */
-        PRRTE_LIST_FOREACH(mod, &prrte_rtc_base.actives, prrte_rtc_base_selected_module_t) {
-            prrte_output(0, "\tModule: %s Priority: %d", mod->component->mca_component_name, mod->pri);
+        PRTE_LIST_FOREACH(mod, &prte_rtc_base.actives, prte_rtc_base_selected_module_t) {
+            prte_output(0, "\tModule: %s Priority: %d", mod->component->mca_component_name, mod->pri);
         }
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }

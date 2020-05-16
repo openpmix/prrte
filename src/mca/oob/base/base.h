@@ -14,6 +14,7 @@
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +29,7 @@
 #ifndef _MCA_OOB_BASE_H_
 #define _MCA_OOB_BASE_H_
 
-#include "prrte_config.h"
+#include "prte_config.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -40,9 +41,9 @@
 #include <net/uio.h>
 #endif
 
-#include "src/class/prrte_bitmap.h"
-#include "src/class/prrte_hash_table.h"
-#include "src/class/prrte_list.h"
+#include "src/class/prte_bitmap.h"
+#include "src/class/prte_hash_table.h"
+#include "src/class/prte_list.h"
 #include "src/util/printf.h"
 #include "src/event/event-internal.h"
 
@@ -59,23 +60,23 @@ BEGIN_C_DECLS
 typedef struct {
     char *include;
     char *exclude;
-    prrte_list_t components;
-    prrte_list_t actives;
+    prte_list_t components;
+    prte_list_t actives;
     int max_uri_length;
-    prrte_hash_table_t peers;
-} prrte_oob_base_t;
-PRRTE_EXPORT extern prrte_oob_base_t prrte_oob_base;
+    prte_hash_table_t peers;
+} prte_oob_base_t;
+PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 
 typedef struct {
-    prrte_object_t super;
-    prrte_oob_base_component_t *component;
-    prrte_bitmap_t addressable;
-} prrte_oob_base_peer_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_oob_base_peer_t);
+    prte_object_t super;
+    prte_oob_base_component_t *component;
+    prte_bitmap_t addressable;
+} prte_oob_base_peer_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_oob_base_peer_t);
 
 /* MCA framework */
-PRRTE_EXPORT extern prrte_mca_base_framework_t prrte_oob_base_framework;
-PRRTE_EXPORT int prrte_oob_base_select(void);
+PRTE_EXPORT extern prte_mca_base_framework_t prte_oob_base_framework;
+PRTE_EXPORT int prte_oob_base_select(void);
 
 /* Access the OOB internal functions via set of event-based macros
  * for inserting messages and other commands into the
@@ -87,11 +88,11 @@ PRRTE_EXPORT int prrte_oob_base_select(void);
  * is available, etc.
  */
 typedef struct {
-    prrte_object_t super;
-    prrte_event_t ev;
-    prrte_rml_send_t *msg;
-} prrte_oob_send_t;
-PRRTE_EXPORT PRRTE_CLASS_DECLARATION(prrte_oob_send_t);
+    prte_object_t super;
+    prte_event_t ev;
+    prte_rml_send_t *msg;
+} prte_oob_send_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_oob_send_t);
 
 /* All OOB sends are based on iovec's and are async as the RML
  * acts as the initial interface to prepare all communications.
@@ -107,19 +108,19 @@ typedef void (*mca_oob_send_callback_fn_t)(int status,
                                            struct iovec *iov,
                                            int count, void *cbdata);
 
-PRRTE_EXPORT void prrte_oob_base_send_nb(int fd, short args, void *cbdata);
-#define PRRTE_OOB_SEND(m)                                                \
+PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
+#define PRTE_OOB_SEND(m)                                                \
     do {                                                                \
-        prrte_oob_send_t *cd;                                            \
-        prrte_output_verbose(1,                                          \
-                            prrte_oob_base_framework.framework_output,   \
+        prte_oob_send_t *cd;                                            \
+        prte_output_verbose(1,                                          \
+                            prte_oob_base_framework.framework_output,   \
                             "%s OOB_SEND: %s:%d",                       \
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),         \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
                             __FILE__, __LINE__);                        \
-        cd = PRRTE_NEW(prrte_oob_send_t);                                  \
+        cd = PRTE_NEW(prte_oob_send_t);                                  \
         cd->msg = (m);                                                  \
-        PRRTE_THREADSHIFT(cd, prrte_event_base,                     \
-                         prrte_oob_base_send_nb, PRRTE_MSG_PRI);          \
+        PRTE_THREADSHIFT(cd, prte_event_base,                     \
+                         prte_oob_base_send_nb, PRTE_MSG_PRI);          \
     }while(0)
 
 /* During initial wireup, we can only transfer contact info on the daemon
@@ -138,7 +139,7 @@ PRRTE_EXPORT void prrte_oob_base_send_nb(int fd, short args, void *cbdata);
  * Since all components define their address info at component start,
  * it is unchanged and does not require acess via event
  */
-PRRTE_EXPORT void prrte_oob_base_get_addr(char **uri);
+PRTE_EXPORT void prte_oob_base_get_addr(char **uri);
 
 END_C_DECLS
 #endif
