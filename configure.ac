@@ -840,11 +840,6 @@ if test -z "$LEX" || \
 fi
 
 #
-# Setup Pandoc for man pages
-#
-PRTE_SETUP_MAN_PAGES
-
-#
 # Look for ps command and arguments
 #
 PRTE_PS_FLAVOR_CHECK
@@ -1113,6 +1108,13 @@ PRTE_SETUP_WRAPPER_FINAL
 
 # If there is a local hook, call it.
 m4_ifdef([prte_CONFIG_LOCAL], [prte_CONFIG_LOCAL])
+
+############################################################################
+# Check for building man pages
+############################################################################
+prte_show_subtitle "Man page setup"
+PRTE_SETUP_MAN_PAGES
+
 
 ############################################################################
 # Party on
