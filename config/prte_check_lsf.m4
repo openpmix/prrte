@@ -144,44 +144,49 @@ AC_DEFUN([PRTE_CHECK_LSF],[
           # If the external libevent component used 'event_core' instead of 'event'
           prte_check_lsf_event_conflict=na
           # Split libs into an array, see if -levent is in that list
-          prte_check_lsf_libevent_present=`echo $LIBS | awk '{split([$]0, a, " "); {for (k in a) {if (a[[k]] == "-levent") {print a[[k]]}}}}' | wc -l`
-          AS_IF([test "$prte_check_lsf_happy" = "yes"],
-                [AS_IF([test "$prte_check_lsf_libevent_present" != 0],
+          prte_check_lsf_libevent_present=`echo "$LIBS" | awk '{split([$]0, a, " "); {for (k in a) {if (a[[k]] == "-levent") {print a[[k]]}}}}' | wc -l | tr -d '[[:space:]]'`
+          # (1) LSF check must have failed above. We need to know why...
+          AS_IF([test "$prte_check_lsf_happy" = "no"],
+                [# (2) If there is a -levent in the $LIBS then that might be the problem
+                 AS_IF([test "$prte_check_lsf_libevent_present" != "0"],
                        [AS_IF([test "$prte_check_lsf_libdir" = "" ],
                               [],
                               [LDFLAGS="$LDFLAGS -L$prte_check_lsf_libdir"])
                         # Note that we do not want to set LIBS here to include -llsf since
                         # the check is not for an LSF library, but for the conflict with
                         # LDFLAGS.
+                        # (3) Check to see if the -levent is from Libevent (check for a symbol it has)
                         AC_CHECK_LIB([event], [evthread_set_condition_callbacks],
                                      [AC_MSG_CHECKING([for libevent conflict])
                                       AC_MSG_RESULT([No. The correct libevent.so was linked.])
                                       prte_check_lsf_event_conflict=no],
-                                     [AC_MSG_CHECKING([for libevent conflict])
-                                      AC_MSG_RESULT([Yes. A wrong libevent.so was linked.])
+                                     [# (4) The libevent.so is not from Libevent. Warn the user.
+                                      AC_MSG_CHECKING([for libevent conflict])
+                                      AC_MSG_RESULT([Yes. Detected a libevent.so that is not from Libevent.])
                                       prte_check_lsf_event_conflict=yes])
                        ],
                        [AC_MSG_CHECKING([for libevent conflict])
                         AC_MSG_RESULT([No. -levent is not being explicitly used.])
                         prte_check_lsf_event_conflict=na])],
-                [prte_check_lsf_event_conflict=na])
+                [AC_MSG_CHECKING([for libevent conflict])
+                 AC_MSG_RESULT([No. LSF checks passed.])
+                 prte_check_lsf_event_conflict=na])
 
           AS_IF([test "$prte_check_lsf_event_conflict" = "yes"],
                 [AC_MSG_WARN([===================================================================])
                  AC_MSG_WARN([Conflicting libevent.so libraries detected on the system.])
                  AC_MSG_WARN([])
-                 AC_MSG_WARN([A system-installed Libevent library was detected and the PRTE])
-                 AC_MSG_WARN([build system chose to use the 'external' component expecting to])
-                 AC_MSG_WARN([link against the Libevent in the linker search path.])
+                 AC_MSG_WARN([A system-installed Libevent library was detected and the PRRTE])
+                 AC_MSG_WARN([build system relies on an external Libevent in the linker search path.])
+                 AC_MSG_WARN([If LSF is present on the system and in the default search path then])
+                 AC_MSG_WARN([it _may be_ the source of the conflict.])
                  AC_MSG_WARN([LSF provides a libevent.so that is not from Libevent in its])
                  AC_MSG_WARN([library path. At this point the linker is attempting to resolve])
                  AC_MSG_WARN([Libevent symbols using the LSF library because of the lack of])
                  AC_MSG_WARN([an explicit linker path pointing to the system-installed Libevent.])
                  AC_MSG_WARN([])
-                 AC_MSG_WARN([To resolve this issue either (A) explicitly pass the Libevent])
-                 AC_MSG_WARN([library path on the configure line (--with-libevent-libdir), or])
-                 AC_MSG_WARN([(B) use the internal libevent by requesting it from configure ])
-                 AC_MSG_WARN([with the --with-libevent=internal option.])
+                 AC_MSG_WARN([To resolve this issue try to explicitly pass the Libevent])
+                 AC_MSG_WARN([library path on the configure line (--with-libevent-libdir).])
                  AC_MSG_WARN([===================================================================])
                 ])
 
