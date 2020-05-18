@@ -701,12 +701,7 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
         }
     } else {
         prte_print_map(&output, jdata);
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PRTE_BOOL)) {
-            fprintf(prte_xml_fp, "%s\n", output);
-            fflush(prte_xml_fp);
-        } else {
-            prte_output(prte_clean_output, "%s", output);
-        }
+        prte_output(prte_clean_output, "%s\n", output);
         free(output);
     }
 }

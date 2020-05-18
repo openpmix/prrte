@@ -342,7 +342,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
         if (NULL != proct->subscribers) {
             if (!exclusive) {
                 /* output this to our local output */
-                if (PRTE_IOF_STDOUT & rev->tag || prte_xml_output) {
+                if (PRTE_IOF_STDOUT & rev->tag) {
                     prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, prte_iof_base.iof_write_stdout->wev);
                 } else {
                     prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, prte_iof_base.iof_write_stderr->wev);
@@ -350,7 +350,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
             }
         } else {
             /* output this to our local output */
-            if (PRTE_IOF_STDOUT & rev->tag || prte_xml_output) {
+            if (PRTE_IOF_STDOUT & rev->tag) {
                 prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, prte_iof_base.iof_write_stdout->wev);
             } else {
                 prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, prte_iof_base.iof_write_stderr->wev);

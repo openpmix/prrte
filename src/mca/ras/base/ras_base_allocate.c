@@ -150,8 +150,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         }
     }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PRTE_BOOL)) {
-        fprintf(prte_xml_fp, "%s</allocation>\n", tmp);
-        fflush(prte_xml_fp);
+        prte_output(prte_clean_output, "%s</allocation>\n", tmp);
     } else {
         prte_output(prte_clean_output, "%s=================================================================\n", tmp);
     }

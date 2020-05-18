@@ -262,9 +262,6 @@ static prte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "xml", 0, PRTE_CMD_LINE_TYPE_BOOL,
       "Provide all output in XML format",
       PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "xml-file", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Provide all output in XML format to the specified file",
-      PRTE_CMD_LINE_OTYPE_OUTPUT },
     /* tag output */
     { '\0', "tag-output", 0, PRTE_CMD_LINE_TYPE_BOOL,
       "Tag all output with [job,rank]",
@@ -1021,23 +1018,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* check for stdout/err directives */
-    /* if we were asked to tag output, mark it so */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "tag-output")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
-    }
-    /* if we were asked to timestamp output, mark it so */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "timestamp-output")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
-    }
     /* cannot have both files and directory set for output */
     param = NULL;
     ptr = NULL;

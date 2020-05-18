@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2013-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
@@ -95,7 +95,7 @@ static int prte_iof_base_close(void)
         if (NULL != prte_iof_base.iof_write_stdout) {
             PRTE_RELEASE(prte_iof_base.iof_write_stdout);
         }
-        if (!prte_xml_output && NULL != prte_iof_base.iof_write_stderr) {
+        if (NULL != prte_iof_base.iof_write_stderr) {
             PRTE_RELEASE(prte_iof_base.iof_write_stderr);
         }
     }
@@ -113,27 +113,12 @@ static int prte_iof_base_open(prte_mca_base_open_flag_t flags)
 
     /* daemons do not need to do this as they do not write out stdout/err */
     if (!PRTE_PROC_IS_DAEMON) {
-        if (prte_xml_output) {
-            if (NULL != prte_xml_fp) {
-                /* user wants all xml-formatted output sent to file */
-                xmlfd = fileno(prte_xml_fp);
-            } else {
-                xmlfd = 1;
-            }
-            /* setup the stdout event */
-            PRTE_IOF_SINK_DEFINE(&prte_iof_base.iof_write_stdout, PRTE_PROC_MY_NAME,
-                                 xmlfd, PRTE_IOF_STDOUT, prte_iof_base_write_handler);
-            /* don't create a stderr event - all output will go to
-             * the stdout channel
-             */
-        } else {
-            /* setup the stdout event */
-            PRTE_IOF_SINK_DEFINE(&prte_iof_base.iof_write_stdout, PRTE_PROC_MY_NAME,
-                                 1, PRTE_IOF_STDOUT, prte_iof_base_write_handler);
-            /* setup the stderr event */
-            PRTE_IOF_SINK_DEFINE(&prte_iof_base.iof_write_stderr, PRTE_PROC_MY_NAME,
-                                 2, PRTE_IOF_STDERR, prte_iof_base_write_handler);
-        }
+        /* setup the stdout event */
+        PRTE_IOF_SINK_DEFINE(&prte_iof_base.iof_write_stdout, PRTE_PROC_MY_NAME,
+                             1, PRTE_IOF_STDOUT, prte_iof_base_write_handler);
+        /* setup the stderr event */
+        PRTE_IOF_SINK_DEFINE(&prte_iof_base.iof_write_stderr, PRTE_PROC_MY_NAME,
+                             2, PRTE_IOF_STDERR, prte_iof_base_write_handler);
 
         /* do NOT set these file descriptors to non-blocking. If we do so,
          * we set the file descriptor to non-blocking for everyone that has
@@ -281,14 +266,6 @@ static void prte_iof_base_write_event_destruct(prte_iof_write_event_t* wev)
         prte_event_free(wev->ev);
     } else {
         free(wev->ev);
-    }
-    if (PRTE_PROC_IS_MASTER && NULL != prte_xml_fp) {
-        int xmlfd = fileno(prte_xml_fp);
-        if (xmlfd == wev->fd) {
-            /* don't close this one - will get it later */
-            PRTE_DESTRUCT(&wev->outputs);
-            return;
-        }
     }
     if (2 < wev->fd) {
         PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,

@@ -462,22 +462,19 @@ static int finalize(void)
             PRTE_RELEASE(output);
         }
     }
-    if (!prte_xml_output) {
-        /* we only opened stderr channel if we are NOT doing xml output */
-        wev = prte_iof_base.iof_write_stderr->wev;
-        if (!prte_list_is_empty(&wev->outputs)) {
-            dump = false;
-            /* make one last attempt to write this out */
-            while (NULL != (output = (prte_iof_write_output_t*)prte_list_remove_first(&wev->outputs))) {
-                if (!dump) {
-                    num_written = write(wev->fd, output->data, output->numbytes);
-                    if (num_written < output->numbytes) {
-                        /* don't retry - just cleanout the list and dump it */
-                        dump = true;
-                    }
+    wev = prte_iof_base.iof_write_stderr->wev;
+    if (!prte_list_is_empty(&wev->outputs)) {
+        dump = false;
+        /* make one last attempt to write this out */
+        while (NULL != (output = (prte_iof_write_output_t*)prte_list_remove_first(&wev->outputs))) {
+            if (!dump) {
+                num_written = write(wev->fd, output->data, output->numbytes);
+                if (num_written < output->numbytes) {
+                    /* don't retry - just cleanout the list and dump it */
+                    dump = true;
                 }
-                PRTE_RELEASE(output);
             }
+            PRTE_RELEASE(output);
         }
     }
 
@@ -660,7 +657,7 @@ static int hnp_output(const prte_process_name_t* peer,
         return ret;
     } else {
         /* output this to our local output */
-        if (PRTE_IOF_STDOUT & source_tag || prte_xml_output) {
+        if (PRTE_IOF_STDOUT & source_tag) {
             prte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), prte_iof_base.iof_write_stdout->wev);
         } else {
             prte_iof_base_write_output(peer, source_tag, (const unsigned char*)msg, strlen(msg), prte_iof_base.iof_write_stderr->wev);

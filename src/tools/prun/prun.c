@@ -248,9 +248,6 @@ static prte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "xml", 0, PRTE_CMD_LINE_TYPE_BOOL,
       "Provide all output in XML format",
       PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "xml-file", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Provide all output in XML format to the specified file",
-      PRTE_CMD_LINE_OTYPE_OUTPUT },
     /* tag output */
     { '\0', "tag-output", 0, PRTE_CMD_LINE_TYPE_BOOL,
       "Tag all output with [job,rank]",
@@ -943,26 +940,6 @@ int prun(int argc, char *argv[])
     PMIX_INFO_CREATE(ds->info, 1);
     PMIX_INFO_LOAD(ds->info, PMIX_SINGLE_LISTENER, NULL, PMIX_BOOL);
     prte_list_append(&tinfo, &ds->super);
-
-    /* setup any output format requests */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "tag-output")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
-        prte_list_append(&tinfo, &ds->super);
-    }
-    if (prte_cmd_line_is_taken(prte_cmd_line, "timestamp-output")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
-        prte_list_append(&tinfo, &ds->super);
-    }
-    if (prte_cmd_line_is_taken(prte_cmd_line, "xml")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
-        prte_list_append(&tinfo, &ds->super);
-    }
 
     /* if they specified the URI, then pass it along */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "dvm-uri", 0, 0))) {

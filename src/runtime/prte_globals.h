@@ -62,8 +62,6 @@ BEGIN_C_DECLS
 
 PRTE_EXPORT extern int prte_debug_verbosity;  /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_prohibited_session_dirs;  /* instantiated in src/runtime/prte_init.c */
-PRTE_EXPORT extern bool prte_xml_output;  /* instantiated in src/runtime/prte_globals.c */
-PRTE_EXPORT extern FILE *prte_xml_fp;   /* instantiated in src/runtime/prte_globals.c */
 PRTE_EXPORT extern bool prte_help_want_aggregate;  /* instantiated in src/util/show_help.c */
 PRTE_EXPORT extern char *prte_job_ident;  /* instantiated in src/runtime/prte_globals.c */
 PRTE_EXPORT extern bool prte_create_session_dirs;  /* instantiated in src/runtime/prte_init.c */
@@ -508,8 +506,6 @@ PRTE_EXPORT extern prte_pointer_array_t *prte_local_children;
 PRTE_EXPORT extern prte_vpid_t prte_total_procs;
 
 /* IOF controls */
-PRTE_EXPORT extern bool prte_tag_output;
-PRTE_EXPORT extern bool prte_timestamp_output;
 /* generate new xterm windows to display output from specified ranks */
 PRTE_EXPORT extern char *prte_xterm;
 

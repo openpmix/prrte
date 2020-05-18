@@ -260,6 +260,24 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
         } else if (0 == strcasecmp(ck2[i], "NOLOCAL")) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_NO_USE_LOCAL);
 
+        } else if (0 == strcasecmp(ck2[i], "TAGOUTPUT")) {
+            if (NULL == jdata) {
+                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                "mapping policy", ck2[i]);
+                return PRTE_ERR_SILENT;
+            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL,
+                                NULL, PRTE_BOOL);
+
+        } else if (0 == strcasecmp(ck2[i], "TIMESTAMPOUTPUT")) {
+            if (NULL == jdata) {
+                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                "mapping policy", ck2[i]);
+                return PRTE_ERR_SILENT;
+            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, PRTE_ATTR_GLOBAL,
+                                NULL, PRTE_BOOL);
+
         } else if (0 == strcasecmp(ck2[i], "XMLOUTPUT")) {
             if (NULL == jdata) {
                 prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,

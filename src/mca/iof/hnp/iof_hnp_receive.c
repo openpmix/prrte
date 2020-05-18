@@ -315,7 +315,7 @@ void prte_iof_hnp_recv(int status, prte_process_name_t* sender,
 
     /* output this to our local output unless one of the sinks was exclusive */
     if (!exclusive) {
-        if (PRTE_IOF_STDOUT & stream || prte_xml_output) {
+        if (PRTE_IOF_STDOUT & stream) {
             prte_iof_base_write_output(&origin, stream, data, numbytes, prte_iof_base.iof_write_stdout->wev);
         } else {
             prte_iof_base_write_output(&origin, stream, data, numbytes, prte_iof_base.iof_write_stderr->wev);

@@ -50,7 +50,6 @@
 
 static bool passed_thru = false;
 static int prte_progress_thread_debug_level = -1;
-static char *prte_xml_file = NULL;
 static char *prte_fork_agent_string = NULL;
 static char *prte_tmpdir_base = NULL;
 static char *prte_local_tmpdir_base = NULL;
@@ -474,57 +473,6 @@ int prte_register_params(void)
                                   PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                   &prte_use_hostname_alias);
-
-    prte_xml_output = false;
-    (void) prte_mca_base_var_register ("prte", "prte", NULL, "xml_output",
-                                  "Display all output in XML format (default: false)",
-                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prte_xml_output);
-
-    /* whether to tag output */
-    /* if we requested xml output, be sure to tag the output as well */
-    prte_tag_output = prte_xml_output;
-    (void) prte_mca_base_var_register ("prte", "prte", NULL, "tag_output",
-                                  "Tag all output with [job,rank] (default: false)",
-                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prte_tag_output);
-    if (prte_xml_output) {
-        prte_tag_output = true;
-    }
-
-
-    prte_xml_file = NULL;
-    (void) prte_mca_base_var_register ("prte", "prte", NULL, "xml_file",
-                                  "Provide all output in XML format to the specified file",
-                                  PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
-                                  PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prte_xml_file);
-    if (NULL != prte_xml_file) {
-        if (PRTE_PROC_IS_MASTER && NULL == prte_xml_fp) {
-            /* only the HNP opens this file! Make sure it only happens once */
-            prte_xml_fp = fopen(prte_xml_file, "w");
-            if (NULL == prte_xml_fp) {
-                prte_output(0, "Could not open specified xml output file: %s", prte_xml_file);
-                return PRTE_ERROR;
-            }
-        }
-        /* ensure we set the flags to tag output */
-        prte_xml_output = true;
-        prte_tag_output = true;
-    } else {
-        /* default to stdout */
-        prte_xml_fp = stdout;
-    }
-
-    /* whether to timestamp output */
-    prte_timestamp_output = false;
-    (void) prte_mca_base_var_register ("prte", "prte", NULL, "timestamp_output",
-                                  "Timestamp all application process output (default: false)",
-                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prte_timestamp_output);
 
     prte_show_resolved_nodenames = false;
     (void) prte_mca_base_var_register ("prte", "prte", NULL, "show_resolved_nodenames",

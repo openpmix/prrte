@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * $COPYRIGHT$
  *
@@ -55,6 +55,10 @@ int prte_iof_base_write_output(const prte_process_name_t *name, prte_iof_tag_t s
     int i, j, k, starttaglen, endtaglen, num_buffered;
     bool endtagged;
     char qprint[10];
+    prte_job_t *jdata;
+    bool prte_xml_output;
+    bool prte_timestamp_output;
+    bool prte_tag_output;
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s write:output setting up to write %d bytes to %s for %s on fd %d",
@@ -65,6 +69,12 @@ int prte_iof_base_write_output(const prte_process_name_t *name, prte_iof_tag_t s
 
     /* setup output object */
     output = PRTE_NEW(prte_iof_write_output_t);
+
+    /* get the job object for this process */
+    jdata = prte_get_job_data_object(name->jobid);
+    prte_timestamp_output = prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PRTE_BOOL);
+    prte_tag_output = prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PRTE_BOOL);
+    prte_xml_output = prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PRTE_BOOL);
 
     /* write output data to the corresponding tag */
     if (PRTE_IOF_STDIN & stream) {
