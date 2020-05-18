@@ -154,3 +154,8 @@ src/tools/pterm/pterm
 
 src/util/hostfile/hostfile_lex.c
 src/util/keyval/keyval_lex.c
+
+test/double-get
+test/get-nofence
+test/attachtest/app
+test/attachtest/tool

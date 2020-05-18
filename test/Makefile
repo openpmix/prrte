@@ -34,7 +34,9 @@ CFLAGS = -g
 
 TESTS = \
 	double-get \
-	get-nofence
+	get-nofence \
+	attachtest/app.c \
+	attachtest/tool.c
 
 all: $(TESTS)
 
