@@ -1,7 +1,8 @@
 dnl -*- shell-script -*-
 dnl
-dnl Copyright (c) 2020 Cisco Systems, Inc.  All rights reserved.
+dnl Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved.
 dnl
+dnl Copyright (c) 2020      Intel, Inc.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -19,16 +20,16 @@ dnl
 AC_DEFUN([PRTE_SETUP_MAN_PAGES],[
     AC_ARG_ENABLE(man-pages,
                   [AC_HELP_STRING([--disable-man-pages],
-                                  [Do not generate/install man pages (default: enable)])])
+                                  [Do not generate/install man pages (default: enabled)])])
 
     PANDOC=
     PRTE_ENABLE_MAN_PAGES=0
     AC_MSG_CHECKING([if want man pages])
     AS_IF([test -z "$enable_man_pages" || test "$enable_man_pages" = "yes"],
           [AC_MSG_RESULT([yes])
-	   PRTE_ENABLE_MAN_PAGES=1
-	   _PRTE_SETUP_PANDOC],
-	  [AC_MSG_RESULT([no])])
+           PRTE_ENABLE_MAN_PAGES=1
+           _PRTE_SETUP_PANDOC],
+          [AC_MSG_RESULT([no])])
 
     AC_SUBST(PANDOC)
     AM_CONDITIONAL([PRTE_ENABLE_MAN_PAGES], [test $PRTE_ENABLE_MAN_PAGES -eq 1])
@@ -65,13 +66,18 @@ AC_DEFUN([_PRTE_SETUP_PANDOC],[
           ])
 
     AS_IF([test -z "$PANDOC" || test -n "`echo $PANDOC | $GREP missing`"],
-          [AS_IF([test ! -f "$srcdir/tools/wrapper/prte_wrapper.1"],
-                 [AC_MSG_WARN([*** Could not find a suitable pandoc on your system.])
-                  AC_MSG_WARN([*** You need pandoc >=$min_major_version.$min_minor_version to build PRTE man pages.])
-                  AC_MSG_WARN([*** See pandoc.org.])
-                  AC_MSG_WARN([*** NOTE: If you are building from a tarball downloaded from the PRTE web site, you do not need Pandoc])
-                  AC_MSG_ERROR([Cannot continue])
-                 ])
+          [AS_IF([test "$PRTE_DEVEL" = "1" && test -z "$enable_man_pages"],
+                 [AC_MSG_CHECKING([man pages will be built])
+                  AC_MSG_RESULT([no - adequate pandoc installation not found])
+                  PANDOC=
+                  PRTE_ENABLE_MAN_PAGES=0],
+                 [AS_IF([test ! -f "$srcdir/tools/wrapper/prte_wrapper.1"],
+                         [AC_MSG_WARN([*** Could not find a suitable pandoc on your system.])
+                          AC_MSG_WARN([*** You need pandoc >=$min_major_version.$min_minor_version to build OpenPRTe man pages.])
+                          AC_MSG_WARN([*** See pandoc.org.])
+                          AC_MSG_WARN([*** NOTE: If you are building from a tarball downloaded from the OpenPRTe GitHub repository, you do not need Pandoc])
+                          AC_MSG_ERROR([Cannot continue])
+                         ])])
            ])
 
     PRTE_VAR_SCOPE_POP
