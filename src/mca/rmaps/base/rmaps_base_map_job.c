@@ -144,6 +144,18 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             }
         }
     }
+
+    /* we always inherit a parent's oversubscribe flag unless the job assigned it */
+    if (NULL != parent &&
+        !(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
+        if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(parent->map->mapping)) {
+            PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
+        } else {
+            PRTE_UNSET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
+            PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
+        }
+    }
+
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void**)&tmp, PRTE_STRING)) {
         if (NULL != strcasestr(tmp, "node")) {
             pernode = true;
