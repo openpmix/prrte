@@ -111,7 +111,6 @@ static prte_event_t show_help_timer_event;
  * Local functions
  */
 static void show_accumulated_duplicates(int fd, short event, void *context);
-static char* xml_format(unsigned char *input);
 static int show_help(const char *filename, const char *topic,
                      const char *output, prte_process_name_t *sender);
 
@@ -673,30 +672,14 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
         if (tli->tli_display &&
             tli->tli_count_since_last_display > 0) {
             static bool first = true;
-            if (prte_xml_output) {
-                prte_asprintf(&tmp, "%d more process%s sent help message %s / %s",
-                         tli->tli_count_since_last_display,
-                         (tli->tli_count_since_last_display > 1) ? "es have" : " has",
-                         tli->tli_filename, tli->tli_topic);
-                output = xml_format((unsigned char*)tmp);
-                free(tmp);
-                fprintf(prte_xml_fp, "%s", output);
-                free(output);
-            } else {
-                prte_output(0, "%d more process%s sent help message %s / %s",
-                            tli->tli_count_since_last_display,
-                            (tli->tli_count_since_last_display > 1) ? "es have" : " has",
-                            tli->tli_filename, tli->tli_topic);
-            }
+            prte_output(0, "%d more process%s sent help message %s / %s",
+                        tli->tli_count_since_last_display,
+                        (tli->tli_count_since_last_display > 1) ? "es have" : " has",
+                        tli->tli_filename, tli->tli_topic);
             tli->tli_count_since_last_display = 0;
 
             if (first) {
-               if (prte_xml_output) {
-                    fprintf(prte_xml_fp, "<stderr>Set MCA parameter \"prte_base_help_aggregate\" to 0 to see all help / error messages</stderr>\n");
-                    fflush(prte_xml_fp);
-                } else {
-                    prte_output(0, "Set MCA parameter \"prte_base_help_aggregate\" to 0 to see all help / error messages");
-                }
+                prte_output(0, "Set MCA parameter \"prte_base_help_aggregate\" to 0 to see all help / error messages");
                 first = false;
             }
         }
@@ -704,116 +687,6 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
 
     show_help_time_last_displayed = now;
     show_help_timer_set = false;
-}
-
-/* dealing with special characters in xml output */
-static char* xml_format(unsigned char *input)
-{
-    int i, j, k, len, outlen;
-    char *output, qprint[10];
-    char *endtag="</stderr>";
-    char *starttag="<stderr>";
-    int endtaglen, starttaglen;
-    bool endtagged = false;
-
-    len = strlen((char*)input);
-    /* add some arbitrary size padding */
-    output = (char*)malloc((len+1024)*sizeof(char));
-    if (NULL == output) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return (char*)input; /* default to no xml formatting */
-    }
-    memset(output, 0, len+1024);
-    outlen = len+1023;
-    endtaglen = strlen(endtag);
-    starttaglen = strlen(starttag);
-
-    /* start at the beginning */
-    k=0;
-
-    /* start with the tag */
-    for (j=0; j < starttaglen && k < outlen; j++) {
-        output[k++] = starttag[j];
-    }
-
-    for (i=0; i < len; i++) {
-        if ('&' == input[i]) {
-            if (k+5 >= outlen) {
-                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-                goto error;
-            }
-            snprintf(qprint, 10, "&amp;");
-            for (j=0; j < (int)strlen(qprint) && k < outlen; j++) {
-                output[k++] = qprint[j];
-            }
-        } else if ('<' == input[i]) {
-            if (k+4 >= outlen) {
-                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-                goto error;
-            }
-            snprintf(qprint, 10, "&lt;");
-            for (j=0; j < (int)strlen(qprint) && k < outlen; j++) {
-                output[k++] = qprint[j];
-            }
-        } else if ('>' == input[i]) {
-            if (k+4 >= outlen) {
-                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-                goto error;
-            }
-            snprintf(qprint, 10, "&gt;");
-            for (j=0; j < (int)strlen(qprint) && k < outlen; j++) {
-                output[k++] = qprint[j];
-            }
-        } else if (input[i] < 32 || input[i] > 127) {
-            /* this is a non-printable character, so escape it too */
-            if (k+7 >= outlen) {
-                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-                goto error;
-            }
-            snprintf(qprint, 10, "&#%03d;", (int)input[i]);
-            for (j=0; j < (int)strlen(qprint) && k < outlen; j++) {
-                output[k++] = qprint[j];
-            }
-            /* if this was a \n, then we also need to break the line with the end tag */
-            if ('\n' == input[i] && (k+endtaglen+1) < outlen) {
-                /* we need to break the line with the end tag */
-                for (j=0; j < endtaglen && k < outlen-1; j++) {
-                    output[k++] = endtag[j];
-                }
-                /* move the <cr> over */
-                output[k++] = '\n';
-                /* if this isn't the end of the input buffer, add a new start tag */
-                if (i < len-1 && (k+starttaglen) < outlen) {
-                    for (j=0; j < starttaglen && k < outlen; j++) {
-                        output[k++] = starttag[j];
-                        endtagged = false;
-                    }
-                } else {
-                    endtagged = true;
-                }
-            }
-        } else {
-            output[k++] = input[i];
-        }
-    }
-
-    if (!endtagged) {
-        /* need to add an endtag */
-        for (j=0; j < endtaglen && k < outlen-1; j++) {
-            output[k++] = endtag[j];
-        }
-        output[k++] = '\n';
-    }
-
-    return output;
-
-error:
-    /* if we couldn't complete the processing for
-     * some reason, return the unprocessed input
-     * so at least the message gets out!
-     */
-    free(output);
-    return (char*)input;
 }
 
 static int show_help(const char *filename, const char *topic,
@@ -882,15 +755,7 @@ static int show_help(const char *filename, const char *topic,
             /* send it to any connected tools */
             prte_iof.output(sender, PRTE_IOF_STDDIAG, output);
         }
-        if (prte_xml_output) {
-            char *tmp;
-            tmp = xml_format((unsigned char*)output);
-            fprintf(prte_xml_fp, "%s", tmp);
-            fflush(prte_xml_fp);
-            free(tmp);
-        } else {
-            prte_output(output_stream, "%s", output);
-        }
+        prte_output(output_stream, "%s", output);
         if (!show_help_timer_set) {
             show_help_time_last_displayed = now;
         }

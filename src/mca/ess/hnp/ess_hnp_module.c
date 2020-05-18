@@ -206,12 +206,6 @@ static int rte_init(int argc, char **argv)
         }
     }
 
-    /* if we are using xml for output, put an mpirun start tag */
-    if (prte_xml_output) {
-        fprintf(prte_xml_fp, "<mpirun>\n");
-        fflush(prte_xml_fp);
-    }
-
     /* open and setup the prte_pstat framework so we can provide
      * process stats if requested
      */
@@ -672,15 +666,6 @@ static int rte_finalize(void)
     prte_session_dir_finalize(PRTE_PROC_MY_NAME);
     /* ensure we scrub the session directory tree */
     prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
-
-    /* close the xml output file, if open */
-    if (prte_xml_output) {
-        fprintf(prte_xml_fp, "</mpirun>\n");
-        fflush(prte_xml_fp);
-        if (stdout != prte_xml_fp) {
-            fclose(prte_xml_fp);
-        }
-    }
 
     free(prte_topo_signature);
 

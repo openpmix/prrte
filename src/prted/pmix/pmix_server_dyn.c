@@ -487,15 +487,23 @@ static void interim(int sd, short args, void *cbdata)
         /***   THE INITIAL JOB-INFO DELIVERED TO PROCS                          ***/
 
         /***   TAG STDOUT   ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_TAG_OUTPUT)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_TAG_OUTPUT) ||
+                   PMIX_CHECK_KEY(info, PMIX_IOF_TAG_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT,
                                PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
 
         /***   TIMESTAMP OUTPUT   ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_TIMESTAMP_OUTPUT)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_TIMESTAMP_OUTPUT) ||
+                   PMIX_CHECK_KEY(info, PMIX_IOF_TIMESTAMP_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT,
+                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+
+        /***   XML OUTPUT   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_XML_OUTPUT)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT,
                                PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
 
         /***   OUTPUT TO FILES   ***/

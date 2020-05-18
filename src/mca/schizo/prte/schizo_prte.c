@@ -295,7 +295,7 @@ static int parse_cli(int argc, int start, char **argv,
 
 static int parse_deprecated_cli(char *option, char ***argv, int i)
 {
-    int rc = PRTE_SUCCESS;
+    int rc = PRTE_ERR_NOT_FOUND;
     char **pargs = *argv;
     char *p2, *tmp, *tmp2, *output;
 
@@ -327,8 +327,16 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--do-not-launch")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DONOTLAUNCH");
     }
-    /* --xml-output  ->  --map-by :xmloutput */
-    else if (0 == strcmp(option, "--xml-output")) {
+    /* --tag-output  ->  --map-by :tagoutput */
+    else if (0 == strcmp(option, "--tag-output")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "TAGOUTPUT");
+    }
+    /* --timestamp-output  ->  --map-by :timestampoutput */
+    else if (0 == strcmp(option, "--timestamp-output")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "TIMESTAMPOUTPUT");
+    }
+    /* --xml  ->  --map-by :xmloutput */
+    else if (0 == strcmp(option, "--xml")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "XMLOUTPUT");
     }
     /* -N ->   map-by ppr:N:node */
@@ -436,7 +444,9 @@ static void register_deprecated_cli(prte_list_t *convertors)
         "--report-bindings",
         "--display-allocation",
         "--do-not-launch",
-        "--xml-output",
+        "--tag-output",
+        "--timestamp-output",
+        "--xml",
         "-N",
         "--map-by",
         "--rank-by",

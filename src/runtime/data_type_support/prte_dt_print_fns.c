@@ -275,30 +275,6 @@ int prte_dt_print_node(char **output, char *prefix, prte_node_t *src, prte_data_
         prte_asprintf(&pfx2, "%s", prefix);
     }
 
-    if (prte_xml_output) {
-        /* need to create the output in XML format */
-        prte_asprintf(&tmp, "%s<host name=\"%s\" slots=\"%d\" max_slots=\"%d\">\n", pfx2,
-                 (NULL == src->name) ? "UNKNOWN" : src->name,
-                 (int)src->slots, (int)src->slots_max);
-        /* does this node have any aliases? */
-        tmp3 = NULL;
-        if (prte_get_attribute(&src->attributes, PRTE_NODE_ALIAS, (void**)&tmp3, PRTE_STRING)) {
-            alias = prte_argv_split(tmp3, ',');
-            for (i=0; NULL != alias[i]; i++) {
-                prte_asprintf(&tmp2, "%s%s\t<noderesolve resolved=\"%s\"/>\n", tmp, pfx2, alias[i]);
-                free(tmp);
-                tmp = tmp2;
-            }
-            prte_argv_free(alias);
-        }
-        if (NULL != tmp3) {
-            free(tmp3);
-        }
-        *output = tmp;
-        free(pfx2);
-        return PRTE_SUCCESS;
-    }
-
     if (!prte_devel_level_output) {
         /* just provide a simple output for users */
         if (0 == src->num_procs) {
@@ -459,19 +435,6 @@ int prte_dt_print_proc(char **output, char *prefix, prte_proc_t *src, prte_data_
         prte_asprintf(&pfx2, "%s", prefix);
     }
 
-    if (prte_xml_output) {
-        /* need to create the output in XML format */
-        if (0 == src->pid) {
-            prte_asprintf(output, "%s<process rank=\"%s\" status=\"%s\"/>\n", pfx2,
-                     PRTE_VPID_PRINT(src->name.vpid), prte_proc_state_to_str(src->state));
-        } else {
-            prte_asprintf(output, "%s<process rank=\"%s\" pid=\"%d\" status=\"%s\"/>\n", pfx2,
-                     PRTE_VPID_PRINT(src->name.vpid), (int)src->pid, prte_proc_state_to_str(src->state));
-        }
-        free(pfx2);
-        return PRTE_SUCCESS;
-    }
-
     if (!prte_devel_level_output) {
         if (prte_get_attribute(&src->attributes, PRTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, PRTE_STRING) &&
             NULL != src->node->topology && NULL != src->node->topology->topo) {
@@ -628,42 +591,6 @@ int prte_dt_print_map(char **output, char *prefix, prte_job_map_t *src, prte_dat
         prte_asprintf(&pfx2, " ");
     } else {
         prte_asprintf(&pfx2, "%s", prefix);
-    }
-
-    if (prte_xml_output) {
-        /* need to create the output in XML format */
-        prte_asprintf(&tmp, "<map>\n");
-        /* loop through nodes */
-        for (i=0; i < src->nodes->size; i++) {
-            if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(src->nodes, i))) {
-                continue;
-            }
-            prte_dt_print_node(&tmp2, "\t", node, PRTE_NODE);
-            prte_asprintf(&tmp3, "%s%s", tmp, tmp2);
-            free(tmp2);
-            free(tmp);
-            tmp = tmp3;
-            /* for each node, loop through procs and print their rank */
-            for (j=0; j < node->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, j))) {
-                    continue;
-                }
-                prte_dt_print_proc(&tmp2, "\t\t", proc, PRTE_PROC);
-                prte_asprintf(&tmp3, "%s%s", tmp, tmp2);
-                free(tmp2);
-                free(tmp);
-                tmp = tmp3;
-            }
-            prte_asprintf(&tmp3, "%s\t</host>\n", tmp);
-            free(tmp);
-            tmp = tmp3;
-        }
-        prte_asprintf(&tmp2, "%s</map>\n", tmp);
-        free(tmp);
-        free(pfx2);
-        *output = tmp2;
-        return PRTE_SUCCESS;
-
     }
 
     prte_asprintf(&pfx, "%s\t", pfx2);

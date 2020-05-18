@@ -129,8 +129,6 @@ prte_pointer_array_t *prte_local_children = NULL;
 prte_vpid_t prte_total_procs = 0;
 
 /* IOF controls */
-bool prte_tag_output = false;
-bool prte_timestamp_output = false;
 /* generate new xterm windows to display output from specified ranks */
 char *prte_xterm = NULL;
 
@@ -178,8 +176,6 @@ int prte_max_vm_size = -1;
 
 int prte_debug_output = -1;
 bool prte_debug_daemons_flag = false;
-bool prte_xml_output = false;
-FILE *prte_xml_fp = NULL;
 char *prte_job_ident = NULL;
 bool prte_execute_quiet = false;
 bool prte_report_silent_errors = false;
