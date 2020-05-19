@@ -33,6 +33,13 @@ AC_DEFUN([PRTE_SETUP_MAN_PAGES],[
 
     AC_SUBST(PANDOC)
     AM_CONDITIONAL([PRTE_ENABLE_MAN_PAGES], [test $PRTE_ENABLE_MAN_PAGES -eq 1])
+    AC_DEFINE_UNQUOTED([PRTE_ENABLE_MAN_PAGES], [$PRTE_ENABLE_MAN_PAGES],
+                       [Whether or not we will build manpages])
+
+    AS_IF([test $PRTE_ENABLE_MAN_PAGES -eq 1],
+          [PRTE_SUMMARY_ADD([[Options]],[[Manpages built]], [prte_manpages], [yes])],
+          [PRTE_SUMMARY_ADD([[Options]],[[Manpages built]], [prte_manpages], [yes])])
+
 ])
 
 dnl Back-end pandoc setup

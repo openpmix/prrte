@@ -348,12 +348,14 @@ void prte_info_do_config(bool want_all)
     char *have_dl;
     char *prun_prefix_by_default;
     char *symbol_visibility;
+    char *manpages;
 
     /* setup the strings that don't require allocations*/
     debug = PRTE_ENABLE_DEBUG ? "yes" : "no";
     have_dl = PRTE_HAVE_DL_SUPPORT ? "yes" : "no";
     prun_prefix_by_default = PRTE_WANT_PRTE_PREFIX_BY_DEFAULT ? "yes" : "no";
     symbol_visibility = PRTE_C_HAVE_VISIBILITY ? "yes" : "no";
+    manpages = PRTE_ENABLE_MAN_PAGES ? "yes" : "no";
 
     /* output values */
     prte_info_out("Configured by", "config:user", PRTE_CONFIGURE_USER);
@@ -408,5 +410,6 @@ void prte_info_do_config(bool want_all)
     prte_info_out("prun default --prefix", "prun:prefix_by_default",
                   prun_prefix_by_default);
     prte_info_out("Symbol vis. support", "options:visibility", symbol_visibility);
+    prte_info_out("Manpages built", "options:man-pages", manpages);
 
 }
