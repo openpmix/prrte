@@ -109,8 +109,6 @@ static int prte_iof_base_close(void)
  */
 static int prte_iof_base_open(prte_mca_base_open_flag_t flags)
 {
-    int xmlfd;
-
     /* daemons do not need to do this as they do not write out stdout/err */
     if (!PRTE_PROC_IS_DAEMON) {
         /* setup the stdout event */

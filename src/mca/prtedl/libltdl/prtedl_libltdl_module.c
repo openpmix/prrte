@@ -68,7 +68,7 @@ static int libltdl_open(const char *fname, bool use_ext, bool private_namespace,
     }
 
     if (NULL != err_msg) {
-        *err_msg = (char*) lt_dlerror();
+        *err_msg = strdup((char*) lt_dlerror());
     }
     return PRTE_ERROR;
 }

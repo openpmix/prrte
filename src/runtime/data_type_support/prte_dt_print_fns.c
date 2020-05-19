@@ -578,10 +578,9 @@ int prte_dt_print_app_context(char **output, char *prefix, prte_app_context_t *s
 int prte_dt_print_map(char **output, char *prefix, prte_job_map_t *src, prte_data_type_t type)
 {
     char *tmp=NULL, *tmp2, *tmp3, *pfx, *pfx2;
-    int32_t i, j;
+    int32_t i;
     int rc;
     prte_node_t *node;
-    prte_proc_t *proc;
 
     /* set default result */
     *output = NULL;
