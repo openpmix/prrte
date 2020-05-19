@@ -110,7 +110,6 @@ int prte_ess_base_prted_setup(void)
     prte_topology_t *t;
     prte_ess_base_signal_t *sig;
     int idx;
-    pmix_nspace_t nspace;
 
     plm_in_use = false;
 
@@ -193,8 +192,6 @@ int prte_ess_base_prted_setup(void)
     /* define the HNP name */
     PRTE_PROC_MY_HNP->jobid = PRTE_PROC_MY_NAME->jobid;
     PRTE_PROC_MY_HNP->vpid = 0;
-    /* get my nspace */
-    PRTE_PMIX_CREATE_NSPACE(nspace, PRTE_PROC_MY_NAME->jobid);
 
     /* open and setup the state machine */
     if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_state_base_framework, 0))) {
@@ -270,7 +267,7 @@ int prte_ess_base_prted_setup(void)
 
             /* define a log file name in the session directory */
             snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log",
-                     nspace, prte_process_info.nodename);
+                     prte_process_info.myproc.nspace, prte_process_info.nodename);
             log_path = prte_os_path(false, prte_process_info.top_session_dir,
                                     log_file, NULL);
 
@@ -291,10 +288,7 @@ int prte_ess_base_prted_setup(void)
     }
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
-    jdata = PRTE_NEW(prte_job_t);
-    jdata->jobid = PRTE_PROC_MY_NAME->jobid;
-    PMIX_LOAD_NSPACE(jdata->nspace, nspace);
-    prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, jdata);
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
     /* every job requires at least one app */
     app = PRTE_NEW(prte_app_context_t);
     prte_pointer_array_set_item(jdata->apps, 0, app);
