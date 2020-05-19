@@ -71,7 +71,7 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
        them */
     void *local_handle = NULL;
     if (use_ext && NULL != fname) {
-        int i;
+        int i, rc;
         char *ext;
 
         for (i = 0, ext = prte_prtedl_dlopen_component.filename_suffixes[i];
@@ -87,10 +87,14 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
             /* Does the file exist? */
             struct stat buf;
             if (stat(name, &buf) < 0) {
-                free(name);
                 if (NULL != err_msg) {
-                    *err_msg = "File not found";
+                    rc = asprintf(err_msg, "File %s not found", name);
+                    if (0 > rc) {
+                        free(name);
+                        return PRTE_ERR_OUT_OF_RESOURCE;
+                    }
                 }
+                free(name);
                 continue;
             }
 

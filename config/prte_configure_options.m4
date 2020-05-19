@@ -198,15 +198,19 @@ AC_ARG_ENABLE([show-load-errors-by-default],
                      MCA-variable-setting mechansism).  This MCA variable
                      controls whether warnings are displayed when an MCA
                      component fails to load at run time due to an error.
-                     (default: enabled, meaning that
+                     (default: enabled in --enable-debug builds, meaning that
                       mca_base_component_show_load_errors is enabled
-                      by default])])
+                      by default when configured with --enable-debug])])
 if test "$enable_show_load_errors_by_default" = "no" ; then
     PRTE_SHOW_LOAD_ERRORS_DEFAULT=0
     AC_MSG_RESULT([disabled by default])
 else
-    PRTE_SHOW_LOAD_ERRORS_DEFAULT=1
-    AC_MSG_RESULT([enabled by default])
+    PRTE_SHOW_LOAD_ERRORS_DEFAULT=$WANT_DEBUG
+    if test "$WANT_DEBUG" = "1"; then
+        AC_MSG_RESULT([enabled by default])
+    else
+        AC_MSG_RESULT([disabled by default])
+    fi
 fi
 AC_DEFINE_UNQUOTED(PRTE_SHOW_LOAD_ERRORS_DEFAULT, $PRTE_SHOW_LOAD_ERRORS_DEFAULT,
                    [Default value for mca_base_component_show_load_errors MCA variable])

@@ -663,7 +663,6 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
 {
     time_t now = time(NULL);
     tuple_list_item_t *tli;
-    char *tmp, *output;
 
     /* Loop through all the messages we've displayed and see if any
        processes have sent duplicates that have not yet been displayed
