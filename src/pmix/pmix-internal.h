@@ -450,14 +450,6 @@ PRTE_EXPORT int prte_convert_jobid_to_nspace(pmix_nspace_t nspace, prte_jobid_t 
 PRTE_EXPORT int prte_convert_nspace_to_jobid(prte_jobid_t *jobid, pmix_nspace_t nspace);
 PRTE_EXPORT void prte_convert_daemon_nspace(prte_jobid_t *jobid, pmix_nspace_t nspace);
 
-#define PRTE_PMIX_CREATE_NSPACE(n, j)      \
-    do {                                    \
-        char *_tmp;                         \
-        prte_asprintf(&_tmp, "%u", (j));   \
-        PMIX_LOAD_NSPACE((n), _tmp);        \
-        free(_tmp);                         \
-    } while(0)
-
 /* convert prte_jobid to pmix nspace */
 #define PRTE_PMIX_CONVERT_JOBID(r, n, j) \
     (r) = prte_convert_jobid_to_nspace((n), (j))
