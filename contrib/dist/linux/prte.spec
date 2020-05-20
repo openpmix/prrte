@@ -685,7 +685,7 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %if !%{sysconfdir_in_prefix}
 %{_sysconfdir}
 %endif
-# If %{install_in_opt}, then we're instaling OMPI to
+# If %%{install_in_opt}, then we're instaling OMPI to
 # /opt/prte/<version>.  But be sure to also explicitly mention
 # /opt/prte so that it can be removed by RPM when everything under
 # there is also removed.
