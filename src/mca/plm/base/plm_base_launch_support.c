@@ -2053,12 +2053,9 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
             if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
                 continue;
             }
-            /* if the app provided a dash-host, and we are not treating
-             * them as requested or "soft" locations, then use those nodes
-             */
+            /* if the app provided a dash-host, then use those nodes */
             hosts = NULL;
-            if (!prte_soft_locations &&
-                prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+            if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                      "%s using dash_host",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));

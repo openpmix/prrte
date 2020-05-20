@@ -35,22 +35,6 @@
 #include "src/runtime/data_type_support/prte_dt_support.h"
 
 /*
- * PRTE_STD_CNTR
- */
-int prte_dt_unpack_std_cntr(prte_buffer_t *buffer, void *dest,
-                             int32_t *num_vals, prte_data_type_t type)
-{
-    int ret;
-
-    /* Turn around and unpack the real type */
-    if (PRTE_SUCCESS != (ret = prte_dss_unpack_buffer(buffer, dest, num_vals, PRTE_STD_CNTR_T))) {
-        PRTE_ERROR_LOG(ret);
-    }
-
-    return ret;
-}
-
-/*
  * JOB
  * NOTE: We do not pack all of the job object's fields as many of them have no
  * value in sending them to another location. The only purpose in packing and
@@ -107,7 +91,7 @@ int prte_dt_unpack_job(prte_buffer_t *buffer, void *dest,
         /* unpack the attributes */
         n=1;
         if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &count,
-                                                         &n, PRTE_STD_CNTR))) {
+                                                         &n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -124,7 +108,7 @@ int prte_dt_unpack_job(prte_buffer_t *buffer, void *dest,
         /* unpack any job info */
         n=1;
         if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &count,
-                                                         &n, PRTE_STD_CNTR))) {
+                                                         &n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -222,7 +206,7 @@ int prte_dt_unpack_job(prte_buffer_t *buffer, void *dest,
         /* unpack the total slots allocated to the job */
         n = 1;
         if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer,
-                         (&(jobs[i]->total_slots_alloc)), &n, PRTE_STD_CNTR))) {
+                         (&(jobs[i]->total_slots_alloc)), &n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -232,7 +216,7 @@ int prte_dt_unpack_job(prte_buffer_t *buffer, void *dest,
          * the map is included */
         n = 1;
         if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer,
-                                            &j, &n, PRTE_STD_CNTR))) {
+                                            &j, &n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -345,7 +329,7 @@ int prte_dt_unpack_node(prte_buffer_t *buffer, void *dest,
         /* unpack the attributes */
         n=1;
         if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &count,
-                                                         &n, PRTE_STD_CNTR))) {
+                                                         &n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -428,7 +412,7 @@ int prte_dt_unpack_proc(prte_buffer_t *buffer, void *dest,
         /* unpack the app context index */
         n = 1;
         if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer,
-                         (&(procs[i]->app_idx)), &n, PRTE_STD_CNTR))) {
+                         (&(procs[i]->app_idx)), &n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -444,7 +428,7 @@ int prte_dt_unpack_proc(prte_buffer_t *buffer, void *dest,
         /* unpack the attributes */
         n=1;
         if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &count,
-                                                         &n, PRTE_STD_CNTR))) {
+                                                         &n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -487,7 +471,7 @@ int prte_dt_unpack_app_context(prte_buffer_t *buffer, void *dest,
         /* get the app index number */
         max_n = 1;
         if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &(app_context[i]->idx),
-                                                         &max_n, PRTE_STD_CNTR))) {
+                                                         &max_n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -503,7 +487,7 @@ int prte_dt_unpack_app_context(prte_buffer_t *buffer, void *dest,
         /* get the number of processes */
         max_n = 1;
         if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &(app_context[i]->num_procs),
-                                                         &max_n, PRTE_STD_CNTR))) {
+                                                         &max_n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -518,7 +502,7 @@ int prte_dt_unpack_app_context(prte_buffer_t *buffer, void *dest,
 
         /* get the number of argv strings that were packed */
         max_n = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &count, &max_n, PRTE_STD_CNTR))) {
+        if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &count, &max_n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -542,7 +526,7 @@ int prte_dt_unpack_app_context(prte_buffer_t *buffer, void *dest,
 
         /* get the number of env strings */
         max_n = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &count, &max_n, PRTE_STD_CNTR))) {
+        if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &count, &max_n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -575,7 +559,7 @@ int prte_dt_unpack_app_context(prte_buffer_t *buffer, void *dest,
         /* unpack the attributes */
         max_n=1;
         if (PRTE_SUCCESS != (rc = prte_dss_unpack_buffer(buffer, &count,
-                                                         &max_n, PRTE_STD_CNTR))) {
+                                                         &max_n, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }

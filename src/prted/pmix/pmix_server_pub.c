@@ -51,7 +51,6 @@
 static int init_server(void)
 {
     char *server;
-    pmix_proc_t proc;
     pmix_value_t val;
     char input[1024], *filename;
     FILE *fp;
@@ -113,9 +112,8 @@ static int init_server(void)
             return rc;
         }
         /* setup our route to the server */
-        PRTE_PMIX_CONVERT_NAME(rc, &proc, &prte_pmix_server_globals.server);
         PMIX_VALUE_LOAD(&val, server, PMIX_STRING);
-        if (PMIX_SUCCESS != (ret = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Store_internal(PRTE_PROC_MY_PROCID, PMIX_PROC_URI, &val))) {
             PMIX_ERROR_LOG(ret);
             PMIX_VALUE_DESTRUCT(&val);
             return rc;

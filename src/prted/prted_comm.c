@@ -108,7 +108,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
     prte_daemon_cmd_flag_t command;
     prte_buffer_t *relay_msg;
     int ret;
-    prte_std_cntr_t n;
+    int32_t n;
     int32_t signal, cnt;
     prte_jobid_t job;
     prte_buffer_t data, *answer;
@@ -119,7 +119,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
     prte_proc_t *proct;
     char *cmd_str = NULL;
     prte_pointer_array_t *procs_to_kill = NULL;
-    prte_std_cntr_t num_procs, num_new_procs = 0, p;
+    int32_t num_procs, num_new_procs = 0, p;
     prte_proc_t *cur_proc = NULL, *prev_proc = NULL;
     bool found = false;
     prte_node_t *node;
@@ -137,7 +137,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
     void *nptr;
     prte_pmix_lock_t lk;
     pmix_data_buffer_t pbkt;
-    pmix_proc_t pdmn, pname;
+    pmix_proc_t pname;
     prte_byte_object_t *bo, *bo2;
     prte_process_name_t dmn;
     pmix_status_t pstatus;
@@ -293,7 +293,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                     PMIX_DATA_BUFFER_LOAD(&pbkt, bo2->bytes, bo2->size);
                     /* unpack the number of info's provided */
                     cnt = 1;
-                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(&prte_process_info.myproc, &pbkt, &ninfo, &cnt, PMIX_SIZE))) {
+                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(PRTE_PROC_MY_PROCID, &pbkt, &ninfo, &cnt, PMIX_SIZE))) {
                         PMIX_ERROR_LOG(pstatus);
                         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         ret = PRTE_ERR_UNPACK_FAILURE;
@@ -302,7 +302,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                     /* unpack the infos */
                     PMIX_INFO_CREATE(info, ninfo);
                     cnt = ninfo;
-                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(&prte_process_info.myproc, &pbkt, info, &cnt, PMIX_INFO))) {
+                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(PRTE_PROC_MY_PROCID, &pbkt, info, &cnt, PMIX_INFO))) {
                         PMIX_ERROR_LOG(pstatus);
                         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         PMIX_INFO_FREE(info, ninfo);
@@ -311,9 +311,8 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                     }
 
                     /* store them locally */
-                    PRTE_PMIX_CONVERT_NAME(ret, &pdmn, &dmn);
                     for (n2=0; n2 < ninfo; n2++) {
-                        pstatus = PMIx_Store_internal(&pdmn, info[n2].key, &info[n2].value);
+                        pstatus = PMIx_Store_internal(PRTE_PROC_MY_PROCID, info[n2].key, &info[n2].value);
                         if (PMIX_SUCCESS != pstatus) {
                             PMIX_ERROR_LOG(pstatus);
                             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
@@ -360,7 +359,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
 
         /* Number of processes */
         n = 1;
-        if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &num_procs, &n, PRTE_STD_CNTR)) ) {
+        if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &num_procs, &n, PRTE_INT32)) ) {
             PRTE_ERROR_LOG(ret);
             goto CLEANUP;
         }

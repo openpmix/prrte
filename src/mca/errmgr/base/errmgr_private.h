@@ -12,7 +12,7 @@
  * Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
@@ -66,7 +66,7 @@ PRTE_EXPORT void prte_errmgr_base_log(int error_code, char *filename, int line);
 PRTE_EXPORT void prte_errmgr_base_abort(int error_code, char *fmt, ...)
     __prte_attribute_format__(__printf__, 2, 3);
 PRTE_EXPORT int prte_errmgr_base_abort_peers(prte_process_name_t *procs,
-                                               prte_std_cntr_t num_procs,
+                                               int32_t num_procs,
                                                int error_code);
 
 END_C_DECLS

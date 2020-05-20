@@ -51,12 +51,6 @@
  * Supported datatypes for messaging and storage operations.
  */
 
-typedef int32_t prte_std_cntr_t;  /** standard counters used in PRTE */
-#define PRTE_STD_CNTR_T         PRTE_INT32
-#define PRTE_STD_CNTR_MAX       INT32_MAX
-#define PRTE_STD_CNTR_MIN       INT32_MIN
-#define PRTE_STD_CNTR_INVALID   -1
-
 /** rank on node, used for both local and node rank. We
  * don't send these around on their own, so don't create
  * dedicated type support for them - we are defining them

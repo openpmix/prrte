@@ -33,23 +33,6 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/data_type_support/prte_dt_support.h"
 
-/* PRTE_STD_CNTR */
-int prte_dt_copy_std_cntr(prte_std_cntr_t **dest, prte_std_cntr_t *src, prte_data_type_t type)
-{
-    prte_std_cntr_t *val;
-
-    val = (prte_std_cntr_t*)malloc(sizeof(prte_std_cntr_t));
-    if (NULL == val) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    *val = *src;
-    *dest = val;
-
-    return PRTE_SUCCESS;
-}
-
 /**
  * JOB
  */
@@ -194,7 +177,7 @@ int prte_dt_copy_exit_code(prte_exit_code_t **dest, prte_exit_code_t *src, prte_
  */
 int prte_dt_copy_map(prte_job_map_t **dest, prte_job_map_t *src, prte_data_type_t type)
 {
-    prte_std_cntr_t i;
+    int32_t i;
 
     if (NULL == src) {
         *dest = NULL;

@@ -167,7 +167,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     prte_job_t *jdata;
     prte_list_t nodes;
     prte_node_t *node;
-    prte_std_cntr_t i;
+    int32_t i;
     prte_app_context_t *app;
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
     char *hosts=NULL;
@@ -334,15 +334,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (!prte_soft_locations &&
-            prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
-            /* if we are using soft locations, then any dash-host would
-             * just include desired nodes and not required. We don't want
-             * to pick them up here as this would mean the request was
-             * always satisfied - instead, we want to allow the request
-             * to fail later on and use whatever nodes are actually
-             * available
-             */
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding dash_hosts",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));

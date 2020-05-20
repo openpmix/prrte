@@ -97,7 +97,6 @@ bool prte_hnp_is_allocated = false;
 bool prte_allocation_required = false;
 bool prte_managed_allocation = false;
 char *prte_set_slots = NULL;
-bool prte_soft_locations = false;
 bool prte_nidmap_communicated = false;
 bool prte_node_info_communicated = false;
 
@@ -203,19 +202,6 @@ int prte_dt_init(void)
         } else {
             prte_output_set_verbosity(prte_debug_output, 1);
         }
-    }
-
-    /** register the base system types with the DSS */
-    tmp = PRTE_STD_CNTR;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_std_cntr,
-                                                     prte_dt_unpack_std_cntr,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_std_cntr,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_std_cntr,
-                                                     (prte_dss_print_fn_t)prte_dt_std_print,
-                                                     PRTE_DSS_UNSTRUCTURED,
-                                                     "PRTE_STD_CNTR", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
     }
 
     tmp = PRTE_JOB;
@@ -746,6 +732,7 @@ static void prte_node_construct(prte_node_t* node)
 
     node->state = PRTE_NODE_STATE_UNKNOWN;
     node->slots = 0;
+    node->slots_available = 0;
     node->slots_inuse = 0;
     node->slots_max = 0;
     node->topology = NULL;
@@ -851,7 +838,7 @@ static void prte_job_map_construct(prte_job_map_t* map)
 
 static void prte_job_map_destruct(prte_job_map_t* map)
 {
-    prte_std_cntr_t i;
+    int32_t i;
     prte_node_t *node;
 
     if (NULL != map->req_mapper) {

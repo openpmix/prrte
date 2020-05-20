@@ -172,7 +172,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 {
     prte_app_context_t *app;
     prte_node_t *node;
-    prte_std_cntr_t n;
+    int32_t n;
     prte_job_map_t *map;
     char *jobid_string = NULL;
     char *param;

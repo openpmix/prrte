@@ -60,13 +60,13 @@ struct prte_job_map_t {
     /* number of new daemons required to be launched
      * to support this job map
      */
-    prte_std_cntr_t num_new_daemons;
+    int32_t num_new_daemons;
     /* starting vpid of the new daemons - they will
      * be sequential from that point
      */
     prte_vpid_t daemon_vpid_start;
     /* number of nodes participating in this job */
-    prte_std_cntr_t num_nodes;
+    int32_t num_nodes;
     /* array of pointers to nodes in this map for this job */
     prte_pointer_array_t *nodes;
 };

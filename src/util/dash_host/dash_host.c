@@ -83,7 +83,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
                                   char *hosts, bool allocating)
 {
     prte_list_item_t *item, *itm;
-    prte_std_cntr_t i, j, k;
+    int32_t i, j, k;
     int rc, nodeidx;
     char **host_argv=NULL;
     char **mapped_nodes = NULL, **mini_map, *ndname;
@@ -352,7 +352,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
  */
 static int parse_dash_host(char ***mapped_nodes, char *hosts)
 {
-    prte_std_cntr_t j, k;
+    int32_t j, k;
     int rc=PRTE_SUCCESS;
     char **mini_map=NULL, *cptr;
     int nodeidx;
@@ -453,7 +453,7 @@ int prte_util_filter_dash_host_nodes(prte_list_t *nodes,
 {
     prte_list_item_t* item;
     prte_list_item_t *next;
-    prte_std_cntr_t i, j, len_mapped_node=0;
+    int32_t i, j, len_mapped_node=0;
     int rc, test;
     char **mapped_nodes = NULL;
     prte_node_t *node;

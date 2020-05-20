@@ -85,7 +85,7 @@ static int ppr_mapper(prte_job_t *jdata)
     prte_hwloc_level_t level;
     prte_list_t node_list;
     prte_list_item_t *item;
-    prte_std_cntr_t num_slots;
+    int32_t num_slots;
     prte_app_idx_t idx;
     char **ppr_req, **ck, *jobppr=NULL;
     size_t len;

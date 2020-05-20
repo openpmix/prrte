@@ -96,8 +96,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app,
         free(hosts);
     }
     /* now filter the list through any -host specification */
-    if (!prte_soft_locations &&
-        prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
         if (PRTE_SUCCESS != (rc = prte_util_filter_dash_host_nodes(nodes, hosts, remove))) {
             PRTE_ERROR_LOG(rc);
             free(hosts);
@@ -136,14 +135,14 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app,
 /*
  * Query the registry for all nodes allocated to a specified app_context
  */
-int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, prte_std_cntr_t *total_num_slots,
+int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *total_num_slots,
                                      prte_app_context_t *app, prte_mapping_policy_t policy,
                                      bool initial_map, bool silent)
 {
     prte_list_item_t *item;
     prte_node_t *node, *nd, *nptr, *next;
-    prte_std_cntr_t num_slots;
-    prte_std_cntr_t i;
+    int32_t num_slots;
+    int32_t i;
     int rc;
     prte_job_t *daemons;
     bool novm;
@@ -164,12 +163,9 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, prte_std_cntr
      */
     if (!prte_managed_allocation) {
         PRTE_CONSTRUCT(&nodes, prte_list_t);
-        /* if the app provided a dash-host, and we are not treating
-         * them as requested or "soft" locations, then use those nodes
-         */
+        /* if the app provided a dash-host, then use those nodes */
         hosts = NULL;
-        if (!prte_soft_locations &&
-            prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using dash_host %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
@@ -449,7 +445,7 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, prte_std_cntr
                 continue;
             }
             if (node->slots > node->slots_inuse) {
-                prte_std_cntr_t s;
+                int32_t s;
                 /* check for any -host allocations */
                 if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
                     s = prte_util_dash_host_compute_slots(node, hosts);

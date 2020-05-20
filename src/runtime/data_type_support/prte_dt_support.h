@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
@@ -46,7 +46,7 @@
 BEGIN_C_DECLS
 
 /** Data type compare functions */
-int prte_dt_compare_std_cntr(prte_std_cntr_t *value1, prte_std_cntr_t *value2, prte_data_type_t type);
+int prte_dt_compare_std_cntr(int32_t *value1, int32_t *value2, prte_data_type_t type);
 int prte_dt_compare_job(prte_job_t *value1, prte_job_t *value2, prte_data_type_t type);
 int prte_dt_compare_node(prte_node_t *value1, prte_node_t *value2, prte_data_type_t type);
 int prte_dt_compare_proc(prte_proc_t *value1, prte_proc_t *value2, prte_data_type_t type);
@@ -73,7 +73,7 @@ int prte_dt_compare_attr(prte_attribute_t *value1, prte_attribute_t *value2, prt
 int prte_dt_compare_sig(prte_grpcomm_signature_t *value1, prte_grpcomm_signature_t *value2, prte_data_type_t type);
 
 /** Data type copy functions */
-int prte_dt_copy_std_cntr(prte_std_cntr_t **dest, prte_std_cntr_t *src, prte_data_type_t type);
+int prte_dt_copy_std_cntr(int32_t **dest, int32_t *src, prte_data_type_t type);
 int prte_dt_copy_job(prte_job_t **dest, prte_job_t *src, prte_data_type_t type);
 int prte_dt_copy_node(prte_node_t **dest, prte_node_t *src, prte_data_type_t type);
 int prte_dt_copy_proc(prte_proc_t **dest, prte_proc_t *src, prte_data_type_t type);

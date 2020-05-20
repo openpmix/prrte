@@ -37,23 +37,6 @@
 #include "src/runtime/data_type_support/prte_dt_support.h"
 
 /*
- * PRTE_STD_CNTR
- */
-int prte_dt_pack_std_cntr(prte_buffer_t *buffer, const void *src,
-                            int32_t num_vals, prte_data_type_t type)
-{
-    int ret;
-
-    /* Turn around and pack the real type */
-    if (PRTE_SUCCESS != (
-                         ret = prte_dss_pack_buffer(buffer, src, num_vals, PRTE_STD_CNTR_T))) {
-        PRTE_ERROR_LOG(ret);
-    }
-
-    return ret;
-}
-
-/*
  * JOB
  * NOTE: We do not pack all of the job object's fields as many of them have no
  * value in sending them to another location. The only purpose in packing and
@@ -106,7 +89,7 @@ int prte_dt_pack_job(prte_buffer_t *buffer, const void *src,
                 ++count;
             }
         }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_STD_CNTR))) {
+        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -126,7 +109,7 @@ int prte_dt_pack_job(prte_buffer_t *buffer, const void *src,
              * of prte_value_t's on a list. So first pack the number
              * of list elements */
             count = prte_list_get_size(cache);
-            if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_STD_CNTR))) {
+            if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
                 PRTE_ERROR_LOG(rc);
                 return rc;
             }
@@ -140,7 +123,7 @@ int prte_dt_pack_job(prte_buffer_t *buffer, const void *src,
         } else {
             /* pack a zero to indicate no job info is being passed */
             count = 0;
-            if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_STD_CNTR))) {
+            if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
                 PRTE_ERROR_LOG(rc);
                 return rc;
             }
@@ -216,7 +199,7 @@ int prte_dt_pack_job(prte_buffer_t *buffer, const void *src,
 
         /* pack the total slots allocated to the job */
         if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->total_slots_alloc)), 1, PRTE_STD_CNTR))) {
+                         (void*)(&(jobs[i]->total_slots_alloc)), 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -234,7 +217,7 @@ int prte_dt_pack_job(prte_buffer_t *buffer, const void *src,
             j = 1;
         }
         if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                            (void*)&j, 1, PRTE_STD_CNTR))) {
+                            (void*)&j, 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -334,7 +317,7 @@ int prte_dt_pack_node(prte_buffer_t *buffer, const void *src,
                 ++count;
             }
         }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_STD_CNTR))) {
+        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -402,7 +385,7 @@ int prte_dt_pack_proc(prte_buffer_t *buffer, const void *src,
 
         /* pack the app context index */
         if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(procs[i]->app_idx)), 1, PRTE_STD_CNTR))) {
+                         (void*)(&(procs[i]->app_idx)), 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -421,7 +404,7 @@ int prte_dt_pack_proc(prte_buffer_t *buffer, const void *src,
                 ++count;
             }
         }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_STD_CNTR))) {
+        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -455,7 +438,7 @@ int prte_dt_pack_app_context(prte_buffer_t *buffer, const void *src,
     for (i=0; i < num_vals; i++) {
         /* pack the application index (for multiapp jobs) */
         if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                                                       (void*)(&(app_context[i]->idx)), 1, PRTE_STD_CNTR))) {
+                                                       (void*)(&(app_context[i]->idx)), 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -469,7 +452,7 @@ int prte_dt_pack_app_context(prte_buffer_t *buffer, const void *src,
 
         /* pack the number of processes */
         if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                                                       (void*)(&(app_context[i]->num_procs)), 1, PRTE_STD_CNTR))) {
+                                                       (void*)(&(app_context[i]->num_procs)), 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -483,7 +466,7 @@ int prte_dt_pack_app_context(prte_buffer_t *buffer, const void *src,
 
         /* pack the number of entries in the argv array */
         count = prte_argv_count(app_context[i]->argv);
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_STD_CNTR))) {
+        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -499,7 +482,7 @@ int prte_dt_pack_app_context(prte_buffer_t *buffer, const void *src,
 
         /* pack the number of entries in the enviro array */
         count = prte_argv_count(app_context[i]->env);
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_STD_CNTR))) {
+        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -527,7 +510,7 @@ int prte_dt_pack_app_context(prte_buffer_t *buffer, const void *src,
                 ++count;
             }
         }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_STD_CNTR))) {
+        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }

@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
@@ -42,17 +42,17 @@ extern prte_rmaps_base_module_t prte_rmaps_round_robin_module;
 PRTE_MODULE_EXPORT int prte_rmaps_rr_bynode(prte_job_t *jdata,
                                               prte_app_context_t *app,
                                               prte_list_t *node_list,
-                                              prte_std_cntr_t num_slots,
+                                              int32_t num_slots,
                                               prte_vpid_t nprocs);
 PRTE_MODULE_EXPORT int prte_rmaps_rr_byslot(prte_job_t *jdata,
                                               prte_app_context_t *app,
                                               prte_list_t *node_list,
-                                              prte_std_cntr_t num_slots,
+                                              int32_t num_slots,
                                               prte_vpid_t nprocs);
 
 PRTE_MODULE_EXPORT int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                                              prte_list_t *node_list,
-                                             prte_std_cntr_t num_slots,
+                                             int32_t num_slots,
                                              prte_vpid_t num_procs,
                                              hwloc_obj_type_t target, unsigned cache_level);
 

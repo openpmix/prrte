@@ -127,7 +127,7 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
                         void* cbdata)
 {
     prte_plm_cmd_flag_t command;
-    prte_std_cntr_t count;
+    int32_t count;
     prte_jobid_t job;
     prte_job_t *jdata, *parent, jb;
     prte_buffer_t *answer;
