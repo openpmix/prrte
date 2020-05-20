@@ -95,12 +95,12 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     prte_job_map_t *map;
     prte_app_context_t *app;
     int i, n;
-    prte_std_cntr_t j;
+    int32_t j;
     prte_list_item_t *item;
     prte_node_t *node, *nd;
     seq_node_t *sq, *save=NULL, *seq;;
     prte_vpid_t vpid;
-    prte_std_cntr_t num_nodes;
+    int32_t num_nodes;
     int rc;
     prte_list_t default_seq_list;
     prte_list_t node_list, *seq_list, sq_list;
@@ -355,7 +355,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
             }
         }
 
-        if (NULL == seq_list || 0 == (num_nodes = (prte_std_cntr_t)prte_list_get_size(seq_list))) {
+        if (NULL == seq_list || 0 == (num_nodes = (int32_t)prte_list_get_size(seq_list))) {
             prte_show_help("help-prte-rmaps-base.txt",
                            "prte-rmaps-base:no-available-resources",
                            true);

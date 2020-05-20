@@ -12,7 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
@@ -126,7 +126,7 @@ void prte_filem_base_recv(int status, prte_process_name_t* sender,
                         void* cbdata)
 {
     prte_filem_cmd_flag_t command;
-    prte_std_cntr_t count;
+    int32_t count;
     int rc;
 
     PRTE_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
@@ -165,7 +165,7 @@ static void filem_base_process_get_proc_node_name_cmd(prte_process_name_t* sende
                                                       prte_buffer_t* buffer)
 {
     prte_buffer_t *answer;
-    prte_std_cntr_t count;
+    int32_t count;
     prte_job_t *jdata = NULL;
     prte_proc_t *proc = NULL;
     prte_process_name_t name;
@@ -229,7 +229,7 @@ static void filem_base_process_get_remote_path_cmd(prte_process_name_t* sender,
                                                    prte_buffer_t* buffer)
 {
     prte_buffer_t *answer;
-    prte_std_cntr_t count;
+    int32_t count;
     char *filename = NULL;
     char *tmp_name = NULL;
     char cwd[PRTE_PATH_MAX];

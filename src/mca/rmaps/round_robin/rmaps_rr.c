@@ -49,7 +49,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
     int i;
     prte_list_t node_list;
     prte_list_item_t *item;
-    prte_std_cntr_t num_slots;
+    int32_t num_slots;
     int rc;
     prte_mca_base_component_t *c = &prte_rmaps_round_robin_component.base_version;
     bool initial_map=true;

@@ -118,8 +118,6 @@ typedef struct {
 #define    PRTE_ENVAR               (prte_data_type_t)   39 /**< corresponds to PMIx envar type */
 #define    PRTE_LIST                (prte_data_type_t)   40 /**< an prte list */
 
-/* General PRTE types - support handled within DSS */
-#define    PRTE_STD_CNTR            (prte_data_type_t)   41 /**< standard counter type */
     /* State-related types */
 #define    PRTE_NODE_STATE          (prte_data_type_t)   42 /**< node status flag */
 #define    PRTE_JOB_STATE           (prte_data_type_t)   43 /**< job status flag */

@@ -108,7 +108,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
     prte_daemon_cmd_flag_t command;
     prte_buffer_t *relay_msg;
     int ret;
-    prte_std_cntr_t n;
+    int32_t n;
     int32_t signal, cnt;
     prte_jobid_t job;
     prte_buffer_t data, *answer;
@@ -119,7 +119,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
     prte_proc_t *proct;
     char *cmd_str = NULL;
     prte_pointer_array_t *procs_to_kill = NULL;
-    prte_std_cntr_t num_procs, num_new_procs = 0, p;
+    int32_t num_procs, num_new_procs = 0, p;
     prte_proc_t *cur_proc = NULL, *prev_proc = NULL;
     bool found = false;
     prte_node_t *node;
@@ -360,7 +360,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
 
         /* Number of processes */
         n = 1;
-        if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &num_procs, &n, PRTE_STD_CNTR)) ) {
+        if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &num_procs, &n, PRTE_INT32)) ) {
             PRTE_ERROR_LOG(ret);
             goto CLEANUP;
         }

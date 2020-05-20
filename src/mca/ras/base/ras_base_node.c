@@ -46,7 +46,7 @@
 int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
 {
     prte_list_item_t* item;
-    prte_std_cntr_t num_nodes;
+    int32_t num_nodes;
     int rc, i;
     prte_node_t *node, *hnp_node, *nptr;
     char *ptr;
@@ -57,7 +57,7 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
     prte_job_t *djob;
 
     /* get the number of nodes */
-    num_nodes = (prte_std_cntr_t)prte_list_get_size(nodes);
+    num_nodes = (int32_t)prte_list_get_size(nodes);
     if (0 == num_nodes) {
         return PRTE_SUCCESS;  /* nothing to do */
     }

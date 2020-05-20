@@ -295,7 +295,7 @@ static char* print_aborted_job(prte_job_t *job,
 char* prte_dump_aborted_procs(prte_job_t *jdata)
 {
     prte_job_t *job, *launcher;
-    prte_std_cntr_t i;
+    int32_t i;
     prte_proc_t *proc, *pptr;
     prte_app_context_t *approc;
     prte_node_t *node;

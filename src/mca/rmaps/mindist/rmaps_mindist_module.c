@@ -70,7 +70,7 @@ static int mindist_map(prte_job_t *jdata)
     prte_proc_t *proc;
     int nprocs_mapped;
     int navg=0, nextra=0;
-    prte_std_cntr_t num_nodes, num_slots;
+    int32_t num_nodes, num_slots;
     unsigned int npus, total_npus, num_procs_to_assign=0, required;
     int rc;
     prte_mca_base_component_t *c = &prte_rmaps_mindist_component.base_version;
@@ -210,7 +210,7 @@ static int mindist_map(prte_job_t *jdata)
             oversubscribed = true;
         }
 
-        num_nodes = (prte_std_cntr_t)prte_list_get_size(&node_list);
+        num_nodes = (int32_t)prte_list_get_size(&node_list);
         /* flag that all subsequent requests should not reset the node->mapped flag */
         initial_map = false;
 

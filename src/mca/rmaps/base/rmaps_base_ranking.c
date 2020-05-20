@@ -761,7 +761,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
 
 int prte_rmaps_base_compute_local_ranks(prte_job_t *jdata)
 {
-    prte_std_cntr_t i;
+    int32_t i;
     int j, k;
     prte_node_t *node;
     prte_proc_t *proc, *psave, *psave2;

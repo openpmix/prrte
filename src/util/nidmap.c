@@ -1094,7 +1094,7 @@ int prte_util_generate_ppn(prte_job_t *jdata,
                     }
                 }
                 if (0 < ppn) {
-                    if (PRTE_SUCCESS != (rc = prte_dss.pack(&bucket, &nptr->index, 1, PRTE_STD_CNTR))) {
+                    if (PRTE_SUCCESS != (rc = prte_dss.pack(&bucket, &nptr->index, 1, PRTE_INT32))) {
                         goto cleanup;
                     }
                     if (PRTE_SUCCESS != (rc = prte_dss.pack(&bucket, &ppn, 1, PRTE_UINT16))) {
@@ -1147,7 +1147,7 @@ int prte_util_generate_ppn(prte_job_t *jdata,
 int prte_util_decode_ppn(prte_job_t *jdata,
                          prte_buffer_t *buf)
 {
-    prte_std_cntr_t index;
+    int32_t index;
     prte_app_idx_t n;
     int cnt, rc=PRTE_SUCCESS, m;
     prte_byte_object_t *boptr;
@@ -1220,7 +1220,7 @@ int prte_util_decode_ppn(prte_job_t *jdata,
 
         /* unpack each node and its ppn */
         cnt = 1;
-        while (PRTE_SUCCESS == (rc = prte_dss.unpack(&bucket, &index, &cnt, PRTE_STD_CNTR))) {
+        while (PRTE_SUCCESS == (rc = prte_dss.unpack(&bucket, &index, &cnt, PRTE_INT32))) {
             /* get the corresponding node object */
             if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, index))) {
                 rc = PRTE_ERR_NOT_FOUND;

@@ -125,10 +125,6 @@ int prte_dt_std_print(char **output, char *prefix, void *src, prte_data_type_t t
     *output = NULL;
 
     switch(type) {
-        case PRTE_STD_CNTR:
-            prte_dt_quick_print(output, "PRTE_STD_CNTR", prefix, src, PRTE_STD_CNTR_T);
-            break;
-
         case PRTE_PROC_STATE:
             prte_dt_quick_print(output, "PRTE_PROC_STATE", prefix, src, PRTE_PROC_STATE_T);
             break;

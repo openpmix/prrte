@@ -396,7 +396,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
                                                 prte_jobid_t *job)
 {
     int rc;
-    prte_std_cntr_t cnt;
+    int32_t cnt;
     prte_job_t *jdata=NULL, *daemons;
     prte_node_t *node;
     prte_vpid_t dmnvpid, v;

@@ -790,11 +790,11 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
     prte_job_t *jdata;
     prte_proc_t *proc;
     int i;
-    prte_std_cntr_t j;
+    int32_t j;
     prte_job_t *job;
     prte_node_t *node;
     prte_job_map_t *map;
-    prte_std_cntr_t index;
+    int32_t index;
     bool one_still_alive;
     prte_vpid_t lowest=0;
     int32_t i32, *i32ptr;

@@ -92,7 +92,7 @@ static int plm_tm_finalize(void);
 /*
  * Local "global" variables
  */
-static prte_std_cntr_t launched = 0;
+static int32_t launched = 0;
 static bool connected = false;
 
 /*
@@ -178,7 +178,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char **argv = NULL;
     int argc = 0;
     int rc;
-    prte_std_cntr_t i;
+    int32_t i;
     char *bin_base = NULL, *lib_base = NULL;
     tm_event_t *tm_events = NULL;
     tm_task_id *tm_task_ids = NULL;

@@ -9,7 +9,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
@@ -27,15 +27,6 @@
 #include "src/mca/grpcomm/grpcomm.h"
 
 #include "src/runtime/data_type_support/prte_dt_support.h"
-
-int prte_dt_compare_std_cntr(prte_std_cntr_t *value1, prte_std_cntr_t *value2, prte_data_type_t type)
-{
-    if (*value1 > *value2) return PRTE_VALUE1_GREATER;
-
-    if (*value2 > *value1) return PRTE_VALUE2_GREATER;
-
-    return PRTE_EQUAL;
-}
 
 /**
  * JOB

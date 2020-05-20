@@ -136,14 +136,14 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app,
 /*
  * Query the registry for all nodes allocated to a specified app_context
  */
-int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, prte_std_cntr_t *total_num_slots,
+int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *total_num_slots,
                                      prte_app_context_t *app, prte_mapping_policy_t policy,
                                      bool initial_map, bool silent)
 {
     prte_list_item_t *item;
     prte_node_t *node, *nd, *nptr, *next;
-    prte_std_cntr_t num_slots;
-    prte_std_cntr_t i;
+    int32_t num_slots;
+    int32_t i;
     int rc;
     prte_job_t *daemons;
     bool novm;
@@ -449,7 +449,7 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, prte_std_cntr
                 continue;
             }
             if (node->slots > node->slots_inuse) {
-                prte_std_cntr_t s;
+                int32_t s;
                 /* check for any -host allocations */
                 if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
                     s = prte_util_dash_host_compute_slots(node, hosts);

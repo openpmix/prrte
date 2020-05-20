@@ -205,19 +205,6 @@ int prte_dt_init(void)
         }
     }
 
-    /** register the base system types with the DSS */
-    tmp = PRTE_STD_CNTR;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_std_cntr,
-                                                     prte_dt_unpack_std_cntr,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_std_cntr,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_std_cntr,
-                                                     (prte_dss_print_fn_t)prte_dt_std_print,
-                                                     PRTE_DSS_UNSTRUCTURED,
-                                                     "PRTE_STD_CNTR", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
     tmp = PRTE_JOB;
     if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_job,
                                                      prte_dt_unpack_job,
@@ -851,7 +838,7 @@ static void prte_job_map_construct(prte_job_map_t* map)
 
 static void prte_job_map_destruct(prte_job_map_t* map)
 {
-    prte_std_cntr_t i;
+    int32_t i;
     prte_node_t *node;
 
     if (NULL != map->req_mapper) {

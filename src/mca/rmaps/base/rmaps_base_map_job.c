@@ -191,7 +191,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         if (NULL != (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             if (0 == app->num_procs) {
                 prte_list_t nodes;
-                prte_std_cntr_t slots;
+                int32_t slots;
                 PRTE_CONSTRUCT(&nodes, prte_list_t);
                 prte_rmaps_base_get_target_nodes(&nodes, &slots, app, PRTE_MAPPING_BYNODE, true, true);
                 if (pernode) {

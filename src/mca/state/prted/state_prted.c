@@ -276,7 +276,7 @@ static void track_procs(int fd, short argc, void *cbdata)
     prte_buffer_t *alert;
     int rc, i;
     prte_plm_cmd_flag_t cmd;
-    prte_std_cntr_t index;
+    int32_t index;
     prte_job_map_t *map;
     prte_node_t *node;
     prte_process_name_t target;

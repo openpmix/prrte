@@ -114,7 +114,7 @@ __prte_attribute_format_funcptr__(__printf__, 2, 3);
  *  communicator group before aborting itself.
  */
 typedef int (*prte_errmgr_base_module_abort_peers_fn_t)(prte_process_name_t *procs,
-                                                        prte_std_cntr_t num_procs,
+                                                        int32_t num_procs,
                                                         int error_code);
 
 /*

@@ -52,7 +52,7 @@ typedef struct {
     /* base object */
     prte_object_t super;
     /* index of this object in the storage array */
-    prte_std_cntr_t index;
+    int32_t index;
     /* process that owns this data - only the
     * owner can remove it
     */
@@ -167,7 +167,7 @@ int prte_data_server_init(void)
 
 void prte_data_server_finalize(void)
 {
-    prte_std_cntr_t i;
+    int32_t i;
     prte_data_object_t *data;
 
     if (!initialized) {
@@ -189,7 +189,7 @@ void prte_data_server(int status, prte_process_name_t* sender,
                       void* cbdata)
 {
     uint8_t command;
-    prte_std_cntr_t count;
+    int32_t count;
     prte_data_object_t *data;
     prte_byte_object_t bo, *boptr;
     prte_buffer_t *answer, *reply;

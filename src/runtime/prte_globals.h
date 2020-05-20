@@ -215,7 +215,7 @@ typedef struct {
     /** Absolute pathname of argv[0] */
     char   *app;
     /** Number of copies of this process that are to be launched */
-    prte_std_cntr_t num_procs;
+    int32_t num_procs;
     /** Array of pointers to the proc objects for procs of this app_context
      * NOTE - not always used
      */
@@ -248,7 +248,7 @@ typedef struct {
     /** Base object so this can be put on a list */
     prte_list_item_t super;
     /* index of this node object in global array */
-    prte_std_cntr_t index;
+    int32_t index;
     /** String node name */
     char *name;
     /* daemon on this node */
@@ -265,10 +265,10 @@ typedef struct {
         This will typically correspond to the number of physical CPUs
         that we have been allocated on this note and would be the
         "ideal" number of processes for us to launch. */
-    prte_std_cntr_t slots;
+    int32_t slots;
     /** How many processes have already been launched, used by one or
         more jobs on this node. */
-    prte_std_cntr_t slots_inuse;
+    int32_t slots_inuse;
     /** A "hard" limit (if set -- a value of 0 implies no hard limit)
         on the number of slots that can be allocated on a given
         node. This is for some environments (e.g. grid) there may be
@@ -279,7 +279,7 @@ typedef struct {
         other words allow the node to be oversubscribed up to a
         specified limit.  For example, if we have two processors, we
         may want to allow up to four processes but no more. */
-    prte_std_cntr_t slots_max;
+    int32_t slots_max;
     /* system topology for this node */
     prte_topology_t *topology;
     /* flags */
@@ -311,7 +311,7 @@ typedef struct {
      */
     prte_vpid_t stdin_target;
     /* total slots allocated to this job */
-    prte_std_cntr_t total_slots_alloc;
+    int32_t total_slots_alloc;
     /* number of procs in this job */
     prte_vpid_t num_procs;
     /* array of pointers to procs in this job */

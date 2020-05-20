@@ -40,7 +40,7 @@
 int prte_rmaps_rr_byslot(prte_job_t *jdata,
                          prte_app_context_t *app,
                          prte_list_t *node_list,
-                         prte_std_cntr_t num_slots,
+                         int32_t num_slots,
                          prte_vpid_t num_procs)
 {
     int i, nprocs_mapped;
@@ -218,7 +218,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
 int prte_rmaps_rr_bynode(prte_job_t *jdata,
                          prte_app_context_t *app,
                          prte_list_t *node_list,
-                         prte_std_cntr_t num_slots,
+                         int32_t num_slots,
                          prte_vpid_t num_procs)
 {
     int j, nprocs_mapped, nnodes;
@@ -437,7 +437,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
 static  int byobj_span(prte_job_t *jdata,
                        prte_app_context_t *app,
                        prte_list_t *node_list,
-                       prte_std_cntr_t num_slots,
+                       int32_t num_slots,
                        prte_vpid_t num_procs,
                        hwloc_obj_type_t target, unsigned cache_level);
 
@@ -448,7 +448,7 @@ static  int byobj_span(prte_job_t *jdata,
 int prte_rmaps_rr_byobj(prte_job_t *jdata,
                         prte_app_context_t *app,
                         prte_list_t *node_list,
-                        prte_std_cntr_t num_slots,
+                        int32_t num_slots,
                         prte_vpid_t num_procs,
                         hwloc_obj_type_t target, unsigned cache_level)
 {
@@ -713,7 +713,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
 static int byobj_span(prte_job_t *jdata,
                       prte_app_context_t *app,
                       prte_list_t *node_list,
-                      prte_std_cntr_t num_slots,
+                      int32_t num_slots,
                       prte_vpid_t num_procs,
                       hwloc_obj_type_t target, unsigned cache_level)
 {

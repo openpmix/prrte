@@ -12,7 +12,7 @@
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -91,7 +91,7 @@ int prte_routed_base_process_callback(prte_jobid_t job, prte_buffer_t *buffer)
 {
     prte_proc_t *proc;
     prte_job_t *jdata;
-    prte_std_cntr_t cnt;
+    int32_t cnt;
     char *rml_uri;
     prte_vpid_t vpid;
     int rc;

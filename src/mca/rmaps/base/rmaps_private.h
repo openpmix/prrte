@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,7 +44,7 @@ BEGIN_C_DECLS
 /* LOCAL FUNCTIONS for use by RMAPS components */
 
 PRTE_EXPORT int prte_rmaps_base_get_target_nodes(prte_list_t* node_list,
-                                                   prte_std_cntr_t *total_num_slots,
+                                                   int32_t *total_num_slots,
                                                    prte_app_context_t *app,
                                                    prte_mapping_policy_t policy,
                                                    bool initial_map, bool silent);

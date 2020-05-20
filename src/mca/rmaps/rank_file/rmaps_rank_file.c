@@ -77,14 +77,14 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
 {
     prte_job_map_t *map;
     prte_app_context_t *app=NULL;
-    prte_std_cntr_t i, k;
+    int32_t i, k;
     prte_list_t node_list;
     prte_list_item_t *item;
     prte_node_t *node, *nd, *root_node;
     prte_vpid_t rank, vpid_start;
-    prte_std_cntr_t num_slots;
+    int32_t num_slots;
     prte_rmaps_rank_file_map_t *rfmap;
-    prte_std_cntr_t relative_index, tmp_cnt;
+    int32_t relative_index, tmp_cnt;
     int rc;
     prte_proc_t *proc;
     prte_mca_base_component_t *c = &prte_rmaps_rank_file_component.super.base_version;

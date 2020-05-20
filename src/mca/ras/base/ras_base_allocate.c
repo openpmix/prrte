@@ -167,7 +167,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     prte_job_t *jdata;
     prte_list_t nodes;
     prte_node_t *node;
-    prte_std_cntr_t i;
+    int32_t i;
     prte_app_context_t *app;
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
     char *hosts=NULL;

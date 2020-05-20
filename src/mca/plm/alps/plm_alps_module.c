@@ -185,7 +185,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     int proc_vpid_index;
     prte_app_context_t *app;
     prte_node_t *node;
-    prte_std_cntr_t nnode;
+    int32_t nnode;
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t*)cbdata;
     char *ltmp;

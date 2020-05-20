@@ -422,7 +422,7 @@ static void check_complete(int fd, short args, void *cbdata)
     int i, rc;
     prte_node_t *node;
     prte_job_map_t *map;
-    prte_std_cntr_t index;
+    int32_t index;
     pmix_proc_t pname;
     prte_pmix_lock_t lock;
     uint8_t command = PRTE_PMIX_PURGE_PROC_CMD;
