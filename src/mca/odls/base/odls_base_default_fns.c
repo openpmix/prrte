@@ -409,7 +409,6 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
     pmix_info_t *info = NULL;
     size_t ninfo=0;
     pmix_status_t ret;
-    pmix_proc_t pproc;
     pmix_data_buffer_t pbuf;
     prte_byte_object_t *bo;
     size_t m;
@@ -595,15 +594,9 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
         bo->bytes = NULL;
         bo->size = 0;
         free(bo);
-        /* setup the daemon job */
-        PRTE_PMIX_CONVERT_NAME(rc, &pproc, PRTE_PROC_MY_NAME);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            goto REPORT_ERROR;
-        }
         /* unpack the number of info structs */
         cnt = 1;
-        ret = PMIx_Data_unpack(&pproc, &pbuf, &ninfo, &cnt, PMIX_SIZE);
+        ret = PMIx_Data_unpack(PRTE_PROC_MY_PROCID, &pbuf, &ninfo, &cnt, PMIX_SIZE);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
@@ -612,7 +605,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
         }
         PMIX_INFO_CREATE(info, ninfo);
         cnt = ninfo;
-        ret = PMIx_Data_unpack(&pproc, &pbuf, info, &cnt, PMIX_INFO);
+        ret = PMIx_Data_unpack(PRTE_PROC_MY_PROCID, &pbuf, info, &cnt, PMIX_INFO);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);

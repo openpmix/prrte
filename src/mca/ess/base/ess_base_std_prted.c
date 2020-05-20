@@ -367,7 +367,6 @@ int prte_ess_base_prted_setup(void)
 
     if (NULL != prte_process_info.my_hnp_uri) {
         pmix_value_t val;
-        pmix_proc_t proc;
 
         /* extract the HNP's name so we can update the routing table */
         if (PRTE_SUCCESS != (ret = prte_rml_base_parse_uris(prte_process_info.my_hnp_uri,
@@ -381,13 +380,7 @@ int prte_ess_base_prted_setup(void)
          * if/when we attempt to send to it
          */
         PMIX_VALUE_LOAD(&val, prte_process_info.my_hnp_uri, PRTE_STRING);
-        PRTE_PMIX_CONVERT_NAME(ret, &proc, PRTE_PROC_MY_HNP);
-        if (PRTE_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
-            error = "convert_name";
-            goto error;
-        }
-        if (PMIX_SUCCESS != PMIx_Store_internal(&proc, PMIX_PROC_URI, &val)) {
+        if (PMIX_SUCCESS != PMIx_Store_internal(PRTE_PROC_MY_PROCID, PMIX_PROC_URI, &val)) {
             PMIX_VALUE_DESTRUCT(&val);
             error = "store HNP URI";
             ret = PRTE_ERROR;

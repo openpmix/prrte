@@ -643,21 +643,11 @@ int prte_register_params(void)
     (void) prte_mca_base_var_register ("prte", "prte", NULL, "set_default_slots",
                                   "Set the number of slots on nodes that lack such info to the"
                                   " number of specified objects [a number, \"cores\" (default),"
-                                  " \"numas\", \"sockets\", \"hwthreads\" (default if hwthreads_as_cpus is set),"
+                                  " \"packages\", \"hwthreads\" (default if hwthreads_as_cpus is set),"
                                   " or \"none\" to skip this option]",
                                   PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                   &prte_set_slots);
-
-    /* should we treat any -host directives as "soft" - i.e., desired
-     * but not required
-     */
-    prte_soft_locations = false;
-    (void) prte_mca_base_var_register ("prte", "prte", NULL, "soft_locations",
-                                  "Treat -host directives as desired, but not required",
-                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
-                                  PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                  &prte_soft_locations);
 
     /* allow specification of the cores to be used by daemons */
     prte_daemon_cores = NULL;

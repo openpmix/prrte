@@ -97,7 +97,6 @@ bool prte_hnp_is_allocated = false;
 bool prte_allocation_required = false;
 bool prte_managed_allocation = false;
 char *prte_set_slots = NULL;
-bool prte_soft_locations = false;
 bool prte_nidmap_communicated = false;
 bool prte_node_info_communicated = false;
 
@@ -733,6 +732,7 @@ static void prte_node_construct(prte_node_t* node)
 
     node->state = PRTE_NODE_STATE_UNKNOWN;
     node->slots = 0;
+    node->slots_available = 0;
     node->slots_inuse = 0;
     node->slots_max = 0;
     node->topology = NULL;

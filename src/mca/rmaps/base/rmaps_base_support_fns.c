@@ -96,8 +96,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app,
         free(hosts);
     }
     /* now filter the list through any -host specification */
-    if (!prte_soft_locations &&
-        prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
         if (PRTE_SUCCESS != (rc = prte_util_filter_dash_host_nodes(nodes, hosts, remove))) {
             PRTE_ERROR_LOG(rc);
             free(hosts);
@@ -164,12 +163,9 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
      */
     if (!prte_managed_allocation) {
         PRTE_CONSTRUCT(&nodes, prte_list_t);
-        /* if the app provided a dash-host, and we are not treating
-         * them as requested or "soft" locations, then use those nodes
-         */
+        /* if the app provided a dash-host, then use those nodes */
         hosts = NULL;
-        if (!prte_soft_locations &&
-            prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using dash_host %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));

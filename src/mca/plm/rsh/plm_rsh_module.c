@@ -107,15 +107,15 @@ static int rsh_terminate_prteds(void);
 static int rsh_finalize(void);
 
 prte_plm_base_module_t prte_plm_rsh_module = {
-    rsh_init,
-    prte_plm_base_set_hnp_name,
-    rsh_launch,
-    remote_spawn,
-    prte_plm_base_prted_terminate_job,
-    rsh_terminate_prteds,
-    prte_plm_base_prted_kill_local_procs,
-    prte_plm_base_prted_signal_local_procs,
-    rsh_finalize
+    .init = rsh_init,
+    .set_hnp_name = prte_plm_base_set_hnp_name,
+    .spawn = rsh_launch,
+    .remote_spawn = remote_spawn,
+    .terminate_job = prte_plm_base_prted_terminate_job,
+    .terminate_orteds = rsh_terminate_prteds,
+    .terminate_procs = prte_plm_base_prted_kill_local_procs,
+    .signal_job = prte_plm_base_prted_signal_local_procs,
+    .finalize = rsh_finalize
 };
 
 typedef struct {

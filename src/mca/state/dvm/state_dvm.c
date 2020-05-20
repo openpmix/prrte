@@ -241,7 +241,13 @@ static void init_complete(int sd, short args, void *cbdata)
 
     /* nothing to do here but move along - if it is the
      * daemon job, then next step is allocate */
-    PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_ALLOCATE);
+    if (PRTE_PROC_MY_NAME->jobid == caddy->jdata->jobid) {
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_ALLOCATE);
+    } else {
+        /* we already did an allocation when we launched the DVM,
+         * so skip that step */
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_ALLOCATION_COMPLETE);
+    }
     PRTE_RELEASE(caddy);
 }
 

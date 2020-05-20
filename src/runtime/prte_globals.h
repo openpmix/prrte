@@ -86,6 +86,7 @@ PRTE_EXPORT extern prte_process_name_t prte_name_wildcard;  /** instantiated in 
 PRTE_EXPORT extern prte_process_name_t prte_name_invalid;  /** instantiated in src/runtime/prte_init.c */
 
 #define PRTE_PROC_MY_NAME       (&prte_process_info.my_name)
+#define PRTE_PROC_MY_PROCID     (&prte_process_info.myproc)
 
 /* define a special name that point to my parent (aka the process that spawned me) */
 #define PRTE_PROC_MY_PARENT     (&prte_process_info.my_parent)
@@ -266,6 +267,10 @@ typedef struct {
         that we have been allocated on this note and would be the
         "ideal" number of processes for us to launch. */
     int32_t slots;
+    /** Slots available for use in the current mapping operation. This
+     *  may differ on a per-job basis from the overall allocated slots
+     *  thru use of the -host option and possibly other means */
+    int32_t slots_available;
     /** How many processes have already been launched, used by one or
         more jobs on this node. */
     int32_t slots_inuse;
@@ -476,7 +481,6 @@ PRTE_EXPORT extern bool prte_hnp_is_allocated;
 PRTE_EXPORT extern bool prte_allocation_required;
 PRTE_EXPORT extern bool prte_managed_allocation;
 PRTE_EXPORT extern char *prte_set_slots;
-PRTE_EXPORT extern bool prte_soft_locations;
 PRTE_EXPORT extern bool prte_hnp_connected;
 PRTE_EXPORT extern bool prte_nidmap_communicated;
 PRTE_EXPORT extern bool prte_node_info_communicated;
