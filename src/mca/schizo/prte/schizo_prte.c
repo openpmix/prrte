@@ -111,11 +111,15 @@ static prte_cmd_line_init_t cmd_line_init[] = {
 
     /* setup MCA parameters */
     { '\0', "mca", 2, PRTE_CMD_LINE_TYPE_STRING,
-      "Pass context-specific MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+      "Pass context-specific MCA parameters; they are considered global if --gpmixmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
       PRTE_CMD_LINE_OTYPE_LAUNCH },
     { '\0', "prtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
-      "Pass context-specific PRTE MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+      "Pass context-specific PRTE MCA parameters; they are considered global if --gpmixmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
       PRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "gprtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
+      "Pass global PRRTE MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
+      PRTE_CMD_LINE_OTYPE_LAUNCH },
+
 
     /* Request parseable help output */
     { '\0', "prte_info_pretty", 0, PRTE_CMD_LINE_TYPE_BOOL,
@@ -230,7 +234,8 @@ static int parse_cli(int argc, int start, char **argv,
 
     for (i = 0; i < (argc-start); ++i) {
         ignore = true;
-        if (0 == strcmp("--prtemca", argv[i])) {
+        if (0 == strcmp("--prtemca", argv[i]) ||
+            0 == strcmp("--gprtemca", argv[i])) {
             if (NULL == argv[i+1] || NULL == argv[i+2]) {
                 /* this is an error */
                 return PRTE_ERR_FATAL;

@@ -74,13 +74,13 @@ prte_schizo_base_module_t prte_schizo_pmix_module = {
 static prte_cmd_line_init_t cmd_line_init[] = {
     /* setup MCA parameters */
     { '\0', "pmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
-      "Pass context-specific PMIx MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+      "Pass context-specific PMIx MCA parameters; they are considered global if --gpmixmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+      PRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "gmca", 2, PRTE_CMD_LINE_TYPE_STRING,
+      "Pass global MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
       PRTE_CMD_LINE_OTYPE_LAUNCH },
     { '\0', "gpmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
       "Pass global PMIx MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "pmixam", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Aggregate PMIx MCA parameter set file list",
       PRTE_CMD_LINE_OTYPE_LAUNCH },
 
     /* End of list */
