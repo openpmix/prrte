@@ -1,11 +1,17 @@
 # NAME
 
-prte - Establish a PRTE Distributed Virtual Machine (DVM).
+prte - Establish a PRRTE Distributed Virtual Machine (DVM).
 
 # SYNOPSIS
 
+Persistent DVM mode:
 ```
 prte [ options ]
+```
+
+Single-Use DVM mode:
+```
+prte [ options ] <program> [ <args> ]
 ```
 
 Invoking `prte` via an absolute path name is equivalent to
@@ -20,21 +26,35 @@ $ /usr/local/bin/prte ...
 is equivalent to
 
 ```
-$ prte --prefix /usr/local
+$ prte --prefix /usr/local ...
 ```
 
 # QUICK SUMMARY
 
-`prte` will establish a DVM that can be used to execute subsequent
-applications. Use of `prte` can be advantageous, for example, when
-you want to execute a number of short-lived tasks. In such cases, the
-time required to start the PRTE DVM can be a significant fraction of
-the time to execute the overall application. Thus, creating a persistent
-DVM can speed the overall execution. In addition, a persistent DVM will
-support executing multiple parallel applications while maintaining
-separation between their respective cores.
+`prte` can be invoked in one of two DVM modes, namely, Persistent and Single-Use
+modes.
+
+In Persistent mode, `prte` will establish a Distributed Virtual Machine (DVM)
+that can be used to execute subsequent applications. Use of `prte` in this mode
+can be advantageous, for example, when you want to execute a number of
+short-lived tasks (e.g., in a workflow scenario). In such cases, the time
+required to start the PRRTE DVM can be a significant fraction of the time to
+execute the overall application. Thus, creating a persistent PRRTE DVM can
+speed the overall execution. In addition, a persistent DVM will support
+executing multiple parallel applications while maintaining separation between
+their respective cores.
+
+In Single-Use mode, `prte` will establish a Distributed Virtual Machine (DVM),
+run the specified `<program>`, then shutdown the PRRTE DVM. Use of `prte` in
+this mode can streamline applications that only want to execute a single
+application. In this mode `prte` accepts all of the `prun` command line options
+for starting the application.
 
 # OPTIONS
+
+`prte` accepts all of the command line options from `prun`. Some of which are
+only meaningful when `prte` is used in the Single-Use mode. Below are frequently
+used options and those options unique to `prte`.
 
 `-h, --help`
 
@@ -43,103 +63,101 @@ separation between their respective cores.
 `-V, --version`
 
 :   Print version number. If no other arguments are given, this will
-    also cause prte to exit.
+    also cause `prte` to exit.
 
-Use one of the following options to specify which hosts (nodes) of the
-cluster to use for the DVM.
+`--daemonize`
 
-`-H, --host <host1,host2,...,hostN>`
+:   Daemonize the DVM daemons into the background
 
-:   List of hosts for the DVM.
+`--no-ready-msg`
 
-`--hostfile <hostfile>`
+:  Do not print a "DVM ready" message
 
-:   Provide a hostfile to use.
+`--report-pid <channel>`
 
-`--machinefile <machinefile>`
-
-:   Synonym for `-hostfile`.
-
-`--prefix <dir>`
-
-:   Prefix directory that will be used to set the `PATH` and
-    `LD_LIBRARY_PATH` on the remote node before invoking the PRTE
-    daemon.
-
-Setting MCA parameters:
-
-`--gmca <key> <value>`
-
-:   Pass global MCA parameters that are applicable to all contexts.
-    `<key>` is the parameter name; `<value>` is the parameter value.
-
-`--mca <key> <value>`
-
-:   Send arguments to various MCA modules. See the "MCA" section,
-    below.
-
-`--report-uri <channel>`
-
-:   Print out prte's URI during startup. The channel must be
+:   Print out `prte`'s PID during startup. The `<channel>` must be
     either a '-' to indicate that the URI is to be output to stdout, a
     '+' to indicate that the URI is to be output to stderr, or a
     filename to which the URI is to be written.
 
+`--report-uri <channel>`
+
+:   Print out `prte`'s URI during startup. The `<channel>` must be
+    either a '-' to indicate that the URI is to be output to stdout, a
+    '+' to indicate that the URI is to be output to stderr, or a
+    filename to which the URI is to be written.
+
+`--system-server`
+
+:   Start the DVM as the system server
+
+`--set-sid`
+
+:   Direct the DVM daemons to separate from the current session
+
+`--max-vm-size <arg0>`
+
+:   The number of DVM daemons to start
+
+`--launch-agent <arg0>`
+
+:   Name of DVM daemon executable used to start processes on remote nodes.
+    Default: `prted`
+
+## Debugging Options
+
 The following options are useful for developers; they are not generally
-useful to most PRTE users:
+useful to most PRRTE users:
 
 `-d, --debug-devel`
 
-:   Enable debugging of the PRTE layer.
+:   Enable debugging of the PRRTE layer.
+
+`--debug`
+
+:   Top-level PRRTE debug switch (default: false)
+
+`--debug-daemons`
+
+:   Enable debugging of the PRRTE daemons in the DVM, output to the terminal.
 
 `--debug-daemons-file`
 
-:   Enable debugging of the PRTE daemons in the DVM, storing output in
+:   Enable debugging of the PRRTE daemons in the DVM, storing output in
     files.
+
+`--debug-verbose <arg0>`
+
+:  Verbosity level for PRRTE debug messages (default: `1`)
+
+`--leave-session-attached`
+
+:  Do not discard stdout/stderr of remote PRRTE daemons
+
+`--test-suicide <arg0>`
+
+:  Suicide instead of clean abort after delay
 
 There may be other options listed with `prte --help`.
 
-## Items from `prun` that may need to be added here (JJH RETURN HERE)
-
-`-max-vm-size, --max-vm-size <size>`
-
-:   Number of processes to run.
-
-`-novm, --novm`
-
-:   Execute without creating an allocation-spanning virtual machine
-    (only start daemons on nodes hosting application procs).
 
 # DESCRIPTION
 
 `prte` starts a Distributed Virtual Machine (DVM) by launching a
 daemon on each node of the allocation, as modified or specified by the
-`--host` and `--hostfile` options. Applications can subsequently be
-executed using the `prun` command. The DVM remains in operation until
-receiving the `pterm` command.
+`--host` and `--hostfile` options.
 
-## Specifying Host Nodes
+In the Persistent mode, applications can subsequently be executed using the
+`prun` command. In this mode, the DVM remains in operation until receiving the
+`pterm` command.
 
-Host nodes can be identified on the `prte` command line with the
-`--host` option or in a hostfile.
+In the Single-Use mode, applications are executed immediately after `prte`
+establishes the DVM, and the DVM is cleaned up when the application terminates.
 
-For example,
+# RETURN VALUE
 
-`prte -H aa,aa,bb ./a.out`
+In the Persistent mode, `prte` returns 0 if no abnormal daemon failure occurs
+during the life of the DVM, and non-zero otherwise.
 
-:   launches two processes on node aa and one on bb.
-
-Or, consider the hostfile
-
-```
-$ cat myhostfile aa slots=2 bb slots=2 cc slots=2
-```
-
-Here, we list both the host names (`aa`, `bb`, and `cc`) but also how
-many "slots" there are for each. Slots indicate how many processes can
-potentially execute on a node. For best performance, the number of
-slots may be chosen to be the number of cores on the node or the
-number of processor sockets. If the hostfile does not provide slots
-information, a default of 1 is assumed. When running under resource
-managers (e.g., SLURM, Torque, etc.), PRTE will obtain both the
-hostnames and the number of slots directly from the resource manger.
+In the Single-Use mode, `prte` returns the value that `prun` would have returned
+for that application. See the `prun` man page for details.
