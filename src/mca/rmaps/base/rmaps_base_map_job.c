@@ -65,6 +65,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     uint16_t u16 = 0;
     uint16_t *u16ptr = &u16, cpus_per_rank;
     bool use_hwthreads = false;
+    bool sequential = false;
 
     PRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -79,11 +80,18 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
      * request inheritance, then don't inherit the launch directives */
     nptr = &name;
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PRTE_NAME)) {
-        if (NULL != (parent = prte_get_job_data_object(name.jobid))) {
+        /* if the launch proxy is me, then this is the initial launch from
+         * a proxy scenario, so we don't really have a parent */
+        if (PRTE_PROC_MY_NAME->jobid == name.jobid) {
+            parent = NULL;
+            /* we do allow inheritance of the defaults */
+            inherit = true;
+        } else if (NULL != (parent = prte_get_job_data_object(name.jobid))) {
             if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PRTE_BOOL)) {
                 inherit = true;
             } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PRTE_BOOL)) {
                 inherit = false;
+                parent = NULL;
             } else if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
                 /* ensure we inherit the defaults as this is equivalent to an initial launch */
                 inherit = true;
@@ -183,6 +191,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             u16 = strtoul(p, NULL, 10);
         }
         free(tmp);
+    } else if (PRTE_MAPPING_SEQ == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        sequential = true;
     }
 
     /* estimate the number of procs for assigning default mapping/ranking policies */
@@ -200,9 +210,10 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     /* add in #packages for each node */
                     PRTE_LIST_FOREACH(node, &nodes, prte_node_t) {
                         slots += u16 * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                          HWLOC_OBJ_PACKAGE, 0,
-                                                                          PRTE_HWLOC_AVAILABLE);
+                                                                          HWLOC_OBJ_PACKAGE, 0);
                     }
+                } else if (sequential) {
+                    slots = prte_list_get_size(&nodes);
                 }
                 app->num_procs = slots;
                 PRTE_LIST_DESTRUCT(&nodes);

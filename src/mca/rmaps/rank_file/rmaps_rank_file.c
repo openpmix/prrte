@@ -90,7 +90,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     prte_mca_base_component_t *c = &prte_rmaps_rank_file_component.super.base_version;
     char *slots, *jobslots = NULL;
     bool initial_map=true;
-    prte_hwloc_resource_type_t rtype;
 
     /* only handle initial launch of rf job */
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
@@ -127,17 +126,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
 
     /* convenience def */
     map = jdata->map;
-
-    /* default to LOGICAL processors */
-    if (prte_rmaps_rank_file_component.physical) {
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rank_file: using PHYSICAL processors");
-        rtype = PRTE_HWLOC_PHYSICAL;
-    } else {
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rank_file: using LOGICAL processors");
-        rtype = PRTE_HWLOC_LOGICAL;
-    }
 
     /* setup the node list */
     PRTE_CONSTRUCT(&node_list, prte_list_t);
@@ -336,7 +324,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                 }
                 bitmap = hwloc_bitmap_alloc();
                 /* parse the slot_list to find the package and core */
-                if (PRTE_SUCCESS != (rc = prte_hwloc_base_cpu_list_parse(slots, node->topology->topo, rtype, bitmap))) {
+                if (PRTE_SUCCESS != (rc = prte_hwloc_base_cpu_list_parse(slots, node->topology->topo, bitmap))) {
                     PRTE_ERROR_LOG(rc);
                     hwloc_bitmap_free(bitmap);
                     goto error;

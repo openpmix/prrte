@@ -98,12 +98,6 @@ typedef struct {
     size_t mbs_len;
 } prte_hwloc_base_memory_segment_t;
 
-/* define type of processor info requested */
-typedef uint8_t prte_hwloc_resource_type_t;
-#define PRTE_HWLOC_PHYSICAL   1
-#define PRTE_HWLOC_LOGICAL    2
-#define PRTE_HWLOC_AVAILABLE  3
-
 /* structs for storing info on objects */
 typedef struct {
     prte_object_t super;
@@ -120,7 +114,6 @@ typedef struct {
     hwloc_obj_type_t type;
     unsigned cache_level;
     unsigned int num_objs;
-    prte_hwloc_resource_type_t rtype;
     prte_list_t sorted_by_dist_list;
 } prte_hwloc_summary_t;
 PRTE_CLASS_DECLARATION(prte_hwloc_summary_t);
@@ -332,18 +325,15 @@ PRTE_EXPORT int prte_hwloc_base_filter_cpus(hwloc_topology_t topo);
 PRTE_EXPORT void prte_hwloc_base_free_topology(hwloc_topology_t topo);
 PRTE_EXPORT unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
                                                               hwloc_obj_type_t target,
-                                                              unsigned cache_level,
-                                                              prte_hwloc_resource_type_t rtype);
+                                                              unsigned cache_level);
 PRTE_EXPORT void prte_hwloc_base_clear_usage(hwloc_topology_t topo);
 
 PRTE_EXPORT hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
                                                           hwloc_obj_type_t target,
                                                           unsigned cache_level,
-                                                          unsigned int instance,
-                                                          prte_hwloc_resource_type_t rtype);
+                                                          unsigned int instance);
 PRTE_EXPORT unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo,
-                                                       hwloc_obj_t obj,
-                                                       prte_hwloc_resource_type_t rtype);
+                                                       hwloc_obj_t obj);
 
 PRTE_EXPORT int prte_hwloc_get_sorted_numa_list(hwloc_topology_t topo,
                                     char* device_name,
@@ -369,7 +359,6 @@ PRTE_EXPORT bool prte_hwloc_base_single_cpu(hwloc_cpuset_t cpuset);
  */
 PRTE_EXPORT int prte_hwloc_base_cpu_list_parse(const char *slot_str,
                                                   hwloc_topology_t topo,
-                                                  prte_hwloc_resource_type_t rtype,
                                                   hwloc_cpuset_t cpumask);
 
 PRTE_EXPORT char* prte_hwloc_base_find_coprocessors(hwloc_topology_t topo);
