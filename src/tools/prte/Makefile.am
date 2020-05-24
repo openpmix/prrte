@@ -41,3 +41,9 @@ prte_LDADD = \
     $(prte_hwloc_LIBS) \
     $(prte_pmix_LIBS) \
 	$(top_builddir)/src/libprrte.la
+
+install-exec-hook:
+	(cd $(DESTDIR)$(bindir); rm -f prterun$(EXEEXT); $(LN_S) prte$(EXEEXT) prterun$(EXEEXT))
+
+uninstall-local:
+	rm -f $(DESTDIR)$(bindir)/prterun$(EXEEXT)
