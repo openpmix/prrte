@@ -136,7 +136,6 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_INIT_BAR_ID            (PRTE_JOB_START_KEY + 31)    // prte_grpcomm_coll_id_t - collective id
 #define PRTE_JOB_FINI_BAR_ID            (PRTE_JOB_START_KEY + 32)    // prte_grpcomm_coll_id_t - collective id
 #define PRTE_JOB_FWDIO_TO_TOOL          (PRTE_JOB_START_KEY + 33)    // Forward IO for this job to the tool requesting its spawn
-#define PRTE_JOB_PHYSICAL_CPUIDS        (PRTE_JOB_START_KEY + 34)    // bool - Hostfile contains physical ids in cpuset
 #define PRTE_JOB_LAUNCHED_DAEMONS       (PRTE_JOB_START_KEY + 35)    // bool - Job caused new daemons to be spawned
 #define PRTE_JOB_REPORT_BINDINGS        (PRTE_JOB_START_KEY + 36)    // bool - Report process bindings
 #define PRTE_JOB_CPUSET                 (PRTE_JOB_START_KEY + 37)    // string - "soft" cgroup envelope for the job

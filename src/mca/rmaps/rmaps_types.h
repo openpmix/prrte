@@ -104,7 +104,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_map_t);
  * levels in src/hwloc/hwloc-internal.h
  */
 #define PRTE_MAPPING_BYNODE            1
-#define PRTE_MAPPING_BYPACKAGE          2
+#define PRTE_MAPPING_BYPACKAGE         2
 #define PRTE_MAPPING_BYL3CACHE         3
 #define PRTE_MAPPING_BYL2CACHE         4
 #define PRTE_MAPPING_BYL1CACHE         5
@@ -114,7 +114,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_map_t);
 #define PRTE_MAPPING_BYSLOT            8
 #define PRTE_MAPPING_BYDIST            9
 /* convenience - declare anything <= 15 to be round-robin*/
-#define PRTE_MAPPING_RR                0x000f
+#define PRTE_MAPPING_RR                16
 
 /* sequential policy */
 #define PRTE_MAPPING_SEQ               20

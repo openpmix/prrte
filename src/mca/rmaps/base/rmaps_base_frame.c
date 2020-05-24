@@ -68,7 +68,7 @@ static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
                                        "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr],"
                                        " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
                                        "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
-                                       "DEVICE(for dist policy), INHERIT, NOINHERIT",
+                                       "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, SEQFILE=path (for seq policy)",
                                        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
@@ -163,6 +163,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
     bool core_cpus_given = false;
     bool oversubscribe_given = false;
     bool nooversubscribe_given = false;
+    prte_job_t *djob;
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "%s rmaps:base check modifiers with %s",
@@ -256,6 +257,14 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
                                 NULL, PRTE_BOOL);
+            /* if we are not in a persistent DVM, then make sure we don't try to launch
+             * the daemons either */
+            if (!prte_persistent) {
+                djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+                prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
+                                    NULL, PRTE_BOOL);
+                prte_do_not_launch = true;
+            }
 
         } else if (0 == strcasecmp(ck2[i], "NOLOCAL")) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_NO_USE_LOCAL);

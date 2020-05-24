@@ -536,7 +536,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
             }
             start = 0;
             /* get the number of objects of this type on this node */
-            nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target, cache_level, PRTE_HWLOC_AVAILABLE);
+            nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target, cache_level);
             if (0 == nobjs) {
                 continue;
             }
@@ -602,7 +602,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
                     prte_output_verbose(10, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:rr: assigning proc to object %d", (i+start) % nobjs);
                     /* get the hwloc object */
-                    if (NULL == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, (i+start) % nobjs, PRTE_HWLOC_AVAILABLE))) {
+                    if (NULL == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, (i+start) % nobjs))) {
                         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                         hwloc_bitmap_free(available);
                         if (NULL != job_cpuset) {
@@ -756,7 +756,7 @@ static int byobj_span(prte_job_t *jdata,
             return PRTE_ERR_SILENT;
         }
         /* get the number of objects of this type on this node */
-        nobjs += prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target, cache_level, PRTE_HWLOC_AVAILABLE);
+        nobjs += prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target, cache_level);
     }
 
     if (0 == nobjs) {
@@ -828,13 +828,13 @@ static int byobj_span(prte_job_t *jdata,
             hwloc_bitmap_free(mycpus);
         }
         /* get the number of objects of this type on this node */
-        nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target, cache_level, PRTE_HWLOC_AVAILABLE);
+        nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target, cache_level);
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:byobj: found %d objs on node %s", nobjs, node->name);
         /* loop through the number of objects */
         for (i=0; i < (int)nobjs && nprocs_mapped < (int)app->num_procs; i++) {
             /* get the hwloc object */
-            if (NULL == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, i, PRTE_HWLOC_AVAILABLE))) {
+            if (NULL == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, i))) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 hwloc_bitmap_free(available);
                 if (NULL != job_cpuset) {

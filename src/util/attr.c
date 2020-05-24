@@ -352,8 +352,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB-FINI-BAR-ID";
         case PRTE_JOB_FWDIO_TO_TOOL:
             return "JOB-FWD-IO-TO-TOOL";
-        case PRTE_JOB_PHYSICAL_CPUIDS:
-            return "JOB-PHYSICAL-CPUIDS";
         case PRTE_JOB_LAUNCHED_DAEMONS:
             return "JOB-LAUNCHED-DAEMONS";
         case PRTE_JOB_REPORT_BINDINGS:

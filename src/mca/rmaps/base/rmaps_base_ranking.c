@@ -100,7 +100,7 @@ static int rank_span(prte_job_t *jdata,
                 }
                 /* get the number of objects - only consider those we can actually use */
                 num_objs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target,
-                                                              cache_level, PRTE_HWLOC_AVAILABLE);
+                                                              cache_level);
                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rank_span: found %d objects on node %s with %d procs",
                                     num_objs, node->name, (int)node->num_procs);
@@ -111,7 +111,7 @@ static int rank_span(prte_job_t *jdata,
                 /* for each object */
                 for (i=0; i < num_objs && cnt < app->num_procs; i++) {
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target,
-                                                          cache_level, i, PRTE_HWLOC_AVAILABLE);
+                                                          cache_level, i);
 
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:rank_span: working object %d", i);
@@ -235,7 +235,7 @@ static int rank_fill(prte_job_t *jdata,
             }
             /* get the number of objects - only consider those we can actually use */
             num_objs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target,
-                                                          cache_level, PRTE_HWLOC_AVAILABLE);
+                                                          cache_level);
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rank_fill: found %d objects on node %s with %d procs",
                                 num_objs, node->name, (int)node->num_procs);
@@ -246,7 +246,7 @@ static int rank_fill(prte_job_t *jdata,
             /* for each object */
             for (i=0; i < num_objs && cnt < app->num_procs; i++) {
                 obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target,
-                                                      cache_level, i, PRTE_HWLOC_AVAILABLE);
+                                                      cache_level, i);
 
                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rank_fill: working object %d", i);
@@ -380,7 +380,7 @@ static int rank_by(prte_job_t *jdata,
 
             /* get the number of objects - only consider those we can actually use */
             num_objs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target,
-                                                          cache_level, PRTE_HWLOC_AVAILABLE);
+                                                          cache_level);
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rank_by: found %d objects on node %s with %d procs",
                                 num_objs, node->name, (int)node->num_procs);
@@ -391,7 +391,7 @@ static int rank_by(prte_job_t *jdata,
             /* collect all the objects */
             for (i=0; i < num_objs; i++) {
                 obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target,
-                                                      cache_level, i, PRTE_HWLOC_AVAILABLE);
+                                                      cache_level, i);
                 prte_pointer_array_set_item(&objs, i, obj);
             }
 

@@ -297,16 +297,14 @@ static int ppr_mapper(prte_job_t *jdata)
             } else {
                 /* get the number of lowest resources on this node */
                 nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                           lowest, cache_level,
-                                                           PRTE_HWLOC_AVAILABLE);
+                                                           lowest, cache_level);
 
                 /* map the specified number of procs to each such resource on this node,
                  * recording the locale of each proc so we know its cpuset
                  */
                 for (i=0; i < nobjs; i++) {
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                          lowest, cache_level,
-                                                          i, PRTE_HWLOC_AVAILABLE);
+                                                          lowest, cache_level, i);
                     for (j=0; j < ppr[start] && nprocs_mapped < total_procs; j++) {
                         if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, idx))) {
                             rc = PRTE_ERR_OUT_OF_RESOURCE;
@@ -482,16 +480,14 @@ static void prune(prte_jobid_t jobid,
 
     /* get the number of resources at this level on this node */
     nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                               lvl, cache_level,
-                                               PRTE_HWLOC_AVAILABLE);
+                                               lvl, cache_level);
 
     /* for each resource, compute the number of procs sitting
      * underneath it and check against the limit
      */
     for (i=0; i < nobjs; i++) {
         obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                              lvl, cache_level,
-                                              i, PRTE_HWLOC_AVAILABLE);
+                                              lvl, cache_level, i);
         /* get the available cpuset */
         avail = obj->cpuset;
 
@@ -704,8 +700,7 @@ static int assign_locations(prte_job_t *jdata)
             } else {
                 /* get the number of resources on this node at this level */
                 nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                           level, cache_level,
-                                                           PRTE_HWLOC_AVAILABLE);
+                                                           level, cache_level);
 
                 /* map the specified number of procs to each such resource on this node,
                  * recording the locale of each proc so we know its cpuset
@@ -713,8 +708,7 @@ static int assign_locations(prte_job_t *jdata)
                 for (i=0; i < nobjs; i++) {
                     cnt = 0;
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                          level, cache_level,
-                                                          i, PRTE_HWLOC_AVAILABLE);
+                                                          level, cache_level, i);
                     for (j=0; j < node->procs->size && cnt < ppr && nprocs_mapped < app->num_procs; j++) {
                         if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, j))) {
                             continue;

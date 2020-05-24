@@ -264,8 +264,7 @@ static void fill_cache_line_size(void)
         i=0;
         while (1) {
             obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology,
-                                                  cache_object, cache_level,
-                                                  i, PRTE_HWLOC_LOGICAL);
+                                                  cache_object, cache_level, i);
             if (NULL == obj) {
                 --cache_level;
                 cache_object = HWLOC_OBJ_L1CACHE;
@@ -557,8 +556,7 @@ unsigned int prte_hwloc_base_get_npus(hwloc_topology_t topo,
 }
 
 unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo,
-                                         hwloc_obj_t obj,
-                                         prte_hwloc_resource_type_t rtype)
+                                         hwloc_obj_t obj)
 {
     unsigned cache_level=0;
     prte_hwloc_obj_data_t *data;
@@ -590,7 +588,7 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo,
     }
 #endif
 
-    nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, obj->type, cache_level, rtype);
+    nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, obj->type, cache_level);
 
     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:get_idx found %u objects of type %s:%u",
@@ -598,7 +596,7 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo,
 
     /* find this object */
     for (i=0; i < nobjs; i++) {
-        ptr = prte_hwloc_base_get_obj_by_type(topo, obj->type, cache_level, i, rtype);
+        ptr = prte_hwloc_base_get_obj_by_type(topo, obj->type, cache_level, i);
         if (ptr == obj) {
             data->idx = i;
             return i;
@@ -622,10 +620,8 @@ static hwloc_obj_t df_search(hwloc_topology_t topo,
                              hwloc_obj_type_t target,
                              unsigned cache_level,
                              unsigned int nobj,
-                             prte_hwloc_resource_type_t rtype,
                              unsigned int *num_objs)
 {
-    hwloc_obj_t obj;
     int search_depth;
 
     search_depth = hwloc_get_type_depth(topo, target);
@@ -634,67 +630,26 @@ static hwloc_obj_t df_search(hwloc_topology_t topo,
 #if HWLOC_API_VERSION >= 0x20000
         return NULL;
 #else
-        if (cache_level != HWLOC_OBJ_CACHE)
+        if (cache_level != HWLOC_OBJ_CACHE) {
             return NULL;
+        }
         search_depth = hwloc_get_cache_type_depth(topo, cache_level, (hwloc_obj_cache_type_t) -1);
 #endif
     }
-    if (HWLOC_TYPE_DEPTH_UNKNOWN == search_depth)
+    if (HWLOC_TYPE_DEPTH_UNKNOWN == search_depth) {
         return NULL;
+    }
 
-    if (PRTE_HWLOC_LOGICAL == rtype) {
-        if (num_objs)
-            *num_objs = hwloc_get_nbobjs_by_depth(topo, search_depth);
-        return hwloc_get_obj_by_depth(topo, search_depth, nobj);
+    if (num_objs) {
+        *num_objs = hwloc_get_nbobjs_by_depth(topo, search_depth);
     }
-    if (PRTE_HWLOC_PHYSICAL == rtype) {
-        /* the PHYSICAL object number is stored as the os_index. When
-         * counting physical objects, we can't just count the number
-         * that are in the hwloc tree as the only entries in the tree
-         * are LOGICAL objects - i.e., any physical gaps won't show. So
-         * we instead return the MAX os_index, as this is the best we
-         * can do to tell you how many PHYSICAL objects are in the system.
-         *
-         * NOTE: if the last PHYSICAL object is not present (e.g., the last
-         * package on the node is empty), then the count we return will
-         * be wrong!
-         */
-        hwloc_obj_t found = NULL;
-        obj = NULL;
-        if (num_objs)
-            *num_objs = 0;
-        while ((obj = hwloc_get_next_obj_by_depth(topo, search_depth, obj)) != NULL) {
-            if (num_objs && obj->os_index > *num_objs)
-                *num_objs = obj->os_index;
-            if (obj->os_index == nobj)
-                found = obj;
-        }
-        return found;
-    }
-    if (PRTE_HWLOC_AVAILABLE == rtype) {
-        unsigned idx = 0;
-        if (num_objs)
-            *num_objs = hwloc_get_nbobjs_inside_cpuset_by_depth(topo, start->cpuset, search_depth);
-        obj = NULL;
-        while ((obj = hwloc_get_next_obj_inside_cpuset_by_depth(topo, start->cpuset, search_depth, obj)) != NULL) {
-            if (idx == nobj)
-                return obj;
-            idx++;
-        }
-        return NULL;
-    }
-    return NULL;
+    return hwloc_get_obj_by_depth(topo, search_depth, nobj);
 }
 
 unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
                                                 hwloc_obj_type_t target,
-                                                unsigned cache_level,
-                                                prte_hwloc_resource_type_t rtype)
+                                                unsigned cache_level)
 {
-    unsigned int num_objs;
-    hwloc_obj_t obj;
-    prte_hwloc_summary_t *sum;
-    prte_hwloc_topo_data_t *data;
     int rc;
 
     /* bozo check */
@@ -704,15 +659,22 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
         return 0;
     }
 
-    /* if we want the number of LOGICAL objects, we can just
-     * use the hwloc accessor to get it, unless it is a CACHE
-     * as these are treated as special cases
+#if HWLOC_API_VERSION >= 0x20000
+    if (0 > (rc = hwloc_get_nbobjs_by_type(topo, target))) {
+        prte_output(0, "UNKNOWN HWLOC ERROR");
+        return 0;
+    }
+    return rc;
+#else
+    unsigned int num_objs;
+    hwloc_obj_t obj;
+    prte_hwloc_summary_t *sum;
+    prte_hwloc_topo_data_t *data;
+
+    /* we can just use the hwloc accessor to get it,
+     * unless it is a CACHE as these are treated as special cases
      */
-    if (PRTE_HWLOC_LOGICAL == rtype
-#if HWLOC_API_VERSION < 0x20000
-        && HWLOC_OBJ_CACHE != target
-#endif
-       ) {
+    if (HWLOC_OBJ_CACHE != target) {
         /* we should not get an error back, but just in case... */
         if (0 > (rc = hwloc_get_nbobjs_by_type(topo, target))) {
             prte_output(0, "UNKNOWN HWLOC ERROR");
@@ -733,8 +695,7 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
     } else {
         PRTE_LIST_FOREACH(sum, &data->summaries, prte_hwloc_summary_t) {
             if (target == sum->type &&
-                cache_level == sum->cache_level &&
-                rtype == sum->rtype) {
+                cache_level == sum->cache_level) {
                 /* yep - return the value */
                 PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                                      "hwloc:base:get_nbojbs pre-existing data %u of %s:%u",
@@ -745,14 +706,13 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
     }
 
     /* don't already know it - go get it */
-    df_search(topo, obj, target, cache_level, 0, rtype, &num_objs);
+    df_search(topo, obj, target, cache_level, 0, &num_objs);
 
     /* cache the results for later */
     sum = PRTE_NEW(prte_hwloc_summary_t);
     sum->type = target;
     sum->cache_level = cache_level;
     sum->num_objs = num_objs;
-    sum->rtype = rtype;
     prte_list_append(&data->summaries, &sum->super);
 
     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
@@ -760,6 +720,7 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
                          num_objs, hwloc_obj_type_string(target), cache_level));
 
     return num_objs;
+#endif
 }
 
 /* as above, only return the Nth instance of the specified object
@@ -768,31 +729,30 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
 hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
                                             hwloc_obj_type_t target,
                                             unsigned cache_level,
-                                            unsigned int instance,
-                                            prte_hwloc_resource_type_t rtype)
+                                            unsigned int instance)
 {
-    hwloc_obj_t obj;
-
     /* bozo check */
     if (NULL == topo) {
         return NULL;
     }
 
-    /* if we want the nth LOGICAL object, we can just
-     * use the hwloc accessor to get it, unless it is a CACHE
+
+#if HWLOC_API_VERSION >= 0x20000
+    return hwloc_get_obj_by_type(topo, target, instance);
+#else
+    hwloc_obj_t obj;
+
+    /* we can just use the hwloc accessor to get it, unless it is a CACHE
      * as these are treated as special cases
      */
-    if (PRTE_HWLOC_LOGICAL == rtype
-#if HWLOC_API_VERSION < 0x20000
-        && HWLOC_OBJ_CACHE != target
-#endif
-       ) {
+    if (HWLOC_OBJ_CACHE != target) {
         return hwloc_get_obj_by_type(topo, target, instance);
     }
 
     /* for everything else, we have to do some work */
     obj = hwloc_get_root_obj(topo);
-    return df_search(topo, obj, target, cache_level, instance, rtype, NULL);
+    return df_search(topo, obj, target, cache_level, instance, NULL);
+#endif
 }
 
 static void df_clear(hwloc_topology_t topo,
@@ -840,7 +800,6 @@ void prte_hwloc_base_clear_usage(hwloc_topology_t topo)
 
 static int package_to_cpu_set(char *cpus,
                              hwloc_topology_t topo,
-                             prte_hwloc_resource_type_t rtype,
                              hwloc_bitmap_t cpumask)
 {
     char **range;
@@ -864,7 +823,7 @@ static int package_to_cpu_set(char *cpus,
     switch (range_cnt) {
     case 1:  /* no range was present, so just one package given */
         package_id = atoi(range[0]);
-        obj = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id, rtype);
+        obj = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id);
         /* get the available cpus for this package */
         hwloc_bitmap_or(cpumask, cpumask, obj->cpuset);
         break;
@@ -874,7 +833,7 @@ static int package_to_cpu_set(char *cpus,
         upper_range = atoi(range[1]);
         /* cycle across the range of packages */
         for (package_id=lower_range; package_id<=upper_range; package_id++) {
-            obj = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id, rtype);
+            obj = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id);
             /* set the available cpus for this package bits in the bitmask */
             hwloc_bitmap_or(cpumask, cpumask, obj->cpuset);
         }
@@ -890,7 +849,6 @@ static int package_to_cpu_set(char *cpus,
 
 static int package_core_to_cpu_set(char *package_core_list,
                                   hwloc_topology_t topo,
-                                  prte_hwloc_resource_type_t rtype,
                                   hwloc_bitmap_t cpumask)
 {
     int rc=PRTE_SUCCESS, i, j;
@@ -907,7 +865,7 @@ static int package_core_to_cpu_set(char *package_core_list,
 
     /* get the object for this package id */
     if (NULL == (package = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0,
-                                                          package_id, rtype))) {
+                                                          package_id))) {
         prte_argv_free(package_core);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -944,8 +902,7 @@ static int package_core_to_cpu_set(char *package_core_list,
                     core_id = atoi(list[j]);
                     /* get that object */
                     if (NULL == (core = df_search(topo, package, obj_type, 0,
-                                                  core_id, PRTE_HWLOC_AVAILABLE,
-                                                  NULL))) {
+                                                  core_id, NULL))) {
                         prte_argv_free(list);
                         prte_argv_free(range);
                         prte_argv_free(package_core);
@@ -966,8 +923,7 @@ static int package_core_to_cpu_set(char *package_core_list,
                 for (core_id=lower_range; core_id <= upper_range; core_id++) {
                     /* get that object */
                     if (NULL == (core = df_search(topo, package, obj_type, 0,
-                                                  core_id, PRTE_HWLOC_AVAILABLE,
-                                                  NULL))) {
+                                                  core_id, NULL))) {
                         prte_argv_free(range);
                         prte_argv_free(package_core);
                         return PRTE_ERR_NOT_FOUND;
@@ -992,7 +948,6 @@ static int package_core_to_cpu_set(char *package_core_list,
 
 int prte_hwloc_base_cpu_list_parse(const char *slot_str,
                                     hwloc_topology_t topo,
-                                    prte_hwloc_resource_type_t rtype,
                                     hwloc_cpuset_t cpumask)
 {
     char **item, **rngs;
@@ -1039,7 +994,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str,
                  */
                 rngs = prte_argv_split(&item[i][1], ',');
                 for (j=0; NULL != rngs[j]; j++) {
-                    if (PRTE_SUCCESS != (rc = package_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
+                    if (PRTE_SUCCESS != (rc = package_to_cpu_set(rngs[j], topo, cpumask))) {
                         prte_argv_free(rngs);
                         prte_argv_free(item);
                         return rc;
@@ -1052,7 +1007,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str,
                     's' == item[i][0]) {
                     rngs = prte_argv_split(&item[i][1], ',');
                     for (j=0; NULL != rngs[j]; j++) {
-                        if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
+                        if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, cpumask))) {
                             prte_argv_free(rngs);
                             prte_argv_free(item);
                             return rc;
@@ -1062,7 +1017,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str,
                 } else {
                     rngs = prte_argv_split(item[i], ',');
                     for (j=0; NULL != rngs[j]; j++) {
-                        if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, rtype, cpumask))) {
+                        if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, cpumask))) {
                             prte_argv_free(rngs);
                             prte_argv_free(item);
                             return rc;
@@ -1084,7 +1039,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str,
                     for (j=0; NULL != list[j]; j++) {
                         core_id = atoi(list[j]);
                         /* find the specified available cpu */
-                        if (NULL == (pu = prte_hwloc_base_get_pu(topo, core_id, rtype))) {
+                        if (NULL == (pu = prte_hwloc_base_get_pu(topo, false, core_id))) {
                             prte_argv_free(range);
                             prte_argv_free(item);
                             prte_argv_free(rngs);
@@ -1102,7 +1057,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str,
                     upper_range = atoi(range[1]);
                     for (core_id=lower_range; core_id <= upper_range; core_id++) {
                         /* find the specified logical available cpu */
-                        if (NULL == (pu = prte_hwloc_base_get_pu(topo, core_id, rtype))) {
+                        if (NULL == (pu = prte_hwloc_base_get_pu(topo, false, core_id))) {
                             prte_argv_free(range);
                             prte_argv_free(item);
                             prte_argv_free(rngs);
@@ -1771,13 +1726,13 @@ char* prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
     unsigned i;
     hwloc_bitmap_t complete, allowed;
 
-    nnuma = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NODE, 0, PRTE_HWLOC_AVAILABLE);
-    npackage = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE, 0, PRTE_HWLOC_AVAILABLE);
-    nl3 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE, 3, PRTE_HWLOC_AVAILABLE);
-    nl2 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE, 2, PRTE_HWLOC_AVAILABLE);
-    nl1 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L1CACHE, 1, PRTE_HWLOC_AVAILABLE);
-    ncore = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE, 0, PRTE_HWLOC_AVAILABLE);
-    nhwt = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PU, 0, PRTE_HWLOC_AVAILABLE);
+    nnuma = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NODE, 0);
+    npackage = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE, 0);
+    nl3 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE, 3);
+    nl2 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE, 2);
+    nl1 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L1CACHE, 1);
+    ncore = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE, 0);
+    nhwt = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PU, 0);
 
     /* get the root object so we can add the processor architecture */
     obj = hwloc_get_root_obj(topo);

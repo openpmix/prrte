@@ -85,6 +85,7 @@ PRTE_CLASS_INSTANCE(seq_node_t,
                    sn_con, sn_des);
 
 static char *prte_getline(FILE *fp);
+static int process_file(char *path, prte_list_t *list);
 
 /*
  * Sequentially map the ranks according to the placement in the
@@ -106,10 +107,8 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     prte_list_t node_list, *seq_list, sq_list;
     prte_proc_t *proc;
     prte_mca_base_component_t *c = &prte_rmaps_seq_component.base_version;
-    char *hosts = NULL, *sep, *eptr;
-    FILE *fp;
-    prte_hwloc_resource_type_t rtype;
-    bool use_hwthread_cpus;
+    char *hosts = NULL;
+    bool use_hwthread_cpus, match;
 
     PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
                          "%s rmaps:seq called on job %s",
@@ -162,50 +161,11 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     /* if there is a default hostfile, go and get its ordered list of nodes */
     PRTE_CONSTRUCT(&default_seq_list, prte_list_t);
     if (NULL != prte_default_hostfile) {
-        char *hstname = NULL;
-        /* open the file */
-        fp = fopen(prte_default_hostfile, "r");
-        if (NULL == fp) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            rc = PRTE_ERR_NOT_FOUND;
-            goto error;
+        rc = process_file(prte_default_hostfile, &default_seq_list);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_LIST_DESTRUCT(&default_seq_list);
+            return rc;
         }
-        while (NULL != (hstname = prte_getline(fp))) {
-            if (0 == strlen(hstname)) {
-                free(hstname);
-                /* blank line - ignore */
-                continue;
-            }
-            if( '#' == hstname[0] ) {
-                free(hstname);
-                /* Comment line - ignore */
-                continue;
-            }
-            sq = PRTE_NEW(seq_node_t);
-            if (NULL != (sep = strchr(hstname, ' '))) {
-                *sep = '\0';
-                sep++;
-                /* remove any trailing space */
-                eptr = sep + strlen(sep) - 1;
-                while (eptr > sep && isspace(*eptr)) {
-                    eptr--;
-                }
-                *(eptr+1) = 0;
-                sq->cpuset = strdup(sep);
-            }
-
-            // Strip off the FQDN if present, ignore IP addresses
-            if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(hstname) ) {
-                char *ptr;
-                if (NULL != (ptr = strchr(hstname, '.'))) {
-                    *ptr = '\0';
-                }
-            }
-
-            sq->hostname = hstname;
-            prte_list_append(&default_seq_list, &sq->super);
-        }
-        fclose(fp);
     }
 
     /* check for type of cpu being used */
@@ -221,17 +181,6 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     jdata->num_procs = 0;
     if (0 < prte_list_get_size(&default_seq_list)) {
         save = (seq_node_t*)prte_list_get_first(&default_seq_list);
-    }
-
-    /* default to LOGICAL processors */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PHYSICAL_CPUIDS, NULL, PRTE_BOOL)) {
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:seq: using PHYSICAL processors");
-        rtype = PRTE_HWLOC_PHYSICAL;
-    } else {
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:seq: using LOGICAL processors");
-        rtype = PRTE_HWLOC_LOGICAL;
     }
 
     /* initialize all the nodes as not included in this job map */
@@ -270,7 +219,6 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
             PRTE_DESTRUCT(&node_list);
             seq_list = &sq_list;
         } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PRTE_STRING)) {
-            char *hstname;
             if (NULL == hosts) {
                 rc = PRTE_ERR_NOT_FOUND;
                 goto error;
@@ -278,51 +226,12 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts, app->app);
             PRTE_CONSTRUCT(&sq_list, prte_list_t);
-            /* open the file */
-            fp = fopen(hosts, "r");
-            if (NULL == fp) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                rc = PRTE_ERR_NOT_FOUND;
-                PRTE_DESTRUCT(&sq_list);
+            rc = process_file(hosts, &sq_list);
+            free(hosts);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_LIST_DESTRUCT(&sq_list);
                 goto error;
             }
-            while (NULL != (hstname = prte_getline(fp))) {
-                if (0 == strlen(hstname)) {
-                    free(hstname);
-                    /* blank line - ignore */
-                    continue;
-                }
-                if( '#' == hstname[0] ) {
-                    free(hstname);
-                    /* Comment line - ignore */
-                    continue;
-                }
-                sq = PRTE_NEW(seq_node_t);
-                if (NULL != (sep = strchr(hstname, ' '))) {
-                    *sep = '\0';
-                    sep++;
-                    /* remove any trailing space */
-                    eptr = sep + strlen(sep) - 1;
-                    while (eptr > sep && isspace(*eptr)) {
-                        eptr--;
-                    }
-                    *(eptr+1) = 0;
-                    sq->cpuset = strdup(sep);
-                }
-
-                // Strip off the FQDN if present, ignore IP addresses
-                if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(hstname) ) {
-                    char *ptr;
-                    if (NULL != (ptr = strchr(hstname, '.'))) {
-                        (*ptr) = '\0';
-                    }
-                }
-
-                sq->hostname = hstname;
-                prte_list_append(&sq_list, &sq->super);
-            }
-            fclose(fp);
-            free(hosts);
             seq_list = &sq_list;
         } else if (0 < prte_list_get_size(&default_seq_list)) {
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
@@ -333,7 +242,8 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
             prte_show_help("help-prte-rmaps-base.txt",
                            "prte-rmaps-base:no-available-resources",
                            true);
-            return PRTE_ERR_SILENT;
+            rc = PRTE_ERR_SILENT;
+            goto error;
         }
 
         /* check for nolocal and remove the head node, if required */
@@ -362,7 +272,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
             return PRTE_ERR_SILENT;
         }
 
-        /* if num_procs wasn't specified, set it now */
+        /* set #procs to the number of entries */
         if (0 == app->num_procs) {
             app->num_procs = num_nodes;
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
@@ -384,16 +294,17 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
              * that our mapping gets saved on that array as the objects
              * returned by the hostfile function are -not- on the array
              */
-            node = NULL;
+            match = false;
             for (j=0; j < prte_node_pool->size; j++) {
                 if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, j))) {
                     continue;
                 }
-                if (0 == strcmp(sq->hostname, node->name)) {
+                if (prte_node_match(node, sq->hostname)) {
+                    match = true;
                     break;
                 }
             }
-            if (NULL == node) {
+            if (!match) {
                 /* wasn't found - that is an error */
                 prte_show_help("help-prte-rmaps-seq.txt",
                                "prte-rmaps-seq:resource-not-found",
@@ -469,7 +380,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
                     /* setup the bitmap */
                     bitmap = hwloc_bitmap_alloc();
                     /* parse the slot_list to find the package and core */
-                    if (PRTE_SUCCESS != (rc = prte_hwloc_base_cpu_list_parse(sq->cpuset, node->topology->topo, rtype, bitmap))) {
+                    if (PRTE_SUCCESS != (rc = prte_hwloc_base_cpu_list_parse(sq->cpuset, node->topology->topo, bitmap))) {
                         PRTE_ERROR_LOG(rc);
                         hwloc_bitmap_free(bitmap);
                         goto error;
@@ -548,4 +459,56 @@ static char *prte_getline(FILE *fp)
     }
 
     return NULL;
+}
+
+static int process_file(char *path, prte_list_t *list)
+{
+    char *hstname = NULL;
+    FILE *fp;
+    seq_node_t *sq;
+    char *sep, *eptr;
+    char *ptr;
+
+    /* open the file */
+    fp = fopen(path, "r");
+    if (NULL == fp) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+    while (NULL != (hstname = prte_getline(fp))) {
+        if (0 == strlen(hstname)) {
+            free(hstname);
+            /* blank line - ignore */
+            continue;
+        }
+        if( '#' == hstname[0] ) {
+            free(hstname);
+            /* Comment line - ignore */
+            continue;
+        }
+        sq = PRTE_NEW(seq_node_t);
+        if (NULL != (sep = strchr(hstname, ' '))) {
+            *sep = '\0';
+            sep++;
+            /* remove any trailing space */
+            eptr = sep + strlen(sep) - 1;
+            while (eptr > sep && isspace(*eptr)) {
+                eptr--;
+            }
+            *(eptr+1) = 0;
+            sq->cpuset = strdup(sep);
+        }
+
+        // Strip off the FQDN if present, ignore IP addresses
+        if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(hstname) ) {
+            if (NULL != (ptr = strchr(hstname, '.'))) {
+                *ptr = '\0';
+            }
+        }
+
+        sq->hostname = hstname;
+        prte_list_append(list, &sq->super);
+    }
+    fclose(fp);
+    return PRTE_SUCCESS;
 }

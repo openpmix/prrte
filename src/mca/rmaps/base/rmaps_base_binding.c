@@ -599,7 +599,7 @@ static int bind_in_place(prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             /* get the index of this location */
-            if (UINT_MAX == (idx = prte_hwloc_base_get_obj_idx(node->topology->topo, locale, PRTE_HWLOC_AVAILABLE))) {
+            if (UINT_MAX == (idx = prte_hwloc_base_get_obj_idx(node->topology->topo, locale))) {
                 PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                 hwloc_bitmap_free(available);
                 if (NULL != job_cpuset) {

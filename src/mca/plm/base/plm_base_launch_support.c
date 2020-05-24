@@ -86,32 +86,27 @@ void prte_plm_base_set_slots(prte_node_t *node)
     if (0 == strncmp(prte_set_slots, "cores", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
             node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                             HWLOC_OBJ_CORE, 0,
-                                                             PRTE_HWLOC_LOGICAL);
+                                                             HWLOC_OBJ_CORE, 0);
         }
     } else if (0 == strncmp(prte_set_slots, "sockets", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
             if (0 == (node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                       HWLOC_OBJ_SOCKET, 0,
-                                                                       PRTE_HWLOC_LOGICAL))) {
+                                                                       HWLOC_OBJ_SOCKET, 0))) {
                 /* some systems don't report sockets - in this case,
                  * use numanodes */
                 node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                 HWLOC_OBJ_NODE, 0,
-                                                                 PRTE_HWLOC_LOGICAL);
+                                                                 HWLOC_OBJ_NODE, 0);
             }
         }
     } else if (0 == strncmp(prte_set_slots, "numas", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
             node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                             HWLOC_OBJ_NODE, 0,
-                                                             PRTE_HWLOC_LOGICAL);
+                                                             HWLOC_OBJ_NODE, 0);
         }
     } else if (0 == strncmp(prte_set_slots, "hwthreads", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
             node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                             HWLOC_OBJ_PU, 0,
-                                                             PRTE_HWLOC_LOGICAL);
+                                                             HWLOC_OBJ_PU, 0L);
         }
     } else {
         /* must be a number */

@@ -391,7 +391,6 @@ PRTE_CLASS_INSTANCE(prte_hwloc_obj_data_t,
 static void sum_const(prte_hwloc_summary_t *ptr)
 {
     ptr->num_objs = 0;
-    ptr->rtype = 0;
     PRTE_CONSTRUCT(&ptr->sorted_by_dist_list, prte_list_t);
 }
 static void sum_dest(prte_hwloc_summary_t *ptr)
