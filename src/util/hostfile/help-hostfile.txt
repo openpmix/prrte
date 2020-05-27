@@ -112,8 +112,8 @@ The boards parameter is less than 0:
 [sockets]
 PRTE detected a bad parameter in the hostfile:
     %s
-The sockets parameter is less than 0:
-    sockets=%d
+The packages parameter is less than 0:
+    packages=%d
 [cores]
 PRTE detected a bad parameter in the hostfile:
     %s

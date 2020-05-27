@@ -297,7 +297,7 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
 {
     int rc = PRTE_ERR_NOT_FOUND;
     char **pargs = *argv;
-    char *p2, *tmp, *tmp2, *output;
+    char *p1, *p2, *tmp, *tmp2, *output;
 
     /* --display-devel-map  ->  map-by :displaydevel */
     if (0 == strcmp(option, "--display-devel-map")) {
@@ -349,6 +349,7 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--map-by")) {
         /* check the value of the option for "socket" */
         if (0 == strncasecmp(pargs[i+1], "socket", strlen("socket"))) {
+            p1 = strdup(pargs[i+1]);  // save the original option
             /* replace "socket" with "package" */
             if (NULL == (p2 = strchr(pargs[i+1], ':'))) {
                 /* no modifiers */
@@ -358,13 +359,14 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
                 ++p2;
                 prte_asprintf(&tmp, "package:%s", p2);
             }
-            prte_asprintf(&p2, "%s %s", option, pargs[i+1]);
+            prte_asprintf(&p2, "%s %s", option, p1);
             prte_asprintf(&tmp2, "%s %s", option, tmp);
             /* can't just call show_help as we want every instance to be reported */
             output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
                                             p2, tmp2);
             fprintf(stderr, "%s\n", output);
             free(output);
+            free(p1);
             free(p2);
             free(tmp2);
             free(pargs[i+1]);
@@ -377,6 +379,7 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--rank-by")) {
         /* check the value of the option for "socket" */
         if (0 == strncasecmp(pargs[i+1], "socket", strlen("socket"))) {
+            p1 = strdup(pargs[i+1]);  // save the original option
             /* replace "socket" with "package" */
             if (NULL == (p2 = strchr(pargs[i+1], ':'))) {
                 /* no modifiers */
@@ -386,13 +389,14 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
                 ++p2;
                 prte_asprintf(&tmp, "package:%s", p2);
             }
-            prte_asprintf(&p2, "%s %s", option, pargs[i+1]);
+            prte_asprintf(&p2, "%s %s", option, p1);
             prte_asprintf(&tmp2, "%s %s", option, tmp);
             /* can't just call show_help as we want every instance to be reported */
             output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
                                             p2, tmp2);
             fprintf(stderr, "%s\n", output);
             free(output);
+            free(p1);
             free(p2);
             free(tmp2);
             free(pargs[i+1]);
@@ -405,6 +409,7 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--bind-to")) {
         /* check the value of the option for "socket" */
         if (0 == strncasecmp(pargs[i+1], "socket", strlen("socket"))) {
+            p1 = strdup(pargs[i+1]);  // save the original option
             /* replace "socket" with "package" */
             if (NULL == (p2 = strchr(pargs[i+1], ':'))) {
                 /* no modifiers */
@@ -414,13 +419,14 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
                 ++p2;
                 prte_asprintf(&tmp, "package:%s", p2);
             }
-            prte_asprintf(&p2, "%s %s", option, pargs[i+1]);
+            prte_asprintf(&p2, "%s %s", option, p1);
             prte_asprintf(&tmp2, "%s %s", option, tmp);
             /* can't just call show_help as we want every instance to be reported */
             output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
                                             p2, tmp2);
             fprintf(stderr, "%s\n", output);
             free(output);
+            free(p1);
             free(p2);
             free(tmp2);
             free(pargs[i+1]);
