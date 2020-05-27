@@ -78,10 +78,10 @@ Please revise the conflict and try again.
 #
 [too-many-cpus-per-rank]
 Your job has requested more cpus per process(rank) than there
-are cpus in a socket:
+are cpus in a package:
 
   Cpus/rank: %d
-  #cpus/socket: %d
+  #cpus/package: %d
 
 Please correct one or both of these values and try again.
 #

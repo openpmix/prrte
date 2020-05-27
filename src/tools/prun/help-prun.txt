@@ -550,13 +550,13 @@ developers.
 #
 [prun:topo-not-supported]
 An attempt was made to bind a process to a specific hardware topology
-mapping (e.g., binding to a socket) but the operating system does not
+mapping (e.g., binding to a package) but the operating system does not
 support such topology-aware actions.  Talk to your local system
 administrator to find out if your system can support topology-aware
 functionality (e.g., Linux Kernels newer than v2.6.18).
 
 Systems that do not support processor topology-aware functionality
-cannot use "bind to socket" and other related functionality.
+cannot use "bind to package" and other related functionality.
 
   Local host:        %s
   Action attempted:  %s %s
