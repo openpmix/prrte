@@ -1710,26 +1710,26 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              PRTE_NAME_PRINT(&proc->name), strsignal(WTERMSIG(proc->exit_code))));
         proc->exit_code = WTERMSIG(proc->exit_code) + 128;
 
-        /* register an event handler for the PRRTE_ERR_PROC_ABORTED event */
+        /* register an event handler for the PRTE_ERR_PROC_ABORTED event */
         pmix_proc_t pname, psource;
-        pmix_status_t pcode = prrte_pmix_convert_rc(PRRTE_ERR_PROC_ABORTED);
-        PRRTE_PMIX_CONVERT_NAME(rc, &pname, &proc->name);
-        PRRTE_PMIX_CONVERT_NAME(rc, &psource, PRRTE_PROC_MY_NAME);
+        pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
+        PRTE_PMIX_CONVERT_NAME(rc, &pname, &proc->name);
+        PRTE_PMIX_CONVERT_NAME(rc, &psource, PRTE_PROC_MY_NAME);
         pmix_info_t *pinfo;
         PMIX_INFO_CREATE(pinfo, 1);
         PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
 
-        if (PRRTE_SUCCESS != PMIx_Notify_event(pcode, &psource,
+        if (PRTE_SUCCESS != PMIx_Notify_event(pcode, &psource,
                     PMIX_RANGE_LOCAL, pinfo, 1,
                     NULL,NULL )) {
-            PRRTE_OUTPUT_VERBOSE((5, prrte_odls_base_framework.framework_output,
-                        "%s odls:notify failed, release pinfo",PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
-            PRRTE_RELEASE(pinfo);
+            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                        "%s odls:notify failed, release pinfo",PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+            PRTE_RELEASE(pinfo);
         }
-        PRRTE_OUTPUT_VERBOSE((5, prrte_odls_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                     "%s odls:event notify in odls proc %d:%d gone",
-                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), proc->name.jobid, proc->name.vpid));
-        PRRTE_FLAG_SET(proc, PRRTE_PROC_FLAG_WAITPID);
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), proc->name.jobid, proc->name.vpid));
+        PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
 
         /* Do not decrement the number of local procs here. That is handled in the errmgr */
     }

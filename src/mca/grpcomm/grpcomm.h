@@ -57,7 +57,7 @@ BEGIN_C_DECLS
  * collective completion */
 typedef void (*prte_grpcomm_cbfunc_t)(int status, prte_buffer_t *buf, void *cbdata);
 
-typedef int (*prrte_grpcomm_rbcast_cb_t)(prrte_buffer_t* buffer);
+typedef int (*prte_grpcomm_rbcast_cb_t)(prte_buffer_t* buffer);
 
 /* Define a collective signature so we don't need to
  * track global collective id's */
@@ -129,11 +129,11 @@ typedef int (*prte_grpcomm_base_module_allgather_fn_t)(prte_grpcomm_coll_t *coll
 /* Reliable broadcast a message thru BMG.
  * only need to provide a message buffer, dont need create dmns
  */
-typedef int (*prrte_grpcomm_base_module_rbcast_fn_t)(prrte_buffer_t *msg);
+typedef int (*prte_grpcomm_base_module_rbcast_fn_t)(prte_buffer_t *msg);
 
-typedef int (*prrte_grpcomm_base_module_rbcast_register_cb_fn_t)(prrte_grpcomm_rbcast_cb_t callback);
+typedef int (*prte_grpcomm_base_module_rbcast_register_cb_fn_t)(prte_grpcomm_rbcast_cb_t callback);
 
-typedef int (*prrte_grpcomm_base_module_rbcast_unregister_cb_fn_t)(int type);
+typedef int (*prte_grpcomm_base_module_rbcast_unregister_cb_fn_t)(int type);
 
 /*
  * Ver 3.0 - internal modules
@@ -144,9 +144,9 @@ typedef struct {
     /* collective operations */
     prte_grpcomm_base_module_xcast_fn_t          xcast;
     prte_grpcomm_base_module_allgather_fn_t      allgather;
-    prrte_grpcomm_base_module_rbcast_fn_t         rbcast;
-    prrte_grpcomm_base_module_rbcast_register_cb_fn_t        register_cb;
-    prrte_grpcomm_base_module_rbcast_unregister_cb_fn_t       unregister_cb;
+    prte_grpcomm_base_module_rbcast_fn_t         rbcast;
+    prte_grpcomm_base_module_rbcast_register_cb_fn_t        register_cb;
+    prte_grpcomm_base_module_rbcast_unregister_cb_fn_t       unregister_cb;
 } prte_grpcomm_base_module_t;
 
 /* the Public APIs */
@@ -178,22 +178,22 @@ typedef int (*prte_grpcomm_base_API_allgather_fn_t)(prte_grpcomm_signature_t *si
  * of daemon. A NULL pointer indicates that all known daemons are in the BMG.
  * A pointer to a name that includes ORTE_VPID_WILDCARD
  * all daemons in the specified jobid.*/
-typedef int (*prrte_grpcomm_base_API_rbcast_fn_t)(prrte_grpcomm_signature_t *sig,
-                                                prrte_rml_tag_t tag,
-                                                prrte_buffer_t *msg);
+typedef int (*prte_grpcomm_base_API_rbcast_fn_t)(prte_grpcomm_signature_t *sig,
+                                                prte_rml_tag_t tag,
+                                                prte_buffer_t *msg);
 
 
-typedef int (*prrte_grpcomm_base_API_rbcast_register_cb_fn_t)(prrte_grpcomm_rbcast_cb_t callback);
+typedef int (*prte_grpcomm_base_API_rbcast_register_cb_fn_t)(prte_grpcomm_rbcast_cb_t callback);
 
-typedef int (*prrte_grpcomm_base_API_rbcast_unregister_cb_fn_t)(int type);
+typedef int (*prte_grpcomm_base_API_rbcast_unregister_cb_fn_t)(int type);
 
 typedef struct {
     /* collective operations */
     prte_grpcomm_base_API_xcast_fn_t             xcast;
     prte_grpcomm_base_API_allgather_fn_t         allgather;
-    prrte_grpcomm_base_API_rbcast_fn_t            rbcast;
-    prrte_grpcomm_base_API_rbcast_register_cb_fn_t     register_cb;
-    prrte_grpcomm_base_API_rbcast_unregister_cb_fn_t   unregister_cb;
+    prte_grpcomm_base_API_rbcast_fn_t            rbcast;
+    prte_grpcomm_base_API_rbcast_register_cb_fn_t     register_cb;
+    prte_grpcomm_base_API_rbcast_unregister_cb_fn_t   unregister_cb;
 } prte_grpcomm_API_module_t;
 
 

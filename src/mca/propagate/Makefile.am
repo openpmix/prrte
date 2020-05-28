@@ -20,8 +20,8 @@ libmca_propagate_la_SOURCES += $(headers)
 
 # Conditionally install the header files
 if WANT_INSTALL_HEADERS
-prrtedir = $(prrteincludedir)/$(subdir)
-nobase_prrte_HEADERS = $(headers)
+prtedir = $(prteincludedir)/$(subdir)
+nobase_prte_HEADERS = $(headers)
 endif
 
 include base/Makefile.am

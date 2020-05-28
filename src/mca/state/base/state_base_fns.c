@@ -777,8 +777,8 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
             parent.jobid = jdata->jobid;
             parent.vpid = PRTE_VPID_WILDCARD;
 
-            /* do not kill send the msg if ft prrte is enabled */
-            if(!prrte_errmgr_detector_enable_flag)
+            /* do not kill send the msg if ft prte is enabled */
+            if(!prte_errmgr_detector_enable_flag)
             {
                 _send_notification(PRTE_ERR_PROC_ABORTED, pdata->state, &pdata->name, &parent);
             }

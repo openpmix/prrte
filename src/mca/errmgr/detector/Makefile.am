@@ -18,7 +18,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_errmgr_detector_DSO
+if MCA_BUILD_prte_errmgr_detector_DSO
 component_noinst =
 component_install = mca_errmgr_detector.la
 else
@@ -26,7 +26,7 @@ component_noinst = libmca_errmgr_detector.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_errmgr_detector_la_SOURCES = $(sources)
 mca_errmgr_detector_la_LDFLAGS = -module -avoid-version

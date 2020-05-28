@@ -90,38 +90,38 @@ bool prp_regflag = 1;
 static void job_errors(int fd, short args, void *cbdata);
 static void proc_errors(int fd, short args, void *cbdata);
 
-static int pack_state_for_proc(prrte_buffer_t *alert, prrte_proc_t *child)
+static int pack_state_for_proc(prte_buffer_t *alert, prte_proc_t *child)
 {
     int rc;
 
     /* pack the child's vpid */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &(child->name.vpid), 1, PRRTE_VPID))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &(child->name.vpid), 1, PRTE_VPID))) {
+        PRTE_ERROR_LOG(rc);
         return rc;
     }
     /* pck the pid */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &child->pid, 1, PRRTE_PID))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->pid, 1, PRTE_PID))) {
+        PRTE_ERROR_LOG(rc);
         return rc;
     }
     /* pack its state */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &child->state, 1, PRRTE_PROC_STATE))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->state, 1, PRTE_PROC_STATE))) {
+        PRTE_ERROR_LOG(rc);
         return rc;
     }
     /* pack its exit code */
-    if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &child->exit_code, 1, PRRTE_EXIT_CODE))) {
-        PRRTE_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->exit_code, 1, PRTE_EXIT_CODE))) {
+        PRTE_ERROR_LOG(rc);
         return rc;
     }
 
-    return PRRTE_SUCCESS;
+    return PRTE_SUCCESS;
 }
 
 static void register_cbfunc(int status, size_t errhndler, void *cbdata)
 {
-    prrte_propagate.register_cb();
-    PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
+    prte_propagate.register_cb();
+    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                 "errmgr:dvm:event register cbfunc with status %d ", status));
 }
 
@@ -133,84 +133,84 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
         pmix_event_notification_cbfunc_fn_t cbfunc,
         void *cbdata)
 {
-    prrte_process_name_t proc, source;
-    proc.jobid = PRRTE_JOBID_INVALID;
-    proc.vpid = PRRTE_VPID_INVALID;
+    prte_process_name_t proc, source;
+    proc.jobid = PRTE_JOBID_INVALID;
+    proc.vpid = PRTE_VPID_INVALID;
 
     int rc;
-    prrte_proc_t *temp_orte_proc;
-    prrte_buffer_t *alert;
-    prrte_job_t *jdata;
-    prrte_plm_cmd_flag_t cmd;
+    prte_proc_t *temp_orte_proc;
+    prte_buffer_t *alert;
+    prte_job_t *jdata;
+    prte_plm_cmd_flag_t cmd;
     size_t n;
-    PRRTE_PMIX_CONVERT_PROCT(rc, &source, psource);
+    PRTE_PMIX_CONVERT_PROCT(rc, &source, psource);
     if (NULL != info) {
         for (n=0; n < ninfo; n++) {
             if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
-                PRRTE_PMIX_CONVERT_PROCT(rc, &proc, info[n].value.data.proc);
+                PRTE_PMIX_CONVERT_PROCT(rc, &proc, info[n].value.data.proc);
 
-                if( prrte_get_proc_daemon_vpid(&proc) != PRRTE_PROC_MY_NAME->vpid){
+                if( prte_get_proc_daemon_vpid(&proc) != PRTE_PROC_MY_NAME->vpid){
                     return;
                 }
-                PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
+                PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                             "%s errmgr: dvm: error proc %s with key-value %s notified from %s",
-                            PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), PRRTE_NAME_PRINT(&proc),
-                            info[n].key, PRRTE_NAME_PRINT(&source)));
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc),
+                            info[n].key, PRTE_NAME_PRINT(&source)));
 
-                if (NULL == (jdata = prrte_get_job_data_object(proc.jobid))) {
+                if (NULL == (jdata = prte_get_job_data_object(proc.jobid))) {
                     /* must already be complete */
-                    PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
+                    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                 "%s errmgr:dvm:error_notify_callback NULL jdata - ignoring error",
-                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                 }
-                temp_orte_proc= (prrte_proc_t*)prrte_pointer_array_get_item(jdata->procs, proc.vpid);
+                temp_orte_proc= (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc.vpid);
 
-                alert = PRRTE_NEW(prrte_buffer_t);
+                alert = PRTE_NEW(prte_buffer_t);
                 /* pack update state command */
-                cmd = PRRTE_PLM_UPDATE_PROC_STATE;
-                if (PRRTE_SUCCESS != (prrte_dss.pack(alert, &cmd, 1, PRRTE_PLM_CMD))) {
-                    PRRTE_ERROR_LOG(rc);
+                cmd = PRTE_PLM_UPDATE_PROC_STATE;
+                if (PRTE_SUCCESS != (prte_dss.pack(alert, &cmd, 1, PRTE_PLM_CMD))) {
+                    PRTE_ERROR_LOG(rc);
                     return;
                 }
 
                 /* pack jobid */
-                if (PRRTE_SUCCESS != (rc = prrte_dss.pack(alert, &proc.jobid, 1, PRRTE_JOBID))) {
-                    PRRTE_ERROR_LOG(rc);
+                if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &proc.jobid, 1, PRTE_JOBID))) {
+                    PRTE_ERROR_LOG(rc);
                     return;
                 }
 
-                /* proc state now is PRRTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this; code is 128+9 */
-                temp_orte_proc->state = PRRTE_PROC_STATE_ABORTED_BY_SIG;
+                /* proc state now is PRTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this; code is 128+9 */
+                temp_orte_proc->state = PRTE_PROC_STATE_ABORTED_BY_SIG;
                 /* now pack the child's info */
-                if (PRRTE_SUCCESS != (rc = pack_state_for_proc(alert, temp_orte_proc))) {
-                    PRRTE_ERROR_LOG(rc);
+                if (PRTE_SUCCESS != (rc = pack_state_for_proc(alert, temp_orte_proc))) {
+                    PRTE_ERROR_LOG(rc);
                     return;
                 }
 
                 /* send this process's info to hnp */
-                if (0 > (rc = prrte_rml.send_buffer_nb(
-                                PRRTE_PROC_MY_HNP, alert,
-                                PRRTE_RML_TAG_PLM,
-                                prrte_rml_send_callback, NULL))) {
-                    PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
+                if (0 > (rc = prte_rml.send_buffer_nb(
+                                PRTE_PROC_MY_HNP, alert,
+                                PRTE_RML_TAG_PLM,
+                                prte_rml_send_callback, NULL))) {
+                    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                 "%s errmgr:dvm: send to hnp failed",
-                                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
-                    PRRTE_ERROR_LOG(rc);
-                    PRRTE_RELEASE(alert);
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    PRTE_ERROR_LOG(rc);
+                    PRTE_RELEASE(alert);
                 }
-                if (PRRTE_FLAG_TEST(temp_orte_proc, PRRTE_PROC_FLAG_IOF_COMPLETE) &&
-                        PRRTE_FLAG_TEST(temp_orte_proc, PRRTE_PROC_FLAG_WAITPID) &&
-                        !PRRTE_FLAG_TEST(temp_orte_proc, PRRTE_PROC_FLAG_RECORDED)) {
-                    PRRTE_ACTIVATE_PROC_STATE(&proc, PRRTE_PROC_STATE_TERMINATED);
+                if (PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_IOF_COMPLETE) &&
+                        PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_WAITPID) &&
+                        !PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_RECORDED)) {
+                    PRTE_ACTIVATE_PROC_STATE(&proc, PRTE_PROC_STATE_TERMINATED);
                 }
 
-                prrte_propagate.prp(&source.jobid, &source, &proc, PRRTE_ERR_PROC_ABORTED);
+                prte_propagate.prp(&source.jobid, &source, &proc, PRTE_ERR_PROC_ABORTED);
                 break;
             }
         }
     }
     if (NULL != cbfunc) {
-        cbfunc(PRRTE_SUCCESS, NULL, 0, NULL, NULL, cbdata);
+        cbfunc(PRTE_SUCCESS, NULL, 0, NULL, NULL, cbdata);
     }
 }
 
@@ -225,13 +225,13 @@ static int init(void)
     prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors, PRTE_MSG_PRI);
 
     /* setup state machine to trap proc errors */
-    pmix_status_t pcode = prrte_pmix_convert_rc(PRRTE_ERR_PROC_ABORTED);
+    pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
 
-    PRRTE_OUTPUT_VERBOSE((5, prrte_errmgr_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                 "%s errmgr:dvm: register evhandler in errmgr",
-                PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME)));
+                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     PMIx_Register_event_handler(&pcode, 1, NULL, 0, error_notify_cbfunc, register_cbfunc, NULL);
-    prte_state.add_proc_state(PRRTE_PROC_STATE_ERROR, proc_errors, PRRTE_ERROR_PRI);
+    prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors, PRTE_ERROR_PRI);
 
     return PRTE_SUCCESS;
 }
@@ -570,8 +570,8 @@ static void proc_errors(int fd, short args, void *cbdata)
             PRTE_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
-            /* do not kill the job if ft prrte is enabled */
-            if(!prrte_errmgr_detector_enable_flag)
+            /* do not kill the job if ft prte is enabled */
+            if(!prte_errmgr_detector_enable_flag)
             {
                 _terminate_job(jdata->jobid);
             }
@@ -720,8 +720,8 @@ static void proc_errors(int fd, short args, void *cbdata)
          * hosed - so just exit out
          */
         if (PRTE_PROC_MY_NAME->jobid == proc->jobid) {
-            /* do not kill the job if ft prrte is enabled, with newly spawned process the jobid could be different */
-            if(!prrte_errmgr_detector_enable_flag)
+            /* do not kill the job if ft prte is enabled, with newly spawned process the jobid could be different */
+            if(!prte_errmgr_detector_enable_flag)
             {
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             }

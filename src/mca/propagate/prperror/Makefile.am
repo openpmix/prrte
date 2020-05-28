@@ -17,7 +17,7 @@ sources = \
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # (for static builds).
 
-if MCA_BUILD_prrte_propagate_prperror_DSO
+if MCA_BUILD_prte_propagate_prperror_DSO
 component_noinst =
 component_install = mca_propagate_prperror.la
 else
@@ -25,11 +25,11 @@ component_noinst = libmca_propagate_prperror.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_propagate_prperror_la_SOURCES = $(sources)
 mca_propagate_prperror_la_LDFLAGS = -module -avoid-version
-mca_propagate_prperror_la_LIBADD = $(top_builddir)/src/libprrte.la
+mca_propagate_prperror_la_LIBADD = $(top_builddir/src/libprrte.la)
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_propagate_prperror_la_SOURCES =$(sources)

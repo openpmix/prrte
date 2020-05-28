@@ -38,7 +38,7 @@
 #endif
 
 #include "src/mca/propagate/base/base.h"
-#if PRRTE_ENABLE_FT_CR == 1
+#if PRTE_ENABLE_FT_CR == 1
 #include "src/mca/snapc/base/base.h"
 #include "src/mca/sstore/base/base.h"
 #endif
@@ -218,9 +218,9 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     /* open the propagate */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_propagate_base_framework, 0))) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_propagate_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_propagate_base_open";
         goto error;
     }
     /* some environments allow remote launches - e.g., ssh - so
@@ -410,9 +410,9 @@ int prte_ess_base_prted_setup(void)
     }
 
     /* select the propagate */
-    if (PRRTE_SUCCESS != (ret = prrte_propagate_base_select())) {
-        PRRTE_ERROR_LOG(ret);
-        error = "prrte_propagate_base_select";
+    if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_propagate_base_select";
         goto error;
     }
 
@@ -556,13 +556,13 @@ int prte_ess_base_prted_finalize(void)
     /* shutdown the pmix server */
     pmix_server_finalize();
 
-    if ( NULL != prrte_propagate.finalize ) {
-        prrte_propagate.finalize();
+    if ( NULL != prte_propagate.finalize ) {
+        prte_propagate.finalize();
     }
-    (void) prrte_mca_base_framework_close(&prrte_propagate_base_framework);
+    (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
 
-    if ( NULL != prrte_errmgr.finalize ) {
-        prrte_errmgr.finalize();
+    if ( NULL != prte_errmgr.finalize ) {
+        prte_errmgr.finalize();
     }
 
     /* close frameworks */

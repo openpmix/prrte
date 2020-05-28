@@ -24,7 +24,7 @@ sources = \
 # # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
 # # (for static builds)
 
-if MCA_BUILD_prrte_grpcomm_bmg_DSO
+if MCA_BUILD_prte_grpcomm_bmg_DSO
 component_noinst =
 component_install = mca_grpcomm_bmg.la
 else
@@ -32,7 +32,7 @@ component_noinst = libmca_grpcomm_bmg.la
 component_install =
 endif
 
-mcacomponentdir = $(prrtelibdir)
+mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 mca_grpcomm_bmg_la_SOURCES = $(sources)
 mca_grpcomm_bmg_la_LDFLAGS = -module -avoid-version

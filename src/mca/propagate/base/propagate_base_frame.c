@@ -10,7 +10,7 @@
  */
 
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 
 #include "src/mca/mca.h"
@@ -25,41 +25,41 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prrte_mca_base_component_t struct.
+ * component's public prte_mca_base_component_t struct.
  */
 #include "src/mca/propagate/base/static-components.h"
 
 /*
  * Global
  */
-prrte_propagate_base_module_t prrte_propagate = {
+prte_propagate_base_module_t prte_propagate = {
     NULL,
     NULL,
     NULL,
     NULL
 };
 
-static int prrte_propagate_base_close(void)
+static int prte_propagate_base_close(void)
 {
     /* Close the selected component */
-    if( NULL != prrte_propagate.finalize ) {
-        prrte_propagate.finalize();
+    if( NULL != prte_propagate.finalize ) {
+        prte_propagate.finalize();
     }
 
-    return prrte_mca_base_framework_components_close(&prrte_propagate_base_framework, NULL);
+    return prte_mca_base_framework_components_close(&prte_propagate_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prrte_propagate_base_open(prrte_mca_base_open_flag_t flags)
+static int prte_propagate_base_open(prte_mca_base_open_flag_t flags)
 {
-    return prrte_mca_base_framework_components_open(&prrte_propagate_base_framework, flags);
+    return prte_mca_base_framework_components_open(&prte_propagate_base_framework, flags);
 }
 
-PRRTE_MCA_BASE_FRAMEWORK_DECLARE(prrte, propagate, "PROPAGATE", NULL,
-        prrte_propagate_base_open,
-        prrte_propagate_base_close,
-        prrte_propagate_base_static_components, 0);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, propagate, "PROPAGATE", NULL,
+        prte_propagate_base_open,
+        prte_propagate_base_close,
+        prte_propagate_base_static_components, 0);
 

@@ -11,7 +11,7 @@
  * $HEADER$
  */
 
-#include "prrte_config.h"
+#include "prte_config.h"
 #include "constants.h"
 #include "types.h"
 
@@ -19,7 +19,7 @@
 #include <string.h>
 
 #include "src/dss/dss.h"
-#include "src/class/prrte_list.h"
+#include "src/class/prte_list.h"
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -40,13 +40,13 @@
 static int bmg_init(void);
 static void bmg_finalize(void);
 
-static int rbcast(prrte_buffer_t *buf);
+static int rbcast(prte_buffer_t *buf);
 
-static int register_cb_type(prrte_grpcomm_rbcast_cb_t callback);
+static int register_cb_type(prte_grpcomm_rbcast_cb_t callback);
 
 static int unregister_cb_type(int type);
 /* Module def */
-prrte_grpcomm_base_module_t prrte_grpcomm_bmg_module = {
+prte_grpcomm_base_module_t prte_grpcomm_bmg_module = {
     bmg_init,
     bmg_finalize,
     NULL,
@@ -57,36 +57,36 @@ prrte_grpcomm_base_module_t prrte_grpcomm_bmg_module = {
 };
 
 /* Internal functions */
-static void rbcast_recv(int status, prrte_process_name_t* sender,
-                       prrte_buffer_t* buffer, prrte_rml_tag_t tag,
+static void rbcast_recv(int status, prte_process_name_t* sender,
+                       prte_buffer_t* buffer, prte_rml_tag_t tag,
                        void* cbdata);
 /* internal variables */
-static prrte_list_t tracker;
+static prte_list_t tracker;
 
 /*
  * registration of callbacks
  */
 #define RBCAST_CB_TYPE_MAX 7
-static prrte_grpcomm_rbcast_cb_t prrte_grpcomm_rbcast_cb[RBCAST_CB_TYPE_MAX+1];
+static prte_grpcomm_rbcast_cb_t prte_grpcomm_rbcast_cb[RBCAST_CB_TYPE_MAX+1];
 
-int register_cb_type(prrte_grpcomm_rbcast_cb_t callback) {
+int register_cb_type(prte_grpcomm_rbcast_cb_t callback) {
     int i;
 
     for(i = 0; i < RBCAST_CB_TYPE_MAX; i++) {
-        if( NULL == prrte_grpcomm_rbcast_cb[i] ) {
-            prrte_grpcomm_rbcast_cb[i] = callback;
+        if( NULL == prte_grpcomm_rbcast_cb[i] ) {
+            prte_grpcomm_rbcast_cb[i] = callback;
             return i;
         }
     }
-    return PRRTE_ERR_OUT_OF_RESOURCE;
+    return PRTE_ERR_OUT_OF_RESOURCE;
 }
 
 int unregister_cb_type(int type) {
     if( RBCAST_CB_TYPE_MAX < type || 0 > type ) {
-        return PRRTE_ERR_BAD_PARAM;
+        return PRTE_ERR_BAD_PARAM;
     }
-    prrte_grpcomm_rbcast_cb[type] = NULL;
-    return PRRTE_SUCCESS;
+    prte_grpcomm_rbcast_cb[type] = NULL;
+    return PRTE_SUCCESS;
 }
 
 /*
@@ -94,13 +94,13 @@ int unregister_cb_type(int type) {
  */
 static int bmg_init(void)
 {
-    PRRTE_CONSTRUCT(&tracker, prrte_list_t);
+    PRTE_CONSTRUCT(&tracker, prte_list_t);
 
-    prrte_rml.recv_buffer_nb(PRRTE_NAME_WILDCARD,
-                            PRRTE_RML_TAG_RBCAST,
-                            PRRTE_RML_PERSISTENT,
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD,
+                            PRTE_RML_TAG_RBCAST,
+                            PRTE_RML_PERSISTENT,
                             rbcast_recv, NULL);
-   return PRRTE_SUCCESS;
+   return PRTE_SUCCESS;
 }
 
 /*
@@ -109,21 +109,21 @@ static int bmg_init(void)
 static void bmg_finalize(void)
 {
     /* cancel the rbcast recv */
-    prrte_rml.recv_cancel(PRRTE_NAME_WILDCARD, PRRTE_RML_TAG_RBCAST);
-    PRRTE_LIST_DESTRUCT(&tracker);
+    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST);
+    PRTE_LIST_DESTRUCT(&tracker);
     return;
 }
 
-static int rbcast(prrte_buffer_t *buf)
+static int rbcast(prte_buffer_t *buf)
 {
     int rc = false;
 
     /* number of "daemons" equal 1hnp + num of daemons, so here pass ndmns -1 */
-    int nprocs = prrte_process_info.num_daemons;// -1;
+    int nprocs = prte_process_info.num_daemons;// -1;
     int vpid;
     int i, d;
-    prrte_process_name_t daemon;
-    vpid = prrte_process_info.my_name.vpid;
+    prte_process_name_t daemon;
+    vpid = prte_process_info.my_name.vpid;
 
     int log2no = (int)(log(nprocs));
     int start_i, increase_val;
@@ -146,83 +146,83 @@ static int rbcast(prrte_buffer_t *buf)
         /*if (idx ==0 ){
             idx = nprocs;
         }*/
-        daemon.jobid = prrte_process_info.my_name.jobid;
+        daemon.jobid = prte_process_info.my_name.jobid;
         daemon.vpid = idx;
-        PRRTE_RETAIN(buf);
+        PRTE_RETAIN(buf);
 
-        PRRTE_OUTPUT_VERBOSE((1, prrte_grpcomm_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                     "%s grpcomm:bmg: broadcast message in %d daemons to %s",
-                    PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME), nprocs,
-                    PRRTE_NAME_PRINT(&daemon)));
-        if(0 > (rc = prrte_rml.send_buffer_nb(&daemon, buf,
-                        PRRTE_RML_TAG_RBCAST, prrte_rml_send_callback, NULL))) {
-            PRRTE_ERROR_LOG(rc);
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nprocs,
+                    PRTE_NAME_PRINT(&daemon)));
+        if(0 > (rc = prte_rml.send_buffer_nb(&daemon, buf,
+                        PRTE_RML_TAG_RBCAST, prte_rml_send_callback, NULL))) {
+            PRTE_ERROR_LOG(rc);
         }
     }
 
     return rc;
 }
 
-static void rbcast_recv(int status, prrte_process_name_t* sender,
-                       prrte_buffer_t* buffer, prrte_rml_tag_t tg,
+static void rbcast_recv(int status, prte_process_name_t* sender,
+                       prte_buffer_t* buffer, prte_rml_tag_t tg,
                        void* cbdata)
 {
     int ret, cnt;
-    prrte_buffer_t datbuf,*relay, *rly, *data;
-    prrte_grpcomm_signature_t *sig;
-    prrte_rml_tag_t tag;
+    prte_buffer_t datbuf,*relay, *rly, *data;
+    prte_grpcomm_signature_t *sig;
+    prte_rml_tag_t tag;
     int cbtype;
     size_t inlen, cmplen;
     uint8_t *packed_data, *cmpdata;
     int8_t flag;
 
-    PRRTE_OUTPUT_VERBOSE((1, prrte_grpcomm_base_framework.framework_output,
+    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:bmg:rbcast:recv: with %d bytes",
-                         PRRTE_NAME_PRINT(PRRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (int)buffer->bytes_used));
     /* we need a passthru buffer to forward and to the callback */
-    rly = PRRTE_NEW(prrte_buffer_t);
-    relay =  PRRTE_NEW(prrte_buffer_t);
-    prrte_dss.copy_payload(rly, buffer);
+    rly = PRTE_NEW(prte_buffer_t);
+    relay =  PRTE_NEW(prte_buffer_t);
+    prte_dss.copy_payload(rly, buffer);
 
-    PRRTE_CONSTRUCT(&datbuf, prrte_buffer_t);
+    PRTE_CONSTRUCT(&datbuf, prte_buffer_t);
     /* unpack the flag to see if this payload is compressed */
     cnt=1;
-    if (PRRTE_SUCCESS != (ret = prrte_dss.unpack(buffer, &flag, &cnt, PRRTE_INT8))) {
-        PRRTE_ERROR_LOG(ret);
-        PRRTE_FORCED_TERMINATE(ret);
+    if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &flag, &cnt, PRTE_INT8))) {
+        PRTE_ERROR_LOG(ret);
+        PRTE_FORCED_TERMINATE(ret);
         return;
      }
     if (flag) {
          /* unpack the data size */
          cnt=1;
-         if (PRRTE_SUCCESS != (ret = prrte_dss.unpack(buffer, &inlen, &cnt, PRRTE_SIZE))) {
-             PRRTE_ERROR_LOG(ret);
-             PRRTE_FORCED_TERMINATE(ret);
+         if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &inlen, &cnt, PRTE_SIZE))) {
+             PRTE_ERROR_LOG(ret);
+             PRTE_FORCED_TERMINATE(ret);
              return;
          }
 
          /* unpack the unpacked data size */
          cnt=1;
-         if (PRRTE_SUCCESS != (ret = prrte_dss.unpack(buffer, &cmplen, &cnt, PRRTE_SIZE))) {
-            PRRTE_ERROR_LOG(ret);
-            PRRTE_FORCED_TERMINATE(ret);
+         if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &cmplen, &cnt, PRTE_SIZE))) {
+            PRTE_ERROR_LOG(ret);
+            PRTE_FORCED_TERMINATE(ret);
             return;
         }
         /* allocate the space */
         packed_data = (uint8_t*)malloc(inlen);
         /* unpack the data blob */
         cnt = inlen;
-        if (PRRTE_SUCCESS != (ret = prrte_dss.unpack(buffer, packed_data, &cnt, PRRTE_UINT8))) {
-            PRRTE_ERROR_LOG(ret);
+        if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, packed_data, &cnt, PRTE_UINT8))) {
+            PRTE_ERROR_LOG(ret);
             free(packed_data);
-            PRRTE_FORCED_TERMINATE(ret);
+            PRTE_FORCED_TERMINATE(ret);
             return;
         }
         /* decompress the data */
-        if (prrte_compress.decompress_block(&cmpdata, cmplen,packed_data, inlen)) {
+        if (prte_compress.decompress_block(&cmpdata, cmplen,packed_data, inlen)) {
             /* the data has been uncompressed */
-            prrte_dss.load(&datbuf, cmpdata, cmplen);
+            prte_dss.load(&datbuf, cmpdata, cmplen);
             data = &datbuf;
         } else {
                     data = buffer;
@@ -233,36 +233,36 @@ static void rbcast_recv(int status, prrte_process_name_t* sender,
                }
     /* get the signature that we need to create the dmns*/
     cnt=1;
-    if (PRRTE_SUCCESS != (ret = prrte_dss.unpack(data, &sig, &cnt, PRRTE_SIGNATURE))) {
-        PRRTE_ERROR_LOG(ret);
-        PRRTE_DESTRUCT(&datbuf);
-        PRRTE_RELEASE(sig);
-        PRRTE_FORCED_TERMINATE(ret);
+    if (PRTE_SUCCESS != (ret = prte_dss.unpack(data, &sig, &cnt, PRTE_SIGNATURE))) {
+        PRTE_ERROR_LOG(ret);
+        PRTE_DESTRUCT(&datbuf);
+        PRTE_RELEASE(sig);
+        PRTE_FORCED_TERMINATE(ret);
         goto CLEANUP;
     }
     /* get the target tag */
     cnt=1;
-    if (PRRTE_SUCCESS != (ret = prrte_dss.unpack(data, &tag, &cnt, PRRTE_RML_TAG))) {
-        PRRTE_ERROR_LOG(ret);
-        PRRTE_FORCED_TERMINATE(ret);
+    if (PRTE_SUCCESS != (ret = prte_dss.unpack(data, &tag, &cnt, PRTE_RML_TAG))) {
+        PRTE_ERROR_LOG(ret);
+        PRTE_FORCED_TERMINATE(ret);
         goto CLEANUP;
     }
-    prrte_dss.copy_payload(relay, data);
+    prte_dss.copy_payload(relay, data);
     /* get the cbtype */
     cnt=1;
-    if (PRRTE_SUCCESS != (ret = prrte_dss.unpack(data, &cbtype, &cnt,PRRTE_INT ))) {
-        PRRTE_ERROR_LOG(ret);
-        PRRTE_FORCED_TERMINATE(ret);
+    if (PRTE_SUCCESS != (ret = prte_dss.unpack(data, &cbtype, &cnt,PRTE_INT ))) {
+        PRTE_ERROR_LOG(ret);
+        PRTE_FORCED_TERMINATE(ret);
         goto CLEANUP;
     }
-    if( prrte_grpcomm_rbcast_cb[cbtype](relay) ) {
+    if( prte_grpcomm_rbcast_cb[cbtype](relay) ) {
         /* forward the rbcast */
-        if (PRRTE_SUCCESS == (ret = rbcast(rly))) {
+        if (PRTE_SUCCESS == (ret = rbcast(rly))) {
         }
     }
 
 CLEANUP:
-    PRRTE_RELEASE(rly);
-    PRRTE_RELEASE(relay);
+    PRTE_RELEASE(rly);
+    PRTE_RELEASE(relay);
 }
 

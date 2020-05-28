@@ -237,8 +237,8 @@ static int rte_init(int argc, char **argv)
     }
 
     /* open the propagator */
-    if (PRRTE_SUCCESS != (ret = prrte_mca_base_framework_open(&prrte_propagate_base_framework, 0))) {
-        error = "prrte_propagate_base_open";
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework, 0))) {
+        error = "prte_propagate_base_open";
         goto error;
     }
 
@@ -378,8 +378,8 @@ static int rte_init(int argc, char **argv)
     }
 
     /* setup the propagate */
-    if (PRRTE_SUCCESS != (ret = prrte_propagate_base_select())) {
-        error = "prrte_propagate_base_select";
+    if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
+        error = "prte_propagate_base_select";
         goto error;
     }
 
@@ -651,9 +651,9 @@ static int rte_finalize(void)
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
     prte_errmgr.finalize();
-    (void) prrte_mca_base_framework_close(&prrte_propagate_base_framework);
+    (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
     /* cleanup the pstat stuff */
-    (void) prrte_mca_base_framework_close(&prrte_pstat_base_framework);
+    (void) prte_mca_base_framework_close(&prte_pstat_base_framework);
 
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {
