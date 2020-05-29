@@ -14,7 +14,7 @@
 #                         All rights reserved.
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -676,7 +676,6 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root, -)
 %if %(test "%{_prefix}" = "/usr" && echo 1 || echo 0)
 %{_bindir}/*
-%{_includedir}/*
 %{_libdir}/*
 %{_datadir}
 %else
