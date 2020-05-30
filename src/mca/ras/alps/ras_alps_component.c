@@ -13,7 +13,7 @@
  * Copyright (c) 2008      UT-Battelle, LLC
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Triad National Security, LLC. All rights
@@ -205,7 +205,8 @@ prte_ras_alps_component_query(prte_mca_base_module_t **module,
      * on some systems
      */
     if ((NULL == (jid_str = getenv("OMPI_ALPS_RESID"))) &&
-        (NULL == (jid_str = getenv("BASIL_RESERVATION_ID")))) {
+        (NULL == (jid_str = getenv("BASIL_RESERVATION_ID"))) &&
+        (NULL == (jid_str = getenv("COBALT_JOBID")))) {
             prte_ras_alps_res_id = get_res_id();
     }
     else {

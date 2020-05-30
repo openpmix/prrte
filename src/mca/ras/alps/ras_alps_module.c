@@ -26,6 +26,7 @@
 #include "constants.h"
 
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
+#include "src/util/dash_host/dash_host.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -307,6 +308,15 @@ prte_ras_alps_allocate(prte_job_t *jdata, prte_list_t *nodes)
 {
     int ret;
     char *appinfo_path = NULL;
+    char *nodelist;
+
+    /* this could be a Cobalt job - if it is, then the node list will
+     * be in the COBALT_PARTNAME envar */
+    if (NULL != (nodelist = getenv("COBALT_PARTNAME"))) {
+        /* looks just like a -host string */
+        ret = prte_util_add_dash_host_nodes(nodes, nodelist, true);
+        goto cleanup;
+    }
 
     if (0 == prte_ras_alps_res_id) {
         prte_show_help("help-ras-alps.txt", "alps-env-var-not-found", 1);
