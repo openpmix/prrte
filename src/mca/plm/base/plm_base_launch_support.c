@@ -141,10 +141,11 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
         }
     }
 
-    /* if this is an unmanaged allocation, then set the default
+    /* if this is an unmanaged allocation or a managed allocation that
+     * did not specify the #slots/node, then set the default
      * slots on each node as directed or using default
      */
-    if (!prte_managed_allocation) {
+    if (!prte_managed_allocation || !prte_managed_slots_given) {
         if (NULL != prte_set_slots &&
             0 != strncmp(prte_set_slots, "none", strlen(prte_set_slots))) {
             caddy->jdata->total_slots_alloc = 0;

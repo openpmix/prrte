@@ -189,7 +189,7 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  (NULL == node->name) ? "NULL" : node->name,
                                  node->slots));
-            if (prte_managed_allocation) {
+            if (prte_managed_allocation && prte_managed_slots_given) {
                 /* the slots are always treated as sacred
                  * in managed allocations
                  */

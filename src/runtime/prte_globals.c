@@ -96,6 +96,7 @@ char **prte_launch_environ = NULL;
 bool prte_hnp_is_allocated = false;
 bool prte_allocation_required = false;
 bool prte_managed_allocation = false;
+bool prte_managed_slots_given = true;
 char *prte_set_slots = NULL;
 bool prte_nidmap_communicated = false;
 bool prte_node_info_communicated = false;

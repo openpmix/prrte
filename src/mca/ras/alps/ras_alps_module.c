@@ -315,6 +315,8 @@ prte_ras_alps_allocate(prte_job_t *jdata, prte_list_t *nodes)
     if (NULL != (nodelist = getenv("COBALT_PARTNAME"))) {
         /* looks just like a -host string */
         ret = prte_util_add_dash_host_nodes(nodes, nodelist, true);
+        /* set a flag so we know to discover the #slots on the nodes */
+        prte_managed_slots_given = false;
         goto cleanup;
     }
 
