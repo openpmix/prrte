@@ -534,6 +534,18 @@ PRTE_EXPORT int prte_pmix_register_cleanup(char *path,
 #define PMIX_ERROR_LOG(r)          \
     prte_output(0, "[%s:%d] PMIx Error: %s", __FILE__, __LINE__, PMIx_Error_string((r)))
 #endif
+
+#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 1 && PMIX_VERSION_RELEASE < 5
+#undef PMIX_LOAD_NSPACE
+#define PMIX_LOAD_NSPACE(a, b)                              \
+    do {                                                    \
+        memset((a), 0, PMIX_MAX_NSLEN+1);                   \
+        if (NULL != (b)) {                                  \
+            pmix_strncpy((char*)(a), (b), PMIX_MAX_NSLEN);  \
+        }                                                   \
+    }while(0)
+#endif
+
 END_C_DECLS
 
 #endif
