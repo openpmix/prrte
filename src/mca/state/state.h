@@ -89,36 +89,40 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
         t += (double)tv.tv_usec / 1000000.0;                                \
     } while(0);
 
-#define PRTE_ACTIVATE_JOB_STATE(j, s)                                       \
-    do {                                                                    \
-        prte_job_t *shadow=(j);                                             \
-        double timestamp = 0.0;                                             \
-        PRTE_STATE_GET_TIMESTAMP(timestamp);                                \
-        prte_output_verbose(1, prte_state_base_framework.framework_output,  \
-                            "%s [%f] ACTIVATE JOB %s STATE %s AT %s:%d",    \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),             \
-                            timestamp,                                      \
-                            (NULL == shadow) ? "NULL" :                     \
-                            PRTE_JOBID_PRINT(shadow->jobid),                \
-                            prte_job_state_to_str((s)),                     \
-                            __FILE__, __LINE__);                            \
-        prte_state.activate_job_state(shadow, (s));                         \
+#define PRTE_ACTIVATE_JOB_STATE(j, s)                                         \
+    do {                                                                      \
+        prte_job_t *shadow=(j);                                               \
+        if( prte_state_base_framework.framework_verbose > 0 ) {               \
+            double timestamp = 0.0;                                           \
+            PRTE_STATE_GET_TIMESTAMP(timestamp);                              \
+            prte_output_verbose(1, prte_state_base_framework.framework_output,\
+                                "%s [%f] ACTIVATE JOB %s STATE %s AT %s:%d",  \
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),           \
+                                timestamp,                                    \
+                                (NULL == shadow) ? "NULL" :                   \
+                                PRTE_JOBID_PRINT(shadow->jobid),              \
+                                prte_job_state_to_str((s)),                   \
+                                __FILE__, __LINE__);                          \
+        }                                                                     \
+        prte_state.activate_job_state(shadow, (s));                           \
     } while(0);
 
-#define PRTE_ACTIVATE_PROC_STATE(p, s)                                      \
-    do {                                                                    \
-        prte_process_name_t *shadow=(p);                                    \
-        double timestamp = 0.0;                                             \
-        PRTE_STATE_GET_TIMESTAMP(timestamp);                                \
-        prte_output_verbose(1, prte_state_base_framework.framework_output,  \
-                            "%s [%f] ACTIVATE PROC %s STATE %s AT %s:%d",   \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),             \
-                            timestamp,                                      \
-                            (NULL == shadow) ? "NULL" :                     \
-                            PRTE_NAME_PRINT(shadow),                        \
-                            prte_proc_state_to_str((s)),                    \
-                            __FILE__, __LINE__);                            \
-        prte_state.activate_proc_state(shadow, (s));                        \
+#define PRTE_ACTIVATE_PROC_STATE(p, s)                                        \
+    do {                                                                      \
+        prte_process_name_t *shadow=(p);                                      \
+        if( prte_state_base_framework.framework_verbose > 0 ) {               \
+            double timestamp = 0.0;                                           \
+            PRTE_STATE_GET_TIMESTAMP(timestamp);                              \
+            prte_output_verbose(1, prte_state_base_framework.framework_output,\
+                                "%s [%f] ACTIVATE PROC %s STATE %s AT %s:%d", \
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),           \
+                                timestamp,                                    \
+                                (NULL == shadow) ? "NULL" :                   \
+                                PRTE_NAME_PRINT(shadow),                      \
+                                prte_proc_state_to_str((s)),                  \
+                                __FILE__, __LINE__);                          \
+        }                                                                     \
+        prte_state.activate_proc_state(shadow, (s));                          \
     } while(0);
 
 /**
