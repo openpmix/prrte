@@ -161,6 +161,9 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
                 caddy->jdata->total_slots_alloc += node->slots;
             }
         }
+    } else {
+        /* for managed allocations, the total slots allocated is fixed at time of allocation */
+        caddy->jdata->total_slots_alloc = prte_ras_base.total_slots_alloc;
     }
 
     if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PRTE_BOOL)) {
