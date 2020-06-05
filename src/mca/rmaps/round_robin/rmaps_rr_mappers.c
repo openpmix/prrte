@@ -79,7 +79,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
         if (NULL != node->topology && NULL != node->topology->topo) {
             obj = hwloc_get_root_obj(node->topology->topo);
         }
-        if (node->slots <= node->slots_inuse) {
+        if (0 == node->slots_available) {
             prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rr:slot node %s is full - skipping",
                                 node->name);
@@ -87,7 +87,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
         }
 
         /* assign a number of procs equal to the number of available slots */
-        num_procs_to_assign = node->slots - node->slots_inuse;
+        num_procs_to_assign = node->slots_available;
 
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:slot assigning %d procs to node %s",
@@ -334,8 +334,8 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                     }
                 }
                 /* if slots < avg + extra (adjusted for cpus/proc), then try to take all */
-                if ((node->slots - node->slots_inuse) < (navg + extra_procs_to_assign)) {
-                    num_procs_to_assign = node->slots - node->slots_inuse;
+                if (node->slots_available < (navg + extra_procs_to_assign)) {
+                    num_procs_to_assign = node->slots_available;
                     /* if we can't take any proc, skip following steps */
                     if (num_procs_to_assign == 0) {
                         continue;
@@ -551,7 +551,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
                 start = (jdata->bkmark_obj + 1) % nobjs;
             }
             /* compute the number of procs to go on this node */
-            nprocs = node->slots - node->slots_inuse;
+            nprocs = node->slots_available;
             prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rr: calculated nprocs %d", nprocs);
             if (nprocs < 1) {
@@ -580,7 +580,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
             if (NULL != job_cpuset) {
                 /* deal with any "soft" cgroup specification */
                 mycpus = prte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
-                  hwloc_bitmap_and(available, mycpus, available);
+                hwloc_bitmap_and(available, mycpus, available);
                 hwloc_bitmap_free(mycpus);
             }
 
@@ -610,6 +610,8 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
                         }
                         return PRTE_ERR_NOT_FOUND;
                     }
+                    /* get the number of PUs available to us on this object - could be
+                     * none, depending on the cgroup assignment */
                     npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
                                                      available, obj);
                     if (0 == npus) {
@@ -745,7 +747,7 @@ static int byobj_span(prte_job_t *jdata,
         }
     }
 
-    /* we know we have enough slots, or that oversubscrption is allowed, so
+    /* we know we have enough slots, or that oversubscription is allowed, so
      * next determine how many total objects we have to work with
      */
     nobjs = 0;
@@ -802,6 +804,13 @@ static int byobj_span(prte_job_t *jdata,
 
     nprocs_mapped = 0;
     PRTE_LIST_FOREACH(node, node_list, prte_node_t) {
+        /* check how many slots are available on this node - even
+         * though we have enough TOTAL slots to perform the mapping,
+         * the distribution of those slots doesn't have to be uniform
+         * across the nodes */
+        if (0 == node->slots_available) {
+            continue;
+        }
         /* add this node to the map, if reqd */
         if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
             PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
@@ -832,7 +841,7 @@ static int byobj_span(prte_job_t *jdata,
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:byobj: found %d objs on node %s", nobjs, node->name);
         /* loop through the number of objects */
-        for (i=0; i < (int)nobjs && nprocs_mapped < (int)app->num_procs; i++) {
+        for (i=0; i < (int)nobjs && 0 < node->slots_available && nprocs_mapped < (int)app->num_procs; i++) {
             /* get the hwloc object */
             if (NULL == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, i))) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -860,6 +869,9 @@ static int byobj_span(prte_job_t *jdata,
                 nprocs++;
                 nxtra_objs--;
             }
+            if (node->slots_available < nprocs) {
+                nprocs = node->slots_available;
+            }
             /* map the reqd number of procs */
             for (j=0; j < nprocs && nprocs_mapped < app->num_procs; j++) {
                 if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, app->idx))) {
@@ -886,6 +898,15 @@ static int byobj_span(prte_job_t *jdata,
             break;
         }
         hwloc_bitmap_free(available);
+    }
+
+    /* depending on access restrictions and the distribution of objects, it is
+     * possible that we could exit the above loop without having mapped all the
+     * procs - e.g., if the available slots on a node is less than the average number of
+     * procs to assign on each node, but higher on some other node. Make another
+     * pass if required */
+    if (nprocs_mapped < app->num_procs) {
+
     }
     if (NULL != job_cpuset) {
         free(job_cpuset);

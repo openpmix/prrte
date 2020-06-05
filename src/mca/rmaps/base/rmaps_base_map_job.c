@@ -937,14 +937,9 @@ static void prte_print_node(char **output,
     free(tmp);
     tmp = tmp2;
 
-    prte_asprintf(&tmp2, "%s\n%s            Num slots: %ld\tSlots in use: %ld\tOversubscribed: %s", tmp, pfx2,
-             (long)src->slots, (long)src->slots_inuse,
+    prte_asprintf(&tmp2, "%s\n%s            Num slots: %ld\tMax slots: %ld\tSlots in use: %ld\tOversubscribed: %s", tmp, pfx2,
+             (long)src->slots, (long)src->slots_max, (long)src->slots_inuse,
              PRTE_FLAG_TEST(src, PRTE_NODE_FLAG_OVERSUBSCRIBED) ? "TRUE" : "FALSE");
-    free(tmp);
-    tmp = tmp2;
-
-    prte_asprintf(&tmp2, "%s\n%s            Num slots allocated: %ld\tMax slots: %ld", tmp, pfx2,
-             (long)src->slots, (long)src->slots_max);
     free(tmp);
     tmp = tmp2;
 

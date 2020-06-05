@@ -85,8 +85,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
     prte_list_item_t *item, *itm;
     int32_t i, j, k;
     int rc, nodeidx;
-    char **host_argv=NULL;
-    char **mapped_nodes = NULL, **mini_map, *ndname;
+    char **mapped_nodes = NULL, **mini_map = NULL, *ndname;
     prte_node_t *node, *nd;
     prte_list_t adds;
     bool found;
@@ -99,35 +98,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
 
     PRTE_CONSTRUCT(&adds, prte_list_t);
-    host_argv = prte_argv_split(hosts, ',');
-
-    /* Accumulate all of the host name mappings */
-    for (j = 0; j < prte_argv_count(host_argv); ++j) {
-        mini_map = prte_argv_split(host_argv[j], ',');
-
-        if (mapped_nodes == NULL) {
-            mapped_nodes = mini_map;
-        } else {
-            for (k = 0; NULL != mini_map[k]; ++k) {
-                rc = prte_argv_append_nosize(&mapped_nodes,
-                                             mini_map[k]);
-                if (PRTE_SUCCESS != rc) {
-                    prte_argv_free(host_argv);
-                    prte_argv_free(mini_map);
-                    goto cleanup;
-                }
-            }
-            prte_argv_free(mini_map);
-        }
-    }
-    prte_argv_free(host_argv);
-    mini_map = NULL;
-
-    /* Did we find anything? If not, then do nothing */
-    if (NULL == mapped_nodes) {
-        rc = PRTE_SUCCESS;
-        goto cleanup;
-    }
+    mapped_nodes = prte_argv_split(hosts, ',');
 
     for (i = 0; NULL != mapped_nodes[i]; ++i) {
         /* if the specified node contains a relative node syntax,
@@ -168,6 +139,9 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
                         prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
                                        true, mapped_nodes[i]);
                         rc = PRTE_ERR_SILENT;
+                        if (NULL != mini_map) {
+                            prte_argv_free(mini_map);
+                        }
                         goto cleanup;
                     }
                     nodeidx = strtol(&mapped_nodes[i][2], NULL, 10);
@@ -177,6 +151,9 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
                         prte_show_help("help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
                                        true, nodeidx, mapped_nodes[i]);
                         rc = PRTE_ERR_SILENT;
+                        if (NULL != mini_map) {
+                            prte_argv_free(mini_map);
+                        }
                         goto cleanup;
                     }
                     /* if the HNP is not allocated, then we need to
@@ -193,6 +170,9 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
                         prte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
                                        true, nodeidx, mapped_nodes[i]);
                         rc = PRTE_ERR_SILENT;
+                        if (NULL != mini_map) {
+                            prte_argv_free(mini_map);
+                        }
                         goto cleanup;
                     }
                     /* add this node to the list */
@@ -202,6 +182,9 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
                     prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
                                    true, mapped_nodes[i]);
                     rc = PRTE_ERR_SILENT;
+                    if (NULL != mini_map) {
+                        prte_argv_free(mini_map);
+                    }
                     goto cleanup;
                 }
             }
@@ -225,12 +208,18 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
 
         /* see if the node contains the number of slots */
         slots_given = false;
+        slots = 0;
         if (NULL != (cptr = strchr(mini_map[i], ':'))) {
             *cptr = '\0';
             ++cptr;
+            if (NULL == cptr) {
+                /* there is nothing after the ':' */
+                prte_argv_free(mini_map);
+                rc = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
             if ('*' == *cptr || 0 == strcmp(cptr, "auto")) {
                 /* auto-detect #slots */
-                slots = -1;
                 slots_given = false;
             } else {
                 slots = strtol(cptr, NULL, 10);
@@ -258,12 +247,10 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
                 found = true;
                 if (slots_given) {
                     node->slots += slots;
-                    if (0 < slots) {
-                        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
-                    }
-                } else {
-                    ++node->slots;
                     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+                } else {
+                    ++node->slots;  // in case we cannot autodetect
+                    PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 }
                 PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                      "%s dashhost: node %s already on list - slots %d",
@@ -276,8 +263,9 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
         if (!found) {
             node = PRTE_NEW(prte_node_t);
             if (NULL == node) {
-                prte_argv_free(mapped_nodes);
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                prte_argv_free(mini_map);
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto cleanup;
             }
             node->name = strdup(ndname);
             PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
@@ -288,15 +276,10 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
             node->slots_max = 0;
             if (slots_given) {
                 node->slots = slots;
-                if (0 < slots) {
-                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
-                }
-            } else if (slots < 0) {
-                node->slots = 0;
-                PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             } else {
                 node->slots = 1;
-                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+                PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             }
             prte_list_append(&adds, &node->super);
         }
@@ -352,90 +335,85 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
  */
 static int parse_dash_host(char ***mapped_nodes, char *hosts)
 {
-    int32_t j, k;
+    int32_t k;
     int rc=PRTE_SUCCESS;
     char **mini_map=NULL, *cptr;
     int nodeidx;
     prte_node_t *node;
     char **host_argv=NULL;
 
-    host_argv = prte_argv_split(hosts, ',');
+    mini_map = prte_argv_split(hosts, ',');
 
     /* Accumulate all of the host name mappings */
-    for (j = 0; j < prte_argv_count(host_argv); ++j) {
-        mini_map = prte_argv_split(host_argv[j], ',');
-
-        for (k = 0; NULL != mini_map[k]; ++k) {
-            if ('+' == mini_map[k][0]) {
-                /* see if we specified empty nodes */
-                if ('e' == mini_map[k][1] ||
-                    'E' == mini_map[k][1]) {
-                    /* request for empty nodes - do they want
-                     * all of them?
-                     */
-                    if (NULL != (cptr = strchr(mini_map[k], ':'))) {
-                        /* the colon indicates a specific # are requested */
-                        *cptr = '*';
-                        prte_argv_append_nosize(mapped_nodes, cptr);
-                    } else {
-                        /* add a marker to the list */
-                        prte_argv_append_nosize(mapped_nodes, "*");
-                    }
-                } else if ('n' == mini_map[k][1] ||
-                           'N' == mini_map[k][1]) {
-                    /* they want a specific relative node #, so
-                     * look it up on global pool
-                     */
-                    nodeidx = strtol(&mini_map[k][2], NULL, 10);
-                    if (nodeidx < 0 ||
-                        nodeidx > (int)prte_node_pool->size) {
-                        /* this is an error */
-                        prte_show_help("help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
-                                       true, nodeidx, mini_map[k]);
-                        rc = PRTE_ERR_SILENT;
-                        goto cleanup;
-                    }
-                    /* if the HNP is not allocated, then we need to
-                     * adjust the index as the node pool is offset
-                     * by one
-                     */
-                    if (!prte_hnp_is_allocated) {
-                        nodeidx++;
-                    }
-                    /* see if that location is filled */
-
-                    if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, nodeidx))) {
-                        /* this is an error */
-                        prte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
-                                       true, nodeidx, mini_map[k]);
-                        rc = PRTE_ERR_SILENT;
-                        goto cleanup;
-                    }
-                    /* add this node to the list */
-                    prte_argv_append_nosize(mapped_nodes, node->name);
+    for (k = 0; NULL != mini_map[k]; ++k) {
+        if ('+' == mini_map[k][0]) {
+            /* see if we specified empty nodes */
+            if ('e' == mini_map[k][1] ||
+                'E' == mini_map[k][1]) {
+                /* request for empty nodes - do they want
+                 * all of them?
+                 */
+                if (NULL != (cptr = strchr(mini_map[k], ':'))) {
+                    /* the colon indicates a specific # are requested */
+                    *cptr = '*';
+                    prte_argv_append_nosize(mapped_nodes, cptr);
                 } else {
-                    /* invalid relative node syntax */
-                    prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
-                                   true, mini_map[k]);
+                    /* add a marker to the list */
+                    prte_argv_append_nosize(mapped_nodes, "*");
+                }
+            } else if ('n' == mini_map[k][1] ||
+                       'N' == mini_map[k][1]) {
+                /* they want a specific relative node #, so
+                 * look it up on global pool
+                 */
+                nodeidx = strtol(&mini_map[k][2], NULL, 10);
+                if (nodeidx < 0 ||
+                    nodeidx > (int)prte_node_pool->size) {
+                    /* this is an error */
+                    prte_show_help("help-dash-host.txt", "dash-host:relative-node-out-of-bounds",
+                                   true, nodeidx, mini_map[k]);
                     rc = PRTE_ERR_SILENT;
                     goto cleanup;
                 }
-            } else { /* non-relative syntax - add to list */
-                /* remove any modifier */
-                if (NULL != (cptr = strchr(mini_map[k], ':'))) {
-                    *cptr = '\0';
+                /* if the HNP is not allocated, then we need to
+                 * adjust the index as the node pool is offset
+                 * by one
+                 */
+                if (!prte_hnp_is_allocated) {
+                    nodeidx++;
                 }
-                /* check for local alias */
-                if (prte_check_host_is_local(mini_map[k])) {
-                    prte_argv_append_nosize(mapped_nodes, prte_process_info.nodename);
-                } else {
-                    prte_argv_append_nosize(mapped_nodes, mini_map[k]);
+                /* see if that location is filled */
+
+                if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, nodeidx))) {
+                    /* this is an error */
+                    prte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
+                                   true, nodeidx, mini_map[k]);
+                    rc = PRTE_ERR_SILENT;
+                    goto cleanup;
                 }
+                /* add this node to the list */
+                prte_argv_append_nosize(mapped_nodes, node->name);
+            } else {
+                /* invalid relative node syntax */
+                prte_show_help("help-dash-host.txt", "dash-host:invalid-relative-node-syntax",
+                               true, mini_map[k]);
+                rc = PRTE_ERR_SILENT;
+                goto cleanup;
+            }
+        } else { /* non-relative syntax - add to list */
+            /* remove any modifier */
+            if (NULL != (cptr = strchr(mini_map[k], ':'))) {
+                *cptr = '\0';
+            }
+            /* check for local alias */
+            if (prte_check_host_is_local(mini_map[k])) {
+                prte_argv_append_nosize(mapped_nodes, prte_process_info.nodename);
+            } else {
+                prte_argv_append_nosize(mapped_nodes, mini_map[k]);
             }
         }
-        prte_argv_free(mini_map);
-        mini_map = NULL;
     }
+    prte_argv_free(mini_map);
 
 cleanup:
     if (NULL != host_argv) {

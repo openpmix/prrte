@@ -259,6 +259,8 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
                  * destructed along the way
                  */
                 PRTE_RETAIN(node);
+                /* reset the available slots */
+                node->slots_available = 0;
                 if (initial_map) {
                     /* if this is the first app_context we
                      * are getting for an initial map of a job,
@@ -336,6 +338,8 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
              * destructed along the way
              */
             PRTE_RETAIN(node);
+            /* reset the available slots */
+            node->slots_available = 0;
             if (initial_map) {
                 /* if this is the first app_context we
                  * are getting for an initial map of a job,
@@ -457,6 +461,7 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
                                      "%s node %s has %d slots available",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      node->name, s));
+                node->slots_available = s;
                 num_slots += s;
                 continue;
             }
@@ -500,8 +505,9 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
              item != prte_list_get_end(allocated_nodes);
              item = prte_list_get_next(item)) {
             node = (prte_node_t*)item;
-            prte_output(0, "    node: %s daemon: %s", node->name,
-                        (NULL == node->daemon) ? "NULL" : PRTE_VPID_PRINT(node->daemon->name.vpid));
+            prte_output(0, "    node: %s daemon: %s #slots: %d", node->name,
+                        (NULL == node->daemon) ? "NULL" : PRTE_VPID_PRINT(node->daemon->name.vpid),
+                        node->slots_available);
         }
     }
 
@@ -538,6 +544,9 @@ prte_proc_t* prte_rmaps_base_setup_proc(prte_job_t *jdata,
         !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
         node->num_procs++;
         ++node->slots_inuse;
+        if (0 < node->slots_available) {
+            --node->slots_available;
+        }
     }
     if (0 > (rc = prte_pointer_array_add(node->procs, (void*)proc))) {
         PRTE_ERROR_LOG(rc);

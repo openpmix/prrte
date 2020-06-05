@@ -163,7 +163,8 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
         }
     }
 
-    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PRTE_BOOL)) {
+    if (4 < prte_output_get_verbosity(prte_ras_base_framework.framework_output) ||
+        prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PRTE_BOOL)) {
         prte_ras_base_display_alloc(caddy->jdata);
     }
     /* ensure we update the routing plan */
