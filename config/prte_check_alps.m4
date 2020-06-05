@@ -16,6 +16,8 @@ dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 dnl                         reserved.
 dnl Copyright (c) 2019      Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2020      Triad National Security, LLC. All rights
+dnl                         reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -152,6 +154,14 @@ AC_DEFUN([PRTE_CHECK_ALPS],[
                ])
 
         AC_MSG_RESULT([prte_check_cray_alps_happy = $prte_check_cray_alps_happy])
+
+        AS_IF([test "$prte_check_cray_alps_happy" = "yes"],
+             [prte_have_cray_alps=1],
+             [prte_have_cray_alps=0])
+
+        AC_DEFINE_UNQUOTED([PRTE_HAVE_CRAY_ALPS], 
+                           [$prte_have_cray_alps], 
+                           [defined to 1 if cray alps env, 0 otherwise])
 
         AS_IF([test "$prte_check_cray_alps_happy" = "yes" && test "$enable_static" = "yes"],
               [CRAY_ALPSLLI_LIBS = $CRAY_ALPSLLI_STATIC_LIBS
