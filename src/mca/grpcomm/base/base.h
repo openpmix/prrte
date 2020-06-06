@@ -88,6 +88,11 @@ PRTE_EXPORT int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig,
                                              prte_buffer_t *buf, int mode,
                                              prte_grpcomm_cbfunc_t cbfunc,
                                              void *cbdata);
+/* reliable broadcast API */
+PRTE_EXPORT int prte_grpcomm_API_rbcast(prte_grpcomm_signature_t *sig,
+                                         prte_rml_tag_t tag,
+                                         prte_buffer_t *buf);
+PRTE_EXPORT int prte_grpcomm_API_register_cb(prte_grpcomm_rbcast_cb_t callback);
 
 PRTE_EXPORT prte_grpcomm_coll_t* prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig, bool create);
 PRTE_EXPORT void prte_grpcomm_base_mark_distance_recv(prte_grpcomm_coll_t *coll, uint32_t distance);

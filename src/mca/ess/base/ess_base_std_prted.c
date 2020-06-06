@@ -37,6 +37,9 @@
 #include <unistd.h>
 #endif
 
+#include "src/mca/propagate/base/base.h"
+#include "src/util/proc_info.h"
+
 #include "src/dss/dss.h"
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
@@ -208,6 +211,12 @@ int prte_ess_base_prted_setup(void)
     if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_errmgr_base_framework, 0))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_errmgr_base_open";
+        goto error;
+    }
+    /* open the propagate */
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework, 0))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_propagate_base_open";
         goto error;
     }
     /* some environments allow remote launches - e.g., ssh - so
@@ -396,6 +405,13 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
 
+    /* select the propagate */
+    if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_propagate_base_select";
+        goto error;
+    }
+
     /*
      * Group communications
      */
@@ -536,13 +552,21 @@ int prte_ess_base_prted_finalize(void)
     /* shutdown the pmix server */
     pmix_server_finalize();
 
+    if ( NULL != prte_propagate.finalize ) {
+        prte_propagate.finalize();
+    }
+    (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
+
+    if ( NULL != prte_errmgr.finalize ) {
+        prte_errmgr.finalize();
+    }
+
     /* close frameworks */
     (void) prte_mca_base_framework_close(&prte_filem_base_framework);
     (void) prte_mca_base_framework_close(&prte_grpcomm_base_framework);
     (void) prte_mca_base_framework_close(&prte_iof_base_framework);
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
-    prte_errmgr.finalize();
     (void) prte_mca_base_framework_close(&prte_plm_base_framework);
     /* make sure our local procs are dead */
     prte_odls.kill_local_procs(NULL);

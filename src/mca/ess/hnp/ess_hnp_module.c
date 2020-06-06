@@ -37,6 +37,8 @@
 #include <unistd.h>
 #endif
 
+#include "src/mca/propagate/base/base.h"
+
 #include "src/include/hash_string.h"
 #include "src/class/prte_hash_table.h"
 #include "src/class/prte_list.h"
@@ -234,6 +236,12 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
+    /* open the propagator */
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework, 0))) {
+        error = "prte_propagate_base_open";
+        goto error;
+    }
+
     /* Since we are the HNP, then responsibility for
      * defining the name falls to the PLM component for our
      * respective environment - hence, we have to open the PLM
@@ -366,6 +374,12 @@ static int rte_init(int argc, char **argv)
     /* setup the error manager */
     if (PRTE_SUCCESS != (ret = prte_errmgr_base_select())) {
         error = "prte_errmgr_base_select";
+        goto error;
+    }
+
+    /* setup the propagate */
+    if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
+        error = "prte_propagate_base_select";
         goto error;
     }
 
@@ -637,6 +651,9 @@ static int rte_finalize(void)
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
     prte_errmgr.finalize();
+    (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
+    /* cleanup the pstat stuff */
+    (void) prte_mca_base_framework_close(&prte_pstat_base_framework);
 
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {

@@ -117,6 +117,8 @@ typedef int (*prte_errmgr_base_module_abort_peers_fn_t)(prte_process_name_t *pro
                                                         int32_t num_procs,
                                                         int error_code);
 
+typedef void (*prte_errmgr_base_module_enable_detector_fn_t)(bool flag);
+
 /*
  * Module Structure
  */
@@ -129,6 +131,9 @@ struct prte_errmgr_base_module_2_3_0_t {
     prte_errmgr_base_module_log_fn_t                        logfn;
     prte_errmgr_base_module_abort_fn_t                      abort;
     prte_errmgr_base_module_abort_peers_fn_t                abort_peers;
+
+    /* start error detector and propagator */
+    prte_errmgr_base_module_enable_detector_fn_t            enable_detector;
 };
 typedef struct prte_errmgr_base_module_2_3_0_t prte_errmgr_base_module_2_3_0_t;
 typedef prte_errmgr_base_module_2_3_0_t prte_errmgr_base_module_t;

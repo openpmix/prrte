@@ -52,7 +52,10 @@ prte_grpcomm_base_t prte_grpcomm_base = {{{0}}};
 
 prte_grpcomm_API_module_t prte_grpcomm = {
     prte_grpcomm_API_xcast,
-    prte_grpcomm_API_allgather
+    prte_grpcomm_API_allgather,
+    prte_grpcomm_API_rbcast,
+    prte_grpcomm_API_register_cb,
+    NULL
 };
 
 static bool recv_issued = false;
@@ -79,6 +82,8 @@ static int prte_grpcomm_base_close(void)
 
     if (recv_issued) {
         prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
+        prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST);
+        prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_BMGXCAST);
         recv_issued = false;
     }
 

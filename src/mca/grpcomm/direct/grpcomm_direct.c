@@ -53,7 +53,10 @@ prte_grpcomm_base_module_t prte_grpcomm_direct_module = {
     init,
     finalize,
     xcast,
-    allgather
+    allgather,
+    NULL,
+    NULL,
+    NULL
 };
 
 /* internal functions */
