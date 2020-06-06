@@ -3,6 +3,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -73,7 +74,7 @@ static int errmgr_detector_register(void)
             PRTE_INFO_LVL_9,
             PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
 
-    prte_errmgr_detector_enable_flag = true;
+    prte_errmgr_detector_enable_flag = false;
     (void) prte_mca_base_component_var_register(c, "enable",
             "Enable/disable detector in errmgr component",
             PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
@@ -110,7 +111,7 @@ static int errmgr_detector_close(void)
 static int errmgr_detector_component_query(prte_mca_base_module_t **module, int *priority)
 {
     /* used by DVM masters */
-    if ( PRTE_PROC_IS_DAEMON ) {
+    if ( PRTE_PROC_IS_DAEMON && prte_errmgr_detector_enable_flag) {
         *priority = my_priority;
         *module = (prte_mca_base_module_t *)&prte_errmgr_detector_module;
         return PRTE_SUCCESS;
