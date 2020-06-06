@@ -68,11 +68,7 @@ void prte_state_base_activate_job_state(prte_job_t *jdata,
             error = itm;
         }
         if (s->job_state == state) {
-            PRTE_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
-                                 "%s ACTIVATING JOB %s STATE %s PRI %d",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 (NULL == jdata) ? "NULL" : PRTE_JOBID_PRINT(jdata->jobid),
-                                 prte_job_state_to_str(state), s->priority));
+            PRTE_REACHING_JOB_STATE(jdata, state, s->priority);
             if (NULL == s->cbfunc) {
                 PRTE_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
                                      "%s NULL CBFUNC FOR JOB %s STATE %s",
@@ -114,11 +110,7 @@ void prte_state_base_activate_job_state(prte_job_t *jdata,
         caddy->job_state = state;
         PRTE_RETAIN(jdata);
     }
-    PRTE_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
-                         "%s ACTIVATING JOB %s STATE %s PRI %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (NULL == jdata) ? "NULL" : PRTE_JOBID_PRINT(jdata->jobid),
-                         prte_job_state_to_str(state), s->priority));
+    PRTE_REACHING_JOB_STATE(jdata, state, s->priority);
     PRTE_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
 }
 
@@ -251,11 +243,7 @@ void prte_state_base_activate_proc_state(prte_process_name_t *proc,
             error = itm;
         }
         if (s->proc_state == state) {
-            PRTE_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
-                                 "%s ACTIVATING PROC %s STATE %s PRI %d",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_NAME_PRINT(proc),
-                                 prte_proc_state_to_str(state), s->priority));
+            PRTE_REACHING_PROC_STATE(proc, state, s->priority);
             if (NULL == s->cbfunc) {
                 PRTE_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
                                      "%s NULL CBFUNC FOR PROC %s STATE %s",
@@ -291,12 +279,8 @@ void prte_state_base_activate_proc_state(prte_process_name_t *proc,
     caddy = PRTE_NEW(prte_state_caddy_t);
     caddy->name = *proc;
     caddy->proc_state = state;
-    PRTE_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
-                         "%s ACTIVATING PROC %s STATE %s PRI %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(proc),
-                         prte_proc_state_to_str(state), s->priority));
-     PRTE_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
+    PRTE_REACHING_PROC_STATE(proc, state, s->priority);
+    PRTE_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
 }
 
 int prte_state_base_add_proc_state(prte_proc_state_t state,

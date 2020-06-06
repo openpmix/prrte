@@ -125,6 +125,41 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
         prte_state.activate_proc_state(shadow, (s));                          \
     } while(0);
 
+/* Called when actually arriving (reaching) the state with priority k */
+#define PRTE_REACHING_JOB_STATE(j, s, k)                                      \
+    do {                                                                      \
+        prte_job_t *shadow=(j);                                               \
+        if( prte_state_base_framework.framework_verbose > 0 ) {               \
+            double timestamp = 0.0;                                           \
+            PRTE_STATE_GET_TIMESTAMP(timestamp);                              \
+            prte_output_verbose(1, prte_state_base_framework.framework_output,\
+                                "%s [%f] ACTIVATING JOB %s STATE %s PRI %d",\
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),           \
+                                timestamp,                                    \
+                                (NULL == shadow) ? "NULL" :                   \
+                                PRTE_JOBID_PRINT(shadow->jobid),              \
+                                prte_job_state_to_str((s)),                   \
+                                k);                                           \
+        }                                                                     \
+    } while(0);
+
+#define PRTE_REACHING_PROC_STATE(p, s, k)                                     \
+    do {                                                                      \
+        prte_process_name_t *shadow=(p);                                      \
+        if( prte_state_base_framework.framework_verbose > 0 ) {               \
+            double timestamp = 0.0;                                           \
+            PRTE_STATE_GET_TIMESTAMP(timestamp);                              \
+            prte_output_verbose(1, prte_state_base_framework.framework_output,\
+                                "%s [%f] ACTIVATING PROC %s STATE %s PRI %d",\
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),           \
+                                timestamp,                                    \
+                                (NULL == shadow) ? "NULL" :                   \
+                                PRTE_NAME_PRINT(shadow),                      \
+                                prte_proc_state_to_str((s)),                  \
+                                k);                                           \
+        }                                                                     \
+    } while(0);
+
 /**
  * Module initialization function.
  *
