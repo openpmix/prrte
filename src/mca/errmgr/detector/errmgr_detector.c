@@ -3,6 +3,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,47 +65,41 @@
 static int init(void);
 static int finalize(void);
 
-int prte_errmgr_enable_detector(bool flag);
+static void enable_detector(bool flag);
 /******************
  * detector module
  ******************/
 prte_errmgr_base_module_t prte_errmgr_detector_module = {
-    init,
-    finalize,
-    prte_errmgr_base_log,
-    prte_errmgr_base_abort,
-    prte_errmgr_base_abort_peers,
-    prte_errmgr_enable_detector
+    .init = init,
+    .finalize = finalize,
+    .logfn = prte_errmgr_base_log,
+    .abort = prte_errmgr_base_abort,
+    .abort_peers = prte_errmgr_base_abort_peers,
+    .enable_detector = enable_detector
 };
 
-prte_errmgr_base_module_t prte_errmgr = {
-    init,
-    finalize,
-    prte_errmgr_base_log,
-    NULL,
-    NULL,
-    prte_errmgr_enable_detector
-};
+/* local storage */
+static prte_errmgr_detector_t prte_errmgr_world_detector = {0};
 
 /*
  * Local functions
  */
 static int fd_heartbeat_request(prte_errmgr_detector_t* detector);
-static int fd_heartbeat_send(prte_errmgr_detector_t* detector);
+static void fd_heartbeat_send(prte_errmgr_detector_t* detector);
 
-static int fd_heartbeat_request_cb(int status,
+static void fd_heartbeat_request_cb(int status,
         prte_process_name_t* sender,
         prte_buffer_t *buffer,
         prte_rml_tag_t tg,
         void *cbdata);
 
-static int fd_heartbeat_recv_cb(int status,
+static void fd_heartbeat_recv_cb(int status,
         prte_process_name_t* sender,
         prte_buffer_t *buffer,
         prte_rml_tag_t tg,
         void *cbdata);
 
-static double Wtime();
+static double Wtime(void );
 //static double prte_errmgr_heartbeat_period = 5;
 //static double prte_errmgr_heartbeat_timeout = 10;
 static prte_event_base_t* fd_event_base = NULL;
@@ -164,7 +159,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
     prte_job_t *jdata;
     prte_plm_cmd_flag_t cmd;
     size_t n;
-    PRTE_PMIX_CONVERT_PROCT(rc, &source, psource);
+    PRTE_PMIX_CONVERT_PROCT(rc, &source, (pmix_proc_t*)psource);
     if (NULL != info) {
         for (n=0; n < ninfo; n++) {
             if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
@@ -253,7 +248,7 @@ int finalize(void) {
     {
         prte_errmgr_detector_t* detector = &prte_errmgr_world_detector;
 
-        if(detector->hb_observer != PRTE_VPID_INVALID)
+        if(detector->hb_observer != (int)PRTE_VPID_INVALID)
         {
             detector->hb_observer = prte_process_info.my_name.vpid;
             PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,"errmgr:detector: send last heartbeat message"));
@@ -278,7 +273,7 @@ bool errmgr_get_daemon_status(prte_process_name_t daemon)
     int i;
     for ( i=0; i<detector->failed_node_count; i++)
     {
-        if( *(detector->daemons_state +i) == daemon.vpid)
+        if( *(detector->daemons_state +i) == (int)daemon.vpid)
         {
             return false;
         }
@@ -296,21 +291,15 @@ static double Wtime(void)
 {
     double wtime;
 
-#if PRTE_TIMER_CYCLE_NATIVE
-    wtime = ((double) prte_timer_base_get_cycles()) / prte_timer_base_get_freq();
-#elif PRTE_TIMER_USEC_NATIVE
-    wtime = ((double) prte_timer_base_get_usec()) / 1000000.0;
-#else
     /* Fall back to gettimeofday() if we have nothing else */
     struct timeval tv;
     gettimeofday(&tv, NULL);
     wtime = tv.tv_sec;
     wtime += (double)tv.tv_usec / 1000000.0;
-#endif
     return wtime;
 }
 
-int prte_errmgr_enable_detector(bool enable_flag)
+static void enable_detector(bool enable_flag)
 {
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                 "%s errmgr:detector report detector_enable_status %d",
@@ -363,7 +352,6 @@ int prte_errmgr_enable_detector(bool enable_flag)
         tv.tv_usec = (-tv.tv_sec + (detector->hb_period / 10.)) * 1e6;
         prte_event_add(&prte_errmgr_world_detector.fd_event, &tv);
     }
-    return PRTE_SUCCESS;
 }
 
 static int fd_heartbeat_request(prte_errmgr_detector_t* detector) {
@@ -433,7 +421,7 @@ static int fd_heartbeat_request(prte_errmgr_detector_t* detector) {
     return PRTE_SUCCESS;
 }
 
-static int fd_heartbeat_request_cb(int status, prte_process_name_t* sender,
+static void fd_heartbeat_request_cb(int status, prte_process_name_t* sender,
         prte_buffer_t *buffer,
         prte_rml_tag_t tg, void *cbdata) {
     prte_errmgr_detector_t* detector = &prte_errmgr_world_detector;
@@ -454,14 +442,14 @@ static int fd_heartbeat_request_cb(int status, prte_process_name_t* sender,
     rr = (ndmns-prte_process_info.my_name.vpid+vpid) % ndmns; /* translate msg->from in circular space so that myrank==0 */
     ro = (ndmns-prte_process_info.my_name.vpid+detector->hb_observer) % ndmns; /* same for the observer rank */
     if( rr < ro ) {
-        return false; /* never forward on the rbcast */
+        return; /* never forward on the rbcast */
     }
 
     detector->hb_observer = vpid;
     detector->hb_sstamp = 0.;
 
     fd_heartbeat_send(detector);
-    return false;
+    return;
 }
 
 /*
@@ -507,7 +495,7 @@ static void fd_event_cb(int fd, short flags, void* pdetector) {
 /*
  * send eager based heartbeats
  */
-static int fd_heartbeat_send(prte_errmgr_detector_t* detector) {
+static void fd_heartbeat_send(prte_errmgr_detector_t* detector) {
 
     double now = Wtime();
     if( 0. != detector->hb_sstamp
@@ -543,10 +531,9 @@ static int fd_heartbeat_send(prte_errmgr_detector_t* detector) {
                     daemon.jobid, daemon.vpid));
         PRTE_ERROR_LOG(ret);
     }
-    return PRTE_SUCCESS;
 }
 
-static int fd_heartbeat_recv_cb(int status, prte_process_name_t* sender,
+static void fd_heartbeat_recv_cb(int status, prte_process_name_t* sender,
         prte_buffer_t *buffer,
         prte_rml_tag_t tg, void *cbdata) {
     prte_errmgr_detector_t* detector = &prte_errmgr_world_detector;
@@ -563,7 +550,7 @@ static int fd_heartbeat_recv_cb(int status, prte_process_name_t* sender,
         detector->hb_observing = detector->hb_observer = PRTE_VPID_INVALID;
         detector->hb_rstamp = INFINITY;
         detector->hb_period = INFINITY;
-        return false;
+        return;
     }
 
     cnt = 1;
@@ -575,7 +562,7 @@ static int fd_heartbeat_recv_cb(int status, prte_process_name_t* sender,
         PRTE_ERROR_LOG(rc);
     }
 
-    if(vpid != detector->hb_observing ) {
+    if((int)vpid != detector->hb_observing ) {
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                     "errmgr:detector: daemon %s receive heartbeat from vpid %d, but I am monitoring vpid %d ",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -601,5 +588,5 @@ static int fd_heartbeat_recv_cb(int status, prte_process_name_t* sender,
                         grace));
         }
     }
-    return false;
+    return;
 }

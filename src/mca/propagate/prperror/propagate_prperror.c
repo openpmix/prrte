@@ -3,6 +3,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -117,12 +118,13 @@ static int register_prp_callback(void)
     int ret;
     if(enable_callback_register_flag)
     {
-        if(prte_grpcomm.register_cb!=NULL)
+        if(prte_grpcomm.register_cb!=NULL) {
             ret= prte_grpcomm.register_cb((prte_grpcomm_rbcast_cb_t)prte_propagate_prperror_recv);
             prte_propagate_error_cb_type = ret;
             PRTE_OUTPUT_VERBOSE((5, prte_propagate_base_framework.framework_output,
                         "propagate: prperror: daemon register grpcomm callback %d at start",prte_propagate_error_cb_type));
             enable_callback_register_flag = 0;
+        }
     }
     return PRTE_SUCCESS;
 }
@@ -184,12 +186,13 @@ static int prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sourc
     int ret;
     if(enable_callback_register_flag)
     {
-        if(prte_grpcomm.register_cb!=NULL)
+        if(prte_grpcomm.register_cb!=NULL) {
             ret= prte_grpcomm.register_cb((prte_grpcomm_rbcast_cb_t)prte_propagate_prperror_recv);
             prte_propagate_error_cb_type = ret;
             PRTE_OUTPUT_VERBOSE((5, prte_propagate_base_framework.framework_output,
                         "propagate: prperror: daemon register grpcomm callback %d",prte_propagate_error_cb_type));
             enable_callback_register_flag = 0;
+        }
     }
 
     /* change the error daemon state*/
@@ -422,6 +425,7 @@ static int _prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sour
             PRTE_RELEASE(pinfo);
         }
     }
+    return rc;
 }
 
 

@@ -3,6 +3,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +36,6 @@ typedef struct {
     int failed_node_count; /* the number of failed nodes in the ring */
     int *daemons_state;    /* a list of failed daemons' vpid */
 } prte_errmgr_detector_t;
-static prte_errmgr_detector_t prte_errmgr_world_detector;
 
 /*
  * Local Component structures
@@ -54,7 +54,6 @@ int prte_errmgr_init_failure_propagate(void);
 int prte_errmgr_finalize_failure_propagate(void);
 bool errmgr_get_daemon_status(prte_process_name_t daemon);
 void errmgr_set_daemon_status(prte_process_name_t daemon);
-extern int prte_errmgr_enable_detector(bool flag);
 END_C_DECLS
 
 #endif /* MCA_ERRMGR_DETECTOR_EXPORT_H */

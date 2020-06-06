@@ -143,7 +143,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
     prte_job_t *jdata;
     prte_plm_cmd_flag_t cmd;
     size_t n;
-    PRTE_PMIX_CONVERT_PROCT(rc, &source, psource);
+    PRTE_PMIX_CONVERT_PROCT(rc, &source, (pmix_proc_t*)psource);
     if (NULL != info) {
         for (n=0; n < ninfo; n++) {
             if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {

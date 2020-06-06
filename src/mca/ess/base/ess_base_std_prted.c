@@ -38,10 +38,6 @@
 #endif
 
 #include "src/mca/propagate/base/base.h"
-#if PRTE_ENABLE_FT_CR == 1
-#include "src/mca/snapc/base/base.h"
-#include "src/mca/sstore/base/base.h"
-#endif
 #include "src/util/proc_info.h"
 
 #include "src/dss/dss.h"
