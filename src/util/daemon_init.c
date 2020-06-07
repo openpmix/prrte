@@ -14,6 +14,8 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2020      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,8 +57,8 @@ int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
     }
 
     /* child continues */
-#if defined(HAVE_SETSID)
-    setsid();  /* become session leader */
+#if defined(HAVE_SETSID) && !(PRTE_HAVE_CRAY_ALPS)
+    setsid();  /* become session leader - doing this confuses Cray aprun in some cases */
 #endif
 
     if (NULL != working_dir) {
