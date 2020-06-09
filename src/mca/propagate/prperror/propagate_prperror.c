@@ -232,6 +232,11 @@ static int prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sourc
                     prte_get_proc_hostname(errorproc)));
 
         node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, errorproc->vpid);
+        if (NULL == node) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            PRTE_DESTRUCT(&prperror_buffer);
+            return PRTE_ERR_NOT_FOUND;
+        }
 
         cnt=node->num_procs; //prte issue, num_procs value is not correct
         if (PRTE_SUCCESS != (rc = prte_dss.pack(&prperror_buffer, &cnt, 1, PRTE_INT))) {
@@ -252,7 +257,9 @@ static int prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sourc
 
     pmix_proc_t pname;
     pmix_info_t *pinfo;
-    PMIX_INFO_CREATE(pinfo, 1+cnt);
+    size_t pcnt = 1 + cnt;
+
+    PMIX_INFO_CREATE(pinfo, pcnt);
 
     PRTE_PMIX_CONVERT_NAME(rc, &pname, errorproc);
     PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
@@ -281,12 +288,14 @@ static int prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sourc
                 cmd = PRTE_PLM_UPDATE_PROC_STATE;
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &cmd, 1, PRTE_PLM_CMD))) {
                     PRTE_ERROR_LOG(rc);
+                    PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
 
                 /* pack jobid */
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &(pptr->name.jobid), 1, PRTE_JOBID))) {
                     PRTE_ERROR_LOG(rc);
+                    PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
 
@@ -295,21 +304,25 @@ static int prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sourc
                 /* pack the child's vpid */
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &(pptr->name.vpid), 1, PRTE_VPID))) {
                     PRTE_ERROR_LOG(rc);
+                    PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
                 /* pack the pid */
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &pptr->pid, 1, PRTE_PID))) {
                     PRTE_ERROR_LOG(rc);
+                    PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
                 /* pack its state */
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &pptr->state, 1, PRTE_PROC_STATE))) {
                     PRTE_ERROR_LOG(rc);
+                    PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
                 /* pack its exit code */
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &pptr->exit_code, 1, PRTE_EXIT_CODE))) {
                     PRTE_ERROR_LOG(rc);
+                    PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
 
@@ -347,10 +360,11 @@ static int prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sourc
         if (PRTE_SUCCESS != PMIx_Notify_event(prte_pmix_convert_rc(state), NULL,
                     PMIX_RANGE_LOCAL, pinfo, cnt+1,
                     NULL,NULL )) {
-            PRTE_RELEASE(pinfo);
+            PMIX_INFO_FREE(pinfo, pcnt);
         }
     }
     //PRTE_DESTRUCT(&prperror_buffer);
+    PMIX_INFO_FREE(pinfo, pcnt);
     PRTE_RELEASE(sig);
     /* we're done! */
     return PRTE_SUCCESS;

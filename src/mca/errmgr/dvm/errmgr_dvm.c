@@ -162,8 +162,13 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                 "%s errmgr:dvm:error_notify_callback NULL jdata - ignoring error",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    return;
                 }
                 temp_orte_proc= (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc.vpid);
+                if (NULL == temp_orte_proc) {
+                    /* must already be gone */
+                    return;
+                }
 
                 alert = PRTE_NEW(prte_buffer_t);
                 /* pack update state command */

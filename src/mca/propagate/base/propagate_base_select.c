@@ -2,6 +2,7 @@
  * Copyright (c) 2017-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,6 +39,12 @@ int prte_propagate_base_select(void)
     }
     PRTE_OUTPUT_VERBOSE((5, prte_propagate_base_framework.framework_output,
                 "propagate selected"));
+
+    if (NULL == best_module) {
+        /* nobody home */
+        exit_status = PRTE_ERROR;
+        goto cleanup;
+    }
 
     /* Save the winner */
     prte_propagate = *best_module;
