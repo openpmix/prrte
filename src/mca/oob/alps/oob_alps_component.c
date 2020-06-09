@@ -18,6 +18,8 @@
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2019      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -88,7 +90,7 @@ static bool component_is_reachable(char *routed, prte_process_name_t *peer);
 /*
  * Struct of function pointers and all that to let us be initialized
  */
-prte_oob_base_component_t prte_oob_alps_component = {
+PRTE_MODULE_EXPORT prte_oob_base_component_t prte_oob_alps_component = {
     .oob_base = {
         PRTE_OOB_BASE_VERSION_2_0_0,
         .mca_component_name = "alps",
