@@ -1324,6 +1324,9 @@ pmix_status_t pmix_server_stdin_fn(const pmix_proc_t *source,
     // so they would go out of scope after we return from this function.
     PMIX_BYTE_OBJECT_CREATE(bo_cpy, 1);
     bo_cpy->bytes = pmix_malloc(bo->size * sizeof(char));
+    if (NULL == bo_cpy->bytes) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+    }
     memcpy(bo_cpy->bytes, bo->bytes, bo->size);
     bo_cpy->size = bo->size;
 
