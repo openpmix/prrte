@@ -786,6 +786,9 @@ static void modex_resp(pmix_status_t status,
         /* we need to preserve the data as the caller
          * will free it upon our return */
         req->data = (char*)malloc(sz);
+        if (NULL == req->data) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        }
         memcpy(req->data, data, sz);
         req->sz = sz;
     }
@@ -1069,6 +1072,9 @@ static void pmix_server_dmdx_resp(int status, prte_process_name_t* sender,
         if (0 < psz) {
             d->ndata = psz;
             d->data = (char*)malloc(psz);
+            if (NULL == d->data) {
+                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            }
             cnt = psz;
             if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&prte_process_info.myproc, &pbuf, d->data, &cnt, PMIX_BYTE))) {
                 PMIX_ERROR_LOG(prc);
