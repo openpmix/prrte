@@ -161,3 +161,4 @@ test/double-get
 test/get-nofence
 test/attachtest/app
 test/attachtest/tool
+test/get-immediate
