@@ -438,7 +438,7 @@ pmix_status_t prte_pmix_convert_job_state_to_error(int state)
             return PMIX_ERR_JOB_FAILED_TO_LAUNCH;
 
         case PRTE_JOB_STATE_KILLED_BY_CMD:
-            return PMIX_ERR_JOB_CANCELLED;
+            return PMIX_ERR_JOB_CANCELED;
 
         case PRTE_JOB_STATE_ABORTED:
         case PRTE_JOB_STATE_CALLED_ABORT:
