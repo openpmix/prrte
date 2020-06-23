@@ -432,16 +432,10 @@ pmix_status_t prte_pmix_convert_job_state_to_error(int state)
             return PMIX_ERR_JOB_FAILED_TO_MAP;
 
         case PRTE_JOB_STATE_NEVER_LAUNCHED:
-            return PMIX_ERR_JOB_NEVER_LAUNCHED;
-
         case PRTE_JOB_STATE_FAILED_TO_LAUNCH:
-            return PMIX_ERR_JOB_FAILED_TO_LAUNCH;
-
         case PRTE_JOB_STATE_FAILED_TO_START:
-            return PMIX_ERR_JOB_FAILED_TO_START;
-
         case PRTE_JOB_STATE_CANNOT_LAUNCH:
-            return PMIX_ERR_JOB_CANNOT_LAUNCH;
+            return PMIX_ERR_JOB_FAILED_TO_LAUNCH;
 
         case PRTE_JOB_STATE_KILLED_BY_CMD:
             return PMIX_ERR_JOB_CANCELLED;
