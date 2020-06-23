@@ -153,7 +153,7 @@ pmix_status_t prte_pmix_convert_rc(int rc)
         return PMIX_ERR_JOB_FAILED_TO_MAP;
 
     case PRTE_ERR_JOB_CANCELLED:
-        return PMIX_ERR_JOB_CANCELLED;
+        return PMIX_ERR_JOB_CANCELED;
 #endif
 
     case PRTE_ERR_DEBUGGER_RELEASE:
