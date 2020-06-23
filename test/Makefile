@@ -35,6 +35,7 @@ CFLAGS = -g
 TESTS = \
 	double-get \
 	get-nofence \
+	get-immediate \
 	attachtest/app.c \
 	attachtest/tool.c
 
