@@ -153,7 +153,7 @@ pmix_status_t prte_pmix_convert_rc(int rc)
         return PMIX_ERR_JOB_FAILED_TO_MAP;
 
     case PRTE_ERR_JOB_CANCELLED:
-        return PMIX_ERR_JOB_CANCELED;
+        return PMIX_ERR_JOB_CANCELLED;
 #endif
 
     case PRTE_ERR_DEBUGGER_RELEASE:
@@ -438,7 +438,7 @@ pmix_status_t prte_pmix_convert_job_state_to_error(int state)
             return PMIX_ERR_JOB_FAILED_TO_LAUNCH;
 
         case PRTE_JOB_STATE_KILLED_BY_CMD:
-            return PMIX_ERR_JOB_CANCELED;
+            return PMIX_ERR_JOB_CANCELLED;
 
         case PRTE_JOB_STATE_ABORTED:
         case PRTE_JOB_STATE_CALLED_ABORT:
