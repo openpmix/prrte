@@ -816,7 +816,7 @@ int main(int argc, char *argv[])
                           iptr, 2, NULL, NULL);
         /* now wait for the launch directives to arrive */
         while (prte_event_base_active && myinfo.lock.active) {
-            prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+            prte_event_loop(prte_event_base, PRTE_EVLOOP_NONBLOCK);
         }
         PMIX_INFO_FREE(iptr, 2);
         /* process the returned directives */
