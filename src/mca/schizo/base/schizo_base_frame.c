@@ -55,12 +55,11 @@ prte_schizo_API_module_t prte_schizo = {
     .finalize = prte_schizo_base_finalize
 };
 
-static char *personalities = NULL;
+static char *personalities = "prte";
 
 static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
 {
     /* pickup any defined personalities */
-    personalities = strdup("prte");
     prte_mca_base_var_register("prte", "schizo", "base", "personalities",
                                 "Comma-separated list of personalities",
                                 PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
