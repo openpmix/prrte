@@ -442,6 +442,7 @@ static void check_complete(int fd, short args, void *cbdata)
     prte_timer_t *timer;
     void *nptr;
     uint32_t u32;
+    int num_tools_attached = 0;
 
     PRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -533,6 +534,10 @@ static void check_complete(int fd, short args, void *cbdata)
             if (jptr->jobid == PRTE_PROC_MY_NAME->jobid) {
                 goto next;
             }
+            /* if this is a tool it might be interested in the terminated event */
+            if (PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_TOOL)) {
+                ++num_tools_attached;
+            }
             /* if the job is flagged to not be monitored, skip it */
             if (PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_DO_NOT_MONITOR)) {
                 goto next;
@@ -544,6 +549,17 @@ static void check_complete(int fd, short args, void *cbdata)
           next:
             rc = prte_hash_table_get_next_key_uint32(prte_job_data, &u32, (void **)&jptr, nptr, &nptr);
         }
+
+        /* Let the tools know that a job terminated before we shutdown */
+        if (num_tools_attached > 0 && jdata->state != PRTE_JOB_STATE_NOTIFIED) {
+            PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                                 "%s state:dvm:check_job_completed state is terminated - activating notify",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFY_COMPLETED);
+            /* mark the job as notified */
+            jdata->state = PRTE_JOB_STATE_NOTIFIED;
+        }
+
         /* if we fell thru to this point, then nobody is still
          * alive except the daemons, so just shut us down */
         prte_plm.terminate_orteds();
