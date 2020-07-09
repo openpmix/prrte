@@ -66,7 +66,9 @@ int pmi_get_string(uint32_t peer_rank, const char *key, void **data_out, size_t 
         rc = PMIx_Get(&proc, key, NULL, 0, &pvalue);
     }
     if (PMIX_SUCCESS != rc) {
-        ERR("Client ns %s rank %d: PMIx_Get on rank %u %s: %s\n", myproc.nspace, myproc.rank, peer_rank, key, PMIx_Error_string(rc));
+        /* we expect 'timeout' case to fail with a not-found error */
+        if (! (timeout && PMIX_ERR_NOT_FOUND) )
+            ERR("Client ns %s rank %d: PMIx_Get on rank %u %s: %s\n", myproc.nspace, myproc.rank, peer_rank, key, PMIx_Error_string(rc));
     }
     if(pvalue->type != PMIX_BYTE_OBJECT){
         ERR("Client ns %s rank %d: PMIx_Get %s: got wrong data type\n", myproc.nspace, myproc.rank, key);
