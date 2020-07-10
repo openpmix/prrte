@@ -311,7 +311,7 @@ static int process_deprecated_cli(prte_cmd_line_t *cmdline,
     ret = PRTE_SUCCESS;
 
     /* check for deprecated cmd line options */
-    for (i=1; NULL != pargs[i]; i++) {
+    for (i=1; i < pargc && NULL != pargs[i]; i++) {
         /* Are we done?  i.e., did we find the special "--" token? */
         if (0 == strcmp(pargs[i], "--")) {
             break;
