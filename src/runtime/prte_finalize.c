@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2006 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -47,6 +47,7 @@ int prte_finalize(void)
     int rc;
     uint32_t key;
     prte_job_t *jdata;
+    void *elt = NULL;
 
     --prte_initialized;
     if (0 != prte_initialized) {
@@ -73,12 +74,16 @@ int prte_finalize(void)
     /* release the cache */
     PRTE_RELEASE(prte_cache);
 
-    /* release the job hash table */
-    PRTE_HASH_TABLE_FOREACH(key, uint32, jdata, prte_job_data) {
-        if (NULL != jdata) {
-            PRTE_RELEASE(jdata);
+    /* release the job hash table; pop the first element in key order and release it, repeat */
+    do {
+        rc = prte_hash_table_get_next_key_uint32(prte_job_data, &key, (void**)&jdata, NULL, &elt);
+        if (PRTE_SUCCESS == rc) {
+            prte_hash_table_remove_value_uint32(prte_job_data, key);
+            if (NULL != jdata) {
+                PRTE_RELEASE(jdata);
+            }
         }
-    }
+    } while (PRTE_SUCCESS == rc);
     PRTE_RELEASE(prte_job_data);
 
     if (prte_do_not_launch) {
