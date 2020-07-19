@@ -573,10 +573,10 @@ int prte_ess_base_prted_finalize(void)
     (void) prte_mca_base_framework_close(&prte_rtc_base_framework);
     (void) prte_mca_base_framework_close(&prte_odls_base_framework);
     (void) prte_mca_base_framework_close(&prte_routed_base_framework);
+    (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
     (void) prte_mca_base_framework_close(&prte_rml_base_framework);
     (void) prte_mca_base_framework_close(&prte_oob_base_framework);
     (void) prte_mca_base_framework_close(&prte_prtereachable_base_framework);
-    (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
     (void) prte_mca_base_framework_close(&prte_state_base_framework);
     /* remove our use of the session directory tree */
     prte_session_dir_finalize(PRTE_PROC_MY_NAME);
