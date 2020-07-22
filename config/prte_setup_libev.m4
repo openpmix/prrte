@@ -61,7 +61,7 @@ AC_DEFUN([PRTE_LIBEV_CONFIG],[
            PRTE_CHECK_PACKAGE([prte_libev],
                               [event.h],
                               [ev],
-                              [ev_async_init],
+                              [ev_async_send],
                               [],
                               [$prte_libev_dir],
                               [$prte_libev_libdir],
