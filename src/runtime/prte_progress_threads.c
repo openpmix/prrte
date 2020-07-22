@@ -48,7 +48,7 @@ typedef struct {
     ev_async async;
     pthread_mutex_t mutex;
     pthread_cond_t cond;
-    pmix_list_t list;
+    prte_list_t list;
 #endif
 } prte_progress_tracker_t;
 
@@ -89,7 +89,7 @@ static PRTE_CLASS_INSTANCE(prte_progress_tracker_t,
                           tracker_constructor,
                           tracker_destructor);
 
-#if PMIX_HAVE_LIBEV
+#if PRTE_HAVE_LIBEV
 
 typedef enum {
     PRTE_EVENT_ACTIVE,
