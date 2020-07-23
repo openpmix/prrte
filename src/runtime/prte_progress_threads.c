@@ -238,7 +238,7 @@ static void stop_progress_engine(prte_progress_tracker_t *trk)
 
     /* break the event loop - this will cause the loop to exit upon
        completion of any current event */
-    prte_event_base_loopbreak(trk->ev_base);
+    prte_event_base_loopexit(trk->ev_base);
 
     prte_thread_join(&trk->engine, NULL);
 }
@@ -308,6 +308,11 @@ prte_event_base_t *prte_progress_thread_init(const char *name)
     prte_event_set(trk->ev_base, &trk->block, -1, PRTE_EV_PERSIST,
                    dummy_timeout_cb, trk);
     prte_event_add(&trk->block, &long_timeout);
+
+#if PRTE_HAVE_LIBEV
+    ev_async_init (&trk->async, prte_libev_ev_async_cb);
+    ev_async_start((struct ev_loop *)trk->ev_base, &trk->async);
+#endif
 
     /* construct the thread object */
     PRTE_CONSTRUCT(&trk->engine, prte_thread_t);
@@ -389,6 +394,21 @@ int prte_progress_thread_pause(const char *name)
 
     return PRTE_ERR_NOT_FOUND;
 }
+
+#if PRTE_HAVE_LIBEV
+static prte_progress_tracker_t* prte_progress_tracker_get_by_base(prte_event_base_t *base) {
+    prte_progress_tracker_t *trk;
+
+    if (inited)  {
+        PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t) {
+            if(trk->ev_base == base) {
+                return trk;
+            }
+        }
+    }
+    return NULL;
+}
+#endif
 
 int prte_progress_thread_resume(const char *name)
 {

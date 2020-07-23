@@ -55,10 +55,10 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
             if test ! -z "$libevent_prefix" && test "$libevent_prefix" != "yes"; then
                 prte_event_defaults=no
                 prte_event_dir=$libevent_prefix
-                if test -d $libevent_prefix/lib; then
-                    prte_event_libdir=$libevent_prefix/lib
-                elif test -d $libevent_prefix/lib64; then
+                if test -d $libevent_prefix/lib64; then
                     prte_event_libdir=$libevent_prefix/lib64
+                elif test -d $libevent_prefix/lib; then
+                    prte_event_libdir=$libevent_prefix/lib
                 elif test -d $libevent_prefix; then
                     prte_event_libdir=$libevent_prefix
                 else
@@ -69,11 +69,11 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
             else
                 prte_event_defaults=yes
                 prte_event_dir=/usr
-                if test -d /usr/lib; then
-                    prte_event_libdir=/usr/lib
-                    AC_MSG_RESULT([(default search paths)])
-                elif test -d /usr/lib64; then
+                if test -d /usr/lib64; then
                     prte_event_libdir=/usr/lib64
+                    AC_MSG_RESULT([(default search paths)])
+                elif test -d /usr/lib; then
+                    prte_event_libdir=/usr/lib
                     AC_MSG_RESULT([(default search paths)])
                 else
                     AC_MSG_RESULT([default paths not found])

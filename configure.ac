@@ -927,9 +927,12 @@ AC_CACHE_SAVE
 # Libevent
 ##################################
 
-prte_show_title "Configure libevent"
+prte_show_title "Configure event library support - libev"
 
 PRTE_LIBEV_CONFIG
+
+prte_show_title "Configure event library support - libevent"
+
 PRTE_LIBEVENT_CONFIG
 
 AS_IF([test $prte_libevent_support -eq 1 && test $prte_libev_support -eq 1],

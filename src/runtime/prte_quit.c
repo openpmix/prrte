@@ -95,7 +95,7 @@ void prte_quit(int fd, short args, void *cbdata)
     PRTE_POST_OBJECT(prte_event_base_active);
     /* break the event loop - this will cause the loop to exit upon
        completion of any current event */
-    prte_event_base_loopbreak(prte_event_base);
+    prte_event_base_loopexit(prte_event_base);
 }
 
 static char* print_aborted_job(prte_job_t *job,
