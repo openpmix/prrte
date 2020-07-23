@@ -83,8 +83,6 @@ PRTE_EXPORT prte_event_t* prte_event_alloc(void);
 
 #define prte_event_base_init_common_timeout (b, t) event_base_init_common_timeout((b), (t))
 
-#define prte_event_base_loopexit(b) event_base_loopexit(b, NULL)
-
 #if PRTE_HAVE_LIBEV
 #define prte_event_use_threads()
 #define prte_event_free(b) free(b)
@@ -93,7 +91,6 @@ PRTE_EXPORT prte_event_t* prte_event_alloc(void);
 
 /* thread support APIs */
 #define prte_event_use_threads() evthread_use_pthreads()
-#define prte_event_base_loopbreak(b) event_base_loopbreak(b)
 #define prte_event_free(x) event_free(x)
 #define prte_event_get_signal(x) event_get_signal(x)
 #endif
@@ -115,12 +112,12 @@ PRTE_EXPORT int prte_event_assign(struct event *ev, prte_event_base_t *evbase,
 PRTE_EXPORT int prte_event_add(struct event *ev, struct timeval *tv);
 PRTE_EXPORT int prte_event_del(struct event *ev);
 PRTE_EXPORT void prte_event_active (struct event *ev, int res, short ncalls);
-PRTE_EXPORT void prte_event_base_loopbreak (prte_event_base_t *b);
+PRTE_EXPORT void prte_event_base_loopexit (prte_event_base_t *b);
 #else
 #define prte_event_add(ev, tv) event_add((ev), (tv))
 #define prte_event_del(ev) event_del((ev))
 #define prte_event_active(x, y, z) event_active((x), (y), (z))
-#define prte_event_base_loopbreak(b) event_base_loopbreak(b)
+#define prte_event_base_loopexit(b) event_base_loopexit(b, NULL)
 
 #endif
 
