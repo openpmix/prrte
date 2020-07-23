@@ -146,6 +146,12 @@ static prte_cmd_line_init_t cmd_line_init[] = {
       PRTE_CMD_LINE_OTYPE_LAUNCH },
 
 
+    /* mpiexec mandated form launch key parameters */
+    { '\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,
+      "Specify the initial error handler that is attached to predefined communicators during the first MPI call.",
+      PRTE_CMD_LINE_OTYPE_LAUNCH },
+
+
     /* DVM-specific options */
     /* uri of PMIx publish/lookup server, or at least where to get it */
     { '\0', "ompi-server", 1, PRTE_CMD_LINE_TYPE_STRING,
@@ -869,6 +875,17 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         rc = process_tune_files(p1, dstenv, ',');
         free(p1);
         if (PRTE_SUCCESS != rc) {
+            return rc;
+        }
+    }
+
+    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "initial-errhandler", 0, 0))) {
+        p1 = strip_quotes(pval->data.string);
+        rc = check_cache(&cache, &cachevals, "mpi_initial_errhandler", p1);
+        free(p1);
+        if (PRTE_SUCCESS != rc) {
+            prte_argv_free(cache);
+            prte_argv_free(cachevals);
             return rc;
         }
     }
