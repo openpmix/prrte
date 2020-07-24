@@ -213,12 +213,14 @@ int prte_ess_base_prted_setup(void)
         error = "prte_errmgr_base_open";
         goto error;
     }
+#if PRTE_ENABLE_FT
     /* open the propagate */
     if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework, 0))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_propagate_base_open";
         goto error;
     }
+#endif
     /* some environments allow remote launches - e.g., ssh - so
      * open and select something -only- if we are given
      * a specific module to use
@@ -404,14 +406,14 @@ int prte_ess_base_prted_setup(void)
         error = "prte_errmgr_base_select";
         goto error;
     }
-
+#if PRTE_ENABLE_FT
     /* select the propagate */
     if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
         PRTE_ERROR_LOG(ret);
         error = "prte_propagate_base_select";
         goto error;
     }
-
+#endif
     /*
      * Group communications
      */
@@ -552,10 +554,12 @@ int prte_ess_base_prted_finalize(void)
     /* shutdown the pmix server */
     pmix_server_finalize();
 
+#if PRTE_ENABLE_FT
     if ( NULL != prte_propagate.finalize ) {
         prte_propagate.finalize();
     }
     (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
+#endif
 
     if ( NULL != prte_errmgr.finalize ) {
         prte_errmgr.finalize();

@@ -80,16 +80,16 @@ prte_errmgr_base_module_t prte_errmgr_dvm_module = {
     .logfn = prte_errmgr_base_log,
     .abort = prte_errmgr_base_abort,
     .abort_peers = prte_errmgr_base_abort_peers,
-    NULL
+    .enable_detector = NULL
 };
 
-bool prp_regflag = 1;
 /*
  * Local functions
  */
 static void job_errors(int fd, short args, void *cbdata);
 static void proc_errors(int fd, short args, void *cbdata);
 
+#if PRTE_ENABLE_FT
 static int pack_state_for_proc(prte_buffer_t *alert, prte_proc_t *child)
 {
     int rc;
@@ -149,7 +149,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
             if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
                 PRTE_PMIX_CONVERT_PROCT(rc, &proc, info[n].value.data.proc);
 
-                if( prte_get_proc_daemon_vpid(&proc) != PRTE_PROC_MY_NAME->vpid){
+                if (prte_get_proc_daemon_vpid(&proc) != PRTE_PROC_MY_NAME->vpid) {
                     return;
                 }
                 PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
@@ -218,6 +218,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
         cbfunc(PRTE_SUCCESS, NULL, 0, NULL, NULL, cbdata);
     }
 }
+#endif
 
 static int init(void)
 {
@@ -229,6 +230,7 @@ static int init(void)
      */
     prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors, PRTE_MSG_PRI);
 
+#if PRTE_ENABLE_FT
     /* setup state machine to trap proc errors */
     pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
 
@@ -236,6 +238,8 @@ static int init(void)
                 "%s errmgr:dvm: register evhandler in errmgr",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     PMIx_Register_event_handler(&pcode, 1, NULL, 0, error_notify_cbfunc, register_cbfunc, NULL);
+#endif
+
     prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors, PRTE_ERROR_PRI);
 
     return PRTE_SUCCESS;
@@ -576,8 +580,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
             /* do not kill the job if ft prte is enabled */
-            if(!prte_errmgr_detector_enable_flag)
-            {
+            if (!prte_enable_ft) {
                 _terminate_job(jdata->jobid);
             }
         }
@@ -726,8 +729,7 @@ static void proc_errors(int fd, short args, void *cbdata)
          */
         if (PRTE_PROC_MY_NAME->jobid == proc->jobid) {
             /* do not kill the job if ft prte is enabled, with newly spawned process the jobid could be different */
-            if(!prte_errmgr_detector_enable_flag)
-            {
+            if (!prte_enable_ft) {
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             }
             break;

@@ -567,10 +567,8 @@ extern char *prte_stacktrace_output_filename;
 extern char *prte_net_private_ipv4;
 extern char *prte_set_max_sys_limits;
 
-/* Detector enable/disable flag */
-PRTE_EXPORT extern bool prte_errmgr_detector_enable_flag;
-PRTE_EXPORT extern double prte_errmgr_heartbeat_period;
-PRTE_EXPORT extern double prte_errmgr_heartbeat_timeout;
+/* Enable/disable ft */
+PRTE_EXPORT extern bool prte_enable_ft;
 
 END_C_DECLS
 

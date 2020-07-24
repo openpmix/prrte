@@ -8,7 +8,7 @@
  *                         reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
@@ -73,7 +73,7 @@ prte_errmgr_base_module_t prte_errmgr_prted_module = {
     .logfn = prte_errmgr_base_log,
     .abort = prted_abort,
     .abort_peers = prte_errmgr_base_abort_peers,
-    NULL
+    .enable_detector = NULL
 };
 
 /* Local functions */

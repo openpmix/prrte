@@ -349,11 +349,13 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
     prte_cache = PRTE_NEW(prte_pointer_array_t);
     prte_pointer_array_init(prte_cache, 1, INT_MAX, 1);
 
+#if PRTE_ENABLE_FT
     if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_DAEMON) {
-        if(NULL != prte_errmgr.enable_detector){
-            prte_errmgr.enable_detector(prte_errmgr_detector_enable_flag);
+        if (NULL != prte_errmgr.enable_detector){
+            prte_errmgr.enable_detector(prte_enable_ft);
         }
     }
+#endif
 
     /* start listening - will be ignored if no listeners
      * were registered */

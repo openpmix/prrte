@@ -3,6 +3,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -78,8 +79,14 @@ static int bmg_close(void)
 
 static int bmg_query(prte_mca_base_module_t **module, int *priority)
 {
-    *priority = my_priority;
-    *module = (prte_mca_base_module_t *)&prte_grpcomm_bmg_module;
-    return PRTE_SUCCESS;
+    if (prte_enable_ft) {
+        *priority = my_priority;
+        *module = (prte_mca_base_module_t *)&prte_grpcomm_bmg_module;
+        return PRTE_SUCCESS;
+    }
+
+    *priority = 0;
+    *module = NULL;
+    return PRTE_ERROR;
 }
 

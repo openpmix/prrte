@@ -213,7 +213,6 @@ AC_SUBST(PRTE_TOP_BUILDDIR)
 # Configuration options
 ############################################################################
 
-PRTE_CONFIGURE_OPTIONS
 PRTE_CHECK_OS_FLAVORS
 PRTE_CONFIGURE_OPTIONS
 

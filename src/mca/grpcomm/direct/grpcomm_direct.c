@@ -50,13 +50,13 @@ static int allgather(prte_grpcomm_coll_t *coll,
 
 /* Module def */
 prte_grpcomm_base_module_t prte_grpcomm_direct_module = {
-    init,
-    finalize,
-    xcast,
-    allgather,
-    NULL,
-    NULL,
-    NULL
+    .init = init,
+    .finalize = finalize,
+    .xcast = xcast,
+    .allgather = allgather,
+    .rbcast = NULL,
+    .register_cb = NULL,
+    .unregister_cb = NULL
 };
 
 /* internal functions */
