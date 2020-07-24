@@ -4,6 +4,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,13 +48,13 @@ static int register_cb_type(prte_grpcomm_rbcast_cb_t callback);
 static int unregister_cb_type(int type);
 /* Module def */
 prte_grpcomm_base_module_t prte_grpcomm_bmg_module = {
-    bmg_init,
-    bmg_finalize,
-    NULL,
-    NULL,
-    rbcast,
-    register_cb_type,
-    unregister_cb_type
+    .init = bmg_init,
+    .finalize = bmg_finalize,
+    .xcast = NULL,
+    .allgather = NULL,
+    .rbcast = rbcast,
+    .register_cb = register_cb_type,
+    .unregister_cb = unregister_cb_type
 };
 
 /* Internal functions */

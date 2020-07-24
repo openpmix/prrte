@@ -681,5 +681,12 @@ int prte_register_params(void)
                           PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                           &prte_pmix_verbose_output);
 
+    prte_mca_base_var_register("prte", "prte", NULL, "enable_ft",
+                        "Enable/disable fault tolerance",
+                        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                        PRTE_INFO_LVL_9,
+                        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_enable_ft);
+
+
     return PRTE_SUCCESS;
 }

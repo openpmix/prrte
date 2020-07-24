@@ -12,7 +12,7 @@
  * Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
@@ -59,7 +59,7 @@ prte_errmgr_base_module_t prte_errmgr_default_fns = {
     .logfn = prte_errmgr_base_log,
     .abort = prte_errmgr_base_abort,
     .abort_peers = prte_errmgr_base_abort_peers,
-    NULL
+    .enable_detector = NULL
 };
 
 /* NOTE: ABSOLUTELY MUST initialize this

@@ -41,7 +41,13 @@ typedef struct {
  * Local Component structures
  */
 
-PRTE_MODULE_EXPORT extern prte_errmgr_base_component_t prte_errmgr_detector_component;
+typedef struct {
+    prte_errmgr_base_component_t super;
+    double heartbeat_period;
+    double heartbeat_timeout;
+} prte_errmgr_detector_component_t;
+
+PRTE_MODULE_EXPORT extern prte_errmgr_detector_component_t prte_errmgr_detector_component;
 
 PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr_detector_module;
 
