@@ -20,7 +20,8 @@ AC_DEFUN([PRTE_LIBEV_CONFIG],[
 
     AC_ARG_WITH([libev],
                 [AC_HELP_STRING([--with-libev=DIR],
-                                [Search for libev headers and libraries in DIR ])])
+                                [Search for libev headers and libraries in DIR ])],
+                [], [with_libev=no])
     AC_ARG_WITH([libev-libdir],
                 [AC_HELP_STRING([--with-libev-libdir=DIR],
                                 [Search for libev libraries in DIR ])])
