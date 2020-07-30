@@ -3,6 +3,8 @@
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2020      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -460,6 +462,7 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
     uint16_t *slots=NULL, slot = UINT16_MAX;
     uint8_t *flags=NULL, flag = UINT8_MAX;
     int8_t i8, ntopos;
+    int16_t i16;
     int rc, n, nbitmap, nstart;
     bool compressed, unislots = true, uniflags = true, unitopos = true;
     prte_node_t *nptr;
@@ -643,26 +646,26 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
     /* if we have uniform #slots, then just flag it - no
      * need to pass anything */
     if (unislots) {
-        i8 = -1 * slot;
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &i8, 1, PRTE_INT8))) {
+        i16 = -1 * slot;
+        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &i16, 1, PRTE_INT16))) {
             goto cleanup;
         }
     } else {
         if (prte_compress.compress_block((uint8_t*)slots, nslots,
                                          (uint8_t**)&bo.bytes, &sz)) {
             /* mark that this was compressed */
-            i8 = 1;
+            i16 = 1;
             compressed = true;
             bo.size = sz;
         } else {
             /* mark that this was not compressed */
-            i8 = 0;
+            i16 = 0;
             compressed = false;
             bo.bytes = flags;
             bo.size = nbitmap;
         }
         /* indicate compression */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &i8, 1, PRTE_INT8))) {
+        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &i16, 1, PRTE_INT16))) {
             if (compressed) {
                 free(bo.bytes);
             }
@@ -745,6 +748,7 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
 int prte_util_parse_node_info(prte_buffer_t *buf)
 {
     int8_t i8;
+    int16_t i16;
     bool compressed;
     int rc = PRTE_SUCCESS, cnt, n, m, index;
     prte_node_t *nptr;
@@ -917,22 +921,22 @@ int prte_util_parse_node_info(prte_buffer_t *buf)
 
     /* check to see if we have uniform slot assignments */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &i8, &cnt, PRTE_INT8))) {
+    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &i16, &cnt, PRTE_INT16))) {
         PRTE_ERROR_LOG(rc);
         goto cleanup;
     }
 
     /* if so, then make every node the same */
-    if (0 > i8) {
-        i8 = -1 * i8;
+    if (0 > i16) {
+        i16 = -1 * i16;
         for (n=0; n < prte_node_pool->size; n++) {
             if (NULL != (nptr = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, n))) {
-                nptr->slots = i8;
+                nptr->slots = i16;
             }
         }
     } else {
         /* if compressed, get the uncompressed size */
-        if (1 == i8) {
+        if (1 == i16) {
             cnt = 1;
             if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &sz, &cnt, PRTE_SIZE))) {
                 PRTE_ERROR_LOG(rc);
@@ -946,7 +950,7 @@ int prte_util_parse_node_info(prte_buffer_t *buf)
             goto cleanup;
         }
         /* if compressed, decompress */
-        if (1 == i8) {
+        if (1 == i16) {
             if (!prte_compress.decompress_block((uint8_t**)&slots, sz,
                                                 boptr->bytes, boptr->size)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
