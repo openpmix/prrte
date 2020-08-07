@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018 The University of Tennessee and The University
+ * Copyright (c) 2017-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
@@ -72,7 +72,7 @@ static int register_prp_callback(void);
 static int prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *source,
         prte_process_name_t *errorproc, prte_proc_state_t state);
 
-int prte_propagate_prperror_recv(prte_buffer_t* buffer);
+static int prte_propagate_prperror_recv(prte_buffer_t* buffer);
 
 /* flag use to register callback for grpcomm rbcast forward */
 int enable_callback_register_flag = 1;
@@ -443,7 +443,7 @@ static int _prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sour
 }
 
 
-int prte_propagate_prperror_recv(prte_buffer_t* buffer)
+static int prte_propagate_prperror_recv(prte_buffer_t* buffer)
 {
     int ret, cnt, state;
     prte_process_name_t errorproc;

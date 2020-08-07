@@ -339,7 +339,7 @@ static void enable_detector(bool enable_flag)
         }
 
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                    "errmgr:detector daemon %d observering %d observer %d",
+                    "errmgr:detector daemon %d observing %d; observed by %d",
                     vpid,
                     detector->hb_observing,
                     detector->hb_observer));
@@ -410,7 +410,7 @@ static int fd_heartbeat_request(prte_errmgr_detector_t* detector) {
         break;
     }
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                "errmgr:detector updated ring daemon %d observering %d observer %d",
+                "errmgr:detector updated ring daemon %d observing %d; observed by %d",
                 PRTE_PROC_MY_NAME->vpid,
                 detector->hb_observing,
                 detector->hb_observer));

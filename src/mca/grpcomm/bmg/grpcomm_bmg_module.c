@@ -40,12 +40,10 @@
 /* Static API's */
 static int bmg_init(void);
 static void bmg_finalize(void);
-
 static int rbcast(prte_buffer_t *buf);
-
 static int register_cb_type(prte_grpcomm_rbcast_cb_t callback);
-
 static int unregister_cb_type(int type);
+
 /* Module def */
 prte_grpcomm_base_module_t prte_grpcomm_bmg_module = {
     .init = bmg_init,
@@ -70,7 +68,7 @@ static prte_list_t tracker;
 #define RBCAST_CB_TYPE_MAX 7
 static prte_grpcomm_rbcast_cb_t prte_grpcomm_rbcast_cb[RBCAST_CB_TYPE_MAX+1];
 
-int register_cb_type(prte_grpcomm_rbcast_cb_t callback) {
+static int register_cb_type(prte_grpcomm_rbcast_cb_t callback) {
     int i;
 
     for(i = 0; i < RBCAST_CB_TYPE_MAX; i++) {
@@ -82,7 +80,7 @@ int register_cb_type(prte_grpcomm_rbcast_cb_t callback) {
     return PRTE_ERR_OUT_OF_RESOURCE;
 }
 
-int unregister_cb_type(int type) {
+static int unregister_cb_type(int type) {
     if( RBCAST_CB_TYPE_MAX < type || 0 > type ) {
         return PRTE_ERR_BAD_PARAM;
     }
