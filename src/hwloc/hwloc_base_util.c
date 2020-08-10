@@ -2011,7 +2011,7 @@ char* prte_hwloc_base_get_location(char *locality,
             } else if (2 == index) {
                 srch = "L2";
             } else {
-                srch = "L0";
+                srch = "L1";
             }
             break;
 #else
@@ -2022,7 +2022,7 @@ char* prte_hwloc_base_get_location(char *locality,
             srch = "L2";
             break;
         case HWLOC_OBJ_L1CACHE:
-            srch = "L0";
+            srch = "L1";
             break;
 #endif
         case HWLOC_OBJ_CORE:
