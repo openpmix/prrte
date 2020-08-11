@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2018 - 2020 The University of Tennessee and The University
- *                           of Tennessee Research Foundation.  All rights
- *                           reserved.
+ * Copyright (c) 2018-2020 The University of Tennessee and The University
+ *                         of Tennessee Research Foundation.  All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,13 +32,19 @@ static void notification_fn(size_t evhdlr_registration_id,
                             void *cbdata)
 {
     gettimeofday(&end,NULL);
-    fprintf(stderr, "Client %s:%d NOTIFIED with status %d and error proc %s:%d key %s \n",
-            myproc.nspace, myproc.rank, status,
-            info[0].value.data.proc->nspace, info[0].value.data.proc->rank,info[0].key);
-    completed = true;
-    if (NULL != cbfunc) {
-        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    fprintf(stderr, "New notification comes\n");
+    if( (info[0].value.data.proc!=NULL) && strcmp(info[0].value.data.proc->nspace, myproc.nspace)==0)
+    {
+        fprintf(stderr, "Client %s:%d NOTIFIED with status %d and error proc %s:%d key %s \n",
+                myproc.nspace, myproc.rank, status,
+                info[0].value.data.proc->nspace, info[0].value.data.proc->rank,info[0].key);
+        completed = true;
+        if (NULL != cbfunc) {
+            cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+        }
     }
+    else
+        fprintf(stderr, "Not from my namespace \n");
 }
 
 static void op_callbk(pmix_status_t status,
