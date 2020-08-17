@@ -47,7 +47,7 @@ In all the above cases, if you want PRTE to default to the number
 of hardware threads instead of the number of processor cores, use the
 --use-hwthread-cpus option.
 
-Alternatively, you can use the --oversubscribe option to ignore the
+Alternatively, you can use the --map-by :OVERSUBSCRIBE option to ignore the
 number of available slots when deciding the number of processes to
 launch.
 #
