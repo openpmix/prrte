@@ -15,6 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,8 +25,10 @@
  */
 
 #define _GNU_SOURCE
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <time.h>
 #include <pthread.h>
@@ -34,54 +37,23 @@
 #include "debugger.h"
 
 
-static int attach_to_running_job(char *nspace);
 static pmix_proc_t myproc;
+static char launcher_namespace[PMIX_MAX_NSLEN + 1];
+static char application_namespace[PMIX_MAX_NSLEN + 1];
+static char daemon_namespace[PMIX_MAX_NSLEN + 1];
 
-/* this is a callback function for the PMIx_Query
- * API. The query will callback with a status indicating
- * if the request could be fully satisfied, partially
- * satisfied, or completely failed. The info parameter
- * contains an array of the returned data, with the
- * info->key field being the key that was provided in
- * the query call. Thus, you can correlate the returned
- * data in the info->value field to the requested key.
- *
- * Once we have dealt with the returned data, we must
- * call the release_fn so that the PMIx library can
- * cleanup */
-static void cbfunc(pmix_status_t status,
-                   pmix_info_t *info, size_t ninfo,
-                   void *cbdata,
-                   pmix_release_cbfunc_t release_fn,
-                   void *release_cbdata)
-{
-    myquery_data_t *mq = (myquery_data_t*)cbdata;
-    size_t n;
 
-    mq->status = status;
-    /* save the returned info - the PMIx library "owns" it
-     * and will release it and perform other cleanup actions
-     * when release_fn is called */
-    if (0 < ninfo) {
-        PMIX_INFO_CREATE(mq->info, ninfo);
-        mq->ninfo = ninfo;
-        for (n=0; n < ninfo; n++) {
-            fprintf(stderr, "Key %s Type %s(%d)\n", info[n].key, PMIx_Data_type_string(info[n].value.type), info[n].value.type);
-            PMIX_INFO_XFER(&mq->info[n], &info[n]);
-        }
-    }
+/*
+ * Launch debugger daemons alongside the application processes
+ */
+static int attach_to_running_job(void);
 
-    /* let the library release the data and cleanup from
-     * the operation */
-    if (NULL != release_fn) {
-        release_fn(release_cbdata);
-    }
+/*
+ * Find the application namespace given the launcher namespace
+ */
+static int query_application_namespace(void);
 
-    /* release the block */
-    DEBUG_WAKEUP_THREAD(&mq->lock);
-}
-
-/* this is the event notification function we pass down below
+/* This is the event notification function we pass down below
  * when registering for general events - i.e.,, the default
  * handler. We don't technically need to register one, but it
  * is usually good practice to catch any events that occur */
@@ -93,13 +65,17 @@ static void notification_fn(size_t evhdlr_registration_id,
                             pmix_event_notification_cbfunc_fn_t cbfunc,
                             void *cbdata)
 {
-    /* this example doesn't do anything with default events */
+    printf("Debugger: %s called as callback for event=%s\n", __FUNCTION__,
+           PMIx_Error_string(status));
+
+    /* Note: This example doesn't do anything with default events */
+
     if (NULL != cbfunc) {
         cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
     }
 }
 
-/* this is an event notification function that we explicitly request
+/* This is an event notification function that we explicitly request
  * be called when the PMIX_ERR_JOB_TERMINATED notification is issued.
  * We could catch it in the general event notification function and test
  * the status to see if it was "job terminated", but it often is simpler
@@ -115,45 +91,59 @@ static void release_fn(size_t evhdlr_registration_id,
                        void *cbdata)
 {
     myrel_t *lock;
-    pmix_status_t rc;
     bool found;
     int exit_code;
     size_t n;
     pmix_proc_t *affected = NULL;
 
+    printf("Debugger: %s called as callback for event=%s\n", __FUNCTION__,
+           PMIx_Error_string(status));
+
     /* find our return object */
     lock = NULL;
     found = false;
     for (n=0; n < ninfo; n++) {
-        if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
+        if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT,
+                         PMIX_MAX_KEYLEN)) {
             lock = (myrel_t*)info[n].value.data.ptr;
-            /* not every RM will provide an exit code, but check if one was given */
+            /* not every RM will provide an exit code, but check if one was
+             * given */
         } else if (0 == strncmp(info[n].key, PMIX_EXIT_CODE, PMIX_MAX_KEYLEN)) {
             exit_code = info[n].value.data.integer;
             found = true;
-        } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
+        } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC,
+                                PMIX_MAX_KEYLEN)) {
             affected = info[n].value.data.proc;
+            if( !PMIX_CHECK_NSPACE(affected->nspace, daemon_namespace) ) {
+                fprintf(stderr, "Debugger: Error: Received notice of unexpected namespace \"%s\" instead of \"%s\"\n",
+                        affected->nspace, daemon_namespace);
+                /* Tell the event handler state machine that we are the last step */
+                if (NULL != cbfunc) {
+                    cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+                }
+                return;
+            }
         }
     }
-    /* if the object wasn't returned, then that is an error */
+
+    /* If the lock object wasn't returned, then that is an error */
     if (NULL == lock) {
         fprintf(stderr, "LOCK WASN'T RETURNED IN RELEASE CALLBACK\n");
-        /* let the event handler progress */
+        /* Let the event handler progress */
         if (NULL != cbfunc) {
             cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
         }
         return;
     }
 
-    fprintf(stderr, "DEBUGGER NOTIFIED THAT JOB %s TERMINATED - AFFECTED %s\n", lock->nspace,
-            (NULL == affected) ? "NULL" : affected->nspace);
+    fprintf(stderr, "DEBUGGER NOTIFIED THAT JOB %s TERMINATED - AFFECTED %s\n",
+            lock->nspace, (NULL == affected) ? "NULL" : affected->nspace);
     if (found) {
         lock->exit_code = exit_code;
         lock->exit_code_given = true;
     }
-    DEBUG_WAKEUP_THREAD(&lock->lock);
 
-    /* tell the event handler state machine that we are the last step */
+    /* Tell the event handler state machine that we are the last step */
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
     }
@@ -162,7 +152,7 @@ static void release_fn(size_t evhdlr_registration_id,
     return;
 }
 
-/* event handler registration is done asynchronously because it
+/* Event handler registration is done asynchronously because it
  * may involve the PMIx server registering with the host RM for
  * external events. So we provide a callback function that returns
  * the status of the request (success or an error), plus a numerical index
@@ -175,104 +165,25 @@ static void evhandler_reg_callbk(pmix_status_t status,
 {
     mylock_t *lock = (mylock_t*)cbdata;
 
+    printf("Debugger: %s called to register callback\n", __FUNCTION__);
+
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
-                   myproc.nspace, myproc.rank, status, (unsigned long)evhandler_ref);
+                myproc.nspace, myproc.rank, status,
+                (unsigned long)evhandler_ref);
     }
     lock->status = status;
     DEBUG_WAKEUP_THREAD(lock);
 }
 
-static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
-{
-    pmix_status_t rc;
-    pmix_info_t *dinfo;
-    pmix_app_t *debugger;
-    size_t dninfo;
-    char cwd[1024];
-    char dspace[PMIX_MAX_NSLEN+1];
-    mylock_t mylock;
-    pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
-
-    /* setup the debugger */
-    PMIX_APP_CREATE(debugger, 1);
-    debugger[0].cmd = strdup("./debuggerd");
-    PMIX_ARGV_APPEND(rc, debugger[0].argv, "./debuggerd");
-    getcwd(cwd, 1024);  // point us to our current directory
-    debugger[0].cwd = strdup(cwd);
-    /* provide directives so the daemons go where we want, and
-     * let the RM know these are debugger daemons */
-    dninfo = 6;
-    PMIX_INFO_CREATE(dinfo, dninfo);
-    PMIX_INFO_LOAD(&dinfo[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
-    PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
-    PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
-    PMIX_INFO_LOAD(&dinfo[2], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
-    PMIX_INFO_LOAD(&dinfo[3], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
-    PMIX_INFO_LOAD(&dinfo[4], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
-    PMIX_INFO_LOAD(&dinfo[5], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
-    /* spawn the daemons */
-    fprintf(stderr, "Debugger: spawning %s\n", debugger[0].cmd);
-    if (PMIX_SUCCESS != (rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace))) {
-        fprintf(stderr, "Debugger daemons failed to launch with error: %s\n", PMIx_Error_string(rc));
-        PMIX_INFO_FREE(dinfo, dninfo);
-        PMIX_APP_FREE(debugger, 1);
-        return rc;
-    }
-    /* cleanup */
-    PMIX_INFO_FREE(dinfo, dninfo);
-    PMIX_APP_FREE(debugger, 1);
-
-    /* register callback for when this job terminates */
-    myrel->nspace = strdup(dspace);
-    PMIX_INFO_CREATE(dinfo, 2);
-    PMIX_INFO_LOAD(&dinfo[0], PMIX_EVENT_RETURN_OBJECT, myrel, PMIX_POINTER);
-    /* only call me back when this specific job terminates */
-    PMIX_INFO_LOAD(&dinfo[1], PMIX_NSPACE, dspace, PMIX_STRING);
-
-    DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(&code, 1, dinfo, 2,
-                                release_fn, evhandler_reg_callbk, (void*)&mylock);
-    DEBUG_WAIT_THREAD(&mylock);
-    rc = mylock.status;
-    DEBUG_DESTRUCT_LOCK(&mylock);
-    PMIX_INFO_FREE(dinfo, 2);
-
-    return rc;
-}
-
-#define DBGR_LOOP_LIMIT  10
-
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
-    pmix_info_t *info, *iptr;
-    pmix_app_t *app;
-    size_t ninfo, napps;
-    char *nspace = NULL;
-    int i;
-    pmix_query_t *query;
-    size_t nq, n;
-    myquery_data_t myquery_data;
-    bool cospawn = false, stop_on_exec = false, cospawn_reqd = false;
-    char cwd[1024];
-    pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
-    mylock_t mylock;
-    myrel_t myrel, launcher_ready, dbrel;
+    pmix_info_t *info;
+    size_t ninfo;
     pid_t pid;
-    pmix_envar_t envar;
-    char *launchers[] = {
-        "prun",
-        "mpirun",
-        "mpiexec",
-        "prterun",
-        NULL
-    };
-    pmix_proc_t proc;
-    bool found;
-    pmix_data_array_t darray;
-    char *tmp;
-    char clientspace[PMIX_MAX_NSLEN+1];
+    int n;
+    int i;
 
     pid = getpid();
 
@@ -281,179 +192,236 @@ int main(int argc, char **argv)
         if (0 == strcmp(argv[i], "-h") ||
             0 == strcmp(argv[i], "--help")) {
             /* print the usage message and exit */
-
-        }
-        if (0 == strcmp(argv[i], "-a") ||
-            0 == strcmp(argv[i], "--attach")) {
-            if (NULL != nspace) {
-                /* can only support one */
-                fprintf(stderr, "Cannot attach to more than one nspace\n");
-                exit(1);
-            }
-            /* the next argument must be the nspace */
-            ++i;
-            if (argc == i) {
-                /* they goofed */
-                fprintf(stderr, "The %s option requires an <nspace> argument\n", argv[i]);
-                exit(1);
-            }
-            nspace = strdup(argv[i]);
-        } else if (0 == strcmp(argv[i], "-c") ||
-                   0 == strcmp(argv[i], "--cospawn")){
-            cospawn_reqd = true;
-            break;
+            printf("Usage: ./attach NAMESPACE_OF_LAUNCHER\n");
+            printf(" Requires knowledge of the namespace of the job launcher\n");
+            printf(" -h|--help      Display this help message and exit.\n");
+            exit(0);
         }
     }
+    if (argc < 2) {
+        printf("Usage: ./attach NAMESPACE_OF_LAUNCHER\n");
+        exit(1);
+    }
+    strncpy(launcher_namespace, argv[1], PMIX_MAX_NSLEN);
     info = NULL;
-    ninfo = 0;
+    ninfo = 1;
+    n = 0;
 
-    /* use the system connection first, if available */
-    PMIX_INFO_CREATE(info, 1);
-    PMIX_INFO_LOAD(&info[0], PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-    /* init as a tool */
+    PMIX_INFO_CREATE(info, ninfo);
+    PMIX_INFO_LOAD(&info[n], PMIX_LAUNCHER, NULL, PMIX_BOOL);
+
+    /* Initialize as a tool */
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, info, ninfo))) {
-        fprintf(stderr, "PMIx_tool_init failed: %s(%d)\n", PMIx_Error_string(rc), rc);
+        fprintf(stderr, "PMIx_tool_init failed: %s(%d)\n",
+                PMIx_Error_string(rc), rc);
         exit(rc);
     }
     PMIX_INFO_FREE(info, ninfo);
 
-    fprintf(stderr, "Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank, (unsigned long)pid);
+    fprintf(stderr, "Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace,
+            myproc.rank, (unsigned long)pid);
+    fprintf(stderr, "Launcher ns %s\n", launcher_namespace);
 
-    /* construct the debugger termination release */
-    DEBUG_CONSTRUCT_LOCK(&dbrel.lock);
-
-    /* register a default event handler */
-    DEBUG_CONSTRUCT_LOCK(&mylock);
+    /* Register a default event handler */
     PMIx_Register_event_handler(NULL, 0, NULL, 0,
-                                notification_fn, evhandler_reg_callbk, (void*)&mylock);
-    DEBUG_WAIT_THREAD(&mylock);
-    DEBUG_DESTRUCT_LOCK(&mylock);
+                                notification_fn, NULL, NULL);
 
-    /* if we are attaching to a running job, then attach to it */
-    if (NULL != nspace) {
-        if (PMIX_SUCCESS != (rc = attach_to_running_job(nspace))) {
-            fprintf(stderr, "Failed to attach to nspace %s: error code %d\n",
-                    nspace, rc);
-            goto done;
-        }
+    /* Resolve the application namespace
+     * We are given the namespace of the launcher. The debugger daemon needs
+     * the namespace of the application so it can interact with and control
+     * execution of the application tasks.
+     *
+     * Query the namespaces known to the launcher to get the application
+     * namespace.
+     */
+    query_application_namespace();
+    fprintf(stderr, "Application ns %s\n", application_namespace);
+
+    /* Attach to the running job */
+    if (PMIX_SUCCESS != (rc = attach_to_running_job())) {
+        fprintf(stderr, "Failed to attach to nspace %s: error code %d\n",
+                launcher_namespace, rc);
     }
 
-
-  done:
-    DEBUG_DESTRUCT_LOCK(&myrel.lock);
-    DEBUG_DESTRUCT_LOCK(&dbrel.lock);
+    /* Finalize the tool */
     PMIx_tool_finalize();
 
     return(rc);
 }
 
-static int attach_to_running_job(char *nspace)
+static int attach_to_running_job(void)
 {
     pmix_status_t rc;
-    pmix_proc_t myproc;
-    pmix_query_t *query;
-    size_t nq;
-    myquery_data_t *q;
+    pmix_info_t *info;
+    pmix_app_t *app;
+    pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
+    size_t ninfo;
+    int n;
+    mylock_t mylock;
+    myrel_t myrel;
+    char cwd[_POSIX_PATH_MAX];
 
-    /* query the active nspaces so we can verify that the
-     * specified one exists */
-    nq = 1;
-    PMIX_QUERY_CREATE(query, nq);
-    PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_NAMESPACES);
+    printf("Debugger: %s called to attach to application with namespace %s\n",
+           __FUNCTION__, application_namespace);
 
-    q = (myquery_data_t*)malloc(sizeof(myquery_data_t));
-    DEBUG_CONSTRUCT_LOCK(&q->lock);
-    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void*)q))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Query_info failed: %d\n", myproc.nspace, myproc.rank, rc);
-        return -1;
-    }
-    DEBUG_WAIT_THREAD(&q->lock);
-    DEBUG_DESTRUCT_LOCK(&q->lock);
-
-    if (NULL == q->info) {
-        fprintf(stderr, "Query returned no info\n");
-        return -1;
-    }
-    /* the query should have returned a comma-delimited list of nspaces */
-    if (PMIX_STRING != q->info[0].value.type) {
-        fprintf(stderr, "Query returned incorrect data type: %d\n", q->info[0].value.type);
-        return -1;
-    }
-    if (NULL == q->info[0].value.data.string) {
-        fprintf(stderr, "Query returned no active nspaces\n");
-        return -1;
-    }
-
-    fprintf(stderr, "Query returned %s\n", q->info[0].value.data.string);
-    return 0;
-
-#if 0
-    /* split the returned string and look for the given nspace */
-
-    /* if not found, then we have an error */
-    PMIX_INFO_FREE(info, ninfo);
-
-    /* get the proctable for this nspace */
-    ninfo = 1;
-    PMIX_INFO_CREATE(info, ninfo);
-    (void)strncpy(info[0].key, PMIX_QUERY_PROC_TABLE, PMIX_MAX_KEYLEN);
-    (void)strncpy(info[0].qualifier, nspace, PMIX_MAX_KEYLEN);
-    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(info, ninfo, infocbfunc, (void*)&active))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Query_info_nb failed: %d\n", myproc.nspace, myproc.rank, rc);
-        return -1;
-    }
-    /* wait to get a response */
-
-    /* the query should have returned a data_array */
-    if (PMIX_DATA_ARRAY != info[0].type) {
-        fprintf(stderr, "Query returned incorrect data type: %d\n", info[0].type);
-        return -1;
-    }
-    if (NULL == info[0].data.darray.array) {
-        fprintf(stderr, "Query returned no proctable info\n");
-        return -1;
-    }
-    /* the data array consists of a struct:
-     *     size_t size;
-     *     void* array;
-     *
-     * In this case, the array is composed of pmix_proc_info_t structs:
-     *     pmix_proc_t proc;   // contains the nspace,rank of this proc
-     *     char* hostname;
-     *     char* executable_name;
-     *     pid_t pid;
-     *     int exit_code;
-     *     pmix_proc_state_t state;
-     */
-
-    /* this is where a debugger tool would process the proctable to
+    /* Note: This is where a debugger tool would process the proctable to
      * create whatever blob it needs to provide to its daemons */
+
+    /* Set up the debugger daemon spawn request */
+    PMIX_APP_CREATE(app, 1);
+    /* Set up the name of the daemon executable to launch */
+    app->cmd = strdup("./daemon");
+    app->argv = (char**)malloc(2*sizeof(char*));
+    /* Set up the debuger daemon arguments, in this case, just argv[0] */
+    app->argv[0] = strdup("./daemon");
+    app->argv[1] = NULL;
+    /* No environment variables */
+    app->env = NULL;
+    /* Set the daemon's working directory to our current directory */
+    getcwd(cwd, _POSIX_PATH_MAX);
+    app->cwd = strdup(cwd);
+    /* No attributes set in the pmix_app_t structure */
+    app->info = NULL;
+    app->ninfo = 0;
+    /* One debugger daemon */
+    app->maxprocs = 1;
+    /* Provide directives so the daemon goes where we want, and
+     * let the RM know this is a debugger daemon */
+    ninfo = 6;
+    n = 0;
+    PMIX_INFO_CREATE(info, ninfo);
+#if 0
+    /* Co-locate daemons 1 per node -- Not implemented yet! */
+    PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_DAEMONS_PER_NODE, 1, PMIX_UINT16);
+#else
+    /* Map debugger daemon processes by node */
+    PMIX_INFO_LOAD(&info[n], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);
+#endif
+    n++;
+    /* Indicate this is a debugger daemon */
+    PMIX_INFO_LOAD(&info[n], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL);
+    n++;
+    /* Indicate that we want to target the application namespace (Replacement for deprecated PMIX_DEBUG_JOB) */
+#if 0
+    PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_TARGET, application_namespace, PMIX_STRING);
+#else
+    PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_JOB, application_namespace, PMIX_STRING);
+#endif
+    n++;
+    /* Forward stdout to this process */
+    PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);
+    n++;
+    /* Forward stderr to this process */
+    PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDERR, NULL, PMIX_BOOL);
+    n++;
+    /* Indicate the requestor is a tool process */
+    PMIX_INFO_LOAD(&info[n], PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
+    n++;
+
+    printf("Debugger: Spawn debugger daemon\n");
+    /* Spawn the daemon */
+    rc = PMIx_Spawn(info, ninfo, app, 1, daemon_namespace);
+    PMIX_APP_FREE(app, 1);
     PMIX_INFO_FREE(info, ninfo);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "Error spawning debugger daemon, %s\n",
+                PMIx_Error_string(rc));
+        return -1;
+    }
+    printf("Debugger: Daemon namespace '%s'\n", daemon_namespace);
 
-    /* setup the debugger daemon spawn request */
-    napps = 1;
-    PMIX_APP_CREATE(app, napps);
-    /* setup the name of the daemon executable to launch */
-    app[0].cmd = strdup("debuggerdaemon");
-    app[0].argc = 1;
-    app[0].argv = (char**)malloc(2*sizeof(char*));
-    app[0].argv[0] = strdup("debuggerdaemon");
-    app[0].argv[1] = NULL;
-    /* provide directives so the daemons go where we want, and
-     * let the RM know these are debugger daemons */
-    ninfo = 3;
-    PMIX_INFO_CREATE(app[0].info, ninfo);
-    PMIX_INFO_LOAD(&app[0].info[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
-    PMIX_INFO_LOAD(&app[0].info[1], PMIX_DEBUGGER_DAEMONS, true, PMIX_BOOL); // these are debugger daemons
-    PMIX_INFO_LOAD(&app[0].info[2], PMIX_DEBUG_TARGET, nspace, PMIX_STRING); // the "jobid" of the application to be debugged
+    /* Note: This is where a debugger tool would wait until the debug operation is
+     * complete */
 
-    /* spawn the daemons */
-    PMIx_Spawn(NULL, 0, app, napps, dspace);
-    /* cleanup */
-    PMIX_APP_FREE(app, napps);
+    /* Register callback for when the debugger daemon terminates */
+    DEBUG_CONSTRUCT_LOCK(&myrel.lock);
+    myrel.nspace = strdup(daemon_namespace);
+    PMIX_INFO_CREATE(info, 2);
+    /* Only call me back when this specific job terminates */
+    PMIX_INFO_LOAD(&info[0], PMIX_NSPACE, daemon_namespace, PMIX_STRING);
+    /* Return access to the lock object */
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
 
-    /* this is where a debugger tool would wait until the debug operation is complete */
+    DEBUG_CONSTRUCT_LOCK(&mylock);
+    PMIx_Register_event_handler(&code, 1, info, 2, release_fn,
+                                evhandler_reg_callbk, (void*)&mylock);
+    DEBUG_WAIT_THREAD(&mylock); // wait for evhandler_reg_callbk
+    rc = mylock.status;
+    DEBUG_DESTRUCT_LOCK(&mylock);
+
+    printf("Debugger: Waiting for debugger daemon namespace %s to complete\n", daemon_namespace);
+    DEBUG_WAIT_THREAD(&myrel.lock); // wait for release_fn
+    PMIX_INFO_FREE(info, 2);
+
+    printf("Debugger: Daemon namespace %s terminated\n", daemon_namespace);
+    return rc;
+}
+
+int query_application_namespace(void)
+{
+    pmix_info_t *namespace_query_data;
+    size_t namespace_query_size;
+    pmix_status_t rc;
+    pmix_query_t namespace_query;
+    int wildcard_rank = PMIX_RANK_WILDCARD;
+    int n;
+    char *ptr;
+
+    PMIX_QUERY_CONSTRUCT(&namespace_query);
+    PMIX_ARGV_APPEND(rc, namespace_query.keys, PMIX_QUERY_NAMESPACES);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "An error occurred creating namespace query.");
+        PMIX_QUERY_DESTRUCT(&namespace_query);
+        return -1;
+    }
+
+    namespace_query.nqual = 2;
+    PMIX_INFO_CREATE(namespace_query.qualifiers, namespace_query.nqual);
+    n = 0;
+    PMIX_INFO_LOAD(&namespace_query.qualifiers[n], PMIX_NSPACE, launcher_namespace,
+                   PMIX_STRING);
+    n++;
+    PMIX_INFO_LOAD(&namespace_query.qualifiers[n], PMIX_RANK, &wildcard_rank,
+                   PMIX_INT32);
+
+    /* Query all namespaces associated with the launcher_namespace */
+    rc = PMIx_Query_info(&namespace_query, 1, &namespace_query_data,
+                         &namespace_query_size);
+    PMIX_QUERY_DESTRUCT(&namespace_query);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr,
+                "An error occurred querying application namespace: %s.\n",
+                PMIx_Error_string(rc));
+        return -1;
+    }
+    if ((1 != namespace_query_size) ||
+              (PMIX_STRING != namespace_query_data->value.type)) {
+        fprintf(stderr, "The response to namespace query has wrong format.\n");
+        return -1;
+    }
+
+    /* The query retruns a comma-delimited list of namespaces. If there are
+     * multple namespaces in the list, then assume the first is the 
+     * application namespace and the second is the daemon namespace.
+     * Copy only the application namespace and terminate the name with '\0'
+     */
+    if (NULL != (ptr = strchr(namespace_query_data->value.data.string, ','))) {
+#if 0
+        // Last item in the list
+        ptr = strrchr(namespace_query_data->value.data.string, ',');
+        ptr += 1;
+        strcpy(application_namespace, ptr);
+#else
+        // First item in the list
+        int len = ptr - namespace_query_data->value.data.string;
+        strncpy(application_namespace, namespace_query_data->value.data.string, len);
+        application_namespace[len] = '\0';
+#endif
+    } else {
+        strcpy(application_namespace, namespace_query_data->value.data.string);
+    }
+    printf("Application namespace is '%s'\n", application_namespace);
 
     return 0;
-#endif
 }
+
