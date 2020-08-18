@@ -65,7 +65,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "KEY: %s\n", info[n].key);
     }
 
-    if (PMIX_SUCCESS != (rc = PMIx_Get(&myproc, PMIX_NUMA_RANK, NULL, 0, &val))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Get(&myproc, PMIX_PACKAGE_RANK, NULL, 0, &val))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Get numa rank failed: %s\n",
                 myproc.nspace, myproc.rank, PMIx_Error_string(rc));
         exit(0);
