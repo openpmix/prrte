@@ -321,7 +321,7 @@ AC_DEFUN([PRTE_SETUP_CC],[
                       prte_cv_cc_wno_long_double="yes"
                       if test -s conftest.err ; then
                           dnl Yes, it should be "ignor", in order to catch ignoring and ignore
-                          for i in unknown invalid ignor unrecognized ; do
+                          for i in unknown invalid ignor unrecognized 'not supported'; do
                               $GREP -iq $i conftest.err
                               if test "$?" = "0" ; then
                                   prte_cv_cc_wno_long_double="no"
