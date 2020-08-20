@@ -417,6 +417,11 @@ static void _query(int sd, short args, void *cbdata)
                     ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
+                /* Check if there are any entries in global proctable */
+                if (0 == jdata->num_procs) {
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
                 /* setup the reply */
                 kv = PRTE_NEW(prte_info_item_t);
                 (void)strncpy(kv->info.key, PMIX_QUERY_PROC_TABLE, PMIX_MAX_KEYLEN);
@@ -452,7 +457,12 @@ static void _query(int sd, short args, void *cbdata)
                  * entries for each LOCAL proc in the indicated job */
                 jdata = prte_get_job_data_object(jobid);
                 if (NULL == jdata) {
-                    rc = PRTE_ERR_NOT_FOUND;
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
+                /* Check if there are any entries in local proctable */
+                if (0 == jdata->num_local_procs) {
+                    ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
                 /* setup the reply */
