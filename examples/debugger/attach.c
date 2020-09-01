@@ -199,7 +199,7 @@ int main(int argc, char **argv)
         }
     }
     if (argc < 2) {
-        printf("Usage: ./attach NAMESPACE_OF_LAUNCHER\n");
+        printf("Usage: %s NAMESPACE_OF_LAUNCHER\n", argv[0]);
         exit(1);
     }
     strncpy(launcher_namespace, argv[1], PMIX_MAX_NSLEN);
@@ -218,9 +218,9 @@ int main(int argc, char **argv)
     }
     PMIX_INFO_FREE(info, ninfo);
 
-    fprintf(stderr, "Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace,
-            myproc.rank, (unsigned long)pid);
-    fprintf(stderr, "Launcher ns %s\n", launcher_namespace);
+    printf("Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace,
+           myproc.rank, (unsigned long)pid);
+    printf("Launcher ns %s\n", launcher_namespace);
 
     /* Register a default event handler */
     PMIx_Register_event_handler(NULL, 0, NULL, 0,
@@ -405,7 +405,8 @@ int query_application_namespace(void)
      * application namespace and the second is the daemon namespace.
      * Copy only the application namespace and terminate the name with '\0'
      */
-    if (NULL != (ptr = strchr(namespace_query_data->value.data.string, ','))) {
+    ptr = strchr(namespace_query_data->value.data.string, ',');
+    if (NULL != ptr) {
 #if 0
         // Last item in the list
         ptr = strrchr(namespace_query_data->value.data.string, ',');

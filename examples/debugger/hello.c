@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <ctype.h>
 
 #include <pmix.h>
 
@@ -50,7 +51,13 @@ int main(int argc, char **argv)
     gethostname(hostname, 1024);
 
     if (1 < argc) {
-        spin = strtoul(argv[1], NULL, 10);
+        if (isdigit(argv[1][0]) && '0' != argv[1][0]) {
+            spin = strtoul(argv[1], NULL, 10);
+        } else {
+            fprintf(stderr, "Error: 'spin' must be a whole number greater than 0.\n");
+            fprintf(stderr, "Usage: %s [spin] [] []\n", argv[0]);
+            exit(1);
+        }
     }
 
     /* init us - note that the call to "init" includes the return of
@@ -78,8 +85,12 @@ int main(int argc, char **argv)
             myproc.nspace, myproc.rank, (unsigned long)pid, hostname ,
             (int)localrank);
 
-    // 0 or 1 argument then everyone sleeps for a bit then finalizes
-    if (3 > argc) {
+    // 0 arguments then do nothing.
+    if (1 == argc) {
+        ;
+    }
+    // 1 argument then everyone sleeps for a bit then finalizes
+    else if (2 == argc) {
         if (0 < spin) {
             sleep(spin);
         }
@@ -97,8 +108,8 @@ int main(int argc, char **argv)
             }
         }
     }
-    // 3 arguments (or more) then rank 0 waits in a spin loop, others block in the fence
-    else if (3 < argc) {
+    // Otherwise then rank 0 waits in a spin loop, others block in the fence
+    else {
         if (0 == myproc.rank) {
             spin = 1;
             while (0 < spin) {

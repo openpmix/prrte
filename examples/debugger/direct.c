@@ -496,7 +496,7 @@ int main(int argc, char **argv)
         if (0 == strcmp(argv[i], "-h") ||
             0 == strcmp(argv[i], "--help")) {
             /* print the usage message and exit */
-            printf("Usage: ./direct [-c|--cospawn]\n");
+            printf("Usage: %s [-c|--cospawn]\n", argv[0]);
             printf(" Requires 'prte' persistent daemon is running.\n");
             printf(" -h|--help      Display this help message and exit.\n");
             printf(" -c|--cospawn   Use the PMIx Cospawn technique to launch app and daemons\n");
