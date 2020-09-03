@@ -185,9 +185,6 @@ BEGIN_C_DECLS
 
 /* error propagate  */
 #define PRTE_RML_TAG_RBCAST                 66
-#define PRTE_RML_TAG_BMGXCAST               67
-#define PRTE_RML_TAG_ALLGATHER_BMG          68
-#define PRTE_RML_TAG_BMG_COLL_RELEASE       69
 
 /* heartbeat request */
 #define PRTE_RML_TAG_HEARTBEAT_REQUEST      70
