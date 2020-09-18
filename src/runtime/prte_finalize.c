@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +47,7 @@ int prte_finalize(void)
 {
     int rc;
     uint32_t key;
-    prte_job_t *jdata;
+    prte_job_t *jdata = NULL, *child_jdata = NULL, *next_jdata = NULL;
     void *elt = NULL;
 
     --prte_initialized;
@@ -74,7 +75,29 @@ int prte_finalize(void)
     /* release the cache */
     PRTE_RELEASE(prte_cache);
 
-    /* release the job hash table; pop the first element in key order and release it, repeat */
+    /* Release the job hash table
+     *
+     * There is the potential for a prte_job_t object to still be in the
+     * children list of another prte_job_t object, both objects stored in the
+     * prte_job_data hash table. If this happens then an assert will be raised
+     * when the first prte_job_t object is released when iterating over the
+     * prte_job_data structure. Therefore, we traverse the children list of
+     * every prte_job_t in the prte_job_data hash, removing all children
+     * references before iterating over the prte_job_data hash table to
+     * release the prte_job_t objects.
+     */
+    PRTE_HASH_TABLE_FOREACH(key, uint32, jdata, prte_job_data) {
+        if (NULL != jdata) {
+            // Remove all children from the list
+            // We do not want to destruct this list here since that occurs in the
+            // prte_job_t destructor - which will happen in the next loop.
+            PRTE_LIST_FOREACH_SAFE(child_jdata, next_jdata, &jdata->children, prte_job_t) {
+                prte_list_remove_item(&jdata->children, &child_jdata->super);
+            }
+        }
+    }
+
+    jdata = NULL;
     do {
         rc = prte_hash_table_get_next_key_uint32(prte_job_data, &key, (void**)&jdata, NULL, &elt);
         if (PRTE_SUCCESS == rc) {
