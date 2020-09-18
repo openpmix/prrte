@@ -234,7 +234,13 @@ int main(int argc, char **argv)
      * Query the namespaces known to the launcher to get the application
      * namespace.
      */
-    query_application_namespace();
+    rc = query_application_namespace();
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "Failed to discover the application namespace. Maybe the namespace \"%s\" is invalid\n",
+                launcher_namespace);
+        PMIx_tool_finalize();
+        return(rc);
+    }
     fprintf(stderr, "Application ns %s\n", application_namespace);
 
     /* Attach to the running job */
