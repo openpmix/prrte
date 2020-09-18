@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2017      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
@@ -422,6 +422,13 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_proc_t);
  * service
  */
 PRTE_EXPORT   prte_job_t* prte_get_job_data_object(prte_jobid_t job);
+
+/**
+ * Set a job data object
+ * This will return the 'old' object at the specified location.
+ * If there was none then NULL is returned.
+ */
+PRTE_EXPORT prte_job_t* prte_set_job_data_object(prte_jobid_t jobid, prte_job_t *jdata);
 
 /**
  * Get a proc data object

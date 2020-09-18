@@ -745,7 +745,7 @@ void prte_pmix_server_tool_conn_complete(prte_job_t *jdata,
     /* flag that it is not to be monitored */
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_DO_NOT_MONITOR);
     /* store it away */
-    prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, jdata);
+    prte_set_job_data_object(jdata->jobid, jdata);
 
     /* must create a map for it (even though it has no
      * info in it) so that the job info will be picked

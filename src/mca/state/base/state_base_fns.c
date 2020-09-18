@@ -970,7 +970,7 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
                  * is maintained!
                  */
                 if (1 < j) {
-                    prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, NULL);
+                    prte_set_job_data_object(jdata->jobid, NULL);
                     PRTE_RELEASE(jdata);
                 }
             }

@@ -98,6 +98,7 @@ int prte_plm_base_create_jobid(prte_job_t *jdata)
     bool found;
     char *tmp;
     int rc;
+    prte_job_t *old_jdata;
 
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         /* this job is being restarted - do not assign it
@@ -135,10 +136,23 @@ int prte_plm_base_create_jobid(prte_job_t *jdata)
     prte_asprintf(&tmp, "%s.%u", prte_process_info.myproc.nspace, (unsigned)prte_plm_globals.next_jobid);
     PMIX_LOAD_NSPACE(jdata->nspace, tmp);
     free(tmp);
+    // The following routine will create a new prte_job_t structure and add it
+    // to the prte_job_data hash table at the ".N" position. Note that the 'new'
+    // object is not the 'jdata' referenced here. After this call we have
+    // two objects in the system with the same jobid/nspace.
     PRTE_PMIX_CONVERT_NSPACE(rc, &jdata->jobid, jdata->nspace);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
+    // Replace the 'new' (temporary) object with the one passed to this function
+    old_jdata = prte_set_job_data_object(jdata->jobid, jdata);
+    // Release the temporary object, but mark the jobid as invalid so the
+    // destructor does not remove the object we just put on the hash.
+    old_jdata->jobid = PRTE_JOBID_INVALID;
+    if (NULL != old_jdata) {
+        PRTE_RELEASE(old_jdata);
+    }
+
     prte_plm_globals.next_jobid++;
     if (INT16_MAX == prte_plm_globals.next_jobid) {
         reuse = true;
