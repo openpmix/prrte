@@ -653,42 +653,35 @@ int main(int argc, char *argv[])
 
     /* get any connection info we may have pushed */
     {
-        pmix_info_t *info;
-        size_t ninfo;
+        pmix_info_t info;
+        size_t z1=1;
         pmix_value_t *vptr;
         int32_t one=1;
 
         boptr = &bo;
         bo.bytes = NULL;
         bo.size = 0;
-        if (PMIX_SUCCESS == PMIx_Get(&prte_process_info.myproc, NULL, NULL, 0, &vptr) && NULL != vptr) {
-            /* the data is returned as a pmix_data_array_t */
-            if (PMIX_DATA_ARRAY != vptr->type || NULL == vptr->data.darray ||
-                PMIX_INFO != vptr->data.darray->type || NULL == vptr->data.darray->array) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                PRTE_RELEASE(buffer);
-                goto DONE;
-            }
+        if (PMIX_SUCCESS == PMIx_Get(&prte_process_info.myproc, PMIX_PROC_URI, NULL, 0, &vptr) && NULL != vptr) {
             /* use the PMIx data support to pack it */
-            info = (pmix_info_t*)vptr->data.darray->array;
-            ninfo = vptr->data.darray->size;
+            PMIX_INFO_LOAD(&info, PMIX_PROC_URI, vptr->data.string, PMIX_STRING);
+            PMIX_VALUE_RELEASE(vptr);
             PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prte_process_info.myproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prte_process_info.myproc, &pbuf, &z1, 1, PMIX_SIZE))) {
                 PMIX_ERROR_LOG(prc);
                 ret = PRTE_ERROR;
                 PRTE_RELEASE(buffer);
                 goto DONE;
             }
-            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prte_process_info.myproc, &pbuf, info, ninfo, PMIX_INFO))) {
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prte_process_info.myproc, &pbuf, &info, 1, PMIX_INFO))) {
                 PMIX_ERROR_LOG(prc);
                 ret = PRTE_ERROR;
                 PRTE_RELEASE(buffer);
                 goto DONE;
             }
+            PMIX_INFO_DESTRUCT(&info);
             PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
             bo.bytes = (uint8_t*)pbo.bytes;
             bo.size = pbo.size;
-            PMIX_VALUE_RELEASE(vptr);
             if (PRTE_SUCCESS != (ret = prte_dss.pack(buffer, &one, 1, PRTE_INT32))) {
                 PRTE_ERROR_LOG(ret);
                 PRTE_RELEASE(buffer);
