@@ -70,6 +70,7 @@ prte_rtc_base_module_t prte_rtc_hwloc_module = {
     .set = set
 };
 
+#if PMIX_VERSION_MAJOR < 4
 #if HWLOC_API_VERSION >= 0x20000
 static size_t shmemsize = 0;
 static size_t shmemaddr;
@@ -92,9 +93,11 @@ static int enough_space(const char *filename,
                         uint64_t *space_avail,
                         bool *result);
 #endif
+#endif
 
 static int init(void)
 {
+#if PMIX_VERSION_MAJOR < 4
 #if HWLOC_API_VERSION >= 0x20000
     int rc;
     bool space_available = false;
@@ -193,12 +196,13 @@ static int init(void)
     }
     prte_hwloc_shmem_available = true;
 #endif
-
+#endif
     return PRTE_SUCCESS;
 }
 
 static void finalize(void)
 {
+#if PMIX_VERSION_MAJOR < 4
 #if HWLOC_API_VERSION >= 0x20000
     if (NULL != shmemfile) {
         unlink(shmemfile);
@@ -208,11 +212,13 @@ static void finalize(void)
         close(shmemfd);
     }
 #endif
+#endif
     return;
 }
 
 static void assign(prte_job_t *jdata)
 {
+#if PMIX_VERSION_MAJOR < 4
 #if HWLOC_API_VERSION >= 0x20000
     prte_list_t *cache;
     prte_value_t *kv;
@@ -251,6 +257,7 @@ static void assign(prte_job_t *jdata)
     kv->type = PRTE_SIZE;
     kv->data.size = shmemsize;
     prte_list_append(cache, &kv->super);
+#endif
 #endif
 }
 
@@ -459,6 +466,7 @@ static void set(prte_job_t *jobdat,
     }
 }
 
+#if PMIX_VERSION_MAJOR < 4
 #if HWLOC_API_VERSION >= 0x20000
 
 static int parse_map_line(const char *line,
@@ -738,4 +746,5 @@ out:
     *space_avail = avail;
     return rc;
 }
+#endif
 #endif

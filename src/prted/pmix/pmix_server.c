@@ -92,6 +92,9 @@ static void pmix_server_log(int status, prte_process_name_t* sender,
 #define PRTE_PMIX_SERVER_MIN_ROOMS    4096
 
 pmix_server_globals_t prte_pmix_server_globals = {0};
+#ifdef PMIX_TOPOLOGY2
+static pmix_topology_t mytopology = {0};
+#endif
 
 static pmix_server_module_t pmix_server = {
     .client_connected = pmix_server_client_connected_fn,
@@ -390,9 +393,11 @@ int pmix_server_init(void)
 {
     int rc;
     prte_list_t ilist;
-    prte_value_t *kv;
+    prte_info_item_t *kv;
     pmix_info_t *info;
     size_t n, ninfo;
+    char *tmp;
+    pmix_status_t prc;
 
     if (prte_pmix_server_globals.initialized) {
         return PRTE_SUCCESS;
@@ -427,12 +432,24 @@ int pmix_server_init(void)
     PRTE_CONSTRUCT(&ilist, prte_list_t);
 
     /* tell the server our hostname so we agree on it */
-    kv = PRTE_NEW(prte_value_t);
-    kv->key = strdup(PMIX_HOSTNAME);
-    kv->type = PRTE_STRING;
-    kv->data.string = strdup(prte_process_info.nodename);
+    kv = PRTE_NEW(prte_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, prte_process_info.nodename, PMIX_STRING);
     prte_list_append(&ilist, &kv->super);
 
+    /* if PMIx is version 4 or higher, then we can pass our
+     * topology object down to the server library for its use
+     * and for passing to any local clients */
+#ifdef PMIX_TOPOLOGY2
+    mytopology.source = strdup("hwloc");
+    mytopology.topology = prte_hwloc_topology;
+    kv = PRTE_NEW(prte_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_TOPOLOGY2, &mytopology, PMIX_POINTER);
+    prte_list_append(&ilist, &kv->super);
+    // tell the server to share this topology for us
+    kv = PRTE_NEW(prte_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_SHARE_TOPOLOGY, NULL, PMIX_BOOL);
+    prte_list_append(&ilist, &kv->super);
+#else
 #if HWLOC_API_VERSION < 0x20000
      /* pass the topology string as we don't
       * have HWLOC shared memory available - we do
@@ -442,65 +459,58 @@ int pmix_server_init(void)
     if (NULL != prte_hwloc_topology) {
         char *xmlbuffer=NULL;
         int len;
-        kv = PRTE_NEW(prte_value_t);
-        kv->key = strdup(PMIX_HWLOC_XML_V1);
+        kv = PRTE_NEW(prte_info_item_t);
         if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len)) {
             PRTE_RELEASE(kv);
             PRTE_DESTRUCT(&ilist);
             return PRTE_ERROR;
         }
-        kv->data.string = xmlbuffer;
-        kv->type = PRTE_STRING;
+        PMIX_INFO_LOAD(&kv->info, PMIX_HWLOC_XML_V1, xmlbuffer, PMIX_STRING);
+        free(xmlbuffer);
         prte_list_append(&ilist, &kv->super);
     }
 #else
-    /* if shmem support isn't available, then export
+    /* if shmem support is available, then we will share
+     * it since earlier versions of PMIx aren't able to
+     * do so on our behalf - if it isn't available, then export
      * the topology as a v2 xml string */
     if (!prte_hwloc_shmem_available) {
         if (NULL != prte_hwloc_topology) {
             char *xmlbuffer=NULL;
             int len;
-            kv = PRTE_NEW(prte_value_t);
-            kv->key = strdup(PMIX_HWLOC_XML_V2);
+            kv = PRTE_NEW(prte_info_item_t);
             if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len, 0)) {
                 PRTE_RELEASE(kv);
                 PRTE_DESTRUCT(&ilist);
                 return PRTE_ERROR;
             }
-            kv->data.string = xmlbuffer;
-            kv->type = PRTE_STRING;
+            PMIX_INFO_LOAD(&kv->info, PMIX_HWLOC_XML_V2, xmlbuffer, PMIX_STRING);
+            free(xmlbuffer);
             prte_list_append(&ilist, &kv->super);
         }
     }
 #endif
+#endif
 
     /* tell the server our temp directory */
-    kv = PRTE_NEW(prte_value_t);
-    kv->key = strdup(PMIX_SERVER_TMPDIR);
-    kv->type = PRTE_STRING;
-    kv->data.string = prte_os_path(false, prte_process_info.jobfam_session_dir, NULL);
+    kv = PRTE_NEW(prte_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_TMPDIR, prte_process_info.jobfam_session_dir, PMIX_STRING);
     prte_list_append(&ilist, &kv->super);
     if (!prte_pmix_server_globals.legacy) {
         /* use only one listener */
-        kv = PRTE_NEW(prte_value_t);
-        kv->key = strdup(PMIX_SINGLE_LISTENER);
-        kv->type = PRTE_BOOL;
-        kv->data.flag = true;
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_SINGLE_LISTENER, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
     }
     /* tell the server to use its own internal monitoring */
-    kv = PRTE_NEW(prte_value_t);
-    kv->key = strdup(PMIX_SERVER_ENABLE_MONITORING);
-    kv->type = PRTE_BOOL;
-    kv->data.flag = true;
+    kv = PRTE_NEW(prte_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_ENABLE_MONITORING, NULL, PMIX_BOOL);
     prte_list_append(&ilist, &kv->super);
     /* if requested, tell the server to drop a session-level
      * PMIx connection point */
     if (prte_pmix_server_globals.session_server) {
-        kv = PRTE_NEW(prte_value_t);
-        kv->key = strdup(PMIX_SERVER_TOOL_SUPPORT);
-        kv->type = PRTE_BOOL;
-        kv->data.flag = true;
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_TOOL_SUPPORT, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
     }
 
@@ -509,10 +519,8 @@ int pmix_server_init(void)
      * at least one case, a daemon can be colocated with the
      * HNP and would overwrite the server rendezvous file */
     if (prte_pmix_server_globals.system_server && PRTE_PROC_IS_MASTER) {
-        kv = PRTE_NEW(prte_value_t);
-        kv->key = strdup(PMIX_SERVER_SYSTEM_SUPPORT);
-        kv->type = PRTE_BOOL;
-        kv->data.flag = true;
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_SYSTEM_SUPPORT, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
     }
 
@@ -520,44 +528,34 @@ int pmix_server_init(void)
      * as well as a gateway */
     if (PRTE_PROC_IS_MASTER) {
 #ifdef PMIX_SERVER_SCHEDULER
-        kv = PRTE_NEW(prte_value_t);
-        kv->key = strdup(PMIX_SERVER_SCHEDULER);
-        kv->type = PRTE_BOOL;
-        kv->data.flag = true;
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_SCHEDULER, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
 #endif
 #ifdef PMIX_SERVER_GATEWAY
-        kv = PRTE_NEW(prte_value_t);
-        kv->key = strdup(PMIX_SERVER_GATEWAY);
-        kv->type = PRTE_BOOL;
-        kv->data.flag = true;
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_GATEWAY, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
 #endif
     }
 
     /* PRTE always allows remote tool connections */
-    kv = PRTE_NEW(prte_value_t);
-    kv->key = strdup(PMIX_SERVER_REMOTE_CONNECTIONS);
-    kv->type = PRTE_BOOL;
-    kv->data.flag = true;
+    kv = PRTE_NEW(prte_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_REMOTE_CONNECTIONS, NULL, PMIX_BOOL);
     prte_list_append(&ilist, &kv->super);
 
     /* if we were launched by a debugger, then we need to have
      * notification of our termination sent */
     if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
-        kv = PRTE_NEW(prte_value_t);
-        kv->key = strdup(PMIX_EVENT_SILENT_TERMINATION);
-        kv->type = PRTE_BOOL;
-        kv->data.flag = false;
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_EVENT_SILENT_TERMINATION, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
     }
 
 #ifdef PMIX_HOSTNAME_KEEP_FQDN
     /* tell the server what we are doing with FQDN */
-    kv = PRTE_NEW(prte_value_t);
-    kv->key = strdup(PMIX_HOSTNAME_KEEP_FQDN);
-    kv->type = PRTE_BOOL;
-    kv->data.flag = prte_keep_fqdn_hostnames;
+    kv = PRTE_NEW(prte_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME_KEEP_FQDN, &prte_keep_fqdn_hostnames, PMIX_BOOL);
     prte_list_append(&ilist, &kv->super);
 #endif
 
@@ -565,12 +563,8 @@ int pmix_server_init(void)
     ninfo = prte_list_get_size(&ilist) + 2;
     PMIX_INFO_CREATE(info, ninfo);
     n = 0;
-    while (NULL != (kv = (prte_value_t*)prte_list_remove_first(&ilist))) {
-        if (PRTE_BOOL == kv->type) {
-            PMIX_INFO_LOAD(&info[n], kv->key, &kv->data.flag, PMIX_BOOL);
-        } else {
-            PMIX_INFO_LOAD(&info[n], kv->key, kv->data.string, PMIX_STRING);
-        }
+    while (NULL != (kv = (prte_info_item_t*)prte_list_remove_first(&ilist))) {
+        PMIX_INFO_XFER(&info[n], &kv->info);
         ++n;
         PRTE_RELEASE(kv);
     }
@@ -580,21 +574,52 @@ int pmix_server_init(void)
     PMIX_INFO_LOAD(&info[n+1], PMIX_SERVER_RANK, &prte_process_info.myproc.rank, PMIX_PROC_RANK);
 
     /* setup the local server */
-    if (PRTE_SUCCESS != (rc = PMIx_server_init(&pmix_server, info, ninfo))) {
+    if (PMIX_SUCCESS != (prc = PMIx_server_init(&pmix_server, info, ninfo))) {
         /* pmix will provide a nice show_help output here */
         PMIX_INFO_FREE(info, ninfo);
-        return rc;
+        return prte_pmix_convert_status(prc);
     }
     PMIX_INFO_FREE(info, ninfo);
+    rc = PRTE_SUCCESS;
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* register our support */
     for (n=0; 0 != strlen(prte_attributes[n].function); n++) {
-        rc = PMIx_Register_attributes(prte_attributes[n].function, prte_attributes[n].attrs);
-        if (PMIX_SUCCESS != rc) {
-            break;
+        prc = PMIx_Register_attributes(prte_attributes[n].function, prte_attributes[n].attrs);
+        if (PMIX_SUCCESS != prc) {
+            return prte_pmix_convert_status(prc);
         }
     }
+    /* register our local resources */
+    PRTE_CONSTRUCT(&ilist, prte_list_t);
+
+    /* register our hostname so everyone agrees on it */
+    kv = PRTE_NEW(prte_info_item_t);
+    PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, prte_process_info.nodename, PMIX_STRING);
+    prte_list_append(&ilist, &kv->super);
+#ifdef PMIX_HOSTNAME_ALIASES
+    // check for aliases
+    if (NULL != prte_process_info.aliases) {
+        kv = PRTE_NEW(prte_info_item_t);
+        tmp = pmix_argv_join(prte_process_info.aliases, ',');
+        PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME_ALIASES, tmp, PMIX_STRING);
+        free(tmp);
+        prte_list_append(&ilist, &kv->super);
+    }
+#endif
+    /* convert to an info array */
+    ninfo = prte_list_get_size(&ilist);
+    PMIX_INFO_CREATE(info, ninfo);
+    n = 0;
+    while (NULL != (kv = (prte_info_item_t*)prte_list_remove_first(&ilist))) {
+        PMIX_INFO_XFER(&info[n], &kv->info);
+        ++n;
+        PRTE_RELEASE(kv);
+    }
+    PRTE_LIST_DESTRUCT(&ilist);
+    prc = PMIx_server_register_resources(info, ninfo, NULL, NULL);
+    PMIX_INFO_FREE(info, ninfo);
+    rc = prte_pmix_convert_status(prc);
 #endif
 
     return rc;
@@ -662,6 +687,9 @@ void pmix_server_finalize(void)
     PRTE_DESTRUCT(&prte_pmix_server_globals.reqs);
     PRTE_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
     PRTE_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
+#ifdef PMIX_TOPOLOGY2
+    free(mytopology.source);
+#endif
     prte_pmix_server_globals.initialized = false;
 }
 
