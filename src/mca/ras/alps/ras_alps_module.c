@@ -15,6 +15,8 @@
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2020      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -509,7 +511,7 @@ prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename,
             prte_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "ras:alps:read_appinfo: got NID %d", apSlots[ix].nid);
 
-            prte_asprintf( &hostname, "%d", apSlots[ix].nid );
+            prte_asprintf( &hostname, "nid%05d", apSlots[ix].nid );
             if (NULL == hostname) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 return PRTE_ERR_OUT_OF_RESOURCE;
@@ -556,7 +558,7 @@ prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename,
             prte_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "ras:alps:read_appinfo(modern): processing NID %d with %d slots",
                                 apNodes[ix].nid, apNodes[ix].numPEs);
-            prte_asprintf( &hostname, "%d", apNodes[ix].nid );
+            prte_asprintf( &hostname, "nid%05d", apNodes[ix].nid );
             if (NULL == hostname) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 return PRTE_ERR_OUT_OF_RESOURCE;
