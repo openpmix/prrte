@@ -26,7 +26,7 @@ dist_prtedata_DATA = help-ras-alps.txt \
 		  ras-alps-command.sh
 
 install-data-hook:
-	chmod +x $(prtedatadir)/ras-alps-command.sh
+	chmod +x $(DESTDIR)$(prtedatadir)/ras-alps-command.sh
 
 sources = \
         ras_alps.h \
