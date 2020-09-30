@@ -443,7 +443,7 @@ int pmix_server_init(void)
     mytopology.source = strdup("hwloc");
     mytopology.topology = prte_hwloc_topology;
     kv = PRTE_NEW(prte_info_item_t);
-    PMIX_INFO_LOAD(&kv->info, PMIX_TOPOLOGY2, &mytopology, PMIX_POINTER);
+    PMIX_INFO_LOAD(&kv->info, PMIX_TOPOLOGY2, &mytopology, PMIX_TOPO);
     prte_list_append(&ilist, &kv->super);
     // tell the server to share this topology for us
     kv = PRTE_NEW(prte_info_item_t);

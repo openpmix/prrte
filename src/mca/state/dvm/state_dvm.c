@@ -264,7 +264,7 @@ static void vm_ready(int fd, short args, void *cbdata)
     prte_byte_object_t bo, *boptr;
     int32_t numbytes, v;
     pmix_value_t *val;
-    pmix_info_t *info;
+    pmix_info_t info;
     size_t ninfo;
     pmix_proc_t pproc;
     pmix_data_buffer_t pbuf;
@@ -287,12 +287,14 @@ static void vm_ready(int fd, short args, void *cbdata)
             if (PRTE_SUCCESS != (rc = prte_util_nidmap_create(prte_node_pool, buf))) {
                 PRTE_ERROR_LOG(rc);
                 PRTE_RELEASE(buf);
+                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
                 return;
             }
             /* provide the info on the capabilities of each node */
             if (PRTE_SUCCESS != (rc = prte_util_pass_node_info(buf))) {
                 PRTE_ERROR_LOG(rc);
                 PRTE_RELEASE(buf);
+                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
                 return;
             }
             /* get wireup info for daemons */
@@ -305,38 +307,39 @@ static void vm_ready(int fd, short args, void *cbdata)
                 }
                 val = NULL;
                 PRTE_PMIX_CONVERT_VPID(pproc.rank, dmn->name.vpid);
-                if (PMIX_SUCCESS != (ret = PMIx_Get(&pproc, NULL, NULL, 0, &val)) || NULL == val) {
+                if (PMIX_SUCCESS != (ret = PMIx_Get(&pproc, PMIX_PROC_URI, NULL, 0, &val)) || NULL == val) {
                     PMIX_ERROR_LOG(ret);
                     PRTE_RELEASE(wireup);
-                    return;
-                }
-                /* the data is returned as a pmix_data_array_t */
-                if (PMIX_DATA_ARRAY != val->type || NULL == val->data.darray ||
-                    PMIX_INFO != val->data.darray->type || NULL == val->data.darray->array) {
-                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                    PRTE_RELEASE(wireup);
+                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
                     return;
                 }
                 /* use the PMIx data support to pack it */
-                info = (pmix_info_t*)val->data.darray->array;
-                ninfo = val->data.darray->size;
+                PMIX_INFO_LOAD(&info, PMIX_PROC_URI, val->data.string, PMIX_STRING);
+                PMIX_VALUE_RELEASE(val);
+                ninfo = 1;
                 PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
                 if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
                     PRTE_RELEASE(wireup);
+                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    PMIX_INFO_DESTRUCT(&info);
                     return;
                 }
-                if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, info, ninfo, PMIX_INFO))) {
+                if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&pproc, &pbuf, &info, ninfo, PMIX_INFO))) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
                     PRTE_RELEASE(wireup);
+                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    PMIX_INFO_DESTRUCT(&info);
                     return;
                 }
+                PMIX_INFO_DESTRUCT(&info);
                 PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(wireup, &dmn->name, 1, PRTE_NAME))) {
                     PRTE_ERROR_LOG(rc);
                     PRTE_RELEASE(wireup);
+                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
                     return;
                 }
                 boptr = &bo;
@@ -345,9 +348,9 @@ static void vm_ready(int fd, short args, void *cbdata)
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(wireup, &boptr, 1, PRTE_BYTE_OBJECT))) {
                     PRTE_ERROR_LOG(rc);
                     PRTE_RELEASE(wireup);
+                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
                     return;
                 }
-                PMIX_VALUE_RELEASE(val);
             }
             /* put it in a byte object for xmission */
             prte_dss.unload(wireup, (void**)&bo.bytes, &numbytes);
@@ -358,6 +361,7 @@ static void vm_ready(int fd, short args, void *cbdata)
                 PRTE_ERROR_LOG(rc);
                 PRTE_RELEASE(wireup);
                 PRTE_RELEASE(buf);
+                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
                 return;
             }
             /* release the data since it has now been copied into our buffer */

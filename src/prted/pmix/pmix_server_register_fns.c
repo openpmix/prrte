@@ -83,6 +83,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     size_t nmsize;
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     pmix_server_pset_t *pset;
+    pmix_cpuset_t cpuset;
 #endif
     prte_value_t *val;
     uint32_t ui32;
@@ -442,10 +443,40 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 tmp = NULL;
                 if (prte_get_attribute(&pptr->attributes, PRTE_PROC_CPU_BITMAP, (void**)&tmp, PRTE_STRING) &&
                     NULL != tmp) {
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+                    /* provide the cpuset string for this proc */
+                    kv = PRTE_NEW(prte_info_item_t);
+                    PMIX_INFO_LOAD(&kv->info, PMIX_CPUSET, tmp, PMIX_STRING);
+                    prte_list_append(pmap, &kv->super);
+                    /* let PMIx generate the locality string */
+                    PMIX_CPUSET_CONSTRUCT(&cpuset);
+                    cpuset.source = "hwloc";
+                    cpuset.bitmap = hwloc_bitmap_alloc();
+                    hwloc_bitmap_list_sscanf(cpuset.bitmap, tmp);
+                    free(tmp);
+                    ret = PMIx_server_generate_locality_string(&cpuset, &tmp);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
+                        PRTE_LIST_RELEASE(pmap);
+                        PRTE_LIST_DESTRUCT(&appinfo);
+                        PRTE_LIST_RELEASE(info);
+                        return prte_pmix_convert_status(ret);
+                    }
+                    kv = PRTE_NEW(prte_info_item_t);
+                    PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, tmp, PMIX_STRING);
+                    prte_list_append(pmap, &kv->super);
+                    free(tmp);
+#else
+                    /* generate the locality string ourselves */
                     kv = PRTE_NEW(prte_info_item_t);
                     PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, prte_hwloc_base_get_locality_string(prte_hwloc_topology, tmp), PMIX_STRING);
                     prte_list_append(pmap, &kv->super);
+                    /* and also provide the cpuset string for this proc */
+                    kv = PRTE_NEW(prte_info_item_t);
+                    PMIX_INFO_LOAD(&kv->info, PMIX_CPUSET, tmp, PMIX_STRING);
+                    prte_list_append(pmap, &kv->super);
                     free(tmp);
+#endif
                 } else {
                     /* the proc is not bound */
                     kv = PRTE_NEW(prte_info_item_t);
