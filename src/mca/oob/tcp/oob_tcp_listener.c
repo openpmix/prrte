@@ -624,8 +624,6 @@ static void* listen_thread(prte_object_t *obj)
         rc = select(max + 1, &readfds, NULL, NULL, &timeout);
         if (!prte_oob_tcp_component.listen_thread_active) {
             /* we've been asked to terminate */
-            close(prte_oob_tcp_component.stop_thread[0]);
-            close(prte_oob_tcp_component.stop_thread[1]);
             return NULL;
         }
         if (rc < 0) {
