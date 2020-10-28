@@ -1097,6 +1097,8 @@ void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
         prted_failed_launch = true;
         goto CLEANUP;
     }
+    /* Apply any CPU filters (not preserved by the XML) */
+    prte_hwloc_base_filter_cpus(topo);
     /* record the final topology */
     t->topo = topo;
     /* setup the summary data for this topology as we will need
@@ -1539,6 +1541,8 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
             t->index = prte_pointer_array_add(prte_node_topologies, t);
             daemon->node->topology = t;
             if (NULL != topo) {
+                /* Apply any CPU filters (not preserved by the XML) */
+                prte_hwloc_base_filter_cpus(topo);
                 t->topo = topo;
             } else {
                 /* nope - save the signature and request the complete topology from that node */

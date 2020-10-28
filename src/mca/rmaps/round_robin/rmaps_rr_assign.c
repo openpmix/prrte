@@ -143,6 +143,9 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
             /* get the number of objects of this type on this node */
             nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target, cache_level);
             if (0 == nobjs) {
+                prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps:rr: found NO %s objects on node %s",
+                                    hwloc_obj_type_string(target), node->name);
                 continue;
             }
 
