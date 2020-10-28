@@ -533,6 +533,7 @@ static int assign_locations(prte_job_t *jdata)
                 return PRTE_ERR_SILENT;
             }
 
+            obj = hwloc_get_root_obj(node->topology->topo);
             rdata = (prte_hwloc_topo_data_t*)obj->userdata;
             available = hwloc_bitmap_dup(rdata->available);
             if (NULL != job_cpuset) {
