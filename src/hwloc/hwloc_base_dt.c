@@ -3,7 +3,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * $COPYRIGHT$
  *
@@ -152,13 +152,49 @@ int prte_hwloc_unpack(prte_buffer_t *buffer, void *dest,
 
 int prte_hwloc_copy(hwloc_topology_t *dest, hwloc_topology_t src, prte_data_type_t type)
 {
-#if HAVE_HWLOC_TOPOLOGY_DUP
+#if PRTE_HAVE_HWLOC_TOPOLOGY_DUP
     /* use the hwloc dup function */
     return hwloc_topology_dup(dest, src);
 #else
-    /* hwloc_topology_dup() was introduced in hwloc v1.8.0.
-     * Note that as of March 2017, prte_hwloc_copy() is not (yet?) used in the code base anywhere. */
-    return PRTE_ERR_NOT_SUPPORTED;
+    /* we have to do this in a convoluted manner */
+    char *xmlbuffer=NULL;
+    int len;
+    struct hwloc_topology_support *srcsup, *destsup;
+    pmix_status_t rc;
+    hwloc_topology_t t;
+
+    /* extract an xml-buffer representation of the tree */
+#if HWLOC_API_VERSION < 0x20000
+    if (0 != hwloc_topology_export_xmlbuffer(src, &xmlbuffer, &len)) {
+        return PMIX_ERROR;
+    }
+#else
+    if (0 != hwloc_topology_export_xmlbuffer(src, &xmlbuffer, &len, 0)) {
+        return PRTE_ERROR;
+    }
+#endif
+
+    /* convert the xml back */
+    if (0 != hwloc_topology_init((hwloc_topology_t*)&t)) {
+        rc = PMIX_ERROR;
+        free(xmlbuffer);
+        return rc;
+    }
+    if (0 != hwloc_topology_set_xmlbuffer(t, xmlbuffer, strlen(xmlbuffer))) {
+        rc = PMIX_ERROR;
+        free(xmlbuffer);
+        hwloc_topology_destroy(t);
+        return rc;
+    }
+    free(xmlbuffer);
+
+    /* transfer the support struct */
+    srcsup = (struct hwloc_topology_support*)hwloc_topology_get_support(src->topology);
+    destsup = (struct hwloc_topology_support*)hwloc_topology_get_support(t);
+    memcpy(destsup, srcsup, sizeof(struct hwloc_topology_support));
+
+    *dest = t;
+    return PMIX_SUCCESS;
 #endif
 }
 
