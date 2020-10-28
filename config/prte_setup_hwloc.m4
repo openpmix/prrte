@@ -34,6 +34,7 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
     prte_check_hwloc_save_LIBS="$LIBS"
     prte_hwloc_standard_header_location=yes
     prte_hwloc_standard_lib_location=yes
+    prte_have_topology_dup=0
 
     if test "x$with_hwloc_header" != "x"; then
         AS_IF([test "$with_hwloc_header" = "yes"],
@@ -42,6 +43,7 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
                prte_hwloc_header_given=1])
         prte_hwloc_support=1
         prte_hwloc_source="external header"
+        prte_have_topology_dup=1
 
     elif test "$with_hwloc" != "no"; then
         AC_MSG_CHECKING([for hwloc in])
@@ -107,14 +109,27 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
             AC_COMPILE_IFELSE(
                   [AC_LANG_PROGRAM([[#include <hwloc.h>]],
                   [[
-        #if HWLOC_API_VERSION < 0x00010500
-        #error "hwloc API version is less than 0x00010500"
-        #endif
+            #if HWLOC_API_VERSION < 0x00010500
+            #error "hwloc API version is less than 0x00010500"
+            #endif
                   ]])],
                   [AC_MSG_RESULT([yes])],
                   [AC_MSG_RESULT([no])
                    AC_MSG_ERROR([Cannot continue])])
+
+            AC_MSG_CHECKING([if external hwloc version is 1.8 or greater])
+            AC_COMPILE_IFELSE(
+                  [AC_LANG_PROGRAM([[#include <hwloc.h>]],
+                  [[
+            #if HWLOC_API_VERSION < 0x00010800
+            #error "hwloc API version is less than 0x00010800"
+            #endif
+                  ]])],
+                  [AC_MSG_RESULT([yes])
+                   prte_have_topology_dup=1],
+                  [AC_MSG_RESULT([no])])
         fi
+
     fi
 
     CPPFLAGS=$prte_check_hwloc_save_CPPFLAGS
@@ -146,6 +161,9 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
 
     AC_DEFINE_UNQUOTED([PRTE_HWLOC_HEADER_GIVEN], [$prte_hwloc_header_given],
                        [Whether or not the hwloc header was given to us])
+
+    AC_DEFINE_UNQUOTED([PRTE_HAVE_HWLOC_TOPOLOGY_DUP], [$prte_have_topology_dup],
+                       [Whether or not hwloc_topology_dup is available])
 
     AC_MSG_CHECKING([will hwloc support be built])
     if test "$prte_hwloc_support" != "1"; then
