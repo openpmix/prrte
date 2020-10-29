@@ -11,7 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2015      Intel, Inc. All rights reserved
+# Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -84,15 +84,15 @@ else
             if test -d "$srcdir/.git" && test $git_happy -eq 1; then
                 if test "$srcdir" != "`pwd`"; then
                     git_save_dir=`pwd`
-                    cd $srcdir
+                    cd "$srcdir"
                     PRTE_REPO_REV=`git describe --tags --always`
-                    cd $git_save_dir
+                    cd "$git_save_dir"
                     unset git_save_dir
                 else
                     PRTE_REPO_REV=`git describe --tags --always`
                 fi
             else
-                PRTE_REPO_REV="date`date '+%Y-%m-%d'`"
+                PRTE_REPO_REV=date`$srcdir/getdate.sh '+%Y-%m-%d'`
             fi
         fi
 

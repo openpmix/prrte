@@ -119,6 +119,46 @@ AM_SILENT_RULES([yes])
 # Make configure depend on the VERSION file, since it's used in AC_INIT
 AC_SUBST([CONFIGURE_DEPENDENCIES], ['$(top_srcdir)/VERSION'])
 
+# Sanity checks
+AC_DEFUN([PRTE_CHECK_DIR_FOR_SPACES],[
+    dir="$1"
+    article="$2"
+    label="$3"
+
+    AC_MSG_CHECKING([directory of $label])
+    AC_MSG_RESULT([$dir])
+    AS_IF([test -n "`echo $dir | grep ' '`"],
+          [AC_MSG_WARN([This version of PRRTE does not support $article $label])
+           AC_MSG_WARN([with a path that contains spaces])
+           AC_MSG_ERROR([Cannot continue.])])
+])
+
+AC_DEFUN([PRTE_CANONICALIZE_PATH],[
+    case $host_os in
+    darwin*)
+        # MacOS does not have "readlink -f" or realpath (at least as
+        # of MacOS Cataline / 10.15).  Instead, use Python, because we
+        # know MacOS comes with a /usr/bin/python that has
+        # os.path.realpath.
+        $2=`/usr/bin/python -c 'import os; print os.path.realpath("'$1'")'`
+        ;;
+    *)
+        $2=`readlink -f $1`
+        ;;
+    esac
+])
+
+PRTE_VAR_SCOPE_PUSH(prte_checkdir)
+PRTE_CHECK_DIR_FOR_SPACES([$srcdir], [a], [source tree])
+PRTE_CANONICALIZE_PATH([$srcdir], [prte_checkdir])
+PRTE_CHECK_DIR_FOR_SPACES([$prte_checkdir], [an], [absolute source tree])
+PRTE_CANONICALIZE_PATH([.], [prte_checkdir])
+PRTE_CHECK_DIR_FOR_SPACES([$prte_checkdir], [a], [build tree])
+PRTE_CHECK_DIR_FOR_SPACES([$prefix], [a], [prefix])
+PRTE_CANONICALIZE_PATH([$prefix], [prte_checkdir])
+PRTE_CHECK_DIR_FOR_SPACES([$prte_checkdir], [an], [absolute prefix])
+PRTE_VAR_SCOPE_POP
+
 prte_show_subtitle "Checking versions"
 
 # Get the version of PRTE that we are installing

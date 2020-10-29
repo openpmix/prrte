@@ -94,9 +94,9 @@ EOF
 # Save some stats about this build
 #
 
-PRTE_CONFIGURE_USER="`whoami`"
-PRTE_CONFIGURE_HOST="`(hostname || uname -n) 2> /dev/null | sed 1q`"
-PRTE_CONFIGURE_DATE="`date`"
+PRTE_CONFIGURE_USER="${USER:-`whoami`}"
+PRTE_CONFIGURE_HOST="${HOSTNAME:-`(hostname || uname -n) 2> /dev/null | sed 1q`}"
+PRTE_CONFIGURE_DATE="`$srcdir/config/getdate.sh`"
 
 #
 # Save these details so that they can be used in prte_info later
