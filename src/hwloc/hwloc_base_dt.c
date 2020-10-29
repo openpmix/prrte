@@ -183,7 +183,7 @@ int prte_hwloc_copy(hwloc_topology_t *dest, hwloc_topology_t src, prte_data_type
     free(xmlbuffer);
 
     /* transfer the support struct */
-    srcsup = (struct hwloc_topology_support*)hwloc_topology_get_support((hwloc_topology_t)src->topology);
+    srcsup = (struct hwloc_topology_support*)hwloc_topology_get_support((struct hwloc_topology_t*)src->topology);
     destsup = (struct hwloc_topology_support*)hwloc_topology_get_support(t);
     memcpy(destsup, srcsup, sizeof(struct hwloc_topology_support));
 
