@@ -188,7 +188,7 @@ int prte_hwloc_copy(hwloc_topology_t *dest, hwloc_topology_t src, prte_data_type
     memcpy(destsup, srcsup, sizeof(struct hwloc_topology_support));
 
     *dest = t;
-    return PMIX_SUCCESS;
+    return PRTE_SUCCESS;
 #endif
 }
 
