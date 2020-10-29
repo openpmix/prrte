@@ -160,28 +160,22 @@ int prte_hwloc_copy(hwloc_topology_t *dest, hwloc_topology_t src, prte_data_type
     char *xmlbuffer=NULL;
     int len;
     struct hwloc_topology_support *srcsup, *destsup;
-    pmix_status_t rc;
+    int rc;
     hwloc_topology_t t;
 
     /* extract an xml-buffer representation of the tree */
-#if HWLOC_API_VERSION < 0x20000
     if (0 != hwloc_topology_export_xmlbuffer(src, &xmlbuffer, &len)) {
-        return PMIX_ERROR;
-    }
-#else
-    if (0 != hwloc_topology_export_xmlbuffer(src, &xmlbuffer, &len, 0)) {
         return PRTE_ERROR;
     }
-#endif
 
     /* convert the xml back */
     if (0 != hwloc_topology_init((hwloc_topology_t*)&t)) {
-        rc = PMIX_ERROR;
+        rc = PRTE_ERROR;
         free(xmlbuffer);
         return rc;
     }
     if (0 != hwloc_topology_set_xmlbuffer(t, xmlbuffer, strlen(xmlbuffer))) {
-        rc = PMIX_ERROR;
+        rc = PRTE_ERROR;
         free(xmlbuffer);
         hwloc_topology_destroy(t);
         return rc;
