@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2009-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -227,16 +227,15 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     debugger[0].cwd = strdup(cwd);
     /* provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
-    dninfo = 8;
+    dninfo = 7;
     PMIX_INFO_CREATE(dinfo, dninfo);
     PMIX_INFO_LOAD(&dinfo[0], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
     PMIX_INFO_LOAD(&dinfo[1], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
     PMIX_INFO_LOAD(&dinfo[2], PMIX_DEBUG_JOB, appspace, PMIX_STRING); // the nspace being debugged
     PMIX_INFO_LOAD(&dinfo[3], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
-    PMIX_INFO_LOAD(&dinfo[4], PMIX_DEBUG_WAITING_FOR_NOTIFY, NULL, PMIX_BOOL);  // tell the daemon that the proc is waiting to be released
-    PMIX_INFO_LOAD(&dinfo[5], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
-    PMIX_INFO_LOAD(&dinfo[6], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
-    PMIX_INFO_LOAD(&dinfo[7], PMIX_SETUP_APP_ENVARS, NULL, PMIX_BOOL);
+    PMIX_INFO_LOAD(&dinfo[4], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
+    PMIX_INFO_LOAD(&dinfo[5], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
+    PMIX_INFO_LOAD(&dinfo[6], PMIX_SETUP_APP_ENVARS, NULL, PMIX_BOOL);
     /* spawn the daemons */
     fprintf(stderr, "Debugger: spawning %s\n", debugger[0].cmd);
     if (PMIX_SUCCESS != (rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, dspace))) {
