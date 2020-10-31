@@ -266,7 +266,7 @@ static int save_param_name (void)
 
 static int add_to_env_str(char *var, char *val)
 {
-    int sz, varsz, valsz, new_envsize;
+    int sz, varsz=0, valsz=0, new_envsize;
     void *tmp;
 
     if (NULL == var) {
@@ -286,12 +286,12 @@ static int add_to_env_str(char *var, char *val)
         sz += 1;
     }
     /* add required new size incl NULL byte */
-    sz += varsz+valsz+1;
+    sz += varsz + valsz + 1;
 
     /* make sure we have sufficient space */
     new_envsize = envsize;
     while (new_envsize <= sz) {
-        new_envsize *=2;
+        new_envsize *= 2;
     }
 
     if (NULL != env_str) {
