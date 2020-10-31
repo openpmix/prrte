@@ -253,7 +253,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
             /* save the request in the hotel until the
              * data is returned */
             if (PRTE_SUCCESS != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
-                prte_show_help("help-orted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
+                prte_show_help("help-prted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
                 /* can't just return as that would cause the requestor
                  * to hang, so instead execute the callback */
                 prc = prte_pmix_convert_rc(rc);
@@ -288,7 +288,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
             /* save the request in the hotel until the
              * data is returned */
             if (PRTE_SUCCESS != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
-                prte_show_help("help-orted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
+                prte_show_help("help-prted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
                 /* can't just return as that would cause the requestor
                  * to hang, so instead execute the callback */
                 prc = prte_pmix_convert_rc(rc);
@@ -305,7 +305,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
          * that we don't know about yet. In this case, just
          * record the request and we will process it later */
         if (PRTE_SUCCESS != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
-            prte_show_help("help-orted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
+            prte_show_help("help-prted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
             /* can't just return as that would cause the requestor
              * to hang, so instead execute the callback */
             prc = prte_pmix_convert_rc(rc);
@@ -355,7 +355,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     /* track the request so we know the function and cbdata
      * to callback upon completion */
     if (PRTE_SUCCESS != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
-        prte_show_help("help-orted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
+        prte_show_help("help-prted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
         prc = prte_pmix_convert_rc(rc);
         goto callback;
     }

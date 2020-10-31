@@ -131,7 +131,7 @@ static void spawn(int sd, short args, void *cbdata)
     /* add this request to our tracker hotel */
     PRTE_ADJUST_TIMEOUT(req);
     if (PRTE_SUCCESS != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
-        prte_show_help("help-orted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
+        prte_show_help("help-prted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
         goto callback;
     }
 
@@ -197,9 +197,9 @@ static void interim(int sd, short args, void *cbdata)
     uint16_t u16;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s spawn called from proc %s",
+                        "%s spawn called from proc %s with %d apps",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(requestor));
+                        PRTE_NAME_PRINT(requestor), (int)cd->napps);
 
     /* create the job object */
     jdata = PRTE_NEW(prte_job_t);
@@ -257,7 +257,7 @@ static void interim(int sd, short args, void *cbdata)
                     } else {
                         /* get the cwd */
                         if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
-                            prte_show_help("help-orted.txt", "cwd", true, "spawn", rc);
+                            prte_show_help("help-prted.txt", "cwd", true, "spawn", rc);
                             PRTE_RELEASE(jdata);
                             goto complete;
                         }
@@ -313,8 +313,10 @@ static void interim(int sd, short args, void *cbdata)
 #endif
                 } else {
                     /* unrecognized key */
-                    prte_show_help("help-orted.txt", "bad-key",
-                                   true, "spawn", "application", info->key);
+                    if (9 < prte_output_get_verbosity(prte_pmix_server_globals.output)) {
+                        prte_show_help("help-prted.txt", "bad-key",
+                                       true, "spawn", "application", info->key);
+                    }
                 }
             }
         }

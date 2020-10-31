@@ -682,7 +682,7 @@ static void _toolconn(int sd, short args, void *cbdata)
             prte_pmix_server_tool_conn_complete(jdata, cd);
         } else {
             if (PRTE_SUCCESS != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, cd, &cd->room_num))) {
-                prte_show_help("help-orted.txt", "noroom", true, cd->operation, prte_pmix_server_globals.num_rooms);
+                prte_show_help("help-prted.txt", "noroom", true, cd->operation, prte_pmix_server_globals.num_rooms);
                 goto callback;
             }
             /* we need to send this to the HNP for a jobid */

@@ -143,7 +143,7 @@ typedef int (*prte_schizo_base_module_get_rem_time_fn_t)(uint32_t *timeleft);
 
 
 /* give the components a chance to add job info */
-typedef void (*prte_schizo_base_module_job_info_fn_t)(prte_cmd_line_t *cmdline, prte_list_t *jobinfo);
+typedef void (*prte_schizo_base_module_job_info_fn_t)(prte_cmd_line_t *cmdline, void *jobinfo);
 
 /*
  * schizo module version 1.3.0

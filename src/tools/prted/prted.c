@@ -447,7 +447,7 @@ int main(int argc, char *argv[])
                 core = strtoul(cores[i], NULL, 10);
                 if (NULL == (pu = prte_hwloc_base_get_pu(prte_hwloc_topology, false, core))) {
                     /* the message will now come out locally */
-                    prte_show_help("help-orted.txt", "orted:cannot-bind",
+                    prte_show_help("help-prted.txt", "orted:cannot-bind",
                                    true, prte_process_info.nodename,
                                    prte_daemon_cores);
                     ret = PRTE_ERR_NOT_SUPPORTED;

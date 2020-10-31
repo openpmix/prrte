@@ -159,7 +159,7 @@ static void execute(int sd, short args, void *cbdata)
     if (!prte_pmix_server_globals.pubsub_init) {
         /* we need to initialize our connection to the server */
         if (PRTE_SUCCESS != (rc = init_server())) {
-            prte_show_help("help-orted.txt", "noserver", true,
+            prte_show_help("help-prted.txt", "noserver", true,
                            (NULL == prte_data_server_uri) ?
                            "NULL" : prte_data_server_uri);
             goto callback;
@@ -168,7 +168,7 @@ static void execute(int sd, short args, void *cbdata)
 
     /* add this request to our tracker hotel */
     if (PRTE_SUCCESS != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
-        prte_show_help("help-orted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
+        prte_show_help("help-prted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
         goto callback;
     }
 
