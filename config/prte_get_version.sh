@@ -92,7 +92,7 @@ else
                     PRTE_REPO_REV=`git describe --tags --always`
                 fi
             else
-                PRTE_REPO_REV=date`$srcdir/getdate.sh '+%Y-%m-%d'`
+                PRTE_REPO_REV=date`$srcdir/config/getdate.sh '+%Y-%m-%d'`
             fi
         fi
 
