@@ -91,7 +91,7 @@ m4_define([PRTE_GET_VERSION],[
                     $2_REPO_REV=`git describe --tags --always`
                 fi
             else
-                $2_REPO_REV=date`$srcdir/getdate.sh '+%Y-%m-%d'`
+                $2_REPO_REV=date`$srcdir/config/getdate.sh '+%Y-%m-%d'`
             fi
         fi
 
