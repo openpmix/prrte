@@ -553,7 +553,7 @@ static void _query(int sd, short args, void *cbdata)
             } else if (0 == strcmp(q->keys[n], PMIX_JOB_SIZE)) {
                 jdata = prte_get_job_data_object(jobid);
                 if (NULL == jdata) {
-                    rc = PRTE_ERR_NOT_FOUND;
+                    ret = PRTE_ERR_NOT_FOUND;
                     goto done;
                 }
                 /* setup the reply */
