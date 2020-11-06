@@ -556,11 +556,6 @@ static void _query(int sd, short args, void *cbdata)
                     ret = PRTE_ERR_NOT_FOUND;
                     goto done;
                 }
-                /* Check if there are any entries in local proctable */
-                if (0 == jdata->num_local_procs) {
-                    ret = PRTE_ERR_NOT_FOUND;
-                    goto done;
-                }
                 /* setup the reply */
                 kv = PRTE_NEW(prte_info_item_t);
                 (void)strncpy(kv->info.key, PMIX_JOB_SIZE, PMIX_MAX_KEYLEN);
