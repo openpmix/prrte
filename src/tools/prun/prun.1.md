@@ -110,8 +110,7 @@ further details.
 
 `-N <num>`
 
-:
-    Launch num processes per node on all allocated nodes (synonym for
+:   Launch num processes per node on all allocated nodes (synonym for
     npernode).
 
 `-display-map, --display-map`
