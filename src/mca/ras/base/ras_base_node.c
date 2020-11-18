@@ -103,6 +103,7 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
                 hnp_node->name = strdup("prte");
                 skiphnp = true;
                 PRTE_SET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping, PRTE_MAPPING_NO_USE_LOCAL);
+                PRTE_FLAG_SET(hnp_node, PRTE_NODE_NON_USABLE);  // leave this node out of mapping operations
             }
         }
     }
