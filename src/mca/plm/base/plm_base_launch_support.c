@@ -1466,7 +1466,17 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
 
         /* see if they provided their inventory */
         idx = 1;
-        if (PRTE_SUCCESS == prte_dss.unpack(buffer, &bptr, &idx, PRTE_BYTE_OBJECT)) {
+        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &flag, &idx, PRTE_INT8))) {
+            PRTE_ERROR_LOG(rc);
+            prted_failed_launch = true;
+            goto CLEANUP;
+        }
+        if (1 == flag) {
+            if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &bptr, &idx, PRTE_BYTE_OBJECT))) {
+                PRTE_ERROR_LOG(rc);
+                prted_failed_launch = true;
+                goto CLEANUP;
+            }
             /* if nothing is present, then ignore it */
             if (0 == bptr->size) {
                 free(bptr);

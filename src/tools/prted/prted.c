@@ -254,6 +254,7 @@ int main(int argc, char *argv[])
     prte_process_name_t target;
     char *myuri;
     prte_value_t *pval;
+    int8_t flag;
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -747,7 +748,6 @@ int main(int argc, char *argv[])
      * will request it if necessary */
     if (1 == PRTE_PROC_MY_NAME->vpid) {
         prte_buffer_t data;
-        int8_t flag;
         uint8_t *cmpdata;
         size_t cmplen;
 
@@ -812,6 +812,13 @@ int main(int argc, char *argv[])
     }
     PRTE_PMIX_WAIT_THREAD(&xfer.lock);
     if (NULL != xfer.info) {
+        /* pack a flag indicating that the inventory is included */
+        flag = 1;
+        if (PRTE_SUCCESS != (ret = prte_dss.pack(buffer, &flag, 1, PRTE_INT8))) {
+            PRTE_ERROR_LOG(ret);
+            PRTE_RELEASE(buffer);
+            goto DONE;
+        }
         PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
         if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, &pbuf, &xfer.ninfo, 1, PMIX_SIZE))) {
             PMIX_ERROR_LOG(prc);
@@ -833,7 +840,16 @@ int main(int argc, char *argv[])
             PRTE_RELEASE(buffer);
             goto DONE;
         }
+    } else {
+        /* pack a flag indicating no inventory was provided */
+        flag = 0;
+        if (PRTE_SUCCESS != (ret = prte_dss.pack(buffer, &flag, 1, PRTE_INT8))) {
+            PRTE_ERROR_LOG(ret);
+            PRTE_RELEASE(buffer);
+            goto DONE;
+        }
     }
+
     /* send it to the designated target */
     if (0 > (ret = prte_rml.send_buffer_nb(&target, buffer,
                                            PRTE_RML_TAG_PRTED_CALLBACK,
