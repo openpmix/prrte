@@ -1178,14 +1178,6 @@ int prun(int argc, char *argv[])
         prte_list_append(&job_info, &ds->super);
     }
 
-    if (prte_cmd_line_is_taken(prte_cmd_line, "report-bindings")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_REPORT_BINDINGS, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
-    }
-
     /* mark if recovery was enabled on the cmd line */
     if (prte_cmd_line_is_taken(prte_cmd_line, "enable-recovery")) {
         ds = PRTE_NEW(prte_ds_info_t);
