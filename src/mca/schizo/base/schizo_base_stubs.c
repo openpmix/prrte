@@ -359,8 +359,12 @@ static int process_deprecated_cli(prte_cmd_line_t *cmdline,
                          * to deprecate i */
                         rc = PRTE_SUCCESS;
                     } else if (PRTE_OPERATION_SUCCEEDED == rc) {
-                        /* we did not do a conversion but don't
-                         * want to deprecate i */
+                        /* Advance past any command line option
+                         * parameters */
+                        memset(&e, 0, sizeof(prte_cmd_line_init_t));
+                        e.ocl_cmd_long_name = &pargs[i][2];
+                        option = prte_cmd_line_find_option(cmdline, &e);
+                        i += option->clo_num_params;
                         rc = PRTE_ERR_SILENT;
                     } else {
                         --i;
