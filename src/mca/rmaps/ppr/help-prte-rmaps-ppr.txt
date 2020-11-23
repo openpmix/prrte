@@ -19,9 +19,10 @@ The specification must be a comma-separated list containing
 combinations of number, followed by a colon, followed
 by the resource type. For example, a value of "1:package" indicates that
 one process is to be mapped onto each package. Values are supported
-for hwthread, core, L1-3 caches, package, numa, and node. Note that
+for "hwthread", "core", "package",
+"l1cache", "l2cache", "l3cache", and "node" . Note that
 enough characters must be provided to clearly specify the desired
-resource (e.g., "nu" for "numa").
+resource (e.g., "l1" for "l1cache").
 #
 [unrecognized-ppr-option]
 An unrecognized value was given for the number of processes
@@ -34,9 +35,9 @@ The specification must be a number, followed by a colon, followed
 by the resource type. For example, a value of "1:slot" indicates that
 anything over one process per slot is to be considered oversubscribed.
 Only values for "hwthread", "core", "package",
-"l1cache", "l2cache", "l3cache", "numa", and "node" are allowed. Note that
+"l1cache", "l2cache", "l3cache", and "node" are allowed. Note that
 enough characters must be provided to clearly specify the desired
-resource (e.g., "nu" for "numa").
+resource (e.g., "l1" for "l1cache").
 #
 [ppr-violation]
 The provided mapping directives resulted in too many processes
