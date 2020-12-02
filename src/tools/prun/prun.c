@@ -355,7 +355,7 @@ static prte_cmd_line_init_t cmd_line_init[] = {
     /* Mapping options */
     { '\0', "map-by", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache | "
-      "l2cache | l3cache | socket (default:np>2) | node | seq | dist | ppr],"
+      "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr],"
       " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
       "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
       "DEVICE(for dist policy), INHERIT, NOINHERIT, PE-LIST=a,b (comma-delimited "
@@ -366,14 +366,14 @@ static prte_cmd_line_init_t cmd_line_init[] = {
       /* Ranking options */
     { '\0', "rank-by", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache "
-      "| l2cache | l3cache | socket (default:np>2) | node], with modifier :SPAN or :FILL",
+      "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
       PRTE_CMD_LINE_OTYPE_RANKING },
 
 
       /* Binding options */
     { '\0', "bind-to", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Binding policy for job. Allowed values: none, hwthread, core, l1cache, l2cache, "
-      "l3cache, socket, (\"none\" is the default when oversubscribed, \"core\" is "
+      "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
       "the default when np<=2, and \"socket\" is the default when np>2). Allowed colon-delimited qualifiers: "
       "overload-allowed, if-supported",
       PRTE_CMD_LINE_OTYPE_BINDING },
@@ -1175,14 +1175,6 @@ int prun(int argc, char *argv[])
         ds = PRTE_NEW(prte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
         PMIX_INFO_LOAD(ds->info, PMIX_BINDTO, pval->data.string, PMIX_STRING);
-        prte_list_append(&job_info, &ds->super);
-    }
-
-    if (prte_cmd_line_is_taken(prte_cmd_line, "report-bindings")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_REPORT_BINDINGS, &flag, PMIX_BOOL);
         prte_list_append(&job_info, &ds->super);
     }
 

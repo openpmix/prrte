@@ -674,6 +674,10 @@ static void component_shutdown(void)
         /* tell the thread to exit */
         write(prte_oob_tcp_component.stop_thread[1], &i, sizeof(int));
         prte_thread_join(&prte_oob_tcp_component.listen_thread, NULL);
+
+        close(prte_oob_tcp_component.stop_thread[0]);
+        close(prte_oob_tcp_component.stop_thread[1]);
+
     } else {
         prte_output_verbose(2, prte_oob_base_framework.framework_output,
                         "no hnp or not active");

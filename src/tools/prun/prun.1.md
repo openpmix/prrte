@@ -110,8 +110,7 @@ further details.
 
 `-N <num>`
 
-:
-    Launch num processes per node on all allocated nodes (synonym for
+:   Launch num processes per node on all allocated nodes (synonym for
     npernode).
 
 `-display-map, --display-map`
@@ -146,7 +145,9 @@ the psrvr to run on.
 
 `-H, -host, --host <host1,host2,...,hostN>`
 
-:   List of hosts on which to invoke processes.
+:   List of hosts on which to invoke processes. Pass +e to allocate only
+    onto empty nodes or +e:N to allocate onto nodes at least N of which
+    are empty (i.e. exclusive to this prun instance).
 
 `-hostfile, --hostfile <hostfile>`
 

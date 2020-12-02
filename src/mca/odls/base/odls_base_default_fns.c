@@ -691,6 +691,11 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
             PRTE_RETAIN(pptr);
             prte_pointer_array_add(pptr->node->procs, pptr);
             pptr->node->num_procs++;
+            /* and connect it back to its job object, if not already done */
+            if (NULL == pptr->job) {
+                PRTE_RETAIN(jdata);
+                pptr->job = jdata;
+            }
         }
         /* see if it belongs to us */
         if (pptr->parent == PRTE_PROC_MY_NAME->vpid) {

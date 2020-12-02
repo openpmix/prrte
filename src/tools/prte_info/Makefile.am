@@ -27,20 +27,18 @@ AM_CFLAGS = \
             -DPRTE_CONFIGURE_DATE="\"@PRTE_CONFIGURE_DATE@\"" \
             -DPRTE_BUILD_USER="\"$$USER\"" \
             -DPRTE_BUILD_HOST="\"$${HOSTNAME:-`(hostname || uname -n) | sed 1q`}\"" \
-            -DPRTE_BUILD_DATE="\"`date`\"" \
+            -DPRTE_BUILD_DATE="\"`$(top_srcdir)/config/getdate.sh`\"" \
             -DPRTE_BUILD_CFLAGS="\"@CFLAGS@\"" \
             -DPRTE_BUILD_CPPFLAGS="\"@CPPFLAGS@\"" \
-            -DPRTE_BUILD_CXXFLAGS="\"@CXXFLAGS@\"" \
-            -DPRTE_BUILD_CXXCPPFLAGS="\"@CXXCPPFLAGS@\"" \
-            -DPRTE_BUILD_FFLAGS="\"@FFLAGS@\"" \
-            -DPRTE_BUILD_FCFLAGS="\"@FCFLAGS@\"" \
             -DPRTE_BUILD_LDFLAGS="\"@LDFLAGS@\"" \
             -DPRTE_BUILD_LIBS="\"@LIBS@\"" \
             -DPRTE_CC_ABSOLUTE="\"@PRTE_CC_ABSOLUTE@\"" \
-            -DPRTE_CXX_ABSOLUTE="\"@PRTE_CXX_ABSOLUTE@\"" \
             -DPRTE_WRAPPER_EXTRA_CFLAGS="\"@PRTE_WRAPPER_EXTRA_CFLAGS@\"" \
             -DPRTE_WRAPPER_EXTRA_LDFLAGS="\"@PRTE_WRAPPER_EXTRA_LDFLAGS@\"" \
-            -DPRTE_WRAPPER_EXTRA_LIBS="\"@PRTE_WRAPPER_EXTRA_LIBS@\""
+            -DPRTE_WRAPPER_EXTRA_LIBS="\"@PRTE_WRAPPER_EXTRA_LIBS@\"" \
+            -DPRTE_GREEK_VERSION="\"@PRTE_GREEK_VERSION@\"" \
+            -DPRTE_REPO_REV="\"@PRTE_REPO_REV@\"" \
+            -DPRTE_RELEASE_DATE="\"@PRTE_RELEASE_DATE@\""
 
 AM_LDFLAGS = $(PRTE_EXTRA_LIB_LDFLAGS) $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 

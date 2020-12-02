@@ -291,8 +291,12 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
         /* the list is empty - if the HNP is allocated, then add it */
         if (prte_hnp_is_allocated) {
             nd = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, 0);
-            PRTE_RETAIN(nd);
-            prte_list_append(allocated_nodes, &nd->super);
+            if (!PRTE_FLAG_TEST(nd, PRTE_NODE_NON_USABLE)) {
+                PRTE_RETAIN(nd);
+                prte_list_append(allocated_nodes, &nd->super);
+            } else {
+                nd = NULL;
+            }
         } else {
             nd = NULL;
         }

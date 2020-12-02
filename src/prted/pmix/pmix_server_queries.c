@@ -18,6 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -89,7 +90,7 @@ static void _query(int sd, short args, void *cbdata)
     bool local_only;
     prte_namelist_t *nm;
     prte_list_t targets;
-    int i, num_replies;
+    int i, num_replies, matched;
     pmix_proc_info_t *procinfo;
     pmix_info_t *info;
     pmix_data_array_t *darray;
@@ -123,7 +124,38 @@ static void _query(int sd, short args, void *cbdata)
         /* see if they provided any qualifiers */
         if (NULL != q->qualifiers && 0 < q->nqual) {
             for (n=0; n < q->nqual; n++) {
+                prte_output_verbose(2, prte_pmix_server_globals.output,
+                                    "%s qualifier key \"%s\" : value \"%s\"",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                    q->qualifiers[n].key,
+                                    (q->qualifiers[n].value.type == PMIX_STRING ? q->qualifiers[n].value.data.string : "(not a string)"));
                 if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NSPACE)) {
+                    /* Never trust the namespace string that is provided.
+                     * First check to see if we know about this namespace. If
+                     * not then return an error. If so then continue on.
+                     * Note that the "PRTE_PMIX_CONVERT_NSPACE" function will create
+                     * a new prte_job_t structure an add it to the list.
+                     */
+                    /* Make sure the qualifier namespace exists */
+                    matched = 0;
+                    PRTE_HASH_TABLE_FOREACH(key, uint32, jdata, prte_job_data) {
+                        if (NULL != jdata &&
+                            PMIX_CHECK_NSPACE(q->qualifiers[n].value.data.string,
+                                              jdata->nspace)) {
+                            matched = 1;
+                            break;
+                        }
+                    }
+                    if (0 == matched) {
+                        prte_output_verbose(2, prte_pmix_server_globals.output,
+                                            "%s qualifier key \"%s\" : value \"%s\" is an unknown namespace",
+                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                            q->qualifiers[n].key,
+                                            q->qualifiers[n].value.data.string);
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
+
                     PRTE_PMIX_CONVERT_NSPACE(rc, &jobid, q->qualifiers[n].value.data.string);
                     if (PRTE_JOBID_INVALID == jobid || PRTE_SUCCESS != rc) {
                         ret = PMIX_ERR_BAD_PARAM;
@@ -521,7 +553,7 @@ static void _query(int sd, short args, void *cbdata)
             } else if (0 == strcmp(q->keys[n], PMIX_JOB_SIZE)) {
                 jdata = prte_get_job_data_object(jobid);
                 if (NULL == jdata) {
-                    rc = PRTE_ERR_NOT_FOUND;
+                    ret = PRTE_ERR_NOT_FOUND;
                     goto done;
                 }
                 /* setup the reply */

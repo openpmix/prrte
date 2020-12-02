@@ -5,7 +5,7 @@ This README documents the features and options specific to the
 
 Features
 ========
-This implementation provides an prte level failure detection and propagation mechanism
+This implementation provides a runtime level failure detection and propagation mechanism
 for both process and node failure.
 
 What's new?
@@ -99,11 +99,11 @@ cases. You can change those default by '--prtemca parameter value'
   timeout (i.e. failure detection speed). Recommended value is 2 times
   the heartbeat period
 
-To be noted: if you want to use prte failure detction and propagation features.
+To be noted: if you want to use prte failure detection and propagation features.
              You MUST set prte_enable_recovery to true,
              prte_abort_non_zero_exit to false.
 
-## Tesing
+## Testing
 =====================
 Step 1: salloc -k -N num_of_nodes -w host1,host2...
         -k, --no-kill do not kill job on node failure
@@ -111,7 +111,7 @@ Step 1: salloc -k -N num_of_nodes -w host1,host2...
 Step 2: prte --prtemca errmgr_detector_heartbeat_period 0.5  --prtemca errmgr_detector_heartbeat_timeout 1  --prtemca errmgr_detector_enable 1 --prtemca  prte_abort_on_non_zero_status 0 --debug-daemons
         using 'errmgr_detector_enable 1' choose enable the error detector.
 
-        If you config with --enable-debug, --debug-daemons will give you lots of information.
+        Config with --enable-debug, --debug-daemons will give you lots of information.
 
         Also, the ring detector heartbeat sending frequency is not hard coded, you can change heartbeat_peroid and heartbeat_timeout by using mca params:
         eg:

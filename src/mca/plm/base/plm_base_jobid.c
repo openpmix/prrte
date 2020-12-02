@@ -61,7 +61,12 @@ int prte_plm_base_set_hnp_name(void)
         return PRTE_SUCCESS;
     }
 
-    /* for our nspace, we will use the nodename+pid */
+    /* for our nspace, we will use the nodename+pid
+     * Note that we do not add the .0 suffix to the namespace as we do with
+     * the children namespaces. The daemon jobfamily is always "0".
+     * The PRTE_PMIX_CONVERT_NSPACE routine will create the prte_job_t structre
+     * and add it to the prte_job_data hash table at position "0".
+     */
     prte_asprintf(&evar, "%s-%s%u", prte_tool_basename, prte_process_info.nodename, (uint32_t)prte_process_info.pid);
 
     PRTE_PMIX_CONVERT_NSPACE(rc, &PRTE_PROC_MY_NAME->jobid, evar);
@@ -78,7 +83,6 @@ int prte_plm_base_set_hnp_name(void)
     /* set the nspace */
     PMIX_LOAD_NSPACE(prte_process_info.myproc.nspace, evar);
     prte_process_info.myproc.rank = 0;
-
 
     /* done */
     free(evar);

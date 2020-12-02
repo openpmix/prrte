@@ -225,7 +225,7 @@ static void show_stackframe (int signo, siginfo_t * info, void * p)
             case BUS_ADRERR: si_code_str = "Non-existant physical address"; break;
 #endif
 #ifdef BUS_OBJERR
-            case BUS_OBJERR: si_code_str = "Objet-specific hardware error"; break;
+            case BUS_OBJERR: si_code_str = "Object-specific hardware error"; break;
 #endif
             }
             break;

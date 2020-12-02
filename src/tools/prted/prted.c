@@ -254,6 +254,7 @@ int main(int argc, char *argv[])
     prte_process_name_t target;
     char *myuri;
     prte_value_t *pval;
+    int8_t flag;
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -653,42 +654,35 @@ int main(int argc, char *argv[])
 
     /* get any connection info we may have pushed */
     {
-        pmix_info_t *info;
-        size_t ninfo;
+        pmix_info_t info;
+        size_t z1=1;
         pmix_value_t *vptr;
         int32_t one=1;
 
         boptr = &bo;
         bo.bytes = NULL;
         bo.size = 0;
-        if (PMIX_SUCCESS == PMIx_Get(&prte_process_info.myproc, NULL, NULL, 0, &vptr) && NULL != vptr) {
-            /* the data is returned as a pmix_data_array_t */
-            if (PMIX_DATA_ARRAY != vptr->type || NULL == vptr->data.darray ||
-                PMIX_INFO != vptr->data.darray->type || NULL == vptr->data.darray->array) {
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                PRTE_RELEASE(buffer);
-                goto DONE;
-            }
+        if (PMIX_SUCCESS == PMIx_Get(&prte_process_info.myproc, PMIX_PROC_URI, NULL, 0, &vptr) && NULL != vptr) {
             /* use the PMIx data support to pack it */
-            info = (pmix_info_t*)vptr->data.darray->array;
-            ninfo = vptr->data.darray->size;
+            PMIX_INFO_LOAD(&info, PMIX_PROC_URI, vptr->data.string, PMIX_STRING);
+            PMIX_VALUE_RELEASE(vptr);
             PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prte_process_info.myproc, &pbuf, &ninfo, 1, PMIX_SIZE))) {
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prte_process_info.myproc, &pbuf, &z1, 1, PMIX_SIZE))) {
                 PMIX_ERROR_LOG(prc);
                 ret = PRTE_ERROR;
                 PRTE_RELEASE(buffer);
                 goto DONE;
             }
-            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prte_process_info.myproc, &pbuf, info, ninfo, PMIX_INFO))) {
+            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(&prte_process_info.myproc, &pbuf, &info, 1, PMIX_INFO))) {
                 PMIX_ERROR_LOG(prc);
                 ret = PRTE_ERROR;
                 PRTE_RELEASE(buffer);
                 goto DONE;
             }
+            PMIX_INFO_DESTRUCT(&info);
             PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
             bo.bytes = (uint8_t*)pbo.bytes;
             bo.size = pbo.size;
-            PMIX_VALUE_RELEASE(vptr);
             if (PRTE_SUCCESS != (ret = prte_dss.pack(buffer, &one, 1, PRTE_INT32))) {
                 PRTE_ERROR_LOG(ret);
                 PRTE_RELEASE(buffer);
@@ -754,7 +748,6 @@ int main(int argc, char *argv[])
      * will request it if necessary */
     if (1 == PRTE_PROC_MY_NAME->vpid) {
         prte_buffer_t data;
-        int8_t flag;
         uint8_t *cmpdata;
         size_t cmplen;
 
@@ -819,6 +812,13 @@ int main(int argc, char *argv[])
     }
     PRTE_PMIX_WAIT_THREAD(&xfer.lock);
     if (NULL != xfer.info) {
+        /* pack a flag indicating that the inventory is included */
+        flag = 1;
+        if (PRTE_SUCCESS != (ret = prte_dss.pack(buffer, &flag, 1, PRTE_INT8))) {
+            PRTE_ERROR_LOG(ret);
+            PRTE_RELEASE(buffer);
+            goto DONE;
+        }
         PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
         if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, &pbuf, &xfer.ninfo, 1, PMIX_SIZE))) {
             PMIX_ERROR_LOG(prc);
@@ -840,7 +840,16 @@ int main(int argc, char *argv[])
             PRTE_RELEASE(buffer);
             goto DONE;
         }
+    } else {
+        /* pack a flag indicating no inventory was provided */
+        flag = 0;
+        if (PRTE_SUCCESS != (ret = prte_dss.pack(buffer, &flag, 1, PRTE_INT8))) {
+            PRTE_ERROR_LOG(ret);
+            PRTE_RELEASE(buffer);
+            goto DONE;
+        }
     }
+
     /* send it to the designated target */
     if (0 > (ret = prte_rml.send_buffer_nb(&target, buffer,
                                            PRTE_RML_TAG_PRTED_CALLBACK,
