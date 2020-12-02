@@ -327,15 +327,20 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                                 "mapping policy", ck2[i]);
                 return PRTE_ERR_SILENT;
             }
-            if (NULL == (ptr = strchr(ck2[i], '='))) {
-                /* missing the value */
+            /* Should be processing PE=<n>, verify '=' is present then that following value
+             * is numeric */
+            if ('=' != ck2[i][2]) {
+                prte_argv_free(ck2);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            u16 = strtol(&ck2[i][3], &ptr, 10);
+            if (((&ck2[i][3]) == ptr) || ('\0' != *ptr)) {
+                /* missing the value or value is invalid */
                 prte_show_help("help-prte-rmaps-base.txt", "missing-value", true,
                                 "mapping policy", "PE", ck2[i]);
                 prte_argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
-            ptr++;
-            u16 = strtol(ptr, NULL, 10);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL,
                                 &u16, PRTE_UINT16);
 
