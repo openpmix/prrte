@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2017      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -392,6 +392,25 @@ prte_job_t* prte_get_job_data_object(prte_jobid_t job)
     return jdata;
 }
 
+prte_job_t* prte_set_job_data_object(prte_jobid_t jobid, prte_job_t *jdata)
+{
+    prte_job_t *old_jdata = NULL;
+
+    /* if the job data wasn't setup, we cannot set the data */
+    if (NULL == prte_job_data) {
+        return NULL;
+    }
+
+    old_jdata = prte_get_job_data_object(jobid);
+    prte_hash_table_set_value_uint32(prte_job_data, jobid, jdata);
+    if (old_jdata == jdata) {
+        return NULL;
+    }
+    else {
+        return old_jdata;
+    }
+}
+
 prte_proc_t* prte_get_proc_object(prte_process_name_t *proc)
 {
     prte_job_t *jdata;
@@ -648,6 +667,7 @@ static void prte_job_destruct(prte_job_t* job)
     prte_app_context_t *app;
     int n;
     prte_timer_t *evtimer;
+    prte_job_t *child_jdata = NULL;
 
     if (NULL == job) {
         /* probably just a race condition - just return */
@@ -703,6 +723,11 @@ static void prte_job_destruct(prte_job_t* job)
     PRTE_LIST_DESTRUCT(&job->attributes);
 
     PRTE_DESTRUCT(&job->launch_msg);
+
+    /* Clear the child list before destroying the list */
+    PRTE_LIST_FOREACH(child_jdata, &job->children, prte_job_t) {
+        prte_list_remove_item(&job->children, &child_jdata->super);
+    }
 
     PRTE_LIST_DESTRUCT(&job->children);
 

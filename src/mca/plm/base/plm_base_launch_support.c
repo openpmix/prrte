@@ -302,8 +302,11 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
          * step required before we launch the daemons. It allows
          * the prte_rmaps_base_setup_virtual_machine routine to
          * search all apps for any hosts to be used by the vm
+         *
+         * Note that the prte_plm_base_create_jobid function will
+         * place the "caddy->jdata" object at the correct position
+         * in the hash table. There is no need to store it again here.
          */
-        prte_hash_table_set_value_uint32(prte_job_data, caddy->jdata->jobid, caddy->jdata);
     }
 
     /* if job recovery is not enabled, set it to default */

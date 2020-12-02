@@ -8,6 +8,7 @@
  * Copyright (c) 2016      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2016-2020 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -76,7 +77,11 @@ void prte_convert_daemon_nspace(prte_jobid_t *jobid, pmix_nspace_t nspace)
     jobfam = (uint16_t)(((0x0000ffff & (0xffff0000 & hash32) >> 16)) ^ (0x0000ffff & hash32));
     jdata->jobid = (0xffff0000 & ((uint32_t)jobfam << 16));
     *jobid = jdata->jobid;
-    prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, jdata);
+
+    /*
+     * Add this temporary job object to the hash as a placeholder.
+     */
+    prte_set_job_data_object(jdata->jobid, jdata);
 }
 
 int prte_convert_nspace_to_jobid(prte_jobid_t *jobid, pmix_nspace_t nspace)
@@ -128,7 +133,11 @@ int prte_convert_nspace_to_jobid(prte_jobid_t *jobid, pmix_nspace_t nspace)
     jobfam = (uint16_t)(((0x0000ffff & (0xffff0000 & hash32) >> 16)) ^ (0x0000ffff & hash32));
     jdata->jobid = (0xffff0000 & ((uint32_t)jobfam << 16)) | (0x0000ffff & localjob);
     *jobid = jdata->jobid;
-    prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, jdata);
+
+    /*
+     * Add this temporary job object to the hash as a placeholder.
+     */
+    prte_set_job_data_object(jdata->jobid, jdata);
 
     return PRTE_SUCCESS;
 }

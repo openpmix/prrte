@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
- * Copyright (c) 2017      IBM Corporation. All rights reserved.
+ * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -454,7 +454,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
             /* check to see if we already have this one */
             if (NULL == prte_get_job_data_object(jdata->jobid)) {
                 /* nope - add it */
-                prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, jdata);
+                prte_set_job_data_object(jdata->jobid, jdata);
             } else {
                 /* yep - so we can drop this copy */
                 jdata->jobid = PRTE_JOBID_INVALID;
@@ -534,7 +534,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
             goto REPORT_ERROR;
         }
     } else {
-        prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, jdata);
+        prte_set_job_data_object(jdata->jobid, jdata);
 
         /* ensure the map object is present */
         if (NULL == jdata->map) {

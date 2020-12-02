@@ -538,7 +538,7 @@ static void track_procs(int fd, short argc, void *cbdata)
             }
 
             /* cleanup the job info */
-            prte_hash_table_set_value_uint32(prte_job_data, jdata->jobid, NULL);
+            prte_set_job_data_object(jdata->jobid, NULL);
             PRTE_RELEASE(jdata);
         }
     }

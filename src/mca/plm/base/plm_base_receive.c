@@ -16,6 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -171,7 +172,8 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
         if (PRTE_SUCCESS == rc) {
             job = jb.jobid;
         }
-        PRTE_DESTRUCT(&jb);
+        // The 'jb' object is now stored as reference in the prte_job_data hash
+        // by the prte_plm_base_create_jobid function.
 
         /* setup the response */
         answer = PRTE_NEW(prte_buffer_t);
