@@ -349,6 +349,7 @@ void prte_info_do_config(bool want_all)
     char *prun_prefix_by_default;
     char *symbol_visibility;
     char *manpages;
+    char *resilience;
 
     /* setup the strings that don't require allocations*/
     debug = PRTE_ENABLE_DEBUG ? "yes" : "no";
@@ -356,6 +357,7 @@ void prte_info_do_config(bool want_all)
     prun_prefix_by_default = PRTE_WANT_PRTE_PREFIX_BY_DEFAULT ? "yes" : "no";
     symbol_visibility = PRTE_C_HAVE_VISIBILITY ? "yes" : "no";
     manpages = PRTE_ENABLE_MAN_PAGES ? "yes" : "no";
+    resilience = PRTE_ENABLE_FT ? "yes" : "no";
 
     /* output values */
     prte_info_out("Configured by", "config:user", PRTE_CONFIGURE_USER);
@@ -411,5 +413,6 @@ void prte_info_do_config(bool want_all)
                   prun_prefix_by_default);
     prte_info_out("Symbol vis. support", "options:visibility", symbol_visibility);
     prte_info_out("Manpages built", "options:man-pages", manpages);
+    prte_info_out("Resilience support", "options:ft", resilience);
 
 }
