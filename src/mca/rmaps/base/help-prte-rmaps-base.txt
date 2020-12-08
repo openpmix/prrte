@@ -501,3 +501,10 @@ not enough cpus are available to meet the request:
   CPUs per proc:   %d
 
 Please adjust your request and try again.
+[invalid-value]
+A %s was given that requires a value, but the provided value is invalid:
+
+  Policy:  %s
+  Given:   %s
+
+Please provide a valid value for this policy, or remove it.
