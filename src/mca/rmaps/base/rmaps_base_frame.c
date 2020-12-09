@@ -154,7 +154,7 @@ PRTE_CLASS_INSTANCE(prte_rmaps_base_selected_module_t,
 static int check_modifiers(char *ck, prte_job_t *jdata,
                            prte_mapping_policy_t *tmp)
 {
-    char **ck2, *ptr;
+    char **ck2, *ptr, *temp_parm, *temp_token, *parm_delimiter;
     int i;
     uint16_t u16;
     bool inherit_given = false;
@@ -296,20 +296,28 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, PRTE_ATTR_GLOBAL,
                                 NULL, PRTE_BOOL);
 
-        } else if (0 == strncasecmp(ck2[i], "PE-LIST", 7)) {
+        } else if (0 == strncasecmp(ck2[i], "PE-LIST=", 8)) {
             if (NULL == jdata) {
                 prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                 "mapping policy", ck2[i]);
                 return PRTE_ERR_SILENT;
             }
-            if (NULL == (ptr = strchr(ck2[i], '='))) {
-                /* missing the value */
-                prte_show_help("help-prte-rmaps-base.txt", "missing-value", true,
-                                "mapping policy", "PE-LIST", ck2[i]);
-                prte_argv_free(ck2);
-                return PRTE_ERR_SILENT;
+            ptr = &ck2[i][8];
+            /* Verify the option parmeter is a list of numeric tokens */
+            temp_parm = strdup(ptr);
+            temp_token = strtok(temp_parm, ",");
+            while (NULL != temp_token) {
+                u16 = strtol(temp_token, &parm_delimiter, 10);
+                if ('\0' != *parm_delimiter) {
+                    prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                    "mapping policy", "PE", ck2[i]);
+                    prte_argv_free(ck2);
+                    free(temp_parm);
+                    return PRTE_ERR_SILENT;
+                }
+                temp_token = strtok(NULL, ",");
             }
-            ptr++;
+            free(temp_parm);
             /* quick check - if it matches the default, then don't set it */
             if (NULL != prte_hwloc_default_cpu_list) {
                 if (0 != strcmp(prte_hwloc_default_cpu_list, ptr)) {
@@ -321,21 +329,21 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                                     PRTE_ATTR_GLOBAL, ptr, PRTE_STRING);
             }
 
-        } else if (0 == strncasecmp(ck2[i], "PE", 2)) {
+        } else if (0 == strncasecmp(ck2[i], "PE=", 3)) {
             if (NULL == jdata) {
                 prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                 "mapping policy", ck2[i]);
                 return PRTE_ERR_SILENT;
             }
-            if (NULL == (ptr = strchr(ck2[i], '='))) {
-                /* missing the value */
-                prte_show_help("help-prte-rmaps-base.txt", "missing-value", true,
+            /* Numeric value must immediately follow '=' (PE=2) */
+            u16 = strtol(&ck2[i][3], &ptr, 10);
+            if ('\0' != *ptr) {
+                /* missing the value or value is invalid */
+                prte_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                 "mapping policy", "PE", ck2[i]);
                 prte_argv_free(ck2);
                 return PRTE_ERR_SILENT;
             }
-            ptr++;
-            u16 = strtol(ptr, NULL, 10);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL,
                                 &u16, PRTE_UINT16);
 
