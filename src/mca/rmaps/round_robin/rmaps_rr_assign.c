@@ -88,7 +88,7 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
                                hwloc_obj_type_t target,
                                unsigned cache_level)
 {
-    int start, j, m, n, npus, cpus_per_rank;
+    int start, j, m, n, k, npus, cpus_per_rank;
     prte_app_context_t *app;
     prte_node_t *node;
     prte_proc_t *proc;
@@ -197,19 +197,28 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
                     continue;
                 }
 
-                prte_output_verbose(20, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps:rr: assigning proc to object %d", (j + start) % nobjs);
-                /* get the hwloc object */
-                if (NULL == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, (j + start) % nobjs))) {
-                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                    hwloc_bitmap_free(available);
-                    if (NULL != job_cpuset) {
-                        free(job_cpuset);
+                /* Search for resource which has at least enough members for
+                 * request. Seach fails if we wrap back to our starting index
+                 * without finding a satisfactory resource. */
+                k = start;
+                do {
+                    /* get the hwloc object */
+                    if (NULL == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, k))) {
+                        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                        hwloc_bitmap_free(available);
+                        if (NULL != job_cpuset) {
+                            free(job_cpuset);
+                        }
+                        return PRTE_ERR_NOT_FOUND;
                     }
-                    return PRTE_ERR_NOT_FOUND;
-                }
-                npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
-                                                 available, obj);
+                    npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
+                                                     available, obj);
+                    if (npus >= cpus_per_rank) {
+                        break;
+                    }
+                    k = (k + 1) % nobjs;
+                } while (k != start);
+                /* Fail if loop exits without finding an adequate resource */
                 if (cpus_per_rank > npus) {
                     prte_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
                                    cpus_per_rank, npus,
@@ -220,9 +229,13 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
                     }
                     return PRTE_ERR_SILENT;
                 }
+                prte_output_verbose(20, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps:rr: assigning proc to object %d", k);
                 prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                /* Position at next sequential resource for next search */
+                start = (k + 1) % nobjs;
                 /* track the bookmark */
-                jdata->bkmark_obj = (j + start) % nobjs;
+                jdata->bkmark_obj = start;
             }
             hwloc_bitmap_free(available);
         }
