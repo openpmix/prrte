@@ -66,7 +66,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
                      bool cmdline);
 static int detect_proxy(char **argv);
 static int allow_run_as_root(prte_cmd_line_t *cmd_line);
-static void job_info(prte_cmd_line_t *cmdline, prte_list_t *jobinfo);
+static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
 
 prte_schizo_base_module_t prte_schizo_ompi_module = {
     .define_cli = define_cli,
@@ -1148,11 +1148,11 @@ static int allow_run_as_root(prte_cmd_line_t *cmd_line)
     return PRTE_ERR_TAKE_NEXT_OPTION;
 }
 
-static void job_info(prte_cmd_line_t *cmdline, prte_list_t *jobinfo)
+static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
 {
-    prte_ds_info_t *ds;
     prte_value_t *pval;
     uint16_t u16;
+    pmix_status_t rc;
 
     if (NULL != (pval = prte_cmd_line_get_param(cmdline, "stream-buffering", 0, 0))) {
         u16 = pval->data.integer;
@@ -1161,10 +1161,10 @@ static void job_info(prte_cmd_line_t *cmdline, prte_list_t *jobinfo)
             prte_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, pval->data.integer);
             return;
         }
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, "OMPI_STREAM_BUFFERING", &u16, PMIX_UINT16);
-        prte_list_append(jobinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(rc, jobinfo, "OMPI_STREAM_BUFFERING", &u16, PMIX_UINT16);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
     }
 }
 

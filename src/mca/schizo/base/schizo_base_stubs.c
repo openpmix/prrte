@@ -255,7 +255,7 @@ int prte_schizo_base_setup_child(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
-void prte_schizo_base_job_info(prte_cmd_line_t *cmdline, prte_list_t *jobinfo)
+void prte_schizo_base_job_info(prte_cmd_line_t *cmdline, void *jobinfo)
 {
     prte_schizo_base_active_module_t *mod;
 

@@ -922,7 +922,7 @@ static void pmix_server_dmdx_recv(int status, prte_process_name_t* sender,
          * amount of time to start the job */
         PRTE_ADJUST_TIMEOUT(req);
         if (PRTE_SUCCESS != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
-            prte_show_help("help-orted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
+            prte_show_help("help-prted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
             PRTE_RELEASE(req);
             send_error(rc, &pproc, sender, room_num);
         }
@@ -964,7 +964,7 @@ static void pmix_server_dmdx_recv(int status, prte_process_name_t* sender,
             PMIX_INFO_FREE(info, ninfo);
             /* check us into the hotel */
             if (PRTE_SUCCESS != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
-                prte_show_help("help-orted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
+                prte_show_help("help-prted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
                 PRTE_RELEASE(req);
                 send_error(rc, &pproc, sender, room_num);
             }
@@ -993,7 +993,7 @@ static void pmix_server_dmdx_recv(int status, prte_process_name_t* sender,
      * amount of time to start the job */
     PRTE_ADJUST_TIMEOUT(req);
     if (PRTE_SUCCESS != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
-        prte_show_help("help-orted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
+        prte_show_help("help-prted.txt", "noroom", true, req->operation, prte_pmix_server_globals.num_rooms);
         PRTE_RELEASE(req);
         send_error(rc, &pproc, sender, room_num);
         return;

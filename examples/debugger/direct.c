@@ -95,7 +95,7 @@ static void notification_fn(size_t evhdlr_registration_id,
     size_t n;
 
     if (PMIX_ERR_UNREACH == status ||
-        PMIX_ERR_LOST_CONNECTION_TO_SERVER == status) {
+        PMIX_ERR_LOST_CONNECTION == status) {
         /* we should always have info returned to us - if not, there is
          * nothing we can do */
         if (NULL != info) {

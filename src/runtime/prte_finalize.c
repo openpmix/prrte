@@ -72,6 +72,7 @@ int prte_finalize(void)
      * be ignored if no listeners were registered */
     prte_stop_listening();
 
+#if 0
     /* release the cache */
     PRTE_RELEASE(prte_cache);
 
@@ -157,6 +158,15 @@ int prte_finalize(void)
     }
 }
     PRTE_RELEASE(prte_node_pool);
+
+    if (NULL != prte_fork_agent) {
+        prte_argv_free(prte_fork_agent);
+    }
+
+    free (prte_process_info.nodename);
+    prte_process_info.nodename = NULL;
+
+#endif
     /* call the finalize function for this environment */
     if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {
         return rc;
@@ -168,15 +178,8 @@ int prte_finalize(void)
     /* Close the general debug stream */
     prte_output_close(prte_debug_output);
 
-    if (NULL != prte_fork_agent) {
-        prte_argv_free(prte_fork_agent);
-    }
-
     /* finalize the class/object system */
     prte_class_finalize();
-
-    free (prte_process_info.nodename);
-    prte_process_info.nodename = NULL;
 
     return PRTE_SUCCESS;
 }

@@ -794,7 +794,7 @@ int main(int argc, char *argv[])
         ++param;
         /* register for the PMIX_LAUNCH_DIRECTIVE event */
         PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        ret = PMIX_LAUNCH_DIRECTIVE;
+//        ret = PMIX_LAUNCH_DIRECTIVE;
         /* setup the myinfo object to capture the returned
          * values - must do so prior to registering in case
          * the event has already arrived */

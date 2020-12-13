@@ -427,7 +427,7 @@ int main(int argc, char *argv[])
      /* setup a lock to track the connection */
     PRTE_PMIX_CONSTRUCT_LOCK(&rellock);
     /* register to trap connection loss */
-    pmix_status_t code[2] = {PMIX_ERR_UNREACH, PMIX_ERR_LOST_CONNECTION_TO_SERVER};
+    pmix_status_t code[2] = {PMIX_ERR_UNREACH, PMIX_ERR_LOST_CONNECTION};
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
     PMIX_INFO_LOAD(&info, PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
     PMIx_Register_event_handler(code, 2, &info, 1,

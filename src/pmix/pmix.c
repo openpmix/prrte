@@ -311,9 +311,7 @@ int prte_pmix_convert_status(pmix_status_t status)
     case PMIX_ERR_WOULD_BLOCK:
         return PRTE_ERR_WOULD_BLOCK;
 
-    case PMIX_ERR_LOST_CONNECTION_TO_SERVER:
-    case PMIX_ERR_LOST_PEER_CONNECTION:
-    case PMIX_ERR_LOST_CONNECTION_TO_CLIENT:
+    case PMIX_ERR_LOST_CONNECTION:
         return PRTE_ERR_COMM_FAILURE;
 
     case PMIX_EXISTS:

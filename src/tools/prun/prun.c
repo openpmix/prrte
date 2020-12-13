@@ -93,41 +93,19 @@
 #include "prun.h"
 
 typedef struct {
-    prte_object_t super;
-    prte_pmix_lock_t lock;
-    pmix_info_t *info;
-    size_t ninfo;
-} myinfo_t;
-static void mcon(myinfo_t *p)
-{
-    PRTE_PMIX_CONSTRUCT_LOCK(&p->lock);
-    p->info = NULL;
-    p->ninfo = 0;
-}
-static void mdes(myinfo_t *p)
-{
-    PRTE_PMIX_DESTRUCT_LOCK(&p->lock);
-    if (NULL != p->info) {
-        PMIX_INFO_FREE(p->info, p->ninfo);
-    }
-}
-static PRTE_CLASS_INSTANCE(myinfo_t, prte_object_t,
-                            mcon, mdes);
-
-typedef struct {
     prte_list_item_t super;
     pmix_app_t app;
-    prte_list_t info;
+    void *info;
 } prte_pmix_app_t;
 static void acon(prte_pmix_app_t *p)
 {
     PMIX_APP_CONSTRUCT(&p->app);
-    PRTE_CONSTRUCT(&p->info, prte_list_t);
+    PMIX_INFO_LIST_START(p->info);
 }
 static void ades(prte_pmix_app_t *p)
 {
     PMIX_APP_DESTRUCT(&p->app);
-    PRTE_LIST_DESTRUCT(&p->info);
+    PMIX_INFO_LIST_RELEASE(p->info);
 }
 static PRTE_CLASS_INSTANCE(prte_pmix_app_t,
                           prte_list_item_t,
@@ -139,9 +117,7 @@ typedef struct {
     size_t ninfo;
 } mylock_t;
 
-static prte_list_t job_info;
 static prte_jobid_t myjobid = PRTE_JOBID_INVALID;
-static myinfo_t myinfo;
 static pmix_nspace_t spawnednspace;
 
 static int create_app(int argc, char* argv[],
@@ -404,32 +380,6 @@ static void clean_abort(int fd, short flags, void *arg);
 static void signal_forward_callback(int signal);
 static void epipe_signal_callback(int signal);
 
-static void infocb(pmix_status_t status,
-                   pmix_info_t *info, size_t ninfo,
-                   void *cbdata,
-                   pmix_release_cbfunc_t release_fn,
-                   void *release_cbdata)
-{
-    prte_pmix_lock_t *lock = (prte_pmix_lock_t*)cbdata;
-#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-    /* The callback should likely not have been called
-     * see the comment below */
-    if (PMIX_ERR_COMM_FAILURE == status) {
-        return;
-    }
-#endif
-    PRTE_ACQUIRE_OBJECT(lock);
-
-    if (verbose) {
-        prte_output(0, "PRUN: INFOCB");
-    }
-
-    if (NULL != release_fn) {
-        release_fn(release_cbdata);
-    }
-    PRTE_PMIX_WAKEUP_THREAD(lock);
-}
-
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t*)cbdata;
@@ -482,7 +432,7 @@ static void defhandler(size_t evhdlr_registration_id,
 #endif
 
     if (PMIX_ERR_UNREACH == status ||
-        PMIX_ERR_LOST_CONNECTION_TO_SERVER == status) {
+        PMIX_ERR_LOST_CONNECTION == status) {
         /* we should always have info returned to us - if not, there is
          * nothing we can do */
         if (NULL != info) {
@@ -599,36 +549,6 @@ static void setupcbfunc(pmix_status_t status,
     PRTE_PMIX_WAKEUP_THREAD(&mylock->lock);
 }
 
-static void launchhandler(size_t evhdlr_registration_id,
-                          pmix_status_t status,
-                          const pmix_proc_t *source,
-                          pmix_info_t info[], size_t ninfo,
-                          pmix_info_t *results, size_t nresults,
-                          pmix_event_notification_cbfunc_fn_t cbfunc,
-                          void *cbdata)
-{
-    size_t n;
-
-    /* the info list will include the launch directives, so
-     * transfer those to the myinfo_t for return to the main thread */
-    if (NULL != info) {
-        myinfo.ninfo = ninfo;
-        PMIX_INFO_CREATE(myinfo.info, myinfo.ninfo);
-        for (n=0; n < ninfo; n++) {
-            PMIX_INFO_XFER(&myinfo.info[n], &info[n]);
-        }
-    }
-
-    /* we _always_ have to execute the evhandler callback or
-     * else the event progress engine will hang */
-    if (NULL != cbfunc) {
-        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
-    }
-
-    /* now release the thread */
-    PRTE_PMIX_WAKEUP_THREAD(&myinfo.lock);
-}
-
 int prun(int argc, char *argv[])
 {
     int rc=1, i;
@@ -636,19 +556,15 @@ int prun(int argc, char *argv[])
     prte_pmix_lock_t lock, rellock;
     prte_list_t apps;
     prte_pmix_app_t *app;
-    prte_list_t tinfo;
+    void *tinfo, *jinfo;
     pmix_info_t info, *iptr;
     pmix_proc_t pname, controller;
     pmix_status_t ret;
     bool flag;
-    prte_ds_info_t *ds;
     size_t m, n, ninfo;
     pmix_app_t *papps;
     size_t napps;
     mylock_t mylock;
-#if PMIX_NUMERIC_VERSION >= 0x00040000
-    bool notify_launch = false;
-#endif
     prte_value_t *pval;
     uint32_t ui32;
     pid_t pid;
@@ -659,9 +575,10 @@ int prun(int argc, char *argv[])
     prte_ess_base_signal_t *sig;
     prte_event_list_item_t *evitm;
     char *personality = NULL;
+    pmix_value_t *val;
+    pmix_data_array_t darray;
 
     /* init the globals */
-    PRTE_CONSTRUCT(&job_info, prte_list_t);
     PRTE_CONSTRUCT(&apps, prte_list_t);
     PRTE_CONSTRUCT(&forwarded_signals, prte_list_t);
 
@@ -863,111 +780,56 @@ int prun(int argc, char *argv[])
     }
 
     /* setup options */
-    PRTE_CONSTRUCT(&tinfo, prte_list_t);
+    PMIX_INFO_LIST_START(tinfo);
+
     if (prte_cmd_line_is_taken(prte_cmd_line, "do-not-connect")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
     } else if (prte_cmd_line_is_taken(prte_cmd_line, "system-server-first")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
     } else if (prte_cmd_line_is_taken(prte_cmd_line, "system-server-only")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
     }
+
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0)) &&
         0 < pval->data.integer) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        ui32 = pval->data.integer;
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
+
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "num-connect-retries", 0, 0)) &&
         0 < pval->data.integer) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        ui32 = pval->data.integer;
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
+
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0)) &&
         0 < pval->data.integer) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        pid = pval->data.integer;
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "namespace", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_NSPACE, pval->data.string, PMIX_STRING);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_NSPACE, pval->data.string, PMIX_STRING);
     }
-    /* ensure we don't try to use the usock PTL component */
-    ds = PRTE_NEW(prte_ds_info_t);
-    PMIX_INFO_CREATE(ds->info, 1);
-    PMIX_INFO_LOAD(ds->info, PMIX_USOCK_DISABLE, NULL, PMIX_BOOL);
-    prte_list_append(&tinfo, &ds->super);
 
     /* set our session directory to something hopefully unique so
      * our rendezvous files don't conflict with other prun/prte
      * instances */
-    ds = PRTE_NEW(prte_ds_info_t);
-    PMIX_INFO_CREATE(ds->info, 1);
-    PMIX_INFO_LOAD(ds->info, PMIX_SERVER_TMPDIR, mytmpdir, PMIX_STRING);
-    prte_list_append(&tinfo, &ds->super);
+    PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_TMPDIR, mytmpdir, PMIX_STRING);
 
     /* we are also a launcher, so pass that down so PMIx knows
      * to setup rendezvous points */
-    ds = PRTE_NEW(prte_ds_info_t);
-    PMIX_INFO_CREATE(ds->info, 1);
-    PMIX_INFO_LOAD(ds->info, PMIX_LAUNCHER, NULL, PMIX_BOOL);
-    prte_list_append(&tinfo, &ds->super);
-    /* we always support session-level rendezvous */
-    ds = PRTE_NEW(prte_ds_info_t);
-    PMIX_INFO_CREATE(ds->info, 1);
-    PMIX_INFO_LOAD(ds->info, PMIX_SERVER_TOOL_SUPPORT, NULL, PMIX_BOOL);
-    prte_list_append(&tinfo, &ds->super);
-    /* use only one listener */
-    ds = PRTE_NEW(prte_ds_info_t);
-    PMIX_INFO_CREATE(ds->info, 1);
-    PMIX_INFO_LOAD(ds->info, PMIX_SINGLE_LISTENER, NULL, PMIX_BOOL);
-    prte_list_append(&tinfo, &ds->super);
+    PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_LAUNCHER, NULL, PMIX_BOOL);
+
+    /* we always support tool rendezvous */
+    PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_TOOL_SUPPORT, NULL, PMIX_BOOL);
 
     /* if they specified the URI, then pass it along */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "dvm-uri", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_URI, pval->data.string, PMIX_STRING);
-        prte_list_append(&tinfo, &ds->super);
-    }
-
-    /* if we were launched by a debugger, then we need to have
-     * notification of our termination sent */
-    if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = false;
-        PMIX_INFO_LOAD(ds->info, PMIX_EVENT_SILENT_TERMINATION, &flag, PMIX_BOOL);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_URI, pval->data.string, PMIX_STRING);
     }
 
     /* convert to array of info */
-    ninfo = prte_list_get_size(&tinfo);
-    PMIX_INFO_CREATE(iptr, ninfo);
-    n = 0;
-    PRTE_LIST_FOREACH(ds, &tinfo, prte_ds_info_t) {
-        PMIX_INFO_XFER(&iptr[n], ds->info);
-        ++n;
-    }
-    PRTE_LIST_DESTRUCT(&tinfo);
+    PMIX_INFO_LIST_CONVERT(ret, tinfo, &darray);
+    iptr = (pmix_info_t*)darray.array;
+    ninfo = darray.size;
+    PMIX_INFO_LIST_RELEASE(tinfo);
 
     /* now initialize PMIx - we have to indicate we are a launcher so that we
      * will provide rendezvous points for tools to connect to us */
@@ -977,67 +839,37 @@ int prun(int argc, char *argv[])
     }
     PMIX_INFO_FREE(iptr, ninfo);
 
-    /* if the user just wants us to terminate a DVM, then do so */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "terminate")) {
-        /* advise the user to utilize "pterm" in the future */
-        prte_show_help("help-prun.txt", "use-pterm", true, prte_tool_basename);
-        /* setup a lock to track the connection */
-        PRTE_PMIX_CONSTRUCT_LOCK(&rellock);
-        /* register to trap connection loss */
-        pmix_status_t code[2] = {PMIX_ERR_UNREACH, PMIX_ERR_LOST_CONNECTION_TO_SERVER};
-        PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        PMIX_INFO_LOAD(&info, PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
-        PMIx_Register_event_handler(code, 2, &info, 1,
-                                    evhandler, regcbfunc, &lock);
-        PRTE_PMIX_WAIT_THREAD(&lock);
-        PRTE_PMIX_DESTRUCT_LOCK(&lock);
-        flag = true;
-        PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_TERMINATE, &flag, PMIX_BOOL);
-        fprintf(stderr, "TERMINATING DVM...");
-        PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        rc = PMIx_Job_control_nb(NULL, 0, &info, 1, infocb, (void*)&lock);
-        if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-            goto DONE;
-        } else if (PMIX_SUCCESS == rc) {
-    #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-            /* There is a bug in PMIx 3.0.0 up to 3.0.2 that causes the callback never
-             * being called when the server terminates. The callback might be eventually
-             * called though then the connection to the server closes with
-             * status PMIX_ERR_COMM_FAILURE */
-            poll(NULL, 0, 1000);
-            infocb(PMIX_SUCCESS, NULL, 0, (void *)&lock, NULL, NULL);
-    #endif
-            PRTE_PMIX_WAIT_THREAD(&lock);
-            PRTE_PMIX_DESTRUCT_LOCK(&lock);
-            /* wait for connection to depart */
-            PRTE_PMIX_WAIT_THREAD(&rellock);
-            PRTE_PMIX_DESTRUCT_LOCK(&rellock);
-            /* wait for the connection to go away */
-        }
-        fprintf(stderr, "DONE\n");
-#if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
-        return rc;
-#else
-        goto DONE;
-#endif
-    }
-
-
     /* register a default event handler and pass it our release lock
      * so we can cleanly exit if the server goes away */
     PRTE_PMIX_CONSTRUCT_LOCK(&rellock);
-    PMIX_INFO_LOAD(&info, PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
+    PMIX_INFO_CREATE(iptr, 2);
+    PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
+    PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_HDLR_NAME, "DEFAULT", PMIX_STRING);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    PMIx_Register_event_handler(NULL, 0, &info, 1, defhandler, regcbfunc, &lock);
+    PMIx_Register_event_handler(NULL, 0,iptr, 2, defhandler, regcbfunc, &lock);
     PRTE_PMIX_WAIT_THREAD(&lock);
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(iptr, 2);
+
+    /***** CONSTRUCT THE APP'S JOB-INFO ****/
+    PMIX_INFO_LIST_START(jinfo);
+
+    /***** CHECK FOR LAUNCH DIRECTIVES - ADD THEM TO JOB INFO IF FOUND ****/
+    PMIX_LOAD_PROCID(&pname, myproc.nspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info, PMIX_OPTIONAL, NULL, PMIX_BOOL);
+    ret = PMIx_Get(&pname, PMIX_LAUNCH_DIRECTIVES, &info, 1, &val);
+    PMIX_INFO_DESTRUCT(&info);
+    if (PMIX_SUCCESS == ret) {
+        iptr = (pmix_info_t*)val->data.darray->array;
+        ninfo = val->data.darray->size;
+        for (n=0; n < ninfo; n++) {
+            PMIX_INFO_LIST_XFER(ret, jinfo, &iptr[n]);
+        }
+        PMIX_VALUE_RELEASE(val);
+    }
 
     /* we want to be notified upon job completion */
-    ds = PRTE_NEW(prte_ds_info_t);
-    PMIX_INFO_CREATE(ds->info, 1);
-    flag = true;
-    PMIX_INFO_LOAD(ds->info, PMIX_NOTIFY_COMPLETION, &flag, PMIX_BOOL);
-    prte_list_append(&job_info, &ds->super);
+    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_NOTIFY_COMPLETION, &flag, PMIX_BOOL);
 
     /* pass the personality */
     for (i=0; NULL != prte_schizo_base.personalities[i]; i++) {
@@ -1049,31 +881,22 @@ int prun(int argc, char *argv[])
         if (NULL != tmp) {
             personality = prte_argv_join(tmp, ',');
             prte_argv_free(tmp);
-            ds = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_PERSONALITY, personality, PMIX_STRING);
+            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, personality, PMIX_STRING);
             /* don't free personality as we need it again later */
-            prte_list_append(&job_info, &ds->super);
         }
     }
 
     /* check for stdout/err directives */
     /* if we were asked to tag output, mark it so */
     if (prte_cmd_line_is_taken(prte_cmd_line, "tag-output")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
     }
+
     /* if we were asked to timestamp output, mark it so */
     if (prte_cmd_line_is_taken(prte_cmd_line, "timestamp-output")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
     }
+
     /* cannot have both files and directory set for output */
     param = NULL;
     ptr = NULL;
@@ -1088,9 +911,6 @@ int prun(int argc, char *argv[])
                         param, ptr);
         return PRTE_ERR_FATAL;
     } else if (NULL != param) {
-        /* if we were asked to output to files, pass it along. */
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
         /* if the given filename isn't an absolute path, then
          * convert it to one so the name will be relative to
          * the directory where prun was given as that is what
@@ -1104,14 +924,10 @@ int prun(int argc, char *argv[])
         } else {
             ptr = strdup(param);
         }
-        PMIX_INFO_LOAD(ds->info, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
         free(ptr);
-        prte_list_append(&job_info, &ds->super);
     } else if (NULL != ptr) {
 #if PMIX_NUMERIC_VERSION >= 0x00040000
-        /* if we were asked to output to a directory, pass it along. */
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
         /* If the given filename isn't an absolute path, then
          * convert it to one so the name will be relative to
          * the directory where prun was given as that is what
@@ -1125,95 +941,61 @@ int prun(int argc, char *argv[])
         } else {
             param = strdup(ptr);
         }
-        PMIX_INFO_LOAD(ds->info, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
         free(param);
 #endif
     }
+
     /* if we were asked to merge stderr to stdout, mark it so */
     if (prte_cmd_line_is_taken(prte_cmd_line, "merge-stderr-to-stdout")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
     }
 
     /* check what user wants us to do with stdin */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "stdin", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_STDIN_TGT, pval->data.string, PMIX_STRING);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, pval->data.string, PMIX_STRING);
     }
 
     /* if we want the argv's indexed, indicate that */
     if (prte_cmd_line_is_taken(prte_cmd_line, "index-argv-by-rank")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_INDEX_ARGV, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_INDEX_ARGV, &flag, PMIX_BOOL);
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_MAPBY, pval->data.string, PMIX_STRING);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->data.string, PMIX_STRING);
     }
 
     /* if the user specified a ranking policy, then set it */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "rank-by", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_RANKBY, pval->data.string, PMIX_STRING);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, pval->data.string, PMIX_STRING);
     }
 
     /* if the user specified a binding policy, then set it */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "bind-to", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_BINDTO, pval->data.string, PMIX_STRING);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, pval->data.string, PMIX_STRING);
     }
 
     /* mark if recovery was enabled on the cmd line */
     if (prte_cmd_line_is_taken(prte_cmd_line, "enable-recovery")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_JOB_RECOVERABLE, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_RECOVERABLE, &flag, PMIX_BOOL);
     }
     /* record the max restarts */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "max-restarts", 0, 0)) &&
         0 < pval->data.integer) {
         ui32 = pval->data.integer;
         PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t) {
-            ds = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
-            prte_list_append(&app->info, &ds->super);
+            PMIX_INFO_LIST_ADD(ret, app->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
         }
     }
     /* if continuous operation was specified */
     if (prte_cmd_line_is_taken(prte_cmd_line, "continuous")) {
         /* mark this job as continuously operating */
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_JOB_CONTINUOUS, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_CONTINUOUS, &flag, PMIX_BOOL);
     }
 
     /* if stop-on-exec was specified */
     if (prte_cmd_line_is_taken(prte_cmd_line, "stop-on-exec")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_DEBUG_STOP_ON_EXEC, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, &flag, PMIX_BOOL);
     }
 
     /* check for a job timeout specification, to be provided in seconds
@@ -1233,30 +1015,20 @@ int prun(int argc, char *argv[])
         } else {
             i = pval->data.integer;
         }
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT, &i, PMIX_INT);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT, &i, PMIX_INT);
     }
+
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     if (prte_cmd_line_is_taken(prte_cmd_line, "get-stack-traces")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT_STACKTRACES, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_STACKTRACES, &flag, PMIX_BOOL);
     }
     if (prte_cmd_line_is_taken(prte_cmd_line, "report-state-on-timeout")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT_REPORT_STATE, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_REPORT_STATE, &flag, PMIX_BOOL);
     }
 #endif
 
     /* give the schizo components a chance to add to the job info */
-    prte_schizo.job_info(prte_cmd_line, &job_info);
+    prte_schizo.job_info(prte_cmd_line, jinfo);
 
     /* pickup any relevant envars */
     ninfo = 3;
@@ -1294,10 +1066,7 @@ int prun(int argc, char *argv[])
                 0 == strncmp(mylock.info[n].key, PMIX_UNSET_ENVAR, PMIX_MAX_KEYLEN) ||
                 0 == strncmp(mylock.info[n].key, PMIX_PREPEND_ENVAR, PMIX_MAX_KEYLEN) ||
                 0 == strncmp(mylock.info[n].key, PMIX_APPEND_ENVAR, PMIX_MAX_KEYLEN)) {
-                ds = PRTE_NEW(prte_ds_info_t);
-                PMIX_INFO_CREATE(ds->info, 1);
-                PMIX_INFO_XFER(&ds->info[0], &mylock.info[n]);
-                prte_list_append(&job_info, &ds->super);
+                PMIX_INFO_LIST_XFER(ret, jinfo,  &mylock.info[n]);
             }
         }
         PMIX_INFO_FREE(mylock.info, mylock.ninfo);
@@ -1318,118 +1087,25 @@ int prun(int argc, char *argv[])
         goto DONE;
     }
 
-    /* if we were launched by a tool wanting to direct our
-     * operation, then we need to pause here and give it
-     * a chance to tell us what we need to do */
-    if (NULL != (param = getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL"))) {
-        ptr = strdup(param);
-        param = strchr(ptr, ':');
-        if (NULL == param) {
-            prte_show_help("help-prun.txt", "bad-pause-for-tool", true,
-                           prte_tool_basename, ptr, prte_tool_basename);
-            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-            goto DONE;
-        }
-        *param = '\0';
-        ++param;
-        /* register for the PMIX_LAUNCH_DIRECTIVE event */
-        PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        ret = PMIX_LAUNCH_DIRECTIVE;
-        /* setup the myinfo object to capture the returned
-         * values - must do so prior to registering in case
-         * the event has already arrived */
-        PRTE_CONSTRUCT(&myinfo, myinfo_t);
-
-        /* go ahead and register */
-        PMIx_Register_event_handler(&ret, 1, NULL, 0, launchhandler, regcbfunc, &lock);
-        PRTE_PMIX_WAIT_THREAD(&lock);
-        PRTE_PMIX_DESTRUCT_LOCK(&lock);
-        /* notify the tool that we are ready */
-        (void)strncpy(controller.nspace, ptr, PMIX_MAX_NSLEN);
-        controller.rank = strtoul(param, NULL, 10);
-        PMIX_INFO_CREATE(iptr, 2);
-        /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
-        /* not to be delivered to a default event handler */
-        PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
-        PMIx_Notify_event(PMIX_LAUNCHER_READY, &prte_process_info.myproc, PMIX_RANGE_CUSTOM,
-                          iptr, 2, NULL, NULL);
-        /* now wait for the launch directives to arrive */
-        PRTE_PMIX_WAIT_THREAD(&myinfo.lock);
-        PMIX_INFO_FREE(iptr, 1);
-
-        /* process the returned directives */
-        if (NULL != myinfo.info) {
-            for (n=0; n < myinfo.ninfo; n++) {
-                if (0 == strncmp(myinfo.info[n].key, PMIX_DEBUG_JOB_DIRECTIVES, PMIX_MAX_KEYLEN)) {
-                    /* there will be a pmix_data_array containing the directives */
-                    iptr = (pmix_info_t*)myinfo.info[n].value.data.darray->array;
-                    ninfo = myinfo.info[n].value.data.darray->size;
-                    for (m=0; m < ninfo; m++) {
-#if PMIX_NUMERIC_VERSION >= 0x00040000
-                        if (PMIX_CHECK_KEY(&iptr[m], PMIX_NOTIFY_LAUNCH)) {
-                            /* we don't pass this along - it is aimed at us */
-                            notify_launch = true;
-                            continue;
-                        }
-#endif
-                        ds = PRTE_NEW(prte_ds_info_t);
-                        ds->info = &iptr[m];
-                        prte_list_append(&job_info, &ds->super);
-                    }
-                    free(myinfo.info[n].value.data.darray);  // protect the info structs
-                } else if (0 == strncmp(myinfo.info[n].key, PMIX_DEBUG_APP_DIRECTIVES, PMIX_MAX_KEYLEN)) {
-                    /* there will be a pmix_data_array containing the directives */
-                    iptr = (pmix_info_t*)myinfo.info[n].value.data.darray->array;
-                    ninfo = myinfo.info[n].value.data.darray->size;
-                    for (m=0; m < ninfo; m++) {
-                        PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t) {
-                            /* the value can only be on one list at a time, so replicate it */
-                            ds = PRTE_NEW(prte_ds_info_t);
-                            ds->info = &iptr[n];
-                            prte_list_append(&app->info, &ds->super);
-                        }
-                    }
-                    free(myinfo.info[n].value.data.darray);  // protect the info structs
-                }
-            }
-        }
-    }
-
     /* convert the job info into an array */
-    ninfo = prte_list_get_size(&job_info);
-    iptr = NULL;
-    if (0 < ninfo) {
-        PMIX_INFO_CREATE(iptr, ninfo);
-        n=0;
-        PRTE_LIST_FOREACH(ds, &job_info, prte_ds_info_t) {
-            PMIX_INFO_XFER(&iptr[n], ds->info);
-            ++n;
-        }
-    }
+    PMIX_INFO_LIST_CONVERT(ret, jinfo, &darray);
+    iptr = (pmix_info_t*)darray.array;
+    ninfo = darray.size;
+    PMIX_INFO_LIST_RELEASE(jinfo);
 
     /* convert the apps to an array */
     napps = prte_list_get_size(&apps);
     PMIX_APP_CREATE(papps, napps);
     n = 0;
     PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t) {
-        size_t fbar;
-
         papps[n].cmd = strdup(app->app.cmd);
         papps[n].argv = prte_argv_copy(app->app.argv);
         papps[n].env = prte_argv_copy(app->app.env);
         papps[n].cwd = strdup(app->app.cwd);
         papps[n].maxprocs = app->app.maxprocs;
-        fbar = prte_list_get_size(&app->info);
-        if (0 < fbar) {
-            papps[n].ninfo = fbar;
-            PMIX_INFO_CREATE(papps[n].info, fbar);
-            m = 0;
-            PRTE_LIST_FOREACH(ds, &app->info, prte_ds_info_t) {
-                PMIX_INFO_XFER(&papps[n].info[m], ds->info);
-                ++m;
-            }
-        }
+        PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);
+        papps[n].info = (pmix_info_t*)darray.array;
+        papps[n].ninfo = darray.size;
         /* pickup any relevant envars */
         rc = prte_schizo.parse_env(prte_cmd_line, environ, &papps[n].env, false);
         if (PRTE_SUCCESS != rc) {
@@ -1437,6 +1113,7 @@ int prun(int argc, char *argv[])
         }
         ++n;
     }
+    PRTE_LIST_DESTRUCT(&apps);
 
     if (verbose) {
         prte_output(0, "Calling PMIx_Spawn");
@@ -1452,20 +1129,29 @@ int prun(int argc, char *argv[])
     PRTE_PMIX_CONVERT_NSPACE(rc, &myjobid, spawnednspace);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
-    if (notify_launch) {
+    PMIX_INFO_LOAD(&info, PMIX_OPTIONAL, NULL, PMIX_BOOL);
+    ret = PMIx_Get(&myproc, PMIX_PARENT_ID, &info, 1, &val);
+    PMIX_INFO_DESTRUCT(&info);
+    if (PMIX_SUCCESS == ret) {
+        PMIX_LOAD_PROCID(&controller, val->data.proc->nspace, val->data.proc->rank);
+        PMIX_VALUE_RELEASE(val);
         /* direct an event back to our controller telling them
          * the namespace of the spawned job */
-        PMIX_INFO_CREATE(iptr, 3);
+        PMIX_INFO_LIST_START(tinfo);
         /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
         /* pass the nspace of the spawned job */
-        PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, spawnednspace, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_NSPACE, spawnednspace, PMIX_STRING);
         /* not to be delivered to a default event handler */
-        PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
-        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &controller, PMIX_RANGE_CUSTOM,
-                          iptr, 3, NULL, NULL);
-        PMIX_INFO_FREE(iptr, 3);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+        PMIX_INFO_LIST_CONVERT(ret, tinfo, &darray);
+        iptr = (pmix_info_t*)darray.array;
+        ninfo = darray.size;
+        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &myproc, PMIX_RANGE_CUSTOM,
+                          iptr, ninfo, NULL, NULL);
+        PMIX_INFO_LIST_RELEASE(tinfo);
     }
+
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
     PMIX_INFO_CREATE(iptr, 1);
@@ -1513,7 +1199,7 @@ int prun(int argc, char *argv[])
     }
 
     /* if we lost connection to the server, then we are done */
-    if (PMIX_ERR_LOST_CONNECTION_TO_SERVER == rc ||
+    if (PMIX_ERR_LOST_CONNECTION == rc ||
         PMIX_ERR_UNREACH == rc) {
         goto DONE;
     }
@@ -1527,17 +1213,16 @@ int prun(int argc, char *argv[])
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* close the push of our stdin */
-    PMIX_INFO_CREATE(iptr, 1);
-    PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
+    PMIX_INFO_LOAD(&info, PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    ret = PMIx_IOF_push(NULL, 0, NULL, iptr, 1, opcbfunc, &lock);
+    ret = PMIx_IOF_push(NULL, 0, NULL, &info, 1, opcbfunc, &lock);
     if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
         prte_output(0, "IOF close of stdin failed: %s", PMIx_Error_string(ret));
     } else if (PMIX_SUCCESS == ret) {
         PRTE_PMIX_WAIT_THREAD(&lock);
     }
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
-    PMIX_INFO_FREE(iptr, 1);
+    PMIX_INFO_DESTRUCT(&info);
 #endif
 
   DONE:
@@ -1660,7 +1345,6 @@ static int create_app(int argc, char* argv[],
     prte_pmix_app_t *app = NULL;
     bool found = false;
     char *appname = NULL;
-    prte_ds_info_t *val;
     prte_value_t *pvalue;
 
     *made_app = false;
@@ -1705,10 +1389,7 @@ static int create_app(int argc, char* argv[],
             app->app.cwd = prte_os_path(false, cwd, param, NULL);
         }
     } else if (prte_cmd_line_is_taken(prte_cmd_line, "set-cwd-to-session-dir")) {
-        val = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(val->info, 1);
-        PMIX_INFO_LOAD(val->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
-        prte_list_append(&app->info, &val->super);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
     } else {
         if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
             prte_show_help("help-prun.txt", "prun:init-failure",
@@ -1721,10 +1402,7 @@ static int create_app(int argc, char* argv[],
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* if they specified a process set name, then pass it along */
     if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "pset", 0, 0))) {
-        val = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(val->info, 1);
-        PMIX_INFO_LOAD(val->info, PMIX_PSET_NAME, pvalue->data.string, PMIX_STRING);
-        prte_list_append(&app->info, &val->super);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PSET_NAME, pvalue->data.string, PMIX_STRING);
     }
 #endif
 
@@ -1740,10 +1418,7 @@ static int create_app(int argc, char* argv[],
             return PRTE_ERR_FATAL;
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
-            val = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(val->info, 1);
-            PMIX_INFO_LOAD(val->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
-            prte_list_append(&app->info, &val->super);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
             found = true;
         }
     }
@@ -1754,10 +1429,7 @@ static int create_app(int argc, char* argv[],
             return PRTE_ERR_FATAL;
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
-            val = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(val->info, 1);
-            PMIX_INFO_LOAD(val->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
-            prte_list_append(&app->info, &val->super);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
         }
     }
 
@@ -1769,10 +1441,7 @@ static int create_app(int argc, char* argv[],
             prte_argv_append_nosize(&targ, pvalue->data.string);
         }
         tval = prte_argv_join(targ, ',');
-        val = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(val->info, 1);
-        PMIX_INFO_LOAD(val->info, PMIX_HOST, tval, PMIX_STRING);
-        prte_list_append(&app->info, &val->super);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOST, tval, PMIX_STRING);
         free(tval);
     }
 
@@ -1800,21 +1469,12 @@ static int create_app(int argc, char* argv[],
      */
     if (NULL == strstr(app->app.argv[0], "java")) {
         if (prte_cmd_line_is_taken(prte_cmd_line, "preload-binaries")) {
-            val = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(val->info, 1);
-            PMIX_INFO_LOAD(val->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
-            prte_list_append(&app->info, &val->super);
-            val = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(val->info, 1);
-            PMIX_INFO_LOAD(val->info, PMIX_PRELOAD_BIN, NULL, PMIX_BOOL);
-            prte_list_append(&app->info, &val->super);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_BIN, NULL, PMIX_BOOL);
         }
     }
     if (prte_cmd_line_is_taken(prte_cmd_line, "preload-files")) {
-        val = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(val->info, 1);
-        PMIX_INFO_LOAD(val->info, PMIX_PRELOAD_FILES, NULL, PMIX_BOOL);
-        prte_list_append(&app->info, &val->super);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_FILES, NULL, PMIX_BOOL);
     }
 
     /* Do not try to find argv[0] here -- the starter is responsible
@@ -2013,7 +1673,6 @@ static void clean_abort(int fd, short flags, void *arg)
     PMIX_LOAD_PROCID(&target, spawnednspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
     rc = PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL);
-    prte_output(0, "JOB CTRL %s", PMIx_Error_string(rc));
     if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
         PMIx_tool_finalize();
         /* exit with a non-zero status */
@@ -2026,7 +1685,7 @@ static bool first = true;
 
 /*
  * Attempt to terminate the job and wait for callback indicating
- * the job has been abprted.
+ * the job has been aborted.
  */
 static void abort_signal_callback(int fd)
 {
