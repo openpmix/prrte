@@ -96,41 +96,19 @@
 #include "src/prted/pmix/pmix_server_internal.h"
 
 typedef struct {
-    prte_object_t super;
-    prte_pmix_lock_t lock;
-    pmix_info_t *info;
-    size_t ninfo;
-} myinfo_t;
-static void mcon(myinfo_t *p)
-{
-    PRTE_PMIX_CONSTRUCT_LOCK(&p->lock);
-    p->info = NULL;
-    p->ninfo = 0;
-}
-static void mdes(myinfo_t *p)
-{
-    PRTE_PMIX_DESTRUCT_LOCK(&p->lock);
-    if (NULL != p->info) {
-        PMIX_INFO_FREE(p->info, p->ninfo);
-    }
-}
-static PRTE_CLASS_INSTANCE(myinfo_t, prte_object_t,
-                            mcon, mdes);
-
-typedef struct {
     prte_list_item_t super;
     pmix_app_t app;
-    prte_list_t info;
+    void *info;
 } prte_pmix_app_t;
 static void acon(prte_pmix_app_t *p)
 {
     PMIX_APP_CONSTRUCT(&p->app);
-    PRTE_CONSTRUCT(&p->info, prte_list_t);
+    PMIX_INFO_LIST_START(p->info);
 }
 static void ades(prte_pmix_app_t *p)
 {
     PMIX_APP_DESTRUCT(&p->app);
-    PRTE_LIST_DESTRUCT(&p->info);
+    PMIX_INFO_LIST_RELEASE(p->info);
 }
 static PRTE_CLASS_INSTANCE(prte_pmix_app_t,
                           prte_list_item_t,
@@ -143,10 +121,9 @@ typedef struct {
     size_t ninfo;
 } mylock_t;
 
-static prte_list_t job_info;
 static prte_jobid_t myjobid = PRTE_JOBID_INVALID;
-static myinfo_t myinfo;
 static pmix_nspace_t spawnednspace;
+static pmix_proc_t myproc;
 
 static int create_app(int argc, char* argv[],
                       prte_list_t *jdata,
@@ -413,13 +390,6 @@ static prte_cmd_line_init_t cmd_line_init[] = {
 };
 
 
-static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
-{
-    prte_pmix_lock_t *lock = (prte_pmix_lock_t*)cbdata;
-    PRTE_ACQUIRE_OBJECT(lock);
-    PRTE_PMIX_WAKEUP_THREAD(lock);
-}
-
 static void setupcbfunc(pmix_status_t status,
                         pmix_info_t info[], size_t ninfo,
                         void *provided_cbdata,
@@ -449,36 +419,6 @@ static void setupcbfunc(pmix_status_t status,
     PRTE_PMIX_WAKEUP_THREAD(&mylock->lock);
 }
 
-static void launchhandler(size_t evhdlr_registration_id,
-                          pmix_status_t status,
-                          const pmix_proc_t *source,
-                          pmix_info_t info[], size_t ninfo,
-                          pmix_info_t *results, size_t nresults,
-                          pmix_event_notification_cbfunc_fn_t cbfunc,
-                          void *cbdata)
-{
-    size_t n;
-
-    /* the info list will include the launch directives, so
-     * transfer those to the myinfo_t for return to the main thread */
-    if (NULL != info) {
-        myinfo.ninfo = ninfo;
-        PMIX_INFO_CREATE(myinfo.info, myinfo.ninfo);
-        for (n=0; n < ninfo; n++) {
-            PMIX_INFO_XFER(&myinfo.info[n], &info[n]);
-        }
-    }
-
-    /* we _always_ have to execute the evhandler callback or
-     * else the event progress engine will hang */
-    if (NULL != cbfunc) {
-        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
-    }
-
-    /* now release the thread */
-    PRTE_PMIX_WAKEUP_THREAD(&myinfo.lock);
-}
-
 static void spcbfunc(pmix_status_t status,
                      char nspace[], void *cbdata)
 {
@@ -491,7 +431,6 @@ static void spcbfunc(pmix_status_t status,
     }
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
-
 
 static int wait_pipe[2];
 
@@ -523,11 +462,10 @@ int main(int argc, char *argv[])
     prte_pmix_lock_t lock;
     prte_list_t apps;
     prte_pmix_app_t *app;
-    pmix_info_t *iptr;
+    pmix_info_t *iptr, info;
     pmix_proc_t controller;
     pmix_status_t ret;
     bool flag;
-    prte_ds_info_t *ds;
     size_t m, n, ninfo, param_len;
     pmix_app_t *papps;
     size_t napps;
@@ -545,9 +483,12 @@ int main(int argc, char *argv[])
     prte_app_context_t *dapp;
     bool proxyrun = false;
     char *personality = NULL;
+    void *jinfo;
+    pmix_proc_t pname;
+    pmix_value_t *val;
+    pmix_data_array_t darray;
 
     /* init the globals */
-    PRTE_CONSTRUCT(&job_info, prte_list_t);
     PRTE_CONSTRUCT(&apps, prte_list_t);
 
     /* init the tiny part of PRTE we use */
@@ -749,10 +690,7 @@ int main(int argc, char *argv[])
     prte_setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
     /* if we were asked to report a uri, set the MCA param to do so */
      if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "report-uri", 0, 0))) {
-        prte_setenv("PMIX_MCA_ptl_tcp_report_uri", pval->data.string, true, &environ);
-    }
-    if (prte_cmd_line_is_taken(prte_cmd_line, "remote-tools")) {
-        prte_setenv("PMIX_MCA_ptl_tcp_remote_connections", "1", true, &environ);
+        prte_setenv("PMIX_MCA_ptl_base_report_uri", pval->data.string, true, &environ);
     }
     /* don't aggregate help messages as that will apply job-to-job */
     prte_setenv("PRTE_MCA_prte_base_help_aggregate", "0", true, &environ);
@@ -773,89 +711,29 @@ int main(int argc, char *argv[])
         PRTE_ERROR_LOG(ret);
         return ret;
     }
-
-    /* if we were launched by a tool wanting to direct our
-     * operation, then we need to pause here and give it
-     * a chance to tell us what we need to do - this needs to be
+    /* get my proc ID */
+    ret = PMIx_Get(NULL, PMIX_PROCID, NULL, 0, &val);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        goto DONE;
+    }
+    memcpy(&myproc, val->data.proc, sizeof(pmix_proc_t));
+    PMIX_VALUE_RELEASE(val);
+    
+    /* check for launch directives in case we were launched by a
+     * tool wanting to direct our operation - this needs to be
      * done prior to starting the DVM as it may include instructions
      * on the daemon executable, the fork/exec agent to be used by
-     * the daemons, or other directives impacting the DVM itself */
-    if (NULL != (param = getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL"))) {
-        /* check against bad param */
-        ptr = strdup(param);
-        param = strchr(ptr, ':');
-        if (NULL == param) {
-            prte_show_help("help-prun.txt", "bad-pause-for-tool", true,
-                           prte_tool_basename, ptr, prte_tool_basename);
-            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-            goto DONE;
-        }
-        *param = '\0';
-        ++param;
-        /* register for the PMIX_LAUNCH_DIRECTIVE event */
-        PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-//        ret = PMIX_LAUNCH_DIRECTIVE;
-        /* setup the myinfo object to capture the returned
-         * values - must do so prior to registering in case
-         * the event has already arrived */
-        PRTE_CONSTRUCT(&myinfo, myinfo_t);
-
-        /* go ahead and register */
-        PMIx_Register_event_handler(&ret, 1, NULL, 0, launchhandler, regcbfunc, &lock);
-        PRTE_PMIX_WAIT_THREAD(&lock);
-        PRTE_PMIX_DESTRUCT_LOCK(&lock);
-        /* notify the tool that we are ready */
-        (void)strncpy(controller.nspace, ptr, PMIX_MAX_NSLEN);
-        controller.rank = strtoul(param, NULL, 10);
-        PMIX_INFO_CREATE(iptr, 2);
-        /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
-        /* not to be delivered to a default event handler */
-        PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
-        PMIx_Notify_event(PMIX_LAUNCHER_READY, &prte_process_info.myproc, PMIX_RANGE_CUSTOM,
-                          iptr, 2, NULL, NULL);
-        /* now wait for the launch directives to arrive */
-        while (prte_event_base_active && myinfo.lock.active) {
-            prte_event_loop(prte_event_base, PRTE_EVLOOP_NONBLOCK);
-        }
-        PMIX_INFO_FREE(iptr, 2);
-        /* process the returned directives */
-        if (NULL != myinfo.info) {
-            for (n=0; n < myinfo.ninfo; n++) {
-
-                if (PMIX_CHECK_KEY(&myinfo.info[n], PMIX_DEBUG_JOB_DIRECTIVES)) {
-                    /* there will be a pmix_data_array containing the directives */
-                    iptr = (pmix_info_t*)myinfo.info[n].value.data.darray->array;
-                    ninfo = myinfo.info[n].value.data.darray->size;
-                    for (m=0; m < ninfo; m++) {
-#if PMIX_NUMERIC_VERSION >= 0x00040000
-                        if (PMIX_CHECK_KEY(&iptr[m], PMIX_NOTIFY_LAUNCH)) {
-                            /* we don't pass this along - it is aimed at us */
-                            notify_launch = true;
-                            continue;
-                        }
-#endif
-                        ds = PRTE_NEW(prte_ds_info_t);
-                        ds->info = &iptr[m];
-                        prte_list_append(&job_info, &ds->super);
-                    }
-                    free(myinfo.info[n].value.data.darray);  // protect the info structs
-                } else if (0 == strncmp(myinfo.info[n].key, PMIX_DEBUG_APP_DIRECTIVES, PMIX_MAX_KEYLEN)) {
-                    /* there will be a pmix_data_array containing the directives */
-                    iptr = (pmix_info_t*)myinfo.info[n].value.data.darray->array;
-                    ninfo = myinfo.info[n].value.data.darray->size;
-                    for (m=0; m < ninfo; m++) {
-                        PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t) {
-                            /* the value can only be on one list at a time, so replicate it */
-                            ds = PRTE_NEW(prte_ds_info_t);
-                            ds->info = &iptr[n];
-                            prte_list_append(&app->info, &ds->super);
-                        }
-                    }
-                    free(myinfo.info[n].value.data.darray);  // protect the info structs
-                }
-            }
-        }
+     * the daemons, or other directives impacting the DVM itself. */
+    PMIX_LOAD_PROCID(&pname, myproc.nspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info, PMIX_OPTIONAL, NULL, PMIX_BOOL);
+    /*  Have to cycle over directives we support*/
+    ret = PMIx_Get(&pname, PMIX_FORKEXEC_AGENT, &info, 1, &val);
+    PMIX_INFO_DESTRUCT(&info);
+    if (PMIX_SUCCESS == ret) {
+        /* set our fork/exec agent */
+        PMIX_VALUE_RELEASE(val);
     }
 
     /* start the DVM */
@@ -867,7 +745,7 @@ int main(int argc, char *argv[])
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
-    /* also should have created a daemon "app" */
+    /* ess/hnp also should have created a daemon "app" */
     if (NULL == (dapp = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, 0))) {
         prte_show_help("help-prun.txt", "bad-app-object", true,
                        prte_tool_basename);
@@ -999,6 +877,22 @@ int main(int argc, char *argv[])
     }
     /* mark that we are not a persistent DVM */
     prte_persistent = false;
+    /* setup to capture job-level info */
+    PMIX_INFO_LIST_START(jinfo);
+
+    /***** CHECK FOR LAUNCH DIRECTIVES - ADD THEM TO JOB INFO IF FOUND ****/
+    PMIX_LOAD_PROCID(&pname, myproc.nspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info, PMIX_OPTIONAL, NULL, PMIX_BOOL);
+    ret = PMIx_Get(&pname, PMIX_LAUNCH_DIRECTIVES, &info, 1, &val);
+    PMIX_INFO_DESTRUCT(&info);
+    if (PMIX_SUCCESS == ret) {
+        iptr = (pmix_info_t*)val->data.darray->array;
+        ninfo = val->data.darray->size;
+        for (n=0; n < ninfo; n++) {
+            PMIX_INFO_LIST_XFER(ret, jinfo, &iptr[n]);
+        }
+        PMIX_VALUE_RELEASE(val);
+    }
 
     /* pass the personality */
     for (i=0; NULL != prte_schizo_base.personalities[i]; i++) {
@@ -1010,11 +904,8 @@ int main(int argc, char *argv[])
         if (NULL != tmp) {
             personality = prte_argv_join(tmp, ',');
             prte_argv_free(tmp);
-            ds = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_PERSONALITY, personality, PMIX_STRING);
+            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, personality, PMIX_STRING);
             /* don't free personality as we need it again later */
-            prte_list_append(&job_info, &ds->super);
         }
     }
 
@@ -1033,8 +924,6 @@ int main(int argc, char *argv[])
         return PRTE_ERR_FATAL;
     } else if (NULL != param) {
         /* if we were asked to output to files, pass it along. */
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
         /* if the given filename isn't an absolute path, then
          * convert it to one so the name will be relative to
          * the directory where prun was given as that is what
@@ -1049,14 +938,11 @@ int main(int argc, char *argv[])
         } else {
             ptr = strdup(param);
         }
-        PMIX_INFO_LOAD(ds->info, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
         free(ptr);
-        prte_list_append(&job_info, &ds->super);
     } else if (NULL != ptr) {
 #if PMIX_NUMERIC_VERSION >= 0x00040000
         /* if we were asked to output to a directory, pass it along. */
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
         /* If the given filename isn't an absolute path, then
          * convert it to one so the name will be relative to
          * the directory where prun was given as that is what
@@ -1071,94 +957,59 @@ int main(int argc, char *argv[])
         } else {
             param = strdup(ptr);
         }
-        PMIX_INFO_LOAD(ds->info, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
         free(param);
 #endif
     }
     /* if we were asked to merge stderr to stdout, mark it so */
     if (prte_cmd_line_is_taken(prte_cmd_line, "merge-stderr-to-stdout")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL);
     }
 
     /* check what user wants us to do with stdin */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "stdin", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_STDIN_TGT, pval->data.string, PMIX_STRING);
-        prte_list_append(&job_info, &ds->super);
-    }
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, pval->data.string, PMIX_STRING);
+     }
 
     /* if we want the argv's indexed, indicate that */
     if (prte_cmd_line_is_taken(prte_cmd_line, "index-argv-by-rank")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_INDEX_ARGV, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_INDEX_ARGV, NULL, PMIX_BOOL);
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_MAPBY, pval->data.string, PMIX_STRING);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->data.string, PMIX_STRING);
     }
 
     /* if the user specified a ranking policy, then set it */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "rank-by", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_RANKBY, pval->data.string, PMIX_STRING);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, pval->data.string, PMIX_STRING);
     }
 
     /* if the user specified a binding policy, then set it */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "bind-to", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_BINDTO, pval->data.string, PMIX_STRING);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, pval->data.string, PMIX_STRING);
     }
     /* mark if recovery was enabled on the cmd line */
     if (prte_cmd_line_is_taken(prte_cmd_line, "enable-recovery")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_JOB_RECOVERABLE, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_RECOVERABLE, NULL, PMIX_BOOL);
     }
     /* record the max restarts */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "max-restarts", 0, 0)) &&
         0 < pval->data.integer) {
         ui32 = pval->data.integer;
         PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t) {
-            ds = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            PMIX_INFO_LOAD(ds->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
-            prte_list_append(&app->info, &ds->super);
+            PMIX_INFO_LIST_ADD(ret, app->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
         }
     }
     /* if continuous operation was specified */
     if (prte_cmd_line_is_taken(prte_cmd_line, "continuous")) {
         /* mark this job as continuously operating */
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_JOB_CONTINUOUS, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_CONTINUOUS, NULL, PMIX_BOOL);
     }
 
     /* if stop-on-exec was specified */
     if (prte_cmd_line_is_taken(prte_cmd_line, "stop-on-exec")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_DEBUG_STOP_ON_EXEC, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);
     }
 
     /* check for a job timeout specification, to be provided in seconds
@@ -1179,30 +1030,19 @@ int main(int argc, char *argv[])
         } else {
             i = pval->data.integer;
         }
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT, &i, PMIX_INT);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT, &i, PMIX_INT);
     }
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     if (prte_cmd_line_is_taken(prte_cmd_line, "get-stack-traces")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT_STACKTRACES, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_STACKTRACES, NULL, PMIX_BOOL);
     }
     if (prte_cmd_line_is_taken(prte_cmd_line, "report-state-on-timeout")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        flag = true;
-        PMIX_INFO_LOAD(ds->info, PMIX_TIMEOUT_REPORT_STATE, &flag, PMIX_BOOL);
-        prte_list_append(&job_info, &ds->super);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_REPORT_STATE, NULL, PMIX_BOOL);
     }
 #endif
 
     /* give the schizo components a chance to add to the job info */
-    prte_schizo.job_info(prte_cmd_line, &job_info);
+    prte_schizo.job_info(prte_cmd_line, jinfo);
 
     /* pickup any relevant envars */
     ninfo = 3;
@@ -1246,49 +1086,31 @@ int main(int argc, char *argv[])
                 0 == strncmp(mylock.info[n].key, PMIX_UNSET_ENVAR, PMIX_MAX_KEYLEN) ||
                 0 == strncmp(mylock.info[n].key, PMIX_PREPEND_ENVAR, PMIX_MAX_KEYLEN) ||
                 0 == strncmp(mylock.info[n].key, PMIX_APPEND_ENVAR, PMIX_MAX_KEYLEN)) {
-                ds = PRTE_NEW(prte_ds_info_t);
-                PMIX_INFO_CREATE(ds->info, 1);
-                PMIX_INFO_XFER(&ds->info[0], &mylock.info[n]);
-                prte_list_append(&job_info, &ds->super);
+                PMIX_INFO_LIST_XFER(ret, jinfo, &mylock.info[n]);
             }
         }
         PMIX_INFO_FREE(mylock.info, mylock.ninfo);
     }
 
     /* convert the job info into an array */
-    ninfo = prte_list_get_size(&job_info);
-    iptr = NULL;
-    if (0 < ninfo) {
-        PMIX_INFO_CREATE(iptr, ninfo);
-        n=0;
-        PRTE_LIST_FOREACH(ds, &job_info, prte_ds_info_t) {
-            PMIX_INFO_XFER(&iptr[n], ds->info);
-            ++n;
-        }
-    }
+    PMIX_INFO_LIST_CONVERT(ret, jinfo, &darray);
+    iptr = (pmix_info_t*)darray.array;
+    ninfo = darray.size;
+    PMIX_INFO_LIST_RELEASE(jinfo);
 
     /* convert the apps to an array */
     napps = prte_list_get_size(&apps);
     PMIX_APP_CREATE(papps, napps);
     n = 0;
     PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t) {
-        size_t fbar;
-
         papps[n].cmd = strdup(app->app.cmd);
         papps[n].argv = prte_argv_copy(app->app.argv);
         papps[n].env = prte_argv_copy(app->app.env);
         papps[n].cwd = strdup(app->app.cwd);
         papps[n].maxprocs = app->app.maxprocs;
-        fbar = prte_list_get_size(&app->info);
-        if (0 < fbar) {
-            papps[n].ninfo = fbar;
-            PMIX_INFO_CREATE(papps[n].info, fbar);
-            m = 0;
-            PRTE_LIST_FOREACH(ds, &app->info, prte_ds_info_t) {
-                PMIX_INFO_XFER(&papps[n].info[m], ds->info);
-                ++m;
-            }
-        }
+        PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);
+        papps[n].info = (pmix_info_t*)darray.array;
+        papps[n].ninfo = darray.size;
         /* pickup any relevant envars */
         rc = prte_schizo.parse_env(prte_cmd_line, environ, &papps[n].env, false);
         if (PRTE_SUCCESS != rc) {
@@ -1463,7 +1285,6 @@ static int create_app(int argc, char* argv[],
     prte_pmix_app_t *app = NULL;
     bool found = false;
     char *appname = NULL;
-    prte_ds_info_t *val;
     prte_value_t *pvalue;
 
     *made_app = false;
@@ -1506,10 +1327,7 @@ static int create_app(int argc, char* argv[],
             app->app.cwd = prte_os_path(false, cwd, param, NULL);
         }
     } else if (prte_cmd_line_is_taken(prte_cmd_line, "set-cwd-to-session-dir")) {
-        val = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(val->info, 1);
-        PMIX_INFO_LOAD(val->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
-        prte_list_append(&app->info, &val->super);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
     } else {
         if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
             prte_show_help("help-prun.txt", "prun:init-failure",
@@ -1522,10 +1340,7 @@ static int create_app(int argc, char* argv[],
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* if they specified a process set name, then pass it along */
     if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "pset", 0, 0))) {
-        val = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(val->info, 1);
-        PMIX_INFO_LOAD(val->info, PMIX_PSET_NAME, pvalue->data.string, PMIX_STRING);
-        prte_list_append(&app->info, &val->super);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PSET_NAME, pvalue->data.string, PMIX_STRING);
     }
 #endif
 
@@ -1541,10 +1356,7 @@ static int create_app(int argc, char* argv[],
             return PRTE_ERR_FATAL;
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
-            val = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(val->info, 1);
-            PMIX_INFO_LOAD(val->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
-            prte_list_append(&app->info, &val->super);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
             found = true;
         }
     }
@@ -1555,10 +1367,7 @@ static int create_app(int argc, char* argv[],
             return PRTE_ERR_FATAL;
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
-            val = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(val->info, 1);
-            PMIX_INFO_LOAD(val->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
-            prte_list_append(&app->info, &val->super);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
         }
     }
 
@@ -1570,10 +1379,7 @@ static int create_app(int argc, char* argv[],
             prte_argv_append_nosize(&targ, pvalue->data.string);
         }
         tval = prte_argv_join(targ, ',');
-        val = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(val->info, 1);
-        PMIX_INFO_LOAD(val->info, PMIX_HOST, tval, PMIX_STRING);
-        prte_list_append(&app->info, &val->super);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOST, tval, PMIX_STRING);
         free(tval);
     }
 
@@ -1601,21 +1407,12 @@ static int create_app(int argc, char* argv[],
      */
     if (NULL == strstr(app->app.argv[0], "java")) {
         if (prte_cmd_line_is_taken(prte_cmd_line, "preload-binaries")) {
-            val = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(val->info, 1);
-            PMIX_INFO_LOAD(val->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
-            prte_list_append(&app->info, &val->super);
-            val = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(val->info, 1);
-            PMIX_INFO_LOAD(val->info, PMIX_PRELOAD_BIN, NULL, PMIX_BOOL);
-            prte_list_append(&app->info, &val->super);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_BIN, NULL, PMIX_BOOL);
         }
     }
     if (prte_cmd_line_is_taken(prte_cmd_line, "preload-files")) {
-        val = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(val->info, 1);
-        PMIX_INFO_LOAD(val->info, PMIX_PRELOAD_FILES, NULL, PMIX_BOOL);
-        prte_list_append(&app->info, &val->super);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_FILES, NULL, PMIX_BOOL);
     }
 
     /* Do not try to find argv[0] here -- the starter is responsible
