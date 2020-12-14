@@ -80,7 +80,7 @@ static int ppr_mapper(prte_job_t *jdata)
     hwloc_obj_t obj;
     hwloc_obj_type_t lowest;
     unsigned cache_level=0;
-    unsigned int nobjs, i;
+    unsigned int nobjs, i, num_available;;
     bool pruning_reqd = false;
     prte_hwloc_level_t level;
     prte_list_t node_list;
@@ -298,11 +298,18 @@ static int ppr_mapper(prte_job_t *jdata)
                 /* get the number of lowest resources on this node */
                 nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                            lowest, cache_level);
-
+                /* Map up to number of slots on node or number of specified resource on node
+                 * whichever is less. */
+                if (node->slots < nobjs) {
+                    num_available = node->slots;
+                }
+                else {
+                    num_available = nobjs;
+                }
                 /* map the specified number of procs to each such resource on this node,
                  * recording the locale of each proc so we know its cpuset
                  */
-                for (i=0; i < nobjs; i++) {
+                for (i=0; i < num_available; i++) {
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
                                                           lowest, cache_level, i);
                     for (j=0; j < ppr[start] && nprocs_mapped < total_procs; j++) {
