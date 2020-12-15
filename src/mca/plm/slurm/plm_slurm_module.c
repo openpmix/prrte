@@ -187,7 +187,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char **custom_strings;
     int num_args, i;
     char *cur_prefix;
-    char *cpus_on_node;
     int proc_vpid_index;
     bool failed_launch=true;
     prte_job_t *daemons;
@@ -271,13 +270,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* start one orted on each node */
     prte_argv_append(&argc, &argv, "--ntasks-per-node=1");
 
-    /* add all CPUs to this task */
-    cpus_on_node = getenv("SLURM_CPUS_ON_NODE");
-    if(cpus_on_node) {
-	    asprintf(&tmp, "--cpus-per-task=%s", cpus_on_node);
-	    prte_argv_append(&argc, &argv, tmp);
-	    free(tmp);
-    }
+    /* tell Slurm to add all CPUs to this task */
+    putenv("SLURM_WHOLE=1");
 
     if (!prte_enable_recovery) {
         /* kill the job if any orteds die */
