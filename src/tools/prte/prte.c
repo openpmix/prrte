@@ -1125,7 +1125,8 @@ int main(int argc, char *argv[])
     }
 
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    pmix_server_spawn_fn(&prte_process_info.myproc, iptr, ninfo, papps, napps, spcbfunc, &lock);
+    ret = pmix_server_spawn_fn(&prte_process_info.myproc, iptr, ninfo, papps,
+                               napps, spcbfunc, &lock);
     if (PRTE_SUCCESS != ret) {
         prte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
         rc = ret;
