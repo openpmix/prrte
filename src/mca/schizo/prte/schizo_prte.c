@@ -63,6 +63,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
 static int setup_fork(prte_job_t *jdata,
                       prte_app_context_t *context);
 static int define_session_dir(char **tmpdir);
+static int detect_proxy(char **argv);
 static int allow_run_as_root(prte_cmd_line_t *cmd_line);
 static void wrap_args(char **args);
 
@@ -74,6 +75,7 @@ prte_schizo_base_module_t prte_schizo_prte_module = {
     .parse_env = parse_env,
     .setup_fork = setup_fork,
     .define_session_dir = define_session_dir,
+    .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root,
     .wrap_args = wrap_args
 };
@@ -684,6 +686,20 @@ static int define_session_dir(char **tmpdir)
                    (unsigned long)mypid);
 
     return PRTE_SUCCESS;
+}
+
+static int detect_proxy(char **argv)
+{
+    /* if the basename of the cmd was "mpirun" or "mpiexec",
+     * we default to us */
+    if (prte_schizo_base.test_proxy_launch ||
+        0 == strcmp(prte_tool_basename, "prterun")) {
+        /* add us to the personalities */
+        prte_argv_append_unique_nosize(&prte_schizo_base.personalities, "prte");
+        return PRTE_SUCCESS;
+    }
+
+    return PRTE_ERR_TAKE_NEXT_OPTION;
 }
 
 static int allow_run_as_root(prte_cmd_line_t *cmd_line)
