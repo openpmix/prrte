@@ -62,6 +62,7 @@ static void set(prte_job_t *jdata,
                 prte_proc_t *proc,
                 char ***environ_copy,
                 int write_fd);
+static void report_binding(prte_job_t *jobdat, int rank);
 
 prte_rtc_base_module_t prte_rtc_hwloc_module = {
     .init = init,
@@ -335,9 +336,18 @@ static void set(prte_job_t *jobdat,
                     return;
                 }
             }
-        }
-        if (0 == rc && prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PRTE_BOOL)) {
-            prte_output(0, "MCW rank %d is not bound (or bound to all available processors)", child->name.vpid);
+            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PRTE_BOOL)) {
+                if (0 == rc) {
+                    report_binding(jobdat, child->name.vpid);
+                }
+                else {
+                    prte_output(0, "MCW rank %d is not bound (or bound to all available processors)",
+                                child->name.vpid);
+                }
+            }
+        } else if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PRTE_BOOL)) {
+            prte_output(0, "MCW rank %d is not bound (or bound to all available processors)",
+                        child->name.vpid);
         }
     } else {
         /* convert the list to a cpuset */
@@ -407,29 +417,7 @@ static void set(prte_job_t *jobdat,
         }
 
         if (0 == rc && prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PRTE_BOOL)) {
-            char *tmp1;
-            hwloc_cpuset_t mycpus;
-            bool use_hwthread_cpus;
-
-            /* check for type of cpu being used */
-            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
-                use_hwthread_cpus = true;
-            } else {
-                use_hwthread_cpus = false;
-            }
-            /* get the cpus we are bound to */
-            mycpus = hwloc_bitmap_alloc();
-            if (hwloc_get_cpubind(prte_hwloc_topology,
-                                  mycpus,
-                                  HWLOC_CPUBIND_PROCESS) < 0) {
-                prte_output(0, "MCW rank %d is not bound",
-                            child->name.vpid);
-            } else {
-                tmp1 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, prte_hwloc_topology);
-                prte_output(0, "MCW rank %d bound to %s", child->name.vpid, tmp1);
-                free(tmp1);
-            }
-            hwloc_bitmap_free(mycpus);
+            report_binding(jobdat, child->name.vpid);
         }
 
         /* set memory affinity policy - if we get an error, don't report
@@ -464,6 +452,31 @@ static void set(prte_job_t *jobdat,
     if (NULL != cpu_bitmap) {
         free(cpu_bitmap);
     }
+}
+
+static void report_binding(prte_job_t *jobdat, int rank) {
+    char *tmp1;
+    hwloc_cpuset_t mycpus;
+    bool use_hwthread_cpus;
+
+    /* check for type of cpu being used */
+    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+        use_hwthread_cpus = true;
+    } else {
+        use_hwthread_cpus = false;
+    }
+    /* get the cpus we are bound to */
+    mycpus = hwloc_bitmap_alloc();
+    if (hwloc_get_cpubind(prte_hwloc_topology,
+                          mycpus,
+                          HWLOC_CPUBIND_PROCESS) < 0) {
+        prte_output(0, "MCW rank %d is not bound", rank);
+    } else {
+        tmp1 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, prte_hwloc_topology);
+        prte_output(0, "MCW rank %d bound to %s", rank, tmp1);
+        free(tmp1);
+    }
+    hwloc_bitmap_free(mycpus);
 }
 
 #if PMIX_VERSION_MAJOR < 4
