@@ -713,3 +713,7 @@ variable, but the value of the variable is in an improper form:
 The variable must be of the form (nspace:rank) of the tool requesting that
 %s pause for it to connect. Please reset the value of the variable and try
 again.
+#
+[prun:executable-incorrectly-given]
+The %s command was given with an application specified. %s is only used
+to start the persistent DVM - it cannot be used with an application.

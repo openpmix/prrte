@@ -874,7 +874,17 @@ int main(int argc, char *argv[])
         }
         /* nope - just need to wait for instructions */
         goto proceed;
+    } else {
+        /* they did provide an app - this is only allowed
+         * when running as a proxy! */
+        if (!proxyrun) {
+            prte_show_help("help-prun.txt", "prun:executable-incorrectly-given",
+                           true, prte_tool_basename, prte_tool_basename);
+            PRTE_UPDATE_EXIT_STATUS(rc);
+            goto DONE;
+        }
     }
+
     /* mark that we are not a persistent DVM */
     prte_persistent = false;
     /* setup to capture job-level info */
