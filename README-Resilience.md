@@ -1,78 +1,76 @@
 This README documents the features and options specific to the
-**PRRTE Level Fault Tolerant** PMIx Reference RunTime Environment (PRRTE)
+**PRTE Level Fault Tolerant** PMIx reference RunTime Environment (PRTE)
 
 [TOC]
 
 Features
 ========
+
 This implementation provides a runtime level failure detection and propagation mechanism
 for both process and node failure.
 
-What's new?
+### What's added to support fault-tolerance?
 
-    (1) New module under src/mca/errmgr: detector:
-        Daemons monitor one another along a ring topology to detect node failures.
+1. New module under src/mca/errmgr: detector:
+   Daemons monitor one another along a ring topology to detect node failures.
+   src/mca/odls is in charge of detecting the failure of locally hosted processes
+   (using SIGCHLD signals from the operating system).
 
-        src/mca/odls is in charge of detecting the failure of locally hosted processes
-        (using SIGCHLD signals from the operating system).
+2. New component: propagate with module prperror:
+   Prepares the content of the reliable broadcast messages (i.e., the list of failed processes).
+   In order to populate the list of failed processes in node failure cases, the list of processes
+   hosted by a particular daemon is collected by prperror module.
 
-    (2) New component: propagate with module prperror:
-        Prepares the content of the reliable broadcast messages (i.e., the list of failed processes).
-        In order to populate the list of failed processes in node failure cases, the list of processes
-        hosted by a particular daemon is collected by prperror module.
+3. New module under src/mca/grpcomm: bmg
+   The BMG component implements a broadcast algorithm in a reliable way;
+   to be noted, this component abides by the normal interface for a daemon
+   broadcast and can reliably broadcast any type of information
 
-    (3) New module under src/mca/grpcomm: bmg
-        The BMG component implements a broadcast algorithm in a reliable way;
-        to be noted, this component abides by the normal interface for a daemon
-        broadcast and can reliably broadcast any type of information
+4. Test case for process failure under example/error_notify.c
+   This test uses kill(pid) to kill a process to simulate process failure.
 
-    (4) Test case for process failure under example/error_notify.c
-        This test uses kill(pid) to kill a process to simulate process failure.
-
-    (5) Test case for daemon/node failure under example/daemon_error_notify.c
-        This test uses kill(ppid) to kill a process's parent to simulate node failure.
+5. Test case for daemon/node failure under example/daemon_error_notify.c
+   This test uses kill(ppid) to kill a process's parent to simulate node failure.
 
 Building
-======================
+========
 ```bash
 ./autogen.pl
 
-# Before configure make sure you have external pmix and libevent installed,
-# if you want to run mpi application you can use mpicc to build you binary
-# and run with prun.  If you want to run mpi applications, you mpi and PRRTE
-# should have the same version of PMIx
+# If you want to run mpi applications, you mpi and PRTE
+# should have the same version of PMIx and libevent
 
-./configure --prefix=...  --with-pmix=/external-pmix-path --with-libevent=/external-libevent-path
+./configure --enable-prte-ft --prefix=...  --with-pmix=/external-pmix-path --with-libevent=/external-libevent-path
 
 make [-j N] all install
 #    use an integer value of N for parallel builds
 ```
 
-There are many available configure options (see `./configure --help`
-for a full list); a summary of the more commonly used ones is included
-in the upstream Open MPI README file.
-
 Running
-=====================
+=======
+
 ## Building your application
 
 Compile your application as usual
-  1. using the provided `pcc` for pmix-based application
-  2. using your "mpicc" for mpi-based application
+  1. using the provided `pcc` for pmix-based application;
+  2. using your `mpicc` for mpi-based application with a prte-based MPI (e.g., Open MPI).
 
 ## Running your application
 
-You need to launch your daemons by `prte`
-
-You can launch your application with by simply using the provided `prun`.
+### If running standalone
+  1. you need to launch first the DVM daemons with `prte --mca prte_enable_ft true`.
+  2. You can then launch your application with by simply using the provided `prun --enable-recovery`.
 Make sure to set your `PATH` and `LD_LIBRARY_PATH` properly.
 
-## Running under a batch scheduler
+### If running with a prte-based MPI (e.g., Open MPI)
+  1. use `mpiexec --enable-recovery --mca prte_enable_ft true`.
+
+### Running under a batch scheduler
 
 This code can operate under a job/batch scheduler, and is tested routinely with Slurm.
 One difficulty comes from the fact that many job schedulers will "cleanup" the
 application as soon as a process fails. In order to avoid this problem, it is preferred
-that you use '-k, --no-kill [=off]: Do not automatically terminate a job if one of the nodes
+that you use `-k, --no-kill [=off]: Do not automatically terminate a job if one of the nodes
 it has been allocated fails.` within an allocation (e.g. `salloc`, `sbatch`) rather than
 a direct launch (e.g. `srun`).
 
@@ -83,8 +81,7 @@ parameters are sane and should result in very good performance in most
 cases. You can change those default by '--prtemca parameter value'
 
 - `prte_enable_recovery <true|false> (default: false)` controls automatic
-  cleanup of apps with failed processes within mpirun. The default
-  differs from upstream Open MPI.
+  cleanup of apps with failed processes.
 
 - 'prte_abort_non_zero_exit <true|false> (default: true)` controls the job
   termination after a error occurred.
@@ -103,12 +100,13 @@ To be noted: if you want to use prte failure detection and propagation features.
              You MUST set prte_enable_recovery to true,
              prte_abort_non_zero_exit to false.
 
-## Testing
-=====================
+Testing
+=======
+
 Step 1: salloc -k -N num_of_nodes -w host1,host2...
         -k, --no-kill do not kill job on node failure
 
-Step 2: prte --prtemca errmgr_detector_heartbeat_period 0.5  --prtemca errmgr_detector_heartbeat_timeout 1  --prtemca errmgr_detector_enable 1 --prtemca  prte_abort_on_non_zero_status 0 --debug-daemons
+Step 2: prte --prtemca prte_enable_ft true --prtemca errmgr_detector_heartbeat_period 0.5  --prtemca errmgr_detector_heartbeat_timeout 1  --prtemca errmgr_detector_enable 1 --prtemca  prte_abort_on_non_zero_status 0 --debug-daemons
         using 'errmgr_detector_enable 1' choose enable the error detector.
 
         Config with --enable-debug, --debug-daemons will give you lots of information.

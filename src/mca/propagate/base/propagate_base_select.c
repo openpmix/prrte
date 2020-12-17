@@ -26,6 +26,8 @@ int prte_propagate_base_select(void)
     int exit_status = PRTE_SUCCESS;
     prte_propagate_base_component_t *best_component = NULL;
     prte_propagate_base_module_t *best_module = NULL;
+    /* early bailout. */
+    if (!prte_enable_ft) return PRTE_SUCCESS;
     /*
      * Select the best component
      */

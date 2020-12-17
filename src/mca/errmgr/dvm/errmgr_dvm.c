@@ -120,9 +120,12 @@ static int pack_state_for_proc(prte_buffer_t *alert, prte_proc_t *child)
 
 static void register_cbfunc(int status, size_t errhndler, void *cbdata)
 {
-    prte_propagate.register_cb();
-    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                "errmgr:dvm:event register cbfunc with status %d ", status));
+
+    if(NULL != prte_propagate.register_cb) {
+        prte_propagate.register_cb();
+        PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+            "errmgr:dvm:event register cbfunc with status %d ", status));
+    }
 }
 
 static void error_notify_cbfunc(size_t evhdlr_registration_id,
@@ -231,13 +234,15 @@ static int init(void)
     prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors, PRTE_MSG_PRI);
 
 #if PRTE_ENABLE_FT
-    /* setup state machine to trap proc errors */
-    pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
+    if (prte_enable_ft) {
+        /* setup state machine to trap proc errors */
+        pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
 
-    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+        PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                 "%s errmgr:dvm: register evhandler in errmgr",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-    PMIx_Register_event_handler(&pcode, 1, NULL, 0, error_notify_cbfunc, register_cbfunc, NULL);
+        PMIx_Register_event_handler(&pcode, 1, NULL, 0, error_notify_cbfunc, register_cbfunc, NULL);
+    }
 #endif
 
     prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors, PRTE_ERROR_PRI);

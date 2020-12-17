@@ -79,10 +79,6 @@ static int prte_grpcomm_base_close(void)
     uint32_t *seq_number;
 
     prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
-#if PRTE_ENABLE_FT
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST);
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_BMGXCAST);
-#endif
 
     /* Close the active modules */
     PRTE_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t) {
