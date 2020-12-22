@@ -62,7 +62,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
     char **node_cnt=NULL;
     char **slot_cnt=NULL;
     char **max_slot_cnt=NULL;
-    char *tmp, *job_cpuset;
+    char *tmp, *job_cpuset=NULL;
     char prefix[6];
     bool use_hwthread_cpus = false;
     hwloc_obj_t root;
