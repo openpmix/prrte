@@ -98,9 +98,9 @@ static int rte_finalize(void);
 static void rte_abort(int status, bool report) __prte_attribute_noreturn__;
 
 prte_ess_base_module_t prte_ess_hnp_module = {
-    rte_init,
-    rte_finalize,
-    rte_abort,
+    .init = rte_init,
+    .finalize = rte_finalize,
+    .abort = rte_abort
 };
 
 /* local globals */
