@@ -106,7 +106,6 @@ static char *frameworks[] = {
     "mpi", /* global options set in runtime/ompi_mpi_params.c */
     "bml",
     "coll",
-    "crcp",
     "fbtl",
     "fcoll",
     "fs",

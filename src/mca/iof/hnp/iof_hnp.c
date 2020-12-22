@@ -80,8 +80,6 @@ static void hnp_complete(const prte_job_t *jdata);
 
 static int finalize(void);
 
-static int hnp_ft_event(int state);
-
 static int push_stdin(const prte_process_name_t* dst_name,
                       uint8_t *data, size_t sz);
 
@@ -99,7 +97,6 @@ prte_iof_base_module_t prte_iof_hnp_module = {
     .output = hnp_output,
     .complete = hnp_complete,
     .finalize = finalize,
-    .ft_event = hnp_ft_event,
     .push_stdin = push_stdin
 };
 
@@ -493,14 +490,6 @@ static int finalize(void)
 
     return PRTE_SUCCESS;
 }
-
-int hnp_ft_event(int state) {
-    /*
-     * Replica doesn't need to do anything for a checkpoint
-     */
-    return PRTE_SUCCESS;
-}
-
 
 /* this function is called by the event library and thus
  * can access information global to the state machine

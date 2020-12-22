@@ -60,13 +60,11 @@ typedef void (*prte_oob_tcp_module_accept_connection_fn_t)(const int accepted_fd
                                                           const struct sockaddr *addr);
 typedef void (*prte_oob_tcp_module_ping_fn_t)(const prte_process_name_t *proc);
 typedef void (*prte_oob_tcp_module_send_nb_fn_t)(prte_rml_send_t *msg);
-typedef void (*prte_oob_tcp_module_ft_event_fn_t)(int state);
 
 typedef struct {
     prte_oob_tcp_module_accept_connection_fn_t  accept_connection;
     prte_oob_tcp_module_ping_fn_t               ping;
     prte_oob_tcp_module_send_nb_fn_t            send_nb;
-    prte_oob_tcp_module_ft_event_fn_t           ft_event;
 } prte_oob_tcp_module_t;
 PRTE_MODULE_EXPORT extern prte_oob_tcp_module_t prte_oob_tcp_module;
 

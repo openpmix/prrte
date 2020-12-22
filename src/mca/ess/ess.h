@@ -67,16 +67,6 @@ typedef int (*prte_ess_base_module_finalize_fn_t)(void);
  */
 typedef void (*prte_ess_base_module_abort_fn_t)(int status, bool report);
 
-/**
- * Handle fault tolerance updates
- *
- * @param[in] state Fault tolerance state update
- *
- * @retval PRTE_SUCCESS The operation completed successfully
- * @retval PRTE_ERROR   An unspecifed error occurred
- */
-typedef int  (*prte_ess_base_module_ft_event_fn_t)(int state);
-
 /*
  * the standard module data structure
  */
@@ -84,7 +74,6 @@ struct prte_ess_base_module_3_0_0_t {
     prte_ess_base_module_init_fn_t                  init;
     prte_ess_base_module_finalize_fn_t              finalize;
     prte_ess_base_module_abort_fn_t                 abort;
-    prte_ess_base_module_ft_event_fn_t              ft_event;
 };
 typedef struct prte_ess_base_module_3_0_0_t prte_ess_base_module_3_0_0_t;
 typedef struct prte_ess_base_module_3_0_0_t prte_ess_base_module_t;

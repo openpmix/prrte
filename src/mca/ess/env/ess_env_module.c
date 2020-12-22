@@ -76,10 +76,9 @@ static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
 prte_ess_base_module_t prte_ess_env_module = {
-    rte_init,
-    rte_finalize,
-    NULL,
-    NULL
+    .init = rte_init,
+    .finalize = rte_finalize,
+    .abort = NULL
 };
 
 static int rte_init(int argc, char **argv)

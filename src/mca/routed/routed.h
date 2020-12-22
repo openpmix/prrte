@@ -182,16 +182,6 @@ typedef int (*prte_routed_module_set_lifeline_fn_t)(prte_process_name_t *proc);
  */
 typedef size_t (*prte_routed_module_num_routes_fn_t)(void);
 
-/**
- * Handle fault tolerance updates
- *
- * @param[in] state Fault tolerance state update
- *
- * @retval PRTE_SUCCESS The operation completed successfully
- * @retval PRTE_ERROR   An unspecifed error occurred
- */
-typedef int  (*prte_routed_module_ft_event_fn_t)(int state);
-
 /* ******************************************************************** */
 
 
@@ -217,8 +207,6 @@ typedef struct {
     prte_routed_module_update_routing_plan_fn_t     update_routing_plan;
     prte_routed_module_get_routing_list_fn_t        get_routing_list;
     prte_routed_module_num_routes_fn_t              num_routes;
-    /* FT Notification */
-    prte_routed_module_ft_event_fn_t                ft_event;
 } prte_routed_module_t;
 
 /* provide an interface to the routed framework stub functions */
