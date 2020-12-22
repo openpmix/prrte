@@ -204,11 +204,6 @@ typedef void (*prte_iof_base_complete_fn_t)(const prte_job_t *jdata);
 typedef int (*prte_iof_base_finalize_fn_t)(void);
 
 /**
- * FT Event Notification
- */
-typedef int (*prte_iof_base_ft_event_fn_t)(int state);
-
-/**
  *  IOF module.
  */
 struct prte_iof_base_module_2_0_0_t {
@@ -219,7 +214,6 @@ struct prte_iof_base_module_2_0_0_t {
     prte_iof_base_output_fn_t       output;
     prte_iof_base_complete_fn_t     complete;
     prte_iof_base_finalize_fn_t     finalize;
-    prte_iof_base_ft_event_fn_t     ft_event;
     prte_iof_base_push_stdin_fn_t   push_stdin;
 };
 

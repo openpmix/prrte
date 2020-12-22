@@ -81,8 +81,6 @@ static void prted_complete(const prte_job_t *jdata);
 
 static int finalize(void);
 
-static int prted_ft_event(int state);
-
 /* The API's in this module are solely used to support LOCAL
  * procs - i.e., procs that are co-located to the daemon. Output
  * from local procs is automatically sent to the HNP for output
@@ -99,7 +97,6 @@ prte_iof_base_module_t prte_iof_prted_module = {
     .output = prted_output,
     .complete = prted_complete,
     .finalize = finalize,
-    .ft_event = prted_ft_event
 };
 
 static int init(void)
@@ -340,15 +337,6 @@ static int finalize(void)
     /* Cancel the RML receive */
     prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_PROXY);
     return PRTE_SUCCESS;
-}
-
-/*
- * FT event
- */
-
-static int prted_ft_event(int state)
-{
-    return PRTE_ERR_NOT_IMPLEMENTED;
 }
 
 static void stdin_write_handler(int _fd, short event, void *cbdata)

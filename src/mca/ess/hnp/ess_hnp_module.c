@@ -101,7 +101,6 @@ prte_ess_base_module_t prte_ess_hnp_module = {
     rte_init,
     rte_finalize,
     rte_abort,
-    NULL /* ft_event */
 };
 
 /* local globals */

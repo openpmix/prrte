@@ -55,7 +55,6 @@ prte_ess_base_module_t prte_ess_lsf_module = {
     rte_init,
     rte_finalize,
     NULL,
-    NULL /* ft_event */
 };
 
 /*

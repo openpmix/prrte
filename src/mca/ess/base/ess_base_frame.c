@@ -47,7 +47,6 @@ prte_ess_base_module_t prte_ess = {
     NULL,  /* init */
     NULL,  /* finalize */
     NULL,  /* abort */
-    NULL   /* ft_event */
 };
 int prte_ess_base_std_buffering = -1;
 int prte_ess_base_num_procs = -1;
