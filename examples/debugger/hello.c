@@ -69,7 +69,7 @@ int main(int argc, char **argv)
     localrank = val->data.uint16;
     PMIX_VALUE_RELEASE(val);
 
-    fprintf(stderr, "Client ns %s rank %d pid %lu: Running on host %s localrank %d\n",
+    printf("Client ns %s rank %d pid %lu: Running on host %s localrank %d\n",
             myproc.nspace, myproc.rank, (unsigned long)pid, hostname , (int)localrank);
 
     if (0 < spin) {
@@ -78,12 +78,12 @@ int main(int argc, char **argv)
 
   done:
     /* finalize us */
-    fprintf(stderr, "Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
+    printf("Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
         fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %s\n",
                 myproc.nspace, myproc.rank, PMIx_Error_string(rc));
     } else {
-        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize successfully completed\n", myproc.nspace, myproc.rank);
+        printf("Client ns %s rank %d:PMIx_Finalize successfully completed\n", myproc.nspace, myproc.rank);
     }
     fflush(stderr);
     return(0);
