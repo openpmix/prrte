@@ -14,6 +14,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,6 +32,7 @@
 #include "src/util/printf.h"
 
 #include "src/tools/prte_info/pinfo.h"
+#include "pmix.h"
 
 /*
  * Public variables
@@ -83,6 +85,8 @@ void prte_info_show_prte_version(const char *scope)
     prte_asprintf(&tmp, "%s:version:release_date", prte_info_type_prte);
     prte_info_out("PRTE release date", tmp, PRTE_RELEASE_DATE);
     free(tmp);
+
+    prte_info_out("PMIx", "pmix:version:full", PMIx_Get_version());
 }
 
 /*
