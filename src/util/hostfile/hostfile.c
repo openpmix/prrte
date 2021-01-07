@@ -747,7 +747,7 @@ int prte_util_filter_hostfile_nodes(prte_list_t *nodes,
                 /* search the list of nodes provided to us and find it */
                 for (item1 = prte_list_get_first(nodes);
                      item1 != prte_list_get_end(nodes);
-                     item1 = prte_list_get_next(nodes)) {
+                     item1 = prte_list_get_next(item1)) {
                     node_from_list = (prte_node_t*)item1;
                     if (prte_node_match(node_from_pool, node_from_list->name)) {
                         if (remove) {
