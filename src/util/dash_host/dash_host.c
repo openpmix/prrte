@@ -334,7 +334,28 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes,
         }
     }
 
-    rc = PRTE_SUCCESS;
+    if(prte_managed_allocation) {
+        prte_node_t *node_from_pool = NULL;
+        for (i = 0; i < prte_node_pool->size; i++) {
+            if (NULL == (node_from_pool = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, i))) {
+                continue;
+            }
+            for (itm = prte_list_get_first(nodes);
+               itm != prte_list_get_end(nodes);
+               itm = prte_list_get_next(itm)) {
+              node = (prte_node_t*) itm;
+              if (0 == strcmp(node_from_pool->name, node->name)) {
+                if(node->slots < node_from_pool -> slots) {
+                  node_from_pool->slots = node->slots;
+                }
+                break;
+              }
+              // There's no need to check that this host exists in the pool. That
+              // should have already been checked at this point.
+          }
+      }
+  }  
+  rc = PRTE_SUCCESS;
 
  cleanup:
     if (NULL != mapped_nodes) {
