@@ -159,9 +159,15 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
 
     /* if this is NOT a managed allocation, then we use the nodes
      * that were specified for this app - there is no need to collect
-     * all available nodes and "filter" them
+     * all available nodes and "filter" them.
+     *
+     * However, if it is a managed allocation AND the hostfile or the hostlist was
+     * provided, those take precedence, so process them and filter as we normally do.
      */
-    if (!prte_managed_allocation) {
+    if ( !prte_managed_allocation ||
+        (prte_managed_allocation &&
+         (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING) ||
+         prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PRTE_STRING)))) {
         PRTE_CONSTRUCT(&nodes, prte_list_t);
         /* if the app provided a dash-host, then use those nodes */
         hosts = NULL;
