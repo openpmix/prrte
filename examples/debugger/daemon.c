@@ -15,6 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,6 +31,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <pthread.h>
+#include <libgen.h>
 
 #include <pmix_tool.h>
 #include "debugger.h"
@@ -415,7 +417,7 @@ int main(int argc, char **argv)
     /* Display the process table */
     printf("[%s:%d:%lu] Local proctable received for nspace '%s' has %d entries\n",
             myproc.nspace, myproc.rank, (unsigned long)pid, target_namespace,
-            myquery_data.info[0].value.data.darray->size);
+            (int)myquery_data.info[0].value.data.darray->size);
 
     proctable = myquery_data.info[0].value.data.darray->array;
     for (i = 0; i < myquery_data.info[0].value.data.darray->size; i++) {
@@ -453,7 +455,7 @@ int main(int argc, char **argv)
                            info, ninfo, NULL, NULL);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr,
-                "%s[%s:%u:%lu] Sending release failed with error %s(%d)\n",
+                "[%s:%u:%lu] Sending release failed with error %s(%d)\n",
                 myproc.nspace, myproc.rank, (unsigned long)pid,
                 PMIx_Error_string(rc), rc);
         goto done;

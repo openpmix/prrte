@@ -19,6 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,6 +49,7 @@
 #include "src/util/show_help.h"
 #include "src/threads/threads.h"
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_locks.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -480,9 +482,20 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
     size_t n;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s local process %s:%d generated event code %d range %s",
+                        "%s local process %s:%d generated event code %s range %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        source->nspace, source->rank, code, PMIx_Data_range_string(range));
+                        source->nspace, source->rank,
+                        PMIx_Error_string(code),
+                        PMIx_Data_range_string(range));
+
+    /* we can get events prior to completing prte_init as we have
+     * to init PMIx early so that PRRTE components can use it */
+    PRTE_ACQUIRE_THREAD(&prte_init_lock);
+    if (!prte_initialized) {
+        PRTE_RELEASE_THREAD(&prte_init_lock);
+        goto done;
+    }
+    PRTE_RELEASE_THREAD(&prte_init_lock);
 
     /* check to see if this is one we sent down */
     for (n=0; n < ninfo; n++) {
@@ -492,6 +505,11 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
         }
     }
 
+    /* if this is notification of procs being ready for debug, then
+     * we treat this as a state change */
+    if (PMIX_DEBUG_WAITING_FOR_NOTIFY == code) {
+
+    }
     /* a local process has generated an event - we need to xcast it
      * to all the daemons so it can be passed down to their local
      * procs */

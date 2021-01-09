@@ -12,6 +12,7 @@
  * Copyright (c) 2007-2008 Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +44,7 @@ PRTE_EXPORT extern const char prte_version_string[];
 /**
  * Whether PRTE is initialized or we are in prte_finalize
  */
-PRTE_EXPORT extern int prte_initialized;
+PRTE_EXPORT extern bool prte_initialized;
 PRTE_EXPORT extern bool prte_finalizing;
 PRTE_EXPORT extern int prte_debug_output;
 PRTE_EXPORT extern bool prte_debug_flag;
