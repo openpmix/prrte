@@ -161,6 +161,16 @@ static prte_cmd_line_init_t cmd_line_init[] = {
       "Forward mpirun port to compute node daemons so all will use it",
       PRTE_CMD_LINE_OTYPE_DVM },
 
+    /* Display Commumication Protocol : MPI_Init */
+    { '\0', "display-comm", 0, PRTE_CMD_LINE_TYPE_BOOL,
+      "Display table of communication methods between ranks during MPI_Init",
+      PRTE_CMD_LINE_OTYPE_GENERAL },
+
+    /* Display Commumication Protocol : MPI_Finalize */
+    { '\0', "display-comm-finalize", 0, PRTE_CMD_LINE_TYPE_BOOL,
+      "Display table of communication methods between ranks during MPI_Finalize",
+      PRTE_CMD_LINE_OTYPE_GENERAL },
+
 
     /* End of list */
     { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
@@ -887,6 +897,16 @@ static int parse_env(prte_cmd_line_t *cmd_line,
             prte_argv_free(cachevals);
             return rc;
         }
+    }
+
+    if (prte_cmd_line_is_taken(cmd_line, "display-comm") && prte_cmd_line_is_taken(cmd_line, "display-comm-finalize")) {
+        prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_init,mpi_finalize", true, dstenv);
+    }
+    else if (prte_cmd_line_is_taken(cmd_line, "display-comm")) {
+        prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_init", true, dstenv);
+    }
+    else if (prte_cmd_line_is_taken(cmd_line, "display-comm-finalize")) {
+        prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
     }
 
     /* now look for any "--mca" options - note that it is an error
