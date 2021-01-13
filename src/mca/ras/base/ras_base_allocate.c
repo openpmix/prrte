@@ -318,6 +318,9 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
             PRTE_RELEASE(caddy);
             return;
         }
+        /* Record that the rankfile mapping policy has been selected */
+        PRTE_SET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping, PRTE_MAPPING_GIVEN);
+        PRTE_SET_MAPPING_POLICY(prte_rmaps_base.mapping, PRTE_MAPPING_BYUSER);
         /* rankfile is considered equivalent to an RM allocation */
         if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping))) {
             PRTE_SET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);

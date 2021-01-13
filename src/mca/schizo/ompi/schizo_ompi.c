@@ -149,6 +149,9 @@ static prte_cmd_line_init_t cmd_line_init[] = {
       "Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]",
       PRTE_CMD_LINE_OTYPE_LAUNCH },
 
+    { '\0', "rankfile", 1, PRTE_CMD_LINE_TYPE_STRING,
+      "Name of file to specify explicit task mapping",
+      PRTE_CMD_LINE_OTYPE_LAUNCH },
 
     /* mpiexec mandated form launch key parameters */
     { '\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,
@@ -940,6 +943,11 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         xparams = NULL;
         prte_argv_free(xvals);
         xvals = NULL;
+    }
+
+    /* Check for rankfile option */
+    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "rankfile", 0, 0))) {
+        prte_rankfile = strdup(pval->data.string);
     }
 
     /* now process any tune file specification - the tune file processor
