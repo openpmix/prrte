@@ -14,6 +14,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -80,6 +81,14 @@ typedef struct {
     prte_condition_t cond;
     volatile bool active;
 } prte_lock_t;
+
+#define PRTE_LOCK_STATIC_INIT               \
+    {                                       \
+        .status = 0,                        \
+        .mutex = PRTE_MUTEX_STATIC_INIT,    \
+        .cond = PRTE_CONDITION_STATIC_INIT, \
+        .active = false                     \
+    }
 
 #define PRTE_CONSTRUCT_LOCK(l)                          \
     do {                                                \

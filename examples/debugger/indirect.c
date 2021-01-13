@@ -15,6 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,6 +39,7 @@ static pmix_proc_t myproc;
 static volatile bool ilactive = true;
 static volatile bool dbactive = true;
 static volatile char *appnspace = NULL;
+static volatile bool regpending = true;
 
 /* this is a callback function for the PMIx_Query
  * API. The query will callback with a status indicating
@@ -141,6 +143,7 @@ static void evhandler_reg_callbk(pmix_status_t status,
                    myproc.nspace, myproc.rank, status, (unsigned long)evhandler_ref);
     }
     lock->status = status;
+    regpending = false;
     DEBUG_WAKEUP_THREAD(lock);
 }
 
@@ -383,27 +386,37 @@ fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "LAUNCH-COMPLETE", PMIX_STRING);
     PMIx_Register_event_handler(&code, 1, info, 1,
                                 spawn_cbfunc, evhandler_reg_callbk, (void*)&mylock);
-    DEBUG_WAIT_THREAD(&mylock);
-    DEBUG_DESTRUCT_LOCK(&mylock);
-    PMIX_INFO_FREE(info, 1);
-
-    fprintf(stderr, "RELEASING PRUN\n");
-    /* release the IL to spawn its job */
-    PMIX_INFO_CREATE(info, 2);
-    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
-    /* target this notification solely to that one tool */
-    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);
-    PMIx_Notify_event(PMIX_ERR_DEBUGGER_RELEASE, &myproc,
-                      PMIX_RANGE_CUSTOM,
-                      info, 2, NULL, NULL);
-    PMIX_INFO_FREE(info, 2);
-fprintf(stderr, "WAITING FOR APPLICATION LAUNCH\n");
-    /* wait for the IL to have launched its application */
-    while (dbactive) {
+    while (regpending && ilactive) {
         struct timespec tp = {0, 500000};
         nanosleep(&tp, NULL);
     }
+    DEBUG_DESTRUCT_LOCK(&mylock);
+    PMIX_INFO_FREE(info, 1);
+    if (!ilactive) {
+        goto done;
+    }
 
+    fprintf(stderr, "RELEASING %s\n", argv[1]);
+    /* release the IL to spawn its job */
+    PMIX_INFO_CREATE(info, 3);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+    /* target this notification solely to that one tool */
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);
+    PMIX_INFO_LOAD(&info[2], PMIX_EVENT_DO_NOT_CACHE, NULL, PMIX_BOOL);
+    PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, &myproc,
+                      PMIX_RANGE_CUSTOM,
+                      info, 3, NULL, NULL);
+    PMIX_INFO_FREE(info, 3);
+fprintf(stderr, "WAITING FOR APPLICATION LAUNCH\n");
+    /* wait for the IL to have launched its application */
+    while (dbactive && ilactive) {
+        struct timespec tp = {0, 500000};
+        nanosleep(&tp, NULL);
+    }
+    if (!ilactive) {
+        /* the launcher failed */
+        goto done;
+    }
 
 fprintf(stderr, "APPLICATION HAS LAUNCHED: %s\n", (char*)appnspace);
 

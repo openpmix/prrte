@@ -16,6 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,15 +51,13 @@ int prte_finalize(void)
     prte_job_t *jdata = NULL, *child_jdata = NULL, *next_jdata = NULL;
     void *elt = NULL;
 
-    --prte_initialized;
-    if (0 != prte_initialized) {
-        /* check for mismatched calls */
-        if (0 > prte_initialized) {
-            prte_output(0, "%s MISMATCHED CALLS TO PRTE FINALIZE",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        }
+    PRTE_ACQUIRE_THREAD(&prte_init_lock);
+    if (!prte_initialized) {
+        PRTE_RELEASE_THREAD(&prte_init_lock);
         return PRTE_ERROR;
     }
+    prte_initialized = false;
+    PRTE_RELEASE_THREAD(&prte_init_lock);
 
     /* protect against multiple calls */
     if (prte_atomic_trylock(&prte_finalize_lock)) {

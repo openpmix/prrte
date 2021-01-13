@@ -18,6 +18,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -83,7 +84,7 @@
 /*
  * Whether we have completed prte_init or we are in prte_finalize
  */
-int prte_initialized = 0;
+bool prte_initialized = false;
 bool prte_finalizing = false;
 bool prte_debug_flag = false;
 int prte_debug_verbosity = -1;
@@ -238,12 +239,12 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
     int ret;
     char *error = NULL;
 
-    if (0 < prte_initialized) {
-        /* track number of times we have been called */
-        prte_initialized++;
+    PRTE_ACQUIRE_THREAD(&prte_init_lock);
+    if (prte_initialized) {
+        PRTE_RELEASE_THREAD(&prte_init_lock);
         return PRTE_SUCCESS;
     }
-    prte_initialized++;
+    PRTE_RELEASE_THREAD(&prte_init_lock);
 
     ret = prte_init_util(flags);
     if (PRTE_SUCCESS != ret) {
@@ -366,6 +367,9 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
     }
 
     /* All done */
+    PRTE_ACQUIRE_THREAD(&prte_init_lock);
+    prte_initialized = true;
+    PRTE_RELEASE_THREAD(&prte_init_lock);
     return PRTE_SUCCESS;
 
  error:
