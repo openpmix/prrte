@@ -4,6 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -58,6 +59,8 @@ static void init_complete(int fd, short args, void *cbdata);
 static void vm_ready(int fd, short args, void *cbata);
 static void check_complete(int fd, short args, void *cbdata);
 static void cleanup_job(int fd, short args, void *cbdata);
+static void job_started(int fd, short args, void *cbata);
+static void ready_for_debug(int fd, short args, void *cbata);
 
 /******************
  * DVM module - used when mpirun is persistent
@@ -95,7 +98,9 @@ static prte_job_state_t launch_states[] = {
     PRTE_JOB_STATE_SYSTEM_PREP,
     PRTE_JOB_STATE_LAUNCH_APPS,
     PRTE_JOB_STATE_SEND_LAUNCH_MSG,
+    PRTE_JOB_STATE_STARTED,
     PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
+    PRTE_JOB_STATE_READY_FOR_DEBUG,
     PRTE_JOB_STATE_RUNNING,
     PRTE_JOB_STATE_REGISTERED,
     /* termination states */
@@ -117,7 +122,9 @@ static prte_state_cbfunc_t launch_callbacks[] = {
     prte_plm_base_complete_setup,
     prte_plm_base_launch_apps,
     prte_plm_base_send_launch_msg,
+    job_started,
     prte_state_base_local_launch_complete,
+    ready_for_debug,
     prte_plm_base_post_launch,
     prte_plm_base_registered,
     check_complete,
@@ -414,6 +421,65 @@ static void vm_ready(int fd, short args, void *cbdata)
     if (PRTE_SUCCESS != prte_filem.preposition_files(caddy->jdata, files_ready, caddy->jdata)) {
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
     }
+}
+
+static void job_started(int fd, short args, void *cbdata)
+{
+    prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
+    prte_job_t *jdata = caddy->jdata;
+    pmix_info_t *iptr;
+    pmix_proc_t controller;
+    pmix_nspace_t spawnednspace;
+    time_t timestamp;
+    pmix_status_t ret;
+
+    /* if there is an originator for this job, notify them
+     * that the first process of the job has been started */
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PRTE_BOOL)) {
+        PRTE_PMIX_CONVERT_JOBID(ret, spawnednspace, jdata->jobid);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            goto done;
+        }
+        PRTE_PMIX_CONVERT_NAME(ret, &controller, &jdata->originator);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            goto done;
+        }
+        timestamp = time(NULL);
+        PMIX_INFO_CREATE(iptr, 4);
+        /* target this notification solely to that one tool */
+        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
+        /* pass the nspace of the spawned job */
+        PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, spawnednspace, PMIX_STRING);
+        /* not to be delivered to a default event handler */
+        PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+        /* provide the timestamp */
+        PMIX_INFO_LOAD(&iptr[3], PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
+        PMIx_Notify_event(PMIX_EVENT_JOB_START, &prte_process_info.myproc, PMIX_RANGE_CUSTOM,
+                          iptr, 4, NULL, NULL);
+        PMIX_INFO_FREE(iptr, 4);
+    }
+
+done:
+    PRTE_RELEASE(caddy);
+}
+
+static void ready_for_debug(int fd, short args, void *cbdata)
+{
+    prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
+    prte_job_t *jdata = caddy->jdata;
+
+    /* track number of procs at this point */
+    jdata->num_ready_for_debug++;
+
+    /* check if all have reported */
+    if (jdata->num_procs == jdata->num_ready_for_debug) {
+        /* generate the event notifying any connected tool that
+         * the specified job is ready for debug */
+    }
+    PRTE_RELEASE(caddy);
 }
 
 static void opcbfunc(pmix_status_t status, void *cbdata)

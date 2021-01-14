@@ -17,6 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2020 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -618,6 +619,40 @@ int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PRTE_BOOL)) {
         return PRTE_SUCCESS;
     }
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+    /* if the requestor was a tool, use PMIx to notify them of
+     * launch complete as they won't be listening on PRRTE oob */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PRTE_BOOL)) {
+        pmix_info_t *iptr;
+        pmix_proc_t controller;
+        pmix_nspace_t spawnednspace;
+        time_t timestamp;
+
+        /* direct an event back to our controller telling them
+         * the namespace of the spawned job */
+        PRTE_PMIX_CONVERT_JOBID(ret, spawnednspace, jdata->jobid);
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
+        PRTE_PMIX_CONVERT_NAME(ret, &controller, &jdata->originator);
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
+        timestamp = time(NULL);
+        PMIX_INFO_CREATE(iptr, 4);
+        /* target this notification solely to that one tool */
+        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
+        /* pass the nspace of the spawned job */
+        PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, spawnednspace, PMIX_STRING);
+        /* not to be delivered to a default event handler */
+        PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+        /* provide the timestamp */
+        PMIX_INFO_LOAD(&iptr[3], PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
+        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &prte_process_info.myproc, PMIX_RANGE_CUSTOM,
+                          iptr, 4, NULL, NULL);
+        PMIX_INFO_FREE(iptr, 4);
+    }
+#endif
 
     /* prep the response to the spawn requestor */
     answer = PRTE_NEW(prte_buffer_t);

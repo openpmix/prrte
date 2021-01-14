@@ -343,6 +343,8 @@ typedef struct {
     prte_vpid_t num_terminated;
     /* number of daemons reported launched so we can track progress */
     prte_vpid_t num_daemons_reported;
+    /* number of procs ready for debug */
+    prte_vpid_t num_ready_for_debug;
     /* originator of a dynamic spawn */
     prte_process_name_t originator;
     /* number of local procs */

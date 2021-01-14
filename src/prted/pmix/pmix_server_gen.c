@@ -480,6 +480,8 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
     pmix_data_buffer_t pbkt;
     pmix_status_t ret;
     size_t n;
+    prte_jobid_t jobid;
+    prte_job_t *jdata;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
                         "%s local process %s:%d generated event code %s range %s",
@@ -508,8 +510,12 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code,
     /* if this is notification of procs being ready for debug, then
      * we treat this as a state change */
     if (PMIX_DEBUG_WAITING_FOR_NOTIFY == code) {
-
+        PRTE_PMIX_CONVERT_NSPACE(rc, &jobid, source->nspace);
+        jdata = prte_get_job_data_object(jobid);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_READY_FOR_DEBUG);
+        goto done;
     }
+
     /* a local process has generated an event - we need to xcast it
      * to all the daemons so it can be passed down to their local
      * procs */

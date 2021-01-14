@@ -4,6 +4,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -72,8 +73,10 @@ static int pack_state_update(prte_buffer_t *buf, prte_job_t *jdata);
 /* defined default state machines */
 static prte_job_state_t job_states[] = {
     PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
+    PRTE_JOB_STATE_READY_FOR_DEBUG
 };
 static prte_state_cbfunc_t job_callbacks[] = {
+    track_jobs,
     track_jobs
 };
 
@@ -162,7 +165,7 @@ static int finalize(void)
 static void track_jobs(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
-    prte_buffer_t *alert;
+    prte_buffer_t *alert = NULL;
     prte_plm_cmd_flag_t cmd;
     int rc, i;
     prte_proc_state_t running = PRTE_PROC_STATE_RUNNING;
@@ -171,80 +174,142 @@ static void track_jobs(int fd, short argc, void *cbdata)
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
-    if (PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE == caddy->job_state) {
-        PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
-                            "%s state:prted:track_jobs sending local launch complete for job %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            PRTE_JOBID_PRINT(caddy->jdata->jobid)));
-        /* update the HNP with all proc states for this job */
-       alert = PRTE_NEW(prte_buffer_t);
-         /* pack update state command */
-        cmd = PRTE_PLM_UPDATE_PROC_STATE;
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &cmd, 1, PRTE_PLM_CMD))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_RELEASE(alert);
-            goto cleanup;
-        }
-        /* pack the jobid */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &caddy->jdata->jobid, 1, PRTE_JOBID))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_RELEASE(alert);
-            goto cleanup;
-        }
-        for (i=0; i < prte_local_children->size; i++) {
-            if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i))) {
-                continue;
+    switch (caddy->job_state) {
+        case PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE:
+            PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+                                "%s state:prted:track_jobs sending local launch complete for job %s",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                PRTE_JOBID_PRINT(caddy->jdata->jobid)));
+            /* update the HNP with all proc states for this job */
+            alert = PRTE_NEW(prte_buffer_t);
+             /* pack update state command */
+            cmd = PRTE_PLM_UPDATE_PROC_STATE;
+            if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &cmd, 1, PRTE_PLM_CMD))) {
+                PRTE_ERROR_LOG(rc);
+                PRTE_RELEASE(alert);
+                goto cleanup;
             }
-            /* if this child is part of the job... */
-            if (child->name.jobid == caddy->jdata->jobid) {
-                /* pack the child's vpid */
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &(child->name.vpid), 1, PRTE_VPID))) {
-                    PRTE_ERROR_LOG(rc);
-                    PRTE_RELEASE(alert);
-                    goto cleanup;
+            /* pack the jobid */
+            if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &caddy->jdata->jobid, 1, PRTE_JOBID))) {
+                PRTE_ERROR_LOG(rc);
+                PRTE_RELEASE(alert);
+                goto cleanup;
+            }
+            for (i=0; i < prte_local_children->size; i++) {
+                if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i))) {
+                    continue;
                 }
-                /* pack the pid */
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->pid, 1, PRTE_PID))) {
-                    PRTE_ERROR_LOG(rc);
-                    PRTE_RELEASE(alert);
-                    goto cleanup;
-                }
-                /* If this proc failed to start, then send that info.
-                 * However if it normally terminated then do not send the info.
-                 * Instead report it as running here, and the child waitpid
-                 * function will send back the normal terminated state when the
-                 * the job is complete.
-                 */
-                if (PRTE_PROC_STATE_TERMINATED < child->state) {
-                    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->state, 1, PRTE_PROC_STATE))) {
+                /* if this child is part of the job... */
+                if (child->name.jobid == caddy->jdata->jobid) {
+                    /* pack the child's vpid */
+                    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &(child->name.vpid), 1, PRTE_VPID))) {
                         PRTE_ERROR_LOG(rc);
                         PRTE_RELEASE(alert);
                         goto cleanup;
                     }
-                } else {
+                    /* pack the pid */
+                    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->pid, 1, PRTE_PID))) {
+                        PRTE_ERROR_LOG(rc);
+                        PRTE_RELEASE(alert);
+                        goto cleanup;
+                    }
+                    /* If this proc failed to start, then send that info.
+                     * However if it normally terminated then do not send the info.
+                     * Instead report it as running here, and the child waitpid
+                     * function will send back the normal terminated state when the
+                     * the job is complete.
+                     */
+                    if (PRTE_PROC_STATE_TERMINATED < child->state) {
+                        if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->state, 1, PRTE_PROC_STATE))) {
+                            PRTE_ERROR_LOG(rc);
+                            PRTE_RELEASE(alert);
+                            goto cleanup;
+                        }
+                    } else {
+                        /* pack the RUNNING state to avoid any race conditions */
+                        if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &running, 1, PRTE_PROC_STATE))) {
+                            PRTE_ERROR_LOG(rc);
+                            PRTE_RELEASE(alert);
+                            goto cleanup;
+                        }
+                    }
+                    /* pack its exit code */
+                    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->exit_code, 1, PRTE_EXIT_CODE))) {
+                        PRTE_ERROR_LOG(rc);
+                        PRTE_RELEASE(alert);
+                        goto cleanup;
+                    }
+                }
+            }
+
+            /* flag that this job is complete so the receiver can know */
+            if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &null, 1, PRTE_VPID))) {
+                PRTE_ERROR_LOG(rc);
+                PRTE_RELEASE(alert);
+                goto cleanup;
+            }
+            break;
+
+        case PRTE_JOB_STATE_READY_FOR_DEBUG:
+            PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+                                 "%s state:prted:track_jobs sending ready for debug for job %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_JOBID_PRINT(caddy->jdata->jobid)));
+            /* update the HNP with all proc states for this job */
+            alert = PRTE_NEW(prte_buffer_t);
+            running = PRTE_PROC_STATE_READY_FOR_DEBUG;
+            /* pack update state command */
+            cmd = PRTE_PLM_UPDATE_PROC_STATE;
+            if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &cmd, 1, PRTE_PLM_CMD))) {
+                PRTE_ERROR_LOG(rc);
+                PRTE_RELEASE(alert);
+                goto cleanup;
+            }
+            /* pack the jobid */
+            if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &caddy->jdata->jobid, 1, PRTE_JOBID))) {
+                PRTE_ERROR_LOG(rc);
+                PRTE_RELEASE(alert);
+                goto cleanup;
+            }
+            for (i=0; i < prte_local_children->size; i++) {
+                if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i))) {
+                    continue;
+                }
+                /* if this child is part of the job... */
+                if (child->name.jobid == caddy->jdata->jobid) {
+                    /* pack the child's vpid */
+                    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &(child->name.vpid), 1, PRTE_VPID))) {
+                        PRTE_ERROR_LOG(rc);
+                        PRTE_RELEASE(alert);
+                        goto cleanup;
+                    }
+                    /* pack the pid */
+                    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->pid, 1, PRTE_PID))) {
+                        PRTE_ERROR_LOG(rc);
+                        PRTE_RELEASE(alert);
+                        goto cleanup;
+                    }
                     /* pack the RUNNING state to avoid any race conditions */
                     if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &running, 1, PRTE_PROC_STATE))) {
                         PRTE_ERROR_LOG(rc);
                         PRTE_RELEASE(alert);
                         goto cleanup;
                     }
-                }
-                /* pack its exit code */
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->exit_code, 1, PRTE_EXIT_CODE))) {
-                    PRTE_ERROR_LOG(rc);
-                    PRTE_RELEASE(alert);
-                    goto cleanup;
+                    /* pack its exit code */
+                    if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &child->exit_code, 1, PRTE_EXIT_CODE))) {
+                        PRTE_ERROR_LOG(rc);
+                        PRTE_RELEASE(alert);
+                        goto cleanup;
+                    }
                 }
             }
-        }
+            break;
 
-        /* flag that this job is complete so the receiver can know */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &null, 1, PRTE_VPID))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_RELEASE(alert);
-            goto cleanup;
-        }
+        default:
+            break;
+    }
 
+    if (NULL != alert) {
         /* send it */
         if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert,
                                               PRTE_RML_TAG_PLM,

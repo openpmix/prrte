@@ -13,6 +13,7 @@
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -52,6 +53,8 @@ typedef int32_t prte_exit_code_t;
 #define PRTE_PROC_STATE_IOF_COMPLETE             6  /* io forwarding pipes have closed */
 #define PRTE_PROC_STATE_WAITPID_FIRED            7  /* waitpid fired on process */
 #define PRTE_PROC_STATE_MODEX_READY              8  /* all modex info has been stored */
+#define PRTE_PROC_STATE_READY_FOR_DEBUG          9  /* ready for debug */
+
 /*
  * Define a "boundary" so we can easily and quickly determine
  * if a proc is still running or not - any value less than
@@ -129,6 +132,8 @@ typedef int32_t prte_job_state_t;
 #define PRTE_JOB_STATE_SUSPENDED                15  /* job has been suspended */
 #define PRTE_JOB_STATE_REGISTERED               16  /* all procs registered for sync */
 #define PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE    18  /* all local procs have attempted launch */
+#define PRTE_JOB_STATE_READY_FOR_DEBUG          19  /* all local procs report ready for debug */
+#define PRTE_JOB_STATE_STARTED                  20  /* first process has been started */
 
 /*
  * Define a "boundary" so we can easily and quickly determine

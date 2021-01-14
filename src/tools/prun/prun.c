@@ -19,6 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -558,7 +559,7 @@ int prun(int argc, char *argv[])
     prte_pmix_app_t *app;
     void *tinfo, *jinfo;
     pmix_info_t info, *iptr;
-    pmix_proc_t pname, controller;
+    pmix_proc_t pname;
     pmix_status_t ret;
     bool flag;
     size_t m, n, ninfo;
@@ -1129,29 +1130,6 @@ int prun(int argc, char *argv[])
     PRTE_PMIX_CONVERT_NSPACE(rc, &myjobid, spawnednspace);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
-    PMIX_INFO_LOAD(&info, PMIX_OPTIONAL, NULL, PMIX_BOOL);
-    ret = PMIx_Get(&myproc, PMIX_PARENT_ID, &info, 1, &val);
-    PMIX_INFO_DESTRUCT(&info);
-    if (PMIX_SUCCESS == ret) {
-        PMIX_LOAD_PROCID(&controller, val->data.proc->nspace, val->data.proc->rank);
-        PMIX_VALUE_RELEASE(val);
-        /* direct an event back to our controller telling them
-         * the namespace of the spawned job */
-        PMIX_INFO_LIST_START(tinfo);
-        /* target this notification solely to that one tool */
-        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
-        /* pass the nspace of the spawned job */
-        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_NSPACE, spawnednspace, PMIX_STRING);
-        /* not to be delivered to a default event handler */
-        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
-        PMIX_INFO_LIST_CONVERT(ret, tinfo, &darray);
-        iptr = (pmix_info_t*)darray.array;
-        ninfo = darray.size;
-        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &myproc, PMIX_RANGE_CUSTOM,
-                          iptr, ninfo, NULL, NULL);
-        PMIX_INFO_LIST_RELEASE(tinfo);
-    }
-
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
     PMIX_INFO_CREATE(iptr, 1);
