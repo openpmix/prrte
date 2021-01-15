@@ -15,6 +15,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -98,7 +99,6 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
 #define MCA_OOB_TCP_QUEUE_SEND(m, p)                                    \
     do {                                                                \
         prte_oob_tcp_send_t *_s;                                         \
-        int i;                                                          \
         prte_output_verbose(5, prte_oob_base_framework.framework_output, \
                             "%s:[%s:%d] queue send to %s",              \
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),        \
@@ -106,24 +106,15 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
                             PRTE_NAME_PRINT(&((m)->dst)));              \
         _s = PRTE_NEW(prte_oob_tcp_send_t);                              \
         /* setup the header */                                          \
-        _s->hdr.origin = (m)->origin;                                  \
-        _s->hdr.dst = (m)->dst;                                        \
+        PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->origin);                \
+        PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->dst);                      \
         _s->hdr.type = MCA_OOB_TCP_USER;                               \
         _s->hdr.tag = (m)->tag;                                        \
         _s->hdr.seq_num = (m)->seq_num;                                \
         /* point to the actual message */                               \
         _s->msg = (m);                                                 \
         /* set the total number of bytes to be sent */                  \
-        if (NULL != (m)->buffer) {                                      \
-            _s->hdr.nbytes = (m)->buffer->bytes_used;                  \
-        } else if (NULL != (m)->iov) {                                  \
-            _s->hdr.nbytes = 0;                                        \
-            for (i=0; i < (m)->count; i++) {                            \
-                _s->hdr.nbytes += (m)->iov[i].iov_len;                 \
-            }                                                           \
-        } else {                                                        \
-            _s->hdr.nbytes = (m)->count;                               \
-        }                                                               \
+        _s->hdr.nbytes = (m)->dbuf.bytes_used;                          \
         /* prep header for xmission */                                  \
         MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                \
         /* start the send with the header */                            \
@@ -142,7 +133,6 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
 #define MCA_OOB_TCP_QUEUE_PENDING(m, p)                                 \
     do {                                                                \
         prte_oob_tcp_send_t *_s;                                        \
-        int i;                                                          \
         prte_output_verbose(5, prte_oob_base_framework.framework_output, \
                             "%s:[%s:%d] queue pending to %s",           \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
@@ -150,24 +140,15 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
                             PRTE_NAME_PRINT(&((m)->dst)));              \
         _s = PRTE_NEW(prte_oob_tcp_send_t);                              \
         /* setup the header */                                          \
-        _s->hdr.origin = (m)->origin;                                  \
-        _s->hdr.dst = (m)->dst;                                        \
+        PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->origin);                \
+        PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->dst);                      \
         _s->hdr.type = MCA_OOB_TCP_USER;                               \
         _s->hdr.tag = (m)->tag;                                        \
         _s->hdr.seq_num = (m)->seq_num;                                \
         /* point to the actual message */                               \
         _s->msg = (m);                                                 \
         /* set the total number of bytes to be sent */                  \
-        if (NULL != (m)->buffer) {                                      \
-            _s->hdr.nbytes = (m)->buffer->bytes_used;                  \
-        } else if (NULL != (m)->iov) {                                  \
-            _s->hdr.nbytes = 0;                                        \
-            for (i=0; i < (m)->count; i++) {                            \
-                _s->hdr.nbytes += (m)->iov[i].iov_len;                 \
-            }                                                           \
-        } else {                                                        \
-            _s->hdr.nbytes = (m)->count;                               \
-        }                                                               \
+        _s->hdr.nbytes = (m)->dbuf.bytes_used;                          \
         /* prep header for xmission */                                  \
         MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                \
         /* start the send with the header */                            \
@@ -193,9 +174,9 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
                             PRTE_NAME_PRINT(&((p)->name)));             \
         _s = PRTE_NEW(prte_oob_tcp_send_t);                              \
         /* setup the header */                                          \
-        _s->hdr.origin = (m)->hdr.origin;                              \
-        _s->hdr.dst = (m)->hdr.dst;                                    \
-        _s->hdr.type = MCA_OOB_TCP_USER;                               \
+        PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->hdr.origin);            \
+        PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->hdr.dst);                  \
+       _s->hdr.type = MCA_OOB_TCP_USER;                               \
         _s->hdr.tag = (m)->hdr.tag;                                    \
         (void)prte_string_copy(_s->hdr.routed, (m)->hdr.routed,         \
                       PRTE_MAX_RTD_SIZE);                               \
@@ -239,7 +220,7 @@ typedef struct {
     prte_event_t ev;
     prte_rml_send_t *rmsg;
     prte_oob_tcp_send_t *snd;
-    prte_process_name_t hop;
+    pmix_proc_t hop;
 } prte_oob_tcp_msg_error_t;
 PRTE_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
 
@@ -273,8 +254,7 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
             /* protect the data */                                      \
             proxy->data = NULL;                                         \
         }                                                               \
-        mop->hop.jobid = (h)->jobid;                                    \
-        mop->hop.vpid = (h)->vpid;                                      \
+        PMIX_XFER_PROCID(&mop->hop, (h));                               \
         /* this goes to the OOB framework, so use that event base */    \
         PRTE_THREADSHIFT(mop, prte_event_base,                    \
                          (cbfunc), PRTE_MSG_PRI);                       \
@@ -290,8 +270,7 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
                             PRTE_NAME_PRINT((h)));                      \
         mop = PRTE_NEW(prte_oob_tcp_msg_error_t);                         \
         mop->rmsg = (r);                                                \
-        mop->hop.jobid = (h)->jobid;                                    \
-        mop->hop.vpid = (h)->vpid;                                      \
+        PMIX_XFER_PROCID(&mop->hop, (h));                               \
         /* this goes to the component, so use the framework             \
          * event base */                                                \
         PRTE_THREADSHIFT(mop, prte_event_base,                    \

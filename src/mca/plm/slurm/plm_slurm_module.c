@@ -86,7 +86,7 @@
 static int plm_slurm_init(void);
 static int plm_slurm_launch_job(prte_job_t *jdata);
 static int plm_slurm_terminate_prteds(void);
-static int plm_slurm_signal_job(prte_jobid_t jobid, int32_t signal);
+static int plm_slurm_signal_job(pmix_nspace_t jobid, int32_t signal);
 static int plm_slurm_finalize(void);
 
 static int plm_slurm_start_proc(int argc, char **argv, char **env,
@@ -175,7 +175,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_node_t *node;
     int32_t n;
     prte_job_map_t *map;
-    char *jobid_string = NULL;
     char *param;
     char **argv = NULL;
     int argc;
@@ -211,7 +210,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* start by setting up the virtual machine */
-    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(state->jdata))) {
         PRTE_ERROR_LOG(rc);
         goto cleanup;
@@ -252,9 +251,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
         PRTE_RELEASE(state);
         return;
     }
-
-    /* need integer value for command line parameter */
-    prte_asprintf(&jobid_string, "%lu", (unsigned long) daemons->jobid);
 
     /*
      * start building argv array
@@ -422,7 +418,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             continue;
         }
         app_prefix_dir = NULL;
-        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&app_prefix_dir, PRTE_STRING);
+        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&app_prefix_dir, PMIX_STRING);
         /* Check for already set cur_prefix_dir -- if different,
            complain */
         if (NULL != app_prefix_dir) {
@@ -483,10 +479,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
         prte_argv_free(env);
     }
 
-    if(NULL != jobid_string) {
-        free(jobid_string);
-    }
-
     /* cleanup the caddy */
     PRTE_RELEASE(state);
 
@@ -518,7 +510,7 @@ static int plm_slurm_terminate_prteds(void)
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:slurm: primary daemons complete!",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+        jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
         /* need to set the #terminated value to avoid an incorrect error msg */
         jdata->num_terminated = jdata->num_procs;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
@@ -531,7 +523,7 @@ static int plm_slurm_terminate_prteds(void)
 /**
  * Signal all the processes in the child srun by sending the signal directly to it
  */
-static int plm_slurm_signal_job(prte_jobid_t jobid, int32_t signal)
+static int plm_slurm_signal_job(pmix_nspace_t jobid, int32_t signal)
 {
     int rc = PRTE_SUCCESS;
 
@@ -582,7 +574,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata){
      pid so nobody thinks this is real
      */
 
-    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
     /* abort only if the status returned is non-zero - i.e., if
     * the orteds exited with an error

@@ -8,6 +8,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,7 +20,6 @@
 
 #include <string.h>
 
-#include "src/dss/dss.h"
 #include "src/mca/mca.h"
 #include "src/mca/base/prte_mca_base_component_repository.h"
 #include "src/util/output.h"
@@ -105,12 +105,11 @@ int prte_rml_base_select(void)
     return PRTE_SUCCESS;
 }
 
-void prte_rml_send_callback(int status, prte_process_name_t *peer,
-                            prte_buffer_t* buffer, prte_rml_tag_t tag,
+void prte_rml_send_callback(int status, pmix_proc_t *peer,
+                            pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
                             void* cbdata)
 
 {
-    PRTE_RELEASE(buffer);
     if (PRTE_SUCCESS != status) {
         prte_output_verbose(2, prte_rml_base_framework.framework_output,
                             "%s UNABLE TO SEND MESSAGE TO %s TAG %d: %s",
@@ -127,18 +126,21 @@ void prte_rml_send_callback(int status, prte_process_name_t *peer,
     }
 }
 
-void prte_rml_recv_callback(int status, prte_process_name_t* sender,
-                            prte_buffer_t *buffer,
+void prte_rml_recv_callback(int status, pmix_proc_t* sender,
+                            pmix_data_buffer_t *buffer,
                             prte_rml_tag_t tag, void *cbdata)
 {
     prte_rml_recv_cb_t *blob = (prte_rml_recv_cb_t*)cbdata;
+    pmix_status_t rc;
 
     PRTE_ACQUIRE_OBJECT(blob);
     /* transfer the sender */
-    blob->name.jobid = sender->jobid;
-    blob->name.vpid = sender->vpid;
+    PMIX_LOAD_PROCID(&blob->name, sender->nspace, sender->rank);
     /* just copy the payload to the buf */
-    prte_dss.copy_payload(&blob->data, buffer);
+    rc = PMIx_Data_copy_payload(&blob->data, buffer);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
     /* flag as complete */
     PRTE_POST_OBJECT(blob);
     blob->active = false;
@@ -148,28 +150,32 @@ void prte_rml_recv_callback(int status, prte_process_name_t* sender,
 /***   RML CLASS INSTANCES   ***/
 static void xfer_cons(prte_self_send_xfer_t *xfer)
 {
-    xfer->iov = NULL;
-    xfer->cbfunc.iov = NULL;
-    xfer->buffer = NULL;
-    xfer->cbfunc.buffer = NULL;
+    PMIX_DATA_BUFFER_CONSTRUCT(&xfer->dbuf);
+    xfer->cbfunc = NULL;
     xfer->cbdata = NULL;
+}
+static void xfer_des(prte_self_send_xfer_t *xfer)
+{
+    PMIX_DATA_BUFFER_DESTRUCT(&xfer->dbuf);
 }
 PRTE_CLASS_INSTANCE(prte_self_send_xfer_t,
                    prte_object_t,
-                   xfer_cons, NULL);
+                   xfer_cons, xfer_des);
 
 static void send_cons(prte_rml_send_t *ptr)
 {
     ptr->retries = 0;
     ptr->cbdata = NULL;
-    ptr->iov = NULL;
-    ptr->buffer = NULL;
-    ptr->data = NULL;
+    PMIX_DATA_BUFFER_CONSTRUCT(&ptr->dbuf);
     ptr->seq_num = 0xFFFFFFFF;
+}
+static void send_des(prte_rml_send_t *ptr)
+{
+    PMIX_DATA_BUFFER_DESTRUCT(&ptr->dbuf);
 }
 PRTE_CLASS_INSTANCE(prte_rml_send_t,
                    prte_list_item_t,
-                   send_cons, NULL);
+                   send_cons, send_des);
 
 
 static void send_req_cons(prte_rml_send_request_t *ptr)
@@ -186,14 +192,11 @@ PRTE_CLASS_INSTANCE(prte_rml_send_request_t,
 
 static void recv_cons(prte_rml_recv_t *ptr)
 {
-    ptr->iov.iov_base = NULL;
-    ptr->iov.iov_len = 0;
+   PMIX_DATA_BUFFER_CONSTRUCT(&ptr->dbuf);
 }
 static void recv_des(prte_rml_recv_t *ptr)
 {
-    if (NULL != ptr->iov.iov_base) {
-        free(ptr->iov.iov_base);
-    }
+    PMIX_DATA_BUFFER_DESTRUCT(&ptr->dbuf);
 }
 PRTE_CLASS_INSTANCE(prte_rml_recv_t,
                    prte_list_item_t,
@@ -201,12 +204,12 @@ PRTE_CLASS_INSTANCE(prte_rml_recv_t,
 
 static void rcv_cons(prte_rml_recv_cb_t *ptr)
 {
-    PRTE_CONSTRUCT(&ptr->data, prte_buffer_t);
+    PMIX_DATA_BUFFER_CONSTRUCT(&ptr->data);
     ptr->active = false;
 }
 static void rcv_des(prte_rml_recv_cb_t *ptr)
 {
-    PRTE_DESTRUCT(&ptr->data);
+    PMIX_DATA_BUFFER_DESTRUCT(&ptr->data);
 }
 PRTE_CLASS_INSTANCE(prte_rml_recv_cb_t, prte_object_t,
                    rcv_cons, rcv_des);

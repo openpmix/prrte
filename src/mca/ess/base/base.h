@@ -15,6 +15,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +33,6 @@
 
 #include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/mca.h"
-#include "src/dss/dss_types.h"
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/ess/ess.h"

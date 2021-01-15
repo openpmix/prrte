@@ -5,6 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -109,10 +110,10 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PRTE_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING);
 
     /* see if they want are using hwthreads as cpus */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;

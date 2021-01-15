@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,9 +36,8 @@
 
 #include "src/mca/mca.h"
 #include "src/class/prte_pointer_array.h"
-
-#include "src/dss/dss_types.h"
 #include "src/mca/rml/rml_types.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
 #include "src/mca/odls/odls_types.h"
@@ -57,13 +57,13 @@ BEGIN_C_DECLS
  * for *all* nodes - the individual orteds then parse that data to find the specific launch info
  * for procs on their node
  */
-typedef int (*prte_odls_base_module_get_add_procs_data_fn_t)(prte_buffer_t *data,
-                                                             prte_jobid_t job);
+typedef int (*prte_odls_base_module_get_add_procs_data_fn_t)(pmix_data_buffer_t *data,
+                                                             pmix_nspace_t job);
 
 /**
  * Locally launch the provided processes
  */
-typedef int (*prte_odls_base_module_launch_local_processes_fn_t)(prte_buffer_t *data);
+typedef int (*prte_odls_base_module_launch_local_processes_fn_t)(pmix_data_buffer_t *data);
 
 /**
  * Kill the local processes on this node
@@ -73,7 +73,7 @@ typedef int (*prte_odls_base_module_kill_local_processes_fn_t)(prte_pointer_arra
 /**
  * Signal local processes
  */
-typedef int (*prte_odls_base_module_signal_local_process_fn_t)(const prte_process_name_t *proc,
+typedef int (*prte_odls_base_module_signal_local_process_fn_t)(const pmix_proc_t *proc,
                                                               int32_t signal);
 
 /**

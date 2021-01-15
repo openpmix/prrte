@@ -19,6 +19,7 @@
  * Copyright (c) 2016      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -63,7 +64,6 @@
 #include "src/util/fd.h"
 #include "src/util/error.h"
 #include "src/util/show_help.h"
-#include "src/class/prte_hash_table.h"
 #include "src/event/event-internal.h"
 
 #include "src/util/name_fns.h"
@@ -89,7 +89,7 @@
 
 static void tcp_peer_event_init(prte_oob_tcp_peer_t* peer);
 static int  tcp_peer_send_connect_ack(prte_oob_tcp_peer_t* peer);
-static int tcp_peer_send_connect_nack(int sd, prte_process_name_t name);
+static int tcp_peer_send_connect_nack(int sd, pmix_proc_t name);
 static int tcp_peer_send_blocking(int sd, void* data, size_t size);
 static bool tcp_peer_recv_blocking(prte_oob_tcp_peer_t* peer, int sd,
                                    void* data, size_t size);
@@ -564,7 +564,7 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t* peer)
  * version string, and a security token to ensure we are talking
  * to another OMPI process
  */
-static int tcp_peer_send_connect_nack(int sd, prte_process_name_t name)
+static int tcp_peer_send_connect_nack(int sd, pmix_proc_t name)
 {
     char *msg;
     prte_oob_tcp_hdr_t hdr;
@@ -834,7 +834,6 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t* pr,
     size_t offset = 0;
     prte_oob_tcp_hdr_t hdr;
     prte_oob_tcp_peer_t *peer;
-    uint64_t *ui64;
     uint16_t ack_flag;
     bool is_new = (NULL == pr);
 
@@ -911,18 +910,13 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t* pr,
                                 "%s prte_oob_tcp_recv_connect: connection from new peer",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             peer = PRTE_NEW(prte_oob_tcp_peer_t);
-            peer->name = hdr.origin;
+            PMIX_XFER_PROCID(&peer->name, &hdr.origin);
             peer->state = MCA_OOB_TCP_ACCEPTING;
-            ui64 = (uint64_t*)(&peer->name);
-            if (PRTE_SUCCESS != prte_hash_table_set_value_uint64(&prte_oob_tcp_component.peers, (*ui64), peer)) {
-                PRTE_RELEASE(peer);
-                CLOSE_THE_SOCKET(sd);
-                return PRTE_ERR_OUT_OF_RESOURCE;
-            }
+            prte_list_append(&prte_oob_tcp_component.peers, &peer->super);
         }
     } else {
         /* compare the peers name to the expected value */
-        if (PRTE_EQUAL != prte_util_compare_name_fields(PRTE_NS_CMP_ALL, &peer->name, &hdr.origin)) {
+        if (!PMIX_CHECK_PROCID(&peer->name, &hdr.origin)) {
             prte_output(0, "%s tcp_peer_recv_connect_ack: "
                         "received unexpected process identifier %s from %s\n",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),

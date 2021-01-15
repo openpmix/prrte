@@ -13,6 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,27 +27,27 @@
 #include "prte_config.h"
 
 #include "src/class/prte_pointer_array.h"
-#include "src/dss/dss_types.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
 /* pass info about the nodes in an allocation */
 PRTE_EXPORT int prte_util_nidmap_create(prte_pointer_array_t *pool,
-                                          prte_buffer_t *buf);
+                                          pmix_data_buffer_t *buf);
 
-PRTE_EXPORT int prte_util_decode_nidmap(prte_buffer_t *buf);
+PRTE_EXPORT int prte_util_decode_nidmap(pmix_data_buffer_t *buf);
 
 
 /* pass topology and #slots info */
-PRTE_EXPORT int prte_util_pass_node_info(prte_buffer_t *buf);
+PRTE_EXPORT int prte_util_pass_node_info(pmix_data_buffer_t *buf);
 
-PRTE_EXPORT int prte_util_parse_node_info(prte_buffer_t *buf);
+PRTE_EXPORT int prte_util_parse_node_info(pmix_data_buffer_t *buf);
 
 
 /* pass info about node assignments for a specific job */
 PRTE_EXPORT int prte_util_generate_ppn(prte_job_t *jdata,
-                                         prte_buffer_t *buf);
+                                       pmix_data_buffer_t *buf);
 
 PRTE_EXPORT int prte_util_decode_ppn(prte_job_t *jdata,
-                                       prte_buffer_t *buf);
+                                     pmix_data_buffer_t *buf);
 
 #endif /* PRTE_NIDMAP_H */

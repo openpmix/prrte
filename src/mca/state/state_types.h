@@ -3,6 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -70,7 +71,7 @@ typedef struct {
     prte_event_t ev;
     prte_job_t *jdata;
     prte_job_state_t job_state;
-    prte_process_name_t name;
+    pmix_proc_t name;
     prte_proc_state_t proc_state;
 } prte_state_caddy_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_state_caddy_t);

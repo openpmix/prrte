@@ -16,6 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,7 +37,6 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/dss/dss.h"
 #include "src/util/output.h"
 #include "src/class/prte_list.h"
 
@@ -59,7 +59,6 @@ void prte_rml_base_post_recv(int sd, short args, void *cbdata)
 {
     prte_rml_recv_request_t *req = (prte_rml_recv_request_t*)cbdata;
     prte_rml_posted_recv_t *post, *recv;
-    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL | PRTE_NS_CMP_WILD;
 
     PRTE_ACQUIRE_OBJECT(req);
 
@@ -81,7 +80,7 @@ void prte_rml_base_post_recv(int sd, short args, void *cbdata)
      */
     if (req->cancel) {
         PRTE_LIST_FOREACH(recv, &prte_rml_base.posted_recvs, prte_rml_posted_recv_t) {
-            if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &post->peer, &recv->peer) &&
+            if (PMIX_CHECK_PROCID(&post->peer, &recv->peer) &&
                 post->tag == recv->tag) {
                 prte_output_verbose(5, prte_rml_base_framework.framework_output,
                                     "%s canceling recv %d for peer %s",
@@ -99,7 +98,7 @@ void prte_rml_base_post_recv(int sd, short args, void *cbdata)
 
     /* bozo check - cannot have two receives for the same peer/tag combination */
     PRTE_LIST_FOREACH(recv, &prte_rml_base.posted_recvs, prte_rml_posted_recv_t) {
-        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &post->peer, &recv->peer) &&
+        if (PMIX_CHECK_PROCID(&post->peer, &recv->peer) &&
             post->tag == recv->tag) {
             prte_output(0, "%s TWO RECEIVES WITH SAME PEER %s AND TAG %d - ABORTING",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -127,7 +126,6 @@ static void msg_match_recv(prte_rml_posted_recv_t *rcv, bool get_all)
 {
     prte_list_item_t *item, *next;
     prte_rml_recv_t *msg;
-    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL | PRTE_NS_CMP_WILD;
 
     /* scan thru the list of unmatched recvd messages and
      * see if any matches this spec - if so, push the first
@@ -146,7 +144,7 @@ static void msg_match_recv(prte_rml_posted_recv_t *rcv, bool get_all)
         /* since names could include wildcards, must use
          * the more generalized comparison function
          */
-        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &msg->sender, &rcv->peer) &&
+        if (PMIX_CHECK_PROCID(&msg->sender, &rcv->peer) &&
             msg->tag == rcv->tag) {
             PRTE_RML_ACTIVATE_MESSAGE(msg);
             prte_list_remove_item(&prte_rml_base.unmatched_msgs, item);
@@ -162,8 +160,6 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
 {
     prte_rml_recv_t *msg = (prte_rml_recv_t*)cbdata;
     prte_rml_posted_recv_t *post;
-    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL | PRTE_NS_CMP_WILD;
-    prte_buffer_t buf;
 
     PRTE_ACQUIRE_OBJECT(msg);
 
@@ -176,26 +172,25 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
     /* if this message is just to warmup the connection, then drop it */
     if (PRTE_RML_TAG_WARMUP_CONNECTION == msg->tag) {
         if (!prte_nidmap_communicated) {
-            prte_buffer_t * buffer = PRTE_NEW(prte_buffer_t);
+            pmix_data_buffer_t buffer;
             int rc;
-            if (NULL == buffer) {
-                PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-                return;
-            }
 
-            if (PRTE_SUCCESS != (rc = prte_util_nidmap_create(prte_node_pool, buffer))) {
+            PMIX_DATA_BUFFER_CONSTRUCT(&buffer);
+
+            if (PRTE_SUCCESS != (rc = prte_util_nidmap_create(prte_node_pool, &buffer))) {
                 PRTE_ERROR_LOG(rc);
-                PRTE_RELEASE(buffer);
+                PMIX_DATA_BUFFER_DESTRUCT(&buffer);
                 return;
             }
 
-            if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(&msg->sender, buffer,
+            if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(&msg->sender, &buffer,
                                                               PRTE_RML_TAG_NODE_REGEX_REPORT,
                                                               prte_rml_send_callback, NULL))) {
                 PRTE_ERROR_LOG(rc);
-                PRTE_RELEASE(buffer);
+                PMIX_DATA_BUFFER_DESTRUCT(&buffer);
                 return;
             }
+            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
             PRTE_RELEASE(msg);
             return;
         }
@@ -206,33 +201,19 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
         /* since names could include wildcards, must use
          * the more generalized comparison function
          */
-        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &msg->sender, &post->peer) &&
+        if (PMIX_CHECK_PROCID(&msg->sender, &post->peer) &&
             msg->tag == post->tag) {
             /* deliver the data to this location */
-            if (post->buffer_data) {
-                /* deliver it in a buffer */
-                PRTE_CONSTRUCT(&buf, prte_buffer_t);
-                prte_dss.load(&buf, msg->iov.iov_base, msg->iov.iov_len);
-                /* xfer ownership of the malloc'd data to the buffer */
-                msg->iov.iov_base = NULL;
-                post->cbfunc.buffer(PRTE_SUCCESS, &msg->sender, &buf, msg->tag, post->cbdata);
-                /* the user must have unloaded the buffer if they wanted
-                 * to retain ownership of it, so release whatever remains
-                 */
-                PRTE_OUTPUT_VERBOSE((5, prte_rml_base_framework.framework_output,
-                                     "%s message received  bytes from %s for tag %d called callback",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     PRTE_NAME_PRINT(&msg->sender),
-                                     msg->tag));
-                PRTE_DESTRUCT(&buf);
-            } else {
-                /* deliver as an iovec */
-                post->cbfunc.iov(PRTE_SUCCESS, &msg->sender, &msg->iov, 1, msg->tag, post->cbdata);
-                /* the user should have shifted the data to
-                 * a local variable and NULL'd the iov_base
-                 * if they wanted ownership of the data
-                 */
-            }
+            post->cbfunc(PRTE_SUCCESS, &msg->sender, &msg->dbuf, msg->tag, post->cbdata);
+            /* the user must have unloaded the buffer if they wanted
+             * to retain ownership of it, so release whatever remains
+             */
+            PRTE_OUTPUT_VERBOSE((5, prte_rml_base_framework.framework_output,
+                                 "%s message received %"PRIsize_t" bytes from %s for tag %d called callback",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 msg->dbuf.bytes_used,
+                                 PRTE_NAME_PRINT(&msg->sender),
+                                 msg->tag));
             /* release the message */
             PRTE_RELEASE(msg);
             PRTE_OUTPUT_VERBOSE((5, prte_rml_base_framework.framework_output,

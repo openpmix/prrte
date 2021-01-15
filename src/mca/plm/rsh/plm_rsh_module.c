@@ -17,6 +17,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -267,6 +268,7 @@ static void rsh_wait_daemon(int sd, short flags, void *cbdata)
     prte_wait_tracker_t *t2 = (prte_wait_tracker_t*)cbdata;
     prte_plm_rsh_caddy_t *caddy=(prte_plm_rsh_caddy_t*)t2->cbdata;
     prte_proc_t *daemon = caddy->daemon;
+    pmix_status_t rc;
 
     if (prte_prteds_term_ordered || prte_abnormal_term_ordered) {
         /* ignore any such report - it will occur if we left the
@@ -283,26 +285,42 @@ static void rsh_wait_daemon(int sd, short flags, void *cbdata)
          * to the failure
          */
         if (!PRTE_PROC_IS_MASTER) {
-            prte_buffer_t *buf;
+            pmix_data_buffer_t *buf;
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                 "%s daemon %d failed with status %d",
+                                 "%s daemon %s failed with status %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 (int)daemon->name.vpid, WEXITSTATUS(daemon->exit_code)));
-            buf = PRTE_NEW(prte_buffer_t);
-            prte_dss.pack(buf, &(daemon->name.vpid), 1, PRTE_VPID);
-            prte_dss.pack(buf, &daemon->exit_code, 1, PRTE_INT);
+                                 PRTE_VPID_PRINT(daemon->name.rank),
+                                 WEXITSTATUS(daemon->exit_code)));
+            PMIX_DATA_BUFFER_CREATE(buf);
+            rc = PMIx_Data_pack(NULL, buf, &(daemon->name.rank), 1, PMIX_PROC_RANK);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(buf);
+                PRTE_RELEASE(caddy);
+                PRTE_RELEASE(t2);
+                return;
+            }
+            rc = PMIx_Data_pack(NULL, buf, &daemon->exit_code, 1, PMIX_INT32);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(buf);
+                PRTE_RELEASE(caddy);
+                PRTE_RELEASE(t2);
+                return;
+            }
             prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
                                     PRTE_RML_TAG_REPORT_REMOTE_LAUNCH,
                                     prte_rml_send_callback, NULL);
             /* note that this daemon failed */
             daemon->state = PRTE_PROC_STATE_FAILED_TO_START;
         } else {
-            jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+            jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                 "%s daemon %d failed with status %d",
+                                 "%s daemon %s failed with status %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 (int)daemon->name.vpid, WEXITSTATUS(daemon->exit_code)));
+                                 PRTE_VPID_PRINT(daemon->name.rank),
+                                 WEXITSTATUS(daemon->exit_code)));
             /* set the exit status */
             PRTE_UPDATE_EXIT_STATUS(WEXITSTATUS(daemon->exit_code));
             /* note that this daemon failed */
@@ -766,17 +784,18 @@ static int remote_spawn(void)
     int argc;
     int rc=PRTE_SUCCESS;
     bool failed_launch = true;
-    prte_process_name_t target;
+    pmix_proc_t target;
     prte_plm_rsh_caddy_t *caddy;
     prte_list_t coll;
     prte_namelist_t *child;
+    pmix_status_t ret;
 
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                          "%s plm:rsh: remote spawn called",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* if we hit any errors, tell the HNP it was us */
-    target.vpid = PRTE_PROC_MY_NAME->vpid;
+    target.rank = PRTE_PROC_MY_NAME->rank;
 
     /* check to see if enable-prun-prefix-by-default was given - if
      * this is being done by a singleton, then prun will not be there
@@ -811,22 +830,14 @@ static int remote_spawn(void)
         goto cleanup;
     }
 
-    /* get the daemon job object */
-    if (NULL == prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid)) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
-        PRTE_DESTRUCT(&coll);
-        goto cleanup;
-    }
-
-    target.jobid = PRTE_PROC_MY_NAME->jobid;
+    PMIX_LOAD_NSPACE(target.nspace, PRTE_PROC_MY_NAME->nspace);
     PRTE_LIST_FOREACH(child, &coll, prte_namelist_t) {
-        target.vpid = child->name.vpid;
+        target.rank = child->name.rank;
 
         /* get the host where this daemon resides */
         if (NULL == (hostname = prte_get_proc_hostname(&target))) {
             prte_output(0, "%s unable to get hostname for daemon %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(child->name.vpid));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(child->name.rank));
             rc = PRTE_ERR_NOT_FOUND;
             PRTE_DESTRUCT(&coll);
             goto cleanup;
@@ -836,7 +847,7 @@ static int remote_spawn(void)
         argv[node_name_index1] = strdup(hostname);
 
         /* pass the vpid */
-        rc = prte_util_convert_vpid_to_string(&var, target.vpid);
+        rc = prte_util_convert_vpid_to_string(&var, target.rank);
         if (PRTE_SUCCESS != rc) {
             prte_output(0, "prte_plm_rsh: unable to get daemon vpid as string");
             exit(-1);
@@ -853,8 +864,7 @@ static int remote_spawn(void)
          * upon startup
          */
         caddy->daemon = PRTE_NEW(prte_proc_t);
-        caddy->daemon->name.jobid = PRTE_PROC_MY_NAME->jobid;
-        caddy->daemon->name.vpid = target.vpid;
+        PMIX_LOAD_PROCID(&caddy->daemon->name, PRTE_PROC_MY_NAME->nspace, target.rank);
         prte_list_append(&launch_list, &caddy->super);
     }
     PRTE_LIST_DESTRUCT(&coll);
@@ -880,10 +890,20 @@ cleanup:
     /* check for failed launch */
     if (failed_launch) {
         /* report cannot launch this daemon to HNP */
-        prte_buffer_t *buf;
-        buf = PRTE_NEW(prte_buffer_t);
-        prte_dss.pack(buf, &target.vpid, 1, PRTE_VPID);
-        prte_dss.pack(buf, &rc, 1, PRTE_INT);
+        pmix_data_buffer_t *buf;
+        PMIX_DATA_BUFFER_CREATE(buf);
+        ret = PMIx_Data_pack(NULL, buf, &target.rank, 1, PMIX_PROC_RANK);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return rc;
+        }
+        ret = PMIx_Data_pack(NULL, buf, &rc, 1, PMIX_INT32);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return ret;
+        }
         prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
                                 PRTE_RML_TAG_REPORT_REMOTE_LAUNCH,
                                 prte_rml_send_callback, NULL);
@@ -1024,7 +1044,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* setup the virtual machine */
-    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(state->jdata))) {
         PRTE_ERROR_LOG(rc);
         goto cleanup;
@@ -1113,7 +1133,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         rc = PRTE_ERR_NOT_FOUND;
         goto cleanup;
     }
-    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PRTE_STRING)) {
+    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PMIX_STRING)) {
         /* check to see if enable-prun-prefix-by-default was given - if
          * this is being done by a singleton, then prun will not be there
          * to put the prefix in the app. So make sure we check to find it */
@@ -1147,15 +1167,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* if we are tree launching, find our children and create the launch cmd */
     if (!prte_plm_rsh_component.no_tree_spawn) {
-
-        /* get the orted job data object */
-        if (NULL == prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid)) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            rc = PRTE_ERR_NOT_FOUND;
-            goto cleanup;
-        }
-
-        /* get the updated routing list */
+       /* get the updated routing list */
         PRTE_CONSTRUCT(&coll, prte_list_t);
         prte_routed.get_routing_list(&coll);
     }
@@ -1178,7 +1190,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* if we are tree launching, only launch our own children */
         if (!prte_plm_rsh_component.no_tree_spawn) {
             PRTE_LIST_FOREACH(child, &coll, prte_namelist_t) {
-                if (child->name.vpid == node->daemon->name.vpid) {
+                if (child->name.rank == node->daemon->name.rank) {
                     goto launch;
                 }
             }
@@ -1186,7 +1198,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:rsh:launch daemon %s not a child of mine",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_VPID_PRINT(node->daemon->name.vpid)));
+                                 PRTE_VPID_PRINT(node->daemon->name.rank)));
             continue;
         }
 
@@ -1215,7 +1227,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* setup node name */
         free(argv[node_name_index1]);
         username = NULL;
-        if (prte_get_attribute(&node->attributes, PRTE_NODE_USERNAME, (void**)&username, PRTE_STRING)) {
+        if (prte_get_attribute(&node->attributes, PRTE_NODE_USERNAME, (void**)&username, PMIX_STRING)) {
             prte_asprintf (&argv[node_name_index1], "%s@%s",
                             username, node->name);
             free(username);
@@ -1224,7 +1236,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         }
 
         /* pass the vpid */
-        rc = prte_util_convert_vpid_to_string(&var, node->daemon->name.vpid);
+        rc = prte_util_convert_vpid_to_string(&var, node->daemon->name.rank);
         if (PRTE_SUCCESS != rc) {
             prte_output(0, "prte_plm_rsh: unable to get daemon vpid as string");
             exit(-1);
@@ -1244,7 +1256,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         caddy->argv = prte_argv_copy(argv);
         /* insert the alternate port if any */
         portptr = &port;
-        if (prte_get_attribute(&node->attributes, PRTE_NODE_PORT, (void**)&portptr, PRTE_INT)) {
+        if (prte_get_attribute(&node->attributes, PRTE_NODE_PORT, (void**)&portptr, PMIX_INT)) {
             char portname[16];
             /* for the sake of simplicity, insert "-p" <port> in the duplicated argv */
             prte_argv_insert_element(&caddy->argv, node_name_index1+1, "-p");
@@ -1314,7 +1326,7 @@ static int rsh_finalize(void)
 
     if ((PRTE_PROC_IS_DAEMON || PRTE_PROC_IS_MASTER) && prte_abnormal_term_ordered) {
         /* ensure that any lingering ssh's are gone */
-        if (NULL == (jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid))) {
+        if (NULL == (jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace))) {
             return rc;
         }
         for (i=0; i < jdata->procs->size; i++) {

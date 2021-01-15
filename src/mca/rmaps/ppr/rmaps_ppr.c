@@ -61,11 +61,11 @@ typedef enum {
     PRTE_HWLOC_HWTHREAD_LEVEL
 } prte_hwloc_level_t;
 
-static void prune(prte_jobid_t jobid,
+static void prune(pmix_nspace_t jobid,
                   prte_app_idx_t app_idx,
                   prte_node_t *node,
                   prte_hwloc_level_t *level,
-                  prte_vpid_t *nmapped);
+                  pmix_rank_t *nmapped);
 
 static int ppr[PRTE_HWLOC_HWTHREAD_LEVEL+1];
 
@@ -76,7 +76,7 @@ static int ppr_mapper(prte_job_t *jdata)
     prte_mca_base_component_t *c=&prte_rmaps_ppr_component.base_version;
     prte_node_t *node;
     prte_app_context_t *app;
-    prte_vpid_t total_procs, nprocs_mapped;
+    pmix_rank_t total_procs, nprocs_mapped;
     prte_hwloc_level_t start=PRTE_HWLOC_NODE_LEVEL;
     hwloc_obj_t obj;
     hwloc_obj_type_t lowest;
@@ -98,7 +98,7 @@ static int ppr_mapper(prte_job_t *jdata)
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:ppr: job %s being restarted - ppr cannot map",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper &&
@@ -106,17 +106,17 @@ static int ppr_mapper(prte_job_t *jdata)
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:ppr: job %s not using ppr mapper",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void**)&jobppr, PRTE_STRING) ||
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void**)&jobppr, PMIX_STRING) ||
         NULL == jobppr ||
         PRTE_MAPPING_PPR != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         /* not for us */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:ppr: job %s not using ppr mapper PPR %s policy %s",
-                            PRTE_JOBID_PRINT(jdata->jobid),
+                            PRTE_JOBID_PRINT(jdata->nspace),
                             (NULL == jobppr) ? "NULL" : jobppr,
                             (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) ? "PPRSET" : "PPR NOTSET");
         if (NULL != jobppr) {
@@ -127,7 +127,7 @@ static int ppr_mapper(prte_job_t *jdata)
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:ppr: mapping job %s with ppr %s",
-                        PRTE_JOBID_PRINT(jdata->jobid), jobppr);
+                        PRTE_JOBID_PRINT(jdata->nspace), jobppr);
 
     /* flag that I did the mapping */
     if (NULL != jdata->map->last_mapper) {
@@ -227,7 +227,7 @@ static int ppr_mapper(prte_job_t *jdata)
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:ppr: job %s assigned policy %s",
-                        PRTE_JOBID_PRINT(jdata->jobid),
+                        PRTE_JOBID_PRINT(jdata->nspace),
                         prte_rmaps_base_print_mapping(jdata->map->mapping));
 
     /* convenience */
@@ -246,7 +246,7 @@ static int ppr_mapper(prte_job_t *jdata)
         if (0 < app->num_procs) {
             total_procs = app->num_procs;
         } else {
-            total_procs = PRTE_VPID_MAX;
+            total_procs = PMIX_RANK_VALID;
         }
 
         /* get the available nodes */
@@ -293,7 +293,7 @@ static int ppr_mapper(prte_job_t *jdata)
                         goto error;
                     }
                     nprocs_mapped++;
-                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
                 }
             } else {
                 /* get the number of lowest resources on this node */
@@ -319,7 +319,7 @@ static int ppr_mapper(prte_job_t *jdata)
                             goto error;
                         }
                         nprocs_mapped++;
-                        prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                        prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
                     }
                 }
 
@@ -329,7 +329,7 @@ static int ppr_mapper(prte_job_t *jdata)
                      * node as we go
                      */
                     level--;
-                    prune(jdata->jobid, idx, node, &level, &nprocs_mapped);
+                    prune(jdata->nspace, idx, node, &level, &nprocs_mapped);
                 }
             }
 
@@ -392,7 +392,7 @@ static int ppr_mapper(prte_job_t *jdata)
         if (0 == app->num_procs) {
             app->num_procs = nprocs_mapped;
         }
-        if (PRTE_VPID_MAX != total_procs && nprocs_mapped < total_procs) {
+        if (PMIX_RANK_VALID != total_procs && nprocs_mapped < total_procs) {
             /* couldn't map them all */
             prte_show_help("help-prte-rmaps-ppr.txt", "ppr-too-many-procs",
                            true, app->app, app->num_procs, nprocs_mapped, total_procs, jobppr);
@@ -437,11 +437,11 @@ static hwloc_obj_t find_split(hwloc_topology_t topo, hwloc_obj_t obj)
 /* recursively climb the topology, pruning procs beyond that allowed
  * by the given ppr
  */
-static void prune(prte_jobid_t jobid,
+static void prune(pmix_nspace_t jobid,
                   prte_app_idx_t app_idx,
                   prte_node_t *node,
                   prte_hwloc_level_t *level,
-                  prte_vpid_t *nmapped)
+                  pmix_rank_t *nmapped)
 {
     hwloc_obj_t obj, top;
     unsigned int i, nobjs;
@@ -508,12 +508,12 @@ static void prune(prte_jobid_t jobid,
             if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, n))) {
                 continue;
             }
-            if (proc->name.jobid != jobid ||
+            if (!PMIX_CHECK_NSPACE(proc->name.nspace, jobid) ||
                 proc->app_idx != app_idx) {
                 continue;
             }
             locale = NULL;
-            if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRTE_PTR)) {
+            if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void**)&locale, PMIX_POINTER)) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 return;
             }
@@ -560,12 +560,12 @@ static void prune(prte_jobid_t jobid,
                     if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, n))) {
                         continue;
                     }
-                    if (proc->name.jobid != jobid ||
+                    if (!PMIX_CHECK_NSPACE(proc->name.nspace, jobid) ||
                         proc->app_idx != app_idx) {
                         continue;
                     }
                     locale = NULL;
-                    if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRTE_PTR)) {
+                    if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void**)&locale, PMIX_POINTER)) {
                         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                         return;
                     }
@@ -636,16 +636,16 @@ static int assign_locations(prte_job_t *jdata)
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:ppr: job %s not using ppr assign: %s",
-                            PRTE_JOBID_PRINT(jdata->jobid),
+                            PRTE_JOBID_PRINT(jdata->nspace),
                             (NULL == jdata->map->last_mapper) ? "NULL" : jdata->map->last_mapper);
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void**)&jobppr, PRTE_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void**)&jobppr, PMIX_STRING);
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:ppr: assigning locations for job %s with ppr %s policy %s",
-                        PRTE_JOBID_PRINT(jdata->jobid), jobppr,
+                        PRTE_JOBID_PRINT(jdata->nspace), jobppr,
                         prte_rmaps_base_print_mapping(jdata->map->mapping));
 
     /* pickup the object level */
@@ -700,10 +700,10 @@ static int assign_locations(prte_job_t *jdata)
                     if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, j))) {
                         continue;
                     }
-                    if (proc->name.jobid != jdata->jobid) {
+                    if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                         continue;
                     }
-                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
                 }
             } else {
                 /* get the number of resources on this node at this level */
@@ -721,16 +721,16 @@ static int assign_locations(prte_job_t *jdata)
                         if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, j))) {
                             continue;
                         }
-                        if (proc->name.jobid != jdata->jobid) {
+                        if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                             continue;
                         }
                         /* if we already assigned it, then skip */
-                        if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, NULL, PRTE_PTR)) {
+                        if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, NULL, PMIX_POINTER)) {
                             continue;
                         }
                         nprocs_mapped++;
                         cnt++;
-                        prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                        prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
                     }
                 }
             }

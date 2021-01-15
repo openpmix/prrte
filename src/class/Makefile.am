@@ -14,6 +14,7 @@
 # Copyright (c) 2014-2018 Los Alamos National Security, LLC. All rights
 #                         reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -29,7 +30,6 @@ headers += \
         class/prte_bitmap.h \
         class/prte_hash_table.h \
         class/prte_hotel.h \
-        class/prte_tree.h \
         class/prte_list.h \
         class/prte_object.h \
         class/prte_graph.h\
@@ -43,7 +43,6 @@ libprrte_la_SOURCES += \
         class/prte_bitmap.c \
         class/prte_hash_table.c \
         class/prte_hotel.c \
-        class/prte_tree.c \
         class/prte_list.c \
         class/prte_object.c \
         class/prte_graph.c\

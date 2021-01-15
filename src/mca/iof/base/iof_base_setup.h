@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,11 +51,11 @@ PRTE_EXPORT int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts);
 PRTE_EXPORT int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
                                             char ***env);
 
-PRTE_EXPORT int prte_iof_base_setup_parent(const prte_process_name_t* name,
+PRTE_EXPORT int prte_iof_base_setup_parent(const pmix_proc_t* name,
                                              prte_iof_base_io_conf_t *opts);
 
 /* setup output files */
-PRTE_EXPORT int prte_iof_base_setup_output_files(const prte_process_name_t* dst_name,
+PRTE_EXPORT int prte_iof_base_setup_output_files(const pmix_proc_t* dst_name,
                                                    prte_job_t *jobdat,
                                                    prte_iof_proc_t *proct);
 

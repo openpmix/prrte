@@ -17,6 +17,7 @@
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -136,7 +137,7 @@ void prte_errmgr_base_abort(int error_code, char *fmt, ...)
     /* No way to reach here */
 }
 
-int prte_errmgr_base_abort_peers(prte_process_name_t *procs,
+int prte_errmgr_base_abort_peers(pmix_proc_t *procs,
                                  int32_t num_procs,
                                  int error_code)
 {

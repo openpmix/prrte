@@ -17,6 +17,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -529,7 +530,7 @@ prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename,
 
                 node = PRTE_NEW(prte_node_t);
                 node->name = hostname;
-                prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL, &apSlots[ix].nid, PRTE_INT32);
+                prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL, &apSlots[ix].nid, PMIX_INT32);
                 node->slots_inuse = 0;
                 node->slots_max = 0;
                 node->slots = 1;
@@ -566,7 +567,7 @@ prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename,
 
             node = PRTE_NEW(prte_node_t);
             node->name = hostname;
-            prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL, &apNodes[ix].nid, PRTE_INT32);
+            prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL, &apNodes[ix].nid, PMIX_INT32);
             node->slots_inuse = 0;
             node->slots_max = 0;
             if (prte_hwloc_default_use_hwthread_cpus) {

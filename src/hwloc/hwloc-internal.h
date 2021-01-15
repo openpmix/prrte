@@ -7,6 +7,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,7 +35,6 @@
 
 #include "src/class/prte_list.h"
 #include "src/class/prte_value_array.h"
-#include "src/dss/dss_types.h"
 
 BEGIN_C_DECLS
 
@@ -393,23 +393,6 @@ PRTE_EXPORT int prte_hwloc_base_node_name_to_id(char *node_name, int *id);
 PRTE_EXPORT int prte_hwloc_base_memory_set(prte_hwloc_base_memory_segment_t *segments,
                                              size_t num_segments);
 
-/* datatype support */
-PRTE_EXPORT int prte_hwloc_pack(prte_buffer_t *buffer, const void *src,
-                                  int32_t num_vals,
-                                  prte_data_type_t type);
-PRTE_EXPORT int prte_hwloc_unpack(prte_buffer_t *buffer, void *dest,
-                                    int32_t *num_vals,
-                                    prte_data_type_t type);
-PRTE_EXPORT int prte_hwloc_copy(hwloc_topology_t *dest,
-                                  hwloc_topology_t src,
-                                  prte_data_type_t type);
-PRTE_EXPORT int prte_hwloc_compare(const hwloc_topology_t topo1,
-                                     const hwloc_topology_t topo2,
-                                     prte_data_type_t type);
-PRTE_EXPORT int prte_hwloc_print(char **output, char *prefix,
-                                   hwloc_topology_t src,
-                                   prte_data_type_t type);
-
 /**
  * Make a prettyprint string for a hwloc_cpuset_t (e.g., "package
  * 2[core 3]").
@@ -446,6 +429,8 @@ PRTE_EXPORT int prte_hwloc_base_topology_set_flags (hwloc_topology_t topology, u
 PRTE_EXPORT int prte_hwloc_base_open(void);
 PRTE_EXPORT void prte_hwloc_base_close(void);
 PRTE_EXPORT int prte_hwloc_base_register(void);
+PRTE_EXPORT int prte_hwloc_print(char **output, char *prefix,
+                                 hwloc_topology_t src);
 
 END_C_DECLS
 

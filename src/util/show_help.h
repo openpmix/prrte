@@ -14,6 +14,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -98,6 +99,7 @@
 #include <stdarg.h>
 #include "types.h"
 #include "src/mca/rml/rml_types.h"
+#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
@@ -191,9 +193,10 @@ PRTE_EXPORT int prte_show_help_add_dir(const char *directory);
 PRTE_EXPORT int prte_show_help_suppress(const char *filename,
                                           const char *topic);
 
-PRTE_EXPORT void prte_show_help_recv(int status, prte_process_name_t* sender,
-                                       prte_buffer_t *buffer, prte_rml_tag_t tag,
-                                       void* cbdata);
+PRTE_EXPORT void prte_show_help_recv(int status, pmix_proc_t* sender,
+                                     pmix_data_buffer_t *buffer,
+                                     prte_rml_tag_t tag,
+                                     void* cbdata);
 
 END_C_DECLS
 

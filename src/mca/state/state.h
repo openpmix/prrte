@@ -4,6 +4,7 @@
  *                         reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -52,7 +53,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/runtime/prte_globals.h"
-
+#include "src/util/error_strings.h"
 #include "src/mca/state/state_types.h"
 
 BEGIN_C_DECLS
@@ -100,7 +101,7 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),           \
                                 timestamp,                                    \
                                 (NULL == shadow) ? "NULL" :                   \
-                                PRTE_JOBID_PRINT(shadow->jobid),              \
+                                PRTE_JOBID_PRINT(shadow->nspace),             \
                                 prte_job_state_to_str((s)),                   \
                                 __FILE__, __LINE__);                          \
         }                                                                     \
@@ -109,7 +110,7 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
 
 #define PRTE_ACTIVATE_PROC_STATE(p, s)                                        \
     do {                                                                      \
-        prte_process_name_t *shadow=(p);                                      \
+        pmix_proc_t *shadow=(p);                                      \
         if( prte_state_base_framework.framework_verbose > 0 ) {               \
             double timestamp = 0.0;                                           \
             PRTE_STATE_GET_TIMESTAMP(timestamp);                              \
@@ -137,7 +138,7 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),           \
                                 timestamp,                                    \
                                 (NULL == shadow) ? "NULL" :                   \
-                                PRTE_JOBID_PRINT(shadow->jobid),              \
+                                PRTE_JOBID_PRINT(shadow->nspace),             \
                                 prte_job_state_to_str((s)),                   \
                                 k);                                           \
         }                                                                     \
@@ -145,7 +146,7 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
 
 #define PRTE_REACHING_PROC_STATE(p, s, k)                                     \
     do {                                                                      \
-        prte_process_name_t *shadow=(p);                                      \
+        pmix_proc_t *shadow=(p);                                      \
         if( prte_state_base_framework.framework_verbose > 0 ) {               \
             double timestamp = 0.0;                                           \
             PRTE_STATE_GET_TIMESTAMP(timestamp);                              \
@@ -234,7 +235,7 @@ typedef int (*prte_state_base_module_remove_job_state_fn_t)(prte_job_state_t sta
 
 
 /****    Proc STATE APIs  ****/
-/* Proc states are accessed via prte_process_name_t as the state machine
+/* Proc states are accessed via pmix_proc_t as the state machine
  * must be available to both application processes and PRTE tools. APIs are
  * providedfor assembling and editing the state machine, as well as activating
  * a specific proc state
@@ -262,7 +263,7 @@ typedef int (*prte_state_base_module_remove_job_state_fn_t)(prte_job_state_t sta
  *
  * 3. if neither of the above is true, then the call will be ignored.
  */
-typedef void (*prte_state_base_module_activate_proc_state_fn_t)(prte_process_name_t *proc,
+typedef void (*prte_state_base_module_activate_proc_state_fn_t)(pmix_proc_t *proc,
                                                                  prte_proc_state_t state);
 
 /* Add a state to the proc state machine.

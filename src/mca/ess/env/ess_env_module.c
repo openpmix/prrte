@@ -13,6 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -127,23 +128,21 @@ static int rte_finalize(void)
 
 static int env_set_name(void)
 {
-    prte_vpid_t vpid;
+    pmix_rank_t vpid;
 
     if (NULL == prte_ess_base_nspace) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
 
-    PRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRTE_PROC_MY_NAME->jobid, prte_ess_base_nspace);
-    PMIX_LOAD_NSPACE(prte_process_info.myproc.nspace, prte_ess_base_nspace);
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, prte_ess_base_nspace);
 
     if (NULL == prte_ess_base_vpid) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
     vpid = strtoul(prte_ess_base_vpid, NULL, 10);
-    prte_process_info.myproc.rank = vpid;
-    PRTE_PROC_MY_NAME->vpid = vpid;
+    PRTE_PROC_MY_NAME->rank = vpid;
 
     PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
                          "ess:env set name to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));

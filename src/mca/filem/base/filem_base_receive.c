@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,10 +42,10 @@
 #endif
 
 #include "src/mca/mca.h"
+#include "src/util/name_fns.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
 
-#include "src/dss/dss.h"
 #include "constants.h"
 #include "types.h"
 #include "src/util/proc_info.h"
@@ -52,20 +53,19 @@
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/state/state.h"
-#include "src/util/name_fns.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
-
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/filem/filem.h"
 #include "src/mca/filem/base/base.h"
 
 /*
  * Functions to process some FileM specific commands
  */
-static void filem_base_process_get_proc_node_name_cmd(prte_process_name_t* sender,
-                                                      prte_buffer_t* buffer);
-static void filem_base_process_get_remote_path_cmd(prte_process_name_t* sender,
-                                                   prte_buffer_t* buffer);
+static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
+                                                      pmix_data_buffer_t* buffer);
+static void filem_base_process_get_remote_path_cmd(pmix_proc_t* sender,
+                                                   pmix_data_buffer_t* buffer);
 
 static bool recv_issued=false;
 
@@ -121,9 +121,9 @@ int prte_filem_base_comm_stop(void)
  * NOTE: The incoming buffer "buffer" is PRTE_RELEASED by the calling program.
  * DO NOT RELEASE THIS BUFFER IN THIS CODE
  */
-void prte_filem_base_recv(int status, prte_process_name_t* sender,
-                        prte_buffer_t* buffer, prte_rml_tag_t tag,
-                        void* cbdata)
+void prte_filem_base_recv(int status, pmix_proc_t* sender,
+                          pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
+                          void* cbdata)
 {
     prte_filem_cmd_flag_t command;
     int32_t count;
@@ -134,8 +134,9 @@ void prte_filem_base_recv(int status, prte_process_name_t* sender,
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     count = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &command, &count, PRTE_FILEM_CMD))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &command, &count, PRTE_FILEM_CMD);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return;
     }
 
@@ -161,22 +162,23 @@ void prte_filem_base_recv(int status, prte_process_name_t* sender,
     }
 }
 
-static void filem_base_process_get_proc_node_name_cmd(prte_process_name_t* sender,
-                                                      prte_buffer_t* buffer)
+static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
+                                                      pmix_data_buffer_t* buffer)
 {
-    prte_buffer_t *answer;
+    pmix_data_buffer_t *answer;
     int32_t count;
     prte_job_t *jdata = NULL;
     prte_proc_t *proc = NULL;
-    prte_process_name_t name;
+    pmix_proc_t name;
     int rc;
 
     /*
      * Unpack the data
      */
     count = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &name, &count, PRTE_NAME))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &name, &count, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         return;
     }
@@ -185,13 +187,13 @@ static void filem_base_process_get_proc_node_name_cmd(prte_process_name_t* sende
      * Process the data
      */
     /* get the job data object for this proc */
-    if (NULL == (jdata = prte_get_job_data_object(name.jobid))) {
+    if (NULL == (jdata = prte_get_job_data_object(name.nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         return;
     }
     /* get the proc object for it */
-    proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, name.vpid);
+    proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, name.rank);
     if (NULL == proc || NULL == proc->node) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
@@ -201,11 +203,12 @@ static void filem_base_process_get_proc_node_name_cmd(prte_process_name_t* sende
     /*
      * Send back the answer
      */
-    answer = PRTE_NEW(prte_buffer_t);
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(answer, &(proc->node->name), 1, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    PMIX_DATA_BUFFER_CREATE(answer);
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, answer, &(proc->node->name), 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRTE_RELEASE(answer);
+        PMIX_DATA_BUFFER_RELEASE(answer);
         return;
     }
 
@@ -214,7 +217,7 @@ static void filem_base_process_get_proc_node_name_cmd(prte_process_name_t* sende
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRTE_RELEASE(answer);
+        PMIX_DATA_BUFFER_RELEASE(answer);
         return;
     }
 }
@@ -225,10 +228,10 @@ static void filem_base_process_get_proc_node_name_cmd(prte_process_name_t* sende
  * - Verify the existence of the file/dir
  * - Determine if the specified file/dir is in fact a file or dir or unknown if not found.
  */
-static void filem_base_process_get_remote_path_cmd(prte_process_name_t* sender,
-                                                   prte_buffer_t* buffer)
+static void filem_base_process_get_remote_path_cmd(pmix_proc_t* sender,
+                                                   pmix_data_buffer_t* buffer)
 {
-    prte_buffer_t *answer;
+    pmix_data_buffer_t *answer;
     int32_t count;
     char *filename = NULL;
     char *tmp_name = NULL;
@@ -238,8 +241,9 @@ static void filem_base_process_get_remote_path_cmd(prte_process_name_t* sender,
     int rc;
 
     count = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &filename, &count, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &filename, &count, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         goto CLEANUP;
     }
@@ -287,17 +291,19 @@ static void filem_base_process_get_remote_path_cmd(prte_process_name_t* sender,
      * - PRTE_FILEM_TYPE_DIR     = Directory
      * - PRTE_FILEM_TYPE_UNKNOWN = Could not be determined, or does not exist
      */
-    answer = PRTE_NEW(prte_buffer_t);
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(answer, &tmp_name, 1, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    PMIX_DATA_BUFFER_CREATE(answer);
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, answer, &tmp_name, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRTE_RELEASE(answer);
+        PMIX_DATA_BUFFER_RELEASE(answer);
         goto CLEANUP;
     }
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(answer, &file_type, 1, PRTE_INT))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, answer, &file_type, 1, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRTE_RELEASE(answer);
+        PMIX_DATA_BUFFER_RELEASE(answer);
         goto CLEANUP;
     }
 
@@ -306,7 +312,7 @@ static void filem_base_process_get_remote_path_cmd(prte_process_name_t* sender,
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRTE_RELEASE(answer);
+        PMIX_DATA_BUFFER_RELEASE(answer);
     }
 
  CLEANUP:

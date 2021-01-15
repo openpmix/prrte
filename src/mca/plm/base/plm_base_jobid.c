@@ -12,6 +12,7 @@
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,54 +36,36 @@
 #include "src/mca/plm/base/plm_private.h"
 
 /*
- * attempt to create a globally unique name - do a hash
- * of the hostname plus pid
+ * attempt to create a globally unique name
  */
 int prte_plm_base_set_hnp_name(void)
 {
     char *evar;
-    int rc;
 
     /* we may have been passed a PMIx nspace to use */
     if (NULL != (evar = getenv("PMIX_SERVER_NSPACE"))) {
         PMIX_LOAD_PROCID(&prte_process_info.myproc, evar, 0);
-        /* setup the corresponding numerical jobid and add the
-         * job to the hash table */
-        PRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRTE_PROC_MY_NAME->jobid, evar);
 
         if (NULL != (evar = getenv("PMIX_SERVER_RANK"))) {
-            PRTE_PROC_MY_NAME->vpid = strtoul(evar, NULL, 10);
-        } else {
-            PRTE_PROC_MY_NAME->vpid = 0;
+            PRTE_PROC_MY_NAME->rank = strtoul(evar, NULL, 10);
         }
         /* copy it to the HNP field */
-        PRTE_PROC_MY_HNP->jobid = PRTE_PROC_MY_NAME->jobid;
-        PRTE_PROC_MY_HNP->vpid = PRTE_PROC_MY_NAME->vpid;
+        memcpy(PRTE_PROC_MY_HNP, PRTE_PROC_MY_NAME, sizeof(pmix_proc_t));
         return PRTE_SUCCESS;
     }
 
-    /* for our nspace, we will use the nodename+pid
-     * Note that we do not add the .0 suffix to the namespace as we do with
-     * the children namespaces. The daemon jobfamily is always "0".
-     * The PRTE_PMIX_CONVERT_NSPACE routine will create the prte_job_t structre
-     * and add it to the prte_job_data hash table at position "0".
-     */
-    prte_asprintf(&evar, "%s-%s%u", prte_tool_basename, prte_process_info.nodename, (uint32_t)prte_process_info.pid);
-
-    PRTE_PMIX_CONVERT_NSPACE(rc, &PRTE_PROC_MY_NAME->jobid, evar);
-    if (PRTE_SUCCESS != rc) {
-        free(evar);
-        return rc;
+    if (NULL == prte_plm_globals.base_nspace) {
+        /* use basename-hostname-pid as our base nspace */
+        prte_asprintf(&prte_plm_globals.base_nspace, "%s-%s-%u",
+                      prte_tool_basename, prte_process_info.nodename,
+                      (uint32_t)prte_process_info.pid);
     }
-    PRTE_PROC_MY_NAME->vpid = 0;
 
+    /* create the DVM nspace */
+    prte_asprintf(&evar, "%s@0", prte_plm_globals.base_nspace);
+    PMIX_LOAD_PROCID(PRTE_PROC_MY_NAME, evar, 0);
     /* copy it to the HNP field */
-    PRTE_PROC_MY_HNP->jobid = PRTE_PROC_MY_NAME->jobid;
-    PRTE_PROC_MY_HNP->vpid = PRTE_PROC_MY_NAME->vpid;
-
-    /* set the nspace */
-    PMIX_LOAD_NSPACE(prte_process_info.myproc.nspace, evar);
-    prte_process_info.myproc.rank = 0;
+    memcpy(PRTE_PROC_MY_HNP, PRTE_PROC_MY_NAME, sizeof(pmix_proc_t));
 
     /* done */
     free(evar);
@@ -96,13 +79,12 @@ static bool reuse = false;
 
 int prte_plm_base_create_jobid(prte_job_t *jdata)
 {
-    int16_t i;
-    prte_jobid_t pjid;
+    uint32_t i;
+    pmix_nspace_t pjid;
     prte_job_t *ptr;
     bool found;
     char *tmp;
     int rc;
-    prte_job_t *old_jdata;
 
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         /* this job is being restarted - do not assign it
@@ -114,19 +96,14 @@ int prte_plm_base_create_jobid(prte_job_t *jdata)
     if (reuse) {
         /* find the first unused jobid */
         found = false;
-        for (i=1; i < INT16_MAX; i++) {
+        for (i=1; i < UINT32_MAX; i++) {
             ptr = NULL;
-            pjid = PRTE_CONSTRUCT_LOCAL_JOBID(PRTE_PROC_MY_NAME->jobid, prte_plm_globals.next_jobid);
-            prte_hash_table_get_value_uint32(prte_job_data, pjid, (void**)&ptr);
+            (void)snprintf(pjid, PMIX_MAX_NSLEN-1, "%s@%u", prte_plm_globals.base_nspace, i);
+            ptr = prte_get_job_data_object(pjid);
             if (NULL == ptr) {
                 found = true;
+                prte_plm_globals.next_jobid = i;
                 break;
-            }
-
-            if (INT16_MAX == prte_plm_globals.next_jobid) {
-                prte_plm_globals.next_jobid = 1;
-            } else {
-                prte_plm_globals.next_jobid++;
             }
         }
         if (!found) {
@@ -136,29 +113,21 @@ int prte_plm_base_create_jobid(prte_job_t *jdata)
         }
     }
 
-    /* the new nspace is our nspace with a ".N" extension */
-    prte_asprintf(&tmp, "%s.%u", prte_process_info.myproc.nspace, (unsigned)prte_plm_globals.next_jobid);
+    /* the new nspace is our base nspace with an "@N" extension */
+    prte_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace,
+                  prte_plm_globals.next_jobid);
     PMIX_LOAD_NSPACE(jdata->nspace, tmp);
     free(tmp);
-    // The following routine will create a new prte_job_t structure and add it
-    // to the prte_job_data hash table at the ".N" position. Note that the 'new'
-    // object is not the 'jdata' referenced here. After this call we have
-    // two objects in the system with the same jobid/nspace.
-    PRTE_PMIX_CONVERT_NSPACE(rc, &jdata->jobid, jdata->nspace);
+
+    /* store the job object */
+    rc = prte_set_job_data_object(jdata);
     if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
         return rc;
-    }
-    // Replace the 'new' (temporary) object with the one passed to this function
-    old_jdata = prte_set_job_data_object(jdata->jobid, jdata);
-    // Release the temporary object, but mark the jobid as invalid so the
-    // destructor does not remove the object we just put on the hash.
-    old_jdata->jobid = PRTE_JOBID_INVALID;
-    if (NULL != old_jdata) {
-        PRTE_RELEASE(old_jdata);
     }
 
     prte_plm_globals.next_jobid++;
-    if (INT16_MAX == prte_plm_globals.next_jobid) {
+    if (UINT32_MAX == prte_plm_globals.next_jobid) {
         reuse = true;
         prte_plm_globals.next_jobid = 1;
     }

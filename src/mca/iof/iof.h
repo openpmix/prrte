@@ -14,6 +14,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -132,21 +133,20 @@ BEGIN_C_DECLS
  * is a pointer to the name of the requesting tool */
 #define PRTE_IOF_PROXY_PULL(a, b)                                       \
     do {                                                                \
-        prte_buffer_t *buf;                                             \
+        pmix_data_buffer_t *buf;                                        \
         prte_iof_tag_t tag;                                             \
-        prte_process_name_t nm;                                         \
+        pmix_proc_t nm;                                                 \
                                                                         \
-        buf = PRTE_NEW(prte_buffer_t);                                   \
+        PMIX_DATA_BUFFER_CREATE(buf);                                   \
                                                                         \
         /* setup the tag to pull from HNP */                            \
         tag = PRTE_IOF_STDOUTALL | PRTE_IOF_PULL | PRTE_IOF_EXCLUSIVE;  \
-        prte_dss.pack(buf, &tag, 1, PRTE_IOF_TAG);                      \
+        PMIx_Data_pack(NULL, buf, &tag, 1, PMIX_UINT16);                \
         /* pack the name of the source we want to pull */               \
-        nm.jobid = (a)->jobid;                                          \
-        nm.vpid = PRTE_VPID_WILDCARD;                                   \
-        prte_dss.pack(buf, &nm, 1, PRTE_NAME);                          \
+        PMIX_LOAD_PROCID(&nm, (a)->nspace, PMIX_RANK_WILDCARD);         \
+        PMIx_Data_pack(NULL, buf, &nm, 1, PMIX_PROC);                   \
         /* pack the name of the tool */                                 \
-        prte_dss.pack(buf, (b), 1, PRTE_NAME);                          \
+        PMIx_Data_pack(NULL, buf, (b), 1, PMIX_PROC);                   \
                                                                         \
         /* send the buffer to the HNP */                                \
         prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,                  \
@@ -165,7 +165,7 @@ typedef int (*prte_iof_base_init_fn_t)(void);
  * @param peer  Name of target peer(s)
  * @param fd    Local file descriptor for input.
  */
-typedef int (*prte_iof_base_push_fn_t)(const prte_process_name_t* peer,
+typedef int (*prte_iof_base_push_fn_t)(const pmix_proc_t* peer,
                                        prte_iof_tag_t src_tag, int fd);
 
 /**
@@ -177,24 +177,24 @@ typedef int (*prte_iof_base_push_fn_t)(const prte_process_name_t* peer,
  * @param source_tag    Indicates the output streams to be forwarded
  * @param fd            Local file descriptor for output.
  */
-typedef int (*prte_iof_base_pull_fn_t)(const prte_process_name_t* peer,
+typedef int (*prte_iof_base_pull_fn_t)(const pmix_proc_t* peer,
                                        prte_iof_tag_t source_tag,
                                        int fd);
 
 /**
  * Close the specified iof stream(s) from the indicated peer(s)
  */
-typedef int (*prte_iof_base_close_fn_t)(const prte_process_name_t* peer,
+typedef int (*prte_iof_base_close_fn_t)(const pmix_proc_t* peer,
                                         prte_iof_tag_t source_tag);
 
 /**
  * Output something via the IOF subsystem
  */
-typedef int (*prte_iof_base_output_fn_t)(const prte_process_name_t* peer,
+typedef int (*prte_iof_base_output_fn_t)(const pmix_proc_t* peer,
                                          prte_iof_tag_t source_tag,
                                          const char *msg);
 
-typedef int (*prte_iof_base_push_stdin_fn_t)(const prte_process_name_t* dst_name,
+typedef int (*prte_iof_base_push_stdin_fn_t)(const pmix_proc_t* dst_name,
                                              uint8_t *data, size_t sz);
 
 /* Flag that a job is complete */

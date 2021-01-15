@@ -2,6 +2,7 @@
  * Copyright (c) 2017-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,7 +20,6 @@
 
 #include "src/class/prte_list.h"
 #include "src/class/prte_hash_table.h"
-#include "src/dss/dss_types.h"
 #include "src/mca/mca.h"
 
 #include "src/mca/odls/odls_types.h"

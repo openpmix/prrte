@@ -16,6 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -83,7 +84,7 @@
 static int plm_alps_init(void);
 static int plm_alps_launch_job(prte_job_t *jdata);
 static int plm_alps_terminate_orteds(void);
-static int plm_alps_signal_job(prte_jobid_t jobid, int32_t signal);
+static int plm_alps_signal_job(pmix_nspace_t jobid, int32_t signal);
 static int plm_alps_finalize(void);
 
 static int plm_alps_start_proc(int argc, char **argv, char **env,
@@ -188,7 +189,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
     int32_t nnode;
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t*)cbdata;
-    char *ltmp;
 
     PRTE_ACQUIRE_OBJECT(state);
 
@@ -203,7 +203,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* start by setting up the virtual machine */
-    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(state->jdata))) {
         PRTE_ERROR_LOG(rc);
         goto cleanup;
@@ -384,7 +384,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(state->jdata->apps, i))) {
             continue;
         }
-        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&app_prefix_dir, PRTE_STRING);
+        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&app_prefix_dir, PMIX_STRING);
         /* Check for already set cur_prefix_dir -- if different,
            complain */
         if (NULL != app_prefix_dir) {
@@ -481,7 +481,7 @@ static int plm_alps_terminate_orteds(void)
         PRTE_ERROR_LOG(rc);
     }
 
-    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
 
     PRTE_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
@@ -494,7 +494,7 @@ static int plm_alps_terminate_orteds(void)
 /**
  * Signal all the processes in the child alps by sending the signal directly to it
  */
-static int plm_alps_signal_job(prte_jobid_t jobid, int32_t signal)
+static int plm_alps_signal_job(pmix_nspace_t jobid, int32_t signal)
 {
     if (NULL != alpsrun && 0 != alpsrun->pid) {
         kill(alpsrun->pid, (int)signal);
@@ -540,7 +540,7 @@ static void alps_wait_cb(int sd, short args, void *cbdata) {
        alps failed. Report the error and make sure that prun
        wakes up - otherwise, do nothing!
     */
-    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
     if (0 != proc->exit_code) {
         if (failed_launch) {

@@ -13,6 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +41,6 @@
 
 #include "types.h"
 
-#include "src/dss/dss_types.h"
 #include "src/hwloc/hwloc-internal.h"
 #include PRTE_PMIX_HEADER
 #if ! PRTE_PMIX_HEADER_GIVEN
@@ -68,13 +68,12 @@ typedef uint8_t prte_proc_type_t;
  * files - however, these are all initialized elsewhere.
  */
 typedef struct prte_process_info_t {
-    prte_process_name_t my_name;        /**< My official process name */
     pmix_proc_t myproc;
-    prte_process_name_t my_hnp;         /**< Name of my hnp */
+    pmix_proc_t my_hnp;                 /**< Name of my hnp */
     char *my_hnp_uri;                   /**< Contact info for my hnp */
-    prte_process_name_t my_parent;      /**< Name of my parent (or my HNP if no parent was specified) */
+    pmix_proc_t my_parent;              /**< Name of my parent (or my HNP if no parent was specified) */
     pid_t hnp_pid;                      /**< hnp pid - used if singleton */
-    prte_vpid_t num_daemons;            /**< number of daemons in system */
+    pmix_rank_t num_daemons;            /**< number of daemons in system */
     int num_nodes;                      /**< number of nodes in the job */
     char *nodename;                     /**< string name for this node */
     char **aliases;                     /**< aliases for this node */

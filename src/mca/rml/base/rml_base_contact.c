@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,7 +27,6 @@
 #include "src/util/argv.h"
 #include "src/util/output.h"
 
-#include "src/dss/dss.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/routed/routed.h"
 #include "src/util/name_fns.h"
@@ -39,7 +39,7 @@
 
 
 int prte_rml_base_parse_uris(const char* uri,
-                             prte_process_name_t* peer,
+                             pmix_proc_t* peer,
                              char*** uris)
 {
     int rc;

@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -211,7 +212,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, PRTE_ATTR_GLOBAL,
-                                NULL, PRTE_BOOL);
+                                NULL, PMIX_BOOL);
 
         } else if (0 == strcasecmp(ck2[i], "DISPLAYDEVEL")) {
             if (NULL == jdata) {
@@ -220,7 +221,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, PRTE_ATTR_GLOBAL,
-                                NULL, PRTE_BOOL);
+                                NULL, PMIX_BOOL);
 
         } else if (0 == strcasecmp(ck2[i], "DISPLAYTOPO")) {
             if (NULL == jdata) {
@@ -229,7 +230,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, PRTE_ATTR_GLOBAL,
-                                NULL, PRTE_BOOL);
+                                NULL, PMIX_BOOL);
 
         } else if (0 == strcasecmp(ck2[i], "DISPLAYDIFF")) {
             if (NULL == jdata) {
@@ -238,7 +239,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, PRTE_ATTR_GLOBAL,
-                                NULL, PRTE_BOOL);
+                                NULL, PMIX_BOOL);
 
         } else if (0 == strcasecmp(ck2[i], "DISPLAYALLOC")) {
             if (NULL == jdata) {
@@ -247,7 +248,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, PRTE_ATTR_GLOBAL,
-                                NULL, PRTE_BOOL);
+                                NULL, PMIX_BOOL);
 
         } else if (0 == strcasecmp(ck2[i], "DONOTLAUNCH")) {
             if (NULL == jdata) {
@@ -256,13 +257,13 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
-                                NULL, PRTE_BOOL);
+                                NULL, PMIX_BOOL);
             /* if we are not in a persistent DVM, then make sure we don't try to launch
              * the daemons either */
             if (!prte_persistent) {
-                djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+                djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
                 prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
-                                    NULL, PRTE_BOOL);
+                                    NULL, PMIX_BOOL);
                 prte_do_not_launch = true;
             }
 
@@ -276,7 +277,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL,
-                                NULL, PRTE_BOOL);
+                                NULL, PMIX_BOOL);
 
         } else if (0 == strcasecmp(ck2[i], "TIMESTAMPOUTPUT")) {
             if (NULL == jdata) {
@@ -285,7 +286,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, PRTE_ATTR_GLOBAL,
-                                NULL, PRTE_BOOL);
+                                NULL, PMIX_BOOL);
 
         } else if (0 == strcasecmp(ck2[i], "XMLOUTPUT")) {
             if (NULL == jdata) {
@@ -294,7 +295,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, PRTE_ATTR_GLOBAL,
-                                NULL, PRTE_BOOL);
+                                NULL, PMIX_BOOL);
 
         } else if (0 == strncasecmp(ck2[i], "PE-LIST=", 8)) {
             if (NULL == jdata) {
@@ -322,11 +323,11 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
             if (NULL != prte_hwloc_default_cpu_list) {
                 if (0 != strcmp(prte_hwloc_default_cpu_list, ptr)) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_CPUSET,
-                                        PRTE_ATTR_GLOBAL, ptr, PRTE_STRING);
+                                        PRTE_ATTR_GLOBAL, ptr, PMIX_STRING);
                 }
             } else {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_CPUSET,
-                                    PRTE_ATTR_GLOBAL, ptr, PRTE_STRING);
+                                    PRTE_ATTR_GLOBAL, ptr, PMIX_STRING);
             }
 
         } else if (0 == strncasecmp(ck2[i], "PE=", 3)) {
@@ -345,7 +346,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL,
-                                &u16, PRTE_UINT16);
+                                &u16, PMIX_UINT16);
 
         } else if (0 == strcasecmp(ck2[i], "INHERIT")) {
             if (noinherit_given) {
@@ -359,7 +360,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 prte_rmaps_base.inherit = true;
             } else {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_INHERIT, PRTE_ATTR_GLOBAL,
-                                    NULL, PRTE_BOOL);
+                                    NULL, PMIX_BOOL);
             }
             inherit_given = true;
 
@@ -375,7 +376,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 prte_rmaps_base.inherit = false;
             } else {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, PRTE_ATTR_GLOBAL,
-                                    NULL, PRTE_BOOL);
+                                    NULL, PMIX_BOOL);
             }
             noinherit_given = true;
 
@@ -392,7 +393,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 prte_rmaps_base.device = strdup(ptr);
             } else {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_DIST_DEVICE, PRTE_ATTR_GLOBAL,
-                                    ptr, PRTE_STRING);
+                                    ptr, PMIX_STRING);
             }
 
         } else if (0 == strcasecmp(ck2[i], "HWTCPUS")) {
@@ -406,7 +407,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 prte_rmaps_base.hwthread_cpus = true;
             } else {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL,
-                                    NULL, PRTE_BOOL);
+                                    NULL, PMIX_BOOL);
             }
             hwthread_cpus_given = true;
 
@@ -421,7 +422,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 prte_rmaps_base.hwthread_cpus = false;
             } else {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, PRTE_ATTR_GLOBAL,
-                                    NULL, PRTE_BOOL);
+                                    NULL, PMIX_BOOL);
             }
             core_cpus_given = true;
 
@@ -506,7 +507,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
            }
             /* now save the pattern */
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL,
-                                ck, PRTE_STRING);
+                                ck, PMIX_STRING);
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PPR);
             PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
             ppr = true;
@@ -598,7 +599,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                     prte_rmaps_base.hwthread_cpus = true;
                 } else {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL,
-                                        NULL, PRTE_BOOL);
+                                        NULL, PMIX_BOOL);
                 }
             } else if (0 == strncasecmp(spec, "dist", len)) {
                 if (NULL == jdata) {
@@ -607,7 +608,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                         free(spec);
                         return PRTE_ERR_SILENT;
                     }
-                } else if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DIST_DEVICE, NULL, PRTE_STRING)) {
+                } else if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DIST_DEVICE, NULL, PMIX_STRING)) {
                     prte_show_help("help-prte-rmaps-base.txt", "device-not-specified", true);
                     free(spec);
                     return PRTE_ERR_SILENT;

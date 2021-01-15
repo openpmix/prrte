@@ -14,6 +14,7 @@
 # Copyright (c) 2012      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -27,12 +28,11 @@ dist_prtedata_DATA += runtime/help-prte-runtime.txt
 
 headers += \
         runtime/runtime.h \
-	runtime/prte_locks.h \
+        runtime/prte_locks.h \
         runtime/prte_globals.h \
         runtime/prte_quit.h \
         runtime/runtime_internals.h \
-        runtime/data_type_support/prte_dt_support.h \
-	runtime/prte_wait.h \
+        runtime/prte_wait.h \
         runtime/prte_data_server.h \
         runtime/prte_progress_threads.h
 
@@ -42,7 +42,6 @@ libprrte_la_SOURCES += \
         runtime/prte_locks.c \
         runtime/prte_globals.c \
         runtime/prte_quit.c \
-        runtime/data_type_support/prte_dt_compare_fns.c \
         runtime/data_type_support/prte_dt_copy_fns.c \
         runtime/data_type_support/prte_dt_print_fns.c \
         runtime/data_type_support/prte_dt_packing_fns.c \

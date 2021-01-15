@@ -5,6 +5,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +36,6 @@
 
 #include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
-#include "src/dss/dss.h"
 
 #include "src/util/show_help.h"
 #include "src/util/argv.h"
@@ -90,11 +90,11 @@ static prte_list_t incoming_files;
 static prte_list_t positioned_files;
 
 static void send_chunk(int fd, short argc, void *cbdata);
-static void recv_files(int status, prte_process_name_t* sender,
-                       prte_buffer_t* buffer, prte_rml_tag_t tag,
+static void recv_files(int status, pmix_proc_t* sender,
+                       pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
                        void* cbdata);
-static void recv_ack(int status, prte_process_name_t* sender,
-                     prte_buffer_t* buffer, prte_rml_tag_t tag,
+static void recv_ack(int status, pmix_proc_t* sender,
+                     pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
                      void* cbdata);
 static void write_handler(int fd, short event, void *cbdata);
 
@@ -183,8 +183,8 @@ static void xfer_complete(int status, prte_filem_raw_xfer_t *xfer)
     }
 }
 
-static void recv_ack(int status, prte_process_name_t* sender,
-                     prte_buffer_t* buffer, prte_rml_tag_t tag,
+static void recv_ack(int status, pmix_proc_t* sender,
+                     pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
                      void* cbdata)
 {
     prte_list_item_t *item, *itm;
@@ -195,15 +195,17 @@ static void recv_ack(int status, prte_process_name_t* sender,
 
     /* unpack the file */
     n=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &file, &n, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &file, &n, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return;
     }
 
     /* unpack the status */
     n=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &st, &n, PRTE_INT))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &st, &n, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return;
     }
 
@@ -262,7 +264,7 @@ static int raw_preposition_files(prte_job_t *jdata,
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: preposition files for job %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_JOBID_PRINT(jdata->jobid)));
+                         PRTE_JOBID_PRINT(jdata->nspace)));
 
     /* cycle across the app_contexts looking for files or
      * binaries to be prepositioned
@@ -272,7 +274,7 @@ static int raw_preposition_files(prte_job_t *jdata,
         if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PRTE_BOOL)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL)) {
             /* add the executable to our list */
             PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: preload executable %s",
@@ -293,7 +295,7 @@ static int raw_preposition_files(prte_job_t *jdata,
             app->argv[0] = strdup(app->app);
             fs->remote_target = strdup(app->app);
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void**)&filestring, PRTE_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void**)&filestring, PMIX_STRING)) {
             files = prte_argv_split(filestring, ',');
             free(filestring);
             for (j=0; NULL != files[j]; j++) {
@@ -387,7 +389,7 @@ static int raw_preposition_files(prte_job_t *jdata,
              * can find them on the remote end
              */
             filestring = prte_argv_join(files, ',');
-            prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL, filestring, PRTE_STRING);
+            prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL, filestring, PMIX_STRING);
             /* cleanup for the next app */
             prte_argv_free(files);
             free(filestring);
@@ -643,11 +645,11 @@ static int raw_link_local_files(prte_job_t *jdata,
     }
 
     /* get the list of files this app wants */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void**)&filestring, PRTE_STRING)) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void**)&filestring, PMIX_STRING)) {
         files = prte_argv_split(filestring, ',');
         free(filestring);
     }
-    if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL)) {
         /* add the app itself to the list */
         bname = prte_basename(app->app);
         prte_argv_append_nosize(&files, bname);
@@ -667,12 +669,12 @@ static int raw_link_local_files(prte_job_t *jdata,
                              "%s filem:raw: working symlinks for proc %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(&proc->name)));
-        if (proc->name.jobid != jdata->jobid) {
+        if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
             PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: proc %s not part of job %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&proc->name),
-                                 PRTE_JOBID_PRINT(jdata->jobid)));
+                                 PRTE_JOBID_PRINT(jdata->nspace)));
             continue;
         }
         if (proc->app_idx != app->idx) {
@@ -755,7 +757,7 @@ static void send_chunk(int fd, short argc, void *cbdata)
     unsigned char data[PRTE_FILEM_RAW_CHUNK_MAX];
     int32_t numbytes;
     int rc;
-    prte_buffer_t chunk;
+    pmix_data_buffer_t chunk;
     prte_grpcomm_signature_t *sig;
 
     PRTE_ACQUIRE_OBJECT(rev);
@@ -801,42 +803,51 @@ static void send_chunk(int fd, short argc, void *cbdata)
                          rev->nchunk, numbytes, rev->file));
 
     /* package it for transmission */
-    PRTE_CONSTRUCT(&chunk, prte_buffer_t);
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(&chunk, &rev->file, 1, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    PMIX_DATA_BUFFER_CONSTRUCT(&chunk);
+    rc = PMIx_Data_pack(NULL, &chunk, &rev->file, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         close(fd);
+        PMIX_DATA_BUFFER_DESTRUCT(&chunk);
         return;
     }
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(&chunk, &rev->nchunk, 1, PRTE_INT32))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(NULL, &chunk, &rev->nchunk, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         close(fd);
+        PMIX_DATA_BUFFER_DESTRUCT(&chunk);
         return;
     }
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(&chunk, data, numbytes, PRTE_BYTE))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(NULL, &chunk, data, numbytes, PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         close(fd);
+        PMIX_DATA_BUFFER_DESTRUCT(&chunk);
         return;
     }
     /* if it is the first chunk, then add file type and index of the app */
     if (0 == rev->nchunk) {
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(&chunk, &rev->type, 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_pack(NULL, &chunk, &rev->type, 1, PMIX_INT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             close(fd);
+            PMIX_DATA_BUFFER_DESTRUCT(&chunk);
             return;
         }
     }
 
     /* goes to all daemons */
     sig = PRTE_NEW(prte_grpcomm_signature_t);
-    sig->signature = (prte_process_name_t*)malloc(sizeof(prte_process_name_t));
-    sig->signature[0].jobid = PRTE_PROC_MY_NAME->jobid;
-    sig->signature[0].vpid = PRTE_VPID_WILDCARD;
+    sig->signature = (pmix_proc_t*)malloc(sizeof(pmix_proc_t));
+    sig->sz = 1;
+    PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
     if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_FILEM_BASE, &chunk))) {
         PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&chunk);
         close(fd);
         return;
     }
-    PRTE_DESTRUCT(&chunk);
+    PMIX_DATA_BUFFER_DESTRUCT(&chunk);
     PRTE_RELEASE(sig);
     rev->nchunk++;
 
@@ -856,18 +867,20 @@ static void send_chunk(int fd, short argc, void *cbdata)
 
 static void send_complete(char *file, int status)
 {
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     int rc;
 
-    buf = PRTE_NEW(prte_buffer_t);
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &file, 1, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(buf);
+    PMIX_DATA_BUFFER_CREATE(buf);
+    rc = PMIx_Data_pack(NULL, buf, &file, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         return;
     }
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &status, 1, PRTE_INT))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(buf);
+    rc = PMIx_Data_pack(NULL, buf, &status, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         return;
     }
     if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
@@ -942,8 +955,8 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
     return PRTE_SUCCESS;
 }
 
-static void recv_files(int status, prte_process_name_t* sender,
-                       prte_buffer_t* buffer, prte_rml_tag_t tag,
+static void recv_files(int status, pmix_proc_t* sender,
+                       pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
                        void* cbdata)
 {
     char *file, *session_dir;
@@ -958,14 +971,16 @@ static void recv_files(int status, prte_process_name_t* sender,
 
     /* unpack the data */
     n=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &file, &n, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &file, &n, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         send_complete(NULL, rc);
         return;
     }
     n=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &nchunk, &n, PRTE_INT32))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &nchunk, &n, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         send_complete(file, rc);
         free(file);
         return;
@@ -976,8 +991,9 @@ static void recv_files(int status, prte_process_name_t* sender,
         nbytes = 0;
     } else {
         nbytes=PRTE_FILEM_RAW_CHUNK_MAX;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, data, &nbytes, PRTE_BYTE))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buffer, data, &nbytes, PMIX_BYTE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             send_complete(file, rc);
             free(file);
             return;
@@ -986,8 +1002,9 @@ static void recv_files(int status, prte_process_name_t* sender,
     /* if the chunk is 0, then additional info should be present */
     if (0 == nchunk) {
         n=1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &type, &n, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buffer, &type, &n, PMIX_INT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             send_complete(file, rc);
             free(file);
             return;

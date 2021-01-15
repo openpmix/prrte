@@ -13,6 +13,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -166,7 +167,7 @@ exit:
     return rc;
 }
 
-static int _setup_jobfam_session_dir(prte_process_name_t *proc)
+static int _setup_jobfam_session_dir(pmix_proc_t *proc)
 {
     int rc = PRTE_SUCCESS;
 
@@ -191,7 +192,7 @@ static int _setup_jobfam_session_dir(prte_process_name_t *proc)
 }
 
 static int
-_setup_job_session_dir(prte_process_name_t *proc)
+_setup_job_session_dir(pmix_proc_t *proc)
 {
     int rc = PRTE_SUCCESS;
 
@@ -200,10 +201,10 @@ _setup_job_session_dir(prte_process_name_t *proc)
         if( PRTE_SUCCESS != (rc = _setup_jobfam_session_dir(proc)) ){
             return rc;
         }
-        if (PRTE_JOBID_INVALID != proc->jobid) {
+        if (!PMIX_NSPACE_INVALID(proc->nspace)) {
             if (0 > prte_asprintf(&prte_process_info.job_session_dir,
-                             "%s/%d", prte_process_info.jobfam_session_dir,
-                             PRTE_LOCAL_JOBID(proc->jobid))) {
+                             "%s/%s", prte_process_info.jobfam_session_dir,
+                             PRTE_LOCAL_JOBID_PRINT(proc->nspace))) {
                 prte_process_info.job_session_dir = NULL;
                 rc = PRTE_ERR_OUT_OF_RESOURCE;
                 goto exit;
@@ -221,7 +222,7 @@ exit:
 }
 
 static int
-_setup_proc_session_dir(prte_process_name_t *proc)
+_setup_proc_session_dir(pmix_proc_t *proc)
 {
     int rc = PRTE_SUCCESS;
 
@@ -230,10 +231,10 @@ _setup_proc_session_dir(prte_process_name_t *proc)
         if( PRTE_SUCCESS != (rc = _setup_job_session_dir(proc)) ){
             return rc;
         }
-        if (PRTE_VPID_INVALID != proc->vpid) {
+        if (PMIX_RANK_INVALID != proc->rank) {
             if (0 > prte_asprintf(&prte_process_info.proc_session_dir,
-                             "%s/%d", prte_process_info.job_session_dir,
-                             proc->vpid)) {
+                             "%s/%s", prte_process_info.job_session_dir,
+                             PRTE_VPID_PRINT(proc->rank))) {
                 prte_process_info.proc_session_dir = NULL;
                 rc = PRTE_ERR_OUT_OF_RESOURCE;
                 goto exit;
@@ -250,7 +251,7 @@ exit:
     return rc;
 }
 
-int prte_session_setup_base(prte_process_name_t *proc)
+int prte_session_setup_base(pmix_proc_t *proc)
 {
     int rc;
 
@@ -299,7 +300,7 @@ int prte_session_setup_base(prte_process_name_t *proc)
 /*
  * Construct the session directory and create it if necessary
  */
-int prte_session_dir(bool create, prte_process_name_t *proc)
+int prte_session_dir(bool create, pmix_proc_t *proc)
 {
     int rc = PRTE_SUCCESS;
 
@@ -317,7 +318,7 @@ int prte_session_dir(bool create, prte_process_name_t *proc)
     /*
      * Now that we have the full path, go ahead and create it if necessary
      */
-    if( create ) {
+    if (create) {
         if( PRTE_SUCCESS != (rc = prte_create_dir(prte_process_info.proc_session_dir)) ) {
             PRTE_ERROR_LOG(rc);
             goto cleanup;
@@ -345,7 +346,7 @@ cleanup:
  * A job has aborted - so force cleanup of the session directory
  */
 int
-prte_session_dir_cleanup(prte_jobid_t jobid)
+prte_session_dir_cleanup(pmix_nspace_t jobid)
 {
     /* special case - if a daemon is colocated with mpirun,
      * then we let mpirun do the rest to avoid a race
@@ -353,11 +354,11 @@ prte_session_dir_cleanup(prte_jobid_t jobid)
      * daemon colocated with mpirun */
     if (prte_ras_base.launch_orted_on_hn &&
         PRTE_PROC_IS_DAEMON &&
-        1 == PRTE_PROC_MY_NAME->vpid) {
+        1 == PRTE_PROC_MY_NAME->rank) {
         return PRTE_SUCCESS;
     }
 
-    if (!prte_create_session_dirs || prte_process_info.rm_session_dirs ) {
+    if (!prte_create_session_dirs || prte_process_info.rm_session_dirs) {
         /* we haven't created them or RM will clean them up for us*/
         return PRTE_SUCCESS;
     }
@@ -429,7 +430,7 @@ prte_session_dir_cleanup(prte_jobid_t jobid)
 
 
 int
-prte_session_dir_finalize(prte_process_name_t *proc)
+prte_session_dir_finalize(pmix_proc_t *proc)
 {
     if (!prte_create_session_dirs || prte_process_info.rm_session_dirs ) {
         /* we haven't created them or RM will clean them up for us*/
@@ -472,7 +473,7 @@ prte_session_dir_finalize(prte_process_name_t *proc)
      * daemon colocated with mpirun */
     if (prte_ras_base.launch_orted_on_hn &&
         PRTE_PROC_IS_DAEMON &&
-        1 == PRTE_PROC_MY_NAME->vpid) {
+        1 == PRTE_PROC_MY_NAME->rank) {
         return PRTE_SUCCESS;
     }
 
@@ -487,7 +488,7 @@ prte_session_dir_finalize(prte_process_name_t *proc)
                                 false, prte_dir_check_file);
     }
 
-    if( NULL != prte_process_info.top_session_dir ){
+    if (NULL != prte_process_info.top_session_dir) {
         prte_os_dirpath_destroy(prte_process_info.top_session_dir,
                                 false, prte_dir_check_file);
     }

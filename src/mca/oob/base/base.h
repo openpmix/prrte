@@ -15,6 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -63,12 +64,13 @@ typedef struct {
     prte_list_t components;
     prte_list_t actives;
     int max_uri_length;
-    prte_hash_table_t peers;
+    prte_list_t peers;
 } prte_oob_base_t;
 PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 
 typedef struct {
-    prte_object_t super;
+    prte_list_item_t super;
+    pmix_proc_t name;
     prte_oob_base_component_t *component;
     prte_bitmap_t addressable;
 } prte_oob_base_peer_t;
@@ -122,6 +124,8 @@ PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
         PRTE_THREADSHIFT(cd, prte_event_base,                     \
                          prte_oob_base_send_nb, PRTE_MSG_PRI);          \
     }while(0)
+
+PRTE_EXPORT prte_oob_base_peer_t* prte_oob_base_get_peer(const pmix_proc_t *pr);
 
 /* During initial wireup, we can only transfer contact info on the daemon
  * command line. This limits what we can send to a string representation of

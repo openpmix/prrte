@@ -17,6 +17,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -112,7 +113,7 @@ static prte_event_t show_help_timer_event;
  */
 static void show_accumulated_duplicates(int fd, short event, void *context);
 static int show_help(const char *filename, const char *topic,
-                     const char *output, prte_process_name_t *sender);
+                     const char *output, pmix_proc_t *sender);
 
 int prte_show_help_init(void)
 {
@@ -459,7 +460,7 @@ int prte_show_help_norender(const char *filename, const char *topic,
 {
     int rc = PRTE_SUCCESS;
     int8_t have_output = 1;
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     bool am_inside = false;
 
     /* if we are the HNP, or the RML has not yet been setup,
@@ -488,22 +489,42 @@ int prte_show_help_norender(const char *filename, const char *topic,
         am_inside = true;
 
         /* build the message to the HNP */
-        buf = PRTE_NEW(prte_buffer_t);
+        PMIX_DATA_BUFFER_CREATE(buf);
         /* pack the filename of the show_help text file */
-        prte_dss.pack(buf, &filename, 1, PRTE_STRING);
+        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &filename, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            goto CLEANUP;
+        }
         /* pack the topic tag */
-        prte_dss.pack(buf, &topic, 1, PRTE_STRING);
+        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &topic, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            goto CLEANUP;
+        }
         /* pack the flag that we have a string */
-        prte_dss.pack(buf, &have_output, 1, PRTE_INT8);
+        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &have_output, 1, PMIX_INT8);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            goto CLEANUP;
+        }
         /* pack the resulting string */
-        prte_dss.pack(buf, &output, 1, PRTE_STRING);
+        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &output, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            goto CLEANUP;
+        }
 
         /* send it via RML to the HNP */
 
         if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
                                                           PRTE_RML_TAG_SHOW_HELP,
                                                           prte_rml_send_callback, NULL))) {
-            PRTE_RELEASE(buf);
+            PMIX_DATA_BUFFER_RELEASE(buf);
             /* okay, that didn't work, output locally  */
             prte_output(output_stream, "%s", output);
         } else {
@@ -520,7 +541,7 @@ int prte_show_help_suppress(const char *filename, const char *topic)
 {
     int rc = PRTE_SUCCESS;
     int8_t have_output = 0;
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     static bool am_inside = false;
 
     if (prte_execute_quiet) {
@@ -552,19 +573,33 @@ int prte_show_help_suppress(const char *filename, const char *topic)
         am_inside = true;
 
         /* build the message to the HNP */
-        buf = PRTE_NEW(prte_buffer_t);
-        /* pack the filename of the show_help text file */
-        prte_dss.pack(buf, &filename, 1, PRTE_STRING);
+        PMIX_DATA_BUFFER_CREATE(buf);
+        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &filename, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return PRTE_SUCCESS;
+        }
         /* pack the topic tag */
-        prte_dss.pack(buf, &topic, 1, PRTE_STRING);
+        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &topic, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return PRTE_SUCCESS;
+        }
         /* pack the flag that we DO NOT have a string */
-        prte_dss.pack(buf, &have_output, 1, PRTE_INT8);
+        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &have_output, 1, PMIX_INT8);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return PRTE_SUCCESS;
+        }
         /* send it to the HNP */
         if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
                                                           PRTE_RML_TAG_SHOW_HELP,
                                                           prte_rml_send_callback, NULL))) {
             PRTE_ERROR_LOG(rc);
-            PRTE_RELEASE(buf);
+            PMIX_DATA_BUFFER_RELEASE(buf);
             /* okay, that didn't work, just process locally error, just ignore return  */
             show_help(filename, topic, NULL, PRTE_PROC_MY_NAME);
         }
@@ -687,7 +722,7 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
 }
 
 static int show_help(const char *filename, const char *topic,
-                     const char *output, prte_process_name_t *sender)
+                     const char *output, pmix_proc_t *sender)
 {
     int rc;
     tuple_list_item_t *tli = NULL;
@@ -780,8 +815,8 @@ static int show_help(const char *filename, const char *topic,
 
 /* Note that this function is called from ess/hnp, so don't make it
    static */
-void prte_show_help_recv(int status, prte_process_name_t* sender,
-                         prte_buffer_t *buffer, prte_rml_tag_t tag,
+void prte_show_help_recv(int status, pmix_proc_t* sender,
+                         pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
                          void* cbdata)
 {
     char *output=NULL;
@@ -797,28 +832,32 @@ void prte_show_help_recv(int status, prte_process_name_t* sender,
 
     /* unpack the filename of the show_help text file */
     n = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &filename, &n, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &filename, &n, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
     /* unpack the topic tag */
     n = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &topic, &n, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &topic, &n, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
     /* unpack the flag */
     n = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &have_output, &n, PRTE_INT8))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &have_output, &n, PMIX_INT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
 
     /* If we have an output string, unpack it */
     if (have_output) {
         n = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &output, &n, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &output, &n, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto cleanup;
         }
     }

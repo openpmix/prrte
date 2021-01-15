@@ -78,6 +78,8 @@ const char *prte_job_state_to_str(prte_job_state_t state)
         return "LOCAL LAUNCH COMPLETE";
     case PRTE_JOB_STATE_READY_FOR_DEBUG:
         return "READY FOR DEBUG";
+    case PRTE_JOB_STATE_STARTED:
+        return "JOB STARTED";
     case PRTE_JOB_STATE_UNTERMINATED:
         return "UNTERMINATED";
     case PRTE_JOB_STATE_TERMINATED:

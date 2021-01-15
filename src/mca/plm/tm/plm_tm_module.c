@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -86,7 +87,7 @@
 static int plm_tm_init(void);
 static int plm_tm_launch_job(prte_job_t *jdata);
 static int plm_tm_terminate_orteds(void);
-static int plm_tm_signal_job(prte_jobid_t jobid, int32_t signal);
+static int plm_tm_signal_job(pmix_nspace_t jobid, int32_t signal);
 static int plm_tm_finalize(void);
 
 /*
@@ -205,7 +206,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* setup the virtual machine */
-    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(jdata))) {
         PRTE_ERROR_LOG(rc);
         goto cleanup;
@@ -321,7 +322,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
        there
     */
     app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, 0);
-    prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PRTE_STRING);
+    prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PMIX_STRING);
     if (NULL != prefix_dir) {
         char *newenv;
 
@@ -372,7 +373,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                              node->name));
 
         /* setup process name */
-        rc = prte_util_convert_vpid_to_string(&vpid_string, node->daemon->name.vpid);
+        rc = prte_util_convert_vpid_to_string(&vpid_string, node->daemon->name.rank);
         if (PRTE_SUCCESS != rc) {
             prte_output(0, "plm:tm: unable to get daemon vpid as string");
             exit(-1);
@@ -477,7 +478,7 @@ int plm_tm_terminate_orteds(void)
     return rc;
 }
 
-static int plm_tm_signal_job(prte_jobid_t jobid, int32_t signal)
+static int plm_tm_signal_job(pmix_nspace_t jobid, int32_t signal)
 {
     int rc;
 

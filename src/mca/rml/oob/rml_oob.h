@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,9 +28,8 @@
 
 #include "prte_config.h"
 
-#include "src/dss/dss_types.h"
 #include "src/event/event-internal.h"
-
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/oob/oob.h"
 
 #include "src/mca/rml/base/base.h"
@@ -48,15 +48,8 @@ PRTE_MODULE_EXPORT extern prte_rml_component_t prte_rml_oob_component;
 
 void prte_rml_oob_fini(struct prte_rml_base_module_t *mod);
 
-int prte_rml_oob_send_nb(prte_process_name_t* peer,
-                         struct iovec* msg,
-                         int count,
-                         prte_rml_tag_t tag,
-                         prte_rml_callback_fn_t cbfunc,
-                         void* cbdata);
-
-int prte_rml_oob_send_buffer_nb(prte_process_name_t* peer,
-                                prte_buffer_t* buffer,
+int prte_rml_oob_send_buffer_nb(pmix_proc_t* peer,
+                                pmix_data_buffer_t* buffer,
                                 prte_rml_tag_t tag,
                                 prte_rml_buffer_callback_fn_t cbfunc,
                                 void* cbdata);

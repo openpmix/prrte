@@ -5,6 +5,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,7 +34,7 @@ BEGIN_C_DECLS
 /* struct for tracking routing trees */
 typedef struct {
     prte_list_item_t super;
-    prte_vpid_t vpid;
+    pmix_rank_t rank;
     prte_bitmap_t relatives;
 } prte_routed_tree_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_routed_tree_t);
@@ -42,7 +43,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_routed_tree_t);
 typedef struct {
     prte_object_t super;
     uint16_t job_family;
-    prte_process_name_t route;
+    pmix_proc_t route;
     char *hnp_uri;
 } prte_routed_jobfam_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_routed_jobfam_t);

@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,8 +46,6 @@
 #include "src/util/output.h"
 #endif
 
-#include "src/dss/dss_types.h"
-
 /**
  * Supported datatypes for messaging and storage operations.
  */
@@ -59,8 +58,8 @@
  */
 typedef uint16_t prte_local_rank_t;
 typedef uint16_t prte_node_rank_t;
-#define PRTE_LOCAL_RANK         PRTE_UINT16
-#define PRTE_NODE_RANK          PRTE_UINT16
+#define PRTE_LOCAL_RANK         PMIX_UINT16
+#define PRTE_NODE_RANK          PMIX_UINT16
 #define PRTE_LOCAL_RANK_MAX     UINT16_MAX-1
 #define PRTE_NODE_RANK_MAX      UINT16_MAX-1
 #define PRTE_LOCAL_RANK_INVALID UINT16_MAX
@@ -68,30 +67,8 @@ typedef uint16_t prte_node_rank_t;
 
 /* index for app_contexts */
 typedef uint32_t prte_app_idx_t;
-#define PRTE_APP_IDX        PRTE_UINT32
+#define PRTE_APP_IDX        PMIX_UINT32
 #define PRTE_APP_IDX_MAX    UINT32_MAX
-
-/* general typedefs & structures */
-
-#if !defined(WORDS_BIGENDIAN)
-#define PRTE_PROCESS_NAME_NTOH(guid) prte_process_name_ntoh_intr(&(guid))
-static inline __prte_attribute_always_inline__ void
-prte_process_name_ntoh_intr(prte_process_name_t *name)
-{
-    name->jobid = ntohl(name->jobid);
-    name->vpid = ntohl(name->vpid);
-}
-#define PRTE_PROCESS_NAME_HTON(guid) prte_process_name_hton_intr(&(guid))
-static inline __prte_attribute_always_inline__ void
-prte_process_name_hton_intr(prte_process_name_t *name)
-{
-    name->jobid = htonl(name->jobid);
-    name->vpid = htonl(name->vpid);
-}
-#else
-#define PRTE_PROCESS_NAME_NTOH(guid)
-#define PRTE_PROCESS_NAME_HTON(guid)
-#endif
 
 /*
  * portable assignment of pointer to int
@@ -253,60 +230,5 @@ static inline uint64_t prte_swap_bytes8(uint64_t val)
 #define prte_swap_bytes4 htonl
 #define prte_swap_bytes8 prte_hton64
 #endif /* WORDS_BIGENDIAN || !HAVE_UNIX_BYTESWAP */
-
-#define PRTE_NAME_ARGS(n) \
-    (unsigned long) ((NULL == n) ? (unsigned long)PRTE_JOBID_INVALID : (unsigned long)(n)->jobid), \
-    (unsigned long) ((NULL == n) ? (unsigned long)PRTE_VPID_INVALID : (unsigned long)(n)->vpid) \
-
-/*
- * define invalid values
- */
-#define PRTE_JOBID_INVALID          (PRTE_JOBID_MAX + 2)
-#define PRTE_VPID_INVALID           (PRTE_VPID_MAX + 2)
-#define PRTE_LOCAL_JOBID_INVALID    (PRTE_JOBID_INVALID & 0x0000FFFF)
-
-/*
- * define wildcard values
- */
-#define PRTE_JOBID_WILDCARD         (PRTE_JOBID_MAX + 1)
-#define PRTE_VPID_WILDCARD          (PRTE_VPID_MAX + 1)
-#define PRTE_LOCAL_JOBID_WILDCARD   (PRTE_JOBID_WILDCARD & 0x0000FFFF)
-
-/* PRTE attribute */
-typedef uint16_t prte_attribute_key_t;
-#define PRTE_ATTR_KEY_T   PRTE_UINT16
-typedef struct {
-    prte_list_item_t super;             /* required for this to be on lists */
-    prte_attribute_key_t key;           /* key identifier */
-    prte_data_type_t type;              /* the type of value stored */
-    bool local;                         // whether or not to pack/send this value
-    union {
-        bool flag;
-        uint8_t byte;
-        char *string;
-        size_t size;
-        pid_t pid;
-        int integer;
-        int8_t int8;
-        int16_t int16;
-        int32_t int32;
-        int64_t int64;
-        unsigned int uint;
-        uint8_t uint8;
-        uint16_t uint16;
-        uint32_t uint32;
-        uint64_t uint64;
-        prte_byte_object_t bo;
-        prte_buffer_t buf;
-        float fval;
-        struct timeval tv;
-        void *ptr;  // never packed or passed anywhere
-        prte_vpid_t vpid;
-        prte_jobid_t jobid;
-        prte_process_name_t name;
-        prte_envar_t envar;
-    } data;
-} prte_attribute_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_attribute_t);
 
 #endif

@@ -17,6 +17,7 @@
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +44,6 @@
 
 #include "src/util/proc_info.h"
 #include "src/mca/errmgr/errmgr.h"
-#include "src/dss/dss.h"
 
 #include "src/runtime/runtime.h"
 #include "src/runtime/prte_globals.h"
@@ -243,12 +243,6 @@ int prte_register_params(void)
             PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_3,
             PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_env_list_internal);
 
-    /* dss has parameters */
-    ret = prte_dss_register_vars ();
-    if (PRTE_SUCCESS != ret) {
-        return ret;
-    }
-
     /* get a clean output channel too - need to do this here because
      * we use it below, and prun and some other tools call this
      * function prior to calling prte_init
@@ -404,7 +398,7 @@ int prte_register_params(void)
                                   prte_progress_thread_debug_level);
     }
 
-    prted_debug_failure = (int) PRTE_VPID_INVALID;
+    prted_debug_failure = PMIX_RANK_INVALID;
     (void) prte_mca_base_var_register ("prte", "prte", NULL, "daemon_fail",
                                   "Have the specified prted fail after init for debugging purposes",
                                   PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,

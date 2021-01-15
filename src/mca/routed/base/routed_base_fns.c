@@ -13,6 +13,7 @@
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,7 +25,6 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/dss/dss.h"
 #include "src/util/argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -50,7 +50,7 @@ void prte_routed_base_xcast_routing(prte_list_t *coll, prte_list_t *my_children)
      */
     if (PRTE_PROC_IS_MASTER) {
         if (prte_abnormal_term_ordered || !prte_routing_is_enabled) {
-            daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+            daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
             for (i=1; i < daemons->procs->size; i++) {
                 if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(daemons->procs, i))) {
                     continue;
@@ -58,8 +58,7 @@ void prte_routed_base_xcast_routing(prte_list_t *coll, prte_list_t *my_children)
                 /* exclude anyone known not alive */
                 if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_ALIVE)) {
                     nm = PRTE_NEW(prte_namelist_t);
-                    nm->name.jobid = PRTE_PROC_MY_NAME->jobid;
-                    nm->name.vpid = proc->name.vpid;
+                    PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace, proc->name.rank);
                     prte_list_append(coll, &nm->super);
                 }
             }
@@ -71,8 +70,7 @@ void prte_routed_base_xcast_routing(prte_list_t *coll, prte_list_t *my_children)
             /* the xcast always goes to our children */
             PRTE_LIST_FOREACH(child, my_children, prte_routed_tree_t) {
                 nm = PRTE_NEW(prte_namelist_t);
-                nm->name.jobid = PRTE_PROC_MY_NAME->jobid;
-                nm->name.vpid = child->vpid;
+                PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace, child->rank);
                 prte_list_append(coll, &nm->super);
             }
         }
@@ -80,20 +78,19 @@ void prte_routed_base_xcast_routing(prte_list_t *coll, prte_list_t *my_children)
         /* I am a daemon - route to my children */
         PRTE_LIST_FOREACH(child, my_children, prte_routed_tree_t) {
             nm = PRTE_NEW(prte_namelist_t);
-            nm->name.jobid = PRTE_PROC_MY_NAME->jobid;
-            nm->name.vpid = child->vpid;
+            PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace, child->rank);
             prte_list_append(coll, &nm->super);
         }
     }
 }
 
-int prte_routed_base_process_callback(prte_jobid_t job, prte_buffer_t *buffer)
+int prte_routed_base_process_callback(pmix_nspace_t job, pmix_data_buffer_t *buffer)
 {
     prte_proc_t *proc;
     prte_job_t *jdata;
     int32_t cnt;
     char *rml_uri;
-    prte_vpid_t vpid;
+    pmix_rank_t vpid;
     int rc;
 
     /* lookup the job object for this process */
@@ -105,10 +102,11 @@ int prte_routed_base_process_callback(prte_jobid_t job, prte_buffer_t *buffer)
 
     /* unpack the data for each entry */
     cnt = 1;
-    while (PRTE_SUCCESS == (rc = prte_dss.unpack(buffer, &vpid, &cnt, PRTE_VPID))) {
+    while (PRTE_SUCCESS == (rc = PMIx_Data_unpack(NULL, buffer, &vpid, &cnt, PMIX_PROC_RANK))) {
 
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &rml_uri, &cnt, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buffer, &rml_uri, &cnt, PMIX_STRING);
+        if (PMIX_SUCCESS == rc) {
+            PMIX_ERROR_LOG(rc);
             continue;
         }
 

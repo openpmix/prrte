@@ -11,6 +11,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,7 +25,7 @@
  * Routing table for the RML
  *
  * A flexible routing infrastructure for the RML.  Provides "next hop"
- * service.  Only deals with prte_process_name_ts.
+ * service.  Only deals with pmix_proc_ts.
  */
 
 
@@ -40,8 +41,6 @@
 #include "types.h"
 #include "src/mca/mca.h"
 
-#include "src/dss/dss_types.h"
-
 #include "src/mca/routed/routed_types.h"
 
 BEGIN_C_DECLS
@@ -50,7 +49,7 @@ BEGIN_C_DECLS
 /* ******************************************************************** */
 
 
-struct prte_buffer_t;
+struct pmix_data_buffer_t;
 struct prte_rml_module_t;
 
 
@@ -89,7 +88,7 @@ typedef int (*prte_routed_module_finalize_fn_t)(void);
  * that wildcards are supported to remove routes from, for example, all
  * procs in a given job
  */
-typedef int (*prte_routed_module_delete_route_fn_t)(prte_process_name_t *proc);
+typedef int (*prte_routed_module_delete_route_fn_t)(pmix_proc_t *proc);
 
 /**
  * Update route table with new information
@@ -108,8 +107,8 @@ typedef int (*prte_routed_module_delete_route_fn_t)(prte_process_name_t *proc);
  *                      such functionality
  * @retval PRTE_ERROR   An unspecified error occurred
  */
-typedef int (*prte_routed_module_update_route_fn_t)(prte_process_name_t *target,
-                                                    prte_process_name_t *route);
+typedef int (*prte_routed_module_update_route_fn_t)(pmix_proc_t *target,
+                                                    pmix_proc_t *route);
 
 /**
  * Get the next hop towards the target
@@ -120,7 +119,7 @@ typedef int (*prte_routed_module_update_route_fn_t)(prte_process_name_t *target,
  * or it could be an intermediate relay. By design, we -never- use application
  * procs as relays, so any relay will be an orted.
  */
-typedef prte_process_name_t (*prte_routed_module_get_route_fn_t)(prte_process_name_t *target);
+typedef pmix_proc_t (*prte_routed_module_get_route_fn_t)(pmix_proc_t *target);
 
 /**
  * Report a route as "lost"
@@ -132,7 +131,7 @@ typedef prte_process_name_t (*prte_routed_module_get_route_fn_t)(prte_process_na
  * removing that route from the routing table, or could - in the case
  * of a "lifeline" connection - result in abort of the process.
  */
-typedef int (*prte_routed_module_route_lost_fn_t)(const prte_process_name_t *route);
+typedef int (*prte_routed_module_route_lost_fn_t)(const pmix_proc_t *route);
 
 /*
  * Is this route defined?
@@ -146,7 +145,7 @@ typedef int (*prte_routed_module_route_lost_fn_t)(const prte_process_name_t *rou
  * In some cases, though, we truly -do- need to know if a route was
  * specifically defined.
  */
-typedef bool (*prte_routed_module_route_is_defined_fn_t)(const prte_process_name_t *target);
+typedef bool (*prte_routed_module_route_is_defined_fn_t)(const pmix_proc_t *target);
 
 /*
  * Update the module's routing plan
@@ -173,7 +172,7 @@ typedef void (*prte_routed_module_get_routing_list_fn_t)(prte_list_t *coll);
  * that process be lost, the errmgr will be called, possibly resulting
  * in termination of the process and job.
  */
-typedef int (*prte_routed_module_set_lifeline_fn_t)(prte_process_name_t *proc);
+typedef int (*prte_routed_module_set_lifeline_fn_t)(pmix_proc_t *proc);
 
 /*
  * Get the number of routes supported by this process

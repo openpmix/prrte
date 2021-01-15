@@ -14,6 +14,7 @@
  *                         reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -80,10 +81,10 @@ struct prte_filem_base_process_set_1_0_0_t {
     prte_list_item_t super;
 
     /** Source Process */
-    prte_process_name_t source;
+    pmix_proc_t source;
 
     /** Sink Process */
-    prte_process_name_t sink;
+    pmix_proc_t sink;
 };
 typedef struct prte_filem_base_process_set_1_0_0_t prte_filem_base_process_set_1_0_0_t;
 typedef struct prte_filem_base_process_set_1_0_0_t prte_filem_base_process_set_t;

@@ -16,6 +16,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +40,6 @@
 #include "src/util/argv.h"
 #include "src/util/show_help.h"
 #include "src/util/printf.h"
-#include "src/dss/dss.h"
 
 #include "src/include/frameworks.h"
 

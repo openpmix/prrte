@@ -41,7 +41,6 @@
 #include "src/mca/propagate/base/base.h"
 #include "src/util/proc_info.h"
 
-#include "src/dss/dss.h"
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
@@ -174,13 +173,22 @@ int prte_ess_base_prted_setup(void)
         }
     }
     if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+        char *output = NULL;
+        pmix_topology_t topo;
         prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        prte_dss.dump(0, prte_hwloc_topology, PRTE_HWLOC_TOPO);
+        topo.source = "hwloc";
+        topo.topology = prte_hwloc_topology;
+        ret = PMIx_Data_print(&output, NULL, &topo, PMIX_TOPO);
+        if (PMIX_SUCCESS == ret) {
+            fprintf(stderr, "%s\n", output);
+            free(output);
+        } else {
+            PMIX_ERROR_LOG(ret);
+        }
     }
 
     /* define the HNP name */
-    PRTE_PROC_MY_HNP->jobid = PRTE_PROC_MY_NAME->jobid;
-    PRTE_PROC_MY_HNP->vpid = 0;
+    PMIX_LOAD_PROCID(PRTE_PROC_MY_HNP, PRTE_PROC_MY_NAME->nspace, 0);
 
     /* open and setup the state machine */
     if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_state_base_framework,
@@ -289,7 +297,9 @@ int prte_ess_base_prted_setup(void)
     }
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
-    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    jdata = PRTE_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
+    prte_set_job_data_object(jdata);
     /* every job requires at least one app */
     app = PRTE_NEW(prte_app_context_t);
     prte_pointer_array_set_item(jdata->apps, 0, app);
@@ -297,13 +307,12 @@ int prte_ess_base_prted_setup(void)
 
     /* create and store a proc object for us */
     proc = PRTE_NEW(prte_proc_t);
-    proc->name.jobid = PRTE_PROC_MY_NAME->jobid;
-    proc->name.vpid = PRTE_PROC_MY_NAME->vpid;
+    PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
     proc->job = jdata;
-    proc->rank = proc->name.vpid;
+    proc->rank = proc->name.rank;
     proc->pid = prte_process_info.pid;
     proc->state = PRTE_PROC_STATE_RUNNING;
-    prte_pointer_array_set_item(jdata->procs, proc->name.vpid, proc);
+    prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRTE_JOB_STATE_RUNNING;
@@ -384,7 +393,7 @@ int prte_ess_base_prted_setup(void)
          * the connection, but just tells the RML how to reach the HNP
          * if/when we attempt to send to it
          */
-        PMIX_VALUE_LOAD(&val, prte_process_info.my_hnp_uri, PRTE_STRING);
+        PMIX_VALUE_LOAD(&val, prte_process_info.my_hnp_uri, PMIX_STRING);
         if (PMIX_SUCCESS != PMIx_Store_internal(PRTE_PROC_MY_PROCID, PMIX_PROC_URI, &val)) {
             PMIX_VALUE_DESTRUCT(&val);
             error = "store HNP URI";
@@ -470,8 +479,18 @@ int prte_ess_base_prted_setup(void)
      * to ensure a common array position with the DVM master */
     prte_pointer_array_add(prte_node_topologies, t);
     if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+        char *output = NULL;
+        pmix_topology_t topo;
         prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        prte_dss.dump(0, prte_hwloc_topology, PRTE_HWLOC_TOPO);
+        topo.source = "hwloc";
+        topo.topology = prte_hwloc_topology;
+        ret = PMIx_Data_print(&output, NULL, &topo, PMIX_TOPO);
+        if (PMIX_SUCCESS == ret) {
+            fprintf(stderr, "%s\n", output);
+            free(output);
+        } else {
+            PMIX_ERROR_LOG(ret);
+        }
     }
 
     /* Now provide a chance for the PLM
@@ -614,35 +633,37 @@ static void signal_forward_callback(int fd, short event, void *arg)
 {
     prte_event_t *signal = (prte_event_t*)arg;
     int32_t signum, rc;
-    prte_buffer_t *cmd;
+    pmix_data_buffer_t *cmd;
     prte_daemon_cmd_flag_t command=PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
-    prte_jobid_t job = PRTE_JOBID_WILDCARD;
 
     signum = PRTE_EVENT_SIGNAL(signal);
     if (!prte_execute_quiet){
         fprintf(stderr, "PRTE: Forwarding signal %d to job\n", signum);
     }
 
-    cmd = PRTE_NEW(prte_buffer_t);
+    PMIX_DATA_BUFFER_CREATE(cmd);
 
     /* pack the command */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(cmd, &command, 1, PRTE_DAEMON_CMD))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(cmd);
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, cmd, &command, 1, PRTE_DAEMON_CMD);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(cmd);
         return;
     }
 
     /* pack the jobid */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(cmd, &job, 1, PRTE_JOBID))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(cmd);
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, cmd, &PRTE_JOBID_WILDCARD, 1, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(cmd);
         return;
     }
 
     /* pack the signal */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(cmd, &signum, 1, PRTE_INT32))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(cmd);
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, cmd, &PRTE_JOBID_WILDCARD, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(cmd);
         return;
     }
 
@@ -651,7 +672,7 @@ static void signal_forward_callback(int fd, short event, void *arg)
                                           PRTE_RML_TAG_DAEMON,
                                           NULL, NULL))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(cmd);
+        PMIX_DATA_BUFFER_RELEASE(cmd);
     }
 
 }

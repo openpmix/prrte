@@ -17,6 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,7 +51,7 @@ typedef struct {
     /* although not required, there is enough debug
      * value that retaining the name makes sense
      */
-    prte_process_name_t name;
+    pmix_proc_t name;
     char *auth_method;  // method they used to authenticate
     int sd;
     prte_list_t addrs;
@@ -73,7 +74,7 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_peer_t);
 typedef struct {
     prte_object_t super;
     prte_event_t ev;
-    prte_process_name_t peer;
+    pmix_proc_t peer;
     uint16_t af_family;
     char *net;
     char *port;
@@ -84,8 +85,7 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_peer_op_t);
     do {                                                                \
         prte_oob_tcp_peer_op_t *pop;                                     \
         pop = PRTE_NEW(prte_oob_tcp_peer_op_t);                           \
-        pop->peer.jobid = (p)->name.jobid;                              \
-        pop->peer.vpid = (p)->name.vpid;                                \
+        PMIX_XFER_PROCID(&pop->peer, &(p)->name);                   \
         PRTE_THREADSHIFT(pop, prte_event_base,                    \
                          (cbfunc), PRTE_MSG_PRI);                       \
     } while(0);

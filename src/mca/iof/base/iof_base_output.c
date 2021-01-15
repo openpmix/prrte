@@ -12,6 +12,7 @@
  * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +47,7 @@
 
 #include "src/mca/iof/base/base.h"
 
-int prte_iof_base_write_output(const prte_process_name_t *name, prte_iof_tag_t stream,
+int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
                                const unsigned char *data, int numbytes,
                                prte_iof_write_event_t *channel)
 {
@@ -71,10 +72,10 @@ int prte_iof_base_write_output(const prte_process_name_t *name, prte_iof_tag_t s
     output = PRTE_NEW(prte_iof_write_output_t);
 
     /* get the job object for this process */
-    jdata = prte_get_job_data_object(name->jobid);
-    prte_timestamp_output = prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PRTE_BOOL);
-    prte_tag_output = prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PRTE_BOOL);
-    prte_xml_output = prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PRTE_BOOL);
+    jdata = prte_get_job_data_object(name->nspace);
+    prte_timestamp_output = prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
+    prte_tag_output = prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PMIX_BOOL);
+    prte_xml_output = prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL);
 
     /* write output data to the corresponding tag */
     if (PRTE_IOF_STDIN & stream) {
@@ -109,7 +110,7 @@ int prte_iof_base_write_output(const prte_process_name_t *name, prte_iof_tag_t s
      * timestamping of xml output
      */
     if (prte_xml_output) {
-        snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "<%s rank=\"%s\">", suffix, PRTE_VPID_PRINT(name->vpid));
+        snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "<%s rank=\"%s\">", suffix, PRTE_VPID_PRINT(name->rank));
         snprintf(endtag, PRTE_IOF_BASE_TAG_MAX, "</%s>", suffix);
         goto construct;
     }
@@ -126,8 +127,8 @@ int prte_iof_base_write_output(const prte_process_name_t *name, prte_iof_tag_t s
         if (prte_tag_output) {
             /* if we want it tagged as well, use both */
             snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "%s[%s,%s]<%s>:",
-                     cptr, PRTE_LOCAL_JOBID_PRINT(name->jobid),
-                     PRTE_VPID_PRINT(name->vpid), suffix);
+                     cptr, PRTE_LOCAL_JOBID_PRINT(name->nspace),
+                     PRTE_VPID_PRINT(name->rank), suffix);
         } else {
             /* only use timestamp */
             snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "%s<%s>:", cptr, suffix);
@@ -139,8 +140,8 @@ int prte_iof_base_write_output(const prte_process_name_t *name, prte_iof_tag_t s
 
     if (prte_tag_output) {
         snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "[%s,%s]<%s>:",
-                 PRTE_LOCAL_JOBID_PRINT(name->jobid),
-                 PRTE_VPID_PRINT(name->vpid), suffix);
+                 PRTE_LOCAL_JOBID_PRINT(name->nspace),
+                 PRTE_VPID_PRINT(name->rank), suffix);
         /* no endtag for this option */
         memset(endtag, '\0', PRTE_IOF_BASE_TAG_MAX);
         goto construct;

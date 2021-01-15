@@ -5,6 +5,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -53,7 +54,7 @@ typedef struct {
     int32_t type;
     int32_t nchunk;
     int status;
-    prte_vpid_t nrecvd;
+    pmix_rank_t nrecvd;
 } prte_filem_raw_xfer_t;
 PRTE_CLASS_DECLARATION(prte_filem_raw_xfer_t);
 

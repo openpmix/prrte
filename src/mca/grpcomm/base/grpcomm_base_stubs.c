@@ -16,6 +16,7 @@
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,9 +32,6 @@
  */
 #include "prte_config.h"
 
-
-#include "src/dss/dss.h"
-
 #include "src/mca/prtecompress/prtecompress.h"
 #include "src/util/proc_info.h"
 #include "src/util/error_strings.h"
@@ -46,23 +44,23 @@
 #include "src/util/name_fns.h"
 #include "src/threads/threads.h"
 #include "src/runtime/prte_globals.h"
-
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/grpcomm/base/base.h"
 
 static int pack_xcast(prte_grpcomm_signature_t *sig,
-                      prte_buffer_t *buffer,
-                      prte_buffer_t *message,
+                      pmix_data_buffer_t *buffer,
+                      pmix_data_buffer_t *message,
                       prte_rml_tag_t tag);
 
 static int create_dmns(prte_grpcomm_signature_t *sig,
-                       prte_vpid_t **dmns, size_t *ndmns);
+                       pmix_rank_t **dmns, size_t *ndmns);
 
 typedef struct {
     prte_object_t super;
     prte_event_t ev;
     prte_grpcomm_signature_t *sig;
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     int mode;
     prte_grpcomm_cbfunc_t cbfunc;
     void *cbdata;
@@ -78,7 +76,7 @@ static void gccon(prte_grpcomm_caddy_t *p)
 static void gcdes(prte_grpcomm_caddy_t *p)
 {
     if (NULL != p->buf) {
-        PRTE_RELEASE(p->buf);
+        PMIX_DATA_BUFFER_RELEASE(p->buf);
     }
 }
 static PRTE_CLASS_INSTANCE(prte_grpcomm_caddy_t,
@@ -87,12 +85,12 @@ static PRTE_CLASS_INSTANCE(prte_grpcomm_caddy_t,
 
 int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig,
                            prte_rml_tag_t tag,
-                           prte_buffer_t *msg)
+                           pmix_data_buffer_t *msg)
 {
     int rc = PRTE_ERROR;
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     prte_grpcomm_base_active_t *active;
-    prte_vpid_t *dmns;
+    pmix_rank_t *dmns;
     size_t ndmns;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
@@ -104,19 +102,19 @@ int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig,
      * so it does not require us to push it into the event library */
 
     /* prep the output buffer */
-    buf = PRTE_NEW(prte_buffer_t);
+    PMIX_DATA_BUFFER_CREATE(buf);
 
     /* create the array of participating daemons */
     if (PRTE_SUCCESS != (rc = create_dmns(sig, &dmns, &ndmns))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         return rc;
     }
 
     /* setup the payload */
     if (PRTE_SUCCESS != (rc = pack_xcast(sig, buf, msg, tag))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         if (NULL != dmns) {
             free(dmns);
         }
@@ -131,7 +129,7 @@ int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig,
             }
         }
     }
-    PRTE_RELEASE(buf);  // if the module needs to keep the buf, it should PRTE_RETAIN it
+    PMIX_DATA_BUFFER_RELEASE(buf);  // if the module needs to keep the buf, it should PRTE_RETAIN it
     if (NULL != dmns) {
         free(dmns);
     }
@@ -140,10 +138,10 @@ int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig,
 
 int prte_grpcomm_API_rbcast(prte_grpcomm_signature_t *sig,
                            prte_rml_tag_t tag,
-                           prte_buffer_t *msg)
+                            pmix_data_buffer_t *msg)
 {
     int rc = PRTE_ERROR;
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     prte_grpcomm_base_active_t *active;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
@@ -155,7 +153,7 @@ int prte_grpcomm_API_rbcast(prte_grpcomm_signature_t *sig,
      * so it does not require us to push it into the event library */
 
     /* prep the output buffer */
-    buf = PRTE_NEW(prte_buffer_t);
+    PMIX_DATA_BUFFER_CREATE(buf);
 
     /* setup the payload */
     if (PRTE_SUCCESS != (rc = pack_xcast(sig, buf, msg, tag))) {
@@ -207,7 +205,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
     /* retrieve an existing tracker, create it if not
      * already found. The allgather module is responsible
      * for releasing it upon completion of the collective */
-    ret = prte_hash_table_get_value_ptr(&prte_grpcomm_base.sig_table, (void *)cd->sig->signature, cd->sig->sz * sizeof(prte_process_name_t), (void **)&seq_number);
+    ret = prte_hash_table_get_value_ptr(&prte_grpcomm_base.sig_table, (void *)cd->sig->signature, cd->sig->sz * sizeof(pmix_proc_t), (void **)&seq_number);
     if (PRTE_ERR_NOT_FOUND == ret) {
         seq_number = (uint32_t *)malloc(sizeof(uint32_t));
         *seq_number = 0;
@@ -221,7 +219,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
         PRTE_RELEASE(cd);
         return;
     }
-    ret = prte_hash_table_set_value_ptr(&prte_grpcomm_base.sig_table, (void *)cd->sig->signature, cd->sig->sz * sizeof(prte_process_name_t), (void *)seq_number);
+    ret = prte_hash_table_set_value_ptr(&prte_grpcomm_base.sig_table, (void *)cd->sig->signature, cd->sig->sz * sizeof(pmix_proc_t), (void *)seq_number);
     if (PRTE_SUCCESS != ret) {
         PRTE_OUTPUT((prte_grpcomm_base_framework.framework_output,
                      "%s rpcomm:base:allgather cannot add new signature to hash table",
@@ -252,11 +250,12 @@ static void allgather_stub(int fd, short args, void *cbdata)
 }
 
 int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig,
-                               prte_buffer_t *buf, int mode,
+                               pmix_data_buffer_t *buf, int mode,
                                prte_grpcomm_cbfunc_t cbfunc,
                                void *cbdata)
 {
     prte_grpcomm_caddy_t *cd;
+    pmix_status_t rc;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:base:allgather",
@@ -266,9 +265,16 @@ int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig,
      * access framework-global data safely */
     cd = PRTE_NEW(prte_grpcomm_caddy_t);
     /* ensure the data doesn't go away */
-    PRTE_RETAIN(buf);
-    prte_dss.copy((void **)&cd->sig, (void *)sig, PRTE_SIGNATURE);
-    cd->buf = buf;
+    cd->sig = PRTE_NEW(prte_grpcomm_signature_t);
+    cd->sig->sz = sig->sz;
+    cd->sig->signature = (pmix_proc_t*)malloc(cd->sig->sz * sizeof(pmix_proc_t));
+    memcpy(cd->sig->signature, sig->signature, cd->sig->sz * sizeof(pmix_proc_t));
+    rc = PMIx_Data_copy((void**)&cd->buf, buf, PMIX_BUFFER);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PRTE_RELEASE(cd);
+        return rc;
+    }
     cd->mode = mode;
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
@@ -298,7 +304,8 @@ prte_grpcomm_coll_t* prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
             /* if only one is NULL, then we can't possibly match */
             break;
         }
-        if (PRTE_EQUAL == (rc = prte_dss.compare(sig, coll->sig, PRTE_SIGNATURE))) {
+        if (sig->sz == coll->sig->sz &&
+            0 == memcmp(sig->signature, coll->sig->signature, sig->sz * sizeof(pmix_proc_t))) {
             PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:base:returning existing collective",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -315,15 +322,10 @@ prte_grpcomm_coll_t* prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
         return NULL;
     }
     coll = PRTE_NEW(prte_grpcomm_coll_t);
-    prte_dss.copy((void **)&coll->sig, (void *)sig, PRTE_SIGNATURE);
-
-    if (1 < prte_output_get_verbosity(prte_grpcomm_base_framework.framework_output)) {
-        char *tmp=NULL;
-        (void)prte_dss.print(&tmp, NULL, coll->sig, PRTE_SIGNATURE);
-        prte_output(0, "%s grpcomm:base: creating new coll for%s",
-                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmp);
-        free(tmp);
-    }
+    coll->sig = PRTE_NEW(prte_grpcomm_signature_t);
+    coll->sig->sz = sig->sz;
+    coll->sig->signature = (pmix_proc_t*)malloc(coll->sig->sz * sizeof(pmix_proc_t));
+    memcpy(coll->sig->signature, sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
 
     prte_list_append(&prte_grpcomm_base.ongoing, &coll->super);
 
@@ -340,7 +342,7 @@ prte_grpcomm_coll_t* prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
     prte_routed.get_routing_list(&children);
     while (NULL != (nm = (prte_namelist_t*)prte_list_remove_first(&children))) {
         for (n=0; n < coll->ndmns; n++) {
-            if (nm->name.vpid == coll->dmns[n]) {
+            if (nm->name.rank == coll->dmns[n]) {
                 coll->nexpected++;
                 break;
             }
@@ -353,7 +355,7 @@ prte_grpcomm_coll_t* prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
      * be in the rollup tree even though I'm not participating
      * in the collective itself */
     for (n=0; n < coll->ndmns; n++) {
-        if (coll->dmns[n] == PRTE_PROC_MY_NAME->vpid) {
+        if (coll->dmns[n] == PRTE_PROC_MY_NAME->rank) {
             coll->nexpected++;
             break;
         }
@@ -363,7 +365,7 @@ prte_grpcomm_coll_t* prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
 }
 
 static int create_dmns(prte_grpcomm_signature_t *sig,
-                       prte_vpid_t **dmns, size_t *ndmns)
+                       pmix_rank_t **dmns, size_t *ndmns)
 {
     size_t n;
     prte_job_t *jdata;
@@ -372,10 +374,10 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
     int i;
     prte_list_t ds;
     prte_namelist_t *nm;
-    prte_vpid_t vpid;
+    pmix_rank_t vpid;
     bool found;
     size_t nds=0;
-    prte_vpid_t *dns=NULL;
+    pmix_rank_t *dns=NULL;
     int rc = PRTE_SUCCESS;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
@@ -385,7 +387,8 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
 
     /* if NULL == procs, or the target jobid is our own,
      * then all daemons are participating */
-    if (NULL == sig->signature || PRTE_PROC_MY_NAME->jobid == sig->signature[0].jobid) {
+    if (NULL == sig->signature ||
+        PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, sig->signature[0].nspace)) {
         *ndmns = prte_process_info.num_daemons;
         *dmns = NULL;
         return PRTE_SUCCESS;
@@ -393,7 +396,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
 
     PRTE_CONSTRUCT(&ds, prte_list_t);
     for (n=0; n < sig->sz; n++) {
-        if (NULL == (jdata = prte_get_job_data_object(sig->signature[n].jobid))) {
+        if (NULL == (jdata = prte_get_job_data_object(sig->signature[n].nspace))) {
             rc = PRTE_ERR_NOT_FOUND;
             break;
         }
@@ -408,11 +411,11 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
             rc = PRTE_ERR_NOT_FOUND;
             break;
         }
-        if (PRTE_VPID_WILDCARD == sig->signature[n].vpid) {
+        if (PMIX_RANK_WILDCARD == sig->signature[n].rank) {
             PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:base:create_dmns called for all procs in job %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_JOBID_PRINT(sig->signature[0].jobid)));
+                                 PRTE_JOBID_PRINT(sig->signature[0].nspace)));
             /* all daemons hosting this jobid are participating */
             for (i=0; i < jdata->map->nodes->size; i++) {
                 if (NULL == (node = prte_pointer_array_get_item(jdata->map->nodes, i))) {
@@ -424,7 +427,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
                 }
                 found = false;
                 PRTE_LIST_FOREACH(nm, &ds, prte_namelist_t) {
-                    if (nm->name.vpid == node->daemon->name.vpid) {
+                    if (nm->name.rank == node->daemon->name.rank) {
                         found = true;
                         break;
                     }
@@ -435,8 +438,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                          PRTE_NAME_PRINT(&node->daemon->name)));
                     nm = PRTE_NEW(prte_namelist_t);
-                    nm->name.jobid = PRTE_PROC_MY_NAME->jobid;
-                    nm->name.vpid = node->daemon->name.vpid;
+                    PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace, node->daemon->name.rank);
                     prte_list_append(&ds, &nm->super);
                 }
             }
@@ -446,7 +448,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
                                 "%s sign: GETTING PROC OBJECT FOR %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 PRTE_NAME_PRINT(&sig->signature[n])));
-            if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, sig->signature[n].vpid))) {
+            if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, sig->signature[n].rank))) {
                 rc = PRTE_ERR_NOT_FOUND;
                 goto done;
             }
@@ -454,18 +456,17 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
                 rc = PRTE_ERR_NOT_FOUND;
                 goto done;
             }
-            vpid = proc->node->daemon->name.vpid;
+            vpid = proc->node->daemon->name.rank;
             found = false;
             PRTE_LIST_FOREACH(nm, &ds, prte_namelist_t) {
-                if (nm->name.vpid == vpid) {
+                if (nm->name.rank == vpid) {
                     found = true;
                     break;
                 }
             }
             if (!found) {
                 nm = PRTE_NEW(prte_namelist_t);
-                nm->name.jobid = PRTE_PROC_MY_NAME->jobid;
-                nm->name.vpid = vpid;
+                PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace, vpid);
                 prte_list_append(&ds, &nm->super);
             }
         }
@@ -473,14 +474,14 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
 
   done:
     if (0 < prte_list_get_size(&ds)) {
-        dns = (prte_vpid_t*)malloc(prte_list_get_size(&ds) * sizeof(prte_vpid_t));
+        dns = (pmix_rank_t*)malloc(prte_list_get_size(&ds) * sizeof(pmix_rank_t));
         nds = 0;
         while (NULL != (nm = (prte_namelist_t*)prte_list_remove_first(&ds))) {
             PRTE_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:base:create_dmns adding daemon %s to array",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&nm->name)));
-            dns[nds++] = nm->name.vpid;
+            dns[nds++] = nm->name.rank;
             PRTE_RELEASE(nm);
         }
     }
@@ -491,29 +492,37 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
 }
 
 static int pack_xcast(prte_grpcomm_signature_t *sig,
-                      prte_buffer_t *buffer,
-                      prte_buffer_t *message,
+                      pmix_data_buffer_t *buffer,
+                      pmix_data_buffer_t *message,
                       prte_rml_tag_t tag)
 {
     int rc;
-    prte_buffer_t data;
-    int8_t flag;
+    pmix_data_buffer_t data;
+    bool compressed;
     uint8_t *cmpdata;
     size_t cmplen;
 
     /* setup an intermediate buffer */
-    PRTE_CONSTRUCT(&data, prte_buffer_t);
+    PMIX_DATA_BUFFER_CONSTRUCT(&data);
 
     /* pass along the signature */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(&data, &sig, 1, PRTE_SIGNATURE))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_DESTRUCT(&data);
+    rc = PMIx_Data_pack(NULL, &data, &sig->sz, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&data);
+        return rc;
+    }
+    rc = PMIx_Data_pack(NULL, &data, sig->signature, sig->sz, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&data);
         return rc;
     }
     /* pass the final tag */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(&data, &tag, 1, PRTE_RML_TAG))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_DESTRUCT(&data);
+    rc = PMIx_Data_pack(NULL, &data, &tag, 1, PRTE_RML_TAG);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&data);
         return rc;
     }
 
@@ -521,9 +530,10 @@ static int pack_xcast(prte_grpcomm_signature_t *sig,
      * caller is still responsible for releasing any memory in the buffer they
      * gave to us
      */
-    if (PRTE_SUCCESS != (rc = prte_dss.copy_payload(&data, message))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_DESTRUCT(&data);
+    rc = PMIx_Data_copy_payload(&data, message);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&data);
         return rc;
     }
 
@@ -531,48 +541,53 @@ static int pack_xcast(prte_grpcomm_signature_t *sig,
     if (prte_compress.compress_block((uint8_t*)data.base_ptr, data.bytes_used,
                                      &cmpdata, &cmplen)) {
         /* the data was compressed - mark that we compressed it */
-        flag = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &flag, 1, PRTE_INT8))) {
-            PRTE_ERROR_LOG(rc);
+        compressed = true;
+        rc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&data);
             free(cmpdata);
-            PRTE_DESTRUCT(&data);
             return rc;
         }
         /* pack the compressed length */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &cmplen, 1, PRTE_SIZE))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_pack(NULL, buffer, &cmplen, 1, PMIX_SIZE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&data);
             free(cmpdata);
-            PRTE_DESTRUCT(&data);
             return rc;
         }
         /* pack the uncompressed length */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &data.bytes_used, 1, PRTE_SIZE))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_pack(NULL, buffer, &data.bytes_used, 1, PMIX_SIZE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&data);
             free(cmpdata);
-            PRTE_DESTRUCT(&data);
             return rc;
         }
         /* pack the compressed info */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, cmpdata, cmplen, PRTE_UINT8))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_pack(NULL, buffer, cmpdata, cmplen, PMIX_UINT8);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&data);
             free(cmpdata);
-            PRTE_DESTRUCT(&data);
             return rc;
         }
-        PRTE_DESTRUCT(&data);
+        PMIX_DATA_BUFFER_DESTRUCT(&data);
         free(cmpdata);
     } else {
         /* mark that it was not compressed */
-        flag = 0;
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &flag, 1, PRTE_INT8))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_DESTRUCT(&data);
+        compressed = false;
+        rc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&data);
             free(cmpdata);
             return rc;
         }
         /* transfer the payload across */
-        prte_dss.copy_payload(buffer, &data);
-        PRTE_DESTRUCT(&data);
+        rc = PMIx_Data_copy_payload(buffer, &data);
+        PMIX_DATA_BUFFER_DESTRUCT(&data);
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,

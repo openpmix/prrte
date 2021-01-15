@@ -4,6 +4,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +36,6 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
     prte_mca_base_component_list_item_t *cli;
     prte_oob_base_peer_t *pr;
     int rc;
-    uint64_t ui64;
     bool msg_sent;
     prte_oob_base_component_t *component;
     bool reachable;
@@ -61,11 +61,9 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
         return;
     }
 
-    /* check if we have this peer in our hash table */
-    memcpy(&ui64, (char*)&msg->dst, sizeof(uint64_t));
-    if (PRTE_SUCCESS != prte_hash_table_get_value_uint64(&prte_oob_base.peers,
-                                                         ui64, (void**)&pr) ||
-        NULL == pr) {
+    /* check if we have this peer in our list */
+    pr = prte_oob_base_get_peer(&msg->dst);
+    if (NULL == pr) {
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s oob:base:send unknown peer %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -76,13 +74,12 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
          * server after it, so indicate it is optional
          */
         PRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_PROC_URI, &msg->dst,
-                                      (char**)&uri, PRTE_STRING);
+                                      (char**)&uri, PMIX_STRING);
         if (PRTE_SUCCESS == rc ) {
             if (NULL != uri) {
                 process_uri(uri);
-                if (PRTE_SUCCESS != prte_hash_table_get_value_uint64(&prte_oob_base.peers,
-                                                                     ui64, (void**)&pr) ||
-                    NULL == pr) {
+                pr = prte_oob_base_get_peer(&msg->dst);
+                if (NULL == pr) {
                     /* that is just plain wrong */
                     prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                         "%s oob:base:send addressee unknown %s",
@@ -115,12 +112,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                          */
                         if (NULL == pr) {
                             pr = PRTE_NEW(prte_oob_base_peer_t);
-                            if (PRTE_SUCCESS != (rc = prte_hash_table_set_value_uint64(&prte_oob_base.peers, ui64, (void*)pr))) {
-                                PRTE_ERROR_LOG(rc);
-                                msg->status = PRTE_ERR_ADDRESSEE_UNKNOWN;
-                                PRTE_RML_SEND_COMPLETE(msg);
-                                return;
-                            }
+                            PMIX_XFER_PROCID(&pr->name, &msg->dst);
                         }
                         /* mark that this component can reach the peer */
                         prte_bitmap_set_bit(&pr->addressable, component->idx);
@@ -295,13 +287,11 @@ void prte_oob_base_get_addr(char **uri)
 
 static void process_uri(char *uri)
 {
-    prte_process_name_t peer;
+    pmix_proc_t peer;
     char *cptr;
     prte_mca_base_component_list_item_t *cli;
     prte_oob_base_component_t *component;
     char **uris=NULL;
-    int rc;
-    uint64_t ui64;
     prte_oob_base_peer_t *pr;
 
     prte_output_verbose(5, prte_oob_base_framework.framework_output,
@@ -327,8 +317,7 @@ static void process_uri(char *uri)
     /* if the peer is us, no need to go further as we already
      * know our own contact info
      */
-    if (peer.jobid == PRTE_PROC_MY_NAME->jobid &&
-        peer.vpid == PRTE_PROC_MY_NAME->vpid) {
+    if (PMIX_CHECK_PROCID(&peer, PRTE_PROC_MY_NAME)) {
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s:set_addr peer %s is me",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -340,16 +329,11 @@ static void process_uri(char *uri)
     uris = prte_argv_split(cptr, ';');
 
     /* get the peer object for this process */
-    memcpy(&ui64, (char*)&peer, sizeof(uint64_t));
-    if (PRTE_SUCCESS != prte_hash_table_get_value_uint64(&prte_oob_base.peers,
-                                                         ui64, (void**)&pr) ||
-        NULL == pr) {
+    pr = prte_oob_base_get_peer(&peer);
+    if (NULL == pr) {
         pr = PRTE_NEW(prte_oob_base_peer_t);
-        if (PRTE_SUCCESS != (rc = prte_hash_table_set_value_uint64(&prte_oob_base.peers, ui64, (void*)pr))) {
-            PRTE_ERROR_LOG(rc);
-            prte_argv_free(uris);
-            return;
-        }
+        PMIX_XFER_PROCID(&pr->name, &peer);
+        prte_list_append(&prte_oob_base.peers, &pr->super);
     }
 
     /* loop across all available components and let them extract
@@ -357,7 +341,6 @@ static void process_uri(char *uri)
      * are all operating on our event base, so we can just
      * directly call their functions
      */
-    rc = PRTE_ERR_UNREACH;
     PRTE_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t) {
         component = (prte_oob_base_component_t*)cli->cli_component;
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
@@ -383,4 +366,16 @@ static void process_uri(char *uri)
         }
     }
     prte_argv_free(uris);
+}
+
+prte_oob_base_peer_t* prte_oob_base_get_peer(const pmix_proc_t *pr)
+{
+    prte_oob_base_peer_t *peer;
+
+    PRTE_LIST_FOREACH(peer, &prte_oob_base.peers, prte_oob_base_peer_t) {
+        if (PMIX_CHECK_PROCID(pr, &peer->name)) {
+            return peer;
+        }
+    }
+    return NULL;
 }

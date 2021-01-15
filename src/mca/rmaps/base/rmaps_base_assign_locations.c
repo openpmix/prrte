@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +47,7 @@ int prte_rmaps_base_assign_locations(prte_job_t *jdata)
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: assigning locations for job %s",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* cycle thru the available mappers until one agrees to assign
      * locations for the job

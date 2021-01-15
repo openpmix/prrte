@@ -17,6 +17,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -108,7 +109,7 @@ typedef struct {
     prte_list_item_t super;
     char *cmd;
     prte_event_t timeout_ev;
-    prte_jobid_t jobid;
+    pmix_nspace_t nspace;
     prte_pointer_array_t apps;
     int napps;
 } local_jobtracker_t;
@@ -769,7 +770,7 @@ static void timeout(int fd, short args, void *cbdata)
                         "%s Timed out on dynamic allocation",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     /* indicate that we failed to receive an allocation */
-    jdata = prte_get_job_data_object(jtrk->jobid);
+    jdata = prte_get_job_data_object(jtrk->nspace);
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
 }
 
@@ -786,7 +787,7 @@ static void recv_data(int fd, short args, void *cbdata)
     local_jobtracker_t *ptr, *jtrk;
     local_apptracker_t *aptrk;
     prte_app_context_t *app;
-    prte_jobid_t jobid;
+    pmix_nspace_t jobid;
     prte_job_t *jdata;
     char **dash_host = NULL;
 
@@ -820,21 +821,17 @@ static void recv_data(int fd, short args, void *cbdata)
 
     /* the first section contains the PRTE jobid for this allocation */
     tpn = strchr(alloc[0], '=');
-    PRTE_PMIX_CONVERT_NSPACE(rc, &jobid, tpn+1);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        return;
-    }
+    PMIX_LOAD_NSPACE(jobid, tpn+1);
     /* get the corresponding job object */
     jdata = prte_get_job_data_object(jobid);
-    PMIX_LOAD_NSPACE(jdata->nspace, tpn+1);
+    PMIX_LOAD_NSPACE(jdata->nspace, jobid);
     jtrk = NULL;
     /* find the associated tracking object */
     for (item = prte_list_get_first(&jobs);
          item != prte_list_get_end(&jobs);
          item = prte_list_get_next(item)) {
         ptr = (local_jobtracker_t*)item;
-        if (ptr->jobid == jobid) {
+        if (PMIX_CHECK_NSPACE(ptr->nspace, jobid)) {
             jtrk = ptr;
             break;
         }
@@ -945,7 +942,7 @@ static void recv_data(int fd, short args, void *cbdata)
                 free(tpn);
                 return;
             }
-            prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, (void*)tpn, PRTE_STRING);
+            prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, (void*)tpn, PMIX_STRING);
         }
         prte_argv_free(dash_host);
         free(tpn);
@@ -1006,7 +1003,7 @@ static int dyn_allocate(prte_job_t *jdata)
 
     /* track this request */
     jtrk = PRTE_NEW(local_jobtracker_t);
-    jtrk->jobid = jdata->jobid;
+    PMIX_LOAD_NSPACE(jtrk->nspace, jdata->nspace);
     prte_list_append(&jobs, &jtrk->super);
 
     /* construct the command - note that the jdata structure contains
@@ -1058,7 +1055,7 @@ static int dyn_allocate(prte_job_t *jdata)
         prte_argv_append_nosize(&cmd, tmp);
         free(tmp);
         /* if we were given a minimum number of nodes, pass it along */
-        if (prte_get_attribute(&app->attributes, PRTE_APP_MIN_NODES, (void**)&i64ptr, PRTE_INT64)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_MIN_NODES, (void**)&i64ptr, PMIX_INT64)) {
             prte_asprintf(&tmp, "N=%ld", (long int)i64);
             prte_argv_append_nosize(&cmd, tmp);
             free(tmp);
@@ -1074,7 +1071,7 @@ static int dyn_allocate(prte_job_t *jdata)
             free(tmp);
         }
         /* add the mandatory/optional flag */
-        if (prte_get_attribute(&app->attributes, PRTE_APP_MANDATORY, NULL, PRTE_BOOL)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_MANDATORY, NULL, PMIX_BOOL)) {
             prte_argv_append_nosize(&cmd, "flag=mandatory");
         } else {
             prte_argv_append_nosize(&cmd, "flag=optional");
@@ -1162,7 +1159,7 @@ static char* get_node_list(prte_app_context_t *app)
     char *nodes;
     char **dash_host, *dh;
 
-    if (!prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&dh, PRTE_STRING)) {
+    if (!prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&dh, PMIX_STRING)) {
         return NULL;
     }
     dash_host = prte_argv_split(dh, ',');

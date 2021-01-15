@@ -55,7 +55,6 @@
 #include "src/util/path.h"
 #include "src/util/printf.h"
 #include "src/util/sys_limits.h"
-#include "src/dss/dss.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 
@@ -106,10 +105,8 @@ static void setup_cbfunc(pmix_status_t status,
 {
     prte_odls_jcaddy_t *cd = (prte_odls_jcaddy_t*)provided_cbdata;
     prte_job_t *jdata = cd->jdata;
-    prte_buffer_t cache, *bptr;
     pmix_data_buffer_t pbuf;
     pmix_byte_object_t pbo;
-    prte_byte_object_t bo, *boptr;
     int rc = PRTE_SUCCESS;
 
     /* release any info */
@@ -117,37 +114,34 @@ static void setup_cbfunc(pmix_status_t status,
         PMIX_INFO_FREE(cd->info, cd->ninfo);
     }
 
-    PRTE_CONSTRUCT(&cache, prte_buffer_t);
+    PMIX_BYTE_OBJECT_CONSTRUCT(&pbo);
     if (NULL != info) {
         PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
         /* pack the provided info */
         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &pbuf, &ninfo, 1, PMIX_SIZE))) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-            PRTE_DESTRUCT(&cache);
             goto done;
         }
         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &pbuf, info, ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-            PRTE_DESTRUCT(&cache);
             goto done;
         }
         /* unload it */
-        PMIX_DATA_BUFFER_UNLOAD(&pbuf, pbo.bytes, pbo.size);
-        /* pass it along */
-        bo.bytes = (uint8_t*)pbo.bytes;
-        bo.size = pbo.size;
-        boptr = &bo;
-        prte_dss.pack(&cache, &boptr, 1, PRTE_BYTE_OBJECT);
-        free(pbo.bytes);
+        rc = PMIx_Data_unload(&pbuf, &pbo);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
     }
     /* add the results */
-    bptr = &cache;
-    prte_dss.pack(&jdata->launch_msg, &bptr, 1, PRTE_BUFFER);
-    PRTE_DESTRUCT(&cache);
+    rc = PMIx_Data_pack(NULL, &jdata->launch_msg, &pbo, 1, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
 
   done:
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
     /* release our caller */
     if (NULL != cbfunc) {
         cbfunc(rc, cbdata);
@@ -164,16 +158,14 @@ static void setup_cbfunc(pmix_status_t status,
 /* IT IS CRITICAL THAT ANY CHANGE IN THE ORDER OF THE INFO PACKED IN
  * THIS FUNCTION BE REFLECTED IN THE CONSTRUCT_CHILD_LIST PARSER BELOW
 */
-int prte_odls_base_default_get_add_procs_data(prte_buffer_t *buffer,
-                                              prte_jobid_t job)
+int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
+                                              pmix_nspace_t job)
 {
     int rc, n;
     prte_job_t *jdata=NULL, *jptr;
     prte_job_map_t *map=NULL;
-    prte_buffer_t *wireup, jobdata, priorjob;
+    pmix_data_buffer_t jobdata, priorjob;
     int8_t flag;
-    void *nptr;
-    uint32_t key;
     prte_proc_t *proc;
     pmix_info_t *info;
     pmix_status_t ret;
@@ -202,21 +194,28 @@ int prte_odls_base_default_get_add_procs_data(prte_buffer_t *buffer,
      * copy of all active jobs so the grpcomm collectives can
      * properly work should a proc from one of the other jobs
      * interact with this one */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, NULL, PMIX_BOOL)) {
         flag = 1;
-        prte_dss.pack(buffer, &flag, 1, PRTE_INT8);
-        PRTE_CONSTRUCT(&jobdata, prte_buffer_t);
-        rc = prte_hash_table_get_first_key_uint32(prte_job_data, &key, (void **)&jptr, &nptr);
-        while (PRTE_SUCCESS == rc) {
+        rc = PMIx_Data_pack(NULL, buffer, &flag, 1, PMIX_INT8);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return rc;
+        }
+        PMIX_DATA_BUFFER_CONSTRUCT(&jobdata);
+        for (i=0; i < prte_job_data->size; i++) {
+            jptr = prte_pointer_array_get_item(prte_job_data, i);
+            if (NULL == jptr) {
+                continue;
+            }
             /* skip the one we are launching now */
-            if (NULL != jptr && jptr != jdata &&
-                PRTE_PROC_MY_NAME->jobid != jptr->jobid) {
-                PRTE_CONSTRUCT(&priorjob, prte_buffer_t);
+            if (jptr != jdata && PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jptr->nspace)) {
+                PMIX_DATA_BUFFER_CONSTRUCT(&priorjob);
                 /* pack the job struct */
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(&priorjob, &jptr, 1, PRTE_JOB))) {
-                    PRTE_ERROR_LOG(rc);
-                    PRTE_DESTRUCT(&jobdata);
-                    PRTE_DESTRUCT(&priorjob);
+                rc = prte_job_pack(&priorjob, jptr);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
+                    PMIX_DATA_BUFFER_DESTRUCT(&priorjob);
                     return rc;
                 }
                 /* pack the location of each proc */
@@ -224,45 +223,50 @@ int prte_odls_base_default_get_add_procs_data(prte_buffer_t *buffer,
                     if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(jptr->procs, n))) {
                         continue;
                     }
-                    if (PRTE_SUCCESS != (rc = prte_dss.pack(&priorjob, &proc->parent, 1, PRTE_VPID))) {
-                        PRTE_ERROR_LOG(rc);
-                        PRTE_DESTRUCT(&jobdata);
-                        PRTE_DESTRUCT(&priorjob);
+                    rc = PMIx_Data_pack(NULL, &priorjob, &proc->parent, 1, PMIX_PROC_RANK);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
+                        PMIX_DATA_BUFFER_DESTRUCT(&priorjob);
                         return rc;
                     }
                 }
                 /* pack the jobdata buffer */
-                wireup = &priorjob;
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(&jobdata, &wireup, 1, PRTE_BUFFER))) {
-                    PRTE_ERROR_LOG(rc);
-                    PRTE_DESTRUCT(&jobdata);
-                    PRTE_DESTRUCT(&priorjob);
+                rc = PMIx_Data_pack(NULL, &jobdata, &priorjob, 1, PMIX_DATA_BUFFER);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
+                    PMIX_DATA_BUFFER_DESTRUCT(&priorjob);
                     return rc;
                 }
-                PRTE_DESTRUCT(&priorjob);
+                PMIX_DATA_BUFFER_DESTRUCT(&priorjob);
             }
-            rc = prte_hash_table_get_next_key_uint32(prte_job_data, &key, (void **)&jptr, nptr, &nptr);
         }
         /* pack the jobdata buffer */
-        wireup = &jobdata;
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &wireup, 1, PRTE_BUFFER))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_DESTRUCT(&jobdata);
+        rc = PMIx_Data_pack(NULL, buffer, &jobdata, 1, PMIX_DATA_BUFFER);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
             return rc;
         }
-        PRTE_DESTRUCT(&jobdata);
+        PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
     } else {
         flag = 0;
-        prte_dss.pack(buffer, &flag, 1, PRTE_INT8);
+        rc = PMIx_Data_pack(NULL, buffer, &flag, 1, PMIX_INT8);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return rc;
+        }
     }
 
     /* pack the job struct */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &jdata, 1, PRTE_JOB))) {
-        PRTE_ERROR_LOG(rc);
+    rc = prte_job_pack(buffer, jdata);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return rc;
     }
 
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PRTE_BOOL)) {
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
         /* compute and pack the ppn */
         if (PRTE_SUCCESS != (rc = prte_util_generate_ppn(jdata, buffer))) {
             PRTE_ERROR_LOG(rc);
@@ -289,8 +293,8 @@ int prte_odls_base_default_get_add_procs_data(prte_buffer_t *buffer,
             /* assemble all the ranks for this job that are on this node */
             for (k=0; k < node->procs->size; k++) {
                 if (NULL != (pptr = (prte_proc_t*)prte_pointer_array_get_item(node->procs, k))) {
-                    if (jdata->jobid == pptr->name.jobid) {
-                        prte_argv_append_nosize(&micro, PRTE_VPID_PRINT(pptr->name.vpid));
+                    if (PMIX_CHECK_NSPACE(jdata->nspace, pptr->name.nspace)) {
+                        prte_argv_append_nosize(&micro, PRTE_VPID_PRINT(pptr->name.rank));
                     }
                 }
             }
@@ -392,16 +396,16 @@ static void ls_cbunc(pmix_status_t status, void *cbdata)
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
-int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
-                                                prte_jobid_t *job)
+int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer,
+                                                pmix_nspace_t *job)
 {
     int rc;
     int32_t cnt;
     prte_job_t *jdata=NULL, *daemons;
     prte_node_t *node;
-    prte_vpid_t dmnvpid, v;
+    pmix_rank_t dmnvpid, v;
     int32_t n;
-    prte_buffer_t *bptr, *jptr;
+    pmix_data_buffer_t dbuf, jdbuf;
     prte_proc_t *pptr, *dmn;
     prte_app_context_t *app;
     int8_t flag;
@@ -410,56 +414,57 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
     size_t ninfo=0;
     pmix_status_t ret;
     pmix_data_buffer_t pbuf;
-    prte_byte_object_t *bo;
+    pmix_byte_object_t bo;
     size_t m;
-    prte_envar_t envt;
+    pmix_envar_t envt;
 
     PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                          "%s odls:constructing child list",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* set a default response */
-    *job = PRTE_JOBID_INVALID;
+    PMIX_LOAD_NSPACE(*job, NULL);
+
     /* get the daemon job object */
-    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
 
     /* unpack the flag to see if new daemons were launched */
     cnt=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &flag, &cnt, PRTE_INT8))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &flag, &cnt, PMIX_INT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto REPORT_ERROR;
     }
 
     if (0 != flag) {
         /* unpack the buffer containing the info */
         cnt=1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &bptr, &cnt, PRTE_BUFFER))) {
-            *job = PRTE_JOBID_INVALID;
-            PRTE_ERROR_LOG(rc);
-            PRTE_RELEASE(bptr);
+        rc = PMIx_Data_unpack(NULL, buffer, &dbuf, &cnt, PMIX_DATA_BUFFER);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto REPORT_ERROR;
         }
         cnt=1;
-        while (PRTE_SUCCESS == (rc = prte_dss.unpack(bptr, &jptr, &cnt, PRTE_BUFFER))) {
+        while (PMIX_SUCCESS == (rc = PMIx_Data_unpack(NULL, &dbuf, &jdbuf, &cnt, PMIX_DATA_BUFFER))) {
             /* unpack each job and add it to the local prte_job_data array */
             cnt=1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(jptr, &jdata, &cnt, PRTE_JOB))) {
-                *job = PRTE_JOBID_INVALID;
+            rc = prte_job_unpack(&jdbuf, &jdata);
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
-                PRTE_RELEASE(bptr);
-                PRTE_RELEASE(jptr);
+                PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+                PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
                 goto REPORT_ERROR;
             }
             /* check to see if we already have this one */
-            if (NULL == prte_get_job_data_object(jdata->jobid)) {
+            if (NULL == prte_get_job_data_object(jdata->nspace)) {
                 /* nope - add it */
-                prte_set_job_data_object(jdata->jobid, jdata);
+                prte_set_job_data_object(jdata);
             } else {
                 /* yep - so we can drop this copy */
-                jdata->jobid = PRTE_JOBID_INVALID;
+                jdata->index = -1;
                 PRTE_RELEASE(jdata);
-                PRTE_RELEASE(jptr);
+                PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
                 cnt=1;
                 continue;
             }
@@ -467,23 +472,23 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
             for (v=0; v < jdata->num_procs; v++) {
                 if (NULL == (pptr = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, v))) {
                     pptr = PRTE_NEW(prte_proc_t);
-                    pptr->name.jobid = jdata->jobid;
-                    pptr->name.vpid = v;
+                    PMIX_LOAD_PROCID(&pptr->name, jdata->nspace, v);
                     prte_pointer_array_set_item(jdata->procs, v, pptr);
                 }
                 cnt=1;
-                if (PRTE_SUCCESS != (rc = prte_dss.unpack(jptr, &dmnvpid, &cnt, PRTE_VPID))) {
-                    PRTE_ERROR_LOG(rc);
-                    PRTE_RELEASE(jptr);
-                    PRTE_RELEASE(bptr);
+                rc = PMIx_Data_unpack(NULL, &jdbuf, &dmnvpid, &n, PMIX_UINT32);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+                    PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
                     goto REPORT_ERROR;
                 }
                 /* lookup the daemon */
                 if (NULL == (dmn = (prte_proc_t*)prte_pointer_array_get_item(daemons->procs, dmnvpid))) {
                     PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                     rc = PRTE_ERR_NOT_FOUND;
-                    PRTE_RELEASE(jptr);
-                    PRTE_RELEASE(bptr);
+                    PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+                    PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
                     goto REPORT_ERROR;
                 }
                 /* connect the two */
@@ -491,25 +496,24 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
                 pptr->node = dmn->node;
             }
             /* release the buffer */
-            PRTE_RELEASE(jptr);
+            PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
             cnt = 1;
         }
-        PRTE_RELEASE(bptr);
+        PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
     }
 
     /* unpack the job we are to launch */
-    cnt=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &jdata, &cnt, PRTE_JOB))) {
-        *job = PRTE_JOBID_INVALID;
-        PRTE_ERROR_LOG(rc);
+    rc = prte_job_unpack(buffer, &jdata);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto REPORT_ERROR;
     }
-    if (PRTE_JOBID_INVALID == jdata->jobid) {
+    if (PMIX_NSPACE_INVALID(jdata->nspace)) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         rc = PRTE_ERR_BAD_PARAM;
         goto REPORT_ERROR;
     }
-    *job = jdata->jobid;
+    PMIX_LOAD_NSPACE(*job, jdata->nspace);
 
     PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                          "%s odls:construct_child_list unpacking data to launch job %s",
@@ -525,7 +529,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
          * the prte_job_data array. So set the jobid to INVALID to
          * protect the array, and then release the object to free
          * the storage */
-        jdata->jobid = PRTE_JOBID_INVALID;
+        jdata->index = -1;
         PRTE_RELEASE(jdata);
         /* get the correct job object - it will be completely filled out */
         if (NULL == (jdata = prte_get_job_data_object(*job))) {
@@ -534,7 +538,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
             goto REPORT_ERROR;
         }
     } else {
-        prte_set_job_data_object(jdata->jobid, jdata);
+        prte_set_job_data_object(jdata);
 
         /* ensure the map object is present */
         if (NULL == jdata->map) {
@@ -545,7 +549,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
     /* if the job is fully described, then mpirun will have computed
      * and sent us the complete array of procs in the prte_job_t, so we
      * don't need to do anything more here */
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PRTE_BOOL)) {
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
         /* load the ppn info into the job and node arrays - the
          * function will ignore the data on the HNP as it already
          * has the info */
@@ -576,28 +580,22 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
         }
     }
 
-    /* unpack the buffer containing any application setup info - there
+    /* unpack the byte object containing any application setup info - there
      * might not be any, so it isn't an error if we don't find things */
     cnt=1;
-    rc = prte_dss.unpack(buffer, &bptr, &cnt, PRTE_BUFFER);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        goto REPORT_ERROR;
-    }
-
-    cnt=1;
-    rc = prte_dss.unpack(bptr, &bo, &cnt, PRTE_BYTE_OBJECT);
-    PRTE_RELEASE(bptr);
-    if (PRTE_SUCCESS == rc) {
+    rc = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
+    if (PRTE_SUCCESS == rc && 0 < bo.size) {
         /* there was setup data - process it */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-        PMIX_DATA_BUFFER_LOAD(&pbuf, bo->bytes, bo->size);
-        bo->bytes = NULL;
-        bo->size = 0;
-        free(bo);
+        rc = PMIx_Data_load(&pbuf, &bo);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto REPORT_ERROR;
+        }
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
         /* unpack the number of info structs */
         cnt = 1;
-        ret = PMIx_Data_unpack(PRTE_PROC_MY_PROCID, &pbuf, &ninfo, &cnt, PMIX_SIZE);
+        ret = PMIx_Data_unpack(NULL, &pbuf, &ninfo, &cnt, PMIX_SIZE);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
@@ -606,7 +604,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
         }
         PMIX_INFO_CREATE(info, ninfo);
         cnt = ninfo;
-        ret = PMIx_Data_unpack(PRTE_PROC_MY_PROCID, &pbuf, info, &cnt, PMIX_INFO);
+        ret = PMIx_Data_unpack(NULL, &pbuf, info, &cnt, PMIX_INFO);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
@@ -622,28 +620,28 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
                 envt.value = strdup(info[m].value.data.envar.value);
                 envt.separator = info[m].value.data.envar.separator;
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR,
-                                       PRTE_ATTR_GLOBAL, &envt, PRTE_ENVAR);
+                                       PRTE_ATTR_GLOBAL, &envt, PMIX_ENVAR);
             } else if (0 == strcmp(info[m].key, PMIX_ADD_ENVAR)) {
                 envt.envar = info[m].value.data.envar.envar;
                 envt.value = info[m].value.data.envar.value;
                 envt.separator = info[m].value.data.envar.separator;
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_ADD_ENVAR,
-                                       PRTE_ATTR_GLOBAL, &envt, PRTE_ENVAR);
+                                       PRTE_ATTR_GLOBAL, &envt, PMIX_ENVAR);
             } else if (0 == strcmp(info[m].key, PMIX_UNSET_ENVAR)) {
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR,
-                                       PRTE_ATTR_GLOBAL, info[m].value.data.string, PRTE_STRING);
+                                       PRTE_ATTR_GLOBAL, info[m].value.data.string, PMIX_STRING);
             } else if (0 == strcmp(info[m].key, PMIX_PREPEND_ENVAR)) {
                 envt.envar = info[m].value.data.envar.envar;
                 envt.value = info[m].value.data.envar.value;
                 envt.separator = info[m].value.data.envar.separator;
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR,
-                                       PRTE_ATTR_GLOBAL, &envt, PRTE_ENVAR);
+                                       PRTE_ATTR_GLOBAL, &envt, PMIX_ENVAR);
             } else if (0 == strcmp(info[m].key, PMIX_APPEND_ENVAR)) {
                 envt.envar = info[m].value.data.envar.envar;
                 envt.value = info[m].value.data.envar.value;
                 envt.separator = info[m].value.data.envar.separator;
                 prte_prepend_attribute(&jdata->attributes, PRTE_JOB_APPEND_ENVAR,
-                                       PRTE_ATTR_GLOBAL, &envt, PRTE_ENVAR);
+                                       PRTE_ATTR_GLOBAL, &envt, PMIX_ENVAR);
             }
         }
     }
@@ -660,7 +658,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
             continue;
         }
         if (!PRTE_PROC_IS_MASTER &&
-            prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PRTE_BOOL)) {
+            prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
             /* the parser will have already made the connection, but the fully described
              * case won't have done it, so connect the proc to its node here */
             prte_output_verbose(5, prte_odls_base_framework.framework_output,
@@ -668,7 +666,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 PRTE_NAME_PRINT(&pptr->name),
                                 PRTE_VPID_PRINT(pptr->parent));
-            if (PRTE_VPID_INVALID == pptr->parent) {
+            if (PMIX_RANK_INVALID == pptr->parent) {
                 PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                 rc = PRTE_ERR_BAD_PARAM;
                 goto REPORT_ERROR;
@@ -699,7 +697,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
             }
         }
         /* see if it belongs to us */
-        if (pptr->parent == PRTE_PROC_MY_NAME->vpid) {
+        if (pptr->parent == PRTE_PROC_MY_NAME->rank) {
             /* is this child on our current list of children */
             if (!PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_LOCAL)) {
                 /* not on the local list */
@@ -718,7 +716,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
 
             /* if the job is in restart mode, the child must not barrier when launched */
             if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
-                prte_set_attribute(&pptr->attributes, PRTE_PROC_NOBARRIER, PRTE_ATTR_LOCAL, NULL, PRTE_BOOL);
+                prte_set_attribute(&pptr->attributes, PRTE_PROC_NOBARRIER, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
             }
             /* mark that this app_context is being used on this node */
             app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, pptr->app_idx);
@@ -726,7 +724,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
         }
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
         /* reset the mapped flags */
         for (n=0; n < jdata->map->nodes->size; n++) {
             if (NULL != (node = (prte_node_t*)prte_pointer_array_get_item(jdata->map->nodes, n))) {
@@ -735,7 +733,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
         }
     }
 
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PRTE_BOOL)) {
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
         /* compute and save bindings of local children */
         if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_bindings(jdata))) {
             PRTE_ERROR_LOG(rc);
@@ -803,7 +801,7 @@ static int setup_path(prte_app_context_t *app, char **wdir)
     int rc=PRTE_SUCCESS;
     char dir[MAXPATHLEN];
 
-    if (!prte_get_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, NULL, PRTE_BOOL)) {
+    if (!prte_get_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, NULL, PMIX_BOOL)) {
         /* Try to change to the app's cwd and check that the app
            exists and is executable The function will
            take care of outputting a pretty error message, if required
@@ -860,7 +858,7 @@ static void timer_cb(int fd, short event, void *cbdata)
     PRTE_RELEASE(tm);
 }
 
-static int compute_num_procs_alive(prte_jobid_t job)
+static int compute_num_procs_alive(pmix_nspace_t job)
 {
     int i;
     prte_proc_t *child;
@@ -876,7 +874,7 @@ static int compute_num_procs_alive(prte_jobid_t job)
         /* do not include members of the specified job as they
          * will be added later, if required
          */
-        if (job == child->name.jobid) {
+        if (PMIX_CHECK_NSPACE(job, child->name.nspace)) {
             continue;
         }
         num_procs_alive++;
@@ -923,7 +921,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     PRTE_FLAG_UNSET(child, PRTE_PROC_FLAG_WAITPID);
 
     /* setup the pmix environment */
-    PMIX_LOAD_PROCID(&pproc, child->job->nspace, child->name.vpid);
+    PMIX_LOAD_PROCID(&pproc, child->job->nspace, child->name.rank);
     if (PMIX_SUCCESS != (ret = PMIx_server_setup_fork(&pproc, &cd->env))) {
         PMIX_ERROR_LOG(ret);
         rc = PRTE_ERROR;
@@ -966,14 +964,14 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
              nmitem != prte_list_get_end(&prte_odls_globals.xterm_ranks);
              nmitem = prte_list_get_next(nmitem)) {
             nm = (prte_namelist_t*)nmitem;
-            if (PRTE_VPID_WILDCARD == nm->name.vpid ||
-                child->name.vpid == nm->name.vpid) {
+            if (PMIX_RANK_WILDCARD == nm->name.rank ||
+                child->name.rank == nm->name.rank) {
                 /* we want this one - modify the app's command to include
                  * the prte xterm cmd that starts with the xtermcmd */
                 cd->argv = prte_argv_copy(prte_odls_globals.xtermcmd);
                 /* insert the rank into the correct place as a window title */
                 free(cd->argv[2]);
-                prte_asprintf(&cd->argv[2], "Rank %s", PRTE_VPID_PRINT(child->name.vpid));
+                prte_asprintf(&cd->argv[2], "Rank %s", PRTE_VPID_PRINT(child->name.rank));
                 /* add in the argv from the app */
                 for (i=0; NULL != app->argv[i]; i++) {
                     prte_argv_append_nosize(&cd->argv, app->argv[i]);
@@ -982,12 +980,12 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
                 cd->cmd = strdup(prte_odls_globals.xtermcmd[0]);
                 found = true;
                 break;
-            } else if (jobdat->num_procs <= nm->name.vpid) {  /* check for bozo case */
+            } else if (jobdat->num_procs <= nm->name.rank) {  /* check for bozo case */
                 /* can't be done! */
                 prte_show_help("help-prte-odls-base.txt",
                                "prte-odls-base:xterm-rank-out-of-bounds",
                                true, prte_process_info.nodename,
-                               nm->name.vpid, jobdat->num_procs);
+                               nm->name.rank, jobdat->num_procs);
                 state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
                 goto errorout;
             }
@@ -1021,7 +1019,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         !PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_DEBUGGER_DAEMON) &&
         !PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_TOOL)) {
         char *param;
-        prte_asprintf(&param, "%s-%d", cd->argv[0], (int)child->name.vpid);
+        prte_asprintf(&param, "%s-%u", cd->argv[0], child->name.rank);
         free(cd->argv[0]);
         cd->argv[0] = param;
     }
@@ -1033,7 +1031,10 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
 
     if (15 < prte_output_get_verbosity(prte_odls_base_framework.framework_output)) {
         /* dump what is going to be exec'd */
-        prte_dss.dump(prte_odls_base_framework.framework_output, app, PRTE_APP_CONTEXT);
+        char *output = NULL;
+        prte_app_print(&output, jobdat, app);
+        prte_output(prte_odls_base_framework.framework_output, "%s", output);
+        free(output);
     }
 
     if (PRTE_SUCCESS != (rc = cd->fork_local(cd))) {
@@ -1063,7 +1064,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     int total_num_local_procs = 0;
     prte_odls_launch_local_t *caddy = (prte_odls_launch_local_t*)cbdata;
     prte_job_t *jobdat;
-    prte_jobid_t job = caddy->job;
+    pmix_nspace_t job;
     prte_odls_base_fork_local_proc_fn_t fork_local = caddy->fork_local;
     bool index_argv;
     char *msg;
@@ -1078,6 +1079,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     prte_output_verbose(5, prte_odls_base_framework.framework_output,
                         "%s local:launch",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+
+    PMIX_LOAD_NSPACE(job, caddy->job);
 
     /* establish our baseline working directory - we will be potentially
      * bouncing around as we execute various apps, but we will always return
@@ -1105,7 +1108,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     }
 
     /* track if we are indexing argvs so we don't check every time */
-    index_argv = prte_get_attribute(&jobdat->attributes, PRTE_JOB_INDEX_ARGV, NULL, PRTE_BOOL);
+    index_argv = prte_get_attribute(&jobdat->attributes, PRTE_JOB_INDEX_ARGV, NULL, PMIX_BOOL);
 
     /* compute the total number of local procs currently alive and about to be launched */
     total_num_local_procs = compute_num_procs_alive(job) + jobdat->num_local_procs;
@@ -1154,7 +1157,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                     if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, idx))) {
                         continue;
                     }
-                    if (PRTE_EQUAL == prte_dss.compare(&job, &(child->name.jobid), PRTE_JOBID)) {
+                    if (PMIX_CHECK_NSPACE(job, child->name.nspace)) {
                         child->exit_code = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
                         PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
                     }
@@ -1200,7 +1203,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, idx))) {
                     continue;
                 }
-                if (PRTE_EQUAL == prte_dss.compare(&job, &(child->name.jobid), PRTE_JOBID) &&
+                if (PMIX_CHECK_NSPACE(job, child->name.nspace) &&
                     j == (int)child->app_idx) {
                     child->exit_code = rc;
                     PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
@@ -1229,7 +1232,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, idx))) {
                     continue;
                 }
-                if (PRTE_EQUAL == prte_dss.compare(&job, &(child->name.jobid), PRTE_JOBID) &&
+                if (PMIX_CHECK_NSPACE(job, child->name.nspace) &&
                     j == (int)child->app_idx) {
                     child->exit_code = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
                     PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
@@ -1245,7 +1248,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, idx))) {
                     continue;
                 }
-                if (PRTE_EQUAL == prte_dss.compare(&job, &(child->name.jobid), PRTE_JOBID) &&
+                if (PMIX_CHECK_NSPACE(job, child->name.nspace) &&
                     j == (int)child->app_idx) {
                     child->exit_code = rc;
                     PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
@@ -1293,7 +1296,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, idx))) {
                     continue;
                 }
-                if (PRTE_EQUAL == prte_dss.compare(&job, &(child->name.jobid), PRTE_JOBID) &&
+                if (PMIX_CHECK_NSPACE(job, child->name.nspace) &&
                     j == (int)child->app_idx) {
                     child->exit_code = rc;
                     PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
@@ -1313,7 +1316,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, idx))) {
                     continue;
                 }
-                if (PRTE_EQUAL == prte_dss.compare(&job, &(child->name.jobid), PRTE_JOBID) &&
+                if (PMIX_CHECK_NSPACE(job, child->name.nspace) &&
                     j == (int)child->app_idx) {
                     child->exit_code = rc;
                     PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
@@ -1368,7 +1371,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
              * job could be given as a WILDCARD value, we must use
              * the dss.compare function to check for equality.
              */
-            if (PRTE_EQUAL != prte_dss.compare(&job, &(child->name.jobid), PRTE_JOBID)) {
+            if (!PMIX_CHECK_NSPACE(job, child->name.nspace)) {
 
                 PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:launch child %s is not in job %s being launched",
@@ -1408,8 +1411,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             cd->opts.usepty = PRTE_ENABLE_PTY_SUPPORT;
 
             /* do we want to setup stdin? */
-            if (jobdat->stdin_target == PRTE_VPID_WILDCARD ||
-                 child->name.vpid == jobdat->stdin_target) {
+            if (jobdat->stdin_target == PMIX_RANK_WILDCARD ||
+                 child->name.rank == jobdat->stdin_target) {
                 cd->opts.connect_stdin = true;
             } else {
                 cd->opts.connect_stdin = false;
@@ -1459,7 +1462,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
 *  Pass a signal to my local procs
  */
 
-int prte_odls_base_default_signal_local_procs(const prte_process_name_t *proc, int32_t signal,
+int prte_odls_base_default_signal_local_procs(const pmix_proc_t *proc, int32_t signal,
                                               prte_odls_base_signal_local_fn_t signal_local)
 {
     int rc, i;
@@ -1495,7 +1498,7 @@ int prte_odls_base_default_signal_local_procs(const prte_process_name_t *proc, i
         if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i))) {
             continue;
         }
-        if (PRTE_EQUAL == prte_dss.compare(&(child->name), (prte_process_name_t*)proc, PRTE_NAME)) {
+        if (PMIX_CHECK_PROCID(&child->name, proc)) {
             if (PRTE_SUCCESS != (rc = signal_local(child->pid, (int)signal))) {
                 PRTE_ERROR_LOG(rc);
             }
@@ -1570,7 +1573,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
     }
 
     /* get the jobdat for this child */
-    if (NULL == (jobdat = prte_get_job_data_object(proc->name.jobid))) {
+    if (NULL == (jobdat = prte_get_job_data_object(proc->name.nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         goto MOVEON;
     }
@@ -1651,7 +1654,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                 if (NULL == (cptr = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i))) {
                     continue;
                 }
-                if (cptr->name.jobid != proc->name.jobid) {
+                if (!PMIX_CHECK_NSPACE(cptr->name.nspace, proc->name.nspace)) {
                     continue;
                 }
                 if (PRTE_FLAG_TEST(cptr, PRTE_PROC_FLAG_REG) && !prte_allowed_exit_without_sync) {
@@ -1718,25 +1721,22 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
 #if PRTE_ENABLE_FT
         if (prte_enable_ft) {
             /* register an event handler for the PRTE_ERR_PROC_ABORTED event */
-            pmix_proc_t pname, psource;
             int rc;
             pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
-            PRTE_PMIX_CONVERT_NAME(rc, &pname, &proc->name);
-            PRTE_PMIX_CONVERT_NAME(rc, &psource, PRTE_PROC_MY_NAME);
             pmix_info_t *pinfo;
             PMIX_INFO_CREATE(pinfo, 1);
-            PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
+            PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &proc->name, PMIX_PROC );
 
-            if (PRTE_SUCCESS != PMIx_Notify_event(pcode, &psource,
-                        PMIX_RANGE_LOCAL, pinfo, 1,
-                        NULL,NULL )) {
+            if (PRTE_SUCCESS != PMIx_Notify_event(pcode, PRTE_PROC_MY_NAME,
+                                                  PMIX_RANGE_LOCAL, pinfo, 1,
+                                                  NULL,NULL )) {
                 PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                             "%s odls:notify failed, release pinfo",PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                 PRTE_RELEASE(pinfo);
             }
             PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                        "%s odls:event notify in odls proc %d:%d gone",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), proc->name.jobid, proc->name.vpid));
+                        "%s odls:event notify in odls proc %s gone",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
             PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
         }
 #endif
@@ -1791,8 +1791,7 @@ int prte_odls_base_default_kill_local_procs(prte_pointer_array_t *procs,
         PRTE_CONSTRUCT(&procarray, prte_pointer_array_t);
         prte_pointer_array_init(&procarray, 1, 1, 1);
         PRTE_CONSTRUCT(&proctmp, prte_proc_t);
-        proctmp.name.jobid = PRTE_JOBID_WILDCARD;
-        proctmp.name.vpid = PRTE_VPID_WILDCARD;
+        PMIX_LOAD_PROCID(&proctmp.name , NULL, PMIX_RANK_WILDCARD);
         prte_pointer_array_add(&procarray, &proctmp);
         procptr = &procarray;
         do_cleanup = true;
@@ -1823,28 +1822,28 @@ int prte_odls_base_default_kill_local_procs(prte_pointer_array_t *procs,
              *  job could be given as a WILDCARD value, we must
              *  check for that as well as for equality.
              */
-            if (PRTE_JOBID_WILDCARD != proc->name.jobid &&
-                proc->name.jobid != child->name.jobid) {
+            if (!PMIX_NSPACE_INVALID(proc->name.nspace) &&
+                !PMIX_CHECK_NSPACE(proc->name.nspace, child->name.nspace)) {
 
                 PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:kill_local_proc child %s is not part of job %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&child->name),
-                                     PRTE_JOBID_PRINT(proc->name.jobid)));
+                                     PRTE_JOBID_PRINT(proc->name.nspace)));
                 continue;
             }
 
             /* see if this is the specified proc - could be a WILDCARD again, so check
              * appropriately
              */
-            if (PRTE_VPID_WILDCARD != proc->name.vpid &&
-                proc->name.vpid != child->name.vpid) {
+            if (PMIX_RANK_WILDCARD != proc->name.rank &&
+                proc->name.rank != child->name.rank) {
 
                 PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:kill_local_proc child %s is not covered by rank %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&child->name),
-                                     PRTE_VPID_PRINT(proc->name.vpid)));
+                                     PRTE_VPID_PRINT(proc->name.rank)));
                 continue;
             }
 
@@ -2022,7 +2021,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     }
 
     /* find this child's jobdat */
-    if (NULL == (jobdat = prte_get_job_data_object(child->name.jobid))) {
+    if (NULL == (jobdat = prte_get_job_data_object(child->name.nspace))) {
         /* not found */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
@@ -2073,8 +2072,8 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     cd->opts.usepty = PRTE_ENABLE_PTY_SUPPORT;
 
     /* do we want to setup stdin? */
-    if (jobdat->stdin_target == PRTE_VPID_WILDCARD ||
-         child->name.vpid == jobdat->stdin_target) {
+    if (jobdat->stdin_target == PMIX_RANK_WILDCARD ||
+         child->name.rank == jobdat->stdin_target) {
         cd->opts.connect_stdin = true;
     } else {
         cd->opts.connect_stdin = false;

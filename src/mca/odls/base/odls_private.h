@@ -38,10 +38,9 @@
 #include "src/class/prte_list.h"
 #include "src/class/prte_pointer_array.h"
 #include "src/class/prte_bitmap.h"
-#include "src/dss/dss_types.h"
-
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/rml/rml_types.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/threads.h"
 #include "src/mca/odls/odls_types.h"
@@ -80,12 +79,12 @@ PRTE_EXPORT extern prte_odls_globals_t prte_odls_globals;
  * different (e.g., bproc)
  */
 PRTE_EXPORT int
-prte_odls_base_default_get_add_procs_data(prte_buffer_t *data,
-                                          prte_jobid_t job);
+prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *data,
+                                          pmix_nspace_t job);
 
 PRTE_EXPORT int
-prte_odls_base_default_construct_child_list(prte_buffer_t *data,
-                                            prte_jobid_t *job);
+prte_odls_base_default_construct_child_list(pmix_data_buffer_t *data,
+                                            pmix_nspace_t *job);
 
 PRTE_EXPORT void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata);
 
@@ -113,7 +112,7 @@ PRTE_CLASS_DECLARATION(prte_odls_spawn_caddy_t);
 typedef struct {
     prte_object_t object;
     prte_event_t *ev;
-    prte_jobid_t job;
+    pmix_nspace_t job;
     prte_odls_base_fork_local_proc_fn_t fork_local;
     int retries;
 } prte_odls_launch_local_t;
@@ -122,8 +121,8 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_odls_launch_local_t);
 #define PRTE_ACTIVATE_LOCAL_LAUNCH(j, f)                                \
     do {                                                                \
         prte_odls_launch_local_t *ll;                                   \
-        ll = PRTE_NEW(prte_odls_launch_local_t);                         \
-        ll->job = (j);                                                  \
+        ll = PRTE_NEW(prte_odls_launch_local_t);                        \
+        PMIX_LOAD_NSPACE(ll->job, (j));                                 \
         ll->fork_local = (f);                                           \
         prte_event_set(prte_event_base, ll->ev, -1, PRTE_EV_WRITE,      \
                        prte_odls_base_default_launch_local, ll);        \
@@ -139,7 +138,7 @@ PRTE_EXPORT void prte_odls_base_default_wait_local_proc(int fd, short sd, void *
 typedef int (*prte_odls_base_signal_local_fn_t)(pid_t pid, int signum);
 
 PRTE_EXPORT int
-prte_odls_base_default_signal_local_procs(const prte_process_name_t *proc, int32_t signal,
+prte_odls_base_default_signal_local_procs(const pmix_proc_t *proc, int32_t signal,
                                           prte_odls_base_signal_local_fn_t signal_local);
 
 /* define a function type for killing a local proc */

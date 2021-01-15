@@ -6,6 +6,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +19,6 @@
 
 #include <stddef.h>
 
-#include "src/dss/dss.h"
 #include "src/class/prte_pointer_array.h"
 #include "src/class/prte_bitmap.h"
 #include "src/util/bit_ops.h"
@@ -32,7 +32,6 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime.h"
-#include "src/runtime/data_type_support/prte_dt_support.h"
 
 #include "src/mca/rml/base/rml_contact.h"
 
@@ -41,15 +40,15 @@
 
 static int init(void);
 static int finalize(void);
-static int delete_route(prte_process_name_t *proc);
-static int update_route(prte_process_name_t *target,
-                        prte_process_name_t *route);
-static prte_process_name_t get_route(prte_process_name_t *target);
-static int route_lost(const prte_process_name_t *route);
-static bool route_is_defined(const prte_process_name_t *target);
+static int delete_route(pmix_proc_t *proc);
+static int update_route(pmix_proc_t *target,
+                        pmix_proc_t *route);
+static pmix_proc_t get_route(pmix_proc_t *target);
+static int route_lost(const pmix_proc_t *route);
+static bool route_is_defined(const pmix_proc_t *target);
 static void update_routing_plan(void);
 static void get_routing_list(prte_list_t *coll);
-static int set_lifeline(prte_process_name_t *proc);
+static int set_lifeline(pmix_proc_t *proc);
 static size_t num_routes(void);
 
 prte_routed_module_t prte_routed_binomial_module = {
@@ -67,8 +66,8 @@ prte_routed_module_t prte_routed_binomial_module = {
 };
 
 /* local globals */
-static prte_process_name_t      *lifeline=NULL;
-static prte_process_name_t      local_lifeline;
+static pmix_proc_t      *lifeline=NULL;
+static pmix_proc_t      local_lifeline;
 static int                      num_children;
 static prte_list_t              my_children;
 static bool                     hnp_direct=true;
@@ -84,7 +83,7 @@ static int init(void)
         /* set our lifeline to the HNP - we will abort if that connection is lost */
         lifeline = PRTE_PROC_MY_HNP;
     }
-    PRTE_PROC_MY_PARENT->jobid = PRTE_PROC_MY_NAME->jobid;
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_PARENT->nspace, PRTE_PROC_MY_NAME->nspace);
 
     /* setup the list of children */
     PRTE_CONSTRUCT(&my_children, prte_list_t);
@@ -109,10 +108,9 @@ static int finalize(void)
     return PRTE_SUCCESS;
 }
 
-static int delete_route(prte_process_name_t *proc)
+static int delete_route(pmix_proc_t *proc)
 {
-    if (proc->jobid == PRTE_JOBID_INVALID ||
-        proc->vpid == PRTE_VPID_INVALID) {
+    if (PMIX_PROCID_INVALID(proc)) {
         return PRTE_ERR_BAD_PARAM;
     }
 
@@ -131,11 +129,10 @@ static int delete_route(prte_process_name_t *proc)
     return PRTE_SUCCESS;
 }
 
-static int update_route(prte_process_name_t *target,
-                        prte_process_name_t *route)
+static int update_route(pmix_proc_t *target,
+                        pmix_proc_t *route)
 {
-    if (target->jobid == PRTE_JOBID_INVALID ||
-        target->vpid == PRTE_VPID_INVALID) {
+    if (PMIX_PROCID_INVALID(target)) {
         return PRTE_ERR_BAD_PARAM;
     }
 
@@ -160,9 +157,9 @@ static int update_route(prte_process_name_t *target,
 }
 
 
-static prte_process_name_t get_route(prte_process_name_t *target)
+static pmix_proc_t get_route(pmix_proc_t *target)
 {
-    prte_process_name_t *ret, daemon;
+    pmix_proc_t *ret, daemon;
     prte_list_item_t *item;
     prte_routed_tree_t *child;
 
@@ -172,22 +169,20 @@ static prte_process_name_t get_route(prte_process_name_t *target)
     }
 
     /* initialize */
-    daemon.jobid = PRTE_PROC_MY_NAME->jobid;
-    daemon.vpid = PRTE_PROC_MY_NAME->vpid;
+    PMIX_XFER_PROCID(&daemon, PRTE_PROC_MY_NAME);
 
-    if (target->jobid == PRTE_JOBID_INVALID ||
-        target->vpid == PRTE_VPID_INVALID) {
+    if (PMIX_PROCID_INVALID(target)) {
         ret = PRTE_NAME_INVALID;
         goto found;
     }
 
     /* if it is me, then the route is just direct */
-    if (PRTE_EQUAL == prte_dss.compare(PRTE_PROC_MY_NAME, target, PRTE_NAME)) {
+    if (PMIX_CHECK_PROCID(PRTE_PROC_MY_NAME, target)) {
         ret = target;
         goto found;
     }
 
-    if (PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, PRTE_PROC_MY_HNP, target)) {
+    if (PMIX_CHECK_PROCID(PRTE_PROC_MY_HNP, target)) {
         if (!hnp_direct || prte_static_ports) {
             PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
                                  "%s routing to the HNP through my parent %s",
@@ -206,14 +201,14 @@ static prte_process_name_t get_route(prte_process_name_t *target)
 
 
     /* find out what daemon hosts this proc */
-    if (PRTE_VPID_INVALID == (daemon.vpid = prte_get_proc_daemon_vpid(target))) {
+    if (PMIX_RANK_INVALID == (daemon.rank = prte_get_proc_daemon_vpid(target))) {
         /*PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);*/
         ret = PRTE_NAME_INVALID;
         goto found;
     }
 
     /* if the daemon is me, then send direct to the target! */
-    if (PRTE_PROC_MY_NAME->vpid == daemon.vpid) {
+    if (PRTE_PROC_MY_NAME->rank == daemon.rank) {
         ret = target;
         goto found;
     }
@@ -223,15 +218,15 @@ static prte_process_name_t get_route(prte_process_name_t *target)
             item != prte_list_get_end(&my_children);
             item = prte_list_get_next(item)) {
         child = (prte_routed_tree_t*)item;
-        if (child->vpid == daemon.vpid) {
+        if (child->rank == daemon.rank) {
             /* the child is hosting the proc - just send it there */
             ret = &daemon;
             goto found;
         }
         /* otherwise, see if the daemon we need is below the child */
-        if (prte_bitmap_is_set_bit(&child->relatives, daemon.vpid)) {
+        if (prte_bitmap_is_set_bit(&child->relatives, daemon.rank)) {
             /* yep - we need to step through this child */
-            daemon.vpid = child->vpid;
+            daemon.rank = child->rank;
 
             ret = &daemon;
             goto found;
@@ -241,7 +236,7 @@ static prte_process_name_t get_route(prte_process_name_t *target)
     /* if we get here, then the target daemon is not beneath
      * any of our children, so we have to step up through our parent
      */
-    daemon.vpid = PRTE_PROC_MY_PARENT->vpid;
+    daemon.rank = PRTE_PROC_MY_PARENT->rank;
 
     ret = &daemon;
 
@@ -255,7 +250,7 @@ static prte_process_name_t get_route(prte_process_name_t *target)
     return *ret;
 }
 
-static int route_lost(const prte_process_name_t *route)
+static int route_lost(const pmix_proc_t *route)
 {
     prte_list_item_t *item;
     prte_routed_tree_t *child;
@@ -283,12 +278,12 @@ static int route_lost(const prte_process_name_t *route)
     /* is it a daemon, and one of my children? if so, then
      * remove it from the child list
      */
-    if (route->jobid == PRTE_PROC_MY_NAME->jobid) {
+    if (PMIX_CHECK_NSPACE(route->nspace, PRTE_PROC_MY_NAME->nspace)) {
         for (item = prte_list_get_first(&my_children);
              item != prte_list_get_end(&my_children);
              item = prte_list_get_next(item)) {
             child = (prte_routed_tree_t*)item;
-            if (child->vpid == route->vpid) {
+            if (child->rank == route->rank) {
                 PRTE_OUTPUT_VERBOSE((4, prte_routed_base_framework.framework_output,
                                      "%s routed_binomial: removing route to child daemon %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -305,23 +300,22 @@ static int route_lost(const prte_process_name_t *route)
 }
 
 
-static bool route_is_defined(const prte_process_name_t *target)
+static bool route_is_defined(const pmix_proc_t *target)
 {
     /* find out what daemon hosts this proc */
-    if (PRTE_VPID_INVALID == prte_get_proc_daemon_vpid((prte_process_name_t*)target)) {
+    if (PMIX_RANK_INVALID == prte_get_proc_daemon_vpid((pmix_proc_t*)target)) {
         return false;
     }
 
     return true;
 }
 
-static int set_lifeline(prte_process_name_t *proc)
+static int set_lifeline(pmix_proc_t *proc)
 {
     /* we have to copy the proc data because there is no
      * guarantee that it will be preserved
      */
-    local_lifeline.jobid = proc->jobid;
-    local_lifeline.vpid = proc->vpid;
+    PMIX_XFER_PROCID(&local_lifeline, proc);
     lifeline = &local_lifeline;
 
     return PRTE_SUCCESS;
@@ -351,12 +345,12 @@ static int binomial_tree(int rank, int parent, int me, int num_procs,
             peer = rank | mask;
             if (peer < num_procs) {
                 child = PRTE_NEW(prte_routed_tree_t);
-                child->vpid = peer;
+                child->rank = peer;
                 PRTE_OUTPUT_VERBOSE((3, prte_routed_base_framework.framework_output,
                                      "%s routed:binomial %d found child %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      rank,
-                                     PRTE_VPID_PRINT(child->vpid)));
+                                     PRTE_VPID_PRINT(child->rank)));
 
                 if (mine) {
                     /* this is a direct child - add it to my list */
@@ -425,17 +419,17 @@ static void update_routing_plan(void)
     /* compute my direct children and the bitmap that shows which vpids
      * lie underneath their branch
      */
-    PRTE_PROC_MY_PARENT->vpid = binomial_tree(0, 0, PRTE_PROC_MY_NAME->vpid,
+    PRTE_PROC_MY_PARENT->rank = binomial_tree(0, 0, PRTE_PROC_MY_NAME->rank,
                                    prte_process_info.num_daemons,
                                    &num_children, &my_children, NULL, true);
 
     if (0 < prte_output_get_verbosity(prte_routed_base_framework.framework_output)) {
-        prte_output(0, "%s: parent %d num_children %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_PROC_MY_PARENT->vpid, num_children);
+        prte_output(0, "%s: parent %u num_children %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_PROC_MY_PARENT->rank, num_children);
         for (item = prte_list_get_first(&my_children);
              item != prte_list_get_end(&my_children);
              item = prte_list_get_next(item)) {
             child = (prte_routed_tree_t*)item;
-            prte_output(0, "%s: \tchild %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), child->vpid);
+            prte_output(0, "%s: \tchild %u", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), child->rank);
             for (j=0; j < (int)prte_process_info.num_daemons; j++) {
                 if (prte_bitmap_is_set_bit(&child->relatives, j)) {
                     prte_output(0, "%s: \t\trelation %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), j);

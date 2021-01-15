@@ -40,10 +40,10 @@
 #include "src/class/prte_hash_table.h"
 #include "src/class/prte_pointer_array.h"
 #include "src/class/prte_value_array.h"
-#include "src/dss/dss.h"
 #include "src/threads/threads.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/rmaps/rmaps.h"
 #include "src/mca/rml/rml.h"
 #include "src/util/proc_info.h"
 #include "src/util/name_fns.h"
@@ -51,9 +51,6 @@
 #include "src/runtime/runtime.h"
 #include "src/runtime/runtime_internals.h"
 #include "src/runtime/prte_globals.h"
-
-/* need the data type support functions here */
-#include "src/runtime/data_type_support/prte_dt_support.h"
 
 /* State Machine */
 prte_list_t prte_job_states = {{0}};
@@ -122,11 +119,11 @@ prte_timer_t *prte_mpiexec_timeout = NULL;
 int prte_stack_trace_wait_timeout = 30;
 
 /* global arrays for data storage */
-prte_hash_table_t *prte_job_data = NULL;
+prte_pointer_array_t *prte_job_data = NULL;
 prte_pointer_array_t *prte_node_pool = NULL;
 prte_pointer_array_t *prte_node_topologies = NULL;
 prte_pointer_array_t *prte_local_children = NULL;
-prte_vpid_t prte_total_procs = 0;
+pmix_rank_t prte_total_procs = 0;
 
 /* IOF controls */
 /* generate new xterm windows to display output from specified ranks */
@@ -192,9 +189,6 @@ bool prte_enable_ft = false;
 
 int prte_dt_init(void)
 {
-    int rc;
-    prte_data_type_t tmp;
-
     /* set default output */
     prte_debug_output = prte_output_open(NULL);
 
@@ -208,240 +202,94 @@ int prte_dt_init(void)
         }
     }
 
-    tmp = PRTE_JOB;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_job,
-                                                     prte_dt_unpack_job,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_job,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_job,
-                                                     (prte_dss_print_fn_t)prte_dt_print_job,
-                                                     PRTE_DSS_STRUCTURED,
-                                                     "PRTE_JOB", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_NODE;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_node,
-                                                     prte_dt_unpack_node,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_node,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_node,
-                                                     (prte_dss_print_fn_t)prte_dt_print_node,
-                                                     PRTE_DSS_STRUCTURED,
-                                                     "PRTE_NODE", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_PROC;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_proc,
-                                                     prte_dt_unpack_proc,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_proc,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_proc,
-                                                     (prte_dss_print_fn_t)prte_dt_print_proc,
-                                                     PRTE_DSS_STRUCTURED,
-                                                     "PRTE_PROC", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_APP_CONTEXT;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_app_context,
-                                                     prte_dt_unpack_app_context,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_app_context,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_app_context,
-                                                     (prte_dss_print_fn_t)prte_dt_print_app_context,
-                                                     PRTE_DSS_STRUCTURED,
-                                                     "PRTE_APP_CONTEXT", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_NODE_STATE;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_node_state,
-                                                     prte_dt_unpack_node_state,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_node_state,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_node_state,
-                                                     (prte_dss_print_fn_t)prte_dt_std_print,
-                                                     PRTE_DSS_UNSTRUCTURED,
-                                                     "PRTE_NODE_STATE", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_PROC_STATE;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_proc_state,
-                                                     prte_dt_unpack_proc_state,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_proc_state,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_proc_state,
-                                                     (prte_dss_print_fn_t)prte_dt_std_print,
-                                                     PRTE_DSS_UNSTRUCTURED,
-                                                     "PRTE_PROC_STATE", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_JOB_STATE;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_job_state,
-                                                     prte_dt_unpack_job_state,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_job_state,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_job_state,
-                                                     (prte_dss_print_fn_t)prte_dt_std_print,
-                                                     PRTE_DSS_UNSTRUCTURED,
-                                                     "PRTE_JOB_STATE", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_EXIT_CODE;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_exit_code,
-                                                     prte_dt_unpack_exit_code,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_exit_code,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_exit_code,
-                                                     (prte_dss_print_fn_t)prte_dt_std_print,
-                                                     PRTE_DSS_UNSTRUCTURED,
-                                                     "PRTE_EXIT_CODE", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_JOB_MAP;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_map,
-                                                     prte_dt_unpack_map,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_map,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_map,
-                                                     (prte_dss_print_fn_t)prte_dt_print_map,
-                                                     PRTE_DSS_STRUCTURED,
-                                                     "PRTE_JOB_MAP", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_RML_TAG;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_tag,
-                                                      prte_dt_unpack_tag,
-                                                      (prte_dss_copy_fn_t)prte_dt_copy_tag,
-                                                      (prte_dss_compare_fn_t)prte_dt_compare_tags,
-                                                      (prte_dss_print_fn_t)prte_dt_std_print,
-                                                      PRTE_DSS_UNSTRUCTURED,
-                                                      "PRTE_RML_TAG", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_DAEMON_CMD;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_daemon_cmd,
-                                                     prte_dt_unpack_daemon_cmd,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_daemon_cmd,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_daemon_cmd,
-                                                     (prte_dss_print_fn_t)prte_dt_std_print,
-                                                     PRTE_DSS_UNSTRUCTURED,
-                                                     "PRTE_DAEMON_CMD", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_IOF_TAG;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_iof_tag,
-                                                     prte_dt_unpack_iof_tag,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_iof_tag,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_iof_tag,
-                                                     (prte_dss_print_fn_t)prte_dt_std_print,
-                                                     PRTE_DSS_UNSTRUCTURED,
-                                                     "PRTE_IOF_TAG", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_ATTRIBUTE;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_attr,
-                                                     prte_dt_unpack_attr,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_attr,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_attr,
-                                                     (prte_dss_print_fn_t)prte_dt_print_attr,
-                                                     PRTE_DSS_STRUCTURED,
-                                                     "PRTE_ATTRIBUTE", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    tmp = PRTE_SIGNATURE;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_dt_pack_sig,
-                                                     prte_dt_unpack_sig,
-                                                     (prte_dss_copy_fn_t)prte_dt_copy_sig,
-                                                     (prte_dss_compare_fn_t)prte_dt_compare_sig,
-                                                     (prte_dss_print_fn_t)prte_dt_print_sig,
-                                                     PRTE_DSS_STRUCTURED,
-                                                     "PRTE_SIGNATURE", &tmp))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
     return PRTE_SUCCESS;
 }
 
-prte_job_t* prte_get_job_data_object(prte_jobid_t job)
+prte_job_t* prte_get_job_data_object(const pmix_nspace_t job)
 {
-    prte_job_t *jdata;
+    prte_job_t *jptr;
+    int i;
 
     /* if the job data wasn't setup, we cannot provide the data */
     if (NULL == prte_job_data) {
         return NULL;
     }
-
-    jdata = NULL;
-    prte_hash_table_get_value_uint32(prte_job_data, job, (void**)&jdata);
-    return jdata;
+    for (i=0; i < prte_job_data->size; i++) {
+        if (NULL == (jptr = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, i))) {
+            continue;
+        }
+        if (PMIX_CHECK_NSPACE(jptr->nspace, job)) {
+            return jptr;
+        }
+    }
+    return NULL;
 }
 
-prte_job_t* prte_set_job_data_object(prte_jobid_t jobid, prte_job_t *jdata)
+int prte_set_job_data_object(prte_job_t *jdata)
 {
-    prte_job_t *old_jdata = NULL;
+    prte_job_t *jptr;
+    int i, save = -1;
 
     /* if the job data wasn't setup, we cannot set the data */
     if (NULL == prte_job_data) {
-        return NULL;
+        return PRTE_ERROR;
     }
 
-    old_jdata = prte_get_job_data_object(jobid);
-    prte_hash_table_set_value_uint32(prte_job_data, jobid, jdata);
-    if (old_jdata == jdata) {
-        return NULL;
+    /* verify that we don't already have this object */
+    for (i=0; i < prte_job_data->size; i++) {
+        if (NULL == (jptr = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, i))) {
+            if (0 > save) {
+                save = i;
+            }
+            continue;
+        }
+        if (PMIX_CHECK_NSPACE(jptr->nspace, jdata->nspace)) {
+            return PRTE_EXISTS;
+        }
     }
-    else {
-        return old_jdata;
+
+    if (-1 == save) {
+        jdata->index = prte_pointer_array_add(prte_job_data, jdata);
+    } else {
+        jdata->index = save;
+        prte_pointer_array_set_item(prte_job_data, save, jdata);
     }
+    if (0 > jdata->index) {
+        return PRTE_ERROR;
+    }
+    return PRTE_SUCCESS;
 }
 
-prte_proc_t* prte_get_proc_object(prte_process_name_t *proc)
+prte_proc_t* prte_get_proc_object(const pmix_proc_t *proc)
 {
     prte_job_t *jdata;
     prte_proc_t *proct;
 
-    if (NULL == (jdata = prte_get_job_data_object(proc->jobid))) {
+    if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
         return NULL;
     }
-    proct = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc->vpid);
+    proct = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc->rank);
     return proct;
 }
 
-prte_vpid_t prte_get_proc_daemon_vpid(prte_process_name_t *proc)
+pmix_rank_t prte_get_proc_daemon_vpid(const pmix_proc_t *proc)
 {
     prte_job_t *jdata;
     prte_proc_t *proct;
 
-    if (NULL == (jdata = prte_get_job_data_object(proc->jobid))) {
-        return PRTE_VPID_INVALID;
+    if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
+        return PMIX_RANK_INVALID;
     }
-    if (NULL == (proct = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc->vpid))) {
-        return PRTE_VPID_INVALID;
+    if (NULL == (proct = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc->rank))) {
+        return PMIX_RANK_INVALID;
     }
     if (NULL == proct->node || NULL == proct->node->daemon) {
-        return PRTE_VPID_INVALID;
+        return PMIX_RANK_INVALID;
     }
-    return proct->node->daemon->name.vpid;
+    return proct->node->daemon->name.rank;
 }
 
-char* prte_get_proc_hostname(prte_process_name_t *proc)
+char* prte_get_proc_hostname(const pmix_proc_t *proc)
 {
     prte_proc_t *proct;
 
@@ -459,7 +307,7 @@ char* prte_get_proc_hostname(prte_process_name_t *proc)
     return proct->node->name;
 }
 
-prte_node_rank_t prte_get_proc_node_rank(prte_process_name_t *proc)
+prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc)
 {
     prte_proc_t *proct;
 
@@ -486,7 +334,7 @@ bool prte_node_match(prte_node_t *n1, char *name)
     }
 
     /* get the aliases for n1 and check those against "name" */
-    if (prte_get_attribute(&n1->attributes, PRTE_NODE_ALIAS, (void**)&n1alias, PRTE_STRING)) {
+    if (prte_get_attribute(&n1->attributes, PRTE_NODE_ALIAS, (void**)&n1alias, PMIX_STRING)) {
         n1names = prte_argv_split(n1alias, ',');
         free(n1alias);
     }
@@ -504,7 +352,7 @@ bool prte_node_match(prte_node_t *n1, char *name)
         if (NULL == (nptr = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, i))) {
             continue;
         }
-        if (prte_get_attribute(&nptr->attributes, PRTE_NODE_ALIAS, (void**)&n2alias, PRTE_STRING)) {
+        if (prte_get_attribute(&nptr->attributes, PRTE_NODE_ALIAS, (void**)&n2alias, PMIX_STRING)) {
             n2names = prte_argv_split(n2alias, ',');
             free(n2alias);
         }
@@ -621,8 +469,8 @@ static void prte_job_construct(prte_job_t* job)
 {
     job->exit_code = 0;
     job->personality = NULL;
-    job->jobid = PRTE_JOBID_INVALID;
     PMIX_LOAD_NSPACE(job->nspace, NULL);
+    job->index = -1;
     job->offset = 0;
     job->apps = PRTE_NEW(prte_pointer_array_t);
     prte_pointer_array_init(job->apps,
@@ -650,17 +498,16 @@ static void prte_job_construct(prte_job_t* job)
     job->num_daemons_reported = 0;
     job->num_ready_for_debug = 0;
 
-    job->originator.jobid = PRTE_JOBID_INVALID;
-    job->originator.vpid = PRTE_VPID_INVALID;
+    PMIX_LOAD_PROCID(&job->originator, NULL, PMIX_RANK_INVALID);
     job->num_local_procs = 0;
 
     job->flags = 0;
     PRTE_FLAG_SET(job, PRTE_JOB_FLAG_FORWARD_OUTPUT);
 
     PRTE_CONSTRUCT(&job->attributes, prte_list_t);
-    PRTE_CONSTRUCT(&job->launch_msg, prte_buffer_t);
+    PMIX_DATA_BUFFER_CONSTRUCT(&job->launch_msg);
     PRTE_CONSTRUCT(&job->children, prte_list_t);
-    job->launcher = PRTE_JOBID_INVALID;
+    PMIX_LOAD_NSPACE(job->launcher, NULL);
 }
 
 static void prte_job_destruct(prte_job_t* job)
@@ -678,7 +525,7 @@ static void prte_job_destruct(prte_job_t* job)
 
     if (prte_debug_flag) {
         prte_output(0, "%s Releasing job data for %s",
-                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(job->jobid));
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(job->nspace));
     }
 
     if (NULL != job->personality) {
@@ -695,14 +542,14 @@ static void prte_job_destruct(prte_job_t* job)
     /* release any pointers in the attributes */
     evtimer = NULL;
     if (prte_get_attribute(&job->attributes, PRTE_JOB_FAILURE_TIMER_EVENT,
-                           (void**)&evtimer, PRTE_PTR)) {
+                           (void**)&evtimer, PMIX_POINTER)) {
         prte_remove_attribute(&job->attributes, PRTE_JOB_FAILURE_TIMER_EVENT);
         /* the timer is a pointer to prte_timer_t */
         PRTE_RELEASE(evtimer);
     }
     proc = NULL;
     if (prte_get_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC,
-                           (void**)&proc, PRTE_PTR)) {
+                           (void**)&proc, PMIX_POINTER)) {
         prte_remove_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC);
         /* points to an prte_proc_t */
         PRTE_RELEASE(proc);
@@ -724,7 +571,7 @@ static void prte_job_destruct(prte_job_t* job)
     /* release the attributes */
     PRTE_LIST_DESTRUCT(&job->attributes);
 
-    PRTE_DESTRUCT(&job->launch_msg);
+    PMIX_DATA_BUFFER_DESTRUCT(&job->launch_msg);
 
     /* Clear the child list before destroying the list */
     PRTE_LIST_FOREACH(child_jdata, &job->children, prte_job_t) {
@@ -733,11 +580,10 @@ static void prte_job_destruct(prte_job_t* job)
 
     PRTE_LIST_DESTRUCT(&job->children);
 
-    if (NULL != prte_job_data && PRTE_JOBID_INVALID != job->jobid) {
+    if (NULL != prte_job_data && 0 <= job->index) {
         /* remove the job from the global array */
-        prte_hash_table_remove_value_uint32(prte_job_data, job->jobid);
+        prte_pointer_array_set_item(prte_job_data, job->index, NULL);
     }
-
 }
 
 PRTE_CLASS_INSTANCE(prte_job_t,
@@ -814,6 +660,7 @@ static void prte_proc_construct(prte_proc_t* proc)
     proc->name = *PRTE_NAME_INVALID;
     proc->job = NULL;
     proc->rank = PMIX_RANK_INVALID;
+    proc->parent = PMIX_RANK_INVALID;
     proc->pid = 0;
     proc->local_rank = PRTE_LOCAL_RANK_INVALID;
     proc->node_rank = PRTE_NODE_RANK_INVALID;
@@ -857,7 +704,7 @@ static void prte_job_map_construct(prte_job_map_t* map)
     map->ranking = 0;
     map->binding = 0;
     map->num_new_daemons = 0;
-    map->daemon_vpid_start = PRTE_VPID_INVALID;
+    map->daemon_vpid_start = PMIX_RANK_INVALID;
     map->num_nodes = 0;
     map->nodes = PRTE_NEW(prte_pointer_array_t);
     prte_pointer_array_init(map->nodes,
@@ -899,18 +746,7 @@ static void prte_attr_cons(prte_attribute_t* p)
 }
 static void prte_attr_des(prte_attribute_t *p)
 {
-    if (PRTE_BYTE_OBJECT == p->type) {
-        if (NULL != p->data.bo.bytes) {
-            free(p->data.bo.bytes);
-        }
-    } else if (PRTE_BUFFER == p->type) {
-        PRTE_DESTRUCT(&p->data.buf);
-    } else if (PRTE_STRING == p->type) {
-        free(p->data.string);
-    } else if (PRTE_ENVAR == p->type) {
-        free(p->data.envar.envar);
-        free(p->data.envar.value);
-    }
+    PMIX_VALUE_DESTRUCT(&p->data);
 }
 PRTE_CLASS_INSTANCE(prte_attribute_t,
                    prte_list_item_t,

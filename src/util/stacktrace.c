@@ -15,6 +15,7 @@
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -75,7 +76,7 @@ static char *unable_to_print_msg = "Unable to print stack trace!\n";
 static void set_stacktrace_filename(void) {
     snprintf(prte_stacktrace_output_filename, prte_stacktrace_output_filename_max_len,
              "%s.%lu.%lu",
-             prte_stacktrace_output_filename_base, (unsigned long)PRTE_PROC_MY_NAME->vpid, (unsigned long)getpid());
+             prte_stacktrace_output_filename_base, (unsigned long)PRTE_PROC_MY_NAME->rank, (unsigned long)getpid());
 
     return;
 }

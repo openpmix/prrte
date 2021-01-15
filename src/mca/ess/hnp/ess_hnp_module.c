@@ -139,7 +139,6 @@ static int rte_init(int argc, char **argv)
     int idx;
     prte_topology_t *t;
     prte_ess_base_signal_t *sig;
-    pmix_proc_t pname;
     pmix_value_t pval;
     pmix_status_t pret;
 
@@ -381,8 +380,10 @@ static int rte_init(int argc, char **argv)
     }
 #endif
     /* get the job data object for the daemons */
-    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
-
+    jdata = PRTE_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
+    prte_set_job_data_object(jdata);
+    
     /* mark that the daemons have reported as we are the
      * only ones in the system right now, and we definitely
      * are running!
@@ -398,23 +399,21 @@ static int rte_init(int argc, char **argv)
     /* create and store a node object where we are */
     node = PRTE_NEW(prte_node_t);
     node->name = strdup(prte_process_info.nodename);
-    node->index = PRTE_PROC_MY_NAME->vpid;
+    node->index = PRTE_PROC_MY_NAME->rank;
     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_LOC_VERIFIED);
-    prte_pointer_array_set_item(prte_node_pool, 0, node);
+    prte_pointer_array_set_item(prte_node_pool, PRTE_PROC_MY_NAME->rank, node);
 
     /* create and store a proc object for us */
     proc = PRTE_NEW(prte_proc_t);
-    proc->name.jobid = PRTE_PROC_MY_NAME->jobid;
-    proc->name.vpid = PRTE_PROC_MY_NAME->vpid;
+    PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
     proc->job = jdata;
-    proc->rank = proc->name.vpid;
+    proc->rank = proc->name.rank;
     proc->pid = prte_process_info.pid;
     prte_oob_base_get_addr(&proc->rml_uri);
     prte_process_info.my_hnp_uri = strdup(proc->rml_uri);
     /* store it in the local PMIx repo for later retrieval */
     PMIX_VALUE_LOAD(&pval, proc->rml_uri, PMIX_STRING);
-    PMIX_LOAD_PROCID(&pname, jdata->nspace, proc->rank);
-    if (PMIX_SUCCESS != (pret = PMIx_Store_internal(&pname, PMIX_PROC_URI, &pval))) {
+    if (PMIX_SUCCESS != (pret = PMIx_Store_internal(PRTE_PROC_MY_NAME, PMIX_PROC_URI, &pval))) {
         PMIX_ERROR_LOG(pret);
         ret = PRTE_ERROR;
         PMIX_VALUE_DESTRUCT(&pval);
@@ -425,7 +424,7 @@ static int rte_init(int argc, char **argv)
     proc->state = PRTE_PROC_STATE_RUNNING;
     PRTE_RETAIN(node);  /* keep accounting straight */
     proc->node = node;
-    prte_pointer_array_set_item(jdata->procs, proc->name.vpid, proc);
+    prte_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, proc);
 
     /* record that the daemon (i.e., us) is on this node
      * NOTE: we do not add the proc object to the node's
@@ -439,7 +438,7 @@ static int rte_init(int argc, char **argv)
     node->state = PRTE_NODE_STATE_UP;
     /* get our aliases - will include all the interface aliases captured in prte_init */
     aptr = prte_argv_join(prte_process_info.aliases, ',');
-    prte_set_attribute(&node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, aptr, PRTE_STRING);
+    prte_set_attribute(&node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, aptr, PMIX_STRING);
     free(aptr);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
@@ -499,8 +498,11 @@ static int rte_init(int argc, char **argv)
     prte_pointer_array_add(prte_node_topologies, t);
     node->topology = t;
     if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+        char *output = NULL;
         prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        prte_dss.dump(0, prte_hwloc_topology, PRTE_HWLOC_TOPO);
+        prte_hwloc_print(&output, "\t", prte_hwloc_topology);
+        prte_output(0, "%s", output);
+        free(output);
     }
 
 
@@ -520,7 +522,7 @@ static int rte_init(int argc, char **argv)
             /* compute the hash */
             PRTE_HASH_STR(sns[idx], h);
             /* mark that this coprocessor is hosted by this node */
-            prte_hash_table_set_value_uint32(prte_coprocessors, h, (void*)&(PRTE_PROC_MY_NAME->vpid));
+            prte_hash_table_set_value_uint32(prte_coprocessors, h, (void*)&(PRTE_PROC_MY_NAME->rank));
         }
         prte_argv_free(sns);
         free(coprocessors);
@@ -532,8 +534,8 @@ static int rte_init(int argc, char **argv)
         /* compute the hash */
         PRTE_HASH_STR(coprocessors, h);
         /* mark that I am on this coprocessor */
-        prte_hash_table_set_value_uint32(prte_coprocessors, h, (void*)&(PRTE_PROC_MY_NAME->vpid));
-        prte_set_attribute(&node->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_LOCAL, coprocessors, PRTE_STRING);
+        prte_hash_table_set_value_uint32(prte_coprocessors, h, (void*)&(PRTE_PROC_MY_NAME->rank));
+        prte_set_attribute(&node->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_LOCAL, coprocessors, PMIX_STRING);
         free(coprocessors);
         prte_coprocessors_detected = true;
     }

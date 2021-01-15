@@ -16,6 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -81,32 +82,7 @@ prte_rml_component_t prte_rml_oob_component = {
 };
 
 /* Local variables */
-static void recv_nb(prte_process_name_t* peer,
-                    prte_rml_tag_t tag,
-                    bool persistent,
-                    prte_rml_callback_fn_t cbfunc,
-                    void* cbdata)
-{
-    prte_rml_recv_request_t *req;
-
-    prte_output_verbose(10, prte_rml_base_framework.framework_output,
-                         "%s rml_recv_nb for peer %s tag %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(peer), tag);
-
-    /* push the request into the event base so we can add
-     * the receive to our list of posted recvs */
-    req = PRTE_NEW(prte_rml_recv_request_t);
-    req->post->buffer_data = false;
-    req->post->peer.jobid = peer->jobid;
-    req->post->peer.vpid = peer->vpid;
-    req->post->tag = tag;
-    req->post->persistent = persistent;
-    req->post->cbfunc.iov = cbfunc;
-    req->post->cbdata = cbdata;
-    PRTE_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
-}
-static void recv_buffer_nb(prte_process_name_t* peer,
+static void recv_buffer_nb(pmix_proc_t* peer,
                            prte_rml_tag_t tag,
                            bool persistent,
                            prte_rml_buffer_callback_fn_t cbfunc,
@@ -122,16 +98,14 @@ static void recv_buffer_nb(prte_process_name_t* peer,
     /* push the request into the event base so we can add
      * the receive to our list of posted recvs */
     req = PRTE_NEW(prte_rml_recv_request_t);
-    req->post->buffer_data = true;
-    req->post->peer.jobid = peer->jobid;
-    req->post->peer.vpid = peer->vpid;
+    PMIX_XFER_PROCID(&req->post->peer, peer);
     req->post->tag = tag;
     req->post->persistent = persistent;
-    req->post->cbfunc.buffer = cbfunc;
+    req->post->cbfunc = cbfunc;
     req->post->cbdata = cbdata;
     PRTE_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
 }
-static void recv_cancel(prte_process_name_t* peer, prte_rml_tag_t tag)
+static void recv_cancel(pmix_proc_t* peer, prte_rml_tag_t tag)
 {
     prte_rml_recv_request_t *req;
 
@@ -150,8 +124,7 @@ static void recv_cancel(prte_process_name_t* peer, prte_rml_tag_t tag)
      * the receive from our list of posted recvs */
     req = PRTE_NEW(prte_rml_recv_request_t);
     req->cancel = true;
-    req->post->peer.jobid = peer->jobid;
-    req->post->peer.vpid = peer->vpid;
+    PMIX_XFER_PROCID(&req->post->peer, peer);
     req->post->tag = tag;
     PRTE_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
 }
@@ -163,9 +136,7 @@ static int oob_ping(const char* uri, const struct timeval* tv)
 static prte_rml_base_module_t base_module = {
     .component = (struct prte_rml_component_t*)&prte_rml_oob_component,
     .ping = oob_ping,
-    .send_nb = prte_rml_oob_send_nb,
     .send_buffer_nb = prte_rml_oob_send_buffer_nb,
-    .recv_nb = recv_nb,
     .recv_buffer_nb = recv_buffer_nb,
     .recv_cancel = recv_cancel,
     .purge = NULL

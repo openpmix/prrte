@@ -13,6 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,15 +27,13 @@
 #include <sys/types.h>
 
 #include "src/util/argv.h"
-#include "src/dss/dss.h"
-#include "src/dss/dss_internal.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/class/prte_pointer_array.h"
-
 #include "src/mca/errmgr/errmgr.h"
-#include "src/dss/dss.h"
-#include "src/dss/dss_internal.h"
-#include "src/runtime/data_type_support/prte_dt_support.h"
+#include "src/mca/rmaps/rmaps_types.h"
+
+#include "src/runtime/prte_globals.h"
 
 /*
  * JOB
@@ -43,376 +42,381 @@
  * sending a job object is to communicate the data required to dynamically
  * spawn another job - so we only pack that limited set of required data
  */
-int prte_dt_pack_job(prte_buffer_t *buffer, const void *src,
-                     int32_t num_vals, prte_data_type_t type)
+int prte_job_pack(pmix_data_buffer_t *bkt,
+                  prte_job_t *job)
 {
-    int rc;
-    int32_t i, j, count, bookmark;
-    prte_job_t **jobs;
+    pmix_status_t rc;
+    int32_t j, count, bookmark;
     prte_app_context_t *app;
     prte_proc_t *proc;
     prte_attribute_t *kv;
     prte_list_t *cache;
     prte_value_t *val;
-    char *tmp;
 
-    /* array of pointers to prte_job_t objects - need to pack the objects a set of fields at a time */
-    jobs = (prte_job_t**) src;
+    /* pack the nspace */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->nspace, 1, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    /* pack the flags */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->flags, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
 
-    for (i=0; i < num_vals; i++) {
-        /* pack the jobid */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                        (void*)(&(jobs[i]->jobid)), 1, PRTE_JOBID))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
+    /* pack the attributes that need to be sent */
+    count = 0;
+    PRTE_LIST_FOREACH(kv, &job->attributes, prte_attribute_t) {
+        if (PRTE_ATTR_GLOBAL == kv->local) {
+            ++count;
         }
-        /* pack the nspace */
-        tmp = strdup(jobs[i]->nspace);
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                        (void*)(&tmp), 1, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
-            free(tmp);
-            return rc;
+    }
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    PRTE_LIST_FOREACH(kv, &job->attributes, prte_attribute_t) {
+        if (PRTE_ATTR_GLOBAL == kv->local) {
+            rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->key, 1, PMIX_UINT16);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                return prte_pmix_convert_status(rc);
+            }
+            rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->data, 1, PMIX_VALUE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                return prte_pmix_convert_status(rc);
+            }
         }
-        free(tmp);
-        /* pack the flags */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                        (void*)(&(jobs[i]->flags)), 1, PRTE_JOB_FLAGS_T))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
+    }
+    /* check for job info attribute */
+    cache = NULL;
+    if (prte_get_attribute(&job->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PMIX_POINTER) &&
+        NULL != cache) {
+        /* we need to pack these as well, but they are composed
+         * of prte_value_t's on a list. So first pack the number
+         * of list elements */
+        count = prte_list_get_size(cache);
+        rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
         }
-
-        /* pack the attributes that need to be sent */
+        /* now pack each element on the list */
+        PRTE_LIST_FOREACH(val, cache, prte_value_t) {
+            rc = PMIx_Data_pack(NULL, bkt, (void*)&val->value, 1, PMIX_VALUE);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                return prte_pmix_convert_status(rc);
+            }
+        }
+    } else {
+        /* pack a zero to indicate no job info is being passed */
         count = 0;
-        PRTE_LIST_FOREACH(kv, &jobs[i]->attributes, prte_attribute_t) {
-            if (PRTE_ATTR_GLOBAL == kv->local) {
-                ++count;
-            }
+        rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
         }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        PRTE_LIST_FOREACH(kv, &jobs[i]->attributes, prte_attribute_t) {
-            if (PRTE_ATTR_GLOBAL == kv->local) {
-                if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)&kv, 1, PRTE_ATTRIBUTE))) {
-                    PRTE_ERROR_LOG(rc);
-                    return rc;
-                }
-            }
-        }
-        /* check for job info attribute */
-        cache = NULL;
-        if (prte_get_attribute(&jobs[i]->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PRTE_PTR) &&
-            NULL != cache) {
-            /* we need to pack these as well, but they are composed
-             * of prte_value_t's on a list. So first pack the number
-             * of list elements */
-            count = prte_list_get_size(cache);
-            if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
-            }
-            /* now pack each element on the list */
-            PRTE_LIST_FOREACH(val, cache, prte_value_t) {
-                if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)&val, 1, PRTE_VALUE))) {
-                    PRTE_ERROR_LOG(rc);
-                    return rc;
-                }
-            }
-        } else {
-            /* pack a zero to indicate no job info is being passed */
-            count = 0;
-            if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
-            }
-        }
+    }
 
-        /* pack the personality */
-        count = prte_argv_count(jobs[i]->personality);
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, &count, 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
+    /* pack the personality */
+    count = prte_argv_count(job->personality);
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    for (j=0; j < count; j++) {
+        rc = PMIx_Data_pack(NULL, bkt, (void*)&job->personality[j], 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
         }
-        for (j=0; j < count; j++) {
-            if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, &jobs[i]->personality[j], 1, PRTE_STRING))) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
+    }
+
+    /* pack the number of apps */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->num_apps, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* if there are apps, pack the app_contexts */
+    if (0 < job->num_apps) {
+        for (j=0; j < job->apps->size; j++) {
+            if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(job->apps, j))) {
+                continue;
+            }
+            rc = prte_app_pack(bkt, app);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                return prte_pmix_convert_status(rc);
             }
         }
+    }
 
-        /* pack the number of apps */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->num_apps)), 1, PRTE_APP_IDX))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
+    /* pack the number of procs and offset */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->num_procs, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->offset, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
 
-        /* if there are apps, pack the app_contexts */
-        if (0 < jobs[i]->num_apps) {
-            for (j=0; j < jobs[i]->apps->size; j++) {
-                if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jobs[i]->apps, j))) {
+    if (0 < job->num_procs) {
+        /* check attributes to see if this job is to be fully
+         * described in the launch msg */
+        if (prte_get_attribute(&job->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
+            for (j=0; j < job->procs->size; j++) {
+                if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(job->procs, j))) {
                     continue;
                 }
-                if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)&app, 1, PRTE_APP_CONTEXT))) {
-                    PRTE_ERROR_LOG(rc);
-                    return rc;
+                rc = prte_proc_pack(bkt, proc);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    return prte_pmix_convert_status(rc);
                 }
             }
         }
-
-        /* pack the number of procs and offset */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->num_procs)), 1, PRTE_VPID))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->offset)), 1, PRTE_VPID))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        if (0 < jobs[i]->num_procs) {
-            /* check attributes to see if this job is to be fully
-             * described in the launch msg */
-            if (prte_get_attribute(&jobs[i]->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PRTE_BOOL)) {
-                for (j=0; j < jobs[i]->procs->size; j++) {
-                    if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(jobs[i]->procs, j))) {
-                        continue;
-                    }
-                    if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)&proc, 1, PRTE_PROC))) {
-                        PRTE_ERROR_LOG(rc);
-                        return rc;
-                    }
-                }
-            }
-        }
-
-        /* pack the stdin target */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->stdin_target)), 1, PRTE_VPID))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the total slots allocated to the job */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->total_slots_alloc)), 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* if the map is NULL, then we cannot pack it as there is
-         * nothing to pack. However, we have to flag whether or not
-         * the map is included so the unpacking routine can know
-         * what to do
-         */
-        if (NULL == jobs[i]->map) {
-            /* pack a zero value */
-            j=0;
-        } else {
-            /* pack a one to indicate a map is there */
-            j = 1;
-        }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                            (void*)&j, 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the map - this will only pack the fields that control
-         * HOW a job is to be mapped. We do -not- pack the mapped procs
-         * or nodes as this info does not need to be transmitted
-         */
-        if (NULL != jobs[i]->map) {
-            if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                             (void*)(&(jobs[i]->map)), 1, PRTE_JOB_MAP))) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
-            }
-        }
-
-        /* pack the bookmark */
-        if (NULL == jobs[i]->bookmark) {
-            bookmark = -1;
-        } else {
-            bookmark = jobs[i]->bookmark->index;
-        }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, &bookmark, 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the job state */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(jobs[i]->state)), 1, PRTE_JOB_STATE))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the launcher ID */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                        (void*)(&(jobs[i]->launcher)), 1, PRTE_JOBID))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
     }
+
+    /* pack the stdin target */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->stdin_target, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the total slots allocated to the job */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->total_slots_alloc, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* if the map is NULL, then we cannot pack it as there is
+     * nothing to pack. However, we have to flag whether or not
+     * the map is included so the unpacking routine can know
+     * what to do
+     */
+    if (NULL == job->map) {
+        /* pack a zero value */
+        j=0;
+    } else {
+        /* pack a one to indicate a map is there */
+        j = 1;
+    }
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&j, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the map - this will only pack the fields that control
+     * HOW a job is to be mapped. We do -not- pack the mapped procs
+     * or nodes as this info does not need to be transmitted
+     */
+    if (NULL != job->map) {
+        rc = prte_map_pack(bkt, job->map);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
+    }
+
+    /* pack the bookmark */
+    if (NULL == job->bookmark) {
+        bookmark = -1;
+    } else {
+        bookmark = job->bookmark->index;
+    }
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&bookmark, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the job state */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->state, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the launcher ID */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->launcher, 1, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
     return PRTE_SUCCESS;
 }
 
-/*
- *  NODE
- */
-int prte_dt_pack_node(prte_buffer_t *buffer, const void *src,
-                      int32_t num_vals, prte_data_type_t type)
+int prte_node_pack(pmix_data_buffer_t *bkt,
+                   prte_node_t *node)
 {
     int rc;
-    int32_t i, count;
-    prte_node_t **nodes;
+    int32_t count;
     uint8_t flag;
     prte_attribute_t *kv;
 
-    /* array of pointers to prte_node_t objects - need to pack the objects a set of fields at a time */
-    nodes = (prte_node_t**) src;
+    /* do not pack the index - it is meaningless on the other end */
 
-    for (i=0; i < num_vals; i++) {
-        /* do not pack the index - it is meaningless on the other end */
+    /* pack the node name */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&node->name, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
 
-        /* pack the node name */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&(nodes[i]->name)), 1, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
+    /* do not pack the daemon name or launch id */
+
+    /* pack the number of procs on the node */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&node->num_procs, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* do not pack the procs */
+
+    /* pack whether we are oversubscribed or not */
+    flag = PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&flag, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the state */
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&node->state, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack any shared attributes */
+    count = 0;
+    PRTE_LIST_FOREACH(kv, &node->attributes, prte_attribute_t) {
+        if (PRTE_ATTR_GLOBAL == kv->local) {
+            ++count;
         }
-
-        /* do not pack the daemon name or launch id */
-
-        /* pack the number of procs on the node */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&(nodes[i]->num_procs)), 1, PRTE_VPID))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* do not pack the procs */
-
-        /* pack whether we are oversubscribed or not */
-        flag = PRTE_FLAG_TEST(nodes[i], PRTE_NODE_FLAG_OVERSUBSCRIBED);
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&flag), 1, PRTE_UINT8))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the state */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&(nodes[i]->state)), 1, PRTE_NODE_STATE))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack any shared attributes */
-        count = 0;
-        PRTE_LIST_FOREACH(kv, &nodes[i]->attributes, prte_attribute_t) {
+    }
+    rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    if (0 < count) {
+        PRTE_LIST_FOREACH(kv, &node->attributes, prte_attribute_t) {
             if (PRTE_ATTR_GLOBAL == kv->local) {
-                ++count;
-            }
-        }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        PRTE_LIST_FOREACH(kv, &nodes[i]->attributes, prte_attribute_t) {
-            if (PRTE_ATTR_GLOBAL == kv->local) {
-                if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)&kv, 1, PRTE_ATTRIBUTE))) {
-                    PRTE_ERROR_LOG(rc);
-                    return rc;
+                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->key, 1, PMIX_UINT16);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    return prte_pmix_convert_status(rc);
+                }
+                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->data, 1, PMIX_VALUE);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    return prte_pmix_convert_status(rc);
                 }
             }
         }
     }
     return PRTE_SUCCESS;
 }
-
 /*
  * PROC
  */
-int prte_dt_pack_proc(prte_buffer_t *buffer, const void *src,
-                      int32_t num_vals, prte_data_type_t type)
+int prte_proc_pack(pmix_data_buffer_t *bkt,
+                   prte_proc_t *proc)
 {
-    int rc;
-    int32_t i, count;
-    prte_proc_t **procs;
+    pmix_status_t rc;
+    int32_t count;
     prte_attribute_t *kv;
 
-    /* array of pointers to prte_proc_t objects - need to pack the objects a set of fields at a time */
-    procs = (prte_proc_t**) src;
+    /* pack the name */
+    rc = PMIx_Data_pack(NULL, bkt, &proc->name, 1, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
 
-    for (i=0; i < num_vals; i++) {
-        /* pack the name */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(procs[i]->name)), 1, PRTE_NAME))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
+    /* pack the daemon/node it is on */
+    rc = PMIx_Data_pack(NULL, bkt, &proc->parent, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the local rank */
+    rc = PMIx_Data_pack(NULL, bkt, &proc->local_rank, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the node rank */
+    rc = PMIx_Data_pack(NULL, bkt, &proc->node_rank, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the state */
+    rc = PMIx_Data_pack(NULL, bkt, &proc->state, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the app context index */
+    rc = PMIx_Data_pack(NULL, bkt, &proc->app_idx, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the app rank */
+    rc = PMIx_Data_pack(NULL, bkt, &proc->app_rank, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the attributes that will go */
+    count = 0;
+    PRTE_LIST_FOREACH(kv, &proc->attributes, prte_attribute_t) {
+        if (PRTE_ATTR_GLOBAL == kv->local) {
+            ++count;
         }
-
-        /* pack the daemon/node it is on */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(procs[i]->parent)), 1, PRTE_VPID))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the local rank */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(procs[i]->local_rank)), 1, PRTE_LOCAL_RANK))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the node rank */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(procs[i]->node_rank)), 1, PRTE_NODE_RANK))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the state */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(procs[i]->state)), 1, PRTE_PROC_STATE))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the app context index */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(procs[i]->app_idx)), 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the app rank */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                         (void*)(&(procs[i]->app_rank)), 1, PRTE_UINT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the attributes that will go */
-        count = 0;
-        PRTE_LIST_FOREACH(kv, &procs[i]->attributes, prte_attribute_t) {
+    }
+    rc = PMIx_Data_pack(NULL, bkt, &count, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    if (0 < count) {
+        PRTE_LIST_FOREACH(kv, &proc->attributes, prte_attribute_t) {
             if (PRTE_ATTR_GLOBAL == kv->local) {
-                ++count;
-            }
-        }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        PRTE_LIST_FOREACH(kv, &procs[i]->attributes, prte_attribute_t) {
-            if (PRTE_ATTR_GLOBAL == kv->local) {
-                if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)&kv, 1, PRTE_ATTRIBUTE))) {
-                    PRTE_ERROR_LOG(rc);
-                    return rc;
+                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->key, 1, PMIX_UINT16);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    return prte_pmix_convert_status(rc);
+                }
+                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->data, 1, PMIX_VALUE);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    return prte_pmix_convert_status(rc);
                 }
             }
         }
@@ -424,167 +428,112 @@ int prte_dt_pack_proc(prte_buffer_t *buffer, const void *src,
 /*
  * APP CONTEXT
  */
-int prte_dt_pack_app_context(prte_buffer_t *buffer, const void *src,
-                             int32_t num_vals, prte_data_type_t type)
+int prte_app_pack(pmix_data_buffer_t *bkt,
+                  prte_app_context_t *app)
 {
-    int rc;
-    int32_t i, count;
-    prte_app_context_t **app_context;
+    pmix_status_t rc;
+    int32_t count, j;
     prte_attribute_t *kv;
 
-    /* array of pointers to prte_app_context objects - need to pack the objects a set of fields at a time */
-    app_context = (prte_app_context_t**) src;
+    /* pack the application index (for multiapp jobs) */
+    rc = PMIx_Data_pack(NULL, bkt, &app->idx, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
 
-    for (i=0; i < num_vals; i++) {
-        /* pack the application index (for multiapp jobs) */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                                                       (void*)(&(app_context[i]->idx)), 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
+    /* pack the application name */
+    rc = PMIx_Data_pack(NULL, bkt, &app->app, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the number of processes */
+    rc = PMIx_Data_pack(NULL, bkt, &app->num_procs, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the first rank for this app */
+    rc = PMIx_Data_pack(NULL, bkt, &app->first_rank, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the number of entries in the argv array */
+    count = prte_argv_count(app->argv);
+    rc = PMIx_Data_pack(NULL, bkt, &count, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* if there are entries, pack the argv entries */
+    for (j=0; j < count; j++) {
+        rc = PMIx_Data_pack(NULL, bkt, (void*)&app->argv[j], 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
         }
+    }
 
-        /* pack the application name */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                                                       (void*)(&(app_context[i]->app)), 1, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
+    /* pack the number of entries in the enviro array */
+    count = prte_argv_count(app->env);
+    rc = PMIx_Data_pack(NULL, bkt, &count, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* if there are entries, pack the enviro entries */
+    for (j=0; j < count; j++) {
+        rc = PMIx_Data_pack(NULL, bkt, (void*)&app->env[j], 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
         }
+    }
 
-        /* pack the number of processes */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                                                       (void*)(&(app_context[i]->num_procs)), 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
+    /* pack the cwd */
+    rc = PMIx_Data_pack(NULL, bkt, &app->cwd, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack attributes */
+    count = 0;
+    PRTE_LIST_FOREACH(kv, &app->attributes, prte_attribute_t) {
+        if (PRTE_ATTR_GLOBAL == kv->local) {
+            ++count;
         }
-
-        /* pack the first rank for this app */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                                                       (void*)(&(app_context[i]->first_rank)), 1, PRTE_VPID))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack the number of entries in the argv array */
-        count = prte_argv_count(app_context[i]->argv);
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* if there are entries, pack the argv entries */
-        if (0 < count) {
-            if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                                                           (void*)(app_context[i]->argv), count, PRTE_STRING))) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
-            }
-        }
-
-        /* pack the number of entries in the enviro array */
-        count = prte_argv_count(app_context[i]->env);
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* if there are entries, pack the enviro entries */
-        if (0 < count) {
-            if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                                                           (void*)(app_context[i]->env), count, PRTE_STRING))) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
-            }
-        }
-
-        /* pack the cwd */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer,
-                                                       (void*)(&(app_context[i]->cwd)), 1, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        /* pack attributes */
-        count = 0;
-        PRTE_LIST_FOREACH(kv, &app_context[i]->attributes, prte_attribute_t) {
+    }
+    rc = PMIx_Data_pack(NULL, bkt, &count, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    if (0 < count) {
+        PRTE_LIST_FOREACH(kv, &app->attributes, prte_attribute_t) {
             if (PRTE_ATTR_GLOBAL == kv->local) {
-                ++count;
-            }
-        }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)(&count), 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        PRTE_LIST_FOREACH(kv, &app_context[i]->attributes, prte_attribute_t) {
-            if (PRTE_ATTR_GLOBAL == kv->local) {
-                if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, (void*)&kv, 1, PRTE_ATTRIBUTE))) {
-                    PRTE_ERROR_LOG(rc);
-                    return rc;
+                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->key, 1, PMIX_UINT16);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    return prte_pmix_convert_status(rc);
+                }
+                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->data, 1, PMIX_VALUE);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    return prte_pmix_convert_status(rc);
                 }
             }
         }
     }
 
     return PRTE_SUCCESS;
-}
-
-/*
- * EXIT CODE
- */
-int prte_dt_pack_exit_code(prte_buffer_t *buffer, const void *src,
-                                 int32_t num_vals, prte_data_type_t type)
-{
-    int rc;
-
-    if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, src, num_vals, PRTE_EXIT_CODE_T))) {
-        PRTE_ERROR_LOG(rc);
-    }
-
-    return rc;
-}
-
-/*
- * NODE STATE
- */
-int prte_dt_pack_node_state(prte_buffer_t *buffer, const void *src,
-                                  int32_t num_vals, prte_data_type_t type)
-{
-    int rc;
-
-    if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, src, num_vals, PRTE_NODE_STATE_T))) {
-        PRTE_ERROR_LOG(rc);
-    }
-
-    return rc;
-}
-
-/*
- * PROC STATE
- */
-int prte_dt_pack_proc_state(prte_buffer_t *buffer, const void *src,
-                                  int32_t num_vals, prte_data_type_t type)
-{
-    int rc;
-
-    if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, src, num_vals, PRTE_PROC_STATE_T))) {
-        PRTE_ERROR_LOG(rc);
-    }
-
-    return rc;
-}
-
-/*
- * JOB STATE
- */
-int prte_dt_pack_job_state(prte_buffer_t *buffer, const void *src,
-                                 int32_t num_vals, prte_data_type_t type)
-{
-    int rc;
-
-    if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, src, num_vals, PRTE_JOB_STATE_T))) {
-        PRTE_ERROR_LOG(rc);
-    }
-
-    return rc;
 }
 
 /*
@@ -592,277 +541,48 @@ int prte_dt_pack_job_state(prte_buffer_t *buffer, const void *src,
  * NOTE: There is no obvious reason to include all the node information when
  * sending a map
  */
-int prte_dt_pack_map(prte_buffer_t *buffer, const void *src,
-                             int32_t num_vals, prte_data_type_t type)
+int prte_map_pack(pmix_data_buffer_t *bkt,
+                  struct prte_job_map_t *mp)
 {
-    int rc;
-    int32_t i;
-    prte_job_map_t **maps;
+    pmix_status_t rc;
+    prte_job_map_t *map = (prte_job_map_t*)mp;
 
-    /* array of pointers to prte_job_map_t objects - need to pack the objects a set of fields at a time */
-    maps = (prte_job_map_t**) src;
+    /* pack the requested mapper */
+    rc = PMIx_Data_pack(NULL, bkt, &map->req_mapper, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
 
-    for (i=0; i < num_vals; i++) {
-        /* pack the requested mapper */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, &(maps[i]->req_mapper), 1, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        /* pack the last mapper */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, &(maps[i]->last_mapper), 1, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        /* pack the policies */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, &(maps[i]->mapping), 1, PRTE_MAPPING_POLICY))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, &(maps[i]->ranking), 1, PRTE_RANKING_POLICY))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, &(maps[i]->binding), 1, PRTE_BINDING_POLICY))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
+    /* pack the last mapper */
+    rc = PMIx_Data_pack(NULL, bkt, &map->last_mapper, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the policies */
+    rc = PMIx_Data_pack(NULL, bkt, &map->mapping, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    rc = PMIx_Data_pack(NULL, bkt, &map->ranking, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    rc = PMIx_Data_pack(NULL, bkt, &map->binding, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
         /* pack the number of nodes involved in the job */
-        if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, &(maps[i]->num_nodes), 1, PRTE_UINT32))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-    }
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * RML TAG
- */
-int prte_dt_pack_tag(prte_buffer_t *buffer, const void *src,
-                           int32_t num_vals, prte_data_type_t type)
-{
-    int rc;
-
-    /* Turn around and pack the real type */
-    if (PRTE_SUCCESS != (rc = prte_dss_pack_buffer(buffer, src, num_vals, PRTE_RML_TAG_T))) {
-        PRTE_ERROR_LOG(rc);
-    }
-
-    return rc;
-}
-
-/*
- * PRTE_DAEMON_CMD
- */
-int prte_dt_pack_daemon_cmd(prte_buffer_t *buffer, const void *src, int32_t num_vals,
-                              prte_data_type_t type)
-{
-    int ret;
-
-    /* Turn around and pack the real type */
-    if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, src, num_vals, PRTE_DAEMON_CMD_T))) {
-        PRTE_ERROR_LOG(ret);
-    }
-
-    return ret;
-}
-
-/*
- * PRTE_IOF_TAG
- */
-int prte_dt_pack_iof_tag(prte_buffer_t *buffer, const void *src, int32_t num_vals,
-                         prte_data_type_t type)
-{
-    int ret;
-
-    /* Turn around and pack the real type */
-    if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, src, num_vals, PRTE_IOF_TAG_T))) {
-        PRTE_ERROR_LOG(ret);
-    }
-
-    return ret;
-}
-
-
-/*
- * PRTE_ATTR
- */
-int prte_dt_pack_attr(prte_buffer_t *buffer, const void *src, int32_t num_vals,
-                      prte_data_type_t type)
-{
-    prte_attribute_t **ptr;
-    int32_t i, n;
-    int ret;
-
-    ptr = (prte_attribute_t **) src;
-
-    for (i = 0; i < num_vals; ++i) {
-        /* pack the key and type */
-        if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->key, 1, PRTE_ATTR_KEY_T))) {
-            return ret;
-        }
-        if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->type, 1, PRTE_DATA_TYPE))) {
-            return ret;
-        }
-        /* now pack the right field */
-        switch (ptr[i]->type) {
-        case PRTE_BOOL:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.flag, 1, PRTE_BOOL))) {
-                return ret;
-            }
-            break;
-        case PRTE_BYTE:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.byte, 1, PRTE_BYTE))) {
-                return ret;
-            }
-            break;
-        case PRTE_STRING:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.string, 1, PRTE_STRING))) {
-                return ret;
-            }
-            break;
-        case PRTE_SIZE:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.size, 1, PRTE_SIZE))) {
-                return ret;
-            }
-            break;
-        case PRTE_PID:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.pid, 1, PRTE_PID))) {
-                return ret;
-            }
-            break;
-        case PRTE_INT:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.integer, 1, PRTE_INT))) {
-                return ret;
-            }
-            break;
-        case PRTE_INT8:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.int8, 1, PRTE_INT8))) {
-                return ret;
-            }
-            break;
-        case PRTE_INT16:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.int16, 1, PRTE_INT16))) {
-                return ret;
-            }
-            break;
-        case PRTE_INT32:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.int32, 1, PRTE_INT32))) {
-                return ret;
-            }
-            break;
-        case PRTE_INT64:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.int64, 1, PRTE_INT64))) {
-                return ret;
-            }
-            break;
-        case PRTE_UINT:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.uint, 1, PRTE_UINT))) {
-                return ret;
-            }
-            break;
-        case PRTE_UINT8:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.uint8, 1, PRTE_UINT8))) {
-                return ret;
-            }
-            break;
-        case PRTE_UINT16:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.uint16, 1, PRTE_UINT16))) {
-                return ret;
-            }
-            break;
-        case PRTE_UINT32:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.uint32, 1, PRTE_UINT32))) {
-                return ret;
-            }
-            break;
-        case PRTE_UINT64:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.uint64, 1, PRTE_UINT64))) {
-                return ret;
-            }
-            break;
-        case PRTE_BYTE_OBJECT:
-            /* have to pack by hand so we can match unpack without allocation */
-            n = ptr[i]->data.bo.size;
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_int32(buffer, &n, 1, PRTE_INT32))) {
-                return ret;
-            }
-            if (0 < n) {
-                if (PRTE_SUCCESS != (ret = prte_dss_pack_byte(buffer, ptr[i]->data.bo.bytes, n, PRTE_BYTE))) {
-                    return ret;
-                }
-            }
-            break;
-        case PRTE_FLOAT:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.fval, 1, PRTE_FLOAT))) {
-                return ret;
-            }
-            break;
-        case PRTE_TIMEVAL:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.tv, 1, PRTE_TIMEVAL))) {
-                return ret;
-            }
-            break;
-        case PRTE_PTR:
-            /* just ignore these values */
-            break;
-        case PRTE_VPID:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.vpid, 1, PRTE_VPID))) {
-                return ret;
-            }
-            break;
-        case PRTE_JOBID:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.jobid, 1, PRTE_JOBID))) {
-                return ret;
-            }
-            break;
-        case PRTE_NAME:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.name, 1, PRTE_NAME))) {
-                return ret;
-            }
-            break;
-        case PRTE_ENVAR:
-            if (PRTE_SUCCESS != (ret = prte_dss_pack_buffer(buffer, &ptr[i]->data.envar, 1, PRTE_ENVAR))) {
-                return ret;
-            }
-            break;
-
-        default:
-            prte_output(0, "PACK-PRTE-ATTR: UNSUPPORTED TYPE %d", (int)ptr[i]->type);
-            return PRTE_ERROR;
-        }
-    }
-
-    return PRTE_SUCCESS;
-}
-
-/*
- * PRTE_SIGNATURE
- */
-int prte_dt_pack_sig(prte_buffer_t *buffer, const void *src, int32_t num_vals,
-                     prte_data_type_t type)
-{
-    prte_grpcomm_signature_t **ptr;
-    int32_t i;
-    int rc;
-
-    ptr = (prte_grpcomm_signature_t **) src;
-
-    for (i = 0; i < num_vals; ++i) {
-        /* pack the #procs */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &ptr[i]->sz, 1, PRTE_SIZE))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        if (0 < ptr[i]->sz) {
-            /* pack the array */
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, ptr[i]->signature, ptr[i]->sz, PRTE_NAME))) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
-            }
-        }
+    rc = PMIx_Data_pack(NULL, bkt, &map->num_nodes, 1, PMIX_UINT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
     }
 
     return PRTE_SUCCESS;

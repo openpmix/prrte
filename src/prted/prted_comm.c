@@ -53,7 +53,6 @@
 #include "src/util/os_dirpath.h"
 #include "src/util/prte_environ.h"
 #include "src/util/path.h"
-#include "src/dss/dss.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/mca/prtecompress/prtecompress.h"
 #include "src/prted/pmix/pmix_server.h"
@@ -101,19 +100,19 @@ static void _notify_release(pmix_status_t status, void *cbdata)
 
 static prte_pointer_array_t *procs_prev_ordered_to_terminate = NULL;
 
-void prte_daemon_recv(int status, prte_process_name_t* sender,
-                      prte_buffer_t *buffer, prte_rml_tag_t tag,
+void prte_daemon_recv(int status, pmix_proc_t* sender,
+                      pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
                       void* cbdata)
 {
     prte_daemon_cmd_flag_t command;
-    prte_buffer_t *relay_msg;
+    pmix_data_buffer_t *relay_msg;
     int ret;
     int32_t n;
     int32_t signal, cnt;
-    prte_jobid_t job;
-    prte_buffer_t data, *answer;
+    pmix_nspace_t job;
+    pmix_data_buffer_t data, *answer;
     prte_job_t *jdata;
-    prte_process_name_t proc;
+    pmix_proc_t proc;
     int32_t i, num_replies;
     prte_pointer_array_t procarray;
     prte_proc_t *proct;
@@ -122,31 +121,29 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
     int32_t num_procs, num_new_procs = 0, p;
     prte_proc_t *cur_proc = NULL, *prev_proc = NULL;
     bool found = false;
+    bool compressed;
     prte_node_t *node;
     FILE *fp;
     char gscmd[256], path[1035], *pathptr;
     char string[256], *string_ptr = string;
     char *coprocessors;
     prte_job_map_t *map;
-    int8_t flag;
-    uint8_t *cmpdata;
-    size_t cmplen;
-    uint32_t u32;
-    void *nptr;
     prte_pmix_lock_t lk;
     pmix_data_buffer_t pbkt;
     pmix_proc_t pname;
-    prte_byte_object_t *bo, *bo2;
-    prte_process_name_t dmn;
+    pmix_byte_object_t bo, bo2, pbo;
+    pmix_proc_t dmn;
     pmix_status_t pstatus;
     pmix_info_t *info;
     size_t n2, ninfo;
-    prte_buffer_t wireup;
+    pmix_data_buffer_t wireup;
+    pmix_topology_t ptopo;
 
     /* unpack the command */
     n = 1;
-    if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &command, &n, PRTE_DAEMON_CMD))) {
-        PRTE_ERROR_LOG(ret);
+    ret = PMIx_Data_unpack(NULL, buffer, &command, &n, PMIX_UINT8);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         return;
     }
 
@@ -174,16 +171,15 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
         prte_pointer_array_init(&procarray, num_replies, PRTE_GLOBAL_ARRAY_MAX_SIZE, 16);
 
         /* unpack the proc names into the array */
-        while (PRTE_SUCCESS == (ret = prte_dss.unpack(buffer, &proc, &n, PRTE_NAME))) {
+        while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, buffer, &proc, &n, PMIX_PROC))) {
             proct = PRTE_NEW(prte_proc_t);
-            proct->name.jobid = proc.jobid;
-            proct->name.vpid = proc.vpid;
+            PMIX_LOAD_PROCID(&proct->name, proc.nspace, proc.rank);
 
             prte_pointer_array_add(&procarray, proct);
             num_replies++;
         }
-        if (PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
-            PRTE_ERROR_LOG(ret);
+        if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
+            PMIX_ERROR_LOG(ret);
             goto KILL_PROC_CLEANUP;
         }
 
@@ -214,8 +210,9 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
     case PRTE_DAEMON_SIGNAL_LOCAL_PROCS:
         /* unpack the jobid */
         n = 1;
-        if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &job, &n, PRTE_JOBID))) {
-            PRTE_ERROR_LOG(ret);
+        ret = PMIx_Data_unpack(NULL, buffer, &job, &n, PMIX_PROC_NSPACE);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
             goto CLEANUP;
         }
 
@@ -224,8 +221,9 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
 
         /* get the signal */
         n = 1;
-        if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &signal, &n, PRTE_INT32))) {
-            PRTE_ERROR_LOG(ret);
+        ret = PMIx_Data_unpack(NULL, buffer, &signal, &n, PMIX_INT32);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
             goto CLEANUP;
         }
 
@@ -271,29 +269,42 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
             }
             /* unpack the wireup byte object */
             cnt=1;
-            if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &bo, &cnt, PRTE_BYTE_OBJECT))) {
-                PRTE_ERROR_LOG(ret);
+            ret = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
                 goto CLEANUP;
             }
-            if (0 < bo->size) {
+            if (0 < bo.size) {
                 /* load it into a buffer */
-                PRTE_CONSTRUCT(&wireup, prte_buffer_t);
-                prte_dss.load(&wireup, bo->bytes, bo->size);
+                PMIX_DATA_BUFFER_CONSTRUCT(&wireup);
+                ret = PMIx_Data_load(&wireup, &bo);
+                PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    goto CLEANUP;
+                }
                 cnt=1;
-                while (PRTE_SUCCESS == (ret = prte_dss.unpack(&wireup, &dmn, &cnt, PRTE_NAME))) {
+                while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, &wireup, &dmn, &cnt, PMIX_PROC))) {
                     /* unpack the byte object containing the contact info */
                     cnt = 1;
-                    if (PRTE_SUCCESS != (ret = prte_dss.unpack(&wireup, &bo2, &cnt, PRTE_BYTE_OBJECT))) {
-                        PRTE_ERROR_LOG(ret);
+                    ret = PMIx_Data_unpack(NULL, &wireup, &bo2, &cnt, PMIX_BYTE_OBJECT);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
                         break;
                     }
                     /* load into a PMIx buffer for unpacking */
                     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-                    PMIX_DATA_BUFFER_LOAD(&pbkt, bo2->bytes, bo2->size);
+                    ret = PMIx_Data_load(&pbkt, &bo2);
+                    PMIX_BYTE_OBJECT_DESTRUCT(&bo2);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
+                        break;
+                    }
                     /* unpack the number of info's provided */
                     cnt = 1;
-                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(PRTE_PROC_MY_PROCID, &pbkt, &ninfo, &cnt, PMIX_SIZE))) {
-                        PMIX_ERROR_LOG(pstatus);
+                    ret = PMIx_Data_unpack(NULL, &pbkt, &ninfo, &cnt, PMIX_SIZE);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
                         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         ret = PRTE_ERR_UNPACK_FAILURE;
                         break;
@@ -301,8 +312,9 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                     /* unpack the infos */
                     PMIX_INFO_CREATE(info, ninfo);
                     cnt = ninfo;
-                    if (PMIX_SUCCESS != (pstatus = PMIx_Data_unpack(PRTE_PROC_MY_PROCID, &pbkt, info, &cnt, PMIX_INFO))) {
-                        PMIX_ERROR_LOG(pstatus);
+                    ret = PMIx_Data_unpack(NULL, &pbkt, info, &cnt, PMIX_INFO);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
                         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         PMIX_INFO_FREE(info, ninfo);
                         ret = PRTE_ERR_UNPACK_FAILURE;
@@ -323,13 +335,12 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                     PMIX_INFO_FREE(info, ninfo);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 }
-                if (PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
-                    PRTE_ERROR_LOG(ret);
+                if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
+                    PMIX_ERROR_LOG(ret);
                 }
                 /* done with the wireup buffer - dump it */
-                PRTE_DESTRUCT(&wireup);
+                PMIX_DATA_BUFFER_DESTRUCT(&wireup);
             }
-            free(bo);
         }
         break;
 
@@ -358,7 +369,8 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
 
         /* Number of processes */
         n = 1;
-        if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &num_procs, &n, PRTE_INT32)) ) {
+        ret = PMIx_Data_unpack(NULL, buffer, &num_procs, &n, PMIX_INT32);
+        if (PMIX_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             goto CLEANUP;
         }
@@ -380,8 +392,9 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
             cur_proc = PRTE_NEW(prte_proc_t);
 
             n = 1;
-            if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &(cur_proc->name), &n, PRTE_NAME)) ) {
-                PRTE_ERROR_LOG(ret);
+            ret = PMIx_Data_unpack(NULL, buffer, &(cur_proc->name), &n, PMIX_PROC);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
                 goto CLEANUP;
             }
 
@@ -391,9 +404,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                 if( NULL == (prev_proc = (prte_proc_t*)prte_pointer_array_get_item(procs_prev_ordered_to_terminate, p))) {
                     continue;
                 }
-                if(PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL,
-                                                               &cur_proc->name,
-                                                               &prev_proc->name) ) {
+                if (PMIX_CHECK_PROCID(&cur_proc->name, &prev_proc->name) ) {
                     found = true;
                     break;
                 }
@@ -491,10 +502,12 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
         /* cycle thru our known jobs to find any that are tools - these
          * may not have been killed if, for example, we didn't start
          * them */
-        i = prte_hash_table_get_first_key_uint32(prte_job_data, &u32, (void **)&jdata, &nptr);
-        while (PRTE_SUCCESS == i) {
-            if (NULL != jdata &&
-                PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) &&
+        for (i=0; i < prte_job_data->size; i++) {
+            jdata = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, i);
+            if (NULL == jdata) {
+                continue;
+            }
+            if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) &&
                 0 < prte_list_get_size(&jdata->children)) {
                 pmix_info_t info[3];
                 bool flag;
@@ -512,8 +525,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                 /* provide the status */
                 PMIX_INFO_LOAD(&info[1], PMIX_JOB_TERM_STATUS, &xrc, PMIX_STATUS);
                 /* tell the requestor which job */
-                PRTE_PMIX_CONVERT_JOBID(ret, pname.nspace, jd->jobid);
-                pname.rank = PMIX_RANK_WILDCARD;
+                PMIX_LOAD_PROCID(&pname, jd->nspace, PMIX_RANK_WILDCARD);
                 PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
                 PRTE_PMIX_CONSTRUCT_LOCK(&lk);
                 PMIx_Notify_event(PMIX_ERR_JOB_TERMINATED, &pname, PMIX_RANGE_SESSION,
@@ -521,7 +533,6 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                 PRTE_PMIX_WAIT_THREAD(&lk);
                 PRTE_PMIX_DESTRUCT_LOCK(&lk);
             }
-            i = prte_hash_table_get_next_key_uint32(prte_job_data, &u32, (void **)&jdata, nptr, &nptr);
         }
         /* flag that prteds were ordered to terminate */
         prte_prteds_term_ordered = true;
@@ -551,8 +562,9 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
     case PRTE_DAEMON_DVM_CLEANUP_JOB_CMD:
         /* unpack the jobid */
         n = 1;
-        if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &job, &n, PRTE_JOBID))) {
-            PRTE_ERROR_LOG(ret);
+        ret = PMIx_Data_unpack(NULL, buffer, &job, &n, PMIX_PROC_NSPACE);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
             goto CLEANUP;
         }
 
@@ -562,8 +574,6 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
              * was already cleaned up, or it was a tool */
             goto CLEANUP;
         }
-        /* convert the jobid */
-        PRTE_PMIX_CONVERT_JOBID(ret, pname.nspace, job);
 
         /* release all resources (even those on other nodes) that we
          * assigned to this job */
@@ -577,7 +587,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                     if (NULL == (proct = (prte_proc_t*)prte_pointer_array_get_item(node->procs, i))) {
                         continue;
                     }
-                    if (proct->name.jobid != jdata->jobid) {
+                    if (!PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
                         /* skip procs from another job */
                         continue;
                     }
@@ -587,8 +597,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                     }
                     /* deregister this proc - will be ignored if already done */
                     PRTE_PMIX_CONSTRUCT_LOCK(&lk);
-                    pname.rank = proct->name.vpid;
-                    PMIx_server_deregister_client(&pname, _notify_release, &lk);
+                    PMIx_server_deregister_client(&proct->name, _notify_release, &lk);
                     PRTE_PMIX_WAIT_THREAD(&lk);
                     PRTE_PMIX_DESTRUCT_LOCK(&lk);
                     /* set the entry in the node array to NULL */
@@ -607,15 +616,15 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
             jdata->map = NULL;
         }
         PRTE_PMIX_CONSTRUCT_LOCK(&lk);
-        PMIx_server_deregister_nspace(pname.nspace, _notify_release, &lk);
+        PMIx_server_deregister_nspace(job, _notify_release, &lk);
         PRTE_PMIX_WAIT_THREAD(&lk);
         PRTE_PMIX_DESTRUCT_LOCK(&lk);
 
         /* cleanup any pending server ops */
-        pname.rank = PMIX_RANK_WILDCARD;
+        PMIX_LOAD_PROCID(&pname, job, PMIX_RANK_WILDCARD);
         prte_pmix_server_clear(&pname);
         /* remove the session directory tree */
-        if (0 > prte_asprintf(&cmd_str, "%s/%d", prte_process_info.jobfam_session_dir, PRTE_LOCAL_JOBID(jdata->jobid))) {
+        if (0 > prte_asprintf(&cmd_str, "%s/%d", prte_process_info.jobfam_session_dir, PRTE_LOCAL_JOBID(jdata->nspace))) {
             ret = PRTE_ERR_OUT_OF_RESOURCE;
             goto CLEANUP;
         }
@@ -628,105 +637,122 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
 
         /****     REPORT TOPOLOGY COMMAND    ****/
     case PRTE_DAEMON_REPORT_TOPOLOGY_CMD:
-        PRTE_CONSTRUCT(&data, prte_buffer_t);
+        PMIX_DATA_BUFFER_CONSTRUCT(&data);
         /* pack the topology signature */
-        if (PRTE_SUCCESS != (ret = prte_dss.pack(&data, &prte_topo_signature, 1, PRTE_STRING))) {
-            PRTE_ERROR_LOG(ret);
-            PRTE_DESTRUCT(&data);
+        ret = PMIx_Data_pack(NULL, &data, &prte_topo_signature, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&data);
             goto CLEANUP;
         }
         /* pack the topology */
-        if (PRTE_SUCCESS != (ret = prte_dss.pack(&data, &prte_hwloc_topology, 1, PRTE_HWLOC_TOPO))) {
+        ptopo.source = "hwloc";
+        ptopo.topology = prte_hwloc_topology;
+        ret = PMIx_Data_pack(NULL, &data, &ptopo, 1,PMIX_TOPO);
+        if (PMIX_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
-            PRTE_DESTRUCT(&data);
+            PMIX_DATA_BUFFER_DESTRUCT(&data);
             goto CLEANUP;
         }
 
         /* detect and add any coprocessors */
         coprocessors = prte_hwloc_base_find_coprocessors(prte_hwloc_topology);
-        if (PRTE_SUCCESS != (ret = prte_dss.pack(&data, &coprocessors, 1, PRTE_STRING))) {
-            PRTE_ERROR_LOG(ret);
+        ret = PMIx_Data_pack(NULL, &data, &coprocessors, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
         }
         if (NULL != coprocessors) {
             free(coprocessors);
         }
         /* see if I am on a coprocessor */
         coprocessors = prte_hwloc_base_check_on_coprocessor();
-        if (PRTE_SUCCESS != (ret = prte_dss.pack(&data, &coprocessors, 1, PRTE_STRING))) {
-            PRTE_ERROR_LOG(ret);
+        ret = PMIx_Data_pack(NULL, &data, &coprocessors, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
         }
         if (NULL!= coprocessors) {
             free(coprocessors);
         }
-        answer = PRTE_NEW(prte_buffer_t);
+        PMIX_DATA_BUFFER_CREATE(answer);
         if (prte_compress.compress_block((uint8_t*)data.base_ptr, data.bytes_used,
-                                         &cmpdata, &cmplen)) {
+                                         (uint8_t**)&pbo.bytes, &pbo.size)) {
             /* the data was compressed - mark that we compressed it */
-            flag = 1;
-            if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &flag, 1, PRTE_INT8))) {
-                PRTE_ERROR_LOG(ret);
-                free(cmpdata);
-                PRTE_DESTRUCT(&data);
-                PRTE_RELEASE(answer);
+            compressed = true;
+            ret = PMIx_Data_pack(NULL, answer, &compressed, 1, PMIX_BOOL);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                PMIX_DATA_BUFFER_DESTRUCT(&data);
+                PMIX_DATA_BUFFER_RELEASE(answer);
                 goto CLEANUP;
             }
             /* pack the compressed length */
-            if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &cmplen, 1, PRTE_SIZE))) {
-                PRTE_ERROR_LOG(ret);
-                free(cmpdata);
-                PRTE_DESTRUCT(&data);
-                PRTE_RELEASE(answer);
+            ret = PMIx_Data_pack(NULL, answer, &pbo.size, 1, PMIX_SIZE);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                PMIX_DATA_BUFFER_DESTRUCT(&data);
+                PMIX_DATA_BUFFER_RELEASE(answer);
                 goto CLEANUP;
             }
             /* pack the uncompressed length */
-            if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &data.bytes_used, 1, PRTE_SIZE))) {
-                PRTE_ERROR_LOG(ret);
-                free(cmpdata);
-                PRTE_DESTRUCT(&data);
-                PRTE_RELEASE(answer);
+            ret = PMIx_Data_pack(NULL, answer, &data.bytes_used, 1, PMIX_SIZE);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                PMIX_DATA_BUFFER_DESTRUCT(&data);
+                PMIX_DATA_BUFFER_RELEASE(answer);
                 goto CLEANUP;
             }
             /* pack the compressed info */
-            if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, cmpdata, cmplen, PRTE_UINT8))) {
-                PRTE_ERROR_LOG(ret);
-                free(cmpdata);
-                PRTE_DESTRUCT(&data);
-                PRTE_RELEASE(answer);
+            ret = PMIx_Data_pack(NULL, answer, pbo.bytes, pbo.size, PMIX_UINT8);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                PMIX_DATA_BUFFER_DESTRUCT(&data);
+                PMIX_DATA_BUFFER_RELEASE(answer);
                 goto CLEANUP;
             }
-            PRTE_DESTRUCT(&data);
-            free(cmpdata);
+            PMIX_DATA_BUFFER_DESTRUCT(&data);
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
         } else {
             /* mark that it was not compressed */
-            flag = 0;
-            if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &flag, 1, PRTE_INT8))) {
-                PRTE_ERROR_LOG(ret);
-                PRTE_DESTRUCT(&data);
-                free(cmpdata);
-                PRTE_RELEASE(answer);
+            compressed = false;
+            ret = PMIx_Data_pack(NULL, answer, &compressed, 1, PMIX_BOOL);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_DATA_BUFFER_DESTRUCT(&data);
+                PMIX_DATA_BUFFER_RELEASE(answer);
                 goto CLEANUP;
             }
             /* transfer the payload across */
-            prte_dss.copy_payload(answer, &data);
-            PRTE_DESTRUCT(&data);
+            ret = PMIx_Data_copy_payload(answer, &data);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_DATA_BUFFER_DESTRUCT(&data);
+                PMIX_DATA_BUFFER_RELEASE(answer);
+                goto CLEANUP;
+            }
+            PMIX_DATA_BUFFER_DESTRUCT(&data);
         }
         /* send the data */
         if (0 > (ret = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_TOPOLOGY_REPORT,
                                                prte_rml_send_callback, NULL))) {
             PRTE_ERROR_LOG(ret);
-            PRTE_RELEASE(answer);
+            PMIX_DATA_BUFFER_RELEASE(answer);
         }
         break;
 
     case PRTE_DAEMON_GET_STACK_TRACES:
         /* prep the response */
-        answer = PRTE_NEW(prte_buffer_t);
+        PMIX_DATA_BUFFER_CREATE(answer);
         pathptr = path;
 
         /* unpack the jobid */
         n = 1;
-        if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &job, &n, PRTE_JOBID))) {
-            PRTE_ERROR_LOG(ret);
+        ret = PMIx_Data_unpack(NULL, buffer, &job, &n, PMIX_PROC_NSPACE);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
             goto CLEANUP;
         }
 
@@ -741,12 +767,12 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
         for (i=0; i < prte_local_children->size; i++) {
             if (NULL != (proct = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i)) &&
                 PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE) &&
-                proct->name.jobid == job) {
-                relay_msg = PRTE_NEW(prte_buffer_t);
-                if (PRTE_SUCCESS != prte_dss.pack(relay_msg, &proct->name, 1, PRTE_NAME) ||
-                    PRTE_SUCCESS != prte_dss.pack(relay_msg, &proct->node->name, 1, PRTE_STRING) ||
-                    PRTE_SUCCESS != prte_dss.pack(relay_msg, &proct->pid, 1, PRTE_PID)) {
-                    PRTE_RELEASE(relay_msg);
+                PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
+                PMIX_DATA_BUFFER_CREATE(relay_msg);
+                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, relay_msg, &proct->name, 1, PMIX_PROC) ||
+                    PMIX_SUCCESS != PMIx_Data_pack(NULL, relay_msg, &proct->node->name, 1, PMIX_STRING) ||
+                    PMIX_SUCCESS != PMIx_Data_pack(NULL, relay_msg, &proct->pid, 1, PMIX_PID)) {
+                    PMIX_DATA_BUFFER_RELEASE(relay_msg);
                     break;
                 }
 
@@ -767,18 +793,18 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                                     (NULL == gstack_exec) ? "find" : "run",
                                     (NULL == gstack_exec) ? "gstack" : gstack_exec,
                                     proct->node->name);
-                    if (PRTE_SUCCESS ==
-                        prte_dss.pack(relay_msg, &string_ptr, 1, PRTE_STRING)) {
-                        prte_dss.pack(answer, &relay_msg, 1, PRTE_BUFFER);
+                    if (PMIX_SUCCESS ==
+                        PMIx_Data_pack(NULL, relay_msg, &string_ptr, 1, PMIX_STRING)) {
+                        PMIx_Data_pack(NULL, answer, &relay_msg, 1, PMIX_BUFFER);
                     }
-                    PRTE_RELEASE(relay_msg);
+                    PMIX_DATA_BUFFER_RELEASE(relay_msg);
                     break;
                 }
                 /* Read the output a line at a time and pack it for transmission */
                 memset(path, 0, sizeof(path));
                 while (fgets(path, sizeof(path)-1, fp) != NULL) {
-                    if (PRTE_SUCCESS != prte_dss.pack(relay_msg, &pathptr, 1, PRTE_STRING)) {
-                        PRTE_RELEASE(relay_msg);
+                    if (PMIX_SUCCESS != PMIx_Data_pack(NULL, relay_msg, &pathptr, 1, PMIX_STRING)) {
+                        PMIX_DATA_BUFFER_RELEASE(relay_msg);
                         break;
                     }
                     memset(path, 0, sizeof(path));
@@ -786,11 +812,11 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                 /* close */
                 pclose(fp);
                 /* transfer this load */
-                if (PRTE_SUCCESS != prte_dss.pack(answer, &relay_msg, 1, PRTE_BUFFER)) {
-                    PRTE_RELEASE(relay_msg);
+                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, answer, &relay_msg, 1, PMIX_BUFFER)) {
+                    PMIX_DATA_BUFFER_RELEASE(relay_msg);
                     break;
                 }
-                PRTE_RELEASE(relay_msg);
+                PMIX_DATA_BUFFER_RELEASE(relay_msg);
             }
         }
         if (NULL != gstack_exec) {
@@ -801,7 +827,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                                                PRTE_RML_TAG_STACK_TRACE,
                                                prte_rml_send_callback, NULL))) {
             PRTE_ERROR_LOG(ret);
-            PRTE_RELEASE(answer);
+            PMIX_DATA_BUFFER_RELEASE(answer);
         }
         break;
 

@@ -16,6 +16,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,6 +42,7 @@
 #endif
 #endif
 
+#include "src/pmix/pmix-internal.h"
 #include "src/util/os_dirpath.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -64,16 +66,16 @@ static void stdin_write_handler(int fd, short event, void *cbdata);
 /* API FUNCTIONS */
 static int init(void);
 
-static int prted_push(const prte_process_name_t* dst_name, prte_iof_tag_t src_tag, int fd);
+static int prted_push(const pmix_proc_t* dst_name, prte_iof_tag_t src_tag, int fd);
 
-static int prted_pull(const prte_process_name_t* src_name,
+static int prted_pull(const pmix_proc_t* src_name,
                       prte_iof_tag_t src_tag,
                       int fd);
 
-static int prted_close(const prte_process_name_t* peer,
+static int prted_close(const pmix_proc_t* peer,
                        prte_iof_tag_t source_tag);
 
-static int prted_output(const prte_process_name_t* peer,
+static int prted_output(const pmix_proc_t* peer,
                         prte_iof_tag_t source_tag,
                         const char *msg);
 
@@ -121,14 +123,13 @@ static int init(void)
  * to the HNP
  */
 
-static int prted_push(const prte_process_name_t* dst_name,
+static int prted_push(const pmix_proc_t* dst_name,
                       prte_iof_tag_t src_tag, int fd)
 {
     int flags;
     prte_iof_proc_t *proct;
     int rc;
     prte_job_t *jobdat=NULL;
-    prte_ns_cmp_bitmask_t mask;
 
    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:prted pushing fd %d for process %s",
@@ -148,22 +149,19 @@ static int prted_push(const prte_process_name_t* dst_name,
 
     /* do we already have this process in our list? */
     PRTE_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t) {
-        mask = PRTE_NS_CMP_ALL;
-
-        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &proct->name, dst_name)) {
+        if (PMIX_CHECK_PROCID(&proct->name, dst_name)) {
             /* found it */
             goto SETUP;
         }
     }
     /* if we get here, then we don't yet have this proc in our list */
     proct = PRTE_NEW(prte_iof_proc_t);
-    proct->name.jobid = dst_name->jobid;
-    proct->name.vpid = dst_name->vpid;
+    PMIX_XFER_PROCID(&proct->name, dst_name);
     prte_list_append(&prte_iof_prted_component.procs, &proct->super);
 
   SETUP:
     /* get the local jobdata for this proc */
-    if (NULL == (jobdat = prte_get_job_data_object(proct->name.jobid))) {
+    if (NULL == (jobdat = prte_get_job_data_object(proct->name.nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -206,7 +204,7 @@ static int prted_push(const prte_process_name_t* dst_name,
  * that comes to us
  */
 
-static int prted_pull(const prte_process_name_t* dst_name,
+static int prted_pull(const pmix_proc_t* dst_name,
                       prte_iof_tag_t src_tag,
                       int fd)
 {
@@ -244,8 +242,7 @@ static int prted_pull(const prte_process_name_t* dst_name,
     }
     /* if we get here, then we don't yet have this proc in our list */
     proct = PRTE_NEW(prte_iof_proc_t);
-    proct->name.jobid = dst_name->jobid;
-    proct->name.vpid = dst_name->vpid;
+    PMIX_XFER_PROCID(&proct->name, &dst_name);
     prte_list_append(&prte_iof_prted_component.procs, &proct->super);
 
   SETUP:
@@ -261,14 +258,13 @@ static int prted_pull(const prte_process_name_t* dst_name,
  * stream(s), thus terminating any potential io to/from it.
  * For the prted, this just means closing the local fd
  */
-static int prted_close(const prte_process_name_t* peer,
+static int prted_close(const pmix_proc_t* peer,
                        prte_iof_tag_t source_tag)
 {
     prte_iof_proc_t* proct;
-    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL;
 
     PRTE_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t) {
-        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &proct->name, peer)) {
+        if (PMIX_CHECK_PROCID(&proct->name, peer)) {
             if (PRTE_IOF_STDIN & source_tag) {
                 if (NULL != proct->stdinev) {
                     PRTE_RELEASE(proct->stdinev);
@@ -310,7 +306,7 @@ static void prted_complete(const prte_job_t *jdata)
 
     /* cleanout any lingering sinks */
     PRTE_LIST_FOREACH_SAFE(proct, next, &prte_iof_prted_component.procs, prte_iof_proc_t) {
-        if (jdata->jobid == proct->name.jobid) {
+        if (PMIX_CHECK_NSPACE(jdata->nspace, proct->name.nspace)) {
             prte_list_remove_item(&prte_iof_prted_component.procs, &proct->super);
             PRTE_RELEASE(proct);
         }
@@ -435,34 +431,40 @@ CHECK:
     }
 }
 
-static int prted_output(const prte_process_name_t* peer,
+static int prted_output(const pmix_proc_t* peer,
                         prte_iof_tag_t source_tag,
                         const char *msg)
 {
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     int rc;
 
     /* prep the buffer */
-    buf = PRTE_NEW(prte_buffer_t);
+    PMIX_DATA_BUFFER_CREATE(buf);
 
     /* pack the stream first - we do this so that flow control messages can
      * consist solely of the tag
      */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &source_tag, 1, PRTE_IOF_TAG))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(NULL, buf, &source_tag, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         return rc;
     }
 
     /* pack name of process that gave us this data */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, peer, 1, PRTE_NAME))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(NULL, buf, (pmix_proc_t*)peer, 1, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         return rc;
     }
 
     /* pack the data - for compatibility, we have to pack this as PRTE_BYTE,
      * so ensure we include the NULL string terminator */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, msg, strlen(msg)+1, PRTE_BYTE))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(NULL, buf, (void*)msg, strlen(msg)+1, PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         return rc;
     }
 

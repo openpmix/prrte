@@ -12,6 +12,7 @@
  * Copyright (c) 2007      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +31,7 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/dss/dss_types.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/rml/rml_types.h"
 
 BEGIN_C_DECLS
@@ -45,8 +46,8 @@ PRTE_EXPORT int prte_data_server_init(void);
 PRTE_EXPORT void prte_data_server_finalize(void);
 
 /* provide hook for the non-blocking receive */
-PRTE_EXPORT void prte_data_server(int status, prte_process_name_t* sender,
-                                    prte_buffer_t* buffer, prte_rml_tag_t tag,
+PRTE_EXPORT void prte_data_server(int status, pmix_proc_t* sender,
+                                    pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
                                     void* cbdata);
 
 END_C_DECLS

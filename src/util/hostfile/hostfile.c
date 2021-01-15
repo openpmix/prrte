@@ -16,6 +16,7 @@
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -203,7 +204,7 @@ static int hostfile_parse_line(int token, prte_list_t* updates,
                 node = PRTE_NEW(prte_node_t);
                 node->name = node_name;
                 if (NULL != username) {
-                    prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username, PRTE_STRING);
+                    prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username, PMIX_STRING);
                 }
                 prte_list_append(exclude, &node->super);
             } else {
@@ -227,7 +228,7 @@ static int hostfile_parse_line(int token, prte_list_t* updates,
             node->name = node_name;
             node->slots = 1;
             if (NULL != username) {
-                prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username, PRTE_STRING);
+                prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username, PMIX_STRING);
             }
             prte_list_append(updates, &node->super);
         } else {
@@ -290,7 +291,7 @@ static int hostfile_parse_line(int token, prte_list_t* updates,
             node->name = node_name;
             node->slots = 1;
             if (NULL != username) {
-                prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username, PRTE_STRING);
+                prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username, PMIX_STRING);
             }
             prte_list_append(updates, &node->super);
         } else {
@@ -331,7 +332,7 @@ static int hostfile_parse_line(int token, prte_list_t* updates,
         case PRTE_HOSTFILE_USERNAME:
             username = hostfile_parse_string();
             if (NULL != username) {
-                prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username, PRTE_STRING);
+                prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username, PMIX_STRING);
                 free(username);
             }
             break;
@@ -344,7 +345,7 @@ static int hostfile_parse_line(int token, prte_list_t* updates,
                                cur_hostfile_name, rc);
                 return PRTE_ERROR;
             }
-            prte_set_attribute(&node->attributes, PRTE_NODE_PORT, PRTE_ATTR_LOCAL, &rc, PRTE_INT);
+            prte_set_attribute(&node->attributes, PRTE_NODE_PORT, PRTE_ATTR_LOCAL, &rc, PMIX_INT);
             break;
 
         case PRTE_HOSTFILE_COUNT:

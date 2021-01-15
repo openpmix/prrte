@@ -19,6 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -80,7 +81,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     prte_list_t node_list;
     prte_list_item_t *item;
     prte_node_t *node, *nd, *root_node;
-    prte_vpid_t rank, vpid_start;
+    pmix_rank_t rank, vpid_start;
     int32_t num_slots;
     prte_rmaps_rank_file_map_t *rfmap;
     int32_t relative_index, tmp_cnt;
@@ -94,7 +95,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rf: job %s being restarted - rank_file cannot map",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper &&
@@ -102,7 +103,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rf: job %s not using rank_file mapper",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (PRTE_MAPPING_BYUSER != PRTE_GET_MAPPING_POLICY(prte_rmaps_base.mapping)) {
@@ -115,7 +116,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     }
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rank_file: mapping job %s",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* flag that I did the mapping */
     if (NULL != jdata->map->last_mapper) {
@@ -151,7 +152,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     /* END SANITY CHECKS */
 
     /* see if the job was given a slot list */
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&jobslots, PRTE_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&jobslots, PMIX_STRING);
 
     /* start at the beginning... */
     vpid_start = 0;
@@ -228,7 +229,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                     /* all would be oversubscribed, so take the least loaded one */
                     k = (int32_t) UINT32_MAX;
                     PRTE_LIST_FOREACH(nd, &node_list, prte_node_t) {
-                        if (nd->num_procs < (prte_vpid_t)k) {
+                        if (nd->num_procs < (pmix_rank_t)k) {
                             k = nd->num_procs;
                             node = nd;
                         }
@@ -307,7 +308,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                 PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
             }
             /* set the vpid */
-            proc->name.vpid = rank;
+            proc->name.rank = rank;
 
             if (NULL != slots) {
                 /* setup the bitmap */
@@ -334,7 +335,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                  */
                 /* set the proc to the specified map */
                 hwloc_bitmap_list_asprintf(&cpu_bitmap, bitmap);
-                prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PRTE_STRING);
+                prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PMIX_STRING);
                 /* cleanup */
                 free(cpu_bitmap);
                 hwloc_bitmap_free(bitmap);
@@ -342,7 +343,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
 
             /* insert the proc into the proper place */
             if (PRTE_SUCCESS != (rc = prte_pointer_array_set_item(jdata->procs,
-                                                                  proc->name.vpid, proc))) {
+                                                                  proc->name.rank, proc))) {
                 PRTE_ERROR_LOG(rc);
                 return rc;
             }
@@ -369,7 +370,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     }
     PRTE_DESTRUCT(&rankmap);
     /* mark the job as fully described */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PRTE_BOOL);
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
 
     return rc;
 

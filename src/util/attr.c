@@ -3,6 +3,7 @@
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,7 +15,7 @@
 #include "types.h"
 #include "constants.h"
 
-#include "src/dss/dss.h"
+#include "src/util/argv.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
 #include "src/util/string_copy.h"
@@ -39,14 +40,14 @@ static prte_attr_converter_t converters[MAX_CONVERTERS];
 
 bool prte_get_attribute(prte_list_t *attributes,
                         prte_attribute_key_t key,
-                        void **data, prte_data_type_t type)
+                        void **data, pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
 
     PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t) {
         if (key == kv->key) {
-            if (kv->type != type) {
+            if (kv->data.type != type) {
                 PRTE_ERROR_LOG(PRTE_ERR_TYPE_MISMATCH);
                 return false;
             }
@@ -64,14 +65,14 @@ bool prte_get_attribute(prte_list_t *attributes,
 
 int prte_set_attribute(prte_list_t *attributes,
                        prte_attribute_key_t key, bool local,
-                       void *data, prte_data_type_t type)
+                       void *data, pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
 
     PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t) {
         if (key == kv->key) {
-            if (kv->type != type) {
+            if (kv->data.type != type) {
                 return PRTE_ERR_TYPE_MISMATCH;
             }
             if (PRTE_SUCCESS != (rc = prte_attr_load(kv, data, type))) {
@@ -133,7 +134,7 @@ prte_attribute_t* prte_fetch_attribute(prte_list_t *attributes,
 
 int prte_add_attribute(prte_list_t *attributes,
                        prte_attribute_key_t key, bool local,
-                       void *data, prte_data_type_t type)
+                       void *data, pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
@@ -151,7 +152,7 @@ int prte_add_attribute(prte_list_t *attributes,
 
 int prte_prepend_attribute(prte_list_t *attributes,
                            prte_attribute_key_t key, bool local,
-                           void *data, prte_data_type_t type)
+                           void *data, pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
@@ -205,21 +206,19 @@ int prte_attr_register(const char *project,
 
 char *prte_attr_print_list(prte_list_t *attributes)
 {
-    char *out1, *out2, *cache = NULL;
+    char *out1, **cache = NULL;
     prte_attribute_t *attr;
 
     PRTE_LIST_FOREACH(attr, attributes, prte_attribute_t) {
-        prte_dss.print(&out1, NULL, attr, PRTE_ATTRIBUTE);
-        if (NULL == cache) {
-            cache = out1;
-        } else {
-            prte_asprintf(&out2, "%s\n%s", cache, out1);
-            free(cache);
-            free(out1);
-            cache = out2;
-        }
+        prte_argv_append_nosize(&cache, prte_attr_key_to_str(attr->key));
     }
-    return cache;
+    if (NULL != cache) {
+        out1 = prte_argv_join(cache, '\n');
+        prte_argv_free(cache);
+    } else {
+        out1 = NULL;
+    }
+    return out1;
 }
 
 const char *prte_attr_key_to_str(prte_attribute_key_t key)
@@ -519,137 +518,139 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
 
 
 int prte_attr_load(prte_attribute_t *kv,
-                   void *data, prte_data_type_t type)
+                   void *data, pmix_data_type_t type)
 {
-    prte_byte_object_t *boptr;
+    pmix_byte_object_t *boptr;
     struct timeval *tv;
-    prte_envar_t *envar;
+    pmix_envar_t *envar;
 
-    kv->type = type;
+    kv->data.type = type;
     if (NULL == data) {
         /* if the type is BOOL, then the user wanted to
          * use the presence of the attribute to indicate
          * "true" - so let's mark it that way just in
          * case a subsequent test looks for the value */
-        if (PRTE_BOOL == type) {
-            kv->data.flag = true;
+        if (PMIX_BOOL == type) {
+            kv->data.data.flag = true;
         } else {
             /* otherwise, check to see if this type has storage
              * that is already allocated, and free it if so */
-            if (PRTE_STRING == type && NULL != kv->data.string) {
-                free(kv->data.string);
-            } else if (PRTE_BYTE_OBJECT == type && NULL != kv->data.bo.bytes) {
-                free(kv->data.bo.bytes);
+            if (PMIX_STRING == type && NULL != kv->data.data.string) {
+                free(kv->data.data.string);
+            } else if (PMIX_BYTE_OBJECT == type && NULL != kv->data.data.bo.bytes) {
+                free(kv->data.data.bo.bytes);
             }
             /* just set the fields to zero */
-            memset(&kv->data, 0, sizeof(kv->data));
+            memset(&kv->data.data, 0, sizeof(kv->data.data));
         }
         return PRTE_SUCCESS;
     }
 
     switch (type) {
-    case PRTE_BOOL:
-        kv->data.flag = *(bool*)(data);
+    case PMIX_BOOL:
+        kv->data.data.flag = *(bool*)(data);
         break;
-    case PRTE_BYTE:
-        kv->data.byte = *(uint8_t*)(data);
+    case PMIX_BYTE:
+        kv->data.data.byte = *(uint8_t*)(data);
         break;
-    case PRTE_STRING:
-        if (NULL != kv->data.string) {
-            free(kv->data.string);
+    case PMIX_STRING:
+        if (NULL != kv->data.data.string) {
+            free(kv->data.data.string);
         }
-        kv->data.string = strdup( (const char *) data);
+        kv->data.data.string = strdup( (const char *) data);
         break;
-    case PRTE_SIZE:
-        kv->data.size = *(size_t*)(data);
+    case PMIX_SIZE:
+        kv->data.data.size = *(size_t*)(data);
         break;
-    case PRTE_PID:
-        kv->data.pid = *(pid_t*)(data);
-        break;
-
-    case PRTE_INT:
-        kv->data.integer = *(int*)(data);
-        break;
-    case PRTE_INT8:
-        kv->data.int8 = *(int8_t*)(data);
-        break;
-    case PRTE_INT16:
-        kv->data.int16 = *(int16_t*)(data);
-        break;
-    case PRTE_INT32:
-        kv->data.int32 = *(int32_t*)(data);
-        break;
-    case PRTE_INT64:
-        kv->data.int64 = *(int64_t*)(data);
+    case PMIX_PID:
+        kv->data.data.pid = *(pid_t*)(data);
         break;
 
-    case PRTE_UINT:
-        kv->data.uint = *(unsigned int*)(data);
+    case PMIX_INT:
+        kv->data.data.integer = *(int*)(data);
         break;
-    case PRTE_UINT8:
-        kv->data.uint8 = *(uint8_t*)(data);
+    case PMIX_INT8:
+        kv->data.data.int8 = *(int8_t*)(data);
         break;
-    case PRTE_UINT16:
-        kv->data.uint16 = *(uint16_t*)(data);
+    case PMIX_INT16:
+        kv->data.data.int16 = *(int16_t*)(data);
         break;
-    case PRTE_UINT32:
-        kv->data.uint32 = *(uint32_t*)data;
+    case PMIX_INT32:
+        kv->data.data.int32 = *(int32_t*)(data);
         break;
-    case PRTE_UINT64:
-        kv->data.uint64 = *(uint64_t*)(data);
+    case PMIX_INT64:
+        kv->data.data.int64 = *(int64_t*)(data);
         break;
 
-    case PRTE_BYTE_OBJECT:
-        if (NULL != kv->data.bo.bytes) {
-            free(kv->data.bo.bytes);
+    case PMIX_UINT:
+        kv->data.data.uint = *(unsigned int*)(data);
+        break;
+    case PMIX_UINT8:
+        kv->data.data.uint8 = *(uint8_t*)(data);
+        break;
+    case PMIX_UINT16:
+        kv->data.data.uint16 = *(uint16_t*)(data);
+        break;
+    case PMIX_UINT32:
+        kv->data.data.uint32 = *(uint32_t*)data;
+        break;
+    case PMIX_UINT64:
+        kv->data.data.uint64 = *(uint64_t*)(data);
+        break;
+
+    case PMIX_BYTE_OBJECT:
+        if (NULL != kv->data.data.bo.bytes) {
+            free(kv->data.data.bo.bytes);
         }
-        boptr = (prte_byte_object_t*)data;
+        boptr = (pmix_byte_object_t*)data;
         if (NULL != boptr && NULL != boptr->bytes && 0 < boptr->size) {
-            kv->data.bo.bytes = (uint8_t *) malloc(boptr->size);
-            memcpy(kv->data.bo.bytes, boptr->bytes, boptr->size);
-            kv->data.bo.size = boptr->size;
+            kv->data.data.bo.bytes = (char *) malloc(boptr->size);
+            memcpy(kv->data.data.bo.bytes, boptr->bytes, boptr->size);
+            kv->data.data.bo.size = boptr->size;
         } else {
-            kv->data.bo.bytes = NULL;
-            kv->data.bo.size = 0;
+            kv->data.data.bo.bytes = NULL;
+            kv->data.data.bo.size = 0;
         }
         break;
 
-    case PRTE_FLOAT:
-        kv->data.fval = *(float*)(data);
+    case PMIX_FLOAT:
+        kv->data.data.fval = *(float*)(data);
         break;
 
-    case PRTE_TIMEVAL:
+    case PMIX_TIMEVAL:
         tv = (struct timeval*)data;
-        kv->data.tv.tv_sec = tv->tv_sec;
-        kv->data.tv.tv_usec = tv->tv_usec;
+        kv->data.data.tv.tv_sec = tv->tv_sec;
+        kv->data.data.tv.tv_usec = tv->tv_usec;
         break;
 
-    case PRTE_PTR:
-        kv->data.ptr = data;
+    case PMIX_POINTER:
+        kv->data.data.ptr = data;
         break;
 
-    case PRTE_VPID:
-        kv->data.vpid = *(prte_vpid_t *)data;
+    case PMIX_PROC_RANK:
+        kv->data.data.rank = *(pmix_rank_t *)data;
         break;
 
-    case PRTE_JOBID:
-        kv->data.jobid = *(prte_jobid_t *)data;
+    case PMIX_PROC_NSPACE:
+        PMIX_PROC_CREATE(kv->data.data.proc, 1);
+        PMIX_LOAD_NSPACE(kv->data.data.proc->nspace, (char*)data);
         break;
 
-    case PRTE_NAME:
-        kv->data.name = *(prte_process_name_t *)data;
+    case PMIX_PROC:
+        PMIX_PROC_CREATE(kv->data.data.proc, 1);
+        PMIX_XFER_PROCID(kv->data.data.proc, (pmix_proc_t *)data);
         break;
 
-    case PRTE_ENVAR:
-        PRTE_CONSTRUCT(&kv->data.envar, prte_envar_t);
-        envar = (prte_envar_t*)data;
+    case PMIX_ENVAR:
+        PMIX_ENVAR_CONSTRUCT(&kv->data.data.envar);
+        envar = (pmix_envar_t*)data;
         if (NULL != envar->envar) {
-            kv->data.envar.envar = strdup(envar->envar);
+            kv->data.data.envar.envar = strdup(envar->envar);
         }
         if (NULL != envar->value) {
-            kv->data.envar.value = strdup(envar->value);
+            kv->data.data.envar.value = strdup(envar->value);
         }
-        kv->data.envar.separator = envar->separator;
+        kv->data.data.envar.separator = envar->separator;
         break;
 
     default:
@@ -660,81 +661,81 @@ int prte_attr_load(prte_attribute_t *kv,
 }
 
 int prte_attr_unload(prte_attribute_t *kv,
-                     void **data, prte_data_type_t type)
+                     void **data, pmix_data_type_t type)
 {
-    prte_byte_object_t *boptr;
-    prte_envar_t *envar;
+    pmix_byte_object_t *boptr;
+    pmix_envar_t *envar;
 
-    if (type != kv->type) {
+    if (type != kv->data.type) {
         return PRTE_ERR_TYPE_MISMATCH;
     }
     if (NULL == data  ||
-        (PRTE_STRING != type && PRTE_BYTE_OBJECT != type &&
-         PRTE_BUFFER != type && PRTE_PTR != type && NULL == *data)) {
+        (PMIX_STRING != type && PMIX_BYTE_OBJECT != type &&
+         PMIX_BUFFER != type && PMIX_POINTER != type && NULL == *data)) {
         assert(0);
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
 
     switch (type) {
-    case PRTE_BOOL:
-        memcpy(*data, &kv->data.flag, sizeof(bool));
+    case PMIX_BOOL:
+        memcpy(*data, &kv->data.data.flag, sizeof(bool));
         break;
-    case PRTE_BYTE:
-        memcpy(*data, &kv->data.byte, sizeof(uint8_t));
+    case PMIX_BYTE:
+        memcpy(*data, &kv->data.data.byte, sizeof(uint8_t));
         break;
-    case PRTE_STRING:
-        if (NULL != kv->data.string) {
-            *data = strdup(kv->data.string);
+    case PMIX_STRING:
+        if (NULL != kv->data.data.string) {
+            *data = strdup(kv->data.data.string);
         } else {
             *data = NULL;
         }
         break;
-    case PRTE_SIZE:
-        memcpy(*data, &kv->data.size, sizeof(size_t));
+    case PMIX_SIZE:
+        memcpy(*data, &kv->data.data.size, sizeof(size_t));
         break;
-    case PRTE_PID:
-        memcpy(*data, &kv->data.pid, sizeof(pid_t));
-        break;
-
-    case PRTE_INT:
-        memcpy(*data, &kv->data.integer, sizeof(int));
-        break;
-    case PRTE_INT8:
-        memcpy(*data, &kv->data.int8, sizeof(int8_t));
-        break;
-    case PRTE_INT16:
-        memcpy(*data, &kv->data.int16, sizeof(int16_t));
-        break;
-    case PRTE_INT32:
-        memcpy(*data, &kv->data.int32, sizeof(int32_t));
-        break;
-    case PRTE_INT64:
-        memcpy(*data, &kv->data.int64, sizeof(int64_t));
+    case PMIX_PID:
+        memcpy(*data, &kv->data.data.pid, sizeof(pid_t));
         break;
 
-    case PRTE_UINT:
-        memcpy(*data, &kv->data.uint, sizeof(unsigned int));
+    case PMIX_INT:
+        memcpy(*data, &kv->data.data.integer, sizeof(int));
         break;
-    case PRTE_UINT8:
-        memcpy(*data, &kv->data.uint8, 1);
+    case PMIX_INT8:
+        memcpy(*data, &kv->data.data.int8, sizeof(int8_t));
         break;
-    case PRTE_UINT16:
-        memcpy(*data, &kv->data.uint16, 2);
+    case PMIX_INT16:
+        memcpy(*data, &kv->data.data.int16, sizeof(int16_t));
         break;
-    case PRTE_UINT32:
-        memcpy(*data, &kv->data.uint32, 4);
+    case PMIX_INT32:
+        memcpy(*data, &kv->data.data.int32, sizeof(int32_t));
         break;
-    case PRTE_UINT64:
-        memcpy(*data, &kv->data.uint64, 8);
+    case PMIX_INT64:
+        memcpy(*data, &kv->data.data.int64, sizeof(int64_t));
         break;
 
-    case PRTE_BYTE_OBJECT:
-        boptr = (prte_byte_object_t*)malloc(sizeof(prte_byte_object_t));
-        if (NULL != kv->data.bo.bytes && 0 < kv->data.bo.size) {
-            boptr->bytes = (uint8_t *) malloc(kv->data.bo.size);
-            memcpy(boptr->bytes, kv->data.bo.bytes, kv->data.bo.size);
-            boptr->size = kv->data.bo.size;
+    case PMIX_UINT:
+        memcpy(*data, &kv->data.data.uint, sizeof(unsigned int));
+        break;
+    case PMIX_UINT8:
+        memcpy(*data, &kv->data.data.uint8, 1);
+        break;
+    case PMIX_UINT16:
+        memcpy(*data, &kv->data.data.uint16, 2);
+        break;
+    case PMIX_UINT32:
+        memcpy(*data, &kv->data.data.uint32, 4);
+        break;
+    case PMIX_UINT64:
+        memcpy(*data, &kv->data.data.uint64, 8);
+        break;
+
+    case PMIX_BYTE_OBJECT:
+        boptr = (pmix_byte_object_t*)malloc(sizeof(pmix_byte_object_t));
+        if (NULL != kv->data.data.bo.bytes && 0 < kv->data.data.bo.size) {
+            boptr->bytes = (char*) malloc(kv->data.data.bo.size);
+            memcpy(boptr->bytes, kv->data.data.bo.bytes, kv->data.data.bo.size);
+            boptr->size = kv->data.data.bo.size;
         } else {
             boptr->bytes = NULL;
             boptr->size = 0;
@@ -742,44 +743,41 @@ int prte_attr_unload(prte_attribute_t *kv,
         *data = boptr;
         break;
 
-    case PRTE_BUFFER:
-        *data = PRTE_NEW(prte_buffer_t);
-        prte_dss.copy_payload(*data, &kv->data.buf);
+    case PMIX_FLOAT:
+        memcpy(*data, &kv->data.data.fval, sizeof(float));
         break;
 
-    case PRTE_FLOAT:
-        memcpy(*data, &kv->data.fval, sizeof(float));
+    case PMIX_TIMEVAL:
+        memcpy(*data, &kv->data.data.tv, sizeof(struct timeval));
         break;
 
-    case PRTE_TIMEVAL:
-        memcpy(*data, &kv->data.tv, sizeof(struct timeval));
+    case PMIX_POINTER:
+        *data = kv->data.data.ptr;
         break;
 
-    case PRTE_PTR:
-        *data = kv->data.ptr;
+    case PMIX_PROC_RANK:
+        memcpy(*data, &kv->data.data.rank, sizeof(pmix_rank_t));
         break;
 
-    case PRTE_VPID:
-        memcpy(*data, &kv->data.vpid, sizeof(prte_vpid_t));
+    case PMIX_PROC_NSPACE:
+        PMIX_PROC_CREATE(*data, 1);
+        memcpy(*data, kv->data.data.proc->nspace, sizeof(pmix_nspace_t));
         break;
 
-    case PRTE_JOBID:
-        memcpy(*data, &kv->data.jobid, sizeof(prte_jobid_t));
+    case PMIX_PROC:
+        PMIX_PROC_CREATE(*data, 1);
+        memcpy(*data, kv->data.data.proc, sizeof(pmix_proc_t));
         break;
 
-    case PRTE_NAME:
-        memcpy(*data, &kv->data.name, sizeof(prte_process_name_t));
-        break;
-
-    case PRTE_ENVAR:
-        envar = PRTE_NEW(prte_envar_t);
-        if (NULL != kv->data.envar.envar) {
-            envar->envar = strdup(kv->data.envar.envar);
+    case PMIX_ENVAR:
+        PMIX_ENVAR_CREATE(envar, 1);
+        if (NULL != kv->data.data.envar.envar) {
+            envar->envar = strdup(kv->data.data.envar.envar);
         }
-        if (NULL != kv->data.envar.value) {
-            envar->value = strdup(kv->data.envar.value);
+        if (NULL != kv->data.data.envar.value) {
+            envar->value = strdup(kv->data.data.envar.value);
         }
-        envar->separator = kv->data.envar.separator;
+        envar->separator = kv->data.data.envar.separator;
         *data = envar;
         break;
 

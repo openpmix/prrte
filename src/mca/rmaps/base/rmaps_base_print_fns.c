@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,7 +43,6 @@
 #include "src/util/dash_host/dash_host.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/runtime/data_type_support/prte_dt_support.h"
 
 #include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/base/base.h"

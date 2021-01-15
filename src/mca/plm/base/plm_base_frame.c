@@ -15,6 +15,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -84,6 +85,10 @@ static int prte_plm_base_close(void)
         }
     }
 
+    if (NULL != prte_plm_globals.base_nspace) {
+        free(prte_plm_globals.base_nspace);
+    }
+    
     return prte_mca_base_framework_components_close(&prte_plm_base_framework, NULL);
 }
 

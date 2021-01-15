@@ -15,6 +15,7 @@
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -73,7 +74,6 @@ include runtime/Makefile.am
 include tools/Makefile.am
 include prted/Makefile.am
 include mca/Makefile.am
-include dss/Makefile.am
 include sys/Makefile.am
 include threads/Makefile.include
 include pmix/Makefile.am

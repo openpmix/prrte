@@ -14,6 +14,7 @@
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -218,7 +219,7 @@ static int discover(prte_list_t* nodelist, char *pbs_jobid)
 
             node = PRTE_NEW(prte_node_t);
             node->name = hostname;
-            prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL, &nodeid, PRTE_INT32);
+            prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL, &nodeid, PMIX_INT32);
             node->slots_inuse = 0;
             node->slots_max = 0;
             node->slots = ppn;

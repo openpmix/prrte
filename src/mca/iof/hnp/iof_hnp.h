@@ -13,6 +13,7 @@
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -72,16 +73,16 @@ typedef struct prte_iof_hnp_component_t prte_iof_hnp_component_t;
 PRTE_MODULE_EXPORT extern prte_iof_hnp_component_t prte_iof_hnp_component;
 extern prte_iof_base_module_t prte_iof_hnp_module;
 
-void prte_iof_hnp_recv(int status, prte_process_name_t* sender,
-                       prte_buffer_t* buffer, prte_rml_tag_t tag,
+void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
+                       pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
                        void* cbdata);
 
 void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata);
 void prte_iof_hnp_stdin_cb(int fd, short event, void *cbdata);
 bool prte_iof_hnp_stdin_check(int fd);
 
-int prte_iof_hnp_send_data_to_endpoint(prte_process_name_t *host,
-                                       prte_process_name_t *target,
+int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host,
+                                       pmix_proc_t *target,
                                        prte_iof_tag_t tag,
                                        unsigned char *data, int numbytes);
 

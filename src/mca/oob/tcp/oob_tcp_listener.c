@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -58,7 +59,6 @@
 #include "src/util/net.h"
 #include "src/util/argv.h"
 #include "src/util/fd.h"
-#include "src/class/prte_hash_table.h"
 #include "src/class/prte_list.h"
 
 #include "src/mca/errmgr/errmgr.h"

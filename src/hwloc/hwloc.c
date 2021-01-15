@@ -3,6 +3,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,7 +15,6 @@
 #include "prte_config.h"
 
 #include "src/include/constants.h"
-#include "src/dss/dss.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
@@ -200,7 +200,6 @@ int prte_hwloc_base_register(void)
 int prte_hwloc_base_open(void)
 {
     int rc;
-    prte_data_type_t tmp;
 
     if (prte_hwloc_base_inited) {
         return PRTE_SUCCESS;
@@ -210,18 +209,6 @@ int prte_hwloc_base_open(void)
     /* check the provided default binding policy for correctness - specifically want to ensure
      * there are no disallowed qualifiers and setup the global param */
     if (PRTE_SUCCESS != (rc = prte_hwloc_base_set_binding_policy(NULL, prte_hwloc_base_binding_policy))) {
-        return rc;
-    }
-
-    /* declare the hwloc data types */
-    tmp = PRTE_HWLOC_TOPO;
-    if (PRTE_SUCCESS != (rc = prte_dss.register_type(prte_hwloc_pack,
-                                                     prte_hwloc_unpack,
-                                                     (prte_dss_copy_fn_t)prte_hwloc_copy,
-                                                     (prte_dss_compare_fn_t)prte_hwloc_compare,
-                                                     (prte_dss_print_fn_t)prte_hwloc_print,
-                                                     PRTE_DSS_STRUCTURED,
-                                                     "PRTE_HWLOC_TOPO", &tmp))) {
         return rc;
     }
 
@@ -471,7 +458,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                     return PRTE_ERR_SILENT;
                 }
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS,
-                                    PRTE_ATTR_GLOBAL, NULL, PRTE_BOOL);
+                                    PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
             } else {
                 /* unknown option */
                 prte_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);

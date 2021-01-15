@@ -36,8 +36,8 @@
 
 #include "src/util/argv.h"
 #include "src/util/output.h"
-#include "src/dss/dss.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/iof.h"
@@ -70,20 +70,18 @@ static void _query(int sd, short args, void *cbdata)
     pmix_query_t *q;
     pmix_status_t ret = PMIX_SUCCESS;
     prte_info_item_t *kv;
-    prte_jobid_t jobid;
+    pmix_nspace_t jobid;
     prte_job_t *jdata;
     prte_node_t *node, *ndptr;
     int k, rc;
     prte_list_t results, stack;
     size_t m, n, p;
     uint32_t key, nodeid;
-    void *nptr;
     char **nspaces, *hostname, *uri;
 #ifdef PMIX_QUERY_NAMESPACE_INFO
     char *cmdline;
 #endif
     char **ans, *tmp;
-    prte_process_name_t requestor;
     prte_app_context_t *app;
     int matched;
     pmix_proc_info_t *procinfo;
@@ -102,20 +100,13 @@ static void _query(int sd, short args, void *cbdata)
 
     PRTE_CONSTRUCT(&results, prte_list_t);
 
-    PRTE_PMIX_CONVERT_PROCT(rc, &requestor, &cd->proct);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        ret = PMIX_ERR_BAD_PARAM;
-        goto done;
-    }
-
     /* see what they wanted */
     for (m=0; m < cd->nqueries; m++) {
         q = &cd->queries[m];
         hostname = NULL;
         nodeid = UINT32_MAX;
         /* default to the requestor's jobid */
-        jobid = requestor.jobid;
+        PMIX_LOAD_NSPACE(jobid, cd->proct.nspace);
         /* see if they provided any qualifiers */
         if (NULL != q->qualifiers && 0 < q->nqual) {
             for (n=0; n < q->nqual; n++) {
@@ -128,12 +119,11 @@ static void _query(int sd, short args, void *cbdata)
                     /* Never trust the namespace string that is provided.
                      * First check to see if we know about this namespace. If
                      * not then return an error. If so then continue on.
-                     * Note that the "PRTE_PMIX_CONVERT_NSPACE" function will create
-                     * a new prte_job_t structure an add it to the list.
                      */
                     /* Make sure the qualifier namespace exists */
                     matched = 0;
-                    PRTE_HASH_TABLE_FOREACH(key, uint32, jdata, prte_job_data) {
+                    for (k=0; k < prte_job_data->size; k++) {
+                        jdata = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, k);
                         if (NULL != jdata &&
                             PMIX_CHECK_NSPACE(q->qualifiers[n].value.data.string,
                                               jdata->nspace)) {
@@ -151,8 +141,8 @@ static void _query(int sd, short args, void *cbdata)
                         goto done;
                     }
 
-                    PRTE_PMIX_CONVERT_NSPACE(rc, &jobid, q->qualifiers[n].value.data.string);
-                    if (PRTE_JOBID_INVALID == jobid || PRTE_SUCCESS != rc) {
+                    PMIX_LOAD_NSPACE(jobid, q->qualifiers[n].value.data.string);
+                    if (PMIX_NSPACE_INVALID(jobid)) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
@@ -171,14 +161,16 @@ static void _query(int sd, short args, void *cbdata)
                 /* get the current jobids */
                 nspaces = NULL;
                 PRTE_CONSTRUCT(&stack, prte_list_t);
-                rc = prte_hash_table_get_first_key_uint32(prte_job_data, &key, (void **)&jdata, &nptr);
-                while (PRTE_SUCCESS == rc) {
+                for (k = 0; k < prte_job_data->size; k++) {
+                    jdata = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, k);
+                    if (NULL == jdata) {
+                        continue;
+                    }
                     /* don't show the requestor's job or non-launcher tools */
-                    if (PRTE_PROC_MY_NAME->jobid != jdata->jobid &&
+                    if (!PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace) &&
                         (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) || PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_LAUNCHER))) {
                         prte_argv_append_nosize(&nspaces, jdata->nspace);
                     }
-                    rc = prte_hash_table_get_next_key_uint32(prte_job_data, &key, (void **)&jdata, nptr, &nptr);
                 }
                 /* join the results into a single comma-delimited string */
                 kv = PRTE_NEW(prte_info_item_t);
@@ -191,8 +183,11 @@ static void _query(int sd, short args, void *cbdata)
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NAMESPACE_INFO)) {
                 /* get the current jobids */
                 PRTE_CONSTRUCT(&stack, prte_list_t);
-                rc = prte_hash_table_get_first_key_uint32(prte_job_data, &key, (void **)&jdata, &nptr);
-                while (PRTE_SUCCESS == rc) {
+                for (k = 0; k < prte_job_data->size; k++) {
+                    jdata = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, k);
+                    if (NULL == jdata) {
+                        continue;
+                    }
                     /* don't show the requestor's job or non-launcher tools */
                     if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) || PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_LAUNCHER)) {
                         kv = PRTE_NEW(prte_info_item_t);
@@ -215,7 +210,6 @@ static void _query(int sd, short args, void *cbdata)
                         PMIX_INFO_LOAD(&info[1], PMIX_CMD_LINE, cmdline, PMIX_STRING);
                         free(cmdline);
                     }
-                    rc = prte_hash_table_get_next_key_uint32(prte_job_data, &key, (void **)&jdata, nptr, &nptr);
                 }
                 kv = PRTE_NEW(prte_info_item_t);
                 (void)strncpy(kv->info.key, PMIX_QUERY_NAMESPACE_INFO, PMIX_MAX_KEYLEN);
@@ -365,7 +359,7 @@ static void _query(int sd, short args, void *cbdata)
                 /* get the server uri value - we can block here as we are in
                  * an PRTE progress thread */
                 PRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_SERVER_URI, &proct->name,
-                                              (char**)&uri, PRTE_STRING);
+                                              (char**)&uri, PMIX_STRING);
                 if (PRTE_SUCCESS != rc) {
                     ret = prte_pmix_convert_rc(rc);
                     goto done;
@@ -405,7 +399,7 @@ static void _query(int sd, short args, void *cbdata)
                     if (NULL == (proct = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, k))) {
                         continue;
                     }
-                    PRTE_PMIX_CONVERT_NAME(rc, &procinfo[p].proc, &proct->name);
+                    PMIX_LOAD_PROCID(&procinfo[p].proc, proct->name.nspace, proct->name.rank);
                     if (NULL != proct->node && NULL != proct->node->name) {
                         procinfo[p].hostname = strdup(proct->node->name);
                     }
@@ -449,7 +443,7 @@ static void _query(int sd, short args, void *cbdata)
                         continue;
                     }
                     if (PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_LOCAL)) {
-                        PRTE_PMIX_CONVERT_NAME(rc, &procinfo[p].proc, &proct->name);
+                        PMIX_LOAD_PROCID(&procinfo[p].proc, proct->name.nspace, proct->name.rank);
                         if (NULL != proct->node && NULL != proct->node->name) {
                             procinfo[p].hostname = strdup(proct->node->name);
                         }

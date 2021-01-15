@@ -15,6 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +29,7 @@
 
 #include "src/util/printf.h"
 #include "src/mca/rml/rml.h"
-
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/filem/filem.h"
 
 BEGIN_C_DECLS
@@ -46,7 +47,7 @@ PRTE_EXPORT int prte_filem_base_select(void);
  * cmds for base receive
  */
 typedef uint8_t prte_filem_cmd_flag_t;
-#define PRTE_FILEM_CMD  PRTE_UINT8
+#define PRTE_FILEM_CMD  PMIX_UINT8
 #define PRTE_FILEM_GET_PROC_NODE_NAME_CMD  1
 #define PRTE_FILEM_GET_REMOTE_PATH_CMD     2
 
@@ -84,9 +85,10 @@ int prte_filem_base_none_link_local_files(prte_job_t *jdata,
 /* base comm functions */
 PRTE_EXPORT int prte_filem_base_comm_start(void);
 PRTE_EXPORT int prte_filem_base_comm_stop(void);
-PRTE_EXPORT void prte_filem_base_recv(int status, prte_process_name_t* sender,
-                                        prte_buffer_t* buffer, prte_rml_tag_t tag,
-                                        void* cbdata);
+PRTE_EXPORT void prte_filem_base_recv(int status, pmix_proc_t* sender,
+                                      pmix_data_buffer_t* buffer,
+                                      prte_rml_tag_t tag,
+                                      void* cbdata);
 
 
 END_C_DECLS

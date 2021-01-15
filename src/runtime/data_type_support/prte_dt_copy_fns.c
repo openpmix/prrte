@@ -13,6 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,16 +28,17 @@
 #endif
 #include <string.h>
 
+#include "src/pmix/pmix-internal.h"
 #include "src/util/argv.h"
-#include "src/dss/dss.h"
-
 #include "src/mca/errmgr/errmgr.h"
-#include "src/runtime/data_type_support/prte_dt_support.h"
+#include "src/runtime/prte_globals.h"
+#include "src/mca/rmaps/rmaps_types.h"
 
 /**
  * JOB
  */
-int prte_dt_copy_job(prte_job_t **dest, prte_job_t *src, prte_data_type_t type)
+int prte_job_copy(prte_job_t **dest,
+                  prte_job_t *src)
 {
     (*dest) = src;
     PRTE_RETAIN(src);
@@ -47,7 +49,8 @@ int prte_dt_copy_job(prte_job_t **dest, prte_job_t *src, prte_data_type_t type)
 /**
 * NODE
  */
-int prte_dt_copy_node(prte_node_t **dest, prte_node_t *src, prte_data_type_t type)
+int prte_node_copy(prte_node_t **dest,
+                   prte_node_t *src)
 {
     prte_node_t *node;
 
@@ -67,7 +70,8 @@ int prte_dt_copy_node(prte_node_t **dest, prte_node_t *src, prte_data_type_t typ
 /**
  * PROC
  */
-int prte_dt_copy_proc(prte_proc_t **dest, prte_proc_t *src, prte_data_type_t type)
+int prte_proc_copy(prte_proc_t **dest,
+                   prte_proc_t *src)
 {
     (*dest) = src;
     PRTE_RETAIN(src);
@@ -77,9 +81,11 @@ int prte_dt_copy_proc(prte_proc_t **dest, prte_proc_t *src, prte_data_type_t typ
 /*
  * APP CONTEXT
  */
-int prte_dt_copy_app_context(prte_app_context_t **dest, prte_app_context_t *src, prte_data_type_t type)
+int prte_app_copy(prte_app_context_t **dest,
+                  prte_app_context_t *src)
 {
     prte_value_t *kv, *kvnew;
+    pmix_status_t rc;
 
     /* create the new object */
     *dest = PRTE_NEW(prte_app_context_t);
@@ -101,73 +107,15 @@ int prte_dt_copy_app_context(prte_app_context_t **dest, prte_app_context_t *src,
     }
 
     PRTE_LIST_FOREACH(kv, &src->attributes, prte_value_t) {
-        prte_dss.copy((void**)&kvnew, kv, PRTE_VALUE);
+        kvnew = PRTE_NEW(prte_value_t);
+        PMIX_VALUE_XFER_DIRECT(rc, &kvnew->value, &kv->value);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PRTE_RELEASE(kvnew);
+            return prte_pmix_convert_status(rc);
+        }
         prte_list_append(&(*dest)->attributes, &kvnew->super);
     }
-
-    return PRTE_SUCCESS;
-}
-
-int prte_dt_copy_proc_state(prte_proc_state_t **dest, prte_proc_state_t *src, prte_data_type_t type)
-{
-    prte_proc_state_t *ps;
-
-    ps = (prte_proc_state_t*)malloc(sizeof(prte_proc_state_t));
-    if (NULL == ps) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    *ps = *src;
-    *dest = ps;
-
-    return PRTE_SUCCESS;
-}
-
-int prte_dt_copy_job_state(prte_job_state_t **dest, prte_job_state_t *src, prte_data_type_t type)
-{
-    prte_job_state_t *ps;
-
-    ps = (prte_job_state_t*)malloc(sizeof(prte_job_state_t));
-    if (NULL == ps) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    *ps = *src;
-    *dest = ps;
-
-    return PRTE_SUCCESS;
-}
-
-int prte_dt_copy_node_state(prte_node_state_t **dest, prte_node_state_t *src, prte_data_type_t type)
-{
-    prte_node_state_t *ps;
-
-    ps = (prte_node_state_t*)malloc(sizeof(prte_node_state_t));
-    if (NULL == ps) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    *ps = *src;
-    *dest = ps;
-
-    return PRTE_SUCCESS;
-}
-
-int prte_dt_copy_exit_code(prte_exit_code_t **dest, prte_exit_code_t *src, prte_data_type_t type)
-{
-    prte_exit_code_t *ps;
-
-    ps = (prte_exit_code_t*)malloc(sizeof(prte_exit_code_t));
-    if (NULL == ps) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    *ps = *src;
-    *dest = ps;
 
     return PRTE_SUCCESS;
 }
@@ -175,9 +123,12 @@ int prte_dt_copy_exit_code(prte_exit_code_t **dest, prte_exit_code_t *src, prte_
 /*
  * JOB_MAP
  */
-int prte_dt_copy_map(prte_job_map_t **dest, prte_job_map_t *src, prte_data_type_t type)
+int prte_map_copy(struct prte_job_map_t **d,
+                  struct prte_job_map_t *s)
 {
     int32_t i;
+    prte_job_map_t **dest = (prte_job_map_t**)d;
+    prte_job_map_t *src = (prte_job_map_t*)s;
 
     if (NULL == src) {
         *dest = NULL;
@@ -211,98 +162,5 @@ int prte_dt_copy_map(prte_job_map_t **dest, prte_job_map_t *src, prte_data_type_
         (*dest)->nodes->addr[i] = src->nodes->addr[i];
     }
 
-    return PRTE_SUCCESS;
-}
-
-/*
- * RML tag
- */
-int prte_dt_copy_tag(prte_rml_tag_t **dest, prte_rml_tag_t *src, prte_data_type_t type)
-{
-    prte_rml_tag_t *tag;
-
-    if (NULL == src) {
-        *dest = NULL;
-        return PRTE_SUCCESS;
-    }
-
-    /* create the new space */
-    tag = (prte_rml_tag_t*)malloc(sizeof(prte_rml_tag_t));
-    if (NULL == tag) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    /* copy data into it */
-    *tag = *src;
-    *dest = tag;
-
-    return PRTE_SUCCESS;
-}
-
-int prte_dt_copy_daemon_cmd(prte_daemon_cmd_flag_t **dest, prte_daemon_cmd_flag_t *src, prte_data_type_t type)
-{
-    size_t datasize;
-
-    datasize = sizeof(prte_daemon_cmd_flag_t);
-
-    *dest = (prte_daemon_cmd_flag_t*)malloc(datasize);
-    if (NULL == *dest) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    memcpy(*dest, src, datasize);
-
-    return PRTE_SUCCESS;
-}
-
-int prte_dt_copy_iof_tag(prte_iof_tag_t **dest, prte_iof_tag_t *src, prte_data_type_t type)
-{
-    size_t datasize;
-
-    datasize = sizeof(prte_iof_tag_t);
-
-    *dest = (prte_iof_tag_t*)malloc(datasize);
-    if (NULL == *dest) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    memcpy(*dest, src, datasize);
-
-    return PRTE_SUCCESS;
-}
-
-int prte_dt_copy_attr(prte_attribute_t **dest, prte_attribute_t *src, prte_data_type_t type)
-{
-    *dest = PRTE_NEW(prte_attribute_t);
-    if (NULL == *dest) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-    (*dest)->key = src->key;
-    (*dest)->type = src->type;
-
-    memcpy(&(*dest)->data, &src->data, sizeof(src->data));
-
-    return PRTE_SUCCESS;
-}
-
-int prte_dt_copy_sig(prte_grpcomm_signature_t **dest, prte_grpcomm_signature_t *src, prte_data_type_t type)
-{
-    *dest = PRTE_NEW(prte_grpcomm_signature_t);
-    if (NULL == *dest) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-    (*dest)->sz = src->sz;
-    (*dest)->signature = (prte_process_name_t*)malloc(src->sz * sizeof(prte_process_name_t));
-    if (NULL == (*dest)->signature) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        PRTE_RELEASE(*dest);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-    memcpy((*dest)->signature, src->signature, src->sz * sizeof(prte_process_name_t));
     return PRTE_SUCCESS;
 }

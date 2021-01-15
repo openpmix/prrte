@@ -20,6 +20,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2019      Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -84,8 +85,8 @@ static int component_startup(void);
 static void component_shutdown(void);
 static int component_send(prte_rml_send_t *msg);
 static char* component_get_addr(void);
-static int component_set_addr(prte_process_name_t *peer, char **uris);
-static bool component_is_reachable(char *routed, prte_process_name_t *peer);
+static int component_set_addr(pmix_proc_t *peer, char **uris);
+static bool component_is_reachable(char *routed, pmix_proc_t *peer);
 
 /*
  * Struct of function pointers and all that to let us be initialized
@@ -175,7 +176,7 @@ static char* component_get_addr(void)
     return cptr;
 }
 
-static int component_set_addr(prte_process_name_t *peer,
+static int component_set_addr(pmix_proc_t *peer,
                               char **uris)
 {
     prte_output_verbose(10, prte_oob_base_framework.framework_output,
@@ -184,7 +185,7 @@ static int component_set_addr(prte_process_name_t *peer,
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
-static bool component_is_reachable(char *routed, prte_process_name_t *peer)
+static bool component_is_reachable(char *routed, pmix_proc_t *peer)
 {
     prte_output_verbose(10, prte_oob_base_framework.framework_output,
                         "%s oob:alps: component_set_addr invoked - this should not be happening",

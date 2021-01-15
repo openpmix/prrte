@@ -4,6 +4,7 @@
  * Copyright (c) 2017      Inria.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +36,6 @@
 #endif
 
 #include "src/class/prte_list.h"
-#include "src/dss/dss_types.h"
 #include "src/hwloc/hwloc-internal.h"
 #if HWLOC_API_VERSION >= 0x20000
 #include "hwloc/shmem.h"
@@ -243,7 +243,7 @@ static void assign(prte_job_t *jdata)
 
     kv = PRTE_NEW(prte_value_t);
     kv->key = strdup(PMIX_HWLOC_SHMEM_FILE);
-    kv->type = PRTE_STRING;
+    kv->type = PMIX_STRING;
     kv->data.string = strdup(shmemfile);
     prte_list_append(cache, &kv->super);
 
@@ -285,7 +285,7 @@ static void set(prte_job_t *jobdat,
         prte_output_verbose(2, prte_rtc_base_framework.framework_output,
                             "%s hwloc:set jobdat %s child %s - nothing to do",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            (NULL == jobdat) ? "NULL" : PRTE_JOBID_PRINT(jobdat->jobid),
+                            (NULL == jobdat) ? "NULL" : PRTE_JOBID_PRINT(jobdat->nspace),
                             (NULL == child) ? "NULL" : PRTE_NAME_PRINT(&child->name));
         return;
     }
@@ -294,7 +294,7 @@ static void set(prte_job_t *jobdat,
 
     /* Set process affinity, if given */
     cpu_bitmap = NULL;
-    if (!prte_get_attribute(&child->attributes, PRTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, PRTE_STRING) ||
+    if (!prte_get_attribute(&child->attributes, PRTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, PMIX_STRING) ||
         NULL == cpu_bitmap || 0 == strlen(cpu_bitmap)) {
         /* if the daemon is bound, then we need to "free" this proc */
         if (NULL != prte_daemon_cores) {
@@ -336,18 +336,18 @@ static void set(prte_job_t *jobdat,
                     return;
                 }
             }
-            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PRTE_BOOL)) {
+            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PMIX_BOOL)) {
                 if (0 == rc) {
-                    report_binding(jobdat, child->name.vpid);
+                    report_binding(jobdat, child->name.rank);
                 }
                 else {
                     prte_output(0, "MCW rank %d is not bound (or bound to all available processors)",
-                                child->name.vpid);
+                                child->name.rank);
                 }
             }
-        } else if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PRTE_BOOL)) {
+        } else if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PMIX_BOOL)) {
             prte_output(0, "MCW rank %d is not bound (or bound to all available processors)",
-                        child->name.vpid);
+                        child->name.rank);
         }
     } else {
         /* convert the list to a cpuset */
@@ -416,8 +416,8 @@ static void set(prte_job_t *jobdat,
             }
         }
 
-        if (0 == rc && prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PRTE_BOOL)) {
-            report_binding(jobdat, child->name.vpid);
+        if (0 == rc && prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PMIX_BOOL)) {
+            report_binding(jobdat, child->name.rank);
         }
 
         /* set memory affinity policy - if we get an error, don't report
@@ -460,7 +460,7 @@ static void report_binding(prte_job_t *jobdat, int rank) {
     bool use_hwthread_cpus;
 
     /* check for type of cpu being used */
-    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;

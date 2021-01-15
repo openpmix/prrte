@@ -13,6 +13,7 @@
  * Copyright (c) 2012      Los Alamos National Security, LLC
  *                         All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,8 +30,7 @@
 #endif  /* HAVE_UNISTD_H */
 #include <string.h>
 
-#include "src/dss/dss.h"
-
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -43,66 +43,69 @@
 
 #include "iof_hnp.h"
 
-int prte_iof_hnp_send_data_to_endpoint(prte_process_name_t *host,
-                                       prte_process_name_t *target,
+int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host,
+                                       pmix_proc_t *target,
                                        prte_iof_tag_t tag,
                                        unsigned char *data, int numbytes)
 {
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     int rc;
-    prte_grpcomm_signature_t *sig;
+    prte_grpcomm_signature_t sig;
 
     /* if the host is a daemon and we are in the process of aborting,
      * then ignore this request. We leave it alone if the host is not
      * a daemon because it might be a tool that wants to watch the
      * output from an abort procedure
      */
-    if (PRTE_JOB_FAMILY(host->jobid) == PRTE_JOB_FAMILY(PRTE_PROC_MY_NAME->jobid)
+    if (PMIX_CHECK_NSPACE(PRTE_JOB_FAMILY_PRINT(host->nspace),
+                          PRTE_JOB_FAMILY_PRINT(PRTE_PROC_MY_NAME->nspace))
         && prte_job_term_ordered) {
         return PRTE_SUCCESS;
     }
 
-    buf = PRTE_NEW(prte_buffer_t);
+    PMIX_DATA_BUFFER_CREATE(buf);
 
     /* pack the tag - we do this first so that flow control messages can
      * consist solely of the tag
      */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &tag, 1, PRTE_IOF_TAG))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(buf);
+    rc = PMIx_Data_pack(NULL, buf, &tag, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         return rc;
     }
     /* pack the name of the target - this is either the intended
      * recipient (if the tag is stdin and we are sending to a daemon),
      * or the source (if we are sending to anyone else)
      */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, target, 1, PRTE_NAME))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(buf);
+    rc = PMIx_Data_pack(NULL, buf, target, 1, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         return rc;
     }
 
     /* if data is NULL, then we are done */
     if (NULL != data) {
         /* pack the data - if numbytes is zero, we will pack zero bytes */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, data, numbytes, PRTE_BYTE))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_RELEASE(buf);
+        rc = PMIx_Data_pack(NULL, buf, data, numbytes, PMIX_BYTE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
             return rc;
         }
     }
 
     /* if the target is wildcard, then this needs to go to everyone - xcast it */
-    if (PRTE_PROC_MY_NAME->jobid == host->jobid &&
-        PRTE_VPID_WILDCARD == host->vpid) {
+    if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, host->nspace) &&
+        PMIX_RANK_WILDCARD == host->rank) {
         /* xcast this to everyone - the local daemons will know how to handle it */
-        sig = PRTE_NEW(prte_grpcomm_signature_t);
-        sig->signature = (prte_process_name_t*)malloc(sizeof(prte_process_name_t));
-        sig->signature[0].jobid = PRTE_PROC_MY_NAME->jobid;
-        sig->signature[0].vpid = PRTE_VPID_WILDCARD;
-        (void)prte_grpcomm.xcast(sig, PRTE_RML_TAG_IOF_PROXY, buf);
-        PRTE_RELEASE(buf);
-        PRTE_RELEASE(sig);
+        PMIX_PROC_CREATE(sig.signature, 1);
+        sig.sz = 1;
+        PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
+        (void)prte_grpcomm.xcast(&sig, PRTE_RML_TAG_IOF_PROXY, buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        PMIX_PROC_FREE(sig.signature, 1);
         return PRTE_SUCCESS;
     }
 

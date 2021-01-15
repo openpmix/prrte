@@ -12,6 +12,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -92,7 +93,7 @@ int prte_routed_base_select(void)
 
 static void construct(prte_routed_tree_t *rt)
 {
-    rt->vpid = PRTE_VPID_INVALID;
+    rt->rank = PMIX_RANK_INVALID;
     PRTE_CONSTRUCT(&rt->relatives, prte_bitmap_t);
 }
 static void destruct(prte_routed_tree_t *rt)

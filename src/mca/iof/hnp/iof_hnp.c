@@ -18,6 +18,7 @@
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -63,16 +64,16 @@ static void stdin_write_handler(int fd, short event, void *cbdata);
 /* API FUNCTIONS */
 static int init(void);
 
-static int hnp_push(const prte_process_name_t* dst_name, prte_iof_tag_t src_tag, int fd);
+static int hnp_push(const pmix_proc_t* dst_name, prte_iof_tag_t src_tag, int fd);
 
-static int hnp_pull(const prte_process_name_t* src_name,
+static int hnp_pull(const pmix_proc_t* src_name,
                 prte_iof_tag_t src_tag,
                 int fd);
 
-static int hnp_close(const prte_process_name_t* peer,
+static int hnp_close(const pmix_proc_t* peer,
                  prte_iof_tag_t source_tag);
 
-static int hnp_output(const prte_process_name_t* peer,
+static int hnp_output(const pmix_proc_t* peer,
                       prte_iof_tag_t source_tag,
                       const char *msg);
 
@@ -80,7 +81,7 @@ static void hnp_complete(const prte_job_t *jdata);
 
 static int finalize(void);
 
-static int push_stdin(const prte_process_name_t* dst_name,
+static int push_stdin(const pmix_proc_t* dst_name,
                       uint8_t *data, size_t sz);
 
 /* The API's in this module are solely used to support LOCAL
@@ -118,31 +119,16 @@ static int init(void)
     return PRTE_SUCCESS;
 }
 
-/* Setup to read local data. If the tag is other than STDIN,
- * then this is output being pushed from one of my child processes
- * and I'll write the data out myself. If the tag is STDIN,
- * then I need to setup to read from my stdin, and send anything
- * I get to the specified dst_name. The dst_name in this case tells
- * us which procs are to get stdin - only two options are supported:
- *
- * (a) a specific name, usually vpid=0; or
- *
- * (b) all procs, specified by vpid=PRTE_VPID_WILDCARD
- *
- * The prte_plm_base_launch_apps function calls iof.push after
- * the procs are launched and tells us how to distribute stdin. This
- * ensures that the procs are started -before- we begin reading stdin
- * and attempting to send it to remote procs
+/* Setup to read local data.
  */
-static int hnp_push(const prte_process_name_t* dst_name, prte_iof_tag_t src_tag, int fd)
+static int hnp_push(const pmix_proc_t* dst_name, prte_iof_tag_t src_tag, int fd)
 {
     prte_job_t *jdata;
-    prte_iof_proc_t *proct, *pptr;
+    prte_iof_proc_t *proct;
     int flags, rc;
-    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL;
 
     /* don't do this if the dst vpid is invalid or the fd is negative! */
-    if (PRTE_VPID_INVALID == dst_name->vpid || fd < 0) {
+    if (PMIX_RANK_INVALID == dst_name->rank || fd < 0) {
         return PRTE_SUCCESS;
     }
 
@@ -153,15 +139,14 @@ static int hnp_push(const prte_process_name_t* dst_name, prte_iof_tag_t src_tag,
 
     /* do we already have this process in our list? */
     PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
-        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &proct->name, dst_name)) {
+        if (PMIX_CHECK_PROCID(&proct->name, dst_name)) {
             /* found it */
             goto SETUP;
         }
     }
     /* if we get here, then we don't yet have this proc in our list */
     proct = PRTE_NEW(prte_iof_proc_t);
-    proct->name.jobid = dst_name->jobid;
-    proct->name.vpid = dst_name->vpid;
+    PMIX_XFER_PROCID(&proct->name, dst_name);
     prte_list_append(&prte_iof_hnp_component.procs, &proct->super);
 
   SETUP:
@@ -176,7 +161,7 @@ static int hnp_push(const prte_process_name_t* dst_name, prte_iof_tag_t src_tag,
         fcntl(fd, F_SETFL, flags);
     }
     /* get the local jobdata for this proc */
-    if (NULL == (jdata = prte_get_job_data_object(proct->name.jobid))) {
+    if (NULL == (jdata = prte_get_job_data_object(proct->name.nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -201,22 +186,15 @@ static int hnp_push(const prte_process_name_t* dst_name, prte_iof_tag_t src_tag,
      */
     if (NULL != proct->revstdout &&
         (prte_iof_base.redirect_app_stderr_to_stdout || NULL != proct->revstderr)) {
-        if (proct->copy) {
-            /* see if there are any wildcard subscribers out there that
-             * apply to us */
-            PRTE_LIST_FOREACH(pptr, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
-                if (dst_name->jobid == pptr->name.jobid &&
-                    PRTE_VPID_WILDCARD == pptr->name.vpid &&
-                    NULL != pptr->subscribers) {
-                    PRTE_RETAIN(pptr->subscribers);
-                    proct->subscribers = pptr->subscribers;
-                    break;
-                }
-            }
+        prte_iof_base_check_target(proct);
+        if (!proct->revstdout->activated) {
+            PRTE_IOF_READ_ACTIVATE(proct->revstdout);
+            proct->revstdout->activated = true;
         }
-        PRTE_IOF_READ_ACTIVATE(proct->revstdout);
-        if (!prte_iof_base.redirect_app_stderr_to_stdout) {
+        if (!prte_iof_base.redirect_app_stderr_to_stdout &&
+            !proct->revstderr->activated) {
             PRTE_IOF_READ_ACTIVATE(proct->revstderr);
+            proct->revstderr->activated = true;
         }
     }
     return PRTE_SUCCESS;
@@ -229,15 +207,14 @@ static int hnp_push(const prte_process_name_t* dst_name, prte_iof_tag_t src_tag,
  * (b) all procs, specified by vpid=PRTE_VPID_WILDCARD
  *
  */
-static int push_stdin(const prte_process_name_t* dst_name,
+static int push_stdin(const pmix_proc_t* dst_name,
                       uint8_t *data, size_t sz)
 {
     prte_iof_proc_t *proct, *pptr;
     int rc;
-    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL;
 
     /* don't do this if the dst vpid is invalid */
-    if (PRTE_VPID_INVALID == dst_name->vpid) {
+    if (PMIX_RANK_INVALID == dst_name->rank) {
         return PRTE_SUCCESS;
     }
 
@@ -250,7 +227,7 @@ static int push_stdin(const prte_process_name_t* dst_name,
     /* do we already have this process in our list? */
     proct = NULL;
     PRTE_LIST_FOREACH(pptr, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
-        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &pptr->name, dst_name)) {
+        if (PMIX_CHECK_PROCID(&pptr->name, dst_name)) {
             /* found it */
             proct = pptr;
         }
@@ -262,7 +239,7 @@ static int push_stdin(const prte_process_name_t* dst_name,
     /* pass the data to the sink */
 
     /* if the daemon is me, then this is a local sink */
-    if (PRTE_EQUAL == prte_util_compare_name_fields(mask, PRTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
+    if (PMIX_CHECK_PROCID(PRTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
         PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s read %d bytes from stdin - writing to %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int)sz,
@@ -310,12 +287,11 @@ static int push_stdin(const prte_process_name_t* dst_name,
  * process so we can record the file descriptor for its stdin.
  */
 
-static int hnp_pull(const prte_process_name_t* dst_name,
+static int hnp_pull(const pmix_proc_t* dst_name,
                     prte_iof_tag_t src_tag,
                     int fd)
 {
     prte_iof_proc_t *proct;
-    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL;
     int flags;
 
     /* this is a local call - only stdin is supported */
@@ -341,22 +317,20 @@ static int hnp_pull(const prte_process_name_t* dst_name,
 
     /* do we already have this process in our list? */
     PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
-        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &proct->name, dst_name)) {
+        if (PMIX_CHECK_PROCID(&proct->name, dst_name)) {
             /* found it */
             goto SETUP;
         }
     }
     /* if we get here, then we don't yet have this proc in our list */
     proct = PRTE_NEW(prte_iof_proc_t);
-    proct->name.jobid = dst_name->jobid;
-    proct->name.vpid = dst_name->vpid;
+    PMIX_XFER_PROCID(&proct->name, &dst_name);
     prte_list_append(&prte_iof_hnp_component.procs, &proct->super);
 
   SETUP:
     PRTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, fd, PRTE_IOF_STDIN,
                          stdin_write_handler);
-    proct->stdinev->daemon.jobid = PRTE_PROC_MY_NAME->jobid;
-    proct->stdinev->daemon.vpid = PRTE_PROC_MY_NAME->vpid;
+    PMIX_XFER_PROCID(&proct->stdinev->daemon, PRTE_PROC_MY_NAME);
 
     return PRTE_SUCCESS;
 }
@@ -365,11 +339,10 @@ static int hnp_pull(const prte_process_name_t* dst_name,
  * One of our local procs wants us to close the specifed
  * stream(s), thus terminating any potential io to/from it.
  */
-static int hnp_close(const prte_process_name_t* peer,
+static int hnp_close(const pmix_proc_t* peer,
                      prte_iof_tag_t source_tag)
 {
     prte_iof_proc_t* proct;
-    prte_ns_cmp_bitmask_t mask = PRTE_NS_CMP_ALL;
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                           "%s iof:hnp closing connection to process %s",
@@ -377,7 +350,7 @@ static int hnp_close(const prte_process_name_t* peer,
                           PRTE_NAME_PRINT(peer)));
 
     PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
-        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &proct->name, peer)) {
+        if (PMIX_CHECK_PROCID(&proct->name, peer)) {
             if (PRTE_IOF_STDIN & source_tag) {
                 if (NULL != proct->stdinev) {
                     PRTE_RELEASE(proct->stdinev);
@@ -418,7 +391,7 @@ static void hnp_complete(const prte_job_t *jdata)
 
     /* cleanout any lingering sinks */
     PRTE_LIST_FOREACH_SAFE(proct, next, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
-        if (jdata->jobid == proct->name.jobid) {
+        if (PMIX_CHECK_NSPACE(jdata->nspace, proct->name.nspace)) {
             prte_list_remove_item(&prte_iof_hnp_component.procs, &proct->super);
             if (NULL != proct->revstdout) {
                 prte_iof_base_static_dump_output(proct->revstdout);
@@ -487,7 +460,6 @@ static int finalize(void)
         PRTE_RELEASE(proct);
     }
     PRTE_DESTRUCT(&prte_iof_hnp_component.procs);
-
     return PRTE_SUCCESS;
 }
 
@@ -598,22 +570,17 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
     PRTE_PMIX_WAKEUP_THREAD(lk);
 }
 
-static int hnp_output(const prte_process_name_t* peer,
+static int hnp_output(const pmix_proc_t* peer,
                       prte_iof_tag_t source_tag,
                       const char *msg)
 {
     pmix_iof_channel_t pchan;
-    pmix_proc_t source;
     pmix_byte_object_t bo;
     prte_pmix_lock_t lock;
     pmix_status_t rc;
     int ret;
 
     if (PRTE_PROC_IS_MASTER) {
-        PRTE_PMIX_CONVERT_NAME(ret, &source, peer);
-        if (PRTE_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
-        }
         pchan = 0;
         if (PRTE_IOF_STDIN & source_tag) {
             pchan |= PMIX_FWD_STDIN_CHANNEL;
@@ -634,7 +601,7 @@ static int hnp_output(const prte_process_name_t* peer,
             bo.size = strlen(msg)+1;
         }
         PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        rc = PMIx_server_IOF_deliver(&source, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
+        rc = PMIx_server_IOF_deliver(peer, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
         if (PMIX_SUCCESS != rc) {
             ret = prte_pmix_convert_status(rc);
         } else {
