@@ -420,6 +420,16 @@ static void setupcbfunc(pmix_status_t status,
     PRTE_PMIX_WAKEUP_THREAD(&mylock->lock);
 }
 
+static void toolcbfunc(pmix_status_t status,
+                       pmix_proc_t *name,
+                       void *cbdata)
+{
+    mylock_t *mylock = (mylock_t*)cbdata;
+
+    mylock->status = status;
+    PRTE_PMIX_WAKEUP_THREAD(&mylock->lock);
+}
+
 static void spcbfunc(pmix_status_t status,
                      char nspace[], void *cbdata)
 {
@@ -464,16 +474,12 @@ int main(int argc, char *argv[])
     prte_list_t apps;
     prte_pmix_app_t *app;
     pmix_info_t *iptr, info;
-    pmix_proc_t controller;
     pmix_status_t ret;
     bool flag;
     size_t m, n, ninfo, param_len;
     pmix_app_t *papps;
     size_t napps;
     mylock_t mylock;
-#if PMIX_NUMERIC_VERSION >= 0x00040000
-    bool notify_launch = false;
-#endif
     prte_value_t *pval;
     uint32_t ui32;
     char *mytmpdir;
@@ -1103,6 +1109,30 @@ int main(int argc, char *argv[])
         PMIX_INFO_FREE(mylock.info, mylock.ninfo);
     }
 
+    /* see if we ourselves were spawned by someone */
+    ret = PMIx_Get(&prte_process_info.myproc, PMIX_PARENT_ID, NULL, 0, &val);
+    if (PMIX_SUCCESS == ret) {
+        PMIX_LOAD_PROCID(&pname, val->data.proc->nspace, val->data.proc->rank);
+        PMIX_VALUE_RELEASE(val);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
+        /* record that this tool is connected to us */
+        PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
+        PMIX_INFO_CREATE(iptr, 2);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_NSPACE, pname.nspace, PMIX_STRING);
+        PMIX_INFO_LOAD(&iptr[1], PMIX_RANK, &pname.rank, PMIX_PROC_RANK);
+        pmix_tool_connected_fn(iptr, 2, toolcbfunc, &mylock);
+        /* we have to cycle the event library here so we can process
+         * this request */
+        while (prte_event_base_active && mylock.lock.active) {
+            prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+        }
+        PRTE_ACQUIRE_OBJECT(&mylock.lock);
+        PMIX_INFO_FREE(iptr, 2);
+        PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
+    } else {
+        PMIX_LOAD_PROCID(&pname, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
+    }
+
     /* convert the job info into an array */
     PMIX_INFO_LIST_CONVERT(ret, jinfo, &darray);
     iptr = (pmix_info_t*)darray.array;
@@ -1136,7 +1166,7 @@ int main(int argc, char *argv[])
     }
 
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    ret = pmix_server_spawn_fn(&prte_process_info.myproc, iptr, ninfo, papps,
+    ret = pmix_server_spawn_fn(&pname, iptr, ninfo, papps,
                                napps, spcbfunc, &lock);
     if (PRTE_SUCCESS != ret) {
         prte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
@@ -1157,23 +1187,6 @@ int main(int argc, char *argv[])
     PMIX_LOAD_NSPACE(spawnednspace, lock.msg);
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PRTE_PMIX_CONVERT_NSPACE(rc, &myjobid, spawnednspace);
-
-#if PMIX_NUMERIC_VERSION >= 0x00040000
-    if (notify_launch) {
-        /* direct an event back to our controller telling them
-         * the namespace of the spawned job */
-        PMIX_INFO_CREATE(iptr, 3);
-        /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
-        /* pass the nspace of the spawned job */
-        PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, spawnednspace, PMIX_STRING);
-        /* not to be delivered to a default event handler */
-        PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
-        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &prte_process_info.myproc, PMIX_RANGE_CUSTOM,
-                          iptr, 3, NULL, NULL);
-        PMIX_INFO_FREE(iptr, 3);
-    }
-#endif
 
     if (verbose) {
         prte_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(myjobid));

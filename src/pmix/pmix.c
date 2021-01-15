@@ -9,6 +9,7 @@
  *                         All rights reserved.
  * Copyright (c) 2016-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -63,7 +64,7 @@ int prte_convert_jobid_to_nspace(pmix_nspace_t nspace, prte_jobid_t jobid)
 }
 
 
-void prte_convert_daemon_nspace(prte_jobid_t *jobid, pmix_nspace_t nspace)
+void prte_convert_daemon_nspace(prte_jobid_t *jobid, const pmix_nspace_t nspace)
 {
     prte_job_t *jdata;
     uint32_t hash32;
@@ -84,7 +85,7 @@ void prte_convert_daemon_nspace(prte_jobid_t *jobid, pmix_nspace_t nspace)
     prte_set_job_data_object(jdata->jobid, jdata);
 }
 
-int prte_convert_nspace_to_jobid(prte_jobid_t *jobid, pmix_nspace_t nspace)
+int prte_convert_nspace_to_jobid(prte_jobid_t *jobid, const pmix_nspace_t nspace)
 {
     uint32_t key;
     prte_job_t *jdata;
@@ -96,7 +97,7 @@ int prte_convert_nspace_to_jobid(prte_jobid_t *jobid, pmix_nspace_t nspace)
     *jobid = PRTE_JOBID_INVALID;
 
     /* if the nspace is empty, there is nothing more to do */
-    if (0 == strlen(nspace)) {
+    if (NULL == nspace || 0 == strlen(nspace)) {
         return PRTE_SUCCESS;
     }
     if (NULL != strstr(nspace, "JOBID_WILDCARD")) {

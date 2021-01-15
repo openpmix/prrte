@@ -13,6 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -75,6 +76,8 @@ const char *prte_job_state_to_str(prte_job_state_t state)
         return "SYNC REGISTERED";
     case PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE:
         return "LOCAL LAUNCH COMPLETE";
+    case PRTE_JOB_STATE_READY_FOR_DEBUG:
+        return "READY FOR DEBUG";
     case PRTE_JOB_STATE_UNTERMINATED:
         return "UNTERMINATED";
     case PRTE_JOB_STATE_TERMINATED:
@@ -177,6 +180,10 @@ const char *prte_proc_state_to_str(prte_proc_state_t state)
         return "IOF COMPLETE";
     case PRTE_PROC_STATE_WAITPID_FIRED:
         return "WAITPID FIRED";
+    case PRTE_PROC_STATE_MODEX_READY:
+        return "MODEX READY";
+    case PRTE_PROC_STATE_READY_FOR_DEBUG:
+        return "READY FOR DEBUG";
     case PRTE_PROC_STATE_UNTERMINATED:
         return "UNTERMINATED";
     case PRTE_PROC_STATE_TERMINATED:

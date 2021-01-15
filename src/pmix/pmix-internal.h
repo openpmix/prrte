@@ -6,6 +6,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -447,8 +448,8 @@ PRTE_EXPORT int prte_pmix_convert_status(pmix_status_t status);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_job_state_to_error(int state);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_proc_state_to_error(int state);
 PRTE_EXPORT int prte_convert_jobid_to_nspace(pmix_nspace_t nspace, prte_jobid_t jobid);
-PRTE_EXPORT int prte_convert_nspace_to_jobid(prte_jobid_t *jobid, pmix_nspace_t nspace);
-PRTE_EXPORT void prte_convert_daemon_nspace(prte_jobid_t *jobid, pmix_nspace_t nspace);
+PRTE_EXPORT int prte_convert_nspace_to_jobid(prte_jobid_t *jobid, const pmix_nspace_t nspace);
+PRTE_EXPORT void prte_convert_daemon_nspace(prte_jobid_t *jobid, const pmix_nspace_t nspace);
 
 /* convert prte_jobid to pmix nspace */
 #define PRTE_PMIX_CONVERT_JOBID(r, n, j) \

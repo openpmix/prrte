@@ -17,6 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -647,6 +648,7 @@ static void prte_job_construct(prte_job_t* job)
     job->num_reported = 0;
     job->num_terminated = 0;
     job->num_daemons_reported = 0;
+    job->num_ready_for_debug = 0;
 
     job->originator.jobid = PRTE_JOBID_INVALID;
     job->originator.vpid = PRTE_VPID_INVALID;

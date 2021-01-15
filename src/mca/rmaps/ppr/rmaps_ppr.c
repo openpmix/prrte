@@ -5,6 +5,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -300,7 +301,7 @@ static int ppr_mapper(prte_job_t *jdata)
                                                            lowest, cache_level);
                 /* Map up to number of slots on node or number of specified resource on node
                  * whichever is less. */
-                if (node->slots < nobjs) {
+                if (node->slots < (int)nobjs) {
                     num_available = node->slots;
                 }
                 else {
