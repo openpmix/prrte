@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -283,6 +284,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* kill the job if any orteds die */
         prte_argv_append(&argc, &argv, "--kill-on-bad-exit");
     }
+
+    /* our daemons are not an MPI task */
+    prte_argv_append(&argc, &argv, "--mpi=none");
 
     /* ensure the orteds are not bound to a single processor,
      * just in case the TaskAffinity option is set by default.
