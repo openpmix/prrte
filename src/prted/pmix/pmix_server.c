@@ -1176,6 +1176,7 @@ static void pmix_server_log(int status, prte_process_name_t* sender,
     }
 
     PMIX_INFO_CREATE(info, ninfo);
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
     PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
     for (n=0; n < ninfo; n++) {
         cnt = 1;

@@ -19,6 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,7 +57,6 @@
 #include "src/util/sys_limits.h"
 #include "src/dss/dss.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/pstat/pstat.h"
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -590,6 +590,7 @@ int prte_odls_base_default_construct_child_list(prte_buffer_t *buffer,
     PRTE_RELEASE(bptr);
     if (PRTE_SUCCESS == rc) {
         /* there was setup data - process it */
+        PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
         PMIX_DATA_BUFFER_LOAD(&pbuf, bo->bytes, bo->size);
         bo->bytes = NULL;
         bo->size = 0;
@@ -1991,62 +1992,6 @@ int prte_odls_base_default_kill_local_procs(prte_pointer_array_t *procs,
     if (do_cleanup) {
         PRTE_DESTRUCT(&procarray);
         PRTE_DESTRUCT(&proctmp);
-    }
-
-    return PRTE_SUCCESS;
-}
-
-int prte_odls_base_get_proc_stats(prte_buffer_t *answer,
-                                  prte_process_name_t *proc)
-{
-    int rc;
-    prte_proc_t *child;
-    prte_pstats_t stats, *statsptr;
-    int i, j;
-
-    PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                         "%s odls:get_proc_stats for proc %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(proc)));
-
-    /* find this child */
-    for (i=0; i < prte_local_children->size; i++) {
-        if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i))) {
-            continue;
-        }
-
-        if (proc->jobid == child->name.jobid &&
-            (proc->vpid == child->name.vpid ||
-             PRTE_VPID_WILDCARD == proc->vpid)) { /* found it */
-
-            PRTE_CONSTRUCT(&stats, prte_pstats_t);
-            /* record node up to first '.' */
-            for (j=0; j < (int)strlen(prte_process_info.nodename) &&
-                 j < PRTE_PSTAT_MAX_STRING_LEN-1 &&
-                 prte_process_info.nodename[j] != '.'; j++) {
-                stats.node[j] = prte_process_info.nodename[j];
-            }
-            /* record rank */
-            stats.rank = child->name.vpid;
-            /* get stats */
-            rc = prte_pstat.query(child->pid, &stats, NULL);
-            if (PRTE_SUCCESS != rc) {
-                PRTE_DESTRUCT(&stats);
-                return rc;
-            }
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(answer, proc, 1, PRTE_NAME))) {
-                PRTE_ERROR_LOG(rc);
-                PRTE_DESTRUCT(&stats);
-                return rc;
-            }
-            statsptr = &stats;
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(answer, &statsptr, 1, PRTE_PSTAT))) {
-                PRTE_ERROR_LOG(rc);
-                PRTE_DESTRUCT(&stats);
-                return rc;
-            }
-            PRTE_DESTRUCT(&stats);
-        }
     }
 
     return PRTE_SUCCESS;

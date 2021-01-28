@@ -19,6 +19,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1024,6 +1025,7 @@ static void rollup(int status, prte_process_name_t* sender,
                 goto report;
             }
             /* it was packed using PMIx, so unpack it the same way */
+            PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
             PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
             cnt = 1;
             if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&proc, &pbkt, &ninfo, &cnt, PMIX_SIZE))) {

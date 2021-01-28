@@ -18,6 +18,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,7 +45,6 @@
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/pstat/base/base.h"
 #include "src/util/arch.h"
 #include "src/util/prte_environ.h"
 #include "src/util/os_path.h"
@@ -176,20 +176,6 @@ int prte_ess_base_prted_setup(void)
     if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         prte_dss.dump(0, prte_hwloc_topology, PRTE_HWLOC_TOPO);
-    }
-
-    /* open and setup the prte_pstat framework so we can provide
-     * process stats if requested
-     */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_pstat_base_framework, 0))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_pstat_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_pstat_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_pstat_base_select";
-        goto error;
     }
 
     /* define the HNP name */
