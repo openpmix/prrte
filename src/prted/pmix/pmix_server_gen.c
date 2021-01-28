@@ -38,7 +38,6 @@
 #include "src/util/output.h"
 #include "src/dss/dss.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/pstat/pstat.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/iof.h"
@@ -384,6 +383,7 @@ void pmix_server_notify(int status, prte_process_name_t* sender,
     }
 
     /* load it into a pmix data buffer for processing */
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
     PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
     free(boptr);
 

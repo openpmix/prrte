@@ -18,6 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,7 +49,6 @@
 
 #include "src/event/event-internal.h"
 #include "src/mca/base/base.h"
-#include "src/mca/pstat/pstat.h"
 #include "src/util/output.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/prte_environ.h"
@@ -127,7 +127,6 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
     char gscmd[256], path[1035], *pathptr;
     char string[256], *string_ptr = string;
     float pss;
-    prte_pstats_t pstat;
     char *coprocessors;
     prte_job_map_t *map;
     int8_t flag;
@@ -290,6 +289,7 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                         break;
                     }
                     /* load into a PMIx buffer for unpacking */
+                    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
                     PMIX_DATA_BUFFER_LOAD(&pbkt, bo2->bytes, bo2->size);
                     /* unpack the number of info's provided */
                     cnt = 1;
@@ -802,44 +802,6 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
         /* always send our response */
         if (0 > (ret = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, answer,
                                                PRTE_RML_TAG_STACK_TRACE,
-                                               prte_rml_send_callback, NULL))) {
-            PRTE_ERROR_LOG(ret);
-            PRTE_RELEASE(answer);
-        }
-        break;
-
-    case PRTE_DAEMON_GET_MEMPROFILE:
-        answer = PRTE_NEW(prte_buffer_t);
-        /* pack our hostname so they know where it came from */
-        prte_dss.pack(answer, &prte_process_info.nodename, 1, PRTE_STRING);
-        /* collect my memory usage */
-        PRTE_CONSTRUCT(&pstat, prte_pstats_t);
-        prte_pstat.query(prte_process_info.pid, &pstat, NULL);
-        prte_dss.pack(answer, &pstat.pss, 1, PRTE_FLOAT);
-        PRTE_DESTRUCT(&pstat);
-        /* collect the memory usage of all my children */
-        pss = 0.0;
-        num_replies = 0;
-        for (i=0; i < prte_local_children->size; i++) {
-            if (NULL != (proct = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i)) &&
-                PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
-                /* collect the stats on this proc */
-                PRTE_CONSTRUCT(&pstat, prte_pstats_t);
-                if (PRTE_SUCCESS == prte_pstat.query(proct->pid, &pstat, NULL)) {
-                    pss += pstat.pss;
-                    ++num_replies;
-                }
-                PRTE_DESTRUCT(&pstat);
-            }
-        }
-        /* compute the average value */
-        if (0 < num_replies) {
-            pss /= (float)num_replies;
-        }
-        prte_dss.pack(answer, &pss, 1, PRTE_FLOAT);
-        /* send it back */
-        if (0 > (ret = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, answer,
-                                               PRTE_RML_TAG_MEMPROFILE,
                                                prte_rml_send_callback, NULL))) {
             PRTE_ERROR_LOG(ret);
             PRTE_RELEASE(answer);

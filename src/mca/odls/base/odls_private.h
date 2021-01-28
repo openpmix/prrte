@@ -16,6 +16,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -158,11 +159,6 @@ PRTE_EXPORT int prte_odls_base_default_restart_proc(prte_proc_t *child,
  * Preload binary/files functions
  */
 PRTE_EXPORT int prte_odls_base_preload_files_app_context(prte_app_context_t* context);
-
-/*
- * Obtain process stats on a child proc
- */
-PRTE_EXPORT int prte_odls_base_get_proc_stats(prte_buffer_t *answer, prte_process_name_t *proc);
 
 END_C_DECLS
 

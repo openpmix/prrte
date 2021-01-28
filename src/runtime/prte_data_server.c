@@ -15,6 +15,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -251,6 +252,7 @@ void prte_data_server(int status, prte_process_name_t* sender,
     }
 
     /* load it into a pmix data buffer for processing */
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
     PMIX_DATA_BUFFER_LOAD(&pbkt, boptr->bytes, boptr->size);
     boptr->bytes = NULL;
     free(boptr);

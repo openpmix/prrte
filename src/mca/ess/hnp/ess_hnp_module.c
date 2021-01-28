@@ -55,7 +55,6 @@
 #include "src/util/basename.h"
 #include "src/util/fd.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/pstat/base/base.h"
 #include "src/hwloc/hwloc-internal.h"
 
 #include "src/mca/oob/base/base.h"
@@ -206,18 +205,6 @@ static int rte_init(int argc, char **argv)
             error = "topology discovery";
             goto error;
         }
-    }
-
-    /* open and setup the prte_pstat framework so we can provide
-     * process stats if requested
-     */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_pstat_base_framework, 0))) {
-        error = "prte_pstat_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_pstat_base_select())) {
-        error = "prte_pstat_base_select";
-        goto error;
     }
 
     /* open and setup the state machine */
@@ -655,8 +642,6 @@ static int rte_finalize(void)
 #if PRTE_ENABLE_FT
     (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
 #endif
-    /* cleanup the pstat stuff */
-    (void) prte_mca_base_framework_close(&prte_pstat_base_framework);
 
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {

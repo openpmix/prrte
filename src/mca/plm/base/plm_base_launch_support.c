@@ -1325,6 +1325,7 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
                 goto CLEANUP;
             }
             /* load the bytes into a PMIx data buffer for unpacking */
+            PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
             PMIX_DATA_BUFFER_LOAD(&pbuf, bptr->bytes, bptr->size);
             bptr->bytes = NULL;
             free(bptr);
@@ -1521,6 +1522,7 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
             } else {
                 prte_pmix_lock_t lock;
                 /* load the bytes into a PMIx data buffer for unpacking */
+                PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
                 PMIX_DATA_BUFFER_LOAD(&pbuf, bptr->bytes, bptr->size);
                 free(bptr);
                 idx = 1;

@@ -19,6 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +38,6 @@
 #include "src/util/output.h"
 #include "src/dss/dss.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/pstat/pstat.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/iof.h"
@@ -85,12 +85,7 @@ static void _query(int sd, short args, void *cbdata)
     char **ans, *tmp;
     prte_process_name_t requestor;
     prte_app_context_t *app;
-    prte_pstats_t pstat;
-    float pss;
-    bool local_only;
-    prte_namelist_t *nm;
-    prte_list_t targets;
-    int i, num_replies, matched;
+    int matched;
     pmix_proc_info_t *procinfo;
     pmix_info_t *info;
     pmix_data_array_t *darray;
@@ -272,67 +267,6 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_DEBUG_SUPPORT, tmp, PMIX_STRING);
                 free(tmp);
                 prte_list_append(&results, &kv->super);
-#ifdef PMIX_QUERY_MEMORY_USAGE
-            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_MEMORY_USAGE)) {
-                PRTE_CONSTRUCT(&targets, prte_list_t);
-                /* scan the qualifiers */
-                local_only = false;
-                for (k=0; k < (int)q->nqual; k++) {
-                    if (0 == strncmp(q->qualifiers[k].key, PMIX_QUERY_LOCAL_ONLY, PMIX_MAX_KEYLEN)) {
-                        local_only = PMIX_INFO_TRUE(&q->qualifiers[k]);
-                    } else if (0 == strncmp(q->qualifiers[k].key, PMIX_PROCID, PMIX_MAX_KEYLEN)) {
-                        /* save this directive on our list of targets */
-                        nm = PRTE_NEW(prte_namelist_t);
-                        PRTE_PMIX_CONVERT_PROCT(rc, &nm->name, q->qualifiers[n].value.data.proc);
-                        if (PRTE_SUCCESS != rc) {
-                            PRTE_ERROR_LOG(rc);
-                        }
-                        prte_list_append(&targets, &nm->super);
-                    }
-                }
-                /* if they have asked for only our local procs or daemon,
-                 * then we can just get the data directly */
-                if (local_only) {
-                    if (0 == prte_list_get_size(&targets)) {
-                        kv = PRTE_NEW(prte_info_item_t);
-                        (void)strncpy(kv->info.key, PMIX_QUERY_MEMORY_USAGE, PMIX_MAX_KEYLEN);
-                        prte_list_append(&results, &kv->super);
-                        /* create an entry for myself plus the avg of all local procs */
-                        PMIX_DATA_ARRAY_CREATE(darray, 2, PMIX_INFO);
-                        kv->info.value.type = PMIX_DATA_ARRAY;
-                        kv->info.value.data.darray = darray;
-#if PMIX_NUMERIC_VERSION < 0x00030100
-                        PMIX_INFO_CREATE(darray->array, 2);
-#endif
-                        info = (pmix_info_t*)darray->array;
-                        /* collect my memory usage */
-                        PRTE_CONSTRUCT(&pstat, prte_pstats_t);
-                        prte_pstat.query(prte_process_info.pid, &pstat, NULL);
-                        PMIX_INFO_LOAD(&info[0], PMIX_DAEMON_MEMORY, &pstat.pss, PMIX_FLOAT);
-                        PRTE_DESTRUCT(&pstat);
-                        /* collect the memory usage of all my children */
-                        pss = 0.0;
-                        num_replies = 0;
-                        for (i=0; i < prte_local_children->size; i++) {
-                            if (NULL != (proct = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i)) &&
-                                PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
-                                /* collect the stats on this proc */
-                                PRTE_CONSTRUCT(&pstat, prte_pstats_t);
-                                if (PRTE_SUCCESS == prte_pstat.query(proct->pid, &pstat, NULL)) {
-                                    pss += pstat.pss;
-                                    ++num_replies;
-                                }
-                                PRTE_DESTRUCT(&pstat);
-                            }
-                        }
-                        /* compute the average value */
-                        if (0 < num_replies) {
-                            pss /= (float)num_replies;
-                        }
-                        PMIX_INFO_LOAD(&info[1], PMIX_CLIENT_AVG_MEMORY, &pss, PMIX_FLOAT);
-                    }
-                }
-#endif
             } else if (0 == strcmp(q->keys[n], PMIX_TIME_REMAINING)) {
                 if (PRTE_SUCCESS == prte_schizo.get_remaining_time(&key)) {
                     kv = PRTE_NEW(prte_info_item_t);

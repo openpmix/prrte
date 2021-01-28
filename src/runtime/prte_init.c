@@ -68,7 +68,6 @@
 #include "src/mca/odls/base/base.h"
 #include "src/mca/oob/base/base.h"
 #include "src/mca/plm/base/base.h"
-#include "src/mca/pstat/base/base.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rml/base/base.h"
