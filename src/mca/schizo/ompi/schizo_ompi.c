@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2020 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -58,6 +58,10 @@
 
 static int define_cli(prte_cmd_line_t *cli);
 static void register_deprecated_cli(prte_list_t *convertors);
+static int parse_cli(int argc, int start,
+                     char **argv,
+                     char *personality,
+                     char ***target);
 static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
                             char ***argv);
 static int parse_env(prte_cmd_line_t *cmd_line,
@@ -71,6 +75,7 @@ static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
 prte_schizo_base_module_t prte_schizo_ompi_module = {
     .define_cli = define_cli,
     .register_deprecated_cli = register_deprecated_cli,
+    .parse_cli = parse_cli,
     .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
     .detect_proxy = detect_proxy,
@@ -149,7 +154,9 @@ static prte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Specify the initial error handler that is attached to predefined communicators during the first MPI call.",
       PRTE_CMD_LINE_OTYPE_LAUNCH },
-
+    { '\0', "with-ft", 1, PRTE_CMD_LINE_TYPE_STRING,
+      "Specify the type(s) of error handling that the application will use.",
+      PRTE_CMD_LINE_OTYPE_LAUNCH },
 
     /* DVM-specific options */
     /* uri of PMIx publish/lookup server, or at least where to get it */
@@ -827,6 +834,64 @@ static bool check_generic(char *p1)
     }
 
     return false;
+}
+
+static int parse_cli(int argc, int start,
+                     char **argv,
+                     char *personality,
+                     char ***target)
+{
+    char *p1; int i;
+    if (NULL != personality &&
+        NULL != strstr(personality, "ompi")) {
+        return PRTE_ERR_TAKE_NEXT_OPTION;
+    }
+
+    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                        "%s schizo:ompi: parse_cli",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+
+    for (i = 0; i < (argc-start); ++i) {
+        if (0 == strcmp("--with-ft", argv[i]) ||
+            0 == strcmp("-with-ft", argv[i])) {
+            if (NULL == argv[i+1]) {
+                /* this is an error */
+                return PRTE_ERR_FATAL;
+            }
+            p1 = strip_quotes(argv[i+1]);
+            if( 0 != strcmp("no", p1) &&
+                0 != strcmp("false", p1) &&
+                0 != strcmp("0", p1)) {
+                if (NULL == target) {
+                    /* push it into our environment */
+                    char *param = NULL;
+                    asprintf(&param, "PRTE_MCA_prte_enable_ft");
+                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                           "%s schizo:ompi:parse_cli pushing %s into environment",
+                                           PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                    prte_setenv(param, "true", true, &environ);
+                    //prte_enable_ft = true;
+                    prte_enable_recovery = true;
+                    asprintf(&param, "OMPI_MCA_mpi_ft_enable");
+                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                           "%s schizo:ompi:parse_cli pushing %s into environment",
+                                           PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                    prte_setenv(param, "true", true, &environ);
+                }
+                else {
+                    prte_argv_append_nosize(target, "--prtemca");
+                    prte_argv_append_nosize(target, "prte_enable_ft");
+                    prte_argv_append_nosize(target, "true");
+                    prte_argv_append_nosize(target, "--enable-recovery");
+                    prte_argv_append_nosize(target, "--mca");
+                    prte_argv_append_nosize(target, "mpi_ft_enable");
+                    prte_argv_append_nosize(target, "true");
+                }
+            }
+           free(p1);
+        }
+    }
+    return PRTE_SUCCESS;
 }
 
 static int parse_env(prte_cmd_line_t *cmd_line,
