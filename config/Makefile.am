@@ -15,6 +15,7 @@
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2016      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -31,7 +32,9 @@ EXTRA_DIST = \
         find_common_syms \
         getdate.sh \
         make_manpage.pl \
-        md2nroff.pl
+        md2nroff.pl \
+        from-savannah/upstream-config.guess \
+        from-savannah/upstream-config.sub
 
 maintainer-clean-local:
 	rm -f prte_get_version.sh
