@@ -17,6 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      UT-Battelle, LLC. All rights reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -66,6 +67,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     uint16_t *u16ptr = &u16, cpus_per_rank;
     bool use_hwthreads = false;
     bool sequential = false;
+    int32_t slots;
 
     PRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -201,7 +203,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         if (NULL != (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             if (0 == app->num_procs) {
                 prte_list_t nodes;
-                int32_t slots;
                 PRTE_CONSTRUCT(&nodes, prte_list_t);
                 prte_rmaps_base_get_target_nodes(&nodes, &slots, app, PRTE_MAPPING_BYNODE, true, true);
                 if (pernode) {
@@ -215,10 +216,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 } else if (sequential) {
                     slots = prte_list_get_size(&nodes);
                 }
-                app->num_procs = slots;
                 PRTE_LIST_DESTRUCT(&nodes);
+            } else {
+                slots = app->num_procs;
             }
-            nprocs += app->num_procs;
+            nprocs += slots;
         }
     }
 
