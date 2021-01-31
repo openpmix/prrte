@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
-# Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2010-2021 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -21,13 +21,13 @@
 # $HEADER$
 #
 
-# MCA_plm_rsh_CONFIG([action-if-found], [action-if-not-found])
+# MCA_plm_ssh_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prte_plm_rsh_CONFIG],[
-    AC_CONFIG_FILES([src/mca/plm/rsh/Makefile])
+AC_DEFUN([MCA_prte_plm_ssh_CONFIG],[
+    AC_CONFIG_FILES([src/mca/plm/ssh/Makefile])
 
-    AC_CHECK_FUNC([fork], [plm_rsh_happy="yes"], [plm_rsh_happy="no"])
+    AC_CHECK_FUNC([fork], [plm_ssh_happy="yes"], [plm_ssh_happy="no"])
 
-    PRTE_SUMMARY_ADD([[Resource Managers]],[[ssh/rsh]],[$1],[$plm_rsh_happy])
-    AS_IF([test "$plm_rsh_happy" = "yes"], [$1], [$2])
+    PRTE_SUMMARY_ADD([[Resource Managers]],[[ssh/ssh]],[$1],[$plm_ssh_happy])
+    AS_IF([test "$plm_ssh_happy" = "yes"], [$1], [$2])
 ])dnl
