@@ -11,6 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -34,10 +35,11 @@ headers = \
         base.h \
         prte_mca_base_component_repository.h \
         prte_mca_base_var.h \
-	prte_mca_base_var_enum.h \
+        prte_mca_base_var_enum.h \
         prte_mca_base_var_group.h \
         prte_mca_base_vari.h \
-	prte_mca_base_framework.h
+        prte_mca_base_framework.h \
+        prte_mca_base_alias.h
 
 # Library
 
@@ -53,10 +55,11 @@ libprrte_mca_base_la_SOURCES = \
         prte_mca_base_list.c \
         prte_mca_base_open.c \
         prte_mca_base_var.c \
-	prte_mca_base_var_enum.c \
+        prte_mca_base_var_enum.c \
         prte_mca_base_var_group.c \
-	prte_mca_base_components_register.c \
-	prte_mca_base_framework.c
+        prte_mca_base_components_register.c \
+        prte_mca_base_framework.c \
+        prte_mca_base_alias.c
 
 # Conditionally install the header files
 
