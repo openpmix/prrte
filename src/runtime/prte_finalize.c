@@ -35,6 +35,7 @@
 
 #include "src/mca/ess/ess.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/base/prte_mca_base_alias.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
@@ -176,6 +177,8 @@ int prte_finalize(void)
 
     /* Close the general debug stream */
     prte_output_close(prte_debug_output);
+
+    prte_mca_base_alias_cleanup();
 
     /* finalize the class/object system */
     prte_class_finalize();

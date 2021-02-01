@@ -17,6 +17,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -486,6 +487,14 @@ PRTE_EXPORT int prte_proc_table_get_next_key(prte_proc_table_t *pt, prte_process
 #define PRTE_HASH_TABLE_FOREACH(key, type, value, ht) \
   for (void *_nptr=NULL;                                   \
        PRTE_SUCCESS == prte_hash_table_get_next_key_##type(ht, &key, (void **)&value, _nptr, &_nptr);)
+
+#define PRTE_HASH_TABLE_FOREACH_PTR(key, value, ht, body)        \
+{                                    \
+    size_t key_size_;                            \
+    for (void *_nptr=NULL;                        \
+         PRTE_SUCCESS == prte_hash_table_get_next_key_ptr (ht, &key, &key_size_, (void **)&value, _nptr, &_nptr);) \
+    body                                \
+}
 
 END_C_DECLS
 
