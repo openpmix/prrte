@@ -52,6 +52,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/plm/base/plm_private.h"
+#include "src/mca/iof/base/base.h"
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
@@ -1295,7 +1296,30 @@ pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
                                       pmix_iof_channel_t channels,
                                       pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
-    return PMIX_ERR_NOT_SUPPORTED;
+    prte_iof_sink_t *sink;
+    size_t i;
+    int rc;
+    prte_process_name_t name;
+
+    /* Set up I/O forwarding sinks and handlers for stdout and stderr for each proc 
+     * requesting I/O forwarding */
+    for (i = 0; i < nprocs; i++) {
+        PRTE_PMIX_CONVERT_PROCT(rc, &name, &procs[i]);
+        if (PRTE_SUCCESS != rc) {
+            return PMIX_ERR_BAD_PARAM;
+        }
+        if (channels & PMIX_FWD_STDOUT_CHANNEL) {
+            PRTE_IOF_SINK_DEFINE(&sink, &name, fileno(stdout), PRTE_IOF_STDOUT,
+                                 prte_iof_base_write_handler);
+            PRTE_IOF_SINK_ACTIVATE(sink->wev);
+        }
+        if (channels & PMIX_FWD_STDERR_CHANNEL) {
+            PRTE_IOF_SINK_DEFINE(&sink, &name, fileno(stderr), PRTE_IOF_STDERR,
+                                 prte_iof_base_write_handler);
+            PRTE_IOF_SINK_ACTIVATE(sink->wev);
+        }
+    }
+    return PMIX_SUCCESS;
 }
 
 static void pmix_server_stdin_push(int sd, short args, void *cbdata)
