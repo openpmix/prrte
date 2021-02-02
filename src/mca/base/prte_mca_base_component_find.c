@@ -17,6 +17,7 @@
  * Copyright (c) 2014-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,6 +56,7 @@
 #include "src/class/prte_list.h"
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/base/prte_mca_base_alias.h"
 #include "src/mca/base/prte_mca_base_component_repository.h"
 #include "constants.h"
 #include "src/mca/prtedl/base/base.h"
@@ -83,7 +85,8 @@ typedef struct prte_mca_base_open_only_dummy_component_t prte_mca_base_open_only
 
 static char negate[] = "^";
 
-static bool use_component(const bool include_mode,
+static bool use_component(const prte_mca_base_framework_t *framework,
+                          const bool include_mode,
                           const char **requested_component_names,
                           const char *component_name);
 
@@ -117,7 +120,7 @@ int prte_mca_base_component_find (const char *directory, prte_mca_base_framework
     /* Find all the components that were statically linked in */
     if (static_components) {
         for (int i = 0 ; NULL != static_components[i]; ++i) {
-            if ( use_component(include_mode,
+            if ( use_component(framework, include_mode,
                                (const char**)requested_component_names,
                                static_components[i]->mca_component_name) ) {
                 cli = PRTE_NEW(prte_mca_base_component_list_item_t);
@@ -191,7 +194,7 @@ int prte_mca_base_components_filter (prte_mca_base_framework_t *framework, uint3
         prte_mca_base_open_only_dummy_component_t *dummy =
             (prte_mca_base_open_only_dummy_component_t *) cli->cli_component;
 
-        can_use = use_component (include_mode, (const char **) requested_component_names,
+        can_use = use_component (framework, include_mode, (const char **) requested_component_names,
                                  cli->cli_component->mca_component_name);
 
         if (!can_use || (filter_flags & dummy->data.param_field) != filter_flags) {
@@ -262,7 +265,7 @@ static void find_dyn_components(const char *path, prte_mca_base_framework_t *fra
 
     /* Iterate through the repository and find components that can be included */
     PRTE_LIST_FOREACH(ri, dy_components, prte_mca_base_component_repository_item_t) {
-        if (use_component(include_mode, names, ri->ri_name)) {
+        if (use_component(framework, include_mode, names, ri->ri_name)) {
             prte_mca_base_component_repository_open (framework, ri);
         }
     }
@@ -270,27 +273,44 @@ static void find_dyn_components(const char *path, prte_mca_base_framework_t *fra
 
 #endif /* PRTE_HAVE_DL_SUPPORT */
 
-static bool use_component(const bool include_mode,
+static bool component_in_list (const char **requested_component_names,
+                               const char *component_name)
+{
+    for (int i = 0 ; requested_component_names[i] ; ++i) {
+        if (strcmp(component_name, requested_component_names[i]) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool use_component(const prte_mca_base_framework_t *framework,
+                          const bool include_mode,
                           const char **requested_component_names,
                           const char *component_name)
 {
-    bool found = false;
-    const char **req_comp_name = requested_component_names;
-
     /*
      * If no selection is specified then we use all components
      * we can find.
      */
-    if (NULL == req_comp_name) {
+    if (NULL == requested_component_names) {
         return true;
     }
 
-    while ( *req_comp_name != NULL ) {
-        if ( strcmp(component_name, *req_comp_name) == 0 ) {
-            found = true;
-            break;
+    bool found = component_in_list (requested_component_names, component_name);
+
+    if (!found) {
+        const prte_mca_base_alias_t *alias = prte_mca_base_alias_lookup (framework->framework_project,
+                                                               framework->framework_name, component_name);
+        if (alias) {
+            PRTE_LIST_FOREACH_DECL(alias_item, &alias->component_aliases, prte_mca_base_alias_item_t) {
+                found = component_in_list (requested_component_names, alias_item->component_alias);
+                if (found) {
+                    break;
+                }
+            }
         }
-        req_comp_name++;
     }
 
     /*

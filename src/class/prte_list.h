@@ -16,6 +16,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -216,6 +217,11 @@ typedef struct prte_list_t prte_list_t;
   for (item = (type *) (list)->prte_list_sentinel.prte_list_next ;      \
        item != (type *) &(list)->prte_list_sentinel ;                   \
        item = (type *) ((prte_list_item_t *) (item))->prte_list_next)
+
+#define PRTE_LIST_FOREACH_DECL(item, list, type)            \
+    for (type *item = (type *) (list)->prte_list_sentinel.prte_list_next ; \
+    item != (type *) &(list)->prte_list_sentinel ;                   \
+    item = (type *) ((prte_list_item_t *) (item))->prte_list_next)
 
 /**
  * Loop over a list in reverse.
