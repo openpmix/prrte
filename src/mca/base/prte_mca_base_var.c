@@ -20,6 +20,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,6 +50,7 @@
 #include "src/util/argv.h"
 #include "src/mca/mca.h"
 #include "src/mca/base/prte_mca_base_vari.h"
+#include "src/mca/base/prte_mca_base_alias.h"
 #include "constants.h"
 #include "src/util/output.h"
 #include "src/util/prte_environ.h"
@@ -1167,12 +1169,37 @@ int prte_mca_base_var_register (const char *project_name, const char *framework_
                                  prte_mca_base_var_info_lvl_t info_lvl,
                                  prte_mca_base_var_scope_t scope, void *storage)
 {
+    int ret;
+
     /* Only integer variables can have enumerator */
     assert (NULL == enumerator || (PRTE_MCA_BASE_VAR_TYPE_INT == type || PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT == type));
 
-    return register_variable (project_name, framework_name, component_name,
-                              variable_name, description, type, enumerator,
-                              bind, flags, info_lvl, scope, -1, storage);
+    ret = register_variable (project_name, framework_name, component_name,
+                            variable_name, description, type, enumerator,
+                            bind, flags, info_lvl, scope, -1, storage);
+
+    if (PRTE_UNLIKELY(0 > ret)) {
+        return ret;
+    }
+
+    /* Register aliases if any exist */
+    const prte_mca_base_alias_t *alias = prte_mca_base_alias_lookup (project_name, framework_name, component_name);
+    if (NULL == alias) {
+        return ret;
+    }
+
+    PRTE_LIST_FOREACH_DECL(alias_item, &alias->component_aliases, prte_mca_base_alias_item_t) {
+        prte_mca_base_var_syn_flag_t flags = 0;
+        if (alias_item->alias_flags & PRTE_MCA_BASE_ALIAS_FLAG_DEPRECATED) {
+            flags = PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED;
+        }
+        (void) prte_mca_base_var_register_synonym (ret, project_name, framework_name,
+                                                   alias_item->component_alias,
+                                                   variable_name, flags);
+    }
+
+    return ret;
+
 }
 
 int prte_mca_base_component_var_register (const prte_mca_base_component_t *component,
