@@ -80,18 +80,18 @@ static int prte_ras_gridengine_register(void)
 
     prte_ras_gridengine_component.priority = 100;
     (void) prte_mca_base_component_var_register (c, "priority", "Priority of the gridengine ras component",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, PRTE_INFO_LVL_9,
+                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_gridengine_component.priority);
 
     prte_ras_gridengine_verbose = 0;
     (void) prte_mca_base_component_var_register (c, "verbose",
                                             "Enable verbose output for the gridengine ras component",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, PRTE_INFO_LVL_9,
+                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_ras_gridengine_verbose);
 
     prte_ras_gridengine_component.show_jobid = false;
     (void) prte_mca_base_component_var_register (c, "show_jobid", "Show the JOB_ID of the Grid Engine job",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, PRTE_INFO_LVL_9,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_gridengine_component.show_jobid);
 
     return PRTE_SUCCESS;

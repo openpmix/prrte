@@ -61,5 +61,5 @@ static int prte_propagate_base_open(prte_mca_base_open_flag_t flags)
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, propagate, "PROPAGATE", NULL,
         prte_propagate_base_open,
         prte_propagate_base_close,
-        prte_propagate_base_static_components, 0);
+        prte_propagate_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 

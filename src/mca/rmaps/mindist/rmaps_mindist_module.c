@@ -478,7 +478,6 @@ error:
 static int assign_locations(prte_job_t *jdata)
 {
     int j, k, m, n, npus;
-    prte_app_context_t *app;
     prte_node_t *node;
     prte_proc_t *proc;
     hwloc_obj_t obj=NULL;
@@ -520,7 +519,7 @@ static int assign_locations(prte_job_t *jdata)
      * then loop thru the list again to handle the oversubscription
      */
     for (n=0; n < jdata->apps->size; n++) {
-        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, n))) {
+        if (NULL == prte_pointer_array_get_item(jdata->apps, n)) {
             continue;
         }
         for (m=0; m < jdata->map->nodes->size; m++) {

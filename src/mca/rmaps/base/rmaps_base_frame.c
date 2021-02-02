@@ -69,7 +69,7 @@ static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
                                        " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
                                        "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
                                        "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, SEQFILE=path (for seq policy)",
-                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &rmaps_base_mapping_policy);
@@ -79,7 +79,7 @@ static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
     (void) prte_mca_base_var_register("prte", "rmaps", "default", "ranking_policy",
                                        "Default ranking Policy [slot (default:np<=2) | hwthread | core | l1cache "
                                        "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
-                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &rmaps_base_ranking_policy);
@@ -87,7 +87,7 @@ static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
     rmaps_base_inherit = false;
     (void) prte_mca_base_var_register("prte", "rmaps", "default", "inherit",
                                        "Whether child jobs shall inherit mapping/ranking/binding directives from their parent by default",
-                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_inherit);
 
@@ -144,7 +144,7 @@ static int prte_rmaps_base_open(prte_mca_base_open_flag_t flags)
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, rmaps, "PRTE Mapping Subsystem",
                                  prte_rmaps_base_register, prte_rmaps_base_open, prte_rmaps_base_close,
-                                 prte_rmaps_base_static_components, 0);
+                                 prte_rmaps_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 PRTE_CLASS_INSTANCE(prte_rmaps_base_selected_module_t,
                    prte_list_item_t,

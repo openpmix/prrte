@@ -92,7 +92,7 @@ void prte_setup_hostname(void)
     prte_keep_fqdn_hostnames = false;
     (void) prte_mca_base_var_register ("prte", "prte", NULL, "keep_fqdn_hostnames",
                                   "Whether or not to keep FQDN hostnames [default: no]",
-                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                   &prte_keep_fqdn_hostnames);
 
@@ -113,7 +113,8 @@ void prte_setup_hostname(void)
     prte_strip_prefix = NULL;
     (void) prte_mca_base_var_register ("prte", "prte", NULL, "strip_prefix",
                                         "Prefix(es) to match when deciding whether to strip leading characters and zeroes from "
-                                        "node names returned by daemons", PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                        "node names returned by daemons", PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                        PRTE_MCA_BASE_VAR_FLAG_NONE,
                                         PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                         &prte_strip_prefix);
 

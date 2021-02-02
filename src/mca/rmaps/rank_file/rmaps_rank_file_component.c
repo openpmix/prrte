@@ -83,20 +83,20 @@ static int prte_rmaps_rank_file_register(void)
 
     my_priority = 0;
     (void) prte_mca_base_component_var_register(c, "priority", "Priority of the rank_file rmaps component",
-                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                            PRTE_INFO_LVL_9,
                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
     prte_rankfile = NULL;
     tmp = prte_mca_base_component_var_register(c, "path",
                                           "Name of the rankfile to be used for mapping processes (relative or absolute path)",
-                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                           PRTE_INFO_LVL_5,
                                           PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_rankfile);
-    (void) prte_mca_base_var_register_synonym(tmp, "prte", "prte", NULL, "rankfile", 0);
+    (void) prte_mca_base_var_register_synonym(tmp, "prte", "prte", NULL, "rankfile", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
     prte_rmaps_rank_file_component.physical = false;
     (void) prte_mca_base_component_var_register(c, "physical", "Rankfile contains physical cpu designations",
-                                           PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                           PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                            PRTE_INFO_LVL_5,
                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                            &prte_rmaps_rank_file_component.physical);

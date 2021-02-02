@@ -321,14 +321,14 @@ static inline prte_list_item_t *prte_lifo_push (prte_lifo_t *lifo,
 {
     return prte_lifo_push_atomic (lifo, item);
 
-    return prte_lifo_push_st (lifo, item);
+    //return prte_lifo_push_st (lifo, item);
 }
 
 static inline prte_list_item_t *prte_lifo_pop (prte_lifo_t *lifo)
 {
     return prte_lifo_pop_atomic (lifo);
 
-    return prte_lifo_pop_st (lifo);
+    //return prte_lifo_pop_st (lifo);
 }
 
 END_C_DECLS

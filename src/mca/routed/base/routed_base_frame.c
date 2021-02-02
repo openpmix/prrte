@@ -63,7 +63,7 @@ static int prte_routed_base_close(void)
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, routed, "PRTE Message Routing Subsystem", NULL,
                                  prte_routed_base_open, prte_routed_base_close,
-                                 prte_routed_base_static_components, 0);
+                                 prte_routed_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 int prte_routed_base_select(void)
 {

@@ -114,21 +114,24 @@ static int rsh_component_register(void)
     prte_plm_rsh_component.num_concurrent = 128;
     (void) prte_mca_base_component_var_register (c, "num_concurrent",
                                             "How many plm_rsh_agent instances to invoke concurrently (must be > 0)",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_5,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.num_concurrent);
 
     prte_plm_rsh_component.force_rsh = false;
     (void) prte_mca_base_component_var_register (c, "force_rsh", "Force the launcher to always use rsh",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_2,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.force_rsh);
     prte_plm_rsh_component.disable_qrsh = false;
     (void) prte_mca_base_component_var_register (c, "disable_qrsh",
                                             "Disable the use of qrsh when under the Grid Engine parallel environment",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_2,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.disable_qrsh);
@@ -136,7 +139,8 @@ static int rsh_component_register(void)
     prte_plm_rsh_component.daemonize_qrsh = false;
     (void) prte_mca_base_component_var_register (c, "daemonize_qrsh",
                                             "Daemonize the orted under the Grid Engine parallel environment",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_2,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.daemonize_qrsh);
@@ -144,7 +148,8 @@ static int rsh_component_register(void)
     prte_plm_rsh_component.disable_llspawn = false;
     (void) prte_mca_base_component_var_register (c, "disable_llspawn",
                                             "Disable the use of llspawn when under the LoadLeveler environment",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_2,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.disable_llspawn);
@@ -152,14 +157,16 @@ static int rsh_component_register(void)
     prte_plm_rsh_component.daemonize_llspawn = false;
     (void) prte_mca_base_component_var_register (c, "daemonize_llspawn",
                                             "Daemonize the orted when under the LoadLeveler environment",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_2,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.daemonize_llspawn);
 
     prte_plm_rsh_component.priority = 10;
     (void) prte_mca_base_component_var_register (c, "priority", "Priority of the rsh plm component",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.priority);
@@ -167,7 +174,8 @@ static int rsh_component_register(void)
     prte_plm_rsh_delay_string = NULL;
     (void) prte_mca_base_component_var_register (c, "delay",
                                             "Delay between invocations of the remote agent (sec[:usec])",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_4,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_delay_string);
@@ -175,7 +183,8 @@ static int rsh_component_register(void)
     prte_plm_rsh_component.no_tree_spawn = false;
     (void) prte_mca_base_component_var_register (c, "no_tree_spawn",
                                             "If set to true, do not launch via a tree-based topology",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_5,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.no_tree_spawn);
@@ -184,7 +193,8 @@ static int rsh_component_register(void)
     prte_plm_rsh_component.agent = "ssh : rsh";
     var_id = prte_mca_base_component_var_register (c, "agent",
                                               "The command used to launch executables on remote nodes (typically either \"ssh\" or \"rsh\")",
-                                              PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                              PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                              PRTE_MCA_BASE_VAR_FLAG_NONE,
                                               PRTE_INFO_LVL_2,
                                               PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                               &prte_plm_rsh_component.agent);
@@ -195,24 +205,27 @@ static int rsh_component_register(void)
     prte_plm_rsh_component.assume_same_shell = true;
     var_id = prte_mca_base_component_var_register (c, "assume_same_shell",
                                               "If set to true, assume that the shell on the remote node is the same as the shell on the local node.  Otherwise, probe for what the remote shell [default: 1]",
-                                              PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                              PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                              PRTE_MCA_BASE_VAR_FLAG_NONE,
                                               PRTE_INFO_LVL_2,
                                               PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                               &prte_plm_rsh_component.assume_same_shell);
     /* XXX -- var_conversion -- Why does this component register prte_assume_same_shell? Components should ONLY register THEIR OWN variables. */
-    (void) prte_mca_base_var_register_synonym (var_id, "prte", "prte", NULL, "assume_same_shell", 0);
+    (void) prte_mca_base_var_register_synonym (var_id, "prte", "prte", NULL, "assume_same_shell", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
     prte_plm_rsh_component.pass_environ_mca_params = true;
     (void) prte_mca_base_component_var_register (c, "pass_environ_mca_params",
                                             "If set to false, do not include mca params from the environment on the orted cmd line",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_2,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.pass_environ_mca_params);
     prte_plm_rsh_component.ssh_args = NULL;
     (void) prte_mca_base_component_var_register (c, "args",
                                             "Arguments to add to rsh/ssh",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_2,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.ssh_args);
@@ -220,7 +233,8 @@ static int rsh_component_register(void)
     prte_plm_rsh_component.pass_libpath = NULL;
     (void) prte_mca_base_component_var_register (c, "pass_libpath",
                                             "Prepend the specified library path to the remote shell's LD_LIBRARY_PATH",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_2,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_rsh_component.pass_libpath);
@@ -228,7 +242,8 @@ static int rsh_component_register(void)
     prte_plm_rsh_component.chdir = NULL;
     (void) prte_mca_base_component_var_register (c, "chdir",
                                                   "Change working directory after rsh/ssh, but before exec of prted",
-                                                  PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                                  PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                                  PRTE_MCA_BASE_VAR_FLAG_NONE,
                                                   PRTE_INFO_LVL_2,
                                                   PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                                   &prte_plm_rsh_component.chdir);

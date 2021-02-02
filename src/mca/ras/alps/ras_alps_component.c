@@ -163,7 +163,8 @@ ras_alps_register(void)
     param_priority = 75;
     (void) prte_mca_base_component_var_register (&prte_ras_alps_component.base_version,
                                                   "priority", "Priority of the alps ras component",
-                                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                                  PRTE_MCA_BASE_VAR_FLAG_NONE,
                                                   PRTE_INFO_LVL_9,
                                                   PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                                   &param_priority);
@@ -173,14 +174,14 @@ ras_alps_register(void)
                                                   "appinfo_read_attempts",
                                                   "Maximum number of attempts to read ALPS "
                                                   "appinfo file", PRTE_MCA_BASE_VAR_TYPE_INT,
-                                                  NULL, 0, 0, PRTE_INFO_LVL_9,
+                                                  NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                                   PRTE_MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_read_attempts);
 
     ras_alps_apstat_cmd = "apstat";         /* by default apstat is in a user's path on a Cray XE/XC if
                                                alps is the site's job launcher  */
     (void) prte_mca_base_component_var_register (&prte_ras_alps_component.base_version,
                                                   "apstat_cmd", "Location of the apstat command",
-                                                  PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRTE_INFO_LVL_6,
+                                                  PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_6,
                                                   PRTE_MCA_BASE_VAR_SCOPE_READONLY, &ras_alps_apstat_cmd);
 
     return PRTE_SUCCESS;

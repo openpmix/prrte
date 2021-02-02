@@ -78,7 +78,8 @@ static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
     prte_odls_globals.timeout_before_sigkill = 1;
     (void) prte_mca_base_var_register("prte", "odls", "base", "sigkill_timeout",
                                        "Time to wait for a process to die after issuing a kill signal to it",
-                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &prte_odls_globals.timeout_before_sigkill);
@@ -86,7 +87,8 @@ static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
     prte_odls_globals.max_threads = 4;
     (void) prte_mca_base_var_register("prte", "odls", "base", "max_threads",
                                        "Maximum number of threads to use for spawning local procs",
-                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &prte_odls_globals.max_threads);
@@ -94,7 +96,8 @@ static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
     prte_odls_globals.num_threads = -1;
     (void) prte_mca_base_var_register("prte", "odls", "base", "num_threads",
                                        "Specific number of threads to use for spawning local procs",
-                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &prte_odls_globals.num_threads);
@@ -102,7 +105,8 @@ static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
     prte_odls_globals.cutoff = 32;
     (void) prte_mca_base_var_register("prte", "odls", "base", "cutoff",
                                        "Minimum number of local procs before using thread pool for spawn",
-                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &prte_odls_globals.cutoff);
@@ -111,7 +115,8 @@ static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
     (void) prte_mca_base_var_register("prte", "odls", "base", "signal_direct_children_only",
                                        "Whether to restrict signals (e.g., SIGTERM) to direct children, or "
                                        "to apply them as well to any children spawned by those processes",
-                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &prte_odls_globals.signal_direct_children_only);
@@ -315,7 +320,7 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, odls, "PRTE Daemon Launch Subsystem",
                                  prte_odls_base_register, prte_odls_base_open, prte_odls_base_close,
-                                 prte_odls_base_static_components, 0);
+                                 prte_odls_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 static void launch_local_const(prte_odls_launch_local_t *ptr)
 {

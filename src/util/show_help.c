@@ -309,7 +309,6 @@ static int find_topic(const char *base, const char *topic)
         case PRTE_SHOW_HELP_PARSE_DONE:
             prte_output(output_stream, "%sSorry!  You were supposed to get help about:\n    %s\nfrom the file:\n    %s\nBut I couldn't find that topic in the file.  Sorry!\n%s", dash_line, topic, base, dash_line);
             return PRTE_ERR_NOT_FOUND;
-            break;
 
         default:
             break;
@@ -341,7 +340,6 @@ static int read_topic(char ***array)
 
         default:
             return PRTE_SUCCESS;
-            break;
         }
     }
 

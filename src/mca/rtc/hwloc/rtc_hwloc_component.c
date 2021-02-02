@@ -18,6 +18,7 @@
 #include "constants.h"
 
 #include "src/mca/base/base.h"
+#include "src/mca/base/prte_mca_base_var.h"
 
 #include "rtc_hwloc.h"
 
@@ -59,7 +60,8 @@ static int rtc_hwloc_register(void)
     /* set as the default */
     my_priority = 70;
     (void) prte_mca_base_component_var_register (c, "priority", "Priority of the HWLOC rtc component",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &my_priority);
@@ -68,7 +70,8 @@ static int rtc_hwloc_register(void)
     vmhole = biggest;
     (void) prte_mca_base_component_var_register(c, "vmhole",
                                            "Kind of VM hole to identify - none, begin, biggest, libs, heap, stack (default=biggest)",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                           PRTE_MCA_BASE_VAR_FLAG_NONE,
                                            PRTE_INFO_LVL_9,
                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                            &vmhole);

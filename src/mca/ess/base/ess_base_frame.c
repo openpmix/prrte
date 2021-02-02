@@ -75,7 +75,8 @@ static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
                                        "Adjust buffering for stdout/stderr "
                                        "[-1 system default] [0 unbuffered] [1 line buffered] [2 fully buffered] "
                                        "(Default: -1)",
-                                       PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0,
+                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_std_buffering);
     PRTE_RELEASE(new_enum);
@@ -86,7 +87,7 @@ static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
                                       PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
                                       PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_nspace);
-    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "nspace", 0);
+    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "nspace", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
     prte_ess_base_vpid = NULL;
     ret = prte_mca_base_var_register("prte", "ess", "base", "vpid", "Process vpid",
@@ -94,7 +95,7 @@ static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
                                       PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
                                       PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_vpid);
-    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "vpid", 0);
+    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "vpid", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
     prte_ess_base_num_procs = -1;
     ret = prte_mca_base_var_register("prte", "ess", "base", "num_procs",
@@ -103,17 +104,18 @@ static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
                                       PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
                                       PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_num_procs);
-    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "num_procs", 0);
+    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "num_procs", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
     forwarded_signals = NULL;
     ret = prte_mca_base_var_register ("prte", "ess", "base", "forward_signals",
                                        "Comma-delimited list of additional signals (names or integers) to forward to "
                                        "application processes [\"none\" => forward nothing]. Signals provided by "
                                        "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
-                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_4, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &forwarded_signals);
-    prte_mca_base_var_register_synonym(ret, "prte", "ess", "hnp", "forward_signals", 0);
+    prte_mca_base_var_register_synonym(ret, "prte", "ess", "hnp", "forward_signals", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
 
     return PRTE_SUCCESS;
@@ -141,7 +143,7 @@ static int prte_ess_base_open(prte_mca_base_open_flag_t flags)
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, ess, "PRTE Environmenal System Setup",
                                  prte_ess_base_register, prte_ess_base_open, prte_ess_base_close,
-                                 prte_ess_base_static_components, 0);
+                                 prte_ess_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 /* signal forwarding */
 

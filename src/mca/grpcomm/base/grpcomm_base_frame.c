@@ -63,7 +63,8 @@ static int base_register(prte_mca_base_register_flag_t flags)
     prte_grpcomm_base.context_id = 1;
     prte_mca_base_var_register("prte", "grpcomm", "base", "starting_context_id",
                                 "Starting value for assigning context id\'s",
-                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                PRTE_MCA_BASE_VAR_FLAG_NONE,
                                 PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &prte_grpcomm_base.context_id);
@@ -114,7 +115,7 @@ static int prte_grpcomm_base_open(prte_mca_base_open_flag_t flags)
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, grpcomm, "GRPCOMM", base_register,
                                  prte_grpcomm_base_open,
                                  prte_grpcomm_base_close,
-                                 prte_grpcomm_base_static_components, 0);
+                                 prte_grpcomm_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 PRTE_CLASS_INSTANCE(prte_grpcomm_base_active_t,
                    prte_list_item_t,

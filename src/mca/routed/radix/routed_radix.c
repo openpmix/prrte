@@ -412,7 +412,7 @@ static void update_routing_plan(void)
     NInPrevLevel = NInLevel/prte_routed_radix_component.radix;
 
     if( 0 == Ii ) {
-        PRTE_PROC_MY_PARENT->vpid = -1;
+        PRTE_PROC_MY_PARENT->vpid = (prte_vpid_t) -1;
     }  else {
         PRTE_PROC_MY_PARENT->vpid = (Ii-Sum) % NInPrevLevel;
         PRTE_PROC_MY_PARENT->vpid += (Sum - NInPrevLevel);

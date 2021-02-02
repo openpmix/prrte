@@ -1,5 +1,4 @@
 %option nounput
-%option noinput
 %option yylineno
 
 %{ /* -*- C -*- */
@@ -50,6 +49,10 @@ END_C_DECLS
 int prte_util_keyval_yynewlines = 1;
 bool prte_util_keyval_parse_done = false;
 char *prte_util_keyval_string = NULL;
+
+#ifndef YY_BREAK
+#define YY_BREAK
+#endif
 
 %}
 

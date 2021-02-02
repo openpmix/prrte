@@ -94,7 +94,7 @@ static void prte_tree_construct(prte_tree_t *tree)
 #endif
     tree->prte_tree_sentinel.prte_tree_container = tree;
     tree->prte_tree_sentinel.prte_tree_parent = &tree->prte_tree_sentinel;
-    tree->prte_tree_sentinel.prte_tree_num_ancestors = -1;
+    tree->prte_tree_sentinel.prte_tree_num_ancestors = (unsigned) -1;
 
     tree->prte_tree_sentinel.prte_tree_next_sibling =
         &tree->prte_tree_sentinel;

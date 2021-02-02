@@ -72,7 +72,8 @@ static int dvm_register(void)
     my_priority = 1000;
     (void) prte_mca_base_component_var_register(c, "priority",
                                            "Priority of the dvm errmgr component",
-                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                           PRTE_MCA_BASE_VAR_FLAG_NONE,
                                            PRTE_INFO_LVL_9,
                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
 

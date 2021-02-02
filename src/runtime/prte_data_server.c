@@ -137,7 +137,8 @@ int prte_data_server_init(void)
     prte_data_server_verbosity = -1;
     (void) prte_mca_base_var_register ("prte", "prte", "data", "server_verbose",
                                   "Debug verbosity for PRTE data server",
-                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                  PRTE_MCA_BASE_VAR_FLAG_NONE,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                   &prte_data_server_verbosity);
     if (0 <= prte_data_server_verbosity) {
@@ -390,7 +391,7 @@ void prte_data_server(int status, prte_process_name_t* sender,
                 if (n == (size_t)prte_argv_count(req->keys)) {
                     i = PRTE_SUCCESS;
                 } else {
-                    i = PRTE_ERR_PARTIAL_SUCCESS;
+                    i = (uint32_t) PRTE_ERR_PARTIAL_SUCCESS;
                 }
                 /* return the status */
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(reply, &i, 1, PRTE_INT))) {
@@ -460,7 +461,6 @@ void prte_data_server(int status, prte_process_name_t* sender,
              * rc value either, so just send whatever is there */
         }
         goto SEND_ANSWER;
-        break;
 
     case PRTE_PMIX_LOOKUP_CMD:
         prte_output_verbose(1, prte_data_server_output,
@@ -701,7 +701,6 @@ void prte_data_server(int status, prte_process_name_t* sender,
         free(bo.bytes);
 
         goto SEND_ANSWER;
-        break;
 
     case PRTE_PMIX_UNPUBLISH_CMD:
         /* unpack the requestor */
@@ -829,7 +828,6 @@ void prte_data_server(int status, prte_process_name_t* sender,
             PRTE_ERROR_LOG(rc);
         }
         goto SEND_ANSWER;
-        break;
 
     case PRTE_PMIX_PURGE_PROC_CMD:
         /* unpack the proc whose data is to be purged - session

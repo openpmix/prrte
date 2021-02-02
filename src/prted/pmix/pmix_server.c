@@ -239,7 +239,7 @@ void pmix_server_register_params(void)
     prte_pmix_server_globals.verbosity = -1;
     (void) prte_mca_base_var_register ("prte", "pmix", NULL, "server_verbose",
                                   "Debug verbosity for PMIx server",
-                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                   &prte_pmix_server_globals.verbosity);
     if (0 <= prte_pmix_server_globals.verbosity) {
@@ -251,14 +251,14 @@ void pmix_server_register_params(void)
     prte_pmix_server_globals.num_rooms = -1;
     (void) prte_mca_base_var_register ("prte", "pmix", NULL, "server_max_reqs",
                                   "Maximum number of backlogged PMIx server direct modex requests",
-                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                   &prte_pmix_server_globals.num_rooms);
     /* specify the timeout for the hotel */
     prte_pmix_server_globals.timeout = 2;
     (void) prte_mca_base_var_register ("prte", "pmix", NULL, "server_max_wait",
                                   "Maximum time (in seconds) the PMIx server should wait to service direct modex requests",
-                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                   &prte_pmix_server_globals.timeout);
 
@@ -266,7 +266,7 @@ void pmix_server_register_params(void)
     prte_pmix_server_globals.wait_for_server = false;
     (void) prte_mca_base_var_register ("prte", "pmix", NULL, "wait_for_server",
                                   "Whether or not to wait for the session-level server to start",
-                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                   &prte_pmix_server_globals.wait_for_server);
 
@@ -274,7 +274,7 @@ void pmix_server_register_params(void)
     prte_pmix_server_globals.legacy = false;
     (void) prte_mca_base_var_register ("prte", "pmix", NULL, "server_usock_connections",
                                   "Whether or not to support legacy usock connections",
-                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                   &prte_pmix_server_globals.legacy);
 
@@ -282,7 +282,7 @@ void pmix_server_register_params(void)
     prte_pmix_server_globals.session_server = false;
     (void) prte_mca_base_var_register ("prte", "pmix", NULL, "session_server",
                                   "Whether or not to drop a session-level tool rendezvous point",
-                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                   &prte_pmix_server_globals.session_server);
 
@@ -290,7 +290,7 @@ void pmix_server_register_params(void)
     prte_pmix_server_globals.system_server = false;
     (void) prte_mca_base_var_register ("prte", "pmix", NULL, "system_server",
                                   "Whether or not to drop a system-level tool rendezvous point",
-                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                   &prte_pmix_server_globals.system_server);
 }

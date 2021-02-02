@@ -169,7 +169,6 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     prte_socklen_t addrlen = 0;
     prte_oob_tcp_peer_t *peer;
     prte_oob_tcp_addr_t *addr;
-    prte_oob_tcp_send_t *snd;
     bool connected = false;
     prte_if_t *interface;
     char *host;
@@ -446,7 +445,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          */
         if (NULL != peer->send_msg) {
         }
-        while (NULL != (snd = (prte_oob_tcp_send_t*)prte_list_remove_first(&peer->send_queue))) {
+        while (NULL != prte_list_remove_first(&peer->send_queue)) {
         }
         goto cleanup;
     }

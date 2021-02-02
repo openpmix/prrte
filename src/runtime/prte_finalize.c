@@ -48,9 +48,6 @@
 int prte_finalize(void)
 {
     int rc;
-    uint32_t key;
-    prte_job_t *jdata = NULL, *child_jdata = NULL, *next_jdata = NULL;
-    void *elt = NULL;
 
     PRTE_ACQUIRE_THREAD(&prte_init_lock);
     if (!prte_initialized) {
@@ -73,6 +70,9 @@ int prte_finalize(void)
     prte_stop_listening();
 
 #if 0
+    uint32_t key;
+    prte_job_t *jdata = NULL, *child_jdata = NULL, *next_jdata = NULL;
+    void *elt = NULL;
     /* release the cache */
     PRTE_RELEASE(prte_cache);
 

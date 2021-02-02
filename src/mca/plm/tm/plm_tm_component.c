@@ -96,7 +96,7 @@ static int plm_tm_register(void)
     prte_plm_tm_component.want_path_check = true;
     (void) prte_mca_base_component_var_register (comp, "want_path_check",
                                             "Whether the launching process should check for the plm_tm_orted executable in the PATH before launching (the TM API does not give an indication of failure; this is a somewhat-lame workaround; non-zero values enable this check)",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_tm_component.want_path_check);

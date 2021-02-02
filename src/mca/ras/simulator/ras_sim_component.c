@@ -72,7 +72,7 @@ static int ras_sim_register(void)
     prte_ras_simulator_component.slots = "1";
     (void) prte_mca_base_component_var_register (component, "slots",
                                             "Comma-separated list of number of slots on each node to simulate",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_simulator_component.slots);
@@ -80,42 +80,42 @@ static int ras_sim_register(void)
     prte_ras_simulator_component.slots_max = "0";
     (void) prte_mca_base_component_var_register (component, "max_slots",
                                             "Comma-separated list of number of max slots on each node to simulate",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_simulator_component.slots_max);
     prte_ras_simulator_component.num_nodes = NULL;
     (void) prte_mca_base_component_var_register (component, "num_nodes",
                                             "Comma-separated list of number of nodes to simulate for each topology",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_simulator_component.num_nodes);
     prte_ras_simulator_component.topofiles = NULL;
     (void) prte_mca_base_component_var_register (component, "topo_files",
                                             "Comma-separated list of files containing xml topology descriptions for simulated nodes",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_simulator_component.topofiles);
     prte_ras_simulator_component.topologies = NULL;
     (void) prte_mca_base_component_var_register (component, "topologies",
                                             "Comma-separated list of topology descriptions for simulated nodes",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_simulator_component.topologies);
     prte_ras_simulator_component.have_cpubind = true;
     (void) prte_mca_base_component_var_register (component, "have_cpubind",
                                             "Topology supports binding to cpus",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_simulator_component.have_cpubind);
     prte_ras_simulator_component.have_membind = true;
     (void) prte_mca_base_component_var_register (component, "have_membind",
                                             "Topology supports binding to memory",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL,NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL,NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_simulator_component.have_membind);

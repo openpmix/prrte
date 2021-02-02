@@ -80,7 +80,7 @@ static int ras_tm_register(void)
 
     param_priority = 100;
     (void) prte_mca_base_component_var_register(c, "priority", "Priority of the tm ras component",
-                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                            PRTE_INFO_LVL_9,
                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                            &param_priority);
@@ -99,7 +99,7 @@ static int ras_tm_register(void)
 
     (void) prte_mca_base_component_var_register (c, "nodefile_dir",
                                             "The directory where the PBS nodefile can be found",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_tm_component.nodefile_dir);
@@ -114,7 +114,7 @@ static int ras_tm_register(void)
     (void) prte_mca_base_component_var_register (c, "smp",
                                             "The Torque system is configured in SMP mode "
                                             "with the number of cpus/node given in the environment",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_tm_component.smp_mode);

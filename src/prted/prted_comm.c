@@ -126,7 +126,6 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
     FILE *fp;
     char gscmd[256], path[1035], *pathptr;
     char string[256], *string_ptr = string;
-    float pss;
     char *coprocessors;
     prte_job_map_t *map;
     int8_t flag;
@@ -473,7 +472,6 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret);
         }
         return;
-        break;
 
         /****    HALT VM COMMAND    ****/
     case PRTE_DAEMON_HALT_VM_CMD:
@@ -548,7 +546,6 @@ void prte_daemon_recv(int status, prte_process_name_t* sender,
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
         }
         return;
-        break;
 
         /****     DVM CLEANUP JOB COMMAND    ****/
     case PRTE_DAEMON_DVM_CLEANUP_JOB_CMD:

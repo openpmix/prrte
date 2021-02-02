@@ -77,7 +77,7 @@ int prte_hwloc_base_register(void)
     /* debug output */
     (void) prte_mca_base_var_register("prte", "hwloc", "base", "verbose",
                                  "Debug verbosity",
-                                 PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, PRTE_INFO_LVL_9,
+                                 PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY, &verbosity);
     if (0 < verbosity) {
         prte_hwloc_base_output = prte_output_open(NULL);
@@ -96,7 +96,7 @@ int prte_hwloc_base_register(void)
                                 "Note that operating system paging policies are unaffected by this setting. For "
                                 "example, if \"local_only\" is used and local NUMA domain memory is exhausted, a new "
                                 "memory allocation may cause paging.",
-                                PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, 0, PRTE_INFO_LVL_9,
+                                PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_map);
     PRTE_RELEASE(new_enum);
     if (0 > ret) {
@@ -114,7 +114,7 @@ int prte_hwloc_base_register(void)
                                 "PRTE will warn the first time this happens, but allow the job to continue "
                                 "(possibly with degraded performance).  A value of \"error\" means that PRTE "
                                 "will abort the job if this happens.",
-                                PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, 0, PRTE_INFO_LVL_9,
+                                PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_mbfa);
     PRTE_RELEASE(new_enum);
     if (0 > ret) {
@@ -135,7 +135,7 @@ int prte_hwloc_base_register(void)
                                  "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
                                  "the default when np<=2, and \"package\" is the default when np>2). Allowed colon-delimited qualifiers: "
                                  "overload-allowed, if-supported",
-                                 PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRTE_INFO_LVL_9,
+                                 PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_binding_policy);
 
     /* Allow specification of a default CPU list - a comma-delimited list of cpu ranges that
@@ -165,7 +165,7 @@ int prte_hwloc_base_register(void)
                                 "Comma-separated list of ranges specifying logical cpus to be used by the DVM. "
                                 "Supported modifier:HWTCPUS (ranges specified in hwthreads) or CORECPUS "
                                 "(default: ranges specified in cores)",
-                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRTE_INFO_LVL_9,
+                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY, &default_cpu_list);
 
     if (NULL != default_cpu_list) {
@@ -190,7 +190,7 @@ int prte_hwloc_base_register(void)
     prte_hwloc_base_topo_file = NULL;
     (void) prte_mca_base_var_register("prte", "hwloc", "use", "topo_file",
                                  "Read local topology from file instead of directly sensing it",
-                                 PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, PRTE_INFO_LVL_9,
+                                 PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_topo_file);
 
     /* register parameters */

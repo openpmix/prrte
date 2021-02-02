@@ -183,7 +183,8 @@ int prte_ess_base_prted_setup(void)
     PRTE_PROC_MY_HNP->vpid = 0;
 
     /* open and setup the state machine */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_state_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_state_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_state_base_open";
         goto error;
@@ -194,14 +195,16 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     /* open the errmgr */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_errmgr_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_errmgr_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_errmgr_base_open";
         goto error;
     }
 #if PRTE_ENABLE_FT
     /* open the propagate */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_propagate_base_open";
         goto error;
@@ -215,7 +218,8 @@ int prte_ess_base_prted_setup(void)
     plm_in_use = !!(getenv(param));
     free (param);
     if (plm_in_use)  {
-        if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_plm_base_framework, 0))) {
+        if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_plm_base_framework,
+                                                         PRTE_MCA_BASE_OPEN_DEFAULT))) {
             PRTE_ERROR_LOG(ret);
             error = "prte_plm_base_open";
             goto error;
@@ -318,7 +322,8 @@ int prte_ess_base_prted_setup(void)
 
     /* Setup the communication infrastructure */
     /* Routed system */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_routed_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_routed_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_routed_base_open";
         goto error;
@@ -328,7 +333,8 @@ int prte_ess_base_prted_setup(void)
         error = "prte_routed_base_select";
         goto error;
     }
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prtereachable_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prtereachable_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_prtereachable_base_open";
         goto error;
@@ -338,7 +344,8 @@ int prte_ess_base_prted_setup(void)
         error = "prte_prtereachable_base_select";
         goto error;
     }
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_oob_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_oob_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_oob_base_open";
         goto error;
@@ -348,7 +355,8 @@ int prte_ess_base_prted_setup(void)
         error = "prte_oob_base_select";
         goto error;
     }
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_rml_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_rml_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rml_base_open";
         goto error;
@@ -403,7 +411,8 @@ int prte_ess_base_prted_setup(void)
     /*
      * Group communications
      */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_grpcomm_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_grpcomm_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_grpcomm_base_open";
         goto error;
@@ -414,7 +423,8 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     /* Open/select the odls */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_odls_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_odls_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_odls_base_open";
         goto error;
@@ -425,7 +435,8 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     /* Open/select the rtc */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_rtc_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_rtc_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rtc_base_open";
         goto error;
@@ -435,7 +446,8 @@ int prte_ess_base_prted_setup(void)
         error = "prte_rtc_base_select";
         goto error;
     }
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_rmaps_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_rmaps_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rmaps_base_open";
         goto error;
@@ -478,7 +490,8 @@ int prte_ess_base_prted_setup(void)
     }
 
     /* setup I/O forwarding system - must come after we init routes */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_iof_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_iof_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_iof_base_open";
         goto error;
@@ -489,7 +502,8 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     /* setup the FileM */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_filem_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_filem_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_filem_base_open";
         goto error;

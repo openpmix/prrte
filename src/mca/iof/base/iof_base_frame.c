@@ -67,7 +67,8 @@ static int prte_iof_base_register(prte_mca_base_register_flag_t flags)
     prte_iof_base.output_limit = (size_t) INT_MAX;
     (void) prte_mca_base_var_register("prte", "iof", "base", "output_limit",
                                        "Maximum backlog of output messages [default: unlimited]",
-                                       PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0,
+                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &prte_iof_base.output_limit);
@@ -76,7 +77,8 @@ static int prte_iof_base_register(prte_mca_base_register_flag_t flags)
     prte_iof_base.redirect_app_stderr_to_stdout = false;
     (void) prte_mca_base_var_register("prte", "iof","base", "redirect_app_stderr_to_stdout",
                                        "Redirect application stderr to stdout at source (default: false)",
-                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
                                        PRTE_INFO_LVL_9,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &prte_iof_base.redirect_app_stderr_to_stdout);
@@ -136,7 +138,7 @@ static int prte_iof_base_open(prte_mca_base_open_flag_t flags)
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, iof, "PRTE I/O Forwarding",
                                  prte_iof_base_register, prte_iof_base_open, prte_iof_base_close,
-                                 prte_iof_base_static_components, 0);
+                                 prte_iof_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 
 /* class instances */

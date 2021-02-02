@@ -252,7 +252,7 @@ int prte_mca_base_component_repository_init(void)
 #if PRTE_HAVE_DL_SUPPORT
 
     /* Initialize the dl framework */
-    int ret = prte_mca_base_framework_open(&prte_prtedl_base_framework, 0);
+    int ret = prte_mca_base_framework_open(&prte_prtedl_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != ret) {
         prte_output(0, "%s %d:%s failed -- process will likely abort (open the dl framework returned %d instead of PRTE_SUCCESS)\n",
                     __FILE__, __LINE__, __func__, ret);
@@ -291,8 +291,9 @@ int prte_mca_base_component_repository_get_components (prte_mca_base_framework_t
 #if PRTE_HAVE_DL_SUPPORT
     return prte_hash_table_get_value_ptr (&prte_mca_base_component_repository, framework->framework_name,
                                           strlen (framework->framework_name), (void **) framework_components);
-#endif
+#else
     return PRTE_ERR_NOT_FOUND;
+#endif
 }
 
 #if PRTE_HAVE_DL_SUPPORT

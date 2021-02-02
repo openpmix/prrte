@@ -50,6 +50,10 @@ int prte_rmaps_rank_file_line=1;
 prte_rmaps_rank_file_value_t prte_rmaps_rank_file_value = {0};
 bool prte_rmaps_rank_file_done = false;
 
+#ifndef YY_BREAK
+#define YY_BREAK
+#endif
+
 %}
 
 WHITE       [\f\t\v ]

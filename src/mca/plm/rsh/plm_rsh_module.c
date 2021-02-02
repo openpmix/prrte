@@ -768,7 +768,6 @@ static int remote_spawn(void)
     bool failed_launch = true;
     prte_process_name_t target;
     prte_plm_rsh_caddy_t *caddy;
-    prte_job_t *daemons;
     prte_list_t coll;
     prte_namelist_t *child;
 
@@ -813,7 +812,7 @@ static int remote_spawn(void)
     }
 
     /* get the daemon job object */
-    if (NULL == (daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid))) {
+    if (NULL == prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid)) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         rc = PRTE_ERR_NOT_FOUND;
         PRTE_DESTRUCT(&coll);
@@ -1148,10 +1147,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* if we are tree launching, find our children and create the launch cmd */
     if (!prte_plm_rsh_component.no_tree_spawn) {
-        prte_job_t *jdatorted;
 
         /* get the orted job data object */
-        if (NULL == (jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid))) {
+        if (NULL == prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid)) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             rc = PRTE_ERR_NOT_FOUND;
             goto cleanup;

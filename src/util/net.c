@@ -217,7 +217,6 @@ prte_net_islocalhost(const struct sockaddr *addr)
             }
             return false;
         }
-        break;
 #if PRTE_ENABLE_IPV6
     case AF_INET6:
         {
@@ -234,7 +233,6 @@ prte_net_islocalhost(const struct sockaddr *addr)
         prte_output(0, "unhandled sa_family %d passed to prte_net_islocalhost",
                     addr->sa_family);
         return false;
-        break;
     }
 }
 
@@ -271,7 +269,6 @@ prte_net_samenetwork(const struct sockaddr *addr1,
             }
             return false;
         }
-        break;
 #if PRTE_ENABLE_IPV6
     case AF_INET6:
         {
@@ -441,11 +438,9 @@ prte_net_get_port(const struct sockaddr *addr)
     switch (addr->sa_family) {
     case AF_INET:
         return ntohs(((struct sockaddr_in*) addr)->sin_port);
-        break;
 #if PRTE_ENABLE_IPV6
     case AF_INET6:
         return ntohs(((struct sockaddr_in6*) addr)->sin6_port);
-        break;
 #endif
     }
 

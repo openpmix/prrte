@@ -110,7 +110,8 @@ int prte_mca_base_open(void)
     prte_mca_base_component_path = value;
     prte_mca_base_var_register("prte", "mca", "base", "component_path",
                                 "Path where to look for additional components",
-                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                PRTE_MCA_BASE_VAR_FLAG_NONE,
                                 PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &prte_mca_base_component_path);
@@ -120,7 +121,8 @@ int prte_mca_base_open(void)
         (bool) PRTE_SHOW_LOAD_ERRORS_DEFAULT;
     prte_mca_base_var_register("prte", "mca", "base", "component_show_load_errors",
                                 "Whether to show errors for components that failed to load or not",
-                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                PRTE_MCA_BASE_VAR_FLAG_NONE,
                                 PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &prte_mca_base_component_show_load_errors);
@@ -128,7 +130,8 @@ int prte_mca_base_open(void)
     prte_mca_base_component_track_load_errors = false;
     prte_mca_base_var_register("prte", "mca", "base", "component_track_load_errors",
                                 "Whether to track errors for components that failed to load or not",
-                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                PRTE_MCA_BASE_VAR_FLAG_NONE,
                                 PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &prte_mca_base_component_track_load_errors);
@@ -136,7 +139,8 @@ int prte_mca_base_open(void)
     prte_mca_base_component_disable_dlopen = false;
     prte_mca_base_var_register("prte", "mca", "base", "component_disable_dlopen",
                                 "Whether to attempt to disable opening dynamic components or not",
-                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                PRTE_MCA_BASE_VAR_FLAG_NONE,
                                 PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &prte_mca_base_component_disable_dlopen);
@@ -151,7 +155,8 @@ int prte_mca_base_open(void)
     }
     prte_mca_base_var_register("prte", "mca", "base", "verbose",
                                 "Specifies where the default error output stream goes (this is separate from distinct help messages).  Accepts a comma-delimited list of: stderr, stdout, syslog, syslogpri:<notice|info|debug>, syslogid:<str> (where str is the prefix string for all syslog notices), file[:filename] (if filename is not specified, a default filename is used), fileappend (if not specified, the file is opened for truncation), level[:N] (if specified, integer verbose level; otherwise, 0 is implied)",
-                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                PRTE_MCA_BASE_VAR_FLAG_NONE,
                                 PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &prte_mca_base_verbose);

@@ -66,7 +66,8 @@ static int filem_raw_register(void)
     prte_filem_raw_flatten_trees = false;
     (void) prte_mca_base_component_var_register(c, "flatten_directory_trees",
                                            "Put all files in the working directory instead of creating their respective directory trees",
-                                           PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                           PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                           PRTE_MCA_BASE_VAR_FLAG_NONE,
                                            PRTE_INFO_LVL_9,
                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                            &prte_filem_raw_flatten_trees);

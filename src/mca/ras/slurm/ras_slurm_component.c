@@ -82,7 +82,7 @@ static int ras_slurm_register(void)
     prte_ras_slurm_component.timeout = 30;
     (void) prte_mca_base_component_var_register (component, "dyn_allocate_timeout",
                                             "Number of seconds to wait for Slurm dynamic allocation",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_slurm_component.timeout);
@@ -90,7 +90,7 @@ static int ras_slurm_register(void)
     prte_ras_slurm_component.dyn_alloc_enabled = false;
     (void) prte_mca_base_component_var_register (component, "enable_dyn_alloc",
                                             "Whether or not dynamic allocations are enabled",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_slurm_component.dyn_alloc_enabled);
@@ -98,7 +98,7 @@ static int ras_slurm_register(void)
     prte_ras_slurm_component.config_file = NULL;
     (void) prte_mca_base_component_var_register (component, "config_file",
                                             "Path to Slurm configuration file",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_slurm_component.config_file);
@@ -106,7 +106,7 @@ static int ras_slurm_register(void)
     prte_ras_slurm_component.rolling_alloc = false;
     (void) prte_mca_base_component_var_register (component, "enable_rolling_alloc",
                                             "Enable partial dynamic allocations",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_slurm_component.rolling_alloc);
@@ -114,7 +114,7 @@ static int ras_slurm_register(void)
     prte_ras_slurm_component.use_all = false;
     (void) prte_mca_base_component_var_register (component, "use_entire_allocation",
                                             "Use entire allocation (not just job step nodes) for this application",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_5,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_ras_slurm_component.use_all);

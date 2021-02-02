@@ -51,4 +51,4 @@ PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prtereachable, "PRTE Reachability Framewor
                                  prte_reachable_base_frame_register,
                                  prte_reachable_base_frame_open,
                                  prte_reachable_base_frame_close,
-                                 prte_prtereachable_base_static_components, 0);
+                                 prte_prtereachable_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

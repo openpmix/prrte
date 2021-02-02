@@ -69,7 +69,8 @@ static int prte_rmaps_seq_register(void)
     my_priority = 60;
     (void) prte_mca_base_component_var_register(&prte_rmaps_seq_component.base_version,
                                            "priority", "Priority of the seq rmaps component",
-                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                           PRTE_MCA_BASE_VAR_FLAG_NONE,
                                            PRTE_INFO_LVL_9,
                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                            &my_priority);

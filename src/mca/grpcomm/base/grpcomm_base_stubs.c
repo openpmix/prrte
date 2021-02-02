@@ -194,7 +194,6 @@ static void allgather_stub(int fd, short args, void *cbdata)
 {
     prte_grpcomm_caddy_t *cd = (prte_grpcomm_caddy_t*)cbdata;
     int ret = PRTE_SUCCESS;
-    int rc;
     prte_grpcomm_base_active_t *active;
     prte_grpcomm_coll_t *coll;
     uint32_t *seq_number;
@@ -244,7 +243,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
     /* cycle thru the actives and see who can process it */
     PRTE_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t) {
         if (NULL != active->module->allgather) {
-            if (PRTE_SUCCESS == (rc = active->module->allgather(coll, cd->buf, cd->mode))) {
+            if (PRTE_SUCCESS == active->module->allgather(coll, cd->buf, cd->mode)) {
                 break;
             }
         }

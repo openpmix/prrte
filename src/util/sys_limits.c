@@ -68,7 +68,7 @@ static int prte_setlimit(int resource, char *value, rlim_t *out)
     rlim.rlim_cur = 0;
 
     if (0 == strcmp(value, "max")) {
-            maxlim = -1;
+            maxlim = (rlim_t) -1;
     } else if (0 == strncmp(value, "unlimited", strlen(value))) {
             maxlim = RLIM_INFINITY;
     } else {
