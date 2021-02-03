@@ -1319,7 +1319,7 @@ pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
             PRTE_IOF_SINK_ACTIVATE(sink->wev);
         }
     }
-    return PMIX_SUCCESS;
+    return PMIX_OPERATION_SUCCEEDED;
 }
 
 static void pmix_server_stdin_push(int sd, short args, void *cbdata)
