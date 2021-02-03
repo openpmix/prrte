@@ -1306,6 +1306,7 @@ pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
     for (i = 0; i < nprocs; i++) {
         PRTE_PMIX_CONVERT_PROCT(rc, &name, &procs[i]);
         if (PRTE_SUCCESS != rc) {
+            cbfunc(PMIX_ERR_BAD_PARAM, cbdata);
             return PMIX_ERR_BAD_PARAM;
         }
         if (channels & PMIX_FWD_STDOUT_CHANNEL) {
@@ -1319,6 +1320,7 @@ pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
             PRTE_IOF_SINK_ACTIVATE(sink->wev);
         }
     }
+    cbfunc(PMIX_SUCCESS, cbdata);
     return PMIX_SUCCESS;
 }
 
