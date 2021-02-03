@@ -173,7 +173,7 @@ AC_DEFUN([_PRTE_CHECK_COMPILER_VENDOR], [
 
     # IBM XL C/C++
     AS_IF([test "$prte_check_compiler_vendor_result" = "unknown"],
-          [PRTE_IF_IFELSE([defined(__xlC__) || defined(__IBMC__) || defined(__IBMCPP__)],
+          [PRTE_IF_IFELSE([defined(__xlC__) || defined(__IBMC__) || defined(__IBMCPP__) || defined(__ibmxl__)],
                [prte_check_compiler_vendor_result="ibm"],
                [PRTE_IF_IFELSE([defined(_AIX) && !defined(__GNUC__)],
                     [prte_check_compiler_vendor_result="ibm"])])])
