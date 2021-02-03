@@ -74,19 +74,22 @@ static int errmgr_detector_register(void)
         my_priority = 0;
     (void) prte_mca_base_component_var_register(c, "priority",
             "Priority of the detector errmgr component",
-            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+            PRTE_MCA_BASE_VAR_FLAG_NONE,
             PRTE_INFO_LVL_9,
             PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
 
     (void) prte_mca_base_component_var_register(c, "heartbeat_period",
             "Set heartbeat period for ring detector in errmgr component",
-            PRTE_MCA_BASE_VAR_TYPE_DOUBLE, NULL, 0, 0,
+            PRTE_MCA_BASE_VAR_TYPE_DOUBLE, NULL, 0,
+            PRTE_MCA_BASE_VAR_FLAG_NONE,
             PRTE_INFO_LVL_9,
             PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_errmgr_detector_component.heartbeat_period);
 
     (void) prte_mca_base_component_var_register(c, "heartbeat_timeout",
             "Set heartbeat timeout for ring detector in errmgr component",
-            PRTE_MCA_BASE_VAR_TYPE_DOUBLE, NULL, 0, 0,
+            PRTE_MCA_BASE_VAR_TYPE_DOUBLE, NULL, 0,
+            PRTE_MCA_BASE_VAR_FLAG_NONE,
             PRTE_INFO_LVL_9,
             PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_errmgr_detector_component.heartbeat_timeout);
 

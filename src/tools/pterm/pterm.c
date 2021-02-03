@@ -98,7 +98,6 @@ typedef struct {
 static prte_list_t job_info;
 static prte_jobid_t myjobid = PRTE_JOBID_INVALID;
 
-static size_t evid = INT_MAX;
 static pmix_proc_t myproc;
 static bool forcibly_die=false;
 static prte_event_t term_handler;
@@ -182,7 +181,6 @@ static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t*)cbdata;
     PRTE_ACQUIRE_OBJECT(lock);
-    evid = ref;
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 

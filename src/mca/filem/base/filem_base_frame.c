@@ -72,4 +72,4 @@ static int prte_filem_base_open(prte_mca_base_open_flag_t flags)
 }
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, filem, NULL, NULL, prte_filem_base_open, prte_filem_base_close,
-                                 prte_filem_base_static_components, 0);
+                                 prte_filem_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

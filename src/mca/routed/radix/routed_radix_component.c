@@ -57,7 +57,8 @@ static int prte_routed_radix_component_register(void)
     prte_routed_radix_component.radix = 64;
     (void) prte_mca_base_component_var_register(c, NULL,
                                            "Radix to be used for routed radix tree",
-                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                           PRTE_MCA_BASE_VAR_FLAG_NONE,
                                            PRTE_INFO_LVL_9,
                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                            &prte_routed_radix_component.radix);

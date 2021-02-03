@@ -49,7 +49,8 @@ static int prte_rml_base_register(prte_mca_base_register_flag_t flags)
     prte_rml_base.max_retries = 3;
     prte_mca_base_var_register("prte", "rml", "base", "max_retries",
                                  "Max #times to retry sending a message",
-                                 PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                 PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                 PRTE_MCA_BASE_VAR_FLAG_NONE,
                                  PRTE_INFO_LVL_9,
                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                  &prte_rml_base.max_retries);
@@ -76,7 +77,7 @@ static int prte_rml_base_open(prte_mca_base_open_flag_t flags)
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, rml, "PRTE Run-Time Messaging Layer",
                                  prte_rml_base_register, prte_rml_base_open, prte_rml_base_close,
-                                 prte_rml_base_static_components, 0);
+                                 prte_rml_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 /**
  * Function for ordering the component(plugin) by priority

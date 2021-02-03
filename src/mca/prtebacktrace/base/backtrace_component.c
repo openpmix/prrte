@@ -41,4 +41,4 @@
 
 /* Uses default register/open/close functions */
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prtebacktrace, NULL, NULL, NULL, NULL,
-                                prte_prtebacktrace_base_static_components, 0);
+                                prte_prtebacktrace_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

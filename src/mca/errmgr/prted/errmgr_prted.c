@@ -280,11 +280,9 @@ static void job_errors(int fd, short args, void *cbdata)
         /* order termination */
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         goto cleanup;
-        break;
     case PRTE_JOB_STATE_HEARTBEAT_FAILED:
         /* let the HNP handle this */
         goto cleanup;
-        break;
 
     default:
         break;

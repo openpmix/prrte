@@ -253,9 +253,8 @@ int prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
 static void fill_cache_line_size(void)
 {
     bool found = false;
-    unsigned size=0;
-    int i = 0, cache_level = 2;
-    unsigned int cache_object = HWLOC_OBJ_L2CACHE;
+    unsigned size=0, cache_level = 2, i = 0;
+    hwloc_obj_type_t cache_object = HWLOC_OBJ_L2CACHE;
     hwloc_obj_t obj;
 
     /* Look for the smallest L2 cache size */
@@ -1210,7 +1209,7 @@ prte_hwloc_locality_t prte_hwloc_base_get_relative_locality(hwloc_topology_t top
     }
 
 #if HWLOC_API_VERSION >= 0x20000
-    prte_hwloc_base_get_relative_locality_by_depth(topo, HWLOC_TYPE_DEPTH_NUMANODE, loc1, loc2, &locality, &shared);
+    prte_hwloc_base_get_relative_locality_by_depth(topo, (unsigned) HWLOC_TYPE_DEPTH_NUMANODE, loc1, loc2, &locality, &shared);
 #endif
 
     prte_output_verbose(5, prte_hwloc_base_output,

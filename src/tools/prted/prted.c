@@ -293,7 +293,8 @@ int main(int argc, char *argv[])
     }
 
     /* open the SCHIZO framework */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         return ret;
     }

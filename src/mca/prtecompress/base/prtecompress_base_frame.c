@@ -57,14 +57,15 @@ static int prte_prtecompress_base_register(prte_mca_base_register_flag_t flags);
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prtecompress, "COMPRESS MCA",
                                  prte_prtecompress_base_register, prte_prtecompress_base_open,
-                                 prte_prtecompress_base_close, prte_prtecompress_base_static_components, 0);
+                                 prte_prtecompress_base_close, prte_prtecompress_base_static_components,
+                                 PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 static int prte_prtecompress_base_register(prte_mca_base_register_flag_t flags)
 {
     prte_prtecompress_base.prtecompress_limit = 4096;
     (void) prte_mca_base_var_register("prte", "prtecompress", "base", "limit",
                                        "Threshold beyond which data will be prtecompressed",
-                                       PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, 0, PRTE_INFO_LVL_3,
+                                       PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_prtecompress_base.prtecompress_limit);
 
     return PRTE_SUCCESS;

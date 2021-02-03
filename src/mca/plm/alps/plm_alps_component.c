@@ -100,7 +100,8 @@ static int plm_alps_register(void)
 
     prte_plm_alps_component.debug = false;
     (void) prte_mca_base_component_var_register (comp, "debug", "Enable debugging of alps plm",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_alps_component.debug);
@@ -111,21 +112,24 @@ static int plm_alps_register(void)
 
     prte_plm_alps_component.priority = 100;
     (void) prte_mca_base_component_var_register (comp, "priority", "Default selection priority",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_alps_component.priority);
 
     prte_plm_alps_component.aprun_cmd = "aprun";
     (void) prte_mca_base_component_var_register (comp, "aprun", "Command to run instead of aprun",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_alps_component.aprun_cmd);
 
     prte_plm_alps_component.custom_args = NULL;
     (void) prte_mca_base_component_var_register (comp, "args", "Custom arguments to aprun",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_alps_component.custom_args);

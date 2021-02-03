@@ -726,7 +726,7 @@ int prte_mca_base_var_set_flag (int vari, prte_mca_base_var_flag_t flag, bool se
         return PRTE_ERR_BAD_PARAM;
     }
 
-    var->mbv_flags = (var->mbv_flags & ~flag) | (set ? flag : 0);
+    var->mbv_flags = (var->mbv_flags & ~flag) | (set ? flag : PRTE_MCA_BASE_VAR_FLAG_NONE);
 
     /* All done */
     return PRTE_SUCCESS;
@@ -1189,7 +1189,7 @@ int prte_mca_base_var_register (const char *project_name, const char *framework_
     }
 
     PRTE_LIST_FOREACH_DECL(alias_item, &alias->component_aliases, prte_mca_base_alias_item_t) {
-        prte_mca_base_var_syn_flag_t flags = 0;
+        prte_mca_base_var_syn_flag_t flags = PRTE_MCA_BASE_VAR_SYN_FLAG_NONE;
         if (alias_item->alias_flags & PRTE_MCA_BASE_ALIAS_FLAG_DEPRECATED) {
             flags = PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED;
         }

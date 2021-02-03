@@ -62,7 +62,8 @@ static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
     /* pickup any defined personalities */
     prte_mca_base_var_register("prte", "schizo", "base", "personalities",
                                 "Comma-separated list of personalities",
-                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                PRTE_MCA_BASE_VAR_FLAG_NONE,
                                 PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &personalities);
@@ -71,7 +72,8 @@ static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
     prte_schizo_base.test_proxy_launch = false;
     prte_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch",
                                 "Test proxy launches",
-                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                PRTE_MCA_BASE_VAR_FLAG_NONE,
                                 PRTE_INFO_LVL_9,
                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                 &prte_schizo_base.test_proxy_launch);
@@ -114,7 +116,7 @@ static int prte_schizo_base_open(prte_mca_base_open_flag_t flags)
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, schizo, "PRTE Schizo Subsystem",
                                  prte_schizo_base_register,
                                  prte_schizo_base_open, prte_schizo_base_close,
-                                 prte_schizo_base_static_components, 0);
+                                 prte_schizo_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 static void cvcon(prte_convertor_t *p)
 {

@@ -51,6 +51,10 @@ END_C_DECLS
 int prte_show_help_yynewlines = 1;
 bool prte_show_help_parse_done = false;
 
+#ifndef YY_BREAK
+#define YY_BREAK
+#endif
+
 %}
 
 WHITE       [\f\t\v ]

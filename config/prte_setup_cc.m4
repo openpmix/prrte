@@ -54,6 +54,12 @@ AC_DEFUN([PRTE_PROG_CC_C11_HELPER],[
     PRTE_CC_HELPER([if $CC $1 supports C11 _Atomic keyword], [prte_prog_cc_c11_helper__Atomic_available],
                    [[#include <stdatomic.h>]],[[static _Atomic long foo = 1;++foo;]])
 
+    PRTE_CC_HELPER([if $CC $1 supports C11 _c11_atomic functions], [prte_prog_cc_c11_atomic_function],
+                   [[#include <stdatomic.h>]],[[atomic_int acnt = 0; __c11_atomic_fetch_add(&acnt, 1, memory_order_relaxed);]])
+    if test $prte_prog_cc_c11_atomic_function -eq 1; then
+        AC_DEFINE_UNQUOTED([PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC], [$pmix_prog_cc_c11_atomic_function], [Whether we have Clang __c11 atomic functions])
+    fi;
+
     PRTE_CC_HELPER([if $CC $1 supports C11 _Generic keyword], [prte_prog_cc_c11_helper__Generic_available],
                    [[#define FOO(x) (_Generic (x, int: 1))]], [[static int x, y; y = FOO(x);]])
 
@@ -155,7 +161,7 @@ AC_DEFUN([PRTE_SETUP_CC],[
     AC_REQUIRE([_PRTE_PROG_CC])
     AC_REQUIRE([AM_PROG_CC_C_O])
 
-    PRTE_VAR_SCOPE_PUSH([prte_prog_cc_c11_helper__Thread_local_available prte_prog_cc_c11_helper_atomic_var_available prte_prog_cc_c11_helper__Atomic_available prte_prog_cc_c11_helper__static_assert_available prte_prog_cc_c11_helper__Generic_available prte_prog_cc__thread_available prte_prog_cc_c11_helper_atomic_fetch_xor_explicit_available])
+    PRTE_VAR_SCOPE_PUSH([prte_prog_cc_c11_helper__Thread_local_available prte_prog_cc_c11_helper_atomic_var_available prte_prog_cc_c11_helper__Atomic_available prte_prog_cc_c11_helper__static_assert_available prte_prog_cc_c11_helper__Generic_available prte_prog_cc__thread_available prte_prog_cc_c11_helper_atomic_fetch_xor_explicit_available prte_prog_cc_c11_atomic_function])
 
     # AC_PROG_CC_C99 changes CC (instead of CFLAGS) so save CC (without c99
     # flags) for use in our wrappers.

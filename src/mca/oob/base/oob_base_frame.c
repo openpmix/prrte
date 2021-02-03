@@ -98,7 +98,7 @@ static int prte_oob_base_open(prte_mca_base_open_flag_t flags)
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, oob, "Out-of-Band Messaging Subsystem",
                                  NULL, prte_oob_base_open, prte_oob_base_close,
-                                 prte_oob_base_static_components, 0);
+                                 prte_oob_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 
 PRTE_CLASS_INSTANCE(prte_oob_send_t,

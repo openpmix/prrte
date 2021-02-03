@@ -37,7 +37,7 @@ PRTE_CLASS_INSTANCE(prte_if_t, prte_list_item_t, prte_if_construct, NULL);
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prteif, NULL, prte_if_base_register,
                                  prte_if_base_open, prte_if_base_close,
-                                 prte_prteif_base_static_components, 0);
+                                 prte_prteif_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 static int prte_if_base_register (prte_mca_base_register_flag_t flags)
 {

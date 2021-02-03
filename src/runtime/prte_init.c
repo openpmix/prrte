@@ -132,7 +132,7 @@ int prte_init_util(prte_proc_type_t flags)
     prte_output_init();
 
     /* initialize install dirs code */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
         fprintf(stderr, "prte_prteinstalldirs_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRTE_SUCCESS)\n",
                 __FILE__, __LINE__, ret);
         return ret;
@@ -205,7 +205,7 @@ int prte_init_util(prte_proc_type_t flags)
     }
 
     /* initialize if framework */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prteif_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prteif_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
         fprintf(stderr, "prte_prteif_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRTE_SUCCESS)\n",
                 __FILE__, __LINE__, ret);
         return ret;
@@ -216,7 +216,7 @@ int prte_init_util(prte_proc_type_t flags)
     /* open hwloc */
     prte_hwloc_base_open();
 
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_backtrace_base_open";
         goto error;
     }
@@ -312,7 +312,7 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
 
     /* open the SCHIZO framework as everyone needs it, and the
      * ess will use it to help select its component */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_schizo_base_open";
         goto error;
@@ -324,7 +324,7 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
     }
 
     /* open the ESS and select the correct module for this environment */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_ess_base_framework, 0))) {
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_ess_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_ess_base_open";
         goto error;

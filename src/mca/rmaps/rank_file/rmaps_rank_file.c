@@ -61,7 +61,6 @@ prte_rmaps_base_module_t prte_rmaps_rank_file_module = {
 
 static int prte_rmaps_rank_file_parse(const char *);
 static char *prte_rmaps_rank_file_parse_string_or_int(void);
-static const char *prte_rmaps_rank_file_name_cur = NULL;
 char *prte_rmaps_rank_file_slot_list = NULL;
 
 /*
@@ -227,7 +226,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                 }
                 if (NULL == node) {
                     /* all would be oversubscribed, so take the least loaded one */
-                    k = UINT32_MAX;
+                    k = (int32_t) UINT32_MAX;
                     PRTE_LIST_FOREACH(nd, &node_list, prte_node_t) {
                         if (nd->num_procs < (prte_vpid_t)k) {
                             k = nd->num_procs;
@@ -402,7 +401,6 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
     /* get the hnp node's info */
     hnp_node = (prte_node_t*)(prte_node_pool->addr[0]);
 
-    prte_rmaps_rank_file_name_cur = rankfile;
     prte_rmaps_rank_file_done = false;
     prte_rmaps_rank_file_in = fopen(rankfile, "r");
 
@@ -422,7 +420,6 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                 rc = PRTE_ERR_BAD_PARAM;
                 PRTE_ERROR_LOG(rc);
                 goto unlock;
-                break;
             case PRTE_RANKFILE_QUOTED_STRING:
                 prte_show_help("help-rmaps_rank_file.txt", "not-supported-rankfile", true, "QUOTED_STRING", rankfile);
                 rc = PRTE_ERR_BAD_PARAM;
@@ -455,7 +452,6 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                 rc = PRTE_ERR_BAD_PARAM;
                 PRTE_ERROR_LOG(rc);
                 goto unlock;
-                break;
             case PRTE_RANKFILE_EQUAL:
                 if (rank < 0) {
                     prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
@@ -564,7 +560,6 @@ unlock:
         free(node_name);
     }
     PRTE_RELEASE(assigned_ranks_array);
-    prte_rmaps_rank_file_name_cur = NULL;
     return rc;
 }
 

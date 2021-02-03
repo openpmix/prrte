@@ -103,30 +103,6 @@ AC_DEFUN([_PRTE_CHECK_COMPILER_VENDOR], [
     AS_IF([test "$prte_check_compiler_vendor_result" = "unknown"],
           [PRTE_IF_IFELSE([defined(__FUJITSU)],
                [prte_check_compiler_vendor_result="fujitsu"])])
-
-    # GNU
-    AS_IF([test "$prte_check_compiler_vendor_result" = "unknown"],
-          [PRTE_IFDEF_IFELSE([__GNUC__],
-               [prte_check_compiler_vendor_result="gnu"
-
-               # We do not support gccfss as a compiler so die if
-               # someone tries to use said compiler.  gccfss (gcc
-               # for SPARC Systems) is a compiler that is no longer
-               # supported by Oracle and it has some major flaws
-               # that prevents it from actually compiling PRTE code.
-               # So if we detect it we automatically bail.
-
-               if ($CC --version | grep gccfss) >/dev/null 2>&1; then
-                   AC_MSG_RESULT([gccfss])
-                   AC_MSG_WARN([Detected gccfss being used to compile PMIx.])
-                   AC_MSG_WARN([Because of several issues PMIx does not support])
-                   AC_MSG_WARN([the gccfss compiler.  Please use a different compiler.])
-                   AC_MSG_WARN([If you didn't think you used gccfss you may want to])
-                   AC_MSG_WARN([check to see if the compiler you think you used is])
-                   AC_MSG_WARN([actually a link to gccfss.])
-                   AC_MSG_ERROR([Cannot continue])
-               fi])])
-
     # Borland Turbo C
     AS_IF([test "$prte_check_compiler_vendor_result" = "unknown"],
           [PRTE_IFDEF_IFELSE([__TURBOC__],
@@ -173,7 +149,7 @@ AC_DEFUN([_PRTE_CHECK_COMPILER_VENDOR], [
 
     # IBM XL C/C++
     AS_IF([test "$prte_check_compiler_vendor_result" = "unknown"],
-          [PRTE_IF_IFELSE([defined(__xlC__) || defined(__IBMC__) || defined(__IBMCPP__)],
+          [PRTE_IF_IFELSE([defined(__xlC__) || defined(__IBMC__) || defined(__IBMCPP__) || defined(__ibmxl__)],
                [prte_check_compiler_vendor_result="ibm"],
                [PRTE_IF_IFELSE([defined(_AIX) && !defined(__GNUC__)],
                     [prte_check_compiler_vendor_result="ibm"])])])
@@ -247,6 +223,29 @@ AC_DEFUN([_PRTE_CHECK_COMPILER_VENDOR], [
     AS_IF([test "$prte_check_compiler_vendor_result" = "unknown"],
           [PRTE_IFDEF_IFELSE([__WATCOMC__],
                [prte_check_compiler_vendor_result="watcom"])])
+
+    # GNU
+    AS_IF([test "$prte_check_compiler_vendor_result" = "unknown"],
+          [PRTE_IFDEF_IFELSE([__GNUC__],
+               [prte_check_compiler_vendor_result="gnu"
+
+               # We do not support gccfss as a compiler so die if
+               # someone tries to use said compiler.  gccfss (gcc
+               # for SPARC Systems) is a compiler that is no longer
+               # supported by Oracle and it has some major flaws
+               # that prevents it from actually compiling PRTE code.
+               # So if we detect it we automatically bail.
+
+               if ($CC --version | grep gccfss) >/dev/null 2>&1; then
+                   AC_MSG_RESULT([gccfss])
+                   AC_MSG_WARN([Detected gccfss being used to compile PMIx.])
+                   AC_MSG_WARN([Because of several issues PMIx does not support])
+                   AC_MSG_WARN([the gccfss compiler.  Please use a different compiler.])
+                   AC_MSG_WARN([If you didn't think you used gccfss you may want to])
+                   AC_MSG_WARN([check to see if the compiler you think you used is])
+                   AC_MSG_WARN([actually a link to gccfss.])
+                   AC_MSG_ERROR([Cannot continue])
+               fi])])
 
     $1="$prte_check_compiler_vendor_result"
     unset prte_check_compiler_vendor_result

@@ -55,6 +55,10 @@ int prte_util_hostfile_line=1;
 prte_hostfile_value_t prte_util_hostfile_value = {0};
 bool prte_util_hostfile_done = false;
 
+#ifndef YY_BREAK
+#define YY_BREAK
+#endif
+
 %}
 
 WHITE       [\f\t\v ]
@@ -72,8 +76,8 @@ WHITE       [\f\t\v ]
 
 "/*"               { BEGIN(comment);
                      return PRTE_HOSTFILE_NEWLINE; }
-<comment>[^*\n]*       ; /* Eat up non '*'s */
-<comment>"*"+[^*/\n]*  ; /* Eat '*'s not followed by a '/' */
+<comment>[^*\n]*       { break; } /* Eat up non '*'s */
+<comment>"*"+[^*/\n]*  { break; } /* Eat '*'s not followed by a '/' */
 <comment>\n        { prte_util_hostfile_line++;
                      return PRTE_HOSTFILE_NEWLINE; }
 <comment>"*"+"/"   { BEGIN(INITIAL); /* Done with Block Comment */
@@ -82,7 +86,7 @@ WHITE       [\f\t\v ]
 \"[^\"]*\"         { prte_util_hostfile_value.sval = yytext;
                      return PRTE_HOSTFILE_QUOTED_STRING; }
 
-{WHITE}+           ;			/* whitespace */
+{WHITE}+           { break; }			/* whitespace */
 
 "="                { return PRTE_HOSTFILE_EQUAL; }
 

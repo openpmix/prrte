@@ -105,6 +105,7 @@ static inline void prte_atomic_rmb (void)
 #define prte_atomic_swap_64(addr, value) atomic_exchange_explicit (addr, value, memory_order_relaxed)
 #define prte_atomic_swap_ptr(addr, value) atomic_exchange_explicit (addr, value, memory_order_relaxed)
 
+#ifdef PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC
 #define PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(op, bits, type, operator)      \
     static inline type prte_atomic_fetch_ ## op ##_## bits (prte_atomic_ ## type *addr, type value) \
     {                                                                   \
@@ -115,6 +116,18 @@ static inline void prte_atomic_rmb (void)
     {                                                                   \
         return atomic_fetch_ ## op ## _explicit (addr, value, memory_order_relaxed) operator value; \
     }
+#else
+#define PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(op, bits, type, operator)      \
+    static inline type prte_atomic_fetch_ ## op ##_## bits (prte_atomic_ ## type *addr, type value) \
+    {                                                                   \
+        return atomic_fetch_ ## op ## _explicit ((type *) addr, value, memory_order_relaxed); \
+    }                                                                   \
+                                                                        \
+    static inline type prte_atomic_## op ## _fetch_ ## bits (prte_atomic_ ## type *addr, type value) \
+    {                                                                   \
+        return atomic_fetch_ ## op ## _explicit ((type *) addr, value, memory_order_relaxed) operator value; \
+    }
+#endif
 
 PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(add, 32, int32_t, +)
 PRTE_ATOMIC_STDC_DEFINE_FETCH_OP(add, 64, int64_t, +)
@@ -219,13 +232,21 @@ typedef atomic_flag prte_atomic_lock_t;
  */
 static inline void prte_atomic_lock_init (prte_atomic_lock_t *lock, bool value)
 {
+#ifdef PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC
     atomic_flag_clear (lock);
+#else
+    atomic_flag_clear ((volatile void *) lock);
+#endif
 }
 
 
 static inline int prte_atomic_trylock (prte_atomic_lock_t *lock)
 {
+#ifdef PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC
     return (int) atomic_flag_test_and_set (lock);
+#else
+    return (int) atomic_flag_test_and_set ((volatile void *) lock);
+#endif
 }
 
 
@@ -238,9 +259,13 @@ static inline void prte_atomic_lock(prte_atomic_lock_t *lock)
 
 static inline void prte_atomic_unlock (prte_atomic_lock_t *lock)
 {
+#ifdef PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC
     atomic_flag_clear (lock);
-}
+#else
+    atomic_flag_clear ((volatile void *) lock);
+#endif
 
+}
 
 #if PRTE_HAVE_C11_CSWAP_INT128
 

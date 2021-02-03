@@ -196,6 +196,7 @@ void prte_close_open_file_descriptors(int protected_fd)
     DIR *dir = opendir("/proc/self/fd");
     int fd;
     struct dirent *files;
+    int dir_scan_fd = -1;
 
     if (NULL == dir) {
         goto slow;
@@ -203,7 +204,7 @@ void prte_close_open_file_descriptors(int protected_fd)
 
     /* grab the fd of the opendir above so we don't close in the
      * middle of the scan. */
-    int dir_scan_fd = dirfd(dir);
+    dir_scan_fd = dirfd(dir);
     if(dir_scan_fd < 0 ) {
         goto slow;
     }

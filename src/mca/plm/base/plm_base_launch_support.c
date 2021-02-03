@@ -346,7 +346,7 @@ void prte_plm_base_setup_job_complete(int fd, short args, void *cbdata)
 
 void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
 {
-    prte_job_t *jdata, *jdatorted;
+    prte_job_t *jdata;
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
     prte_node_t *node;
     uint32_t h;
@@ -372,7 +372,7 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
     caddy->jdata->state = caddy->job_state;
 
     /* get the orted job data object */
-    if (NULL == (jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid))) {
+    if (NULL == prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid)) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         PRTE_RELEASE(caddy);

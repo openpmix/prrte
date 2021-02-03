@@ -483,7 +483,7 @@ char *prte_cmd_line_get_usage_msg(prte_cmd_line_t *cmd, bool parseable)
     argv = NULL;
     ret = NULL;
 
-    for (otype=0; otype < PRTE_CMD_LINE_OTYPE_NULL; otype++) {
+    for (otype=PRTE_CMD_LINE_OTYPE_GENERAL; otype < PRTE_CMD_LINE_OTYPE_NULL; otype++) {
         found = false;
         /* First, take the original list and sort it */
         sorted = (prte_cmd_line_option_t**)malloc(sizeof(prte_cmd_line_option_t *) *
@@ -1087,8 +1087,6 @@ static prte_value_t* set_dest(prte_cmd_line_option_t *option, char *sval)
         default:
             return NULL;
     }
-
-    return NULL;
 }
 
 

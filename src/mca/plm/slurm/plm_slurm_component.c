@@ -101,14 +101,16 @@ static int plm_slurm_register(void)
 
     prte_plm_slurm_component.custom_args = NULL;
     (void) prte_mca_base_component_var_register (comp, "args", "Custom arguments to srun",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_slurm_component.custom_args);
 
     prte_plm_slurm_component.slurm_warning_msg = true;
     (void) prte_mca_base_component_var_register (comp, "warning", "Turn off warning message",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_9,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_slurm_component.slurm_warning_msg);
