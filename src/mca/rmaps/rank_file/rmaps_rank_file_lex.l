@@ -71,8 +71,8 @@ WHITE       [\f\t\v ]
 
 "/*"               { BEGIN(comment);
                      return PRTE_RANKFILE_NEWLINE; }
-<comment>[^*\n]*       ; /* Eat up non '*'s */
-<comment>"*"+[^*/\n]*  ; /* Eat '*'s not followed by a '/' */
+<comment>[^*\n]*       { break; } /* Eat up non '*'s */
+<comment>"*"+[^*/\n]*  { break; } /* Eat '*'s not followed by a '/' */
 <comment>\n        { prte_rmaps_rank_file_line++;
                      return PRTE_RANKFILE_NEWLINE; }
 <comment>"*"+"/"   { BEGIN(INITIAL); /* Done with Block Comment */
@@ -81,7 +81,7 @@ WHITE       [\f\t\v ]
 \"[^\"]*\"         { prte_rmaps_rank_file_value.sval = yytext;
                      return PRTE_RANKFILE_QUOTED_STRING; }
 
-{WHITE}+           ;
+{WHITE}+           { break; }
 
 "="                { return PRTE_RANKFILE_EQUAL; }
 

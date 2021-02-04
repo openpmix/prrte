@@ -1,4 +1,5 @@
 %option nounput
+%option noinput
 %option yylineno
 
 %{ /* -*- C -*- */
@@ -71,8 +72,8 @@ CHAR        [A-Za-z0-9_\-\.]
 
 "/*"                { BEGIN(comment);
                       return PRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
-<comment>[^*\n]*       ; /* Eat up non '*'s */
-<comment>"*"+[^*/\n]*  ; /* Eat '*'s not followed by a '/' */
+<comment>[^*\n]*    { break; } /* Eat up non '*'s */
+<comment>"*"+[^*/\n]*  { break; } /* Eat '*'s not followed by a '/' */
 <comment>\n         { prte_util_keyval_yynewlines++;
                       return PRTE_UTIL_KEYVAL_PARSE_NEWLINE; }
 <comment>"*"+"/"    { BEGIN(INITIAL); /* Done with Block Comment */
