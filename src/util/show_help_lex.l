@@ -64,11 +64,11 @@ CHAR        [A-Za-z0-9_\-\.]
 
 %%
 
-#.*\n               ; /* comment line */
+#.*\n               { break; } /* comment line */
 
 ^\[.+\]/[^\]\n]*\n { BEGIN(CHOMP); return PRTE_SHOW_HELP_PARSE_TOPIC; }
 
-<CHOMP>.*\n { BEGIN(INITIAL); }
+<CHOMP>.*\n { BEGIN(INITIAL); break; }
 
 .*/\n { BEGIN(CHOMP); return PRTE_SHOW_HELP_PARSE_MESSAGE; }
 
