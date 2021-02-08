@@ -14,6 +14,7 @@
  * Copyright (c) 2012-2018 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -324,10 +325,6 @@ PRTE_ATOMIC_DEFINE_CMPXCG_PTR_XX(_rel_)
 #endif
 
 #endif /* (PRTE_HAVE_ATOMIC_LLSC_32 || PRTE_HAVE_ATOMIC_LLSC_64)*/
-
-#if !defined(PRTE_HAVE_ATOMIC_LLSC_PTR)
-#define PRTE_HAVE_ATOMIC_LLSC_PTR 0
-#endif
 
 #if PRTE_HAVE_ATOMIC_MATH_32 || PRTE_HAVE_ATOMIC_MATH_64
 
