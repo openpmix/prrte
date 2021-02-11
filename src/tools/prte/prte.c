@@ -347,20 +347,19 @@ static prte_cmd_line_init_t cmd_line_init[] = {
     /* Mapping options */
     { '\0', "map-by", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache | "
-      "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr],"
+      "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr |,"
+      "rankfile:<rankfile_path>]"
       " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
       "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
       "DEVICE(for dist policy), INHERIT, NOINHERIT, PE-LIST=a,b (comma-delimited "
       "ranges of cpus to use for this job)",
       PRTE_CMD_LINE_OTYPE_MAPPING },
 
-
       /* Ranking options */
     { '\0', "rank-by", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache "
       "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
       PRTE_CMD_LINE_OTYPE_RANKING },
-
 
       /* Binding options */
     { '\0', "bind-to", 1, PRTE_CMD_LINE_TYPE_STRING,

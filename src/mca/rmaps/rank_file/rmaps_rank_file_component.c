@@ -86,7 +86,6 @@ static int prte_rmaps_rank_file_register(void)
                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                            PRTE_INFO_LVL_9,
                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
-    prte_rankfile = NULL;
     tmp = prte_mca_base_component_var_register(c, "path",
                                           "Name of the rankfile to be used for mapping processes (relative or absolute path)",
                                           PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,

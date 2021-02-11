@@ -516,6 +516,37 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 spec = NULL;
                 goto setpolicy;
             }
+        } else if (0 == strcasecmp(spec, "rankfile")) {
+            /* Make sure there's a rankfile filename specified */
+            if ('\0' == *ck) {
+                prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename",
+                               true);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            /* Check if there are modifiers following the rankfile filename */
+            if (NULL == (ptr = strchr(ck, ':'))) {
+                /* No ':' after rankfile path, so no modifiers */
+                cptr = ptr;
+            }
+            else {
+                /* ':' found after rankfile pathname, truncate string at that point 
+                   and skip to character after ':' */
+                *ptr = '\0';
+                cptr = ptr + 1;
+                /* Make sure there is a modifier following the ':' */
+                if ('\0' == *cptr) {
+                    prte_show_help("help-prte-rmaps-base.txt", "missing-modifier",
+                                   true);
+                    return PRTE_ERR_BAD_PARAM;
+                }
+            }
+            /* Save rankfile pathname */
+            prte_rankfile = strdup(ck);
+            if (NULL == cptr) {
+               free(spec);
+               spec = NULL;
+               goto setpolicy;
+            }
         } else {
             cptr = ck;
         }
@@ -556,7 +587,9 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL3CACHE);
             } else if (0 == strncasecmp(spec, "package", len)) {
                 PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYPACKAGE);
-             } else if (0 == strncasecmp(spec, "hwthread", len)) {
+            } else if (0 == strcasecmp(spec, "rankfile")) {
+                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYUSER);
+            } else if (0 == strncasecmp(spec, "hwthread", len)) {
                 PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
                 /* if we are mapping processes to individual hwthreads, then
                  * we need to treat those hwthreads as separate cpus

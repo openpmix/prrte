@@ -508,3 +508,13 @@ A %s was given that requires a value, but the provided value is invalid:
   Given:   %s
 
 Please provide a valid value for this policy, or remove it.
+#
+[rankfile-no-filename]
+The request to map processes using a rankfile could not be completed
+because the filename of the rankfile was not specified. Please 
+specify the name of the rankfile.
+#
+[missing-modifier]
+A ':' was found in a modifier specification but there is no modifier
+following the ':'. Please specify a modifier.
+#
