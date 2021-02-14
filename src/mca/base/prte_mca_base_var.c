@@ -78,6 +78,12 @@ static int prte_mca_base_var_count = 0;
 
 static prte_hash_table_t prte_mca_base_var_index_hash;
 
+#define PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(mbv_enumerator) {   \
+    if(mbv_enumerator && !mbv_enumerator->enum_is_static) {  \
+        PRTE_RELEASE(mbv_enumerator);                        \
+    }                                                        \
+}
+
 const char *prte_var_type_names[] = {
     "int",
     "unsigned_int",
@@ -589,8 +595,8 @@ int prte_mca_base_var_deregister(int vari)
         var->mbv_storage->stringval) {
         free (var->mbv_storage->stringval);
         var->mbv_storage->stringval = NULL;
-    } else if (var->mbv_enumerator && !var->mbv_enumerator->enum_is_static) {
-        PRTE_RELEASE(var->mbv_enumerator);
+    } else {
+        PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(var -> mbv_enumerator);
     }
 
     var->mbv_enumerator = NULL;
@@ -1126,10 +1132,7 @@ static int register_variable (const char *project_name, const char *framework_na
     if (PRTE_MCA_BASE_VAR_TYPE_BOOL == var->mbv_type) {
         enumerator = &prte_mca_base_var_enum_bool;
     } else if (NULL != enumerator) {
-        if (var->mbv_enumerator) {
-            PRTE_RELEASE (var->mbv_enumerator);
-        }
-
+        PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(var -> mbv_enumerator);
         if (!enumerator->enum_is_static) {
             PRTE_RETAIN(enumerator);
         }
@@ -1520,9 +1523,7 @@ static void var_destructor(prte_mca_base_var_t *var)
     }
 
     /* don't release the boolean enumerator */
-    if (var->mbv_enumerator && !var->mbv_enumerator->enum_is_static) {
-        PRTE_RELEASE(var->mbv_enumerator);
-    }
+    PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(var -> mbv_enumerator);
 
     if (NULL != var->mbv_long_name) {
         free(var->mbv_long_name);
