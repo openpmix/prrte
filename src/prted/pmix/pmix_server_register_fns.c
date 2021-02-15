@@ -132,7 +132,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         NULL != cache) {
         while (NULL != (kv = (prte_info_item_t*)prte_list_remove_first(cache))) {
             prte_list_append(info, &kv->super);
-            PRTE_RELEASE(kv);
         }
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE);
         PRTE_RELEASE(cache);

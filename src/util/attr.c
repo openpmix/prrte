@@ -665,14 +665,35 @@ int prte_attr_unload(prte_attribute_t *kv,
 {
     pmix_byte_object_t *boptr;
     pmix_envar_t *envar;
+    pmix_data_type_t pointers[] = {
+        PMIX_STRING,
+        PMIX_BYTE_OBJECT,
+        PMIX_POINTER,
+        PMIX_PROC_NSPACE,
+        PMIX_PROC,
+        PMIX_ENVAR,
+        PMIX_UNDEF
+    };
+    int n;
+    bool found = false;
 
     if (type != kv->data.type) {
         return PRTE_ERR_TYPE_MISMATCH;
     }
-    if (NULL == data  ||
-        (PMIX_STRING != type && PMIX_BYTE_OBJECT != type &&
-         PMIX_BUFFER != type && PMIX_POINTER != type && NULL == *data)) {
-        assert(0);
+    if (NULL == data) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        return PRTE_ERR_BAD_PARAM;
+    }
+    /* if they didn't give us a storage address
+     * and the data type isn't one where we can
+     * create storage, then this is an error */
+    for (n=0; PMIX_UNDEF != pointers[n]; n++) {
+        if (type == pointers[n]) {
+            found = true;
+            break;
+        }
+    }
+    if (!found && NULL == *data) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }

@@ -51,7 +51,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     prte_proc_t *proc;
     prte_attribute_t *kv;
     prte_list_t *cache;
-    prte_value_t *val;
+    prte_info_item_t *val;
 
     /* pack the nspace */
     rc = PMIx_Data_pack(NULL, bkt, (void*)&job->nspace, 1, PMIX_PROC_NSPACE);
@@ -97,7 +97,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     if (prte_get_attribute(&job->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PMIX_POINTER) &&
         NULL != cache) {
         /* we need to pack these as well, but they are composed
-         * of prte_value_t's on a list. So first pack the number
+         * of prte_info_item_t's on a list. So first pack the number
          * of list elements */
         count = prte_list_get_size(cache);
         rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
@@ -106,8 +106,8 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
             return prte_pmix_convert_status(rc);
         }
         /* now pack each element on the list */
-        PRTE_LIST_FOREACH(val, cache, prte_value_t) {
-            rc = PMIx_Data_pack(NULL, bkt, (void*)&val->value, 1, PMIX_VALUE);
+        PRTE_LIST_FOREACH(val, cache, prte_info_item_t) {
+            rc = PMIx_Data_pack(NULL, bkt, (void*)&val->info, 1, PMIX_INFO);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 return prte_pmix_convert_status(rc);

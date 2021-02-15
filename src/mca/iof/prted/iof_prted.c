@@ -242,7 +242,7 @@ static int prted_pull(const pmix_proc_t* dst_name,
     }
     /* if we get here, then we don't yet have this proc in our list */
     proct = PRTE_NEW(prte_iof_proc_t);
-    PMIX_XFER_PROCID(&proct->name, &dst_name);
+    PMIX_XFER_PROCID(&proct->name, dst_name);
     prte_list_append(&prte_iof_prted_component.procs, &proct->super);
 
   SETUP:

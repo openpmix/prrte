@@ -55,7 +55,6 @@
 #include "src/threads/threads.h"
 
 #include "src/mca/prtebacktrace/base/base.h"
-#include "src/mca/prtecompress/base/base.h"
 #include "src/mca/base/base.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"

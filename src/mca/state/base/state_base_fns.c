@@ -574,7 +574,7 @@ static void _send_notification(int status,
             PRTE_ERROR_LOG(rc);
         }
         PRTE_DESTRUCT(&sig);
-        PRTE_RELEASE(buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
     } else {
         /* get the daemon hosting the proc to be notified */
         PMIX_LOAD_PROCID(&daemon, PRTE_PROC_MY_NAME->nspace, prte_get_proc_daemon_vpid(target));

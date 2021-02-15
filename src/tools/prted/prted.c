@@ -74,7 +74,6 @@
 #include "src/util/daemon_init.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/prtecompress/prtecompress.h"
 
 #include "src/util/show_help.h"
 #include "src/util/proc_info.h"
@@ -254,6 +253,13 @@ int main(int argc, char *argv[])
     char *myuri;
     prte_value_t *pval;
     int8_t flag;
+    uint8_t naliases, ni;
+    char **nonlocal = NULL;
+    int n;
+    pmix_info_t info;
+    size_t z1=1;
+    pmix_value_t *vptr;
+    int32_t one=1;
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -655,11 +661,6 @@ int main(int argc, char *argv[])
     }
 
     /* get any connection info we may have pushed */
-    pmix_info_t info;
-    size_t z1=1;
-    pmix_value_t *vptr;
-    int32_t one=1;
-
     if (PMIX_SUCCESS == PMIx_Get(&prte_process_info.myproc, PMIX_PROC_URI, NULL, 0, &vptr) && NULL != vptr) {
         /* use the PMIx data support to pack it */
         PMIX_INFO_LOAD(&info, PMIX_PROC_URI, vptr->data.string, PMIX_STRING);
@@ -711,10 +712,6 @@ int main(int argc, char *argv[])
     }
 
     /* include any non-loopback aliases for this node */
-    uint8_t naliases, ni;
-    char **nonlocal = NULL;
-    int n;
-
     for (n=0; NULL != prte_process_info.aliases[n]; n++) {
         if (0 != strcmp(prte_process_info.aliases[n], "localhost") &&
             0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
@@ -753,8 +750,6 @@ int main(int argc, char *argv[])
      * will request it if necessary */
     if (1 == PRTE_PROC_MY_NAME->rank) {
         pmix_data_buffer_t data;
-        uint8_t *cmpdata;
-        size_t cmplen;
         pmix_topology_t ptopo;
         bool compressed;
 
@@ -770,67 +765,34 @@ int main(int argc, char *argv[])
             PMIX_DATA_BUFFER_DESTRUCT(&data);
             goto DONE;
         }
-        if (prte_compress.compress_block((uint8_t*)data.base_ptr, data.bytes_used,
-                                         &cmpdata, &cmplen)) {
+        if (PMIx_Data_compress((uint8_t*)data.base_ptr, data.bytes_used,
+                                (uint8_t**)&pbo.bytes, &pbo.size)) {
             /* the data was compressed - mark that we compressed it */
-            compressed = true;;
-            prc = PMIx_Data_pack(NULL, &buffer, &compressed, 1, PMIX_BOOL);
-            if (PMIX_SUCCESS != prc) {
-                PMIX_ERROR_LOG(prc);
-                PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                free(cmpdata);
-                goto DONE;
-            }
-            /* pack the compressed length */
-            prc = PMIx_Data_pack(NULL, &buffer, &cmplen, 1, PMIX_SIZE);
-            if (PMIX_SUCCESS != prc) {
-                PMIX_ERROR_LOG(prc);
-                PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                free(cmpdata);
-                goto DONE;
-            }
-            /* pack the uncompressed length */
-            prc = PMIx_Data_pack(NULL, &buffer, &data.bytes_used, 1, PMIX_SIZE);
-            if (PMIX_SUCCESS != prc) {
-                PMIX_ERROR_LOG(prc);
-                PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                free(cmpdata);
-                goto DONE;
-            }
-            /* pack the compressed info */
-            prc = PMIx_Data_pack(NULL, &buffer, cmpdata, cmplen, PMIX_UINT8);
-            if (PMIX_SUCCESS != prc) {
-                PMIX_ERROR_LOG(prc);
-                PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                free(cmpdata);
-                goto DONE;
-            }
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
-            free(cmpdata);
+            compressed = true;
         } else {
-            /* mark that it was not compressed */
             compressed = false;
-            prc = PMIx_Data_pack(NULL, &buffer, &compressed, 1, PMIX_BOOL);
-            if (PMIX_SUCCESS != prc) {
-                PMIX_ERROR_LOG(prc);
-                PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                goto DONE;
-            }
-            /* transfer the payload across */
-            prc = PMIx_Data_copy_payload(&buffer, &data);
-            if (PMIX_SUCCESS != prc) {
-                PMIX_ERROR_LOG(prc);
-                PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                goto DONE;
-            }
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
+            pbo.bytes = data.base_ptr;
+            pbo.size = data.bytes_used;
+            data.base_ptr = NULL;
+            data.bytes_used = 0;
         }
+        PMIX_DATA_BUFFER_DESTRUCT(&data);
+        prc = PMIx_Data_pack(NULL, &buffer, &compressed, 1, PMIX_BOOL);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_ERROR_LOG(prc);
+            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            goto DONE;
+        }
+        /* pack the data */
+        prc = PMIx_Data_pack(NULL, &buffer, &pbo, 1, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_ERROR_LOG(prc);
+            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            goto DONE;
+        }
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
     }
 
     /* collect our network inventory */

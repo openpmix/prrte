@@ -32,7 +32,6 @@
  */
 #include "prte_config.h"
 
-#include "src/mca/prtecompress/prtecompress.h"
 #include "src/util/proc_info.h"
 #include "src/util/error_strings.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -60,7 +59,7 @@ typedef struct {
     prte_object_t super;
     prte_event_t ev;
     prte_grpcomm_signature_t *sig;
-    pmix_data_buffer_t *buf;
+    pmix_data_buffer_t buf;
     int mode;
     prte_grpcomm_cbfunc_t cbfunc;
     void *cbdata;
@@ -68,16 +67,14 @@ typedef struct {
 static void gccon(prte_grpcomm_caddy_t *p)
 {
     p->sig = NULL;
-    p->buf = NULL;
+    PMIX_DATA_BUFFER_CONSTRUCT(&p->buf);
     p->mode = 0;
     p->cbfunc = NULL;
     p->cbdata = NULL;
 }
 static void gcdes(prte_grpcomm_caddy_t *p)
 {
-    if (NULL != p->buf) {
-        PMIX_DATA_BUFFER_RELEASE(p->buf);
-    }
+    PMIX_DATA_BUFFER_DESTRUCT(&p->buf);
 }
 static PRTE_CLASS_INSTANCE(prte_grpcomm_caddy_t,
                           prte_object_t,
@@ -241,7 +238,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
     /* cycle thru the actives and see who can process it */
     PRTE_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t) {
         if (NULL != active->module->allgather) {
-            if (PRTE_SUCCESS == active->module->allgather(coll, cd->buf, cd->mode)) {
+            if (PRTE_SUCCESS == active->module->allgather(coll, &cd->buf, cd->mode)) {
                 break;
             }
         }
@@ -269,7 +266,7 @@ int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig,
     cd->sig->sz = sig->sz;
     cd->sig->signature = (pmix_proc_t*)malloc(cd->sig->sz * sizeof(pmix_proc_t));
     memcpy(cd->sig->signature, sig->signature, cd->sig->sz * sizeof(pmix_proc_t));
-    rc = PMIx_Data_copy((void**)&cd->buf, buf, PMIX_BUFFER);
+    rc = PMIx_Data_copy_payload(&cd->buf, buf);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PRTE_RELEASE(cd);
@@ -381,9 +378,9 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
     int rc = PRTE_SUCCESS;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:base:create_dmns called with %s signature",
+                         "%s grpcomm:base:create_dmns called with %s signature size %"PRIsize_t"",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (NULL == sig->signature) ? "NULL" : "NON-NULL"));
+                         (NULL == sig->signature) ? "NULL" : "NON-NULL", sig->sz));
 
     /* if NULL == procs, or the target jobid is our own,
      * then all daemons are participating */
@@ -397,6 +394,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
     PRTE_CONSTRUCT(&ds, prte_list_t);
     for (n=0; n < sig->sz; n++) {
         if (NULL == (jdata = prte_get_job_data_object(sig->signature[n].nspace))) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             rc = PRTE_ERR_NOT_FOUND;
             break;
         }
@@ -408,6 +406,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
                 rc = PRTE_SUCCESS;
                 break;
             }
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             rc = PRTE_ERR_NOT_FOUND;
             break;
         }
@@ -422,6 +421,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
                     continue;
                 }
                 if (NULL == node->daemon) {
+                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                     rc = PRTE_ERR_NOT_FOUND;
                     goto done;
                 }
@@ -449,10 +449,12 @@ static int create_dmns(prte_grpcomm_signature_t *sig,
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 PRTE_NAME_PRINT(&sig->signature[n])));
             if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, sig->signature[n].rank))) {
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 rc = PRTE_ERR_NOT_FOUND;
                 goto done;
             }
             if (NULL == proc->node || NULL == proc->node->daemon) {
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 rc = PRTE_ERR_NOT_FOUND;
                 goto done;
             }
@@ -499,8 +501,8 @@ static int pack_xcast(prte_grpcomm_signature_t *sig,
     int rc;
     pmix_data_buffer_t data;
     bool compressed;
-    uint8_t *cmpdata;
-    size_t cmplen;
+    pmix_byte_object_t bo;
+    size_t sz;
 
     /* setup an intermediate buffer */
     PMIX_DATA_BUFFER_CONSTRUCT(&data);
@@ -538,57 +540,33 @@ static int pack_xcast(prte_grpcomm_signature_t *sig,
     }
 
     /* see if we want to compress this message */
-    if (prte_compress.compress_block((uint8_t*)data.base_ptr, data.bytes_used,
-                                     &cmpdata, &cmplen)) {
+    if (PMIx_Data_compress((uint8_t*)data.base_ptr, data.bytes_used,
+                           (uint8_t**)&bo.bytes, &sz)) {
         /* the data was compressed - mark that we compressed it */
         compressed = true;
-        rc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
-            free(cmpdata);
-            return rc;
-        }
-        /* pack the compressed length */
-        rc = PMIx_Data_pack(NULL, buffer, &cmplen, 1, PMIX_SIZE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
-            free(cmpdata);
-            return rc;
-        }
-        /* pack the uncompressed length */
-        rc = PMIx_Data_pack(NULL, buffer, &data.bytes_used, 1, PMIX_SIZE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
-            free(cmpdata);
-            return rc;
-        }
-        /* pack the compressed info */
-        rc = PMIx_Data_pack(NULL, buffer, cmpdata, cmplen, PMIX_UINT8);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
-            free(cmpdata);
-            return rc;
-        }
-        PMIX_DATA_BUFFER_DESTRUCT(&data);
-        free(cmpdata);
+        bo.size = sz;
     } else {
         /* mark that it was not compressed */
         compressed = false;
-        rc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
-            free(cmpdata);
-            return rc;
-        }
-        /* transfer the payload across */
-        rc = PMIx_Data_copy_payload(buffer, &data);
-        PMIX_DATA_BUFFER_DESTRUCT(&data);
+        bo.bytes = data.base_ptr;
+        bo.size = data.bytes_used;
+        data.base_ptr = NULL;
+        data.bytes_used = 0;
     }
+    PMIX_DATA_BUFFER_DESTRUCT(&data);
+    rc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+        return rc;
+    }
+    rc = PMIx_Data_pack(NULL, buffer, &bo, 1, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+        return rc;
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "MSG SIZE: %lu", buffer->bytes_used));

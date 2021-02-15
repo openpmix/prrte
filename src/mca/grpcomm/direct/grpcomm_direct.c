@@ -24,7 +24,6 @@
 
 #include "src/class/prte_list.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/prtecompress/prtecompress.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rml/base/base.h"
@@ -145,7 +144,7 @@ static int allgather(prte_grpcomm_coll_t *coll,
         PMIX_DATA_BUFFER_RELEASE(relay);
         return rc;
     }
-    rc = PMIx_Data_pack(NULL, relay, &coll->sig->signature, coll->sig->sz, PMIX_PROC);
+    rc = PMIx_Data_pack(NULL, relay, coll->sig->signature, coll->sig->sz, PMIX_PROC);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
@@ -365,9 +364,7 @@ static void xcast_recv(int status, pmix_proc_t* sender,
     prte_list_t coll;
     prte_grpcomm_signature_t sig;
     prte_rml_tag_t tag;
-    size_t inlen, cmplen;
-    uint8_t *packed_data, *cmpdata;
-    pmix_byte_object_t bo;
+    pmix_byte_object_t bo, pbo;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct:xcast:recv: with %d bytes",
@@ -398,66 +395,52 @@ static void xcast_recv(int status, pmix_proc_t* sender,
         PMIX_DATA_BUFFER_RELEASE(rly);
         return;
     }
+    /* unpack the data blob */
+    cnt = 1;
+    ret = PMIx_Data_unpack(NULL, buffer, &pbo, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PRTE_FORCED_TERMINATE(ret);
+        PRTE_DESTRUCT(&coll);
+        PMIX_DATA_BUFFER_RELEASE(rly);
+        return;
+    }
     if (compressed) {
-        /* unpack the data size */
-        cnt=1;
-        ret = PMIx_Data_unpack(NULL, buffer, &inlen, &cnt, PMIX_SIZE);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PRTE_FORCED_TERMINATE(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-            PRTE_DESTRUCT(&coll);
-            PMIX_DATA_BUFFER_RELEASE(rly);
-            return;
-        }
-        /* unpack the unpacked data size */
-        cnt=1;
-        ret = PMIx_Data_unpack(NULL, buffer, &cmplen, &cnt, PMIX_SIZE);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PRTE_FORCED_TERMINATE(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-            PRTE_DESTRUCT(&coll);
-            PMIX_DATA_BUFFER_RELEASE(rly);
-            return;
-        }
-        /* allocate the space */
-        packed_data = (uint8_t*)malloc(inlen);
-        /* unpack the data blob */
-        cnt = inlen;
-        ret = PMIx_Data_unpack(NULL, buffer, packed_data, &cnt, PMIX_UINT8);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            free(packed_data);
-            PRTE_FORCED_TERMINATE(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-            PRTE_DESTRUCT(&coll);
-            PMIX_DATA_BUFFER_RELEASE(rly);
-            return;
-        }
         /* decompress the data */
-        if (prte_compress.decompress_block(&cmpdata, cmplen,
-                                       packed_data, inlen)) {
+        if (PMIx_Data_decompress((uint8_t**)&bo.bytes, &bo.size,
+                                (uint8_t*)pbo.bytes, pbo.size)) {
             /* the data has been uncompressed */
-            bo.bytes = (char*)cmpdata;
-            bo.size = cmplen;
             ret = PMIx_Data_load(&datbuf, &bo);
             if (PMIX_SUCCESS != ret) {
-                free(packed_data);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 PRTE_FORCED_TERMINATE(ret);
                 PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
                 PRTE_DESTRUCT(&coll);
                 PMIX_DATA_BUFFER_RELEASE(rly);
                 return;
             }
-            data = &datbuf;
         } else {
-            data = buffer;
+            PMIX_ERROR_LOG(PMIX_ERROR);
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            PRTE_FORCED_TERMINATE(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+            PRTE_DESTRUCT(&coll);
+            PMIX_DATA_BUFFER_RELEASE(rly);
+            return;
         }
-        free(packed_data);
     } else {
-        data = buffer;
+        ret = PMIx_Data_load(&datbuf, &pbo);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            PRTE_FORCED_TERMINATE(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+            PRTE_DESTRUCT(&coll);
+            PMIX_DATA_BUFFER_RELEASE(rly);
+            return;
+        }
     }
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+    data = &datbuf;
 
     /* get the signature that we do not need */
     cnt=1;

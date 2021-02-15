@@ -44,7 +44,6 @@
 #include "src/class/prte_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/prtecompress/prtecompress.h"
 
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/nidmap.h"
@@ -529,12 +528,12 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     /* if we don't want to launch the apps, now is the time to leave */
     if (prte_do_not_launch) {
         bool compressed;
-        uint8_t *cmpdata;
+        uint8_t *cmpdata = NULL;
         size_t cmplen;
         /* report the size of the launch message */
-        compressed = prte_compress.compress_block((uint8_t*)jdata->launch_msg.base_ptr,
-                                                  jdata->launch_msg.bytes_used,
-                                                  &cmpdata, &cmplen);
+        compressed = PMIx_Data_compress((uint8_t*)jdata->launch_msg.base_ptr,
+                                        jdata->launch_msg.bytes_used,
+                                        &cmpdata, &cmplen);
         if (compressed) {
             prte_output(0, "LAUNCH MSG RAW SIZE: %d COMPRESSED SIZE: %d",
                         (int)jdata->launch_msg.bytes_used, (int)cmplen);
@@ -545,6 +544,9 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
         prte_never_launched = true;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALL_JOBS_COMPLETE);
         PRTE_RELEASE(caddy);
+        if (NULL != cmpdata) {
+            free(cmpdata);
+        }
         return;
     }
 
@@ -1019,10 +1021,8 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t* sender,
     uint32_t h;
     prte_job_t *jdata;
     uint8_t flag;
-    size_t inlen;
-    uint8_t *packed_data;
     pmix_data_buffer_t datbuf, *data;
-    pmix_byte_object_t bo;
+    pmix_byte_object_t bo, pbo;
     pmix_topology_t ptopo;
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
@@ -1048,46 +1048,33 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t* sender,
         prted_failed_launch = true;
         goto CLEANUP;
     }
+    /* unpack the data */
+    idx = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &pbo, &idx, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        prted_failed_launch = true;
+        goto CLEANUP;
+    }
+    /* if compressed, decompress it */
     if (flag) {
-        /* unpack the data size */
-        idx=1;
-        rc = PMIx_Data_unpack(NULL, buffer, &inlen, &idx, PMIX_SIZE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-             prted_failed_launch = true;
-            goto CLEANUP;
-        }
-        /* unpack the unpacked data size */
-        idx=1;
-        rc = PMIx_Data_unpack(NULL, buffer, &bo.size, &idx, PMIX_SIZE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            prted_failed_launch = true;
-            goto CLEANUP;
-        }
-        /* allocate the space */
-        packed_data = (uint8_t*)malloc(inlen);
-        /* unpack the data blob */
-        idx = inlen;
-        rc = PMIx_Data_unpack(NULL, buffer, packed_data, &idx, PMIX_UINT8);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            prted_failed_launch = true;
-            goto CLEANUP;
-        }
         /* decompress the data */
-        if (prte_compress.decompress_block((uint8_t**)&bo.bytes, bo.size,
-                                           packed_data, inlen)) {
+        if (PMIx_Data_decompress((uint8_t**)&bo.bytes, &bo.size,
+                                 (uint8_t*)pbo.bytes, pbo.size)) {
             /* the data has been uncompressed */
             rc = PMIx_Data_load(&datbuf, &bo);
-            data = &datbuf;
+            PMIX_BYTE_OBJECT_DESTRUCT(&bo);
         } else {
-            data = buffer;
+            PMIX_ERROR_LOG(PMIX_ERROR);
+            prted_failed_launch = true;
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            goto CLEANUP;
         }
-        free(packed_data);
     } else {
-        data = buffer;
+        rc = PMIx_Data_load(&datbuf, &pbo);
     }
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+    data = &datbuf;
 
     /* unpack the topology signature for this node */
     idx=1;
@@ -1259,6 +1246,15 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
     uint8_t naliases, ni;
     hwloc_obj_t root;
     prte_hwloc_topo_data_t *sum;
+    char *nodename = NULL;
+    pmix_info_t *info;
+    size_t n, ninfo;
+    pmix_byte_object_t pbo, bo;
+    pmix_data_buffer_t pbuf;
+    int32_t flag;
+    bool compressed;
+    pmix_data_buffer_t datbuf, *data;
+    pmix_topology_t ptopo;
 
     /* get the daemon job, if necessary */
     if (NULL == jdatorted) {
@@ -1278,12 +1274,6 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
     /* multiple daemons could be in this buffer, so unpack until we exhaust the data */
     idx = 1;
     while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, buffer, &dname, &idx, PMIX_PROC))) {
-        char *nodename = NULL;
-        pmix_info_t *info;
-        size_t n, ninfo;
-        pmix_byte_object_t pbo;
-        pmix_data_buffer_t pbuf;
-        int32_t flag;
 
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:orted_report_launch from daemon %s",
@@ -1437,13 +1427,6 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
         /* rank=1 always sends its topology back */
         topo = NULL;
         if (1 == dname.rank) {
-            bool compressed;
-            size_t inlen;
-            uint8_t *packed_data;
-            pmix_data_buffer_t datbuf, *data;
-            pmix_byte_object_t bo;
-            pmix_topology_t ptopo;
-
             PMIX_DATA_BUFFER_CONSTRUCT(&datbuf);
             /* unpack the flag to see if this payload is compressed */
             idx=1;
@@ -1453,51 +1436,46 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
+            /* unpack the data */
+            idx=1;
+            ret = PMIx_Data_unpack(NULL, buffer, &pbo, &idx, PMIX_BYTE_OBJECT);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                prted_failed_launch = true;
+                goto CLEANUP;
+            }
             if (compressed) {
-                /* unpack the data size */
-                idx=1;
-                ret = PMIx_Data_unpack(NULL, buffer, &inlen, &idx, PMIX_SIZE);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    prted_failed_launch = true;
-                    goto CLEANUP;
-                }
-                /* unpack the unpacked data size */
-                idx=1;
-                ret = PMIx_Data_unpack(NULL, buffer, &bo.size, &idx, PMIX_SIZE);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    prted_failed_launch = true;
-                    goto CLEANUP;
-                }
-                /* allocate the space */
-                packed_data = (uint8_t*)malloc(inlen);
-                /* unpack the data blob */
-                idx = inlen;
-                ret = PMIx_Data_unpack(NULL, buffer, packed_data, &idx, PMIX_UINT8);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    prted_failed_launch = true;
-                    goto CLEANUP;
-                }
                 /* decompress the data */
-                if (prte_compress.decompress_block((uint8_t**)&bo.bytes, bo.size,
-                                                   packed_data, inlen)) {
+                if (PMIx_Data_decompress((uint8_t**)&bo.bytes, &bo.size,
+                                         (uint8_t*)pbo.bytes, pbo.size)) {
                     /* the data has been uncompressed */
                     ret = PMIx_Data_load(&datbuf, &bo);
+                    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
                     if (PMIX_SUCCESS != ret) {
                         PMIX_ERROR_LOG(ret);
                         prted_failed_launch = true;
+                        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                         goto CLEANUP;
                     }
-                    data = &datbuf;
                 } else {
-                    data = buffer;
+                    PMIX_ERROR_LOG(PMIX_ERROR);
+                    prted_failed_launch = true;
+                    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+                    goto CLEANUP;
                 }
-                free(packed_data);
             } else {
-                data = buffer;
+                ret = PMIx_Data_load(&datbuf, &pbo);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    prted_failed_launch = true;
+                    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                    goto CLEANUP;
+                }
             }
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            data = &datbuf;
+
             /* unpack the available topology information */
             idx=1;
             ret = PMIx_Data_unpack(NULL, data, &ptopo, &idx, PMIX_TOPO);
@@ -1515,6 +1493,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
             root->userdata = (void*)PRTE_NEW(prte_hwloc_topo_data_t);
             sum = (prte_hwloc_topo_data_t*)root->userdata;
             sum->available = prte_hwloc_base_setup_summary(topo);
+            /* cleanup */
+            PMIX_DATA_BUFFER_DESTRUCT(data);
         }
 
         /* see if they provided their inventory */

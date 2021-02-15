@@ -51,8 +51,8 @@ int prte_job_unpack(pmix_data_buffer_t *bkt,
     prte_app_idx_t j;
     prte_attribute_t *kv;
     char *tmp;
-    prte_value_t *val;
-    pmix_value_t *pval;
+    prte_info_item_t *val;
+    pmix_info_t pval;
     prte_list_t *cache;
 
     /* create the prte_job_t object */
@@ -121,21 +121,15 @@ int prte_job_unpack(pmix_data_buffer_t *bkt,
         prte_set_attribute(&jptr->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void*)cache, PMIX_POINTER);
         for (k=0; k < count; k++) {
             n=1;
-            rc = PMIx_Data_unpack(NULL, bkt, &pval, &n, PMIX_VALUE);
+            rc = PMIx_Data_unpack(NULL, bkt, &pval, &n, PMIX_INFO);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PRTE_RELEASE(jptr);
                 return prte_pmix_convert_status(rc);
             }
-            val = PRTE_NEW(prte_value_t);
-            PMIX_VALUE_XFER_DIRECT(rc, &val->value, pval);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PRTE_RELEASE(jptr);
-                PMIX_VALUE_RELEASE(pval);
-                return prte_pmix_convert_status(rc);
-            }
-            PMIX_VALUE_RELEASE(pval);
+            val = PRTE_NEW(prte_info_item_t);
+            PMIX_INFO_XFER(&val->info, &pval);
+            PMIX_INFO_DESTRUCT(&pval);
             prte_list_append(cache, &val->super);
         }
     }

@@ -54,7 +54,6 @@
 #include "src/util/prte_environ.h"
 #include "src/util/path.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/prtecompress/prtecompress.h"
 #include "src/prted/pmix/pmix_server.h"
 
 #include "src/util/proc_info.h"
@@ -674,67 +673,35 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
             free(coprocessors);
         }
         PMIX_DATA_BUFFER_CREATE(answer);
-        if (prte_compress.compress_block((uint8_t*)data.base_ptr, data.bytes_used,
-                                         (uint8_t**)&pbo.bytes, &pbo.size)) {
+        if (PMIx_Data_compress((uint8_t*)data.base_ptr, data.bytes_used,
+                               (uint8_t**)&pbo.bytes, &pbo.size)) {
             /* the data was compressed - mark that we compressed it */
             compressed = true;
-            ret = PMIx_Data_pack(NULL, answer, &compressed, 1, PMIX_BOOL);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                PMIX_DATA_BUFFER_RELEASE(answer);
-                goto CLEANUP;
-            }
-            /* pack the compressed length */
-            ret = PMIx_Data_pack(NULL, answer, &pbo.size, 1, PMIX_SIZE);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                PMIX_DATA_BUFFER_RELEASE(answer);
-                goto CLEANUP;
-            }
-            /* pack the uncompressed length */
-            ret = PMIx_Data_pack(NULL, answer, &data.bytes_used, 1, PMIX_SIZE);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                PMIX_DATA_BUFFER_RELEASE(answer);
-                goto CLEANUP;
-            }
-            /* pack the compressed info */
-            ret = PMIx_Data_pack(NULL, answer, pbo.bytes, pbo.size, PMIX_UINT8);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                PMIX_DATA_BUFFER_RELEASE(answer);
-                goto CLEANUP;
-            }
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
-            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
         } else {
             /* mark that it was not compressed */
             compressed = false;
-            ret = PMIx_Data_pack(NULL, answer, &compressed, 1, PMIX_BOOL);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                PMIX_DATA_BUFFER_RELEASE(answer);
-                goto CLEANUP;
-            }
-            /* transfer the payload across */
-            ret = PMIx_Data_copy_payload(answer, &data);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_DATA_BUFFER_DESTRUCT(&data);
-                PMIX_DATA_BUFFER_RELEASE(answer);
-                goto CLEANUP;
-            }
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
+            pbo.bytes = data.base_ptr;
+            pbo.size = data.bytes_used;
+            data.base_ptr = NULL;
+            data.bytes_used = 0;
         }
+        PMIX_DATA_BUFFER_DESTRUCT(&data);
+        ret = PMIx_Data_pack(NULL, answer, &compressed, 1, PMIX_BOOL);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            PMIX_DATA_BUFFER_RELEASE(answer);
+            goto CLEANUP;
+        }
+        /* pack the payload */
+        ret = PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            PMIX_DATA_BUFFER_RELEASE(answer);
+            goto CLEANUP;
+        }
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
         /* send the data */
         if (0 > (ret = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_TOPOLOGY_REPORT,
                                                prte_rml_send_callback, NULL))) {

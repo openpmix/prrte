@@ -173,7 +173,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
     size_t inlen, cmplen;
     uint8_t *packed_data, *cmpdata;
     int8_t flag;
-    pmix_byte_object_t bo;
+    pmix_byte_object_t bo, pbo;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:bmg:rbcast:recv: with %d bytes",
@@ -201,67 +201,53 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
         PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
         return;
      }
+    /* unpack the data blob */
+    cnt = 1;
+    ret = PMIx_Data_unpack(NULL, buffer, &pbo, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PRTE_FORCED_TERMINATE(ret);
+        PRTE_DESTRUCT(&coll);
+        PMIX_DATA_BUFFER_RELEASE(rly);
+        return;
+    }
     if (flag) {
-        /* unpack the data size */
-        cnt=1;
-        ret = PMIx_Data_unpack(NULL, buffer, &inlen, &cnt, PMIX_SIZE);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_RELEASE(rly);
-            PMIX_DATA_BUFFER_RELEASE(relay);
-            PRTE_FORCED_TERMINATE(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-            return;
-        }
-
-        /* unpack the unpacked data size */
-        cnt=1;
-        ret = PMIx_Data_unpack(NULL, buffer, &cmplen, &cnt, PMIX_SIZE);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_RELEASE(rly);
-            PMIX_DATA_BUFFER_RELEASE(relay);
-            PRTE_FORCED_TERMINATE(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-            return;
-        }
-        /* allocate the space */
-        packed_data = (uint8_t*)malloc(inlen);
-        /* unpack the data blob */
-        cnt = inlen;
-        ret = PMIx_Data_unpack(NULL, buffer, packed_data, &cnt, PMIX_UINT8);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_RELEASE(rly);
-            PMIX_DATA_BUFFER_RELEASE(relay);
-            PRTE_FORCED_TERMINATE(ret);
-            free(packed_data);
-            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-            return;
-        }
         /* decompress the data */
-        if (prte_compress.decompress_block(&cmpdata, cmplen,packed_data, inlen)) {
+        if (PMIx_Data_decompress((uint8_t**)&bo.bytes, &bo.size,
+                                 (uint8_t*)pbo.bytes, pbo.size)) {
             /* the data has been uncompressed */
-            bo.bytes = (char*)cmpdata;
-            bo.size = cmplen;
             ret = PMIx_Data_load(&datbuf, &bo);
             if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_DATA_BUFFER_RELEASE(rly);
-                PMIX_DATA_BUFFER_RELEASE(relay);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 PRTE_FORCED_TERMINATE(ret);
-                free(packed_data);
                 PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+                PRTE_DESTRUCT(&coll);
+                PMIX_DATA_BUFFER_RELEASE(rly);
                 return;
             }
-            data = &datbuf;
         } else {
-            data = buffer;
+            PMIX_ERROR_LOG(PMIX_ERROR);
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            PRTE_FORCED_TERMINATE(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+            PRTE_DESTRUCT(&coll);
+            PMIX_DATA_BUFFER_RELEASE(rly);
+            return;
         }
-        free(packed_data);
     } else {
-        data = buffer;
+        ret = PMIx_Data_load(&datbuf, &pbo);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            PRTE_FORCED_TERMINATE(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+            PRTE_DESTRUCT(&coll);
+            PMIX_DATA_BUFFER_RELEASE(rly);
+            return;
+        }
     }
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+    data = &datbuf;
+
     /* get the signature that we need to create the dmns*/
     cnt=1;
     ret = PMIx_Data_unpack(NULL, data, &sig.sz, &cnt, PMIX_SIZE);
