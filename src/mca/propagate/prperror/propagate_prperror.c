@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The University of Tennessee and The University
+ * Copyright (c) 2017-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
@@ -278,6 +278,7 @@ static int prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sourc
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(&prperror_buffer, &pptr->name, 1, PRTE_NAME))) {
                     PRTE_ERROR_LOG(rc);
                     PRTE_DESTRUCT(&prperror_buffer);
+                    PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
                 PRTE_PMIX_CONVERT_NAME(rc, &pname, &pptr->name);
@@ -409,13 +410,14 @@ static int _prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sour
     pmix_proc_t pname;
     pmix_info_t *pinfo;
     int ret;
-    int cnt=1;
+    int cnt=1, pcnt=1;
     int num_affected = 0;
     if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &num_affected, &cnt, PRTE_INT))) {
         PRTE_ERROR_LOG(ret);
         return false;
     }
-    PMIX_INFO_CREATE(pinfo, 1+num_affected);
+    pcnt = 1+num_affected;
+    PMIX_INFO_CREATE(pinfo, pcnt);
 
     PRTE_PMIX_CONVERT_NAME(rc, &pname, errorproc);
     PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC );
@@ -426,6 +428,7 @@ static int _prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sour
     {
         if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &ename, &cnt, PRTE_NAME))) {
             PRTE_ERROR_LOG(rc);
+            PMIX_INFO_FREE(pinfo, pcnt);
             return rc;
         }
         PRTE_PMIX_CONVERT_NAME(rc, &pname, &ename);
@@ -436,7 +439,7 @@ static int _prte_propagate_prperror(prte_jobid_t *job, prte_process_name_t *sour
         if (PRTE_SUCCESS != PMIx_Notify_event(prte_pmix_convert_rc(state), NULL,
                     PMIX_RANGE_LOCAL, pinfo, num_affected+1,
                     NULL,NULL )) {
-            PRTE_RELEASE(pinfo);
+            PMIX_INFO_FREE(pinfo, pcnt);
         }
     }
     return rc;
