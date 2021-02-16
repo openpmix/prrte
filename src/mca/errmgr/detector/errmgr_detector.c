@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018 The University of Tennessee and The University
+ * Copyright (c) 2016-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
@@ -163,33 +163,45 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
             if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
                 PRTE_PMIX_CONVERT_PROCT(rc, &proc, info[n].value.data.proc);
 
-                if( prte_get_proc_daemon_vpid(&proc) != PRTE_PROC_MY_NAME->vpid){
-                    return;
-                }
                 PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                             "%s errmgr: detector: error proc %s with key-value %s notified from %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc),
                             info[n].key, PRTE_NAME_PRINT(&source)));
+
+                if( prte_get_proc_daemon_vpid(&proc) != PRTE_PROC_MY_NAME->vpid){
+                    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+                                "%s errmgr:detector:error_notify_callback vpid mismatch - ignoring error",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    continue;
+                }
 
                 if (NULL == (jdata = prte_get_job_data_object(proc.jobid))) {
                     /* must already be complete */
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                 "%s errmgr:detector:error_notify_callback NULL jdata - ignoring error",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    continue;
                 }
-                temp_prte_proc= (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc.vpid);
+                if (NULL == (temp_prte_proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc.vpid))) {
+                    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+                                "%s errmgr:detector:error_notify_callback NULL jdata->procs - ignoring error",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    continue;
+                }
 
                 alert = PRTE_NEW(prte_buffer_t);
                 /* pack update state command */
                 cmd = PRTE_PLM_UPDATE_PROC_STATE;
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &cmd, 1, PRTE_PLM_CMD))) {
                     PRTE_ERROR_LOG(rc);
+                    PRTE_RELEASE(alert);
                     return;
                 }
 
                 /* pack jobid */
                 if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &proc.jobid, 1, PRTE_JOBID))) {
                     PRTE_ERROR_LOG(rc);
+                    PRTE_RELEASE(alert);
                     return;
                 }
 
@@ -198,6 +210,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
                 /* now pack the child's info */
                 if (PRTE_SUCCESS != (rc = pack_state_for_proc(alert, temp_prte_proc))) {
                     PRTE_ERROR_LOG(rc);
+                    PRTE_RELEASE(alert);
                     return;
                 }
 
