@@ -168,9 +168,6 @@ static prte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "launch-agent", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Name of daemon executable used to start processes on remote nodes (default: prted)",
       PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "report-pid", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Printout pid on stdout [-], stderr [+], or a file [anything else]",
-      PRTE_CMD_LINE_OTYPE_DVM },
     { '\0', "report-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Printout URI on stdout [-], stderr [+], or a file [anything else]",
       PRTE_CMD_LINE_OTYPE_DVM },
@@ -277,10 +274,6 @@ static prte_cmd_line_init_t cmd_line_init[] = {
 
 
     /* Launch options */
-    /* request that argv[0] be indexed */
-    { '\0', "index-argv-by-rank", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Uniquely index argv[0] for each process using its rank",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
     /* Preload the binary on the remote machine */
     { 's', "preload-binary", 0, PRTE_CMD_LINE_TYPE_BOOL,
       "Preload the binary on the remote machine before starting the remote process.",
@@ -316,9 +309,6 @@ static prte_cmd_line_init_t cmd_line_init[] = {
 
 
     /* Developer options */
-    { '\0', "do-not-resolve", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Do not attempt to resolve interfaces - usually used to determine proposed process placement/binding prior to obtaining an allocation",
-      PRTE_CMD_LINE_OTYPE_DEVEL },
     { '\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
       "Perform all necessary operations to prepare to launch the application, but do not actually launch it (usually used to test mapping patterns)",
       PRTE_CMD_LINE_OTYPE_DEVEL },
@@ -935,11 +925,6 @@ int main(int argc, char *argv[])
     /* check what user wants us to do with stdin */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "stdin", 0, 0))) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, pval->value.data.string, PMIX_STRING);
-    }
-
-    /* if we want the argv's indexed, indicate that */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "index-argv-by-rank")) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_INDEX_ARGV, NULL, PMIX_BOOL);
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
