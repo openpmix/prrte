@@ -191,7 +191,7 @@ void prte_data_server(int status, pmix_proc_t* sender,
     uint8_t command;
     int32_t count;
     prte_data_object_t *data;
-    pmix_byte_object_t bo, *boptr;
+    pmix_byte_object_t bo;
     pmix_data_buffer_t *answer, *reply;
     int rc, k;
     uint32_t ninfo, i;
@@ -247,29 +247,14 @@ void prte_data_server(int status, pmix_proc_t* sender,
         return;
     }
 
-    /* unpack the byte object payload */
-    count = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &boptr, &count, PMIX_BYTE_OBJECT);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        goto SEND_ERROR;
-    }
-
-    /* load it into a pmix data buffer for processing */
-    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-    rc = PMIx_Data_load(&pbkt, boptr);
-    boptr->bytes = NULL;
-    free(boptr);
-
     switch(command) {
     case PRTE_PMIX_PUBLISH_CMD:
         data = PRTE_NEW(prte_data_object_t);
 
         /* unpack the publisher */
         count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &data->owner, &count, PMIX_PROC))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &data->owner, &count, PMIX_PROC))) {
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             PRTE_RELEASE(data);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
@@ -282,9 +267,8 @@ void prte_data_server(int status, pmix_proc_t* sender,
 
         /* unpack the number of infos they published */
         count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &data->ninfo, &count, PMIX_SIZE))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &data->ninfo, &count, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             PRTE_RELEASE(data);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
@@ -294,7 +278,6 @@ void prte_data_server(int status, pmix_proc_t* sender,
         if (1 > data->ninfo) {
             ret = PMIX_ERR_BAD_PARAM;
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             PRTE_RELEASE(data);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
@@ -305,14 +288,12 @@ void prte_data_server(int status, pmix_proc_t* sender,
 
         /* unpack into it */
         count = data->ninfo;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, data->info, &count, PMIX_INFO))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, data->info, &count, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             PRTE_RELEASE(data);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
-        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
         /* check for directives */
         for (n=0; n < data->ninfo; n++) {
@@ -443,12 +424,11 @@ void prte_data_server(int status, pmix_proc_t* sender,
 
                 /* pack it into our reply */
                 rc = PMIx_Data_pack(NULL, reply, &pbo, 1, PMIX_BYTE_OBJECT);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
-                    free(bo.bytes);
                     goto SEND_ERROR;
                 }
-                free(bo.bytes);
                 if (0 > (rc = prte_rml.send_buffer_nb(&req->proxy, reply, PRTE_RML_TAG_DATA_CLIENT,
                                                       prte_rml_send_callback, NULL))) {
                     PRTE_ERROR_LOG(rc);
@@ -459,7 +439,7 @@ void prte_data_server(int status, pmix_proc_t* sender,
 
         /* tell the user it was wonderful... */
         rc = PRTE_SUCCESS;
-        rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_STATUS);
+        rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_INT);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
@@ -473,18 +453,16 @@ void prte_data_server(int status, pmix_proc_t* sender,
 
         /* unpack the requestor */
         count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &requestor, &count, PMIX_PROC))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &requestor, &count, PMIX_PROC))) {
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
 
         /* unpack the number of keys */
         count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &ninfo, &count, PMIX_SIZE))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &ninfo, &count, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
@@ -492,16 +470,14 @@ void prte_data_server(int status, pmix_proc_t* sender,
             /* they forgot to send us the keys?? */
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             rc = PRTE_ERR_BAD_PARAM;
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             goto SEND_ERROR;
         }
 
         /* unpack the keys */
         for (n=0; n < ninfo; n++) {
             count = 1;
-            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &str, &count, PMIX_STRING))) {
+            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &str, &count, PMIX_STRING))) {
                 PMIX_ERROR_LOG(ret);
-                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 rc = PRTE_ERR_UNPACK_FAILURE;
                 prte_argv_free(keys);
                 goto SEND_ERROR;
@@ -512,18 +488,16 @@ void prte_data_server(int status, pmix_proc_t* sender,
 
         /* unpack the number of directives, if any */
         count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &ninfo, &count, PMIX_SIZE))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &ninfo, &count, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
         if (0 < ninfo) {
             PMIX_INFO_CREATE(info, ninfo);
             count = ninfo;
-            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, info, &count, PMIX_INFO))) {
+            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, info, &count, PMIX_INFO))) {
                 PMIX_ERROR_LOG(ret);
-                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 PMIX_INFO_FREE(info, ninfo);
                 rc = PRTE_ERR_UNPACK_FAILURE;
                 goto SEND_ERROR;
@@ -542,7 +516,6 @@ void prte_data_server(int status, pmix_proc_t* sender,
             /* ignore anything else for now */
             PMIX_INFO_FREE(info, ninfo);
         }
-        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
         /* cycle across the provided keys */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
@@ -693,23 +666,22 @@ void prte_data_server(int status, pmix_proc_t* sender,
         rc = PMIx_Data_unload(&pbkt, &pbo);
 
         /* pack it into our reply */
-        rc = PMIx_Data_pack(NULL, answer, &bo, 1, PMIX_BYTE_OBJECT);
+        rc = PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT);
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(answer);
             free(bo.bytes);
             goto SEND_ERROR;
         }
-        free(bo.bytes);
 
         goto SEND_ANSWER;
 
     case PRTE_PMIX_UNPUBLISH_CMD:
         /* unpack the requestor */
         count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &requestor, &count, PMIX_PROC))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &requestor, &count, PMIX_PROC))) {
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
@@ -721,9 +693,8 @@ void prte_data_server(int status, pmix_proc_t* sender,
 
         /* unpack the number of keys */
         count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &ninfo, &count, PMIX_SIZE))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &ninfo, &count, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
@@ -731,16 +702,14 @@ void prte_data_server(int status, pmix_proc_t* sender,
             /* they forgot to send us the keys?? */
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             rc = PRTE_ERR_BAD_PARAM;
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             goto SEND_ERROR;
         }
 
         /* unpack the keys */
         for (n=0; n < ninfo; n++) {
             count = 1;
-            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &str, &count, PMIX_STRING))) {
+            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &str, &count, PMIX_STRING))) {
                 PMIX_ERROR_LOG(ret);
-                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 rc = PRTE_ERR_UNPACK_FAILURE;
                 prte_argv_free(keys);
                 goto SEND_ERROR;
@@ -752,18 +721,16 @@ void prte_data_server(int status, pmix_proc_t* sender,
         /* unpack the number of directives, if any */
         range = PMIX_RANGE_SESSION;  // default
         count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &ninfo, &count, PMIX_SIZE))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &ninfo, &count, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
         if (0 < ninfo) {
             PMIX_INFO_CREATE(info, ninfo);
             count = ninfo;
-            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, info, &count, PMIX_INFO))) {
+            if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, info, &count, PMIX_INFO))) {
                 PMIX_ERROR_LOG(ret);
-                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 PMIX_INFO_FREE(info, ninfo);
                 rc = PRTE_ERR_UNPACK_FAILURE;
                 goto SEND_ERROR;
@@ -779,7 +746,6 @@ void prte_data_server(int status, pmix_proc_t* sender,
             /* ignore anything else for now */
             PMIX_INFO_FREE(info, ninfo);
         }
-        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
         /* cycle across the provided keys */
         for (i=0; NULL != keys[i]; i++) {
@@ -837,13 +803,11 @@ void prte_data_server(int status, pmix_proc_t* sender,
          * data is purged by providing a requestor whose rank
          * is wildcard */
         count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, &pbkt, &requestor, &count, PMIX_PROC))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &requestor, &count, PMIX_PROC))) {
             PMIX_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
-        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 
         prte_output_verbose(1, prte_data_server_output,
                             "%s data server: purge data from %s:%d",
@@ -888,7 +852,7 @@ void prte_data_server(int status, pmix_proc_t* sender,
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_ERROR_NAME(rc));
     /* pack the error code */
-    rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_STATUS);
+    rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_INT);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
     }

@@ -361,11 +361,13 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys,
         return rc;
     }
 
-    /* pack the infos */
-    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
-        PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(req);
-        return rc;
+    if (0 < ninfo) {
+        /* pack the infos */
+        if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
+            PMIX_ERROR_LOG(rc);
+            PRTE_RELEASE(req);
+            return rc;
+        }
     }
 
     /* thread-shift so we can store the tracker */
@@ -440,12 +442,14 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
          return rc;
      }
 
-     /* pack the infos */
-     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
-         PMIX_ERROR_LOG(rc);
-         PRTE_RELEASE(req);
-         return rc;
-     }
+    if (0 < ninfo) {
+         /* pack the infos */
+         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_info_t*)info, ninfo, PMIX_INFO))) {
+             PMIX_ERROR_LOG(rc);
+             PRTE_RELEASE(req);
+             return rc;
+         }
+    }
 
     /* thread-shift so we can store the tracker */
     prte_event_set(prte_event_base, &(req->ev),
@@ -465,7 +469,7 @@ void pmix_server_keyval_client(int status, pmix_proc_t* sender,
     int rc, room_num = -1;
     int32_t cnt;
     pmix_server_req_t *req=NULL;
-    pmix_byte_object_t *boptr;
+    pmix_byte_object_t bo;
     pmix_data_buffer_t pbkt;
     pmix_status_t ret = PMIX_SUCCESS, rt = PMIX_SUCCESS;
     pmix_info_t info;
@@ -517,7 +521,7 @@ void pmix_server_keyval_client(int status, pmix_proc_t* sender,
 
     /* unpack the byte object payload */
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &boptr, &cnt, PMIX_BYTE_OBJECT);
+    rc = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
     /* there may not be anything returned here - e.g., a publish
      * command will not return any data if no matching pending
      * requests were found */
@@ -530,9 +534,9 @@ void pmix_server_keyval_client(int status, pmix_proc_t* sender,
 
     /* load it into a pmix data buffer for processing */
     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-    rc = PMIx_Data_load(&pbkt, boptr);
-    boptr->bytes = NULL;
-    PMIX_BYTE_OBJECT_FREE(boptr, 1);
+    rc = PMIx_Data_load(&pbkt, &bo);
+    bo.bytes = NULL;
+    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
 
     /* unpack the number of data items */
     cnt = 1;
