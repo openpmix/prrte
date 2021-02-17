@@ -169,7 +169,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc),
                                      info[n].key, PRTE_NAME_PRINT(source)));
 
-                if( prte_get_proc_daemon_vpid(&proc) != PRTE_PROC_MY_NAME->vpid){
+                if( prte_get_proc_daemon_vpid(&proc) != PRTE_PROC_MY_NAME->rank){
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                 "%s errmgr:detector:error_notify_callback vpid mismatch - ignoring error",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
