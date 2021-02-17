@@ -36,7 +36,6 @@ BEGIN_C_DECLS
  */
 
 typedef int32_t prte_exit_code_t;
-#define PRTE_EXIT_CODE_T PRTE_INT32
 
 /*
  * Process state codes
@@ -98,7 +97,6 @@ typedef int32_t prte_exit_code_t;
  * App_context state codes
  */
 typedef int32_t prte_app_state_t;
-#define PRTE_APP_STATE_T    PRTE_INT32
 
 #define PRTE_APP_STATE_UNDEF                0
 #define PRTE_APP_STATE_INIT                 1
@@ -111,7 +109,6 @@ typedef int32_t prte_app_state_t;
  */
 
 typedef int32_t prte_job_state_t;
-#define PRTE_JOB_STATE_T    PRTE_INT32
 #define PRTE_JOB_STATE_ANY  INT_MAX
 
 #define PRTE_JOB_STATE_UNDEF                     0
@@ -202,7 +199,6 @@ typedef int32_t prte_job_state_t;
  * space savings.
  */
 typedef int8_t prte_node_state_t;
-#define PRTE_NODE_STATE_T PRTE_INT8
 
 #define PRTE_NODE_STATE_UNDEF         0  // Node is undefined
 #define PRTE_NODE_STATE_UNKNOWN       1  // Node is defined but in an unknown state
@@ -223,7 +219,6 @@ typedef int8_t prte_node_state_t;
  * PLM commands
  */
 typedef uint8_t prte_plm_cmd_flag_t;
-#define PRTE_PLM_CMD    PRTE_UINT8
 #define PRTE_PLM_LAUNCH_JOB_CMD         1
 #define PRTE_PLM_UPDATE_PROC_STATE      2
 #define PRTE_PLM_REGISTERED_CMD         3

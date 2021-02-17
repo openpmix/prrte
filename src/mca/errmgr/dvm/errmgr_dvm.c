@@ -173,11 +173,12 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
                     return;
                 }
 
-                alert = PRTE_NEW(pmix_data_buffer_t);
+                PMIX_DATA_BUFFER_CREATE(alert);
                 /* pack update state command */
                 cmd = PRTE_PLM_UPDATE_PROC_STATE;
-                if (PRTE_SUCCESS != (prte_dss.pack(alert, &cmd, 1, PRTE_PLM_CMD))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_pack(NULL, alert, &cmd, 1, PMIX_UINT8);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
                     return;
                 }
 
