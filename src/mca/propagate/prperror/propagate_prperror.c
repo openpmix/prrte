@@ -25,7 +25,6 @@
 #include <pmix_server.h>
 
 #include "src/util/output.h"
-#include "src/dss/dss.h"
 
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -51,7 +50,6 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/prte_quit.h"
-#include "src/runtime/data_type_support/prte_dt_support.h"
 
 #include "src/mca/propagate/propagate.h"
 #include "src/mca/propagate/base/base.h"
@@ -203,23 +201,26 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
                 "propagate: prperror: daemon %s rbcast state %d of proc %s",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),state, PRTE_NAME_PRINT(errorproc)));
 
-    PRTE_CONSTRUCT(&prperror_buffer, pmix_data_buffer_t);
+    PMIX_DATA_BUFFER_CONSTRUCT(&prperror_buffer);
     /* pack the callback type */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(&prperror_buffer, &prte_propagate_error_cb_type, 1, PRTE_INT))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_DESTRUCT(&prperror_buffer);
+    rc = PMIx_Data_pack(NULL, &prperror_buffer, &prte_propagate_error_cb_type, 1, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
         return rc;
     }
     /* pack the status */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(&prperror_buffer, &status, 1, PRTE_INT))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_DESTRUCT(&prperror_buffer);
+    rc = PMIx_Data_pack(NULL, &prperror_buffer, &status, 1, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
         return rc;
     }
     /* pack dead proc first */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(&prperror_buffer, errorproc, 1, PRTE_NAME))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_DESTRUCT(&prperror_buffer);
+    rc = PMIx_Data_pack(NULL, &prperror_buffer, (void*)errorproc, 1, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
         return rc;
     }
     prte_node_t *node;
@@ -237,23 +238,25 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
         node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, errorproc->rank);
         if (NULL == node) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            PRTE_DESTRUCT(&prperror_buffer);
+            PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
             return PRTE_ERR_NOT_FOUND;
         }
 
         cnt=node->num_procs; //prte issue, num_procs value is not correct
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(&prperror_buffer, &cnt, 1, PRTE_INT))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_DESTRUCT(&prperror_buffer);
+        rc = PMIx_Data_pack(NULL, &prperror_buffer, &cnt, 1, PMIX_INT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
             return rc;
         }
         daemon_error_flag = true;
     }
     /* if process failure pack 0 affected for forwarding unpack*/
     else {
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(&prperror_buffer, &cnt, 1, PRTE_INT))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_DESTRUCT(&prperror_buffer);
+        rc = PMIx_Data_pack(NULL, &prperror_buffer, &cnt, 1, PMIX_INT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
             return rc;
         }
     }
@@ -277,26 +280,33 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
                                      " %d children are afftected  %s\n",
                                      cnt, PRTE_NAME_PRINT(&pptr->name)));
 
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(&prperror_buffer, &pptr->name, 1, PRTE_NAME))) {
-                    PRTE_ERROR_LOG(rc);
-                    PRTE_DESTRUCT(&prperror_buffer);
+                rc = PMIx_Data_pack(NULL, &prperror_buffer, &pptr->name, 1, PMIX_PROC);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
                     PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
                 PMIX_INFO_LOAD(&pinfo[i+1], PMIX_EVENT_AFFECTED_PROC, &pptr->name, PMIX_PROC );
 
-                alert = PRTE_NEW(pmix_data_buffer_t);
+                PMIX_DATA_BUFFER_CREATE(alert);
                 /* pack update state command */
                 cmd = PRTE_PLM_UPDATE_PROC_STATE;
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &cmd, 1, PRTE_PLM_CMD))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_pack(NULL, alert, &cmd, 1, PMIX_UINT8);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
                     PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
 
                 /* pack jobid */
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &(pptr->name.nspace), 1, PRTE_JOBID))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_pack(NULL, alert, &pptr->name.nspace, 1, PMIX_PROC_NSPACE);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
                     PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
@@ -304,26 +314,38 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
                 /* proc state now is PRTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this; code is 128+9 */
                 pptr->state = PRTE_PROC_STATE_ABORTED_BY_SIG;
                 /* pack the child's vpid */
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &(pptr->name.rank), 1, PRTE_VPID))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_pack(NULL, alert, &pptr->name.rank, 1, PMIX_PROC_RANK);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
                     PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
                 /* pack the pid */
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &pptr->pid, 1, PRTE_PID))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_pack(NULL, alert, &pptr->pid, 1, PMIX_PID);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
                     PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
                 /* pack its state */
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &pptr->state, 1, PRTE_PROC_STATE))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_pack(NULL, alert, &pptr->state, 1, PMIX_UINT32);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
                     PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
                 /* pack its exit code */
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(alert, &pptr->exit_code, 1, PRTE_EXIT_CODE))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_pack(NULL, alert, &pptr->exit_code, 1, PMIX_INT32);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
                     PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
@@ -337,7 +359,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
                                          "%s errmgr:detector: send to hnp failed",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                     PRTE_ERROR_LOG(rc);
-                    PRTE_RELEASE(alert);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
                 }
                 if (PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_IOF_COMPLETE) &&
                         PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_WAITPID) &&
@@ -406,10 +428,12 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source,
 
     pmix_info_t *pinfo;
     int ret;
-    int cnt=1, pcnt=1;
+    int cnt=1;
+    size_t pcnt=1;
     int num_affected = 0;
-    if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &num_affected, &cnt, PRTE_INT))) {
-        PRTE_ERROR_LOG(ret);
+    ret = PMIx_Data_unpack(NULL, buffer, &num_affected, &cnt, PMIX_INT);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         return false;
     }
     pcnt = 1+num_affected;
@@ -420,8 +444,9 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source,
     pmix_proc_t ename;
     int i=0;
     for (i =0; i <num_affected; i++) {
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &ename, &cnt, PRTE_NAME))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buffer, &ename, &cnt, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             PMIX_INFO_FREE(pinfo, pcnt);
             return rc;
         }
@@ -441,29 +466,36 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source,
 
 static int prte_propagate_prperror_recv(pmix_data_buffer_t* buffer)
 {
-    int ret, cnt, state;
+    int rc, cnt, state;
     pmix_proc_t errorproc;
     int cbtype;
 
     pmix_data_buffer_t rly;
-    PRTE_CONSTRUCT(&rly, pmix_data_buffer_t);
+    PMIX_DATA_BUFFER_CONSTRUCT(&rly);
 
-    prte_dss.copy_payload(&rly, buffer);
+    rc = PMIx_Data_copy_payload(&rly, buffer);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return false;
+    }
     /* get the cbtype */
     cnt=1;
-    if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &cbtype, &cnt,PRTE_INT ))) {
-        PRTE_ERROR_LOG(ret);
+    rc = PMIx_Data_unpack(NULL, buffer, &cbtype, &cnt, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return false;
     }
     cnt = 1;
-    if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &state, &cnt, PRTE_INT))) {
-        PRTE_ERROR_LOG(ret);
+    rc = PMIx_Data_unpack(NULL, buffer, &state, &cnt, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return false;
     }
     /* for propagate, only one major errorproc is affected per call */
     cnt = 1;
-    if (PRTE_SUCCESS != (ret = prte_dss.unpack(buffer, &errorproc, &cnt, PRTE_NAME))) {
-        PRTE_ERROR_LOG(ret);
+    rc = PMIx_Data_unpack(NULL, buffer, &errorproc, &cnt, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return false;
     }
 
