@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +32,7 @@
 #endif  /* HAVE_UNISTD_H */
 #include <string.h>
 
-#include "src/dss/dss.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
@@ -44,8 +45,8 @@
 
 #include "iof_prted.h"
 
-static void send_cb(int status, prte_process_name_t *peer,
-                    prte_buffer_t *buf, prte_rml_tag_t tag,
+static void send_cb(int status, pmix_proc_t *peer,
+                    pmix_data_buffer_t *buf, prte_rml_tag_t tag,
                     void *cbdata)
 {
     /* nothing to do here - just release buffer and return */
@@ -54,17 +55,18 @@ static void send_cb(int status, prte_process_name_t *peer,
 
 void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
 {
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     int rc;
 
-    buf = PRTE_NEW(prte_buffer_t);
+    PMIX_DATA_BUFFER_CREATE(buf);
 
     /* pack the tag - we do this first so that flow control messages can
      * consist solely of the tag
      */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &tag, 1, PRTE_IOF_TAG))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(buf);
+    rc = PMIx_Data_pack(NULL, buf, &tag, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         return;
     }
 
@@ -77,6 +79,7 @@ void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
     if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP,
                                           send_cb, NULL))) {
         PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
     }
 }
 
@@ -88,21 +91,22 @@ void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
  *
  * (b) flow control messages
  */
-void prte_iof_prted_recv(int status, prte_process_name_t* sender,
-                         prte_buffer_t* buffer, prte_rml_tag_t tag,
+void prte_iof_prted_recv(int status, pmix_proc_t* sender,
+                         pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
                          void* cbdata)
 {
     unsigned char data[PRTE_IOF_BASE_MSG_MAX];
     prte_iof_tag_t stream;
     int32_t count, numbytes;
-    prte_process_name_t target;
+    pmix_proc_t target;
     prte_iof_proc_t *proct;
     int rc;
 
     /* see what stream generated this data */
     count = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &stream, &count, PRTE_IOF_TAG))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &stream, &count, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return;
     }
 
@@ -114,15 +118,17 @@ void prte_iof_prted_recv(int status, prte_process_name_t* sender,
 
     /* unpack the intended target */
     count = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &target, &count, PRTE_NAME))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &target, &count, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return;
     }
 
     /* unpack the data */
     numbytes=PRTE_IOF_BASE_MSG_MAX;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, data, &numbytes, PRTE_BYTE))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, data, &numbytes, PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return;
     }
     /* numbytes will contain the actual #bytes that were sent */
@@ -135,10 +141,9 @@ void prte_iof_prted_recv(int status, prte_process_name_t* sender,
     /* cycle through our list of procs */
     PRTE_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t) {
         /* is this intended for this jobid? */
-        if (target.jobid == proct->name.jobid) {
+        if (PMIX_CHECK_NSPACE(target.nspace, proct->name.nspace)) {
             /* yes - is this intended for all vpids or this vpid? */
-            if (PRTE_VPID_WILDCARD == target.vpid ||
-                proct->name.vpid == target.vpid) {
+            if (PMIX_CHECK_RANK(target.rank, proct->name.rank)) {
                 PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                      "%s writing data to local proc %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),

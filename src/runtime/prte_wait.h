@@ -17,6 +17,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +44,6 @@
 #include <sys/time.h>
 #endif
 
-#include "src/dss/dss.h"
 #include "src/util/output.h"
 #include "src/sys/atomic.h"
 #include "src/event/event-internal.h"

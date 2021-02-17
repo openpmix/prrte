@@ -82,7 +82,6 @@
 
 #include "src/runtime/prte_progress_threads.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/dss/dss.h"
 
 #include "src/runtime/runtime.h"
 #include "src/runtime/prte_globals.h"
@@ -118,7 +117,6 @@ typedef struct {
     size_t ninfo;
 } mylock_t;
 
-static prte_jobid_t myjobid = PRTE_JOBID_INVALID;
 static pmix_nspace_t spawnednspace;
 
 static int create_app(int argc, char* argv[],
@@ -472,8 +470,8 @@ static void evhandler(size_t evhdlr_registration_id,
                       void *cbdata)
 {
     prte_pmix_lock_t *lock = NULL;
-    int jobstatus=0, rc;
-    prte_jobid_t jobid = PRTE_JOBID_INVALID;
+    int jobstatus=0;
+    pmix_nspace_t jobid = {0};
     size_t n;
     char *msg = NULL;
 
@@ -488,10 +486,7 @@ static void evhandler(size_t evhdlr_registration_id,
             if (0 == strncmp(info[n].key, PMIX_JOB_TERM_STATUS, PMIX_MAX_KEYLEN)) {
                 jobstatus = prte_pmix_convert_status(info[n].value.data.status);
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
-                PRTE_PMIX_CONVERT_NSPACE(rc, &jobid, info[n].value.data.proc->nspace);
-                if (PRTE_SUCCESS != rc) {
-                    PRTE_ERROR_LOG(rc);
-                }
+                PMIX_LOAD_NSPACE(jobid, info[n].value.data.proc->nspace);
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
                 lock = (prte_pmix_lock_t*)info[n].value.data.ptr;
         #ifdef PMIX_EVENT_TEXT_MESSAGE
@@ -500,7 +495,7 @@ static void evhandler(size_t evhdlr_registration_id,
         #endif
             }
         }
-        if (verbose && (myjobid != PRTE_JOBID_INVALID && jobid == myjobid)) {
+        if (verbose && PMIX_CHECK_NSPACE(jobid, spawnednspace)) {
             prte_output(0, "JOB %s COMPLETED WITH STATUS %d",
                         PRTE_JOBID_PRINT(jobid), jobstatus);
         }
@@ -763,7 +758,7 @@ int prun(int argc, char *argv[])
     /** setup callbacks for signals we should forward */
     PRTE_CONSTRUCT(&prte_ess_base_signals, prte_list_t);
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "forward-signals", 0, 0))) {
-        param = pval->data.string;
+        param = pval->value.data.string;
     } else {
         param = NULL;
     }
@@ -775,8 +770,11 @@ int prun(int argc, char *argv[])
     }
 
     /* setup the job data global table */
-    prte_job_data = PRTE_NEW(prte_hash_table_t);
-    if (PRTE_SUCCESS != (ret = prte_hash_table_init(prte_job_data, 128))) {
+    prte_job_data = PRTE_NEW(prte_pointer_array_t);
+    if (PRTE_SUCCESS != (ret = prte_pointer_array_init(prte_job_data,
+                                                       PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                                       PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                                       PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         return rc;
     }
@@ -793,21 +791,21 @@ int prun(int argc, char *argv[])
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0)) &&
-        0 < pval->data.integer) {
+        0 < pval->value.data.integer) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "num-connect-retries", 0, 0)) &&
-        0 < pval->data.integer) {
+        0 < pval->value.data.integer) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0)) &&
-        0 < pval->data.integer) {
+        0 < pval->value.data.integer) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "namespace", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_NSPACE, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_NSPACE, pval->value.data.string, PMIX_STRING);
     }
 
     /* set our session directory to something hopefully unique so
@@ -824,7 +822,7 @@ int prun(int argc, char *argv[])
 
     /* if they specified the URI, then pass it along */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "dvm-uri", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_URI, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_URI, pval->value.data.string, PMIX_STRING);
     }
 
     /* convert to array of info */
@@ -903,10 +901,10 @@ int prun(int argc, char *argv[])
     param = NULL;
     ptr = NULL;
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output-filename", 0, 0))) {
-        param = pval->data.string;
+        param = pval->value.data.string;
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output-directory", 0, 0))) {
-        ptr = pval->data.string;
+        ptr = pval->value.data.string;
     }
     if (NULL != param && NULL != ptr) {
         prte_show_help("help-prted.txt", "both-file-and-dir-set", true,
@@ -955,7 +953,7 @@ int prun(int argc, char *argv[])
 
     /* check what user wants us to do with stdin */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "stdin", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, pval->value.data.string, PMIX_STRING);
     }
 
     /* if we want the argv's indexed, indicate that */
@@ -964,17 +962,17 @@ int prun(int argc, char *argv[])
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->value.data.string, PMIX_STRING);
     }
 
     /* if the user specified a ranking policy, then set it */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "rank-by", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, pval->value.data.string, PMIX_STRING);
     }
 
     /* if the user specified a binding policy, then set it */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "bind-to", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, pval->value.data.string, PMIX_STRING);
     }
 
     /* mark if recovery was enabled on the cmd line */
@@ -983,8 +981,8 @@ int prun(int argc, char *argv[])
     }
     /* record the max restarts */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "max-restarts", 0, 0)) &&
-        0 < pval->data.integer) {
-        ui32 = pval->data.integer;
+        0 < pval->value.data.integer) {
+        ui32 = pval->value.data.integer;
         PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t) {
             PMIX_INFO_LIST_ADD(ret, app->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
         }
@@ -1009,13 +1007,13 @@ int prun(int argc, char *argv[])
         if (NULL != param) {
             i = strtol(param, NULL, 10);
             /* both cannot be present, or they must agree */
-            if (NULL != pval && i != pval->data.integer) {
+            if (NULL != pval && i != pval->value.data.integer) {
                 prte_show_help("help-prun.txt", "prun:timeoutconflict", false,
-                               prte_tool_basename, pval->data.integer, param);
+                               prte_tool_basename, pval->value.data.integer, param);
                 exit(1);
             }
         } else {
-            i = pval->data.integer;
+            i = pval->value.data.integer;
         }
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT, &i, PMIX_INT);
     }
@@ -1128,8 +1126,6 @@ int prun(int argc, char *argv[])
         goto DONE;
     }
 
-    PRTE_PMIX_CONVERT_NSPACE(rc, &myjobid, spawnednspace);
-
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
@@ -1167,7 +1163,7 @@ int prun(int argc, char *argv[])
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
 
     if (verbose) {
-        prte_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(myjobid));
+        prte_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
     }
     PRTE_PMIX_WAIT_THREAD(&rellock);
     /* save the status */
@@ -1353,7 +1349,7 @@ static int create_app(int argc, char* argv[],
 
     /* Did the user request a specific wdir? */
     if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "wdir", 0, 0))) {
-        param = pvalue->data.string;
+        param = pvalue->value.data.string;
         /* if this is a relative path, convert it to an absolute path */
         if (prte_path_is_absolute(param)) {
             app->app.cwd = strdup(param);
@@ -1381,7 +1377,7 @@ static int create_app(int argc, char* argv[],
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* if they specified a process set name, then pass it along */
     if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "pset", 0, 0))) {
-        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PSET_NAME, pvalue->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PSET_NAME, pvalue->value.data.string, PMIX_STRING);
     }
 #endif
 
@@ -1397,7 +1393,7 @@ static int create_app(int argc, char* argv[],
             return PRTE_ERR_FATAL;
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
-            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->value.data.string, PMIX_STRING);
             found = true;
         }
     }
@@ -1408,7 +1404,7 @@ static int create_app(int argc, char* argv[],
             return PRTE_ERR_FATAL;
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
-            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->value.data.string, PMIX_STRING);
         }
     }
 
@@ -1417,7 +1413,7 @@ static int create_app(int argc, char* argv[],
         char **targ=NULL, *tval;
         for (i = 0; i < j; ++i) {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "host", i, 0);
-            prte_argv_append_nosize(&targ, pvalue->data.string);
+            prte_argv_append_nosize(&targ, pvalue->value.data.string);
         }
         tval = prte_argv_join(targ, ',');
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOST, tval, PMIX_STRING);
@@ -1427,10 +1423,10 @@ static int create_app(int argc, char* argv[],
     /* check for bozo error */
     if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "np", 0, 0)) ||
         NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "n", 0, 0))) {
-        if (0 > pvalue->data.integer) {
+        if (0 > pvalue->value.data.integer) {
             prte_show_help("help-prun.txt", "prun:negative-nprocs",
                            true, "prun", app->app.argv[0],
-                           pvalue->data.integer, NULL);
+                           pvalue->value.data.integer, NULL);
             return PRTE_ERR_FATAL;
         }
     }
@@ -1438,7 +1434,7 @@ static int create_app(int argc, char* argv[],
         /* we don't require that the user provide --np or -n because
          * the cmd line might stipulate a mapping policy that computes
          * the number of procs - e.g., a map-by ppr option */
-        app->app.maxprocs = pvalue->data.integer;
+        app->app.maxprocs = pvalue->value.data.integer;
     }
 
     /* see if we need to preload the binary to

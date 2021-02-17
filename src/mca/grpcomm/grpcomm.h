@@ -16,6 +16,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,23 +48,22 @@
 #include "src/mca/mca.h"
 #include "src/class/prte_list.h"
 #include "src/class/prte_bitmap.h"
-#include "src/dss/dss_types.h"
-
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/rml/rml_types.h"
 
 BEGIN_C_DECLS
 
 /* define a callback function to be invoked upon
  * collective completion */
-typedef void (*prte_grpcomm_cbfunc_t)(int status, prte_buffer_t *buf, void *cbdata);
+typedef void (*prte_grpcomm_cbfunc_t)(int status, pmix_data_buffer_t *buf, void *cbdata);
 
-typedef int (*prte_grpcomm_rbcast_cb_t)(prte_buffer_t* buffer);
+typedef int (*prte_grpcomm_rbcast_cb_t)(pmix_data_buffer_t* buffer);
 
 /* Define a collective signature so we don't need to
  * track global collective id's */
 typedef struct {
     prte_object_t super;
-    prte_process_name_t *signature;
+    pmix_proc_t *signature;
     size_t sz;
 } prte_grpcomm_signature_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_grpcomm_signature_t);
@@ -75,9 +75,9 @@ typedef struct {
     /* collective's signature */
     prte_grpcomm_signature_t *sig;
     /* collection bucket */
-    prte_buffer_t bucket;
+    pmix_data_buffer_t bucket;
     /* participating daemons */
-    prte_vpid_t *dmns;
+    pmix_rank_t *dmns;
     /** number of participating daemons */
     size_t ndmns;
     /** my index in the dmns array */
@@ -89,7 +89,7 @@ typedef struct {
     /* distance masks for receive */
     prte_bitmap_t distance_mask_recv;
     /* received buckets */
-    prte_buffer_t ** buffers;
+    pmix_data_buffer_t ** buffers;
     /* callback function */
     prte_grpcomm_cbfunc_t cbfunc;
     /* user-provided callback data */
@@ -111,9 +111,9 @@ typedef void (*prte_grpcomm_base_module_finalize_fn_t)(void);
 /* Scalably send a message. Caller will provide an array
  * of daemon vpids that are to receive the message. A NULL
  * pointer indicates that all daemons are participating. */
-typedef int (*prte_grpcomm_base_module_xcast_fn_t)(prte_vpid_t *vpids,
+typedef int (*prte_grpcomm_base_module_xcast_fn_t)(pmix_rank_t *vpids,
                                                    size_t nprocs,
-                                                   prte_buffer_t *msg);
+                                                   pmix_data_buffer_t *msg);
 
 /* allgather - gather data from all specified daemons. Barrier operations
  * will provide a zero-byte buffer. Caller will provide an array
@@ -124,12 +124,12 @@ typedef int (*prte_grpcomm_base_module_xcast_fn_t)(prte_vpid_t *vpids,
  * NOTE: this is a non-blocking call. The callback function cached in
  * the prte_grpcomm_coll_t will be invoked upon completion. */
 typedef int (*prte_grpcomm_base_module_allgather_fn_t)(prte_grpcomm_coll_t *coll,
-                                                       prte_buffer_t *buf, int mode);
+                                                       pmix_data_buffer_t *buf, int mode);
 
 /* Reliable broadcast a message thru BMG.
  * only need to provide a message buffer, dont need create dmns
  */
-typedef int (*prte_grpcomm_base_module_rbcast_fn_t)(prte_buffer_t *msg);
+typedef int (*prte_grpcomm_base_module_rbcast_fn_t)(pmix_data_buffer_t *msg);
 
 typedef int (*prte_grpcomm_base_module_rbcast_register_cb_fn_t)(prte_grpcomm_rbcast_cb_t callback);
 
@@ -159,7 +159,7 @@ typedef struct {
  * procs for processing and relay. */
 typedef int (*prte_grpcomm_base_API_xcast_fn_t)(prte_grpcomm_signature_t *sig,
                                                 prte_rml_tag_t tag,
-                                                prte_buffer_t *msg);
+                                                pmix_data_buffer_t *msg);
 
 /* allgather - gather data from all specified procs. Barrier operations
  * will provide a zero-byte buffer. Caller will provide an array
@@ -171,7 +171,7 @@ typedef int (*prte_grpcomm_base_API_xcast_fn_t)(prte_grpcomm_signature_t *sig,
  * NOTE: this is a non-blocking call. The provided callback function
  * will be invoked upon completion. */
 typedef int (*prte_grpcomm_base_API_allgather_fn_t)(prte_grpcomm_signature_t *sig,
-                                                    prte_buffer_t *buf, int mode,
+                                                    pmix_data_buffer_t *buf, int mode,
                                                     prte_grpcomm_cbfunc_t cbfunc,
                                                     void *cbdata);
 /* Reliable broadcast a message. Caller will provide an array
@@ -180,7 +180,7 @@ typedef int (*prte_grpcomm_base_API_allgather_fn_t)(prte_grpcomm_signature_t *si
  * all daemons in the specified jobid.*/
 typedef int (*prte_grpcomm_base_API_rbcast_fn_t)(prte_grpcomm_signature_t *sig,
                                                 prte_rml_tag_t tag,
-                                                prte_buffer_t *msg);
+                                                 pmix_data_buffer_t *msg);
 
 
 typedef int (*prte_grpcomm_base_API_rbcast_register_cb_fn_t)(prte_grpcomm_rbcast_cb_t callback);

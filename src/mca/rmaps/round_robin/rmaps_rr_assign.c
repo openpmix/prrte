@@ -13,6 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,9 +46,8 @@ int prte_rmaps_rr_assign_root_level(prte_job_t *jdata)
     hwloc_obj_t obj=NULL;
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
-
                         "mca:rmaps:rr: assigning procs to root level for job %s",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     for (m=0; m < jdata->map->nodes->size; m++) {
         if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(jdata->map->nodes, m))) {
@@ -68,13 +68,13 @@ int prte_rmaps_rr_assign_root_level(prte_job_t *jdata)
                 continue;
             }
             /* ignore procs from other jobs */
-            if (proc->name.jobid != jdata->jobid) {
+            if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr:assign skipping proc %s - from another job",
                                     PRTE_NAME_PRINT(&proc->name));
                 continue;
             }
-            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
         }
     }
     return PRTE_SUCCESS;
@@ -103,21 +103,21 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: assigning locations by %s for job %s",
                         hwloc_obj_type_string(target),
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PRTE_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING);
 
     /* see if they want multiple cpus/rank */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRTE_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
         cpus_per_rank = u16;
     } else {
         cpus_per_rank = 1;
     }
 
     /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
@@ -174,7 +174,7 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
 
             /* if this is a comm_spawn situation, start with the object
              * where the parent left off and increment */
-            if (PRTE_JOBID_INVALID != jdata->originator.jobid &&
+            if (!PMIX_NSPACE_INVALID(jdata->originator.nspace) &&
                 UINT_MAX != jdata->bkmark_obj) {
                 start = (jdata->bkmark_obj + 1) % nobjs;
             } else {
@@ -186,7 +186,7 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
                     continue;
                 }
                 /* ignore procs from other jobs */
-                if (proc->name.jobid != jdata->jobid) {
+                if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:rr:assign skipping proc %s - from another job",
                                         PRTE_NAME_PRINT(&proc->name));
@@ -231,7 +231,7 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
                 }
                 prte_output_verbose(20, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr: assigning proc to object %d", k);
-                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
                 /* Position at next sequential resource for next search */
                 start = (k + 1) % nobjs;
                 /* track the bookmark */

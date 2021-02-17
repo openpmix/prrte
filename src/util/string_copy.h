@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +44,7 @@ BEGIN_C_DECLS
  * It is invalid to pass NULL for either dest or src.
  *
  * If dest_len is larger than
- * PRTE_MAX_SIZE_ALLOWED_BY_PRTE_STRING_COPY, we assume that this is
+ * PRTE_MAX_SIZE_ALLOWED_BY_PMIX_STRING_COPY, we assume that this is
  * a programmer error (because PRTE does not generally need to do
  * large string copies), and will assert() fail / abort.
  *
@@ -70,8 +71,8 @@ PRTE_EXPORT void prte_string_copy(char *dest, const char *src,
  *
  * See the description of prte_string_copy() for an explanation.
  */
-#define PRTE_MAX_SIZE_ALLOWED_BY_PRTE_STRING_COPY (128 * 1024)
+#define PRTE_MAX_SIZE_ALLOWED_BY_PMIX_STRING_COPY (128 * 1024)
 
 END_C_DECLS
 
-#endif /* PRTE_STRING_COPY_H */
+#endif /* PMIX_STRING_COPY_H */

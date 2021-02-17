@@ -17,6 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +33,6 @@
 
 #include "src/class/prte_object.h"
 #include "src/class/prte_list.h"
-#include "src/dss/dss_types.h"
 #include "src/threads/mutex.h"
 #include "src/util/argv.h"
 #include "src/util/cmd_line.h"
@@ -389,11 +389,11 @@ int prte_cmd_line_parse(prte_cmd_line_t *cmd, bool ignore_unknown,
                 if (PRTE_CMD_LINE_TYPE_BOOL == option->clo_type &&
                     (0 == option->clo_num_params || help_without_arg)) {
                     val = PRTE_NEW(prte_value_t);
-                    val->type = PRTE_BOOL;
+                    val->value.type = PMIX_BOOL;
                     if (0 == strncasecmp(cmd->lcl_argv[orig], "t", 1) || 0 != atoi(cmd->lcl_argv[orig])) {
-                        val->data.flag = true;
+                        val->value.data.flag = true;
                     } else {
-                        val->data.flag = false;
+                        val->value.data.flag = false;
                     }
                     prte_list_append(&param->clp_values, &val->super);
                 }
@@ -1006,13 +1006,13 @@ static prte_value_t* set_dest(prte_cmd_line_option_t *option, char *sval)
     switch(option->clo_type) {
         case PRTE_CMD_LINE_TYPE_STRING:
             val = PRTE_NEW(prte_value_t);
-            val->type = PRTE_STRING;
+            val->value.type = PMIX_STRING;
             /* check for quotes and remove them */
             if ('\"' == sval[0] && '\"' == sval[strlen(sval)-1]) {
-                val->data.string = strdup(&sval[1]);
-                val->data.string[strlen(val->data.string)-1] = '\0';
+                val->value.data.string = strdup(&sval[1]);
+                val->value.data.string[strlen(val->value.data.string)-1] = '\0';
             } else {
-                val->data.string = strdup(sval);
+                val->value.data.string = strdup(sval);
             }
             return val;
 
@@ -1041,8 +1041,8 @@ static prte_value_t* set_dest(prte_cmd_line_option_t *option, char *sval)
                 }
             }
             val = PRTE_NEW(prte_value_t);
-            val->type = PRTE_INT;
-            val->data.integer = strtol(sval, NULL, 10);
+            val->value.type = PMIX_INT;
+            val->value.data.integer = strtol(sval, NULL, 10);
             return val;
 
         case PRTE_CMD_LINE_TYPE_SIZE_T:
@@ -1070,17 +1070,17 @@ static prte_value_t* set_dest(prte_cmd_line_option_t *option, char *sval)
                 }
             }
             val = PRTE_NEW(prte_value_t);
-            val->type = PRTE_SIZE;
-            val->data.integer = strtol(sval, NULL, 10);
+            val->value.type = PMIX_SIZE;
+            val->value.data.integer = strtol(sval, NULL, 10);
             return val;
 
         case PRTE_CMD_LINE_TYPE_BOOL:
             val = PRTE_NEW(prte_value_t);
-            val->type = PRTE_BOOL;
+            val->value.type = PMIX_BOOL;
             if (0 == strncasecmp(sval, "t", 1) || 0 != atoi(sval)) {
-                val->data.flag = true;
+                val->value.data.flag = true;
             } else {
-                val->data.flag = false;
+                val->value.data.flag = false;
             }
             return val;
 

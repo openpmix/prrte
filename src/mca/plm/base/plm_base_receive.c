@@ -17,6 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,7 +39,6 @@
 #endif
 
 #include "src/mca/mca.h"
-#include "src/dss/dss.h"
 #include "src/threads/threads.h"
 #include "src/util/argv.h"
 #include "src/util/prte_environ.h"
@@ -55,6 +55,7 @@
 #include "src/mca/ras/base/base.h"
 #include "src/util/name_fns.h"
 #include "src/mca/state/state.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
 
@@ -123,22 +124,22 @@ int prte_plm_base_comm_stop(void)
 
 
 /* process incoming messages in order of receipt */
-void prte_plm_base_recv(int status, prte_process_name_t* sender,
-                        prte_buffer_t* buffer, prte_rml_tag_t tag,
+void prte_plm_base_recv(int status, pmix_proc_t* sender,
+                        pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
                         void* cbdata)
 {
     prte_plm_cmd_flag_t command;
     int32_t count;
-    prte_jobid_t job;
+    pmix_nspace_t job;
     prte_job_t *jdata, *parent, jb;
-    prte_buffer_t *answer;
-    prte_vpid_t vpid;
+    pmix_data_buffer_t *answer;
+    pmix_rank_t vpid;
     prte_proc_t *proc;
     prte_proc_state_t state;
     prte_exit_code_t exit_code;
     int32_t rc=PRTE_SUCCESS, ret;
     prte_app_context_t *app, *child_app;
-    prte_process_name_t name, *nptr;
+    pmix_proc_t name, *nptr;
     pid_t pid;
     bool running;
     int i, room;
@@ -150,47 +151,52 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     count = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &command, &count, PRTE_PLM_CMD))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &command, &count, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto CLEANUP;
     }
 
     switch (command) {
     case PRTE_PLM_ALLOC_JOBID_CMD:
         /* set default return value */
-        job = PRTE_JOBID_INVALID;
+        PMIX_LOAD_NSPACE(job, NULL);
 
         /* unpack the room number of the request so we can return it to them */
         count = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &room, &count, PRTE_INT))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buffer, &room, &count, PMIX_INT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto CLEANUP;
         }
         /* get the new jobid */
         PRTE_CONSTRUCT(&jb, prte_job_t);
         rc = prte_plm_base_create_jobid(&jb);
         if (PRTE_SUCCESS == rc) {
-            job = jb.jobid;
+            PMIX_LOAD_NSPACE(job, jb.nspace);
         }
-        // The 'jb' object is now stored as reference in the prte_job_data hash
+        // The 'jb' object is now stored as reference in the prte_job_data array
         // by the prte_plm_base_create_jobid function.
 
         /* setup the response */
-        answer = PRTE_NEW(prte_buffer_t);
+        PMIX_DATA_BUFFER_CREATE(answer);
 
         /* pack the status to be returned */
-        if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &rc, 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(ret);
+        rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_INT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
         }
 
         /* pack the jobid */
-        if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &job, 1, PRTE_JOBID))) {
-            PRTE_ERROR_LOG(ret);
+        rc = PMIx_Data_pack(NULL, answer, &job, 1, PMIX_PROC_NSPACE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
         }
 
         /* pack the room number of the request */
-        if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &room, 1, PRTE_INT))) {
-            PRTE_ERROR_LOG(ret);
+        rc = PMIx_Data_pack(NULL, answer, &room, 1, PMIX_INT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
         }
 
         /* send the response back to the sender */
@@ -209,35 +215,35 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
 
         /* unpack the job object */
         count = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &jdata, &count, PRTE_JOB))) {
+        rc = prte_job_unpack(buffer, &jdata);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             goto ANSWER_LAUNCH;
         }
 
         /* record the sender so we know who to respond to */
-        jdata->originator.jobid = sender->jobid;
-        jdata->originator.vpid = sender->vpid;
+        PMIX_LOAD_PROCID(&jdata->originator, sender->nspace, sender->rank);
 
         /* get the name of the actual spawn parent - i.e., the proc that actually
          * requested the spawn */
         nptr = &name;
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PRTE_NAME)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PMIX_PROC)) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             rc = PRTE_ERR_NOT_FOUND;
             goto ANSWER_LAUNCH;
         }
 
         /* get the parent's job object */
-        if (NULL != (parent = prte_get_job_data_object(name.jobid))) {
+        if (NULL != (parent = prte_get_job_data_object(name.nspace))) {
             /* link the spawned job to the spawner */
             PRTE_RETAIN(jdata);
             prte_list_append(&parent->children, &jdata->super);
             /* connect the launcher as well */
-            if (PRTE_JOBID_INVALID == parent->launcher) {
+            if (PMIX_NSPACE_INVALID(parent->launcher)) {
                 /* we are an original spawn */
-                jdata->launcher = name.jobid;
+                PMIX_LOAD_NSPACE(jdata->launcher, name.nspace);
             } else {
-                jdata->launcher = parent->launcher;
+                PMIX_LOAD_NSPACE(jdata->launcher, parent->launcher);
             }
             if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
                 /* don't use the parent for anything more */
@@ -254,9 +260,9 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
                 child_app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, 0);
                 if (NULL != app && NULL != child_app) {
                     prefix_dir = NULL;
-                    if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PRTE_STRING) &&
-                        !prte_get_attribute(&child_app->attributes, PRTE_APP_PREFIX_DIR, NULL, PRTE_STRING)) {
-                        prte_set_attribute(&child_app->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL, prefix_dir, PRTE_STRING);
+                    if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&prefix_dir, PMIX_STRING) &&
+                        !prte_get_attribute(&child_app->attributes, PRTE_APP_PREFIX_DIR, NULL, PMIX_STRING)) {
+                        prte_set_attribute(&child_app->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL, prefix_dir, PMIX_STRING);
                     }
                     if (NULL != prefix_dir) {
                         free(prefix_dir);
@@ -292,7 +298,7 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
         if (NULL != parent && !PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
             if (NULL == parent->bookmark) {
                 /* find the sender's node in the job map */
-                if (NULL != (proc = (prte_proc_t*)prte_pointer_array_get_item(parent->procs, sender->vpid))) {
+                if (NULL != (proc = (prte_proc_t*)prte_pointer_array_get_item(parent->procs, sender->rank))) {
                     /* set the bookmark so the child starts from that place - this means
                      * that the first child process could be co-located with the proc
                      * that called comm_spawn, assuming slots remain on that node. Otherwise,
@@ -327,22 +333,26 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rc));
 
         /* setup the response */
-        answer = PRTE_NEW(prte_buffer_t);
+        PMIX_DATA_BUFFER_CREATE(answer);
 
         /* pack the error code to be returned */
-        if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &rc, 1, PRTE_INT32))) {
-            PRTE_ERROR_LOG(ret);
+        rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_INT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
         }
 
         /* pack an invalid jobid */
-        job = PRTE_JOBID_INVALID;
-        if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &job, 1, PRTE_JOBID))) {
-            PRTE_ERROR_LOG(ret);
+        PMIX_LOAD_NSPACE(job, NULL);
+        rc = PMIx_Data_pack(NULL, answer, &job, 1, PMIX_PROC_NSPACE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
         }
-        /* pack the room number of the request */
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void**)&room, PRTE_INT)) {
-            if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &room, 1, PRTE_INT))) {
-                PRTE_ERROR_LOG(ret);
+
+            /* pack the room number of the request */
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void**)&room, PMIX_INT)) {
+            rc = PMIx_Data_pack(NULL, answer, &room, 1, PMIX_INT);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
             }
         }
 
@@ -360,34 +370,35 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(sender));
         count = 1;
-        while (PRTE_SUCCESS == (rc = prte_dss.unpack(buffer, &job, &count, PRTE_JOBID))) {
-
+        while (PMIX_SUCCESS == (rc = PMIx_Data_unpack(NULL, buffer, &job, &count, PMIX_PROC_NSPACE))) {
             prte_output_verbose(5, prte_plm_base_framework.framework_output,
                                 "%s plm:base:receive got update_proc_state for job %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 PRTE_JOBID_PRINT(job));
 
-            name.jobid = job;
+            PMIX_LOAD_NSPACE(name.nspace, job);
             running = false;
             /* get the job object */
             jdata = prte_get_job_data_object(job);
             count = 1;
-            while (PRTE_SUCCESS == (rc = prte_dss.unpack(buffer, &vpid, &count, PRTE_VPID))) {
-                if (PRTE_VPID_INVALID == vpid) {
+            while (PMIX_SUCCESS == (rc = PMIx_Data_unpack(NULL, buffer, &vpid, &count, PMIX_PROC_RANK))) {
+                if (PMIX_RANK_INVALID == vpid) {
                     /* flag indicates that this job is complete - move on */
                     break;
                 }
-                name.vpid = vpid;
+                name.rank = vpid;
                 /* unpack the pid */
                 count = 1;
-                if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &pid, &count, PRTE_PID))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_unpack(NULL, buffer, &pid, &count, PMIX_PID);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
                     goto CLEANUP;
                 }
                 /* unpack the state */
                 count = 1;
-                if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &state, &count, PRTE_PROC_STATE))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_unpack(NULL, buffer, &state, &count, PMIX_UINT32);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
                     goto CLEANUP;
                 }
                 if (PRTE_PROC_STATE_RUNNING == state) {
@@ -395,15 +406,16 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
                 }
                 /* unpack the exit code */
                 count = 1;
-                if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &exit_code, &count, PRTE_EXIT_CODE))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_unpack(NULL, buffer, &exit_code, &count, PMIX_INT32);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
                     goto CLEANUP;
                 }
 
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                     "%s plm:base:receive got update_proc_state for vpid %lu state %s exit_code %d",
+                                     "%s plm:base:receive got update_proc_state for vpid %u state %s exit_code %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     (unsigned long)vpid, prte_proc_state_to_str(state), (int)exit_code));
+                                     vpid, prte_proc_state_to_str(state), (int)exit_code));
 
                 if (NULL != jdata) {
                     /* get the proc data object */
@@ -433,8 +445,9 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
             /* prepare for next job */
             count = 1;
         }
-        if (PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
-            PRTE_ERROR_LOG(rc);
+        if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
+            PMIX_ERROR_LOG(rc);
+            rc = prte_pmix_convert_status(rc);
         } else {
             rc = PRTE_SUCCESS;
         }
@@ -442,11 +455,12 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
 
     case PRTE_PLM_REGISTERED_CMD:
         count=1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &job, &count, PRTE_JOBID))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buffer, &job, &count, PMIX_PROC_NSPACE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto CLEANUP;
         }
-        name.jobid = job;
+        PMIX_LOAD_NSPACE(name.nspace, job);
         /* get the job object */
         if (NULL == (jdata = prte_get_job_data_object(job))) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -454,8 +468,8 @@ void prte_plm_base_recv(int status, prte_process_name_t* sender,
             goto CLEANUP;
         }
         count=1;
-        while (PRTE_SUCCESS == prte_dss.unpack(buffer, &vpid, &count, PRTE_VPID)) {
-            name.vpid = vpid;
+        while (PRTE_SUCCESS == PMIx_Data_unpack(NULL, buffer, &vpid, &count, PMIX_PROC_RANK)) {
+            name.rank = vpid;
             PRTE_ACTIVATE_PROC_STATE(&name, PRTE_PROC_STATE_REGISTERED);
             count=1;
         }

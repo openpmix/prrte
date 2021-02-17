@@ -13,6 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +36,6 @@
 #include "src/util/output.h"
 #include "src/util/argv.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/dss/dss.h"
 
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
@@ -105,7 +105,7 @@ static int rte_finalize(void)
 static int slurm_set_name(void)
 {
     int slurm_nodeid;
-    prte_vpid_t vpid;
+    pmix_rank_t vpid;
     char *tmp;
 
     PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
@@ -116,8 +116,7 @@ static int slurm_set_name(void)
         return PRTE_ERR_NOT_FOUND;
     }
 
-    PRTE_PMIX_REGISTER_DAEMON_NSPACE(&PRTE_PROC_MY_NAME->jobid, prte_ess_base_nspace);
-    PMIX_LOAD_NSPACE(prte_process_info.myproc.nspace, prte_ess_base_nspace);
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, prte_ess_base_nspace);
 
     if (NULL == prte_ess_base_vpid) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -127,8 +126,7 @@ static int slurm_set_name(void)
 
     /* fix up the vpid and make it the "real" vpid */
     slurm_nodeid = atoi(getenv("SLURM_NODEID"));
-    PRTE_PROC_MY_NAME->vpid = vpid + slurm_nodeid;
-    prte_process_info.myproc.rank = PRTE_PROC_MY_NAME->vpid;
+    PRTE_PROC_MY_NAME->rank = vpid + slurm_nodeid;
 
     PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
                          "ess:slurm set name to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));

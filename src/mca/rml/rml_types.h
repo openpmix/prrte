@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,8 +43,8 @@
 #include <net/uio.h>
 #endif
 
-#include "src/dss/dss_types.h"
 #include "src/class/prte_list.h"
+#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
@@ -56,7 +57,7 @@ BEGIN_C_DECLS
  * Constant tag values for well-known services
  */
 
-#define PRTE_RML_TAG_T    PRTE_UINT32
+#define PRTE_RML_TAG    PMIX_UINT32
 
 #define PRTE_RML_TAG_INVALID                 0
 #define PRTE_RML_TAG_DAEMON                  1
@@ -220,8 +221,8 @@ typedef uint32_t prte_rml_tag_t;
  * RML proxy commands
  */
 typedef uint8_t prte_rml_cmd_flag_t;
-#define PRTE_RML_CMD    PRTE_UINT8
-#define PRTE_RML_UPDATE_CMD    1
+#define PRTE_RML_CMD PMIX_UINT8
+#define PRTE_RML_UPDATE_CMD     1
 
 
 typedef enum {

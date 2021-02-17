@@ -14,6 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,22 +42,19 @@
 #include "src/util/net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
-
 #include "src/util/attr.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/util/proc_info.h"
 
 /* provide a connection to a reqd variable */
 extern bool prte_keep_fqdn_hostnames;
 
-#define PRTE_NAME_INVALID {PRTE_JOBID_INVALID, PRTE_VPID_INVALID}
-
 PRTE_EXPORT prte_process_info_t prte_process_info = {
-    .my_name =                         PRTE_NAME_INVALID,
     .myproc =                          {{0}, 0},
-    .my_hnp =                          PRTE_NAME_INVALID,
+    .my_hnp =                          {{0}, 0},
     .my_hnp_uri =                      NULL,
-    .my_parent =                       PRTE_NAME_INVALID,
+    .my_parent =                       {{0}, 0},
     .hnp_pid =                         0,
     .num_daemons =                     1,
     .num_nodes =                       1,

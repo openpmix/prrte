@@ -14,6 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +47,6 @@
 #include "src/util/dash_host/dash_host.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/runtime/data_type_support/prte_dt_support.h"
 
 #include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/base/base.h"
@@ -58,7 +58,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app,
     char *hosts;
 
     /* did the app_context contain a hostfile? */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PRTE_STRING)) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
         /* yes - filter the node list through the file, removing
          * any nodes not found in the file
          */
@@ -77,7 +77,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app,
         free(hosts);
     }
     /* did the app_context contain an add-hostfile? */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, (void**)&hosts, PRTE_STRING)) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
         /* yes - filter the node list through the file, removing
          * any nodes not found in the file
          */
@@ -96,7 +96,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app,
         free(hosts);
     }
     /* now filter the list through any -host specification */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
         if (PRTE_SUCCESS != (rc = prte_util_filter_dash_host_nodes(nodes, hosts, remove))) {
             PRTE_ERROR_LOG(rc);
             free(hosts);
@@ -112,7 +112,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app,
         free(hosts);
     }
     /* now filter the list through any add-host specification */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, (void**)&hosts, PRTE_STRING)) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, (void**)&hosts, PMIX_STRING)) {
         if (PRTE_SUCCESS != (rc = prte_util_filter_dash_host_nodes(nodes, hosts, remove))) {
             PRTE_ERROR_LOG(rc);
             free(hosts);
@@ -153,9 +153,9 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
     *total_num_slots = 0;
 
     /* get the daemon job object */
-    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     /* see if we have a vm or not */
-    novm = prte_get_attribute(&daemons->attributes, PRTE_JOB_NO_VM, NULL, PRTE_BOOL);
+    novm = prte_get_attribute(&daemons->attributes, PRTE_JOB_NO_VM, NULL, PMIX_BOOL);
 
     /* if this is NOT a managed allocation, then we use the nodes
      * that were specified for this app - there is no need to collect
@@ -166,12 +166,12 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
      */
     if ( !prte_managed_allocation ||
         (prte_managed_allocation &&
-         (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING) ||
-         prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PRTE_STRING)))) {
+         (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING) ||
+         prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PMIX_STRING)))) {
         PRTE_CONSTRUCT(&nodes, prte_list_t);
         /* if the app provided a dash-host, then use those nodes */
         hosts = NULL;
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using dash_host %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
@@ -181,7 +181,7 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
                 return rc;
             }
             free(hosts);
-        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PRTE_STRING)) {
+        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
             /* otherwise, if the app provided a hostfile, then use that */
             PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using hostfile %s",
@@ -355,13 +355,13 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
             }
             if (NULL == nd || NULL == nd->daemon ||
                 NULL == node->daemon ||
-                nd->daemon->name.vpid < node->daemon->name.vpid) {
+                nd->daemon->name.rank < node->daemon->name.rank) {
                 /* just append to end */
                 prte_list_append(allocated_nodes, &node->super);
                 nd = node;
             } else {
                 /* starting from end, put this node in daemon-vpid order */
-                while (node->daemon->name.vpid < nd->daemon->name.vpid) {
+                while (node->daemon->name.rank < nd->daemon->name.rank) {
                     if (prte_list_get_begin(allocated_nodes) == prte_list_get_prev(&nd->super)) {
                         /* insert at beginning */
                         prte_list_prepend(allocated_nodes, &node->super);
@@ -457,7 +457,7 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
             if (node->slots > node->slots_inuse) {
                 int32_t s;
                 /* check for any -host allocations */
-                if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+                if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
                     s = prte_util_dash_host_compute_slots(node, hosts);
                 } else {
                     s = node->slots - node->slots_inuse;
@@ -511,7 +511,7 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
              item = prte_list_get_next(item)) {
             node = (prte_node_t*)item;
             prte_output(0, "    node: %s daemon: %s", node->name,
-                        (NULL == node->daemon) ? "NULL" : PRTE_VPID_PRINT(node->daemon->name.vpid));
+                        (NULL == node->daemon) ? "NULL" : PRTE_VPID_PRINT(node->daemon->name.rank));
         }
     }
 
@@ -527,7 +527,7 @@ prte_proc_t* prte_rmaps_base_setup_proc(prte_job_t *jdata,
 
     proc = PRTE_NEW(prte_proc_t);
     /* set the jobid */
-    proc->name.jobid = jdata->jobid;
+    PMIX_LOAD_NSPACE(proc->name.nspace, jdata->nspace);
     proc->job = jdata;
     /* flag the proc as ready for launch */
     proc->state = PRTE_PROC_STATE_INIT;
@@ -535,9 +535,9 @@ prte_proc_t* prte_rmaps_base_setup_proc(prte_job_t *jdata,
     /* mark the proc as UPDATED so it will be included in the launch */
     PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_UPDATED);
     if (NULL == node->daemon) {
-        proc->parent = PRTE_VPID_INVALID;
+        proc->parent = PMIX_RANK_INVALID;
     } else {
-        proc->parent = node->daemon->name.vpid;
+        proc->parent = node->daemon->name.rank;
     }
 
     PRTE_RETAIN(node);  /* maintain accounting on object */

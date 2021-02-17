@@ -13,6 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,7 +30,7 @@
 #endif  /* HAVE_UNISTD_H */
 #include <string.h>
 
-#include "src/dss/dss.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/mca/rml/rml.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -48,7 +49,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
 {
     prte_iof_read_event_t *rev = (prte_iof_read_event_t*)cbdata;
     unsigned char data[PRTE_IOF_BASE_MSG_MAX];
-    prte_buffer_t *buf=NULL;
+    pmix_data_buffer_t *buf=NULL;
     int rc;
     int32_t numbytes;
     prte_iof_proc_t *proct = (prte_iof_proc_t*)rev->proc;
@@ -104,25 +105,28 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     }
 
     /* prep the buffer */
-    buf = PRTE_NEW(prte_buffer_t);
+    PMIX_DATA_BUFFER_CREATE(buf);
 
     /* pack the stream first - we do this so that flow control messages can
      * consist solely of the tag
      */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &rev->tag, 1, PRTE_IOF_TAG))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(NULL, buf, &rev->tag, 1, PMIX_UINT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto CLEAN_RETURN;
     }
 
     /* pack name of process that gave us this data */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &proct->name, 1, PRTE_NAME))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(NULL, buf, &proct->name, 1, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto CLEAN_RETURN;
     }
 
     /* pack the data - only pack the #bytes we read! */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &data, numbytes, PRTE_BYTE))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(NULL, buf, &data, numbytes, PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto CLEAN_RETURN;
     }
 
@@ -162,7 +166,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
         PRTE_ACTIVATE_PROC_STATE(&proct->name, PRTE_PROC_STATE_IOF_COMPLETE);
     }
     if (NULL != buf) {
-        PRTE_RELEASE(buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
     }
     return;
 }

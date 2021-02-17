@@ -14,6 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +38,6 @@
 #include <unistd.h>
 #endif  /* HAVE_UNISTD_H */
 
-#include "src/dss/dss_types.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/runtime/prte_globals.h"
 
@@ -65,7 +65,7 @@ PRTE_EXPORT void prte_errmgr_base_log(int error_code, char *filename, int line);
 
 PRTE_EXPORT void prte_errmgr_base_abort(int error_code, char *fmt, ...)
     __prte_attribute_format__(__printf__, 2, 3);
-PRTE_EXPORT int prte_errmgr_base_abort_peers(prte_process_name_t *procs,
+PRTE_EXPORT int prte_errmgr_base_abort_peers(pmix_proc_t *procs,
                                                int32_t num_procs,
                                                int error_code);
 

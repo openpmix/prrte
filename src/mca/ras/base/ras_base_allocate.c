@@ -15,6 +15,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,7 +35,6 @@
 #include "src/class/prte_list.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
-#include "src/dss/dss.h"
 #include "src/util/argv.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/pmix/pmix-internal.h"
@@ -112,7 +112,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     prte_node_t *alloc;
     char *flgs;
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
         prte_asprintf(&tmp, "<allocation>\n");
     } else {
         prte_asprintf(&tmp, "\n======================   ALLOCATED NODES   ======================\n");
@@ -126,7 +126,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         if (NULL == (alloc = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, i))) {
             continue;
         }
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PRTE_BOOL)) {
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
             /* need to create the output in XML format */
             prte_asprintf(&tmp2, "\t<host name=\"%s\" slots=\"%d\" max_slots=\"%d\" slots_inuse=\"%d\">\n",
                      (NULL == alloc->name) ? "UNKNOWN" : alloc->name,
@@ -149,7 +149,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
             tmp = tmp3;
         }
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
         prte_output(prte_clean_output, "%s</allocation>\n", tmp);
     } else {
         prte_output(prte_clean_output, "%s=================================================================\n", tmp);
@@ -337,7 +337,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding dash_hosts",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -389,7 +389,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PRTE_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding hostfile %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
@@ -557,7 +557,7 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
         if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, (void**)&hosts, PRTE_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:add_hosts checking add-hostfile %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
@@ -570,7 +570,7 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
                 return rc;
             }
             /* now indicate that this app is to run across it */
-            prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_LOCAL, (void**)hosts, PRTE_STRING);
+            prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_LOCAL, (void**)hosts, PMIX_STRING);
             prte_remove_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE);
             free(hosts);
         }
@@ -589,7 +589,7 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
         if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, (void**)&hosts, PRTE_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, (void**)&hosts, PMIX_STRING)) {
             prte_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "%s ras:base:add_hosts checking add-host %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts);
@@ -600,7 +600,7 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
                 return rc;
             }
             /* now indicate that this app is to run across them */
-            prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, hosts, PRTE_STRING);
+            prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, hosts, PMIX_STRING);
             prte_remove_attribute(&app->attributes, PRTE_APP_ADD_HOST);
             free(hosts);
         }

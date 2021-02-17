@@ -17,6 +17,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -99,8 +100,8 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_write_event_t);
 
 typedef struct {
     prte_list_item_t super;
-    prte_process_name_t name;
-    prte_process_name_t daemon;
+    pmix_proc_t name;
+    pmix_proc_t daemon;
     prte_iof_tag_t tag;
     prte_iof_write_event_t *wev;
     bool xoff;
@@ -118,6 +119,7 @@ typedef struct {
     int fd;
     prte_iof_tag_t tag;
     bool active;
+    bool activated;
     bool always_readable;
     prte_iof_sink_t *sink;
 } prte_iof_read_event_t;
@@ -125,7 +127,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_read_event_t);
 
 typedef struct {
     prte_list_item_t super;
-    prte_process_name_t name;
+    pmix_proc_t name;
     prte_iof_sink_t *stdinev;
     prte_iof_read_event_t *revstdout;
     prte_iof_read_event_t *revstderr;
@@ -133,6 +135,14 @@ typedef struct {
     bool copy;
 } prte_iof_proc_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_proc_t);
+
+typedef struct {
+    prte_list_item_t super;
+    pmix_proc_t requestor;
+    pmix_proc_t target;
+    uint16_t stream;
+} prte_iof_request_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_request_t);
 
 typedef struct {
     prte_list_item_t super;
@@ -147,6 +157,7 @@ struct prte_iof_base_t {
     prte_iof_sink_t         *iof_write_stdout;
     prte_iof_sink_t         *iof_write_stderr;
     bool                    redirect_app_stderr_to_stdout;
+    prte_list_t             requests;
 };
 typedef struct prte_iof_base_t prte_iof_base_t;
 
@@ -186,9 +197,8 @@ prte_iof_base_fd_always_ready(int fd)
                             prte_iof_base_framework.framework_output,   \
                             "defining endpt: file %s line %d fd %d",    \
                             __FILE__, __LINE__, (fid)));                \
-        ep = PRTE_NEW(prte_iof_sink_t);                                  \
-        ep->name.jobid = (nm)->jobid;                                   \
-        ep->name.vpid = (nm)->vpid;                                     \
+        ep = PRTE_NEW(prte_iof_sink_t);                                 \
+        PMIX_LOAD_PROCID(&ep->name, (nm)->nspace, (nm)->rank);          \
         ep->tag = (tg);                                                 \
         if (0 <= (fid)) {                                               \
             ep->wev->fd = (fid);                                        \
@@ -272,11 +282,13 @@ PRTE_EXPORT int prte_iof_base_flush(void);
 PRTE_EXPORT extern prte_iof_base_t prte_iof_base;
 
 /* base functions */
-PRTE_EXPORT int prte_iof_base_write_output(const prte_process_name_t *name, prte_iof_tag_t stream,
+PRTE_EXPORT int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
                                              const unsigned char *data, int numbytes,
                                              prte_iof_write_event_t *channel);
 PRTE_EXPORT void prte_iof_base_static_dump_output(prte_iof_read_event_t *rev);
 PRTE_EXPORT void prte_iof_base_write_handler(int fd, short event, void *cbdata);
+
+PRTE_EXPORT void prte_iof_base_check_target(prte_iof_proc_t *proct);
 
 END_C_DECLS
 

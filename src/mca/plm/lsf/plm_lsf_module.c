@@ -18,6 +18,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -84,7 +85,7 @@
 static int plm_lsf_init(void);
 static int plm_lsf_launch_job(prte_job_t *jdata);
 static int plm_lsf_terminate_orteds(void);
-static int plm_lsf_signal_job(prte_jobid_t jobid, int32_t signal);
+static int plm_lsf_signal_job(pmix_nspace_t jobid, int32_t signal);
 static int plm_lsf_finalize(void);
 
 
@@ -182,7 +183,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     jdata  = state->jdata;
 
     /* start by setting up the virtual machine */
-    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(jdata))) {
         PRTE_ERROR_LOG(rc);
         goto cleanup;
@@ -314,7 +315,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&app_prefix_dir, PRTE_STRING) &&
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&app_prefix_dir, PMIX_STRING) &&
             NULL != app_prefix_dir) {
             /* Check for already set cur_prefix_dir -- if different,
                complain */
@@ -411,7 +412,7 @@ static int plm_lsf_terminate_orteds(void)
 /**
  * Signal all the processes in the job
  */
-static int plm_lsf_signal_job(prte_jobid_t jobid, int32_t signal)
+static int plm_lsf_signal_job(pmix_nspace_t jobid, int32_t signal)
 {
     int rc;
 

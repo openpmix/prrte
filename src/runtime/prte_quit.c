@@ -18,6 +18,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -114,32 +115,32 @@ static char* print_aborted_job(prte_job_t *job,
         case PRTE_ERR_SYS_LIMITS_PIPES:
             output = prte_show_help_string("help-prun.txt", "prun:sys-limit-pipe", true,
                                            prte_tool_basename, node->name,
-                                           (unsigned long)proc->name.vpid);
+                                           (unsigned long)proc->name.rank);
             break;
         case PRTE_ERR_PIPE_SETUP_FAILURE:
             output = prte_show_help_string("help-prun.txt", "prun:pipe-setup-failure", true,
                                            prte_tool_basename, node->name,
-                                           (unsigned long)proc->name.vpid);
+                                           (unsigned long)proc->name.rank);
             break;
         case PRTE_ERR_SYS_LIMITS_CHILDREN:
             output = prte_show_help_string("help-prun.txt", "prun:sys-limit-children", true,
                                            prte_tool_basename, node->name,
-                                           (unsigned long)proc->name.vpid);
+                                           (unsigned long)proc->name.rank);
             break;
         case PRTE_ERR_FAILED_GET_TERM_ATTRS:
             output = prte_show_help_string("help-prun.txt", "prun:failed-term-attrs", true,
                                            prte_tool_basename, node->name,
-                                           (unsigned long)proc->name.vpid);
+                                           (unsigned long)proc->name.rank);
             break;
         case PRTE_ERR_WDIR_NOT_FOUND:
             output = prte_show_help_string("help-prun.txt", "prun:wdir-not-found", true,
                                            prte_tool_basename, approc->cwd,
-                                           node->name, (unsigned long)proc->name.vpid);
+                                           node->name, (unsigned long)proc->name.rank);
             break;
         case PRTE_ERR_EXE_NOT_FOUND:
             output = prte_show_help_string("help-prun.txt", "prun:exe-not-found", true,
                                            prte_tool_basename,
-                                           (unsigned long)proc->name.vpid,
+                                           (unsigned long)proc->name.rank,
                                            prte_tool_basename,
                                            prte_tool_basename,
                                            node->name,
@@ -148,7 +149,7 @@ static char* print_aborted_job(prte_job_t *job,
         case PRTE_ERR_EXE_NOT_ACCESSIBLE:
             output = prte_show_help_string("help-prun.txt", "prun:exe-not-accessible", true,
                                            prte_tool_basename, approc->app, node->name,
-                                           (unsigned long)proc->name.vpid);
+                                           (unsigned long)proc->name.rank);
             break;
         case PRTE_ERR_MULTIPLE_AFFINITIES:
             output = prte_show_help_string("help-prun.txt",
@@ -208,19 +209,19 @@ static char* print_aborted_job(prte_job_t *job,
             break;
         case PRTE_ERR_PIPE_READ_FAILURE:
             output = prte_show_help_string("help-prun.txt", "prun:pipe-read-failure", true,
-                                           prte_tool_basename, node->name, (unsigned long)proc->name.vpid);
+                                           prte_tool_basename, node->name, (unsigned long)proc->name.rank);
             break;
         case PRTE_ERR_SOCKET_NOT_AVAILABLE:
             output = prte_show_help_string("help-prun.txt", "prun:proc-socket-not-avail", true,
                                            prte_tool_basename, PRTE_ERROR_NAME(proc->exit_code), node->name,
-                                           (unsigned long)proc->name.vpid);
+                                           (unsigned long)proc->name.rank);
             break;
 
         default:
             if (0 != proc->exit_code) {
                 output = prte_show_help_string("help-prun.txt", "prun:proc-failed-to-start", true,
                                                prte_tool_basename, proc->exit_code, PRTE_ERROR_NAME(proc->exit_code),
-                                               node->name, (unsigned long)proc->name.vpid);
+                                               node->name, (unsigned long)proc->name.rank);
             } else {
                 output = prte_show_help_string("help-prun.txt", "prun:proc-failed-to-start-no-status", true,
                                                prte_tool_basename, node->name);
@@ -229,20 +230,20 @@ static char* print_aborted_job(prte_job_t *job,
         return output;
     } else if (PRTE_PROC_STATE_ABORTED == proc->state) {
         output = prte_show_help_string("help-prun.txt", "prun:proc-ordered-abort", true,
-                                       prte_tool_basename, (unsigned long)proc->name.vpid, (unsigned long)proc->pid,
+                                       prte_tool_basename, (unsigned long)proc->name.rank, (unsigned long)proc->pid,
                                        node->name, prte_tool_basename);
         return output;
     } else if (PRTE_PROC_STATE_ABORTED_BY_SIG == job->state) {  /* aborted by signal */
 #ifdef HAVE_STRSIGNAL
         if (NULL != strsignal(WTERMSIG(proc->exit_code))) {
             output = prte_show_help_string("help-prun.txt", "prun:proc-aborted-strsignal", true,
-                                           prte_tool_basename, (unsigned long)proc->name.vpid, (unsigned long)proc->pid,
+                                           prte_tool_basename, (unsigned long)proc->name.rank, (unsigned long)proc->pid,
                                            node->name, WTERMSIG(proc->exit_code),
                                            strsignal(WTERMSIG(proc->exit_code)));
         } else {
 #endif
             output = prte_show_help_string("help-prun.txt", "prun:proc-aborted", true,
-                                           prte_tool_basename, (unsigned long)proc->name.vpid, (unsigned long)proc->pid,
+                                           prte_tool_basename, (unsigned long)proc->name.rank, (unsigned long)proc->pid,
                                            node->name, WTERMSIG(proc->exit_code));
 #ifdef HAVE_STRSIGNAL
         }
@@ -250,7 +251,7 @@ static char* print_aborted_job(prte_job_t *job,
         return output;
     } else if (PRTE_PROC_STATE_TERM_WO_SYNC == proc->state) { /* proc exited w/o finalize */
         output = prte_show_help_string("help-prun.txt", "prun:proc-exit-no-sync", true,
-                                       prte_tool_basename, (unsigned long)proc->name.vpid, (unsigned long)proc->pid,
+                                       prte_tool_basename, (unsigned long)proc->name.rank, (unsigned long)proc->pid,
                                        node->name, prte_tool_basename, prte_tool_basename);
         return output;
     } else if (PRTE_PROC_STATE_COMM_FAILED == proc->state) {
@@ -302,7 +303,7 @@ char* prte_dump_aborted_procs(prte_job_t *jdata)
     char *output = NULL;
 
     /* if this job is not a launcher itself, then get the launcher for this job */
-    if (PRTE_JOBID_INVALID == jdata->launcher) {
+    if (PMIX_NSPACE_INVALID(jdata->launcher)) {
         launcher = jdata;
     } else {
         launcher = prte_get_job_data_object(jdata->launcher);
@@ -334,7 +335,7 @@ char* prte_dump_aborted_procs(prte_job_t *jdata)
         }
         /* see if there is a guilty party */
         proc = NULL;
-        if (!prte_get_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC, (void**)&proc, PRTE_PTR) ||
+        if (!prte_get_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC, (void**)&proc, PMIX_POINTER) ||
             NULL == proc) {
             continue;
         }

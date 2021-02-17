@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,7 +27,6 @@
 
 #include <time.h>
 
-#include "src/dss/dss_types.h"
 #include "src/class/prte_pointer_array.h"
 #include "src/mca/rml/rml_types.h"
 
@@ -36,15 +36,15 @@ BEGIN_C_DECLS
 PRTE_EXPORT int prte_daemon(int argc, char *argv[]);
 
 /* orted communication functions */
-PRTE_EXPORT void prte_daemon_recv(int status, prte_process_name_t* sender,
-                      prte_buffer_t *buffer, prte_rml_tag_t tag,
-                      void* cbdata);
+PRTE_EXPORT void prte_daemon_recv(int status, pmix_proc_t* sender,
+                                  pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
+                                  void* cbdata);
 
 /* direct cmd processing entry points */
 PRTE_EXPORT void prte_daemon_cmd_processor(int fd, short event, void *data);
-PRTE_EXPORT int prte_daemon_process_commands(prte_process_name_t* sender,
-                                               prte_buffer_t *buffer,
-                                               prte_rml_tag_t tag);
+PRTE_EXPORT int prte_daemon_process_commands(pmix_proc_t* sender,
+                                             pmix_data_buffer_t *buffer,
+                                             prte_rml_tag_t tag);
 
 END_C_DECLS
 

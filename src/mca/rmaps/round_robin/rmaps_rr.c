@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,7 +62,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: job %s is being restarted - rr cannot map",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper &&
@@ -69,20 +70,20 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: job %s not using rr mapper",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (PRTE_MAPPING_RR < PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         /* I don't know how to do these - defer */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: job %s not using rr mapper",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping job %s",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* flag that I did the mapping */
     if (NULL != jdata->map->last_mapper) {
@@ -276,13 +277,13 @@ static int prte_rmaps_rr_assign_locations(prte_job_t *jdata)
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: job %s not using rr mapper",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: assign locations for job %s",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* if the mapping directive was byslot or bynode, then we
      * assign locations to the root object level */

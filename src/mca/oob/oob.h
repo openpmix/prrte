@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -54,9 +55,9 @@ typedef int (*mca_oob_base_component_startup_fn_t)(void);
 typedef void (*mca_oob_base_component_shutdown_fn_t)(void);
 typedef int (*mca_oob_base_component_send_fn_t)(prte_rml_send_t *msg);
 typedef char* (*mca_oob_base_component_get_addr_fn_t)(void);
-typedef int (*mca_oob_base_component_set_addr_fn_t)(prte_process_name_t *peer,
+typedef int (*mca_oob_base_component_set_addr_fn_t)(pmix_proc_t *peer,
                                                     char **uris);
-typedef bool (*mca_oob_base_component_is_reachable_fn_t)(prte_process_name_t *peer);
+typedef bool (*mca_oob_base_component_is_reachable_fn_t)(pmix_proc_t *peer);
 typedef void (*mca_oob_ping_callback_fn_t)(int status, void *cbdata);
 
 typedef struct {

@@ -13,6 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,7 +42,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
                          prte_app_context_t *app,
                          prte_list_t *node_list,
                          int32_t num_slots,
-                         prte_vpid_t num_procs)
+                         pmix_rank_t num_procs)
 {
     int i, nprocs_mapped;
     prte_node_t *node;
@@ -53,7 +54,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by slot for job %s slots %d num_procs %lu",
-                        PRTE_JOBID_PRINT(jdata->jobid), (int)num_slots, (unsigned long)num_procs);
+                        PRTE_JOBID_PRINT(jdata->nspace), (int)num_slots, (unsigned long)num_procs);
 
     /* check to see if we can map all the procs */
     if (num_slots < (int)app->num_procs) {
@@ -105,7 +106,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
             nprocs_mapped++;
-            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
         }
     }
 
@@ -116,7 +117,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr:slot job %s is oversubscribed - performing second pass",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* second pass: if we haven't mapped everyone yet, it is
      * because we are oversubscribed. Figure out how many procs
@@ -177,7 +178,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
             nprocs_mapped++;
-            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
         }
         /* not all nodes are equal, so only set oversubscribed for
          * this node if it is in that state
@@ -219,7 +220,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                          prte_app_context_t *app,
                          prte_list_t *node_list,
                          int32_t num_slots,
-                         prte_vpid_t num_procs)
+                         pmix_rank_t num_procs)
 {
     int j, nprocs_mapped, nnodes;
     prte_node_t *node;
@@ -233,7 +234,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by node for job %s app %d slots %d num_procs %lu",
-                        PRTE_JOBID_PRINT(jdata->jobid), (int)app->idx,
+                        PRTE_JOBID_PRINT(jdata->nspace), (int)app->idx,
                         (int)num_slots, (unsigned long)num_procs);
 
     /* quick check to see if we can map all the procs */
@@ -359,7 +360,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                     return PRTE_ERR_OUT_OF_RESOURCE;
                 }
                 nprocs_mapped++;
-                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
             }
             /* not all nodes are equal, so only set oversubscribed for
              * this node if it is in that state
@@ -413,7 +414,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
             nprocs_mapped++;
-            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
             /* not all nodes are equal, so only set oversubscribed for
              * this node if it is in that state
              */
@@ -438,7 +439,7 @@ static  int byobj_span(prte_job_t *jdata,
                        prte_app_context_t *app,
                        prte_list_t *node_list,
                        int32_t num_slots,
-                       prte_vpid_t num_procs,
+                       pmix_rank_t num_procs,
                        hwloc_obj_type_t target, unsigned cache_level);
 
 /* mapping by hwloc object looks a lot like mapping by node,
@@ -449,7 +450,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
                         prte_app_context_t *app,
                         prte_list_t *node_list,
                         int32_t num_slots,
-                        prte_vpid_t num_procs,
+                        pmix_rank_t num_procs,
                         hwloc_obj_type_t target, unsigned cache_level)
 {
     int i, nmapped, nprocs_mapped;
@@ -488,7 +489,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping no-span by %s for job %s slots %d num_procs %lu",
                         hwloc_obj_type_string(target),
-                        PRTE_JOBID_PRINT(jdata->jobid),
+                        PRTE_JOBID_PRINT(jdata->nspace),
                         (int)num_slots, (unsigned long)num_procs);
 
     /* quick check to see if we can map all the procs */
@@ -503,17 +504,17 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PRTE_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING);
 
     /* see if they want multiple cpus/rank */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRTE_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
         cpus_per_rank = u16;
     } else {
         cpus_per_rank = 1;
     }
 
     /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
@@ -546,7 +547,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
 
             /* if this is a comm_spawn situation, start with the object
              * where the parent left off and increment */
-            if (PRTE_JOBID_INVALID != jdata->originator.jobid &&
+            if (!PMIX_NSPACE_INVALID(jdata->originator.nspace) &&
                 UINT_MAX != jdata->bkmark_obj) {
                 start = (jdata->bkmark_obj + 1) % nobjs;
             }
@@ -635,7 +636,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
                     }
                     nprocs_mapped++;
                     nmapped++;
-                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
                      /* track the bookmark */
                     jdata->bkmark_obj = (i + start) % nobjs;
                }
@@ -714,7 +715,7 @@ static int byobj_span(prte_job_t *jdata,
                       prte_app_context_t *app,
                       prte_list_t *node_list,
                       int32_t num_slots,
-                      prte_vpid_t num_procs,
+                      pmix_rank_t num_procs,
                       hwloc_obj_type_t target, unsigned cache_level)
 {
     int i, j, nprocs_mapped, navg;
@@ -732,7 +733,7 @@ static int byobj_span(prte_job_t *jdata,
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping span by %s for job %s slots %d num_procs %lu",
                         hwloc_obj_type_string(target),
-                        PRTE_JOBID_PRINT(jdata->jobid),
+                        PRTE_JOBID_PRINT(jdata->nspace),
                         (int)num_slots, (unsigned long)num_procs);
 
     /* quick check to see if we can map all the procs */
@@ -765,17 +766,17 @@ static int byobj_span(prte_job_t *jdata,
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PRTE_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING);
 
     /* see if they want multiple cpus/rank */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRTE_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
         cpus_per_rank = u16;
     } else {
         cpus_per_rank = 1;
     }
 
     /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
@@ -866,7 +867,7 @@ static int byobj_span(prte_job_t *jdata,
                     return PRTE_ERR_OUT_OF_RESOURCE;
                 }
                 nprocs_mapped++;
-                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
             }
             /* keep track of the node we last used */
             jdata->bookmark = node;

@@ -12,6 +12,7 @@
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -146,7 +147,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_SEQ);
         jdata->map->req_mapper = strdup("seq"); // need sequential mapper
         /* tell the sequential mapper that all cpusets are to be treated as "physical" */
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_PHYSICAL_CPUIDS, true, NULL, PRTE_BOOL);
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_PHYSICAL_CPUIDS, true, NULL, PMIX_BOOL);
         /* LSF provides its info as hwthreads, so set the hwthread-as-cpus flag */
         prte_hwloc_use_hwthreads_as_cpus = true;
         /* don't override something provided by the user, but default to bind-to hwthread */

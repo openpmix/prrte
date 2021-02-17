@@ -16,6 +16,7 @@
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,14 +49,14 @@ typedef struct {
     /* the originator of the message - if we are routing,
      * it could be someone other than me
      */
-    prte_process_name_t     origin;
+    pmix_proc_t     origin;
     /* the intended final recipient - if we don't have
      * a path directly to that process, then we will
      * attempt to route. If we have no route to that
      * process, then we should have rejected the message
      * and let some other module try to send it
      */
-    prte_process_name_t     dst;
+    pmix_proc_t     dst;
     /* the rml tag where this message is headed */
     prte_rml_tag_t tag;
     /* the seq number of this message */
@@ -70,9 +71,9 @@ typedef struct {
 /**
  * Convert the message header to host byte order
  */
-#define MCA_OOB_TCP_HDR_NTOH(h)                \
-    PRTE_PROCESS_NAME_NTOH((h)->origin);        \
-    PRTE_PROCESS_NAME_NTOH((h)->dst);           \
+#define MCA_OOB_TCP_HDR_NTOH(h)                 \
+    (h)->origin.rank = ntohl((h)->origin.rank); \
+    (h)->dst.rank = ntohl((h)->dst.rank);       \
     (h)->tag = PRTE_RML_TAG_NTOH((h)->tag);     \
     (h)->nbytes = ntohl((h)->nbytes);
 
@@ -80,8 +81,8 @@ typedef struct {
  * Convert the message header to network byte order
  */
 #define MCA_OOB_TCP_HDR_HTON(h)                \
-    PRTE_PROCESS_NAME_HTON((h)->origin);        \
-    PRTE_PROCESS_NAME_HTON((h)->dst);           \
+    (h)->origin.rank = htonl((h)->origin.rank); \
+    (h)->dst.rank = htonl((h)->dst.rank);       \
     (h)->tag = PRTE_RML_TAG_HTON((h)->tag);     \
     (h)->nbytes = htonl((h)->nbytes);
 

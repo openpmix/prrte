@@ -13,6 +13,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,7 +65,7 @@ struct prte_job_map_t {
     /* starting vpid of the new daemons - they will
      * be sequential from that point
      */
-    prte_vpid_t daemon_vpid_start;
+    pmix_rank_t daemon_vpid_start;
     /* number of nodes participating in this job */
     int32_t num_nodes;
     /* array of pointers to nodes in this map for this job */

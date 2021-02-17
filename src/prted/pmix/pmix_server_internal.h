@@ -18,6 +18,7 @@
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -98,11 +99,11 @@ BEGIN_C_DECLS
     char *data;
     size_t sz;
     pmix_data_range_t range;
-    prte_process_name_t proxy;
-    prte_process_name_t target;
+    pmix_proc_t proxy;
+    pmix_proc_t target;
     pmix_proc_t tproc;
     prte_job_t *jdata;
-    prte_buffer_t msg;
+    pmix_data_buffer_t msg;
     pmix_op_cbfunc_t opcbfunc;
     pmix_modex_cbfunc_t mdxcbfunc;
     pmix_spawn_cbfunc_t spcbfunc;
@@ -120,7 +121,7 @@ typedef struct {
     int status;
     pmix_status_t *codes;
     size_t ncodes;
-    prte_process_name_t proc;
+    pmix_proc_t proc;
     const char *msg;
     void *server_object;
     pmix_proc_t proct;
@@ -147,7 +148,7 @@ PRTE_CLASS_DECLARATION(prte_pmix_server_op_caddy_t);
 typedef struct {
     prte_object_t super;
     prte_grpcomm_signature_t *sig;
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     pmix_modex_cbfunc_t cbfunc;
     pmix_info_cbfunc_t infocbfunc;
     int mode;
@@ -225,9 +226,8 @@ PRTE_CLASS_DECLARATION(prte_pmix_mdx_caddy_t);
 #define PRTE_PMIX_THREADSHIFT(p, s, st, m, pl, pn, fn, cf, cb)  \
     do {                                                        \
         prte_pmix_server_op_caddy_t *_cd;                       \
-        _cd = PRTE_NEW(prte_pmix_server_op_caddy_t);             \
-        _cd->proc.jobid = (p)->jobid;                           \
-        _cd->proc.vpid = (p)->vpid;                             \
+        _cd = PRTE_NEW(prte_pmix_server_op_caddy_t);            \
+        PMIX_LOAD_PROCID(&_cd->proc, (p)->nspace, (p)->rank);   \
         _cd->server_object = (s);                               \
         _cd->status = (st);                                     \
         _cd->msg = (m);                                         \
@@ -332,16 +332,16 @@ PRTE_EXPORT void prte_pmix_server_tool_conn_complete(prte_job_t *jdata,
                                                        pmix_server_req_t *req);
 
 /* declare the RML recv functions for responses */
-PRTE_EXPORT extern void pmix_server_launch_resp(int status, prte_process_name_t* sender,
-                                                 prte_buffer_t *buffer,
+PRTE_EXPORT extern void pmix_server_launch_resp(int status, pmix_proc_t* sender,
+                                                 pmix_data_buffer_t *buffer,
                                                  prte_rml_tag_t tg, void *cbdata);
 
-PRTE_EXPORT extern void pmix_server_keyval_client(int status, prte_process_name_t* sender,
-                                                   prte_buffer_t *buffer,
+PRTE_EXPORT extern void pmix_server_keyval_client(int status, pmix_proc_t* sender,
+                                                   pmix_data_buffer_t *buffer,
                                                    prte_rml_tag_t tg, void *cbdata);
 
-PRTE_EXPORT extern void pmix_server_notify(int status, prte_process_name_t* sender,
-                                            prte_buffer_t *buffer,
+PRTE_EXPORT extern void pmix_server_notify(int status, pmix_proc_t* sender,
+                                            pmix_data_buffer_t *buffer,
                                             prte_rml_tag_t tg, void *cbdata);
 
 /* exposed shared variables */
@@ -361,7 +361,7 @@ typedef struct {
     int num_rooms;
     int timeout;
     bool wait_for_server;
-    prte_process_name_t server;
+    pmix_proc_t server;
     prte_list_t notifications;
     bool pubsub_init;
     bool session_server;

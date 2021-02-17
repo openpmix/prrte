@@ -15,6 +15,7 @@
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,7 +28,6 @@
 
 #include <string.h>
 
-#include "src/dss/dss.h"
 #include "src/util/argv.h"
 #include "src/util/if.h"
 
@@ -70,7 +70,7 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
     /* mark the job as being a large-cluster sim if that was requested */
     if (1 < prte_ras_base.multiplier) {
         prte_set_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM,
-                           PRTE_ATTR_GLOBAL, NULL, PRTE_BOOL);
+                           PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
     }
 
     /* set the size of the global array - this helps minimize time
@@ -82,7 +82,7 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
     }
 
     /* if we are not launching, get the daemon job */
-    djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
     /* get the hnp node's info */
     hnp_node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, 0);
@@ -132,7 +132,7 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
             hnp_node->slots_max = node->slots_max;
             /* copy across any attributes */
             PRTE_LIST_FOREACH(kv, &node->attributes, prte_attribute_t) {
-                prte_set_attribute(&node->attributes, kv->key, PRTE_ATTR_LOCAL, &kv->data, kv->type);
+                prte_set_attribute(&node->attributes, kv->key, PRTE_ATTR_LOCAL, &kv->data, kv->data.type);
             }
             if (prte_managed_allocation || PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
                 /* the slots are always treated as sacred
@@ -151,7 +151,7 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
                 if (0 != strcmp(node->name, hnp_node->name)) {
                     /* get any current list of aliases */
                     ptr = NULL;
-                    prte_get_attribute(&hnp_node->attributes, PRTE_NODE_ALIAS, (void**)&ptr, PRTE_STRING);
+                    prte_get_attribute(&hnp_node->attributes, PRTE_NODE_ALIAS, (void**)&ptr, PMIX_STRING);
                     if (NULL != ptr) {
                         alias = prte_argv_split(ptr, ',');
                         free(ptr);
@@ -159,7 +159,7 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
                     /* add to list of aliases for this node - only add if unique */
                     prte_argv_append_unique_nosize(&alias, node->name);
                 }
-                if (prte_get_attribute(&node->attributes, PRTE_NODE_ALIAS, (void**)&ptr, PRTE_STRING)) {
+                if (prte_get_attribute(&node->attributes, PRTE_NODE_ALIAS, (void**)&ptr, PMIX_STRING)) {
                     nalias = prte_argv_split(ptr, ',');
                     /* now copy over any aliases that are unique */
                     for (i=0; NULL != nalias[i]; i++) {
@@ -170,7 +170,7 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
                 /* and store the result */
                 if (0 < prte_argv_count(alias)) {
                     ptr = prte_argv_join(alias, ',');
-                    prte_set_attribute(&hnp_node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, ptr, PRTE_STRING);
+                    prte_set_attribute(&hnp_node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, ptr, PMIX_STRING);
                     free(ptr);
                 }
                 prte_argv_free(alias);
@@ -179,7 +179,10 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
             PRTE_RELEASE(node);
             /* create copies, if required */
             for (i=1; i < prte_ras_base.multiplier; i++) {
-                prte_dss.copy((void**)&node, hnp_node, PRTE_NODE);
+                rc = prte_node_copy(&node, hnp_node);
+                if (PRTE_SUCCESS != rc) {
+                    return rc;
+                }
                 PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
                 node->index = prte_pointer_array_add(prte_node_pool, node);
             }
@@ -207,12 +210,11 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
                  * and the mapper needs to see a daemon - this is used solely
                  * for testing the mappers */
                 daemon = PRTE_NEW(prte_proc_t);
-                daemon->name.jobid = PRTE_PROC_MY_NAME->jobid;
-                daemon->name.vpid = node->index;
+                PMIX_LOAD_PROCID(&daemon->name, PRTE_PROC_MY_NAME->nspace, node->index);
                 daemon->state = PRTE_PROC_STATE_RUNNING;
                 PRTE_RETAIN(node);
                 daemon->node = node;
-                prte_pointer_array_set_item(djob->procs, daemon->name.vpid, daemon);
+                prte_pointer_array_set_item(djob->procs, daemon->name.rank, daemon);
                 djob->num_procs++;
                 PRTE_RETAIN(daemon);
                 node->daemon = daemon;
@@ -226,7 +228,10 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
             /* indicate the HNP is not alone */
             hnp_alone = false;
             for (i=1; i < prte_ras_base.multiplier; i++) {
-                prte_dss.copy((void**)&nptr, node, PRTE_NODE);
+                rc = prte_node_copy(&nptr, node);
+                if (PRTE_SUCCESS != rc) {
+                    return rc;
+                }
                 nptr->index = prte_pointer_array_add(prte_node_pool, nptr);
             }
        }

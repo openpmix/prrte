@@ -5,6 +5,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,30 +23,29 @@
 #endif
 #include <ctype.h>
 
-#include "src/dss/dss.h"
-#include "src/mca/prtecompress/prtecompress.h"
 #include "src/util/argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/routed/routed.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
 #include "src/util/nidmap.h"
 
 int prte_util_nidmap_create(prte_pointer_array_t *pool,
-                            prte_buffer_t *buffer)
+                            pmix_data_buffer_t *buffer)
 {
     char *raw = NULL;
-    uint8_t *vpids=NULL, u8;
-    uint16_t u16;
-    uint32_t u32;
-    int n, ndaemons, rc, nbytes;
+    uint32_t *vpids=NULL;
+    uint8_t u8;
+    int n, ndaemons, nbytes;
     bool compressed;
     char **names = NULL, **ranks = NULL;
     prte_node_t *nptr;
-    prte_byte_object_t bo, *boptr;
+    pmix_byte_object_t bo;
     size_t sz;
+    pmix_status_t rc;
 
     /* pack a flag indicating if the HNP was included in the allocation */
     if (prte_hnp_is_allocated) {
@@ -53,8 +53,9 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool,
     } else {
         u8 = 0;
     }
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &u8, 1, PRTE_UINT8))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &u8, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return rc;
     }
 
@@ -64,8 +65,9 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool,
     } else {
         u8 = 0;
     }
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &u8, 1, PRTE_UINT8))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &u8, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         return rc;
     }
 
@@ -77,14 +79,8 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool,
      * have more than a million nodes for quite some time,
      * so for now we'll just allocate enough space to hold
      * them all. Someone can optimize this further later */
-    if (256 >= pool->size) {
-        nbytes = 1;
-    } else if (65536 >= pool->size) {
-        nbytes = 2;
-    } else {
-        nbytes = 4;
-    }
-    vpids = (uint8_t*)malloc(nbytes * pool->size);
+    nbytes = prte_process_info.num_daemons * sizeof(uint32_t);
+    vpids = (uint32_t*)malloc(nbytes);
 
     ndaemons = 0;
     for (n=0; n < pool->size; n++) {
@@ -94,61 +90,37 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool,
         /* add the hostname to the argv */
         prte_argv_append_nosize(&names, nptr->name);
         /* store the vpid */
-        if (1 == nbytes) {
-            if (NULL == nptr->daemon) {
-                vpids[ndaemons] = UINT8_MAX;
-            } else {
-                vpids[ndaemons] = nptr->daemon->name.vpid;
-            }
-        } else if (2 == nbytes) {
-            if (NULL == nptr->daemon) {
-                u16 = UINT16_MAX;
-            } else {
-                u16 = nptr->daemon->name.vpid;
-            }
-            memcpy(&vpids[nbytes*ndaemons], &u16, 2);
+        if (NULL == nptr->daemon) {
+            vpids[ndaemons] = PMIX_RANK_INVALID;
         } else {
-            if (NULL == nptr->daemon) {
-                u32 = UINT32_MAX;
-            } else {
-                u32 = nptr->daemon->name.vpid;
-            }
-            memcpy(&vpids[nbytes*ndaemons], &u32, 4);
+            vpids[ndaemons] = nptr->daemon->name.rank;
         }
         ++ndaemons;
     }
 
     /* construct the string of node names for compression */
     raw = prte_argv_join(names, ',');
-    if (prte_compress.compress_block((uint8_t*)raw, strlen(raw)+1,
-                                     (uint8_t**)&bo.bytes, &sz)) {
+    if (PMIx_Data_compress((uint8_t*)raw, strlen(raw)+1,
+                           (uint8_t**)&bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
         bo.size = sz;
     } else {
         /* mark that this was not compressed */
         compressed = false;
-        bo.bytes = (uint8_t*)raw;
+        bo.bytes = (char*)raw;
         bo.size = strlen(raw)+1;
     }
     /* indicate compression */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &compressed, 1, PRTE_BOOL))) {
-        if (compressed) {
-            free(bo.bytes);
-        }
-        goto cleanup;
-    }
-    /* if compressed, provide the uncompressed size */
-    if (compressed) {
-        sz = strlen(raw)+1;
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &sz, 1, PRTE_SIZE))) {
-            free(bo.bytes);
-            goto cleanup;
-        }
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &compressed, 1, PMIX_BOOL);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return rc;
     }
     /* add the object */
-    boptr = &bo;
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &boptr, 1, PRTE_BYTE_OBJECT))) {
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &bo, 1, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         if (compressed) {
             free(bo.bytes);
         }
@@ -159,42 +131,30 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool,
     }
 
     /* compress the vpids */
-    if (prte_compress.compress_block(vpids, nbytes*ndaemons,
-                                     (uint8_t**)&bo.bytes, &sz)) {
+    if (PMIx_Data_compress((uint8_t*)vpids, nbytes,
+                           (uint8_t**)&bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
         bo.size = sz;
     } else {
         /* mark that this was not compressed */
         compressed = false;
-        bo.bytes = vpids;
+        bo.bytes = (char*)vpids;
         bo.size = nbytes*ndaemons;
     }
     /* indicate compression */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &compressed, 1, PRTE_BOOL))) {
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &compressed, 1, PMIX_BOOL);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         if (compressed) {
             free(bo.bytes);
         }
         goto cleanup;
-    }
-    /* provide the #bytes/vpid */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &nbytes, 1, PRTE_INT))) {
-        if (compressed) {
-            free(bo.bytes);
-        }
-        goto cleanup;
-    }
-    /* if compressed, provide the uncompressed size */
-    if (compressed) {
-        sz = nbytes*ndaemons;
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &sz, 1, PRTE_SIZE))) {
-            free(bo.bytes);
-            goto cleanup;
-        }
     }
     /* add the object */
-    boptr = &bo;
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &boptr, 1, PRTE_BYTE_OBJECT))) {
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &bo, 1, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         if (compressed) {
             free(bo.bytes);
         }
@@ -221,25 +181,26 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool,
     return rc;
 }
 
-int prte_util_decode_nidmap(prte_buffer_t *buf)
+int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
 {
-    uint8_t u8, *vp8 = NULL;
-    uint16_t *vp16 = NULL;
-    uint32_t *vp32 = NULL, vpid;
-    int cnt, rc, nbytes, n;
+    uint8_t u8;
+    pmix_rank_t *vpid = NULL;
+    int cnt, n;
     bool compressed;
     size_t sz;
-    prte_byte_object_t *boptr;
+    pmix_byte_object_t pbo;
     char *raw = NULL, **names = NULL;
     prte_node_t *nd;
     prte_job_t *daemons;
     prte_proc_t *proc;
     prte_topology_t *t = NULL;
+    pmix_status_t rc;
 
     /* unpack the flag indicating if HNP is in allocation */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &u8, &cnt, PRTE_UINT8))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buf, &u8, &cnt, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
     if (1 == u8) {
@@ -250,8 +211,9 @@ int prte_util_decode_nidmap(prte_buffer_t *buf)
 
     /* unpack the flag indicating if we are in managed allocation */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &u8, &cnt, PRTE_UINT8))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buf, &u8, &cnt, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
     if (1 == u8) {
@@ -262,111 +224,71 @@ int prte_util_decode_nidmap(prte_buffer_t *buf)
 
     /* unpack compression flag for node names */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &compressed, &cnt, PRTE_BOOL))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buf, &compressed, &cnt, PMIX_BOOL);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
-    }
-
-    /* if compressed, get the uncompressed size */
-    if (compressed) {
-        cnt = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &sz, &cnt, PRTE_SIZE))) {
-            PRTE_ERROR_LOG(rc);
-            goto cleanup;
-        }
     }
 
     /* unpack the nodename object */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &boptr, &cnt, PRTE_BYTE_OBJECT))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buf, &pbo, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
 
     /* if compressed, decompress */
     if (compressed) {
-        if (!prte_compress.decompress_block((uint8_t**)&raw, sz,
-                                            boptr->bytes, boptr->size)) {
+        if (!PMIx_Data_decompress((uint8_t**)&raw, &sz,
+                                  (uint8_t*)pbo.bytes, pbo.size)) {
             PRTE_ERROR_LOG(PRTE_ERROR);
-            if (NULL != boptr->bytes) {
-                free(boptr->bytes);
-            }
-            free(boptr);
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             rc = PRTE_ERROR;
             goto cleanup;
         }
     } else {
-        raw = (char*)boptr->bytes;
-        boptr->bytes = NULL;
-        boptr->size = 0;
+        raw = (char*)pbo.bytes;
+        pbo.bytes = NULL; // protect the data
+        pbo.size = 0;
     }
-    if (NULL != boptr->bytes) {
-        free(boptr->bytes);
-    }
-    free(boptr);
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
     names = prte_argv_split(raw, ',');
     free(raw);
 
 
     /* unpack compression flag for daemon vpids */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &compressed, &cnt, PRTE_BOOL))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buf, &compressed, &cnt, PMIX_BOOL);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
-    }
-
-    /* unpack the #bytes/vpid */
-    cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &nbytes, &cnt, PRTE_INT))) {
-        PRTE_ERROR_LOG(rc);
-        goto cleanup;
-    }
-
-    /* if compressed, get the uncompressed size */
-    if (compressed) {
-        cnt = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &sz, &cnt, PRTE_SIZE))) {
-            PRTE_ERROR_LOG(rc);
-            goto cleanup;
-        }
     }
 
     /* unpack the vpid object */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &boptr, &cnt, PRTE_BYTE_OBJECT))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buf, &pbo, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
 
     /* if compressed, decompress */
     if (compressed) {
-        if (!prte_compress.decompress_block((uint8_t**)&vp8, sz,
-                                            boptr->bytes, boptr->size)) {
+        if (!PMIx_Data_decompress((uint8_t**)&vpid, &sz,
+                                  (uint8_t*)pbo.bytes, pbo.size)) {
             PRTE_ERROR_LOG(PRTE_ERROR);
-            if (NULL != boptr->bytes) {
-                free(boptr->bytes);
-            }
-            free(boptr);
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             rc = PRTE_ERROR;
             goto cleanup;
         }
     } else {
-        vp8 = (uint8_t*)boptr->bytes;
-        sz = boptr->size;
-        boptr->bytes = NULL;
-        boptr->size = 0;
+        vpid = (pmix_rank_t*)pbo.bytes;
+        sz = pbo.size;
+        pbo.bytes = NULL;
+        pbo.size = 0;
     }
-    if (NULL != boptr->bytes) {
-        free(boptr->bytes);
-    }
-    free(boptr);
-    if (2 == nbytes) {
-        vp16 = (uint16_t*)vp8;
-        vp8 = NULL;
-    } else if (4 == nbytes) {
-        vp32 = (uint32_t*)vp8;
-        vp8 = NULL;
-    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
 
     /* if we are the HNP, we don't need any of this stuff */
     if (PRTE_PROC_IS_MASTER) {
@@ -375,7 +297,7 @@ int prte_util_decode_nidmap(prte_buffer_t *buf)
     }
 
     /* get the daemon job object */
-    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
     /* get our topology */
     for (n=0; n < prte_node_topologies->size; n++) {
@@ -401,31 +323,21 @@ int prte_util_decode_nidmap(prte_buffer_t *buf)
         if (prte_check_host_is_local(names[n])) {
             /* add our aliases as an attribute - will include all the interface aliases captured in prte_init */
             raw = prte_argv_join(prte_process_info.aliases, ',');
-            prte_set_attribute(&nd->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, raw, PRTE_STRING);
+            prte_set_attribute(&nd->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, raw, PMIX_STRING);
             free(raw);
         }
         /* set the topology - always default to homogeneous
          * as that is the most common scenario */
         nd->topology = t;
         /* see if it has a daemon on it */
-        if (1 == nbytes && UINT8_MAX != vp8[n]) {
-            vpid = vp8[n];
-        } else if (2 == nbytes && UINT16_MAX != vp16[n]) {
-            vpid = vp16[n];
-        } else if (4 == nbytes && UINT32_MAX != vp32[n]) {
-            vpid = vp32[n];
-        } else {
-            vpid = UINT32_MAX;
-        }
-        if (UINT32_MAX != vpid) {
-            if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(daemons->procs, vpid))) {
+        if (PMIX_RANK_INVALID != vpid[n]) {
+            if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(daemons->procs, vpid[n]))) {
                 proc = PRTE_NEW(prte_proc_t);
-                proc->name.jobid = PRTE_PROC_MY_NAME->jobid;
-                proc->name.vpid = vpid;
+                PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, vpid[n]);
                 proc->state = PRTE_PROC_STATE_RUNNING;
                 PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_ALIVE);
                 daemons->num_procs++;
-                prte_pointer_array_set_item(daemons->procs, proc->name.vpid, proc);
+                prte_pointer_array_set_item(daemons->procs, proc->name.rank, proc);
             }
             PRTE_RETAIN(nd);
             proc->node = nd;
@@ -442,14 +354,8 @@ int prte_util_decode_nidmap(prte_buffer_t *buf)
     prte_routed.update_routing_plan();
 
   cleanup:
-    if (NULL != vp8) {
-        free(vp8);
-    }
-    if (NULL != vp16) {
-        free(vp16);
-    }
-    if (NULL != vp32) {
-        free(vp32);
+    if (NULL != vpid) {
+        free(vpid);
     }
     if (NULL != names) {
         prte_argv_free(names);
@@ -457,7 +363,7 @@ int prte_util_decode_nidmap(prte_buffer_t *buf)
     return rc;
 }
 
-int prte_util_pass_node_info(prte_buffer_t *buffer)
+int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
 {
     uint16_t *slots=NULL, slot = UINT16_MAX;
     uint8_t *flags=NULL, flag = UINT8_MAX;
@@ -466,10 +372,11 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
     int rc, n, nbitmap, nstart;
     bool compressed, unislots = true, uniflags = true, unitopos = true;
     prte_node_t *nptr;
-    prte_byte_object_t bo, *boptr;
+    pmix_byte_object_t bo;
     size_t sz, nslots;
-    prte_buffer_t bucket;
+    pmix_data_buffer_t bucket;
     prte_topology_t *t;
+    pmix_topology_t pt;
 
     /* make room for the number of slots on each node */
     nslots = sizeof(uint16_t) * prte_node_pool->size;
@@ -497,78 +404,91 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
     } else {
         nstart = 0;
     }
-    PRTE_CONSTRUCT(&bucket, prte_buffer_t);
+    PMIX_DATA_BUFFER_CONSTRUCT(&bucket);
+    pt.source = strdup("hwloc");
     ntopos = 0;
     for (n=nstart; n < prte_node_topologies->size; n++) {
         if (NULL == (t = (prte_topology_t*)prte_pointer_array_get_item(prte_node_topologies, n))) {
             continue;
         }
         /* pack the index */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(&bucket, &t->index, 1, PRTE_INT))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_DESTRUCT(&bucket);
+        rc = PMIx_Data_pack(NULL, &bucket, &t->index, 1, PMIX_INT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&bucket);
+            free(pt.source);
             goto cleanup;
         }
         /* pack this topology string */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(&bucket, &t->sig, 1, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_DESTRUCT(&bucket);
+        rc = PMIx_Data_pack(NULL, &bucket, &t->sig, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&bucket);
+            free(pt.source);
             goto cleanup;
         }
         /* pack the topology itself */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(&bucket, &t->topo, 1, PRTE_HWLOC_TOPO))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_DESTRUCT(&bucket);
+        pt.topology = t->topo;
+        rc = PMIx_Data_pack(NULL, &bucket, &pt, 1, PMIX_TOPO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&bucket);
+            free(pt.source);
             goto cleanup;
         }
         ++ntopos;
     }
+    free(pt.source);
     /* pack the number of topologies in allocation */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &ntopos, 1, PRTE_INT8))) {
+    rc = PMIx_Data_pack(NULL, buffer, &ntopos, 1, PMIX_INT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&bucket);
         goto cleanup;
     }
     if (1 < ntopos) {
         /* need to send them along */
-        if (prte_compress.compress_block((uint8_t*)bucket.base_ptr, bucket.bytes_used,
-                                         &bo.bytes, &sz)) {
+        if (PMIx_Data_compress((uint8_t*)bucket.base_ptr, bucket.bytes_used,
+                               (uint8_t**)&bo.bytes, &sz)) {
             /* the data was compressed - mark that we compressed it */
             compressed = true;
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &compressed, 1, PRTE_BOOL))) {
-                PRTE_ERROR_LOG(rc);
-                PRTE_DESTRUCT(&bucket);
-                goto cleanup;
-            }
-            /* pack the uncompressed length */
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &bucket.bytes_used, 1, PRTE_SIZE))) {
-                PRTE_ERROR_LOG(rc);
-                PRTE_DESTRUCT(&bucket);
+            rc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_DESTRUCT(&bucket);
                 goto cleanup;
             }
             bo.size = sz;
         } else {
             /* mark that it was not compressed */
             compressed = false;
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &compressed, 1, PRTE_BOOL))) {
-                PRTE_ERROR_LOG(rc);
-                PRTE_DESTRUCT(&bucket);
+            rc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_DESTRUCT(&bucket);
                 goto cleanup;
             }
-            prte_dss.unload(&bucket, (void**)&bo.bytes, &bo.size);
+            rc = PMIx_Data_unload(&bucket, &bo);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_DESTRUCT(&bucket);
+                goto cleanup;
+            }
         }
         unitopos = false;
         /* pack the info */
-        boptr = &bo;
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &boptr, 1, PRTE_BYTE_OBJECT))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_DESTRUCT(&bucket);
+        rc = PMIx_Data_pack(NULL, buffer, &bo, 1, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&bucket);
             goto cleanup;
         }
-        PRTE_DESTRUCT(&bucket);
+        PMIX_DATA_BUFFER_DESTRUCT(&bucket);
         free(bo.bytes);
     }
 
     /* construct the per-node info */
-    PRTE_CONSTRUCT(&bucket, prte_buffer_t);
+    PMIX_DATA_BUFFER_CONSTRUCT(&bucket);
     for (n=0; n < prte_node_pool->size; n++) {
         if (NULL == (nptr = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, n))) {
             continue;
@@ -576,9 +496,10 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
         /* track the topology, if required */
         if (!unitopos) {
             i8 = nptr->topology->index;
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(&bucket, &i8, 1, PRTE_INT8))) {
-                PRTE_ERROR_LOG(rc);
-                PRTE_DESTRUCT(&bucket);
+            rc = PMIx_Data_pack(NULL, &bucket, &i8, 1, PMIX_INT8);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_DESTRUCT(&bucket);
                 goto cleanup;
             }
         }
@@ -608,51 +529,52 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
 
     /* deal with the topology assignments */
     if (!unitopos) {
-        if (prte_compress.compress_block((uint8_t*)bucket.base_ptr, bucket.bytes_used,
-                                         (uint8_t**)&bo.bytes, &sz)) {
+        if (PMIx_Data_compress((uint8_t*)bucket.base_ptr, bucket.bytes_used,
+                               (uint8_t**)&bo.bytes, &sz)) {
             /* mark that this was compressed */
             compressed = true;
             bo.size = sz;
         } else {
             /* mark that this was not compressed */
             compressed = false;
-            bo.bytes = (uint8_t*)bucket.base_ptr;
+            bo.bytes = bucket.base_ptr;
             bo.size = bucket.bytes_used;
         }
         /* indicate compression */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &compressed, 1, PRTE_BOOL))) {
+        rc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&bucket);
             if (compressed) {
                 free(bo.bytes);
             }
             goto cleanup;
         }
-        /* if compressed, provide the uncompressed size */
-        if (compressed) {
-            sz = nslots;
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &sz, 1, PRTE_SIZE))) {
-                free(bo.bytes);
-                goto cleanup;
-            }
-        }
         /* add the object */
-        boptr = &bo;
-        rc = prte_dss.pack(buffer, &boptr, 1, PRTE_BYTE_OBJECT);
-        if (compressed) {
-            free(bo.bytes);
+        rc = PMIx_Data_pack(NULL, buffer, &bo, 1, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&bucket);
+            if (compressed) {
+                free(bo.bytes);
+            }
+            goto cleanup;
         }
     }
-    PRTE_DESTRUCT(&bucket);
+    PMIX_DATA_BUFFER_DESTRUCT(&bucket);
 
     /* if we have uniform #slots, then just flag it - no
      * need to pass anything */
     if (unislots) {
         i16 = -1 * slot;
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &i16, 1, PRTE_INT16))) {
+        rc = PMIx_Data_pack(NULL, buffer, &i16, 1, PMIX_INT16);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto cleanup;
         }
     } else {
-        if (prte_compress.compress_block((uint8_t*)slots, nslots,
-                                         (uint8_t**)&bo.bytes, &sz)) {
+        if (PMIx_Data_compress((uint8_t*)slots, nslots,
+                               (uint8_t**)&bo.bytes, &sz)) {
             /* mark that this was compressed */
             i16 = 1;
             compressed = true;
@@ -661,29 +583,26 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
             /* mark that this was not compressed */
             i16 = 0;
             compressed = false;
-            bo.bytes = flags;
-            bo.size = nbitmap;
+            bo.bytes = (char*)slots;
+            bo.size = nslots;
         }
         /* indicate compression */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &i16, 1, PRTE_INT16))) {
+        rc = PMIx_Data_pack(NULL, buffer, &i16, 1, PMIX_INT16);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             if (compressed) {
                 free(bo.bytes);
             }
             goto cleanup;
         }
-        /* if compressed, provide the uncompressed size */
-        if (compressed) {
-            sz = nslots;
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &sz, 1, PRTE_SIZE))) {
-                free(bo.bytes);
-                goto cleanup;
-            }
-        }
         /* add the object */
-        boptr = &bo;
-        rc = prte_dss.pack(buffer, &boptr, 1, PRTE_BYTE_OBJECT);
-        if (compressed) {
-            free(bo.bytes);
+        rc = PMIx_Data_pack(NULL, buffer, &bo, 1, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            if (compressed) {
+                free(bo.bytes);
+            }
+            goto cleanup;
         }
     }
 
@@ -695,12 +614,14 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
         } else {
             i8 = -2;
         }
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &i8, 1, PRTE_INT8))) {
+        rc = PMIx_Data_pack(NULL, buffer, &i8, 1, PMIX_INT8);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto cleanup;
         }
     } else {
-        if (prte_compress.compress_block(flags, nbitmap,
-                                         (uint8_t**)&bo.bytes, &sz)) {
+        if (PMIx_Data_compress(flags, nbitmap,
+                               (uint8_t**)&bo.bytes, &sz)) {
             /* mark that this was compressed */
             i8 = 2;
             compressed = true;
@@ -709,29 +630,26 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
             /* mark that this was not compressed */
             i8 = 3;
             compressed = false;
-            bo.bytes = flags;
+            bo.bytes = (char*)flags;
             bo.size = nbitmap;
         }
         /* indicate compression */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &i8, 1, PRTE_INT8))) {
+        rc = PMIx_Data_pack(NULL, buffer, &i8, 1, PMIX_INT8);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             if (compressed) {
                 free(bo.bytes);
             }
             goto cleanup;
         }
-        /* if compressed, provide the uncompressed size */
-        if (compressed) {
-            sz = nbitmap;
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &sz, 1, PRTE_SIZE))) {
-                free(bo.bytes);
-                goto cleanup;
-            }
-        }
         /* add the object */
-        boptr = &bo;
-        rc = prte_dss.pack(buffer, &boptr, 1, PRTE_BYTE_OBJECT);
-        if (compressed) {
-            free(bo.bytes);
+        rc = PMIx_Data_pack(NULL, buffer, &bo, 1, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            if (compressed) {
+                free(bo.bytes);
+            }
+            goto cleanup;
         }
     }
 
@@ -745,7 +663,7 @@ int prte_util_pass_node_info(prte_buffer_t *buffer)
     return rc;
 }
 
-int prte_util_parse_node_info(prte_buffer_t *buf)
+int prte_util_parse_node_info(pmix_data_buffer_t *buf)
 {
     int8_t i8;
     int16_t i16;
@@ -753,21 +671,23 @@ int prte_util_parse_node_info(prte_buffer_t *buf)
     int rc = PRTE_SUCCESS, cnt, n, m, index;
     prte_node_t *nptr;
     size_t sz;
-    prte_byte_object_t *boptr;
+    pmix_byte_object_t pbo;
     uint16_t *slots = NULL;
     uint8_t *flags = NULL;
     uint8_t *bytes = NULL;
     prte_topology_t *t2, *t3;
+    pmix_topology_t *ptopo;
     hwloc_topology_t topo;
     char *sig;
-    prte_buffer_t bucket;
+    pmix_data_buffer_t bucket;
     hwloc_obj_t root;
     prte_hwloc_topo_data_t *sum;
 
     /* check to see if we have uniform topologies */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &i8, &cnt, PRTE_INT8))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buf, &i8, &cnt, PMIX_INT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
     /* we already defaulted to uniform topology, so only need to
@@ -775,69 +695,67 @@ int prte_util_parse_node_info(prte_buffer_t *buf)
     if (1 < i8) {
         /* unpack the compression flag */
         cnt = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &compressed, &cnt, PRTE_BOOL))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buf, &compressed, &cnt, PMIX_BOOL);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto cleanup;
-        }
-        if (compressed) {
-            /* get the uncompressed size */
-            cnt = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &sz, &cnt, PRTE_SIZE))) {
-                PRTE_ERROR_LOG(rc);
-                goto cleanup;
-            }
         }
         /* unpack the topology object */
         cnt = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &boptr, &cnt, PRTE_BYTE_OBJECT))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buf, &pbo, &cnt, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto cleanup;
         }
 
         /* if compressed, decompress */
         if (compressed) {
-            if (!prte_compress.decompress_block((uint8_t**)&bytes, sz,
-                                                boptr->bytes, boptr->size)) {
+            if (!PMIx_Data_decompress((uint8_t**)&bytes, &sz,
+                                      (uint8_t*)pbo.bytes, pbo.size)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
-                if (NULL != boptr->bytes) {
-                    free(boptr->bytes);
-                }
-                free(boptr);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
                 goto cleanup;
             }
         } else {
-            bytes = (uint8_t*)boptr->bytes;
-            sz = boptr->size;
-            boptr->bytes = NULL;
-            boptr->size = 0;
-        }
-        if (NULL != boptr->bytes) {
-            free(boptr->bytes);
-        }
+            bytes = (uint8_t*)pbo.bytes;
+            sz = pbo.size;
+            pbo.bytes = NULL;
+            pbo.size = 0;
+         }
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);  // release pre-existing data
+        PMIX_BYTE_OBJECT_LOAD(&pbo, bytes, sz);
+
         /* setup to unpack */
-        PRTE_CONSTRUCT(&bucket, prte_buffer_t);
-        prte_dss.load(&bucket, bytes, sz);
+        PMIX_DATA_BUFFER_CONSTRUCT(&bucket);
+        rc = PMIx_Data_load(&bucket, &pbo);
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
 
         for (n=0; n < i8; n++) {
             /* unpack the index */
             cnt = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(&bucket, &index, &cnt, PRTE_INT))) {
-                PRTE_ERROR_LOG(rc);
+            rc = PMIx_Data_unpack(NULL, &bucket, &index, &cnt, PMIX_INT);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
                 goto cleanup;
             }
             /* unpack the signature */
             cnt = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(&bucket, &sig, &cnt, PRTE_STRING))) {
-                PRTE_ERROR_LOG(rc);
+            rc = PMIx_Data_unpack(NULL, &bucket, &sig, &cnt, PMIX_STRING);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
                 goto cleanup;
             }
             /* unpack the topology */
             cnt = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(&bucket, &topo, &cnt, PRTE_HWLOC_TOPO))) {
-                PRTE_ERROR_LOG(rc);
+            rc = PMIx_Data_unpack(NULL, &bucket, &ptopo, &cnt, PMIX_TOPO);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
                 goto cleanup;
             }
+            topo = ptopo->topology;
+            ptopo->topology = NULL;
+            PMIX_TOPOLOGY_FREE(ptopo, 1);
             /* record it */
             t2 = PRTE_NEW(prte_topology_t);
             t2->index = index;
@@ -858,71 +776,66 @@ int prte_util_parse_node_info(prte_buffer_t *buf)
             sum->available = prte_hwloc_base_setup_summary(topo);
             prte_pointer_array_set_item(prte_node_topologies, index, t2);
         }
-        PRTE_DESTRUCT(&bucket);
+        PMIX_DATA_BUFFER_DESTRUCT(&bucket);
 
         /* now get the array of assigned topologies */
         /* unpack the compression flag */
         cnt = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &compressed, &cnt, PRTE_BOOL))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, &bucket, &compressed, &cnt, PMIX_BOOL);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto cleanup;
-        }
-        if (compressed) {
-            /* get the uncompressed size */
-            cnt = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &sz, &cnt, PRTE_SIZE))) {
-                PRTE_ERROR_LOG(rc);
-                goto cleanup;
-            }
         }
         /* unpack the topologies object */
         cnt = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &boptr, &cnt, PRTE_BYTE_OBJECT))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, &bucket, &pbo, &cnt, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto cleanup;
         }
         /* if compressed, decompress */
         if (compressed) {
-            if (!prte_compress.decompress_block((uint8_t**)&bytes, sz,
-                                                boptr->bytes, boptr->size)) {
+            if (!PMIx_Data_decompress((uint8_t**)&bytes, &sz,
+                                      (uint8_t*)pbo.bytes, pbo.size)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
-                if (NULL != boptr->bytes) {
-                    free(boptr->bytes);
-                }
-                free(boptr);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
                 goto cleanup;
             }
         } else {
-            bytes = (uint8_t*)boptr->bytes;
-            sz = boptr->size;
-            boptr->bytes = NULL;
-            boptr->size = 0;
+            bytes = (uint8_t*)pbo.bytes;
+            sz = pbo.size;
+            pbo.bytes = NULL;
+            pbo.size = 0;
         }
-        if (NULL != boptr->bytes) {
-            free(boptr->bytes);
-        }
-        free(boptr);
-        PRTE_CONSTRUCT(&bucket, prte_buffer_t);
-        prte_dss.load(&bucket, bytes, sz);
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);  // release pre-existing data
+        PMIX_BYTE_OBJECT_LOAD(&pbo, bytes, sz);
+
+        /* setup to unpack */
+        PMIX_DATA_BUFFER_CONSTRUCT(&bucket);
+        rc = PMIx_Data_load(&bucket, &pbo);
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);  // release pre-existing data
+
         /* cycle across the node pool and assign the values */
         for (n=0; n < prte_node_pool->size; n++) {
             if (NULL != (nptr = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, n))) {
                 /* unpack the next topology index */
                 cnt = 1;
-                if (PRTE_SUCCESS != (rc = prte_dss.unpack(&bucket, &i8, &cnt, PRTE_INT8))) {
-                    PRTE_ERROR_LOG(rc);
+                rc = PMIx_Data_unpack(NULL, &bucket, &i8, &cnt, PMIX_INT8);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
                     goto cleanup;
                 }
-                nptr->topology = prte_pointer_array_get_item(prte_node_topologies, index);
+                nptr->topology = prte_pointer_array_get_item(prte_node_topologies, i8);
             }
         }
     }
 
     /* check to see if we have uniform slot assignments */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &i16, &cnt, PRTE_INT16))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buf, &i16, &cnt, PMIX_INT16);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
 
@@ -935,41 +848,29 @@ int prte_util_parse_node_info(prte_buffer_t *buf)
             }
         }
     } else {
-        /* if compressed, get the uncompressed size */
-        if (1 == i16) {
-            cnt = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &sz, &cnt, PRTE_SIZE))) {
-                PRTE_ERROR_LOG(rc);
-                goto cleanup;
-            }
-        }
         /* unpack the slots object */
         cnt = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &boptr, &cnt, PRTE_BYTE_OBJECT))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buf, &pbo, &cnt, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto cleanup;
         }
         /* if compressed, decompress */
         if (1 == i16) {
-            if (!prte_compress.decompress_block((uint8_t**)&slots, sz,
-                                                boptr->bytes, boptr->size)) {
+            if (!PMIx_Data_decompress((uint8_t**)&slots, &sz,
+                                      (uint8_t*)pbo.bytes, pbo.size)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
-                if (NULL != boptr->bytes) {
-                    free(boptr->bytes);
-                }
-                free(boptr);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
                 goto cleanup;
             }
         } else {
-            slots = (uint16_t*)boptr->bytes;
-            boptr->bytes = NULL;
-            boptr->size = 0;
+            slots = (uint16_t*)pbo.bytes;
+            pbo.bytes = NULL;
+            pbo.size = 0;
         }
-        if (NULL != boptr->bytes) {
-            free(boptr->bytes);
-        }
-        free(boptr);
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+
         /* cycle across the node pool and assign the values */
         for (n=0, m=0; n < prte_node_pool->size; n++) {
             if (NULL != (nptr = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, n))) {
@@ -981,8 +882,9 @@ int prte_util_parse_node_info(prte_buffer_t *buf)
 
     /* check to see if we have uniform flag assignments */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &i8, &cnt, PRTE_INT8))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buf, &i8, &cnt, PMIX_INT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
 
@@ -999,41 +901,29 @@ int prte_util_parse_node_info(prte_buffer_t *buf)
             }
         }
     } else {
-        /* if compressed, get the uncompressed size */
-        if (1 == i8) {
-            cnt = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &sz, &cnt, PRTE_SIZE))) {
-                PRTE_ERROR_LOG(rc);
-                goto cleanup;
-            }
-        }
         /* unpack the slots object */
         cnt = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &boptr, &cnt, PRTE_BYTE_OBJECT))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buf, &pbo, &cnt, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             goto cleanup;
         }
         /* if compressed, decompress */
-        if (1 == i8) {
-            if (!prte_compress.decompress_block((uint8_t**)&flags, sz,
-                                                boptr->bytes, boptr->size)) {
+        if (2 == i8) {
+            if (!PMIx_Data_decompress((uint8_t**)&flags, &sz,
+                                      (uint8_t*)pbo.bytes, pbo.size)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
-                if (NULL != boptr->bytes) {
-                    free(boptr->bytes);
-                }
-                free(boptr);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
                 goto cleanup;
             }
         } else {
-            flags = (uint8_t*)boptr->bytes;
-            boptr->bytes = NULL;
-            boptr->size = 0;
+            flags = (uint8_t*)pbo.bytes;
+            pbo.bytes = NULL;
+            pbo.size = 0;
         }
-        if (NULL != boptr->bytes) {
-            free(boptr->bytes);
-        }
-        free(boptr);
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+
         /* cycle across the node pool and assign the values */
         for (n=0, m=0; n < prte_node_pool->size; n++) {
             if (NULL != (nptr = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, n))) {
@@ -1059,25 +949,23 @@ int prte_util_parse_node_info(prte_buffer_t *buf)
 
 
 int prte_util_generate_ppn(prte_job_t *jdata,
-                           prte_buffer_t *buf)
+                           pmix_data_buffer_t *buf)
 {
     uint16_t ppn;
-    uint8_t *bytes;
     int32_t nbytes;
     int rc = PRTE_SUCCESS;
     prte_app_idx_t i;
     int j, k;
-    prte_byte_object_t bo, *boptr;
+    pmix_byte_object_t bo;
     bool compressed;
     prte_node_t *nptr;
     prte_proc_t *proc;
     size_t sz;
-    prte_buffer_t bucket;
+    pmix_data_buffer_t bucket;
     prte_app_context_t *app;
 
-    PRTE_CONSTRUCT(&bucket, prte_buffer_t);
-
     for (i=0; i < jdata->num_apps; i++) {
+        PMIX_DATA_BUFFER_CONSTRUCT(&bucket);
         /* for each app_context */
         if (NULL != (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             for (j=0; j < jdata->map->num_nodes; j++) {
@@ -1091,77 +979,83 @@ int prte_util_generate_ppn(prte_job_t *jdata,
                 ppn = 0;
                 for (k=0; k < nptr->procs->size; k++) {
                     if (NULL != (proc = (prte_proc_t*)prte_pointer_array_get_item(nptr->procs, k))) {
-                        if (proc->name.jobid == jdata->jobid &&
+                        if (PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace) &&
                             proc->app_idx == app->idx) {
                             ++ppn;
                         }
                     }
                 }
                 if (0 < ppn) {
-                    if (PRTE_SUCCESS != (rc = prte_dss.pack(&bucket, &nptr->index, 1, PRTE_INT32))) {
+                    rc = PMIx_Data_pack(NULL, &bucket, &nptr->index, 1, PMIX_INT32);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_DESTRUCT(&bucket);
                         goto cleanup;
                     }
-                    if (PRTE_SUCCESS != (rc = prte_dss.pack(&bucket, &ppn, 1, PRTE_UINT16))) {
+                    rc = PMIx_Data_pack(NULL, &bucket, &ppn, 1, PMIX_UINT16);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_DESTRUCT(&bucket);
                         goto cleanup;
                     }
                 }
             }
         }
-        prte_dss.unload(&bucket, (void**)&bytes, &nbytes);
+        nbytes = bucket.bytes_used;
 
-        if (prte_compress.compress_block(bytes, (size_t)nbytes,
-                                         (uint8_t**)&bo.bytes, &sz)) {
+        if (PMIx_Data_compress((uint8_t*)bucket.base_ptr, bucket.bytes_used,
+                               (uint8_t**)&bo.bytes, &sz)) {
             /* mark that this was compressed */
             compressed = true;
             bo.size = sz;
         } else {
             /* mark that this was not compressed */
             compressed = false;
-            bo.bytes = bytes;
-            bo.size = nbytes;
-        }
-        /* indicate compression */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &compressed, 1, PRTE_BOOL))) {
-            if (compressed) {
-                free(bo.bytes);
-            }
-            goto cleanup;
-        }
-        /* if compressed, provide the uncompressed size */
-        if (compressed) {
-            sz = nbytes;
-            if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &sz, 1, PRTE_SIZE))) {
-                free(bo.bytes);
+            rc = PMIx_Data_unload(&bucket, &bo);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_DESTRUCT(&bucket);
                 goto cleanup;
             }
         }
+        PMIX_DATA_BUFFER_DESTRUCT(&bucket);
+        /* indicate compression */
+        rc = PMIx_Data_pack(NULL, buf, &compressed, 1, PMIX_BOOL);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            if (compressed) {
+                PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+            }
+            goto cleanup;
+        }
         /* add the object */
-        boptr = &bo;
-        rc = prte_dss.pack(buf, &boptr, 1, PRTE_BYTE_OBJECT);
-        if (PRTE_SUCCESS != rc) {
+        rc = PMIx_Data_pack(NULL, buf, &bo, 1, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_BYTE_OBJECT_DESTRUCT(&bo);
             break;
         }
-    }
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+   }
 
   cleanup:
-    PRTE_DESTRUCT(&bucket);
     return rc;
 }
 
 int prte_util_decode_ppn(prte_job_t *jdata,
-                         prte_buffer_t *buf)
+                         pmix_data_buffer_t *buf)
 {
     int32_t index;
     prte_app_idx_t n;
     int cnt, rc=PRTE_SUCCESS, m;
-    prte_byte_object_t *boptr;
+    pmix_byte_object_t bo;
     bool compressed;
     uint8_t *bytes;
     size_t sz;
     uint16_t ppn, k;
     prte_node_t *node;
     prte_proc_t *proc;
-    prte_buffer_t bucket;
+    pmix_data_buffer_t bucket;
 
     /* reset any flags */
     for (m=0; m < jdata->map->nodes->size; m++) {
@@ -1173,58 +1067,50 @@ int prte_util_decode_ppn(prte_job_t *jdata,
     for (n=0; n < jdata->num_apps; n++) {
         /* unpack the compression flag */
         cnt = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &compressed, &cnt, PRTE_BOOL))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buf, &compressed, &cnt, PMIX_BOOL);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             return rc;
-        }
-        /* if compressed, unpack the raw size */
-        if (compressed) {
-            cnt = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &sz, &cnt, PRTE_SIZE))) {
-                PRTE_ERROR_LOG(rc);
-                return rc;
-            }
         }
         /* unpack the byte object describing this app */
         cnt = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buf, &boptr, &cnt, PRTE_BYTE_OBJECT))) {
-            PRTE_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buf, &bo, &cnt, PMIX_BYTE_OBJECT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             return rc;
         }
 
         if (PRTE_PROC_IS_MASTER) {
             /* just discard it */
-            free(boptr->bytes);
-            free(boptr);
+            PMIX_BYTE_OBJECT_DESTRUCT(&bo);
             continue;
         }
 
         /* decompress if required */
         if (compressed) {
-            if (!prte_compress.decompress_block(&bytes, sz,
-                                                boptr->bytes, boptr->size)) {
+            if (!PMIx_Data_decompress(&bytes, &sz,
+                                      (uint8_t*)bo.bytes, bo.size)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
-                PRTE_RELEASE(boptr);
+                PMIX_BYTE_OBJECT_DESTRUCT(&bo);
                 return PRTE_ERROR;
             }
         } else {
-            bytes = boptr->bytes;
-            sz = boptr->size;
-            boptr->bytes = NULL;
-            boptr->size = 0;
+            bytes = (uint8_t*)bo.bytes;
+            sz = bo.size;
+            bo.bytes = NULL;
+            bo.size = 0;
         }
-        if (NULL != boptr->bytes) {
-            free(boptr->bytes);
-        }
-        free(boptr);
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);  // release pre-existing data
+        PMIX_BYTE_OBJECT_LOAD(&bo, bytes, sz);
 
         /* setup to unpack */
-        PRTE_CONSTRUCT(&bucket, prte_buffer_t);
-        prte_dss.load(&bucket, bytes, sz);
+        PMIX_DATA_BUFFER_CONSTRUCT(&bucket);
+        rc = PMIx_Data_load(&bucket, &bo);
+        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
 
         /* unpack each node and its ppn */
         cnt = 1;
-        while (PRTE_SUCCESS == (rc = prte_dss.unpack(&bucket, &index, &cnt, PRTE_INT32))) {
+        while (PMIX_SUCCESS == (rc = PMIx_Data_unpack(NULL, &bucket, &index, &cnt, PMIX_INT32))) {
             /* get the corresponding node object */
             if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, index))) {
                 rc = PRTE_ERR_NOT_FOUND;
@@ -1239,18 +1125,19 @@ int prte_util_decode_ppn(prte_job_t *jdata,
             }
             /* get the ppn */
             cnt = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(&bucket, &ppn, &cnt, PRTE_UINT16))) {
-                PRTE_ERROR_LOG(rc);
+            rc = PMIx_Data_unpack(NULL, &bucket, &ppn, &cnt, PMIX_UINT16);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
                 goto error;
             }
             /* create a proc object for each one */
             for (k=0; k < ppn; k++) {
                 proc = PRTE_NEW(prte_proc_t);
-                proc->name.jobid = jdata->jobid;
+                PMIX_LOAD_NSPACE(proc->name.nspace, jdata->nspace);
                 /* leave the vpid undefined as this will be determined
                  * later when we do the overall ranking */
                 proc->app_idx = n;
-                proc->parent = node->daemon->name.vpid;
+                proc->parent = node->daemon->name.rank;
                 PRTE_RETAIN(node);
                 proc->node = node;
                 /* flag the proc as ready for launch */
@@ -1262,10 +1149,10 @@ int prte_util_decode_ppn(prte_job_t *jdata,
             }
             cnt = 1;
         }
-        PRTE_DESTRUCT(&bucket);
+        PMIX_DATA_BUFFER_DESTRUCT(&bucket);
     }
-    if (PRTE_SUCCESS != rc && PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
-        PRTE_ERROR_LOG(rc);
+    if (PMIX_SUCCESS != rc && PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
+        PMIX_ERROR_LOG(rc);
     }
 
     /* reset any flags */
@@ -1278,7 +1165,7 @@ int prte_util_decode_ppn(prte_job_t *jdata,
     return PRTE_SUCCESS;
 
   error:
-    PRTE_DESTRUCT(&bucket);
+    PMIX_DATA_BUFFER_DESTRUCT(&bucket);
     /* reset any flags */
     for (m=0; m < jdata->map->nodes->size; m++) {
         node = (prte_node_t*)prte_pointer_array_get_item(jdata->map->nodes, m);

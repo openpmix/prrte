@@ -19,6 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -81,7 +82,6 @@
 #include "src/util/os_path.h"
 #include "src/util/path.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/dss/dss.h"
 
 #include "src/runtime/runtime.h"
 #include "src/runtime/prte_globals.h"
@@ -96,7 +96,7 @@ typedef struct {
 } mylock_t;
 
 static prte_list_t job_info;
-static prte_jobid_t myjobid = PRTE_JOBID_INVALID;
+static pmix_nspace_t myjobid = {0};
 
 static pmix_proc_t myproc;
 static bool forcibly_die=false;
@@ -193,8 +193,8 @@ static void evhandler(size_t evhdlr_registration_id,
                       void *cbdata)
 {
     prte_pmix_lock_t *lock = NULL;
-    int jobstatus=0, rc;
-    prte_jobid_t jobid = PRTE_JOBID_INVALID;
+    int jobstatus=0;
+    pmix_nspace_t jobid = {0};
     size_t n;
     char *msg = NULL;
 
@@ -209,10 +209,7 @@ static void evhandler(size_t evhdlr_registration_id,
             if (0 == strncmp(info[n].key, PMIX_JOB_TERM_STATUS, PMIX_MAX_KEYLEN)) {
                 jobstatus = prte_pmix_convert_status(info[n].value.data.status);
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
-                PRTE_PMIX_CONVERT_NSPACE(rc, &jobid, info[n].value.data.proc->nspace);
-                if (PRTE_SUCCESS != rc) {
-                    PRTE_ERROR_LOG(rc);
-                }
+                PMIX_LOAD_NSPACE(jobid, info[n].value.data.proc->nspace);
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
                 lock = (prte_pmix_lock_t*)info[n].value.data.ptr;
         #ifdef PMIX_EVENT_TEXT_MESSAGE
@@ -221,7 +218,7 @@ static void evhandler(size_t evhdlr_registration_id,
         #endif
             }
         }
-        if (verbose && (myjobid != PRTE_JOBID_INVALID && jobid == myjobid)) {
+        if (verbose && PMIX_CHECK_NSPACE(jobid, myjobid)) {
             prte_output(0, "JOB %s COMPLETED WITH STATUS %d",
                         PRTE_JOBID_PRINT(jobid), jobstatus);
         }
@@ -330,26 +327,26 @@ int main(int argc, char *argv[])
         prte_list_append(&tinfo, &ds->super);
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0)) &&
-        0 < pval->data.integer) {
+        0 < pval->value.data.integer) {
         ds = PRTE_NEW(prte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        ui32 = pval->data.integer;
+        ui32 = pval->value.data.integer;
         PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
         prte_list_append(&tinfo, &ds->super);
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "num-connect-retries", 0, 0)) &&
-        0 < pval->data.integer) {
+        0 < pval->value.data.integer) {
         ds = PRTE_NEW(prte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        ui32 = pval->data.integer;
+        ui32 = pval->value.data.integer;
         PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
         prte_list_append(&tinfo, &ds->super);
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0)) &&
-        0 < pval->data.integer) {
+        0 < pval->value.data.integer) {
         ds = PRTE_NEW(prte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        pid = pval->data.integer;
+        pid = pval->value.data.integer;
         PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
         prte_list_append(&tinfo, &ds->super);
     }
@@ -363,7 +360,7 @@ int main(int argc, char *argv[])
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "dvm-uri", 0, 0))) {
         ds = PRTE_NEW(prte_ds_info_t);
         PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_URI, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_URI, pval->value.data.string, PMIX_STRING);
         prte_list_append(&tinfo, &ds->super);
     }
 

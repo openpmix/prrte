@@ -3,6 +3,7 @@
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -77,7 +78,7 @@ typedef uint8_t prte_node_flags_t;
 
 #define PRTE_NODE_USERNAME       (PRTE_NODE_START_KEY + 1)
 #define PRTE_NODE_LAUNCH_ID      (PRTE_NODE_START_KEY + 2)   // int32 - Launch id needed by some systems to launch a proc on this node
-#define PRTE_NODE_HOSTID         (PRTE_NODE_START_KEY + 3)   // prte_vpid_t - if this "node" is a coprocessor being hosted on a different node, then
+#define PRTE_NODE_HOSTID         (PRTE_NODE_START_KEY + 3)   // pmix_rank_t - if this "node" is a coprocessor being hosted on a different node, then
                                                              // we need to know the id of our "host" to help any procs on us to determine locality
 #define PRTE_NODE_ALIAS          (PRTE_NODE_START_KEY + 4)   // comma-separate list of alternate names for the node
 #define PRTE_NODE_SERIAL_NUMBER  (PRTE_NODE_START_KEY + 5)   // string - serial number: used if node is a coprocessor
@@ -125,7 +126,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_CONTINUOUS_OP          (PRTE_JOB_START_KEY + 19)    // bool - recovery policy defined for job
 #define PRTE_JOB_RECOVER_DEFINED        (PRTE_JOB_START_KEY + 20)    // bool - recovery policy has been defined
 #define PRTE_JOB_NON_PRTE_JOB          (PRTE_JOB_START_KEY + 22)    // bool - non-prte job
-#define PRTE_JOB_STDOUT_TARGET          (PRTE_JOB_START_KEY + 23)    // prte_jobid_t - job that is to receive the stdout (on its stdin) from this one
+#define PRTE_JOB_STDOUT_TARGET          (PRTE_JOB_START_KEY + 23)    // pmix_nspace_t - job that is to receive the stdout (on its stdin) from this one
 #define PRTE_JOB_POWER                  (PRTE_JOB_START_KEY + 24)    // string - power setting for nodes in job
 #define PRTE_JOB_MAX_FREQ               (PRTE_JOB_START_KEY + 25)    // string - max freq setting for nodes in job
 #define PRTE_JOB_MIN_FREQ               (PRTE_JOB_START_KEY + 26)    // string - min freq setting for nodes in job
@@ -141,7 +142,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_CPUSET                 (PRTE_JOB_START_KEY + 37)    // string - "soft" cgroup envelope for the job
 #define PRTE_JOB_NOTIFICATIONS          (PRTE_JOB_START_KEY + 38)    // string - comma-separated list of desired notifications+methods
 #define PRTE_JOB_ROOM_NUM               (PRTE_JOB_START_KEY + 39)    // int - number of remote request's hotel room
-#define PRTE_JOB_LAUNCH_PROXY           (PRTE_JOB_START_KEY + 40)    // prte_process_name_t - name of spawn requestor
+#define PRTE_JOB_LAUNCH_PROXY           (PRTE_JOB_START_KEY + 40)    // pmix_proc_t - name of spawn requestor
 #define PRTE_JOB_NSPACE_REGISTERED      (PRTE_JOB_START_KEY + 41)    // bool - job has been registered with embedded PMIx server
 #define PRTE_JOB_FIXED_DVM              (PRTE_JOB_START_KEY + 42)    // bool - do not change the size of the DVM for this job
 #define PRTE_JOB_DVM_JOB                (PRTE_JOB_START_KEY + 43)    // bool - job is using a DVM
@@ -162,7 +163,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_PREPEND_ENVAR          (PRTE_JOB_START_KEY + 57)    // prte_envar_t - prepend the specified value to the given envar
 #define PRTE_JOB_APPEND_ENVAR           (PRTE_JOB_START_KEY + 58)    // prte_envar_t - append the specified value to the given envar
 #define PRTE_JOB_ADD_ENVAR              (PRTE_JOB_START_KEY + 59)    // prte_envar_t - add envar, do not override pre-existing one
-#define PRTE_JOB_APP_SETUP_DATA         (PRTE_JOB_START_KEY + 60)    // prte_byte_object_t - blob containing app setup data
+#define PRTE_JOB_APP_SETUP_DATA         (PRTE_JOB_START_KEY + 60)    // pmix_byte_object_t - blob containing app setup data
 #define PRTE_JOB_OUTPUT_TO_DIRECTORY    (PRTE_JOB_START_KEY + 61)    // string - path of directory to which stdout/err is to be directed
 #define PRTE_JOB_STOP_ON_EXEC           (PRTE_JOB_START_KEY + 62)    // bool - stop procs on first instruction for debugger attach
 #define PRTE_JOB_SPAWN_NOTIFIED         (PRTE_JOB_START_KEY + 63)    // bool - process requesting a spawn operation has been notified of result
@@ -252,11 +253,11 @@ PRTE_EXPORT const char *prte_attr_key_to_str(prte_attribute_key_t key);
 
 /* Retrieve the named attribute from a list */
 PRTE_EXPORT bool prte_get_attribute(prte_list_t *attributes, prte_attribute_key_t key,
-                                      void **data, prte_data_type_t type);
+                                      void **data, pmix_data_type_t type);
 
 /* Set the named attribute in a list, overwriting any prior entry */
 PRTE_EXPORT int prte_set_attribute(prte_list_t *attributes, prte_attribute_key_t key,
-                                     bool local, void *data, prte_data_type_t type);
+                                     bool local, void *data, pmix_data_type_t type);
 
 /* Remove the named attribute from a list */
 PRTE_EXPORT void prte_remove_attribute(prte_list_t *attributes, prte_attribute_key_t key);
@@ -267,17 +268,17 @@ PRTE_EXPORT prte_attribute_t* prte_fetch_attribute(prte_list_t *attributes,
 
 PRTE_EXPORT int prte_add_attribute(prte_list_t *attributes,
                                      prte_attribute_key_t key, bool local,
-                                     void *data, prte_data_type_t type);
+                                     void *data, pmix_data_type_t type);
 
 PRTE_EXPORT int prte_prepend_attribute(prte_list_t *attributes,
                                          prte_attribute_key_t key, bool local,
-                                         void *data, prte_data_type_t type);
+                                         void *data, pmix_data_type_t type);
 
 PRTE_EXPORT int prte_attr_load(prte_attribute_t *kv,
-                                 void *data, prte_data_type_t type);
+                                 void *data, pmix_data_type_t type);
 
 PRTE_EXPORT int prte_attr_unload(prte_attribute_t *kv,
-                                   void **data, prte_data_type_t type);
+                                   void **data, pmix_data_type_t type);
 
 PRTE_EXPORT char *prte_attr_print_list(prte_list_t *attributes);
 

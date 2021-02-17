@@ -14,6 +14,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -72,7 +73,7 @@ int prte_util_check_context_cwd(prte_app_context_t *context,
         was, barf because they specifically asked for something we
         can't provide. */
         if (prte_get_attribute(&context->attributes, PRTE_APP_USER_CWD,
-                               NULL, PRTE_BOOL)) {
+                               NULL, PMIX_BOOL)) {
             return PRTE_ERR_WDIR_NOT_FOUND;
         }
 

@@ -16,6 +16,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +33,6 @@
 #endif  /* HAVE_UNISTD_H */
 #include <string.h>
 
-#include "src/dss/dss.h"
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/rml/rml.h"
@@ -245,12 +245,12 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     if (NULL != proct->subscribers) {
         PRTE_LIST_FOREACH(sink, proct->subscribers, prte_iof_sink_t) {
             /* if the target isn't set, then this sink is for another purpose - ignore it */
-            if (PRTE_JOBID_INVALID == sink->daemon.jobid) {
+            if (PMIX_NSPACE_INVALID(sink->daemon.nspace)) {
                 continue;
             }
             if ((sink->tag & rev->tag) &&
-                sink->name.jobid == proct->name.jobid &&
-                (PRTE_VPID_WILDCARD == sink->name.vpid || sink->name.vpid == proct->name.vpid)) {
+                PMIX_CHECK_NSPACE(sink->name.nspace, proct->name.nspace) &&
+                PMIX_CHECK_RANK(sink->name.rank, proct->name.rank)) {
                 /* need to send the data to the remote endpoint - if
                  * the connection closed, numbytes will be zero, so
                  * the remote endpoint will know to close its local fd.
@@ -264,15 +264,10 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                                      PRTE_NAME_PRINT(&sink->daemon)));
                 /* don't pass down zero byte blobs */
                 if (0 < numbytes) {
-                    pmix_proc_t source;
                     pmix_byte_object_t bo;
                     pmix_iof_channel_t pchan;
                     prte_pmix_lock_t lock;
                     pmix_status_t prc;
-                    PRTE_PMIX_CONVERT_NAME(rc, &source, &proct->name);
-                    if (PRTE_SUCCESS != rc) {
-                        PRTE_ERROR_LOG(rc);
-                    }
                     pchan = 0;
                     if (PRTE_IOF_STDIN & rev->tag) {
                         pchan |= PMIX_FWD_STDIN_CHANNEL;
@@ -291,7 +286,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                     bo.bytes = (char*)data;
                     bo.size = numbytes;
                     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-                    prc = PMIx_server_IOF_deliver(&source, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
+                    prc = PMIx_server_IOF_deliver(&proct->name, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
                     if (PMIX_SUCCESS != prc) {
                         PMIX_ERROR_LOG(prc);
                     } else {
@@ -337,7 +332,6 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
         PRTE_RELEASE(proct);
         return;
     }
-
     if (proct->copy) {
         if (NULL != proct->subscribers) {
             if (!exclusive) {

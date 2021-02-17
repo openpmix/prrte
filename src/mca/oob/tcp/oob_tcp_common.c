@@ -16,6 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,7 +62,6 @@
 #include "src/include/prte_socket_errno.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
-#include "src/class/prte_hash_table.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 
 #include "src/mca/oob/tcp/oob_tcp.h"
@@ -188,16 +188,16 @@ void prte_oob_tcp_set_socket_options(int sd)
     }
 }
 
-prte_oob_tcp_peer_t* prte_oob_tcp_peer_lookup(const prte_process_name_t *name)
+prte_oob_tcp_peer_t* prte_oob_tcp_peer_lookup(const pmix_proc_t *name)
 {
     prte_oob_tcp_peer_t *peer;
-    uint64_t ui64;
 
-    memcpy(&ui64, (char*)name, sizeof(uint64_t));
-    if (PRTE_SUCCESS != prte_hash_table_get_value_uint64(&prte_oob_tcp_component.peers, ui64, (void**)&peer)) {
-        return NULL;
+    PRTE_LIST_FOREACH(peer, &prte_oob_tcp_component.peers, prte_oob_tcp_peer_t) {
+        if (PMIX_CHECK_PROCID(name, &peer->name)) {
+            return peer;
+        }
     }
-    return peer;
+    return NULL;
 }
 
 char* prte_oob_tcp_state_print(prte_oob_tcp_state_t state)

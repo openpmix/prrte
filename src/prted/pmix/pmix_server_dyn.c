@@ -18,6 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +38,6 @@
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
-#include "src/dss/dss.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 
@@ -53,29 +53,29 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 
-void pmix_server_launch_resp(int status, prte_process_name_t* sender,
-                             prte_buffer_t *buffer,
+void pmix_server_launch_resp(int status, pmix_proc_t* sender,
+                             pmix_data_buffer_t *buffer,
                              prte_rml_tag_t tg, void *cbdata)
 {
     pmix_server_req_t *req;
     int rc, room;
     int32_t ret, cnt;
-    prte_jobid_t jobid;
+    pmix_nspace_t jobid;
     prte_job_t *jdata;
-    char nspace[PMIX_MAX_NSLEN+1];
-    pmix_proc_t proc;
 
     /* unpack the status - this is already a PMIx value */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &ret, &cnt, PRTE_INT32))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &ret, &cnt, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         ret = prte_pmix_convert_rc(rc);
     }
 
     /* unpack the jobid */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &jobid, &cnt, PRTE_JOBID))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &jobid, &cnt, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         ret = prte_pmix_convert_rc(rc);
     }
     /* we let the above errors fall thru in the vain hope that the room number can
@@ -83,8 +83,9 @@ void pmix_server_launch_resp(int status, prte_process_name_t* sender,
 
     /* unpack our tracking room number */
     cnt = 1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &room, &cnt, PRTE_INT))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &room, &cnt, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         /* we are hosed */
         return;
     }
@@ -99,19 +100,16 @@ void pmix_server_launch_resp(int status, prte_process_name_t* sender,
 
     /* execute the callback */
     if (NULL != req->spcbfunc) {
-        PRTE_PMIX_CONVERT_JOBID(rc, nspace, jobid);
-        req->spcbfunc(ret, nspace, req->cbdata);
+        req->spcbfunc(ret, jobid, req->cbdata);
     } else if (NULL != req->toolcbfunc) {
         /* if success, then add to our job info */
         if (PRTE_SUCCESS == ret) {
             jdata = PRTE_NEW(prte_job_t);
-            jdata->jobid = jobid;
-            req->target.jobid = jobid;
-            req->target.vpid = 0;
+            PMIX_LOAD_NSPACE(jdata->nspace, jobid);
+            PMIX_LOAD_PROCID(&req->target, jobid, 0);
             prte_pmix_server_tool_conn_complete(jdata, req);
-            PRTE_PMIX_CONVERT_NAME(ret, &proc, &req->target);
         }
-        req->toolcbfunc(ret, &proc, req->cbdata);
+        req->toolcbfunc(ret, &req->target, req->cbdata);
     }
     /* cleanup */
     PRTE_RELEASE(req);
@@ -121,7 +119,7 @@ static void spawn(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
     int rc;
-    prte_buffer_t *buf;
+    pmix_data_buffer_t *buf;
     prte_plm_cmd_flag_t command;
     char nspace[PMIX_MAX_NSLEN+1];
     pmix_status_t prc;
@@ -137,34 +135,36 @@ static void spawn(int sd, short args, void *cbdata)
 
     /* include the request room number for quick retrieval */
     prte_set_attribute(&req->jdata->attributes, PRTE_JOB_ROOM_NUM,
-                       PRTE_ATTR_GLOBAL, &req->room_num, PRTE_INT);
+                       PRTE_ATTR_GLOBAL, &req->room_num, PMIX_INT);
 
     /* construct a spawn message */
-    buf = PRTE_NEW(prte_buffer_t);
+    PMIX_DATA_BUFFER_CREATE(buf);
+
     command = PRTE_PLM_LAUNCH_JOB_CMD;
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &command, 1, PRTE_PLM_CMD))) {
-        PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(buf);
+    rc = PMIx_Data_pack(NULL, buf, &command, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         goto callback;
     }
 
     /* pack the jdata object */
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(buf, &req->jdata, 1, PRTE_JOB))) {
-        PRTE_ERROR_LOG(rc);
+    rc = prte_job_pack(buf, req->jdata);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
-        PRTE_RELEASE(buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
-
     }
 
     /* send it to the HNP for processing - might be myself! */
     if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
-                                                        PRTE_RML_TAG_PLM,
-                                                        prte_rml_send_callback, NULL))) {
+                                                      PRTE_RML_TAG_PLM,
+                                                      prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
         prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
-        PRTE_RELEASE(buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
     return;
@@ -182,8 +182,8 @@ static void spawn(int sd, short args, void *cbdata)
 static void interim(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t*)cbdata;
-    prte_process_name_t *requestor = &cd->proc;
-    prte_envar_t envar;
+    pmix_proc_t *requestor = &cd->proc;
+    pmix_envar_t envar;
     prte_job_t *jdata;
     prte_app_context_t *app;
     pmix_app_t *papp;
@@ -193,7 +193,7 @@ static void interim(int sd, short args, void *cbdata)
     char cwd[PRTE_PATH_MAX];
     bool flag;
     size_t m, n;
-    prte_value_t *kv;
+    prte_info_item_t *kv;
     uint16_t u16;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
@@ -237,19 +237,19 @@ static void interim(int sd, short args, void *cbdata)
                 info = &papp->info[m];
                 if (PMIX_CHECK_KEY(info, PMIX_HOST)) {
                     prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST,
-                                       PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                                       PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
                 } else if (PMIX_CHECK_KEY(info, PMIX_HOSTFILE)) {
                     prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE,
-                                       PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                                       PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
                 } else if (PMIX_CHECK_KEY(info, PMIX_ADD_HOSTFILE)) {
                     prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE,
-                                       PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                                       PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
                 } else if (PMIX_CHECK_KEY(info, PMIX_ADD_HOST)) {
                     prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOST,
-                                       PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                                       PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
                 } else if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
                     prte_set_attribute(&app->attributes, PRTE_APP_PREFIX_DIR,
-                                       PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                                       PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
                 } else if (PMIX_CHECK_KEY(info, PMIX_WDIR)) {
                     /* if this is a relative path, convert it to an absolute path */
                     if (prte_path_is_absolute(info->value.data.string)) {
@@ -267,15 +267,15 @@ static void interim(int sd, short args, void *cbdata)
                 } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_BIN)) {
                     flag = PMIX_INFO_TRUE(info);
                     prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN,
-                                       PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                                       PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
                 } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_FILES)) {
                     prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES,
-                                       PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                                       PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
 
                 } else if (PMIX_CHECK_KEY(info, PMIX_COSPAWN_APP)) {
                     flag = PMIX_INFO_TRUE(info);
                     prte_set_attribute(&app->attributes, PRTE_APP_DEBUGGER_DAEMON,
-                                       PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                                       PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
                 /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                 /* there can be multiple of these, so we add them to the attribute list */
                 } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
@@ -283,33 +283,33 @@ static void interim(int sd, short args, void *cbdata)
                     envar.value = info->value.data.envar.value;
                     envar.separator = info->value.data.envar.separator;
                     prte_add_attribute(&app->attributes, PRTE_APP_SET_ENVAR,
-                                       PRTE_ATTR_GLOBAL, &envar, PRTE_ENVAR);
+                                       PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
                 } else if (PMIX_CHECK_KEY(info, PMIX_ADD_ENVAR)) {
                     envar.envar = info->value.data.envar.envar;
                     envar.value = info->value.data.envar.value;
                     envar.separator = info->value.data.envar.separator;
                     prte_add_attribute(&app->attributes, PRTE_APP_ADD_ENVAR,
-                                       PRTE_ATTR_GLOBAL, &envar, PRTE_ENVAR);
+                                       PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
                 } else if (PMIX_CHECK_KEY(info, PMIX_UNSET_ENVAR)) {
                     prte_add_attribute(&app->attributes, PRTE_APP_UNSET_ENVAR,
-                                       PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                                       PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
                 } else if (PMIX_CHECK_KEY(info, PMIX_PREPEND_ENVAR)) {
                     envar.envar = info->value.data.envar.envar;
                     envar.value = info->value.data.envar.value;
                     envar.separator = info->value.data.envar.separator;
                     prte_add_attribute(&app->attributes, PRTE_APP_PREPEND_ENVAR,
-                                       PRTE_ATTR_GLOBAL, &envar, PRTE_ENVAR);
+                                       PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
                 } else if (PMIX_CHECK_KEY(info, PMIX_APPEND_ENVAR)) {
                     envar.envar = info->value.data.envar.envar;
                     envar.value = info->value.data.envar.value;
                     envar.separator = info->value.data.envar.separator;
                     prte_add_attribute(&app->attributes, PRTE_APP_APPEND_ENVAR,
-                                       PRTE_ATTR_GLOBAL, &envar, PRTE_ENVAR);
+                                       PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
 
 #if PMIX_NUMERIC_VERSION >= 0x00040000
                 } else if (PMIX_CHECK_KEY(info, PMIX_PSET_NAME)) {
                     prte_set_attribute(&app->attributes, PRTE_APP_PSET_NAME,
-                                       PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                                       PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
 #endif
                 } else {
                     /* unrecognized key */
@@ -329,15 +329,14 @@ static void interim(int sd, short args, void *cbdata)
         if (PMIX_CHECK_KEY(info, PMIX_PERSONALITY)) {
             jdata->personality = prte_argv_split(info->value.data.string, ',');
             /* cache for inclusion with job info at registration as PMIx needs it too */
-            kv = PRTE_NEW(prte_value_t);
-            kv->key = strdup(info->key);
-            prte_pmix_value_unload(kv, &info->value);
-            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PRTE_PTR)) {
+            kv = PRTE_NEW(prte_info_item_t);
+            PMIX_INFO_XFER(&kv->info, info);
+            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PMIX_POINTER)) {
                 prte_list_append(cache, &kv->super);
             } else {
                 cache = PRTE_NEW(prte_list_t);
                 prte_list_append(cache, &kv->super);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void*)cache, PRTE_PTR);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void*)cache, PMIX_POINTER);
             }
 
         /***   REQUESTED MAPPER   ***/
@@ -348,7 +347,7 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {
             if (PMIX_INFO_TRUE(info)) {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, PRTE_ATTR_GLOBAL,
-                                    NULL, PRTE_BOOL);
+                                    NULL, PMIX_BOOL);
             }
 
         /***   PPR (PROCS-PER-RESOURCE)   ***/
@@ -363,7 +362,7 @@ static void interim(int sd, short args, void *cbdata)
             }
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_PPR);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL,
-                                info->value.data.string, PRTE_STRING);
+                                info->value.data.string, PMIX_STRING);
 
         /***   MAP-BY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
@@ -389,7 +388,7 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_CPUS_PER_PROC)) {
             u16 = info->value.data.uint32;
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL,
-                                &u16, PRTE_UINT16);
+                                &u16, PMIX_UINT16);
 
         /***   NO USE LOCAL   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_NO_PROCS_ON_HEAD)) {
@@ -417,12 +416,12 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_REPORT_BINDINGS)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
         /***   CPU LIST  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_CPU_LIST)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_CPUSET,
-                               PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
 
         /***   RECOVERABLE  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_JOB_RECOVERABLE)) {
@@ -440,44 +439,44 @@ static void interim(int sd, short args, void *cbdata)
                     continue;
                 }
                 prte_set_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS,
-                                   PRTE_ATTR_GLOBAL, &info->value.data.uint32, PRTE_INT32);
+                                   PRTE_ATTR_GLOBAL, &info->value.data.uint32, PMIX_INT32);
             }
 
         /***   CONTINUOUS OPERATION  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_JOB_CONTINUOUS)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS_OP,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
         /***   NON-PMI JOB   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_NON_PMI)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_NON_PRTE_JOB,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
         /***   SPAWN REQUESTOR IS TOOL   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_REQUESTOR_IS_TOOL)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
             if (flag) {
                 /* request that IO be forwarded to the requesting tool */
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_FWDIO_TO_TOOL,
-                                   PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                                   PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
             }
 
         /***   NOTIFY UPON JOB COMPLETION   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_NOTIFY_COMPLETION)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_COMPLETION,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
         /***   STOP ON EXEC FOR DEBUGGER   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_ON_EXEC)) {
 #if PRTE_HAVE_STOP_ON_EXEC
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 #else
             /* we cannot support the request */
             rc = PRTE_ERR_NOT_SUPPORTED;
@@ -493,38 +492,38 @@ static void interim(int sd, short args, void *cbdata)
                    PMIX_CHECK_KEY(info, PMIX_IOF_TAG_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
         /***   TIMESTAMP OUTPUT   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMESTAMP_OUTPUT) ||
                    PMIX_CHECK_KEY(info, PMIX_IOF_TIMESTAMP_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
         /***   XML OUTPUT   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_IOF_XML_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
         /***   OUTPUT TO FILES   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_OUTPUT_TO_FILE)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_TO_FILE,
-                               PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
 
         /***   MERGE STDERR TO STDOUT   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MERGE_STDERR_STDOUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
         /***   STDIN TARGET   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_STDIN_TGT)) {
             if (0 == strcmp(info->value.data.string, "all")) {
-                jdata->stdin_target = PRTE_VPID_WILDCARD;
+                jdata->stdin_target = PMIX_RANK_WILDCARD;
             } else if (0 == strcmp(info->value.data.string, "none")) {
-                jdata->stdin_target = PRTE_VPID_INVALID;
+                jdata->stdin_target = PMIX_RANK_INVALID;
             } else {
                 jdata->stdin_target = strtoul(info->value.data.string, NULL, 10);
             }
@@ -533,7 +532,7 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_INDEX_ARGV)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_INDEX_ARGV,
-                               PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
         /***   DEBUGGER DAEMONS   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUGGER_DAEMONS)) {
@@ -547,62 +546,61 @@ static void interim(int sd, short args, void *cbdata)
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
             prte_add_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR,
-                               PRTE_ATTR_GLOBAL, &envar, PRTE_ENVAR);
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_ADD_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
             prte_add_attribute(&jdata->attributes, PRTE_JOB_ADD_ENVAR,
-                               PRTE_ATTR_GLOBAL, &envar, PRTE_ENVAR);
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_UNSET_ENVAR)) {
             prte_add_attribute(&jdata->attributes, PRTE_JOB_UNSET_ENVAR,
-                               PRTE_ATTR_GLOBAL, info->value.data.string, PRTE_STRING);
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
         } else if (PMIX_CHECK_KEY(info, PMIX_PREPEND_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
             prte_add_attribute(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR,
-                               PRTE_ATTR_GLOBAL, &envar, PRTE_ENVAR);
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_APPEND_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
             prte_add_attribute(&jdata->attributes, PRTE_JOB_APPEND_ENVAR,
-                               PRTE_ATTR_GLOBAL, &envar, PRTE_ENVAR);
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
 #if PMIX_NUMERIC_VERSION >= 0x00040000
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
             prte_add_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT,
-                               PRTE_ATTR_GLOBAL, &info->value.data.integer, PRTE_INT);
+                               PRTE_ATTR_GLOBAL, &info->value.data.integer, PMIX_INT);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT_STACKTRACES)) {
             flag = PMIX_INFO_TRUE(info);
             if (flag) {
                 prte_add_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES,
-                                   PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                                   PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
             }
 
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT_REPORT_STATE)) {
             flag = PMIX_INFO_TRUE(info);
             if (flag) {
                 prte_add_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE,
-                                   PRTE_ATTR_GLOBAL, &flag, PRTE_BOOL);
+                                   PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
             }
 #endif
         /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {
             /* cache for inclusion with job info at registration */
-            kv = PRTE_NEW(prte_value_t);
-            kv->key = strdup(info->key);
-            prte_pmix_value_unload(kv, &info->value);
-            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PRTE_PTR)) {
+            kv = PRTE_NEW(prte_info_item_t);
+            PMIX_INFO_XFER(&kv->info, info);
+            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PMIX_POINTER)) {
                 prte_list_append(cache, &kv->super);
             } else {
                 cache = PRTE_NEW(prte_list_t);
                 prte_list_append(cache, &kv->super);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void*)cache, PRTE_PTR);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void*)cache, PMIX_POINTER);
             }
         }
     }
@@ -613,7 +611,7 @@ static void interim(int sd, short args, void *cbdata)
 
     /* indicate the requestor so bookmarks can be correctly set */
     prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY,
-                       PRTE_ATTR_GLOBAL, requestor, PRTE_NAME);
+                       PRTE_ATTR_GLOBAL, requestor, PMIX_PROC);
 
     /* indicate that IO is to be forwarded */
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT);
@@ -642,7 +640,6 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc,
                          pmix_spawn_cbfunc_t cbfunc, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd;
-    int rc;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
                         "%s spawn upcalled on behalf of proc %s:%u",
@@ -650,12 +647,7 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc,
                         proc->nspace, proc->rank);
 
     cd = PRTE_NEW(prte_pmix_server_op_caddy_t);
-    PRTE_PMIX_CONVERT_NSPACE(rc, &cd->proc.jobid, (char*)proc->nspace);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        return PMIX_ERR_BAD_PARAM;
-    }
-    PRTE_PMIX_CONVERT_RANK(cd->proc.vpid, proc->rank);
+    PMIX_LOAD_PROCID(&cd->proc, proc->nspace, proc->rank);
     cd->info = (pmix_info_t*)job_info;
     cd->ninfo = ninfo;
     cd->apps = (pmix_app_t*)apps;
@@ -715,7 +707,10 @@ static void _cnlk(pmix_status_t status,
     /* the data will consist of a byte object containing
      * a packed buffer of the job data */
     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-    PMIX_DATA_BUFFER_LOAD(&pbkt, data[0].value.data.bo.bytes, data[0].value.data.bo.size);
+    ret = PMIx_Data_load(&pbkt, &data[0].value.data.bo);
+    if (PMIX_SUCCESS != ret) {
+        goto release;
+    }
     data[0].value.data.bo.bytes = NULL;
     data[0].value.data.bo.size = 0;
 
@@ -778,7 +773,6 @@ static void _cnct(int sd, short args, void *cbdata)
     prte_job_t *jdata;
     int rc = PRTE_SUCCESS;
     size_t n;
-    prte_jobid_t jobid;
     uint32_t uid;
 
     PRTE_ACQUIRE_OBJECT(cd);
@@ -794,18 +788,12 @@ static void _cnct(int sd, short args, void *cbdata)
 
     /* cycle thru the procs */
     for(n=0; n < cd->nprocs; n++) {
-        PRTE_PMIX_CONVERT_NSPACE(rc, &jobid, cd->procs[n].nspace);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            goto release;
-        }
         /* see if we have the job object for this job */
-        if (NULL == (jdata = prte_get_job_data_object(jobid))) {
+        if (NULL == (jdata = prte_get_job_data_object(cd->procs[n].nspace))) {
             /* we don't know about this job. If our "global" data
              * server is just our HNP, then we have no way of finding
              * out about it, and all we can do is return an error */
-            if (prte_pmix_server_globals.server.jobid == PRTE_PROC_MY_HNP->jobid &&
-                prte_pmix_server_globals.server.vpid == PRTE_PROC_MY_HNP->vpid) {
+            if (PMIX_CHECK_PROCID(&prte_pmix_server_globals.server, PRTE_PROC_MY_HNP)) {
                 rc = PRTE_ERR_NOT_SUPPORTED;
                 goto release;
             }
@@ -816,7 +804,7 @@ static void _cnct(int sd, short args, void *cbdata)
             cd->ndirs = 1;
             PMIX_INFO_CREATE(cd->directives, cd->ndirs);
             uid = geteuid();
-            PMIX_INFO_LOAD(&cd->directives[0], PMIX_USERID, &uid, PRTE_UINT32);
+            PMIX_INFO_LOAD(&cd->directives[0], PMIX_USERID, &uid, PMIX_UINT32);
             if (PRTE_SUCCESS != (rc = pmix_server_lookup_fn(&cd->procs[n], keys,
                                                              cd->directives, cd->ndirs, _cnlk, cd))) {
                 prte_argv_free(keys);
@@ -830,7 +818,7 @@ static void _cnct(int sd, short args, void *cbdata)
         }
         /* we know about the job - check to ensure it has been
          * registered with the local PMIx server */
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED, NULL, PRTE_BOOL)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED, NULL, PMIX_BOOL)) {
             /* it hasn't been registered yet, so register it now */
             if (PRTE_SUCCESS != (rc = prte_pmix_server_register_nspace(jdata))) {
                 goto release;

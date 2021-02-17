@@ -16,6 +16,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -84,7 +85,7 @@ static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
                                        PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                        &prte_odls_globals.timeout_before_sigkill);
 
-    prte_odls_globals.max_threads = 4;
+    prte_odls_globals.max_threads = 32;
     (void) prte_mca_base_var_register("prte", "odls", "base", "max_threads",
                                        "Maximum number of threads to use for spawning local procs",
                                        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
@@ -161,6 +162,13 @@ void prte_odls_base_start_threads(prte_job_t *jdata)
         return;
     }
 
+    /* if we are a persistent DVM, expect to service lots
+     * of clients */
+    if (prte_persistent) {
+        prte_odls_globals.num_threads = prte_odls_globals.max_threads;
+        goto startup;
+    }
+
     /* setup the pool of worker threads */
     prte_odls_globals.ev_threads = NULL;
     prte_odls_globals.next_base = 0;
@@ -188,6 +196,7 @@ void prte_odls_base_start_threads(prte_job_t *jdata)
         }
         prte_odls_globals.ev_bases = prte_event_base_ptr;
     } else {
+    startup:
         prte_odls_globals.ev_bases =
             (prte_event_base_t**)malloc(prte_odls_globals.num_threads * sizeof(prte_event_base_t*));
         for (i=0; i < prte_odls_globals.num_threads; i++) {
@@ -281,7 +290,7 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
             rank = strtol(ranks[i], NULL, 10);
             if (-1 == rank) {
                 /* wildcard */
-                nm->name.vpid = PRTE_VPID_WILDCARD;
+                nm->name.rank = PMIX_RANK_WILDCARD;
             } else if (rank < 0) {
                 /* error out on bozo case */
                 prte_show_help("help-prte-odls-base.txt",
@@ -293,7 +302,7 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
                  * range as we don't yet know how many ranks
                  * will be in the job - we'll check later
                  */
-                nm->name.vpid = rank;
+                nm->name.rank = rank;
             }
             prte_list_append(&prte_odls_globals.xterm_ranks, &nm->super);
         }
@@ -325,7 +334,7 @@ PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, odls, "PRTE Daemon Launch Subsystem",
 static void launch_local_const(prte_odls_launch_local_t *ptr)
 {
     ptr->ev = prte_event_alloc();
-    ptr->job = PRTE_JOBID_INVALID;
+    PMIX_LOAD_NSPACE(ptr->job, NULL);
     ptr->fork_local = NULL;
     ptr->retries = 0;
 }

@@ -18,20 +18,19 @@
 #define PRTE_PMIX_H
 
 #include "prte_config.h"
-#include "types.h"
 
 #ifdef HAVE_SYS_UN_H
 #include <sys/un.h>
 #endif
 
 #include "src/mca/mca.h"
+#include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
-#include "src/dss/dss.h"
 #include "src/util/error.h"
-#include "src/util/name_fns.h"
 #include "src/util/printf.h"
 #include "src/util/proc_info.h"
 #include "src/include/hash_string.h"
+#include "src/threads/threads.h"
 
 #include PRTE_PMIX_HEADER
 #if ! PRTE_PMIX_HEADER_GIVEN
@@ -75,6 +74,31 @@ typedef struct {
     int status;
     char *msg;
 } prte_pmix_lock_t;
+
+typedef struct {
+    prte_list_item_t super;
+    pmix_value_t value;
+} prte_value_t;
+PRTE_CLASS_DECLARATION(prte_value_t);
+
+#if !defined(WORDS_BIGENDIAN)
+#define PMIX_PROC_NTOH(guid) pmix_proc_ntoh_intr(&(guid))
+static inline __prte_attribute_always_inline__ void
+pmix_proc_ntoh_intr(pmix_proc_t *name)
+{
+    name->rank = ntohl(name->rank);
+}
+#define PMIX_PROC_HTON(guid) pmix_proc_hton_intr(&(guid))
+static inline __prte_attribute_always_inline__ void
+pmix_proc_hton_intr(pmix_proc_t *name)
+{
+    name->rank = htonl(name->rank);
+}
+#else
+#define PMIX_PROC_NTOH(guid)
+#define PMIX_PROC_HTON(guid)
+#endif
+
 
 #define prte_pmix_condition_wait(a,b)   pthread_cond_wait(a, &(b)->m_lock_pthread)
 
@@ -260,26 +284,24 @@ typedef struct {
  *
  * r - the integer return status from the modex op (int)
  * s - string key (char*)
- * p - pointer to the prte_process_name_t of the proc that posted
- *     the data (prte_process_name_t*)
+ * p - pointer to the pmix_proc_t of the proc that posted
+ *     the data (pmix_proc_t*)
  * d - pointer to a location wherein the data object
  *     is to be returned
  * t - the expected data type
  */
-#define PRTE_MODEX_RECV_VALUE_OPTIONAL(r, s, p, d, t)                                  \
+#define PRTE_MODEX_RECV_VALUE_OPTIONAL(r, s, p, d, t)                                   \
     do {                                                                                \
-        pmix_proc_t _proc;                                                              \
         pmix_value_t *_kv = NULL;                                                       \
         pmix_info_t _info;                                                              \
         size_t _sz;                                                                     \
-        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,                             \
+        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,                               \
                             "%s[%s:%d] MODEX RECV VALUE OPTIONAL FOR PROC %s KEY %s",   \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),                       \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),                         \
                             __FILE__, __LINE__,                                         \
-                            PRTE_NAME_PRINT((p)), (s)));                               \
-        PMIX_LOAD_PROCID(&(_proc), prte_process_info.myproc.nspace, (p)->vpid);        \
+                            PRTE_NAME_PRINT((p)), (s)));                                \
         PMIX_INFO_LOAD(&_info, PMIX_OPTIONAL, NULL, PMIX_BOOL);                         \
-        (r) = PMIx_Get(&(_proc), (s), &(_info), 1, &(_kv));                             \
+        (r) = PMIx_Get((p), (s), &(_info), 1, &(_kv));                                  \
         if (NULL == _kv) {                                                              \
             (r) = PMIX_ERR_NOT_FOUND;                                                   \
         } else if (_kv->type != (t)) {                                                  \
@@ -301,26 +323,24 @@ typedef struct {
  *
  * r - the integer return status from the modex op (int)
  * s - string key (char*)
- * p - pointer to the prte_process_name_t of the proc that posted
- *     the data (prte_process_name_t*)
+ * p - pointer to the pmix_proc_t of the proc that posted
+ *     the data (pmix_proc_t*)
  * d - pointer to a location wherein the data object
  *     is to be returned
  * t - the expected data type
  */
-#define PRTE_MODEX_RECV_VALUE_IMMEDIATE(r, s, p, d, t)                                 \
+#define PRTE_MODEX_RECV_VALUE_IMMEDIATE(r, s, p, d, t)                                  \
     do {                                                                                \
-        pmix_proc_t _proc;                                                              \
         pmix_value_t *_kv = NULL;                                                       \
         pmix_info_t _info;                                                              \
         size_t _sz;                                                                     \
-        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,                             \
+        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,                               \
                             "%s[%s:%d] MODEX RECV VALUE OPTIONAL FOR PROC %s KEY %s",   \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),                       \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),                         \
                             __FILE__, __LINE__,                                         \
-                            PRTE_NAME_PRINT((p)), (s)));                               \
-        PMIX_LOAD_PROCID(&(_proc), prte_process_info.myproc.nspace, (p)->vpid);        \
+                            PRTE_NAME_PRINT((p)), (s)));                                \
         PMIX_INFO_LOAD(&_info, PMIX_IMMEDIATE, NULL, PMIX_BOOL);                        \
-        (r) = PMIx_Get(&(_proc), (s), &(_info), 1, &(_kv));                             \
+        (r) = PMIx_Get((p), (s), &(_info), 1, &(_kv));                                  \
         if (NULL == _kv) {                                                              \
             (r) = PMIX_ERR_NOT_FOUND;                                                   \
         } else if (_kv->type != (t)) {                                                  \
@@ -339,24 +359,22 @@ typedef struct {
  *
  * r - the integer return status from the modex op (int)
  * s - string key (char*)
- * p - pointer to the prte_process_name_t of the proc that posted
- *     the data (prte_process_name_t*)
+ * p - pointer to the pmix_proc_t of the proc that posted
+ *     the data (pmix_proc_t*)
  * d - pointer to a location wherein the data object
  *     is to be returned
  * t - the expected data type
  */
-#define PRTE_MODEX_RECV_VALUE(r, s, p, d, t)                                       \
+#define PRTE_MODEX_RECV_VALUE(r, s, p, d, t)                                        \
     do {                                                                            \
-        pmix_proc_t _proc;                                                          \
         pmix_value_t *_kv = NULL;                                                   \
         size_t _sz;                                                                 \
-        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,                         \
+        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,                           \
                             "%s[%s:%d] MODEX RECV VALUE FOR PROC %s KEY %s",        \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),                   \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),                     \
                             __FILE__, __LINE__,                                     \
-                            PRTE_NAME_PRINT((p)), (s)));                           \
-        PMIX_LOAD_PROCID(&(_proc), prte_process_info.myproc.nspace, (p)->vpid);    \
-        (r) = PMIx_Get(&(_proc), (s), NULL, 0, &(_kv));                             \
+                            PRTE_NAME_PRINT((p)), (s)));                            \
+        (r) = PMIx_Get((p), (s), NULL, 0, &(_kv));                                  \
         if (NULL == _kv) {                                                          \
             (r) = PMIX_ERR_NOT_FOUND;                                               \
         } else if (_kv->type != (t)) {                                              \
@@ -375,26 +393,24 @@ typedef struct {
  *
  * r - the integer return status from the modex op (int)
  * s - string key (char*)
- * p - pointer to the prte_process_name_t of the proc that posted
- *     the data (prte_process_name_t*)
+ * p - pointer to the pmix_proc_t of the proc that posted
+ *     the data (pmix_proc_t*)
  * d - pointer to a location wherein the data object
  *     it to be returned (char**)
  * sz - pointer to a location wherein the number of bytes
  *     in the data object can be returned (size_t)
  */
-#define PRTE_MODEX_RECV_STRING(r, s, p, d, sz)                                     \
+#define PRTE_MODEX_RECV_STRING(r, s, p, d, sz)                                      \
     do {                                                                            \
-        pmix_proc_t _proc;                                                          \
         pmix_value_t *_kv = NULL;                                                   \
-        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,                         \
+        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,                           \
                             "%s[%s:%d] MODEX RECV STRING FOR PROC %s KEY %s",       \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),                   \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),                     \
                             __FILE__, __LINE__,                                     \
-                            PRTE_NAME_PRINT((p)), (s)));                           \
+                            PRTE_NAME_PRINT((p)), (s)));                            \
         *(d) = NULL;                                                                \
         *(sz) = 0;                                                                  \
-        PMIX_LOAD_PROCID(&(_proc), prte_process_info.myproc.nspace, (p)->vpid);    \
-        (r) = PMIx_Get(&(_proc), (s), NULL, 0, &(_kv));                             \
+        (r) = PMIx_Get((p), (s), NULL, 0, &(_kv));                                  \
         if (NULL == _kv) {                                                          \
             (r) = PMIX_ERR_NOT_FOUND;                                               \
         } else if (PMIX_SUCCESS == (r)) {                                           \
@@ -413,32 +429,44 @@ typedef struct {
  *
  * r - the integer return status from the modex op (int)
  * s - the MCA component that posted the data (prte_mca_base_component_t*)
- * p - pointer to the prte_process_name_t of the proc that posted
- *     the data (prte_process_name_t*)
+ * p - pointer to the pmix_proc_t of the proc that posted
+ *     the data (pmix_proc_t*)
  * d - pointer to a location wherein the data object
  *     it to be returned (char**)
  * sz - pointer to a location wherein the number of bytes
  *     in the data object can be returned (size_t)
  */
-#define PRTE_MODEX_RECV(r, s, p, d, sz)                                \
+#define PRTE_MODEX_RECV(r, s, p, d, sz)                                 \
     do {                                                                \
         char *_key;                                                     \
-        _key = prte_mca_base_component_to_string((s));                 \
-        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,             \
+        _key = prte_mca_base_component_to_string((s));                  \
+        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,               \
                             "%s[%s:%d] MODEX RECV FOR PROC %s KEY %s",  \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),       \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
                             __FILE__, __LINE__,                         \
-                            PRTE_NAME_PRINT((p)), _key));              \
+                            PRTE_NAME_PRINT((p)), _key));               \
         if (NULL == _key) {                                             \
-            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);                 \
-            (r) = PRTE_ERR_OUT_OF_RESOURCE;                            \
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);                   \
+            (r) = PRTE_ERR_OUT_OF_RESOURCE;                             \
         } else {                                                        \
-            PRTE_MODEX_RECV_STRING((r), _key, (p), (d), (sz));         \
+            PRTE_MODEX_RECV_STRING((r), _key, (p), (d), (sz));          \
             free(_key);                                                 \
         }                                                               \
     } while(0);
 
 #define PRTE_PMIX_SHOW_HELP    "prte.show.help"
+
+
+/* PRTE attribute */
+typedef uint16_t prte_attribute_key_t;
+#define PRTE_ATTR_KEY_T   PRTE_UINT16
+typedef struct {
+    prte_list_item_t super;             /* required for this to be on lists */
+    prte_attribute_key_t key;           /* key identifier */
+    bool local;                         // whether or not to pack/send this value
+    pmix_value_t data;
+} prte_attribute_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_attribute_t);
 
 /* some helper functions */
 PRTE_EXPORT pmix_proc_state_t prte_pmix_convert_state(int state);
@@ -447,83 +475,21 @@ PRTE_EXPORT pmix_status_t prte_pmix_convert_rc(int rc);
 PRTE_EXPORT int prte_pmix_convert_status(pmix_status_t status);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_job_state_to_error(int state);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_proc_state_to_error(int state);
-PRTE_EXPORT int prte_convert_jobid_to_nspace(pmix_nspace_t nspace, prte_jobid_t jobid);
-PRTE_EXPORT int prte_convert_nspace_to_jobid(prte_jobid_t *jobid, const pmix_nspace_t nspace);
-PRTE_EXPORT void prte_convert_daemon_nspace(prte_jobid_t *jobid, const pmix_nspace_t nspace);
-
-/* convert prte_jobid to pmix nspace */
-#define PRTE_PMIX_CONVERT_JOBID(r, n, j) \
-    (r) = prte_convert_jobid_to_nspace((n), (j))
-
-/* convert prte_vpid to pmix rank */
-#define PRTE_PMIX_CONVERT_VPID(r, v)               \
-    do {                                            \
-        if (PRTE_VPID_WILDCARD == (v)) {           \
-            (r) = PMIX_RANK_WILDCARD;               \
-        } else if (PRTE_VPID_INVALID == (v)) {     \
-            (r) = PMIX_RANK_INVALID;                \
-        } else {                                    \
-            (r) = (v);                              \
-        }                                           \
-    } while(0)
-
-/* convert prte_process_name_t to pmix_proc_t */
-#define PRTE_PMIX_CONVERT_NAME(r, p, n)                        \
-    do {                                                        \
-        PRTE_PMIX_CONVERT_JOBID(r, (p)->nspace, (n)->jobid);   \
-        if (PRTE_SUCCESS == (r)) {                             \
-            PRTE_PMIX_CONVERT_VPID((p)->rank, (n)->vpid);      \
-        }                                                       \
-    } while(0)
-
-
-/* register the daemon namespace and convert to jobid */
-#define PRTE_PMIX_REGISTER_DAEMON_NSPACE(j, n)     \
-    prte_convert_daemon_nspace((j), (n))
-
-/* convert pmix_nspace_t to prte_jobid_t */
-#define PRTE_PMIX_CONVERT_NSPACE(r, j, n)       \
-    (r) = prte_convert_nspace_to_jobid((j), (n))
-
-/* convert pmix rank to prte_vpid_t */
-#define PRTE_PMIX_CONVERT_RANK(v, r)           \
-    do {                                        \
-        if (PMIX_RANK_WILDCARD == (r)) {        \
-            (v) = PRTE_VPID_WILDCARD;          \
-        } else if (PMIX_RANK_INVALID == (r)) {  \
-            (v) = PRTE_VPID_INVALID;           \
-        } else {                                \
-            (v) = (r);                          \
-        }                                       \
-    } while(0)
-
-/* convert pmix_proc_t to prte_process_name_t */
-#define PRTE_PMIX_CONVERT_PROCT(r, n, p)                           \
-    do {                                                            \
-        PRTE_PMIX_CONVERT_NSPACE((r), &(n)->jobid, (p)->nspace);   \
-        if (PRTE_SUCCESS == (r)) {                                 \
-            PRTE_PMIX_CONVERT_RANK((n)->vpid, (p)->rank);          \
-        }                                                           \
-    } while(0)
-
-PRTE_EXPORT void prte_pmix_value_load(pmix_value_t *v,
-                                        prte_value_t *kv);
-
-PRTE_EXPORT int prte_pmix_value_unload(prte_value_t *kv,
-                                         const pmix_value_t *v);
 
 PRTE_EXPORT int prte_pmix_register_cleanup(char *path,
-                                             bool directory,
-                                             bool ignore,
-                                             bool jobscope);
+                                           bool directory,
+                                           bool ignore,
+                                           bool jobscope);
 
 /* protect against early versions of PMIx */
 #ifndef PMIX_LOAD_KEY
 #define PMIX_LOAD_KEY(a, b) \
-    do {                                            \
-        memset((a), 0, PMIX_MAX_KEYLEN+1);          \
-        pmix_strncpy((a), (b), PMIX_MAX_KEYLEN);    \
-    }while(0)
+    do {                                                                    \
+        memset((a), 0, PMIX_MAX_KEYLEN+1);                                  \
+        if (NULL != (b)) {                                                  \
+            pmix_strncpy((char*)(a), (const char*)(b), PMIX_MAX_KEYLEN);    \
+        }                                                                   \
+    } while(0)
 #endif
 
 #ifndef PMIX_CHECK_KEY

@@ -16,6 +16,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -113,7 +114,7 @@ __prte_attribute_format_funcptr__(__printf__, 2, 3);
  *  For example, MPI_Abort(comm) will use this function to terminate peers in the
  *  communicator group before aborting itself.
  */
-typedef int (*prte_errmgr_base_module_abort_peers_fn_t)(prte_process_name_t *procs,
+typedef int (*prte_errmgr_base_module_abort_peers_fn_t)(pmix_proc_t *procs,
                                                         int32_t num_procs,
                                                         int error_code);
 

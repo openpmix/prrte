@@ -16,6 +16,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,6 +30,7 @@
 
 #include "src/class/prte_bitmap.h"
 #include "src/mca/mca.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_progress_threads.h"
 #include "src/util/output.h"
 #include "src/mca/base/base.h"
@@ -53,8 +55,6 @@ static int prte_oob_base_close(void)
 {
     prte_oob_base_component_t *component;
     prte_mca_base_component_list_item_t *cli;
-    prte_object_t *value;
-    uint64_t key;
 
     /* shutdown all active transports */
     while (NULL != (cli = (prte_mca_base_component_list_item_t *) prte_list_remove_first (&prte_oob_base.actives))) {
@@ -68,14 +68,8 @@ static int prte_oob_base_close(void)
     /* destruct our internal lists */
     PRTE_DESTRUCT(&prte_oob_base.actives);
 
-    /* release all peers from the hash table */
-    PRTE_HASH_TABLE_FOREACH(key, uint64, value, &prte_oob_base.peers) {
-        if (NULL != value) {
-            PRTE_RELEASE(value);
-        }
-    }
-
-    PRTE_DESTRUCT(&prte_oob_base.peers);
+    /* release all peers from the list */
+    PRTE_LIST_DESTRUCT(&prte_oob_base.peers);
 
     return prte_mca_base_framework_components_close(&prte_oob_base_framework, NULL);
 }
@@ -88,8 +82,7 @@ static int prte_oob_base_open(prte_mca_base_open_flag_t flags)
 {
     /* setup globals */
     prte_oob_base.max_uri_length = -1;
-    PRTE_CONSTRUCT(&prte_oob_base.peers, prte_hash_table_t);
-    prte_hash_table_init(&prte_oob_base.peers, 128);
+    PRTE_CONSTRUCT(&prte_oob_base.peers, prte_list_t);
     PRTE_CONSTRUCT(&prte_oob_base.actives, prte_list_t);
 
      /* Open up all available components */
@@ -107,6 +100,7 @@ PRTE_CLASS_INSTANCE(prte_oob_send_t,
 
 static void pr_cons(prte_oob_base_peer_t *ptr)
 {
+    PMIX_LOAD_PROCID(&ptr->name, NULL, PMIX_RANK_INVALID);
     ptr->component = NULL;
     PRTE_CONSTRUCT(&ptr->addressable, prte_bitmap_t);
     prte_bitmap_init(&ptr->addressable, 8);
@@ -116,5 +110,5 @@ static void pr_des(prte_oob_base_peer_t *ptr)
     PRTE_DESTRUCT(&ptr->addressable);
 }
 PRTE_CLASS_INSTANCE(prte_oob_base_peer_t,
-                   prte_object_t,
+                   prte_list_item_t,
                    pr_cons, pr_des);

@@ -2,6 +2,7 @@
  * Copyright (c) 2017-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,17 +31,17 @@
 #include "src/mca/mca.h"
 #include "src/class/prte_object.h"
 #include "src/class/prte_bitmap.h"
-#include "src/dss/dss_types.h"
 #include "src/mca/state/state.h"
 #include "src/mca/rml/rml_types.h"
+#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
 /* define a callback function to be invoked upon
  * collective completion */
-typedef void (*prte_propagate_cbfunc_t)(int status, prte_buffer_t *buf, void *cbdata);
+typedef void (*prte_propagate_cbfunc_t)(int status, pmix_data_buffer_t *buf, void *cbdata);
 
-typedef int (*prte_propagate_rbcast_cb_t)(prte_buffer_t* buffer);
+typedef int (*prte_propagate_rbcast_cb_t)(pmix_data_buffer_t* buffer);
 
 /*
  * Component functions - all MUST be provided!
@@ -52,10 +53,10 @@ typedef int (*prte_propagate_base_module_init_fn_t)(void);
 /* finalize the selected module */
 typedef int (*prte_propagate_base_module_finalize_fn_t)(void);
 
-typedef int (*prte_propagate_base_module_prp_fn_t)(prte_jobid_t *job,
-        prte_process_name_t *source,
-        prte_process_name_t *sickproc,
-        prte_proc_state_t state);
+typedef int (*prte_propagate_base_module_prp_fn_t)(const pmix_nspace_t job,
+                                                   const pmix_proc_t *source,
+                                                   const pmix_proc_t *sickproc,
+                                                   prte_proc_state_t state);
 
 typedef int (*prte_propagate_base_module_registercb_fn_t)(void);
 

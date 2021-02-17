@@ -3,6 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,8 +19,7 @@
 #include "src/mca/mca.h"
 
 #include "src/class/prte_pointer_array.h"
-#include "src/dss/dss_types.h"
-
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/routed/routed.h"
 
@@ -40,11 +40,11 @@ PRTE_EXPORT extern prte_routed_base_t prte_routed_base;
 
 /* specialized support functions */
 PRTE_EXPORT void prte_routed_base_xcast_routing(prte_list_t *coll,
-                                                  prte_list_t *my_children);
+                                                prte_list_t *my_children);
 
-PRTE_EXPORT int prte_routed_base_process_callback(prte_jobid_t job,
-                                                    prte_buffer_t *buffer);
-PRTE_EXPORT void prte_routed_base_update_hnps(prte_buffer_t *buf);
+PRTE_EXPORT int prte_routed_base_process_callback(pmix_nspace_t job,
+                                                  pmix_data_buffer_t *buffer);
+PRTE_EXPORT void prte_routed_base_update_hnps(pmix_data_buffer_t *buf);
 
 END_C_DECLS
 

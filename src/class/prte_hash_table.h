@@ -42,6 +42,7 @@
 #include <stdint.h>
 #include "src/include/types.h"
 #include "src/class/prte_list.h"
+#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
@@ -338,132 +339,6 @@ PRTE_EXPORT int prte_hash_table_get_first_key_ptr(prte_hash_table_t *table, void
 PRTE_EXPORT int prte_hash_table_get_next_key_ptr(prte_hash_table_t *table, void* *key,
                                        size_t *key_size, void **value,
                                        void *in_node, void **out_node);
-
-
-
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_proc_table_t);
-
-struct prte_proc_table_t
-{
-    prte_hash_table_t    super;          /**< subclass of prte_object_t */
-    size_t               pt_size;        /**< number of extant entries */
-    size_t               vpids_size;
-    // FIXME
-    // Begin KLUDGE!!  So ompi/debuggers/ompi_common_dll.c doesn't complain
-    size_t              pt_table_size;  /**< size of table */
-    // End KLUDGE
-};
-typedef struct prte_proc_table_t prte_proc_table_t;
-
-
-
-/**
- *  Initializes the table size, must be called before using
- *  the table.
- *
- *  @param   pt      The input hash table (IN).
- *  @param   jobids  The size of the jobids table, which will be rounded up
- *                   (if required) to the next highest power of two (IN).
- *  @param   vpids   The size of the vpids table, which will be rounded up
- *                   (if required) to the next highest power of two (IN).
- *  @return  PRTE error code.
- *
- */
-
-PRTE_EXPORT int prte_proc_table_init(prte_proc_table_t* pt, size_t jobids, size_t vpids);
-
-/**
- *  Remove all elements from the table.
- *
- *  @param   pt   The input hash table (IN).
- *  @return  PRTE return code.
- *
- */
-
-PRTE_EXPORT int prte_proc_table_remove_all(prte_proc_table_t *pt);
-
-/**
- *  Retrieve value via prte_process_name_t key.
- *
- *  @param   pt      The input hash table (IN).
- *  @param   key     The input key (IN).
- *  @param   ptr     The value associated with the key
- *  @return  integer return code:
- *           - PRTE_SUCCESS       if key was found
- *           - PRTE_ERR_NOT_FOUND if key was not found
- *           - PRTE_ERROR         other error
- *
- */
-
-PRTE_EXPORT int prte_proc_table_get_value(prte_proc_table_t* pt, prte_process_name_t key,
-                                                   void** ptr);
-
-/**
- *  Set value based on prte_process_name_t key.
- *
- *  @param   pt      The input hash table (IN).
- *  @param   key     The input key (IN).
- *  @param   value   The value to be associated with the key (IN).
- *  @return  PRTE return code.
- *
- */
-
-PRTE_EXPORT int prte_proc_table_set_value(prte_proc_table_t* pt, prte_process_name_t key, void* value);
-
-/**
- *  Remove value based on prte_process_name_t key.
- *
- *  @param   pt      The input hash table (IN).
- *  @param   key     The input key (IN).
- *  @return  PRTE return code.
- *
- */
-
-PRTE_EXPORT int prte_proc_table_remove_value(prte_proc_table_t* pt, prte_process_name_t key);
-
-
-/**
- *  Get the first prte_process_name_t key from the hash table, which can be used later to
- *  get the next key
- *  @param  pt      The hash table pointer (IN)
- *  @param  key     The first key (OUT)
- *  @param  value   The value corresponding to this key (OUT)
- *  @param  node1   The pointer to the first internal node which stores
- *                  the key-value pair (this is required for subsequent calls
- *                  to get_next_key) (OUT)
- *  @param  node2   The pointer to the second internal node which stores
- *                  the key-value pair (this is required for subsequent calls
- *                  to get_next_key) (OUT)
- *  @return PRTE error code
- *
- */
-
-PRTE_EXPORT int prte_proc_table_get_first_key(prte_proc_table_t *pt, prte_process_name_t *key,
-                                                void **value, void **node1, void **node2);
-
-
-/**
- *  Get the next prte_process_name_t key from the hash table, knowing the current key
- *  @param  pt       The hash table pointer (IN)
- *  @param  key      The key (OUT)
- *  @param  value    The value corresponding to this key (OUT)
- *  @param  in_node1 The first node pointer from previous call to either get_first
-                     or get_next (IN)
- *  @param  out_node1 The first pointer to the hash table internal node which stores
- *                   the key-value pair (this is required for subsequent calls
- *                   to get_next_key) (OUT)
- *  @param  in_node2 The second node pointer from previous call to either get_first
-                     or get_next (IN)
- *  @param  out_node2 The second pointer to the hash table internal node which stores
- *                   the key-value pair (this is required for subsequent calls
- *                   to get_next_key) (OUT)
- *  @return PRTE error code
- *
- */
-
-PRTE_EXPORT int prte_proc_table_get_next_key(prte_proc_table_t *pt, prte_process_name_t *key,
-                                               void **value, void *in_node1, void **out_node1,
-                                               void *in_node2, void **out_node2);
 
 /**
  * Loop over a hash table.

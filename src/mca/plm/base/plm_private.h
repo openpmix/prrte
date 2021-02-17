@@ -15,6 +15,7 @@
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,10 +40,8 @@
 
 #include "src/class/prte_list.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/dss/dss_types.h"
 #include "src/mca/base/prte_mca_base_framework.h"
 
-#include "src/dss/dss_types.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/odls/odls_types.h"
@@ -55,12 +54,14 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_plm_base_framework;
 
 /* globals for use solely within PLM framework */
 typedef struct {
+    /* base nspace for this DVM */
+    char *base_nspace;
     /* next jobid */
-    uint16_t next_jobid;
+    uint32_t next_jobid;
     /* time when daemons started launch */
     struct timeval daemonlaunchstart;
     /* tree spawn cmd */
-    prte_buffer_t tree_spawn_cmd;
+    pmix_data_buffer_t tree_spawn_cmd;
     /* daemon nodes assigned at launch */
     bool daemon_nodes_assigned_at_launch;
     size_t node_regex_threshold;
@@ -79,14 +80,14 @@ PRTE_EXPORT int prte_plm_base_set_progress_sched(int sched);
 /*
  * Launch support
  */
-PRTE_EXPORT void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
-                                                 prte_buffer_t *buffer,
+PRTE_EXPORT void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
+                                                 pmix_data_buffer_t *buffer,
                                                  prte_rml_tag_t tag, void *cbdata);
-PRTE_EXPORT void prte_plm_base_daemon_failed(int status, prte_process_name_t* sender,
-                                               prte_buffer_t *buffer,
+PRTE_EXPORT void prte_plm_base_daemon_failed(int status, pmix_proc_t* sender,
+                                               pmix_data_buffer_t *buffer,
                                                prte_rml_tag_t tag, void *cbdata);
-PRTE_EXPORT void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
-                                                 prte_buffer_t *buffer,
+PRTE_EXPORT void prte_plm_base_daemon_topology(int status, pmix_proc_t* sender,
+                                                 pmix_data_buffer_t *buffer,
                                                  prte_rml_tag_t tag, void *cbdata);
 
 PRTE_EXPORT int prte_plm_base_create_jobid(prte_job_t *jdata);
@@ -101,17 +102,17 @@ PRTE_EXPORT int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata);
  * Utilities for plm components that use proxy daemons
  */
 PRTE_EXPORT int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command);
-PRTE_EXPORT int prte_plm_base_prted_terminate_job(prte_jobid_t jobid);
+PRTE_EXPORT int prte_plm_base_prted_terminate_job(pmix_nspace_t jobid);
 PRTE_EXPORT int prte_plm_base_prted_kill_local_procs(prte_pointer_array_t *procs);
-PRTE_EXPORT int prte_plm_base_prted_signal_local_procs(prte_jobid_t job, int32_t signal);
+PRTE_EXPORT int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal);
 
 /*
  * communications utilities
  */
 PRTE_EXPORT int prte_plm_base_comm_start(void);
 PRTE_EXPORT int prte_plm_base_comm_stop(void);
-PRTE_EXPORT void prte_plm_base_recv(int status, prte_process_name_t* sender,
-                                      prte_buffer_t* buffer, prte_rml_tag_t tag,
+PRTE_EXPORT void prte_plm_base_recv(int status, pmix_proc_t* sender,
+                                      pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
                                       void* cbdata);
 
 

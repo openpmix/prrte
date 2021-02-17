@@ -18,6 +18,7 @@
  * Copyright (c) 2018      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2018      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -97,7 +98,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
         count = prte_cmd_line_get_ninsts(prte_info_cmd_line, "param");
         for (i = 0; i < count; ++i) {
             pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int)i, 0);
-            if (0 == strcmp(prte_info_type_all, pval->data.string)) {
+            if (0 == strcmp(prte_info_type_all, pval->value.data.string)) {
                 want_all = true;
                 break;
             }
@@ -115,9 +116,9 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     } else {
         for (i = 0; i < count; ++i) {
             pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int)i, 0);
-            type = pval->data.string;
+            type = pval->value.data.string;
             pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int)i, 1);
-            component = pval->data.string;
+            component = pval->value.data.string;
 
             for (found = false, i = 0; i < mca_types.size; ++i) {
                 if (NULL == (str = (char *)prte_pointer_array_get_item(&mca_types, i))) {
@@ -227,7 +228,7 @@ void prte_info_do_path(bool want_all, prte_cmd_line_t *cmd_line)
     count = prte_cmd_line_get_ninsts(cmd_line, "path");
     for (i = 0; i < count; ++i) {
         pval = prte_cmd_line_get_param(cmd_line, "path", i, 0);
-        scope = pval->data.string;
+        scope = pval->value.data.string;
         if (0 == strcmp("all", scope)) {
             want_all = true;
             break;
@@ -257,7 +258,7 @@ void prte_info_do_path(bool want_all, prte_cmd_line_t *cmd_line)
         count = prte_cmd_line_get_ninsts(cmd_line, "path");
         for (i = 0; i < count; ++i) {
             pval = prte_cmd_line_get_param(cmd_line, "path", i, 0);
-            scope = pval->data.string;
+            scope = pval->value.data.string;
 
             if (0 == strcmp(prte_info_path_prefix, scope)) {
                 prte_info_show_path(prte_info_path_prefix, prte_install_dirs.prefix);

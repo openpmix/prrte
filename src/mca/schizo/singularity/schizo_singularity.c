@@ -2,6 +2,7 @@
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Sylabs, Inc. All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +44,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     bool takeus = false;
     char *pth = NULL; // Path to the directory where the Singularity binary is
     char *exec_args = NULL;
-    prte_envar_t envar;
+    pmix_envar_t envar;
     char **cmd_args = NULL;
 
     if (NULL != prte_schizo_base.personalities &&
@@ -125,7 +126,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     envar.value = pth;
     envar.separator = ':';
     prte_add_attribute(&jdata->attributes, PRTE_JOB_PREPEND_ENVAR,
-                       PRTE_ATTR_GLOBAL, &envar, PRTE_ENVAR);
+                       PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
 
     // the final command is now singularity
     if (app->app) {
@@ -167,7 +168,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     app->argv = cmd_args;
 
     /* set the singularity cache dir, unless asked not to do so */
-    if (!prte_get_attribute(&app->attributes, PRTE_APP_NO_CACHEDIR, NULL, PRTE_BOOL)) {
+    if (!prte_get_attribute(&app->attributes, PRTE_APP_NO_CACHEDIR, NULL, PMIX_BOOL)) {
         /* Set the Singularity sessiondir to exist within the PRTE sessiondir */
         prte_setenv("SINGULARITY_SESSIONDIR", prte_process_info.job_session_dir, true, &app->env);
         /* No need for Singularity to clean up after itself if PRTE will */

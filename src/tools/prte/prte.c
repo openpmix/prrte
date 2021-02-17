@@ -83,7 +83,6 @@
 
 #include "src/runtime/prte_progress_threads.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/dss/dss.h"
 
 #include "src/runtime/runtime.h"
 #include "src/runtime/prte_globals.h"
@@ -122,7 +121,6 @@ typedef struct {
     size_t ninfo;
 } mylock_t;
 
-static prte_jobid_t myjobid = PRTE_JOBID_INVALID;
 static pmix_nspace_t spawnednspace;
 static pmix_proc_t myproc;
 
@@ -653,7 +651,7 @@ int main(int argc, char *argv[])
     prte_debug_flag = prte_cmd_line_is_taken(prte_cmd_line, "debug");
     prte_debug_daemons_flag = prte_cmd_line_is_taken(prte_cmd_line, "debug-daemons");
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "debug-verbose", 0, 0))) {
-        prte_debug_verbosity = pval->data.integer;
+        prte_debug_verbosity = pval->value.data.integer;
     }
     prte_debug_daemons_file_flag = prte_cmd_line_is_taken(prte_cmd_line, "debug-daemons-file");
     if (prte_debug_daemons_file_flag) {
@@ -697,7 +695,7 @@ int main(int argc, char *argv[])
     prte_setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
     /* if we were asked to report a uri, set the MCA param to do so */
      if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "report-uri", 0, 0))) {
-        prte_setenv("PMIX_MCA_ptl_base_report_uri", pval->data.string, true, &environ);
+        prte_setenv("PMIX_MCA_ptl_base_report_uri", pval->value.data.string, true, &environ);
     }
     /* don't aggregate help messages as that will apply job-to-job */
     prte_setenv("PRTE_MCA_prte_base_help_aggregate", "0", true, &environ);
@@ -746,7 +744,7 @@ int main(int argc, char *argv[])
     /* start the DVM */
 
      /* get the daemon job object - was created by ess/hnp component */
-    if (NULL == (jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid))) {
+    if (NULL == (jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace))) {
         prte_show_help("help-prun.txt", "bad-job-object", true,
                        prte_tool_basename);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
@@ -763,7 +761,7 @@ int main(int argc, char *argv[])
     /* Did the user specify a prefix, or want prefix by default? */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "prefix", 0, 0)) || want_prefix_by_default) {
         if (NULL != pval) {
-            param = strdup(pval->data.string);
+            param = strdup(pval->value.data.string);
         } else {
             /* --enable-prun-prefix-default was given to prun */
             param = strdup(prte_install_dirs.prefix);
@@ -780,7 +778,7 @@ int main(int argc, char *argv[])
                 goto DONE;
             }
         }
-        prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL, param, PRTE_STRING);
+        prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL, param, PMIX_STRING);
         free(param);
     } else {
         /* Check if called with fully-qualified path to prte.
@@ -806,7 +804,7 @@ int main(int argc, char *argv[])
                 }
                 free(tmp_basename);
             }
-            prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL, tpath, PRTE_STRING);
+            prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL, tpath, PMIX_STRING);
         }
     }
 
@@ -822,18 +820,18 @@ int main(int argc, char *argv[])
             goto DONE;
         } else {
             pval = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
-            prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_LOCAL, pval->data.string, PRTE_STRING);
+            prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_LOCAL, pval->value.data.string, PMIX_STRING);
         }
     }
     if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "machinefile"))) {
-        if(1 < j || prte_get_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, NULL, PRTE_STRING)) {
+        if(1 < j || prte_get_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, NULL, PMIX_STRING)) {
             prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
                            true, prte_tool_basename, NULL);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             goto DONE;
         } else {
             pval = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
-            prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_LOCAL, pval->data.string, PRTE_STRING);
+            prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_LOCAL, pval->value.data.string, PMIX_STRING);
         }
     }
 
@@ -842,10 +840,10 @@ int main(int argc, char *argv[])
         char **targ=NULL, *tval;
         for (i = 0; i < j; ++i) {
             pval = prte_cmd_line_get_param(prte_cmd_line, "host", i, 0);
-            prte_argv_append_nosize(&targ, pval->data.string);
+            prte_argv_append_nosize(&targ, pval->value.data.string);
         }
         tval = prte_argv_join(targ, ',');
-        prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, tval, PRTE_STRING);
+        prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, tval, PMIX_STRING);
         prte_argv_free(targ);
         free(tval);
     }
@@ -930,10 +928,10 @@ int main(int argc, char *argv[])
     param = NULL;
     ptr = NULL;
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output-filename", 0, 0))) {
-        param = pval->data.string;
+        param = pval->value.data.string;
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output-directory", 0, 0))) {
-        ptr = pval->data.string;
+        ptr = pval->value.data.string;
     }
     if (NULL != param && NULL != ptr) {
         prte_show_help("help-prted.txt", "both-file-and-dir-set", true,
@@ -985,7 +983,7 @@ int main(int argc, char *argv[])
 
     /* check what user wants us to do with stdin */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "stdin", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, pval->value.data.string, PMIX_STRING);
      }
 
     /* if we want the argv's indexed, indicate that */
@@ -994,17 +992,17 @@ int main(int argc, char *argv[])
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->value.data.string, PMIX_STRING);
     }
 
     /* if the user specified a ranking policy, then set it */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "rank-by", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, pval->value.data.string, PMIX_STRING);
     }
 
     /* if the user specified a binding policy, then set it */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "bind-to", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, pval->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, pval->value.data.string, PMIX_STRING);
     }
     /* mark if recovery was enabled on the cmd line */
     if (prte_cmd_line_is_taken(prte_cmd_line, "enable-recovery")) {
@@ -1012,8 +1010,8 @@ int main(int argc, char *argv[])
     }
     /* record the max restarts */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "max-restarts", 0, 0)) &&
-        0 < pval->data.integer) {
-        ui32 = pval->data.integer;
+        0 < pval->value.data.integer) {
+        ui32 = pval->value.data.integer;
         PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t) {
             PMIX_INFO_LIST_ADD(ret, app->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
         }
@@ -1038,14 +1036,14 @@ int main(int argc, char *argv[])
         if (NULL != param) {
             i = strtol(param, NULL, 10);
             /* both cannot be present, or they must agree */
-            if (NULL != pval && i != pval->data.integer) {
+            if (NULL != pval && i != pval->value.data.integer) {
                 prte_show_help("help-prun.txt", "prun:timeoutconflict", false,
-                               prte_tool_basename, pval->data.integer, param);
+                               prte_tool_basename, pval->value.data.integer, param);
                 PRTE_UPDATE_EXIT_STATUS(1);
                 goto DONE;
             }
         } else {
-            i = pval->data.integer;
+            i = pval->value.data.integer;
         }
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT, &i, PMIX_INT);
     }
@@ -1186,10 +1184,9 @@ int main(int argc, char *argv[])
     }
     PMIX_LOAD_NSPACE(spawnednspace, lock.msg);
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
-    PRTE_PMIX_CONVERT_NSPACE(rc, &myjobid, spawnednspace);
 
     if (verbose) {
-        prte_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(myjobid));
+        prte_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
     }
 
   proceed:
@@ -1337,7 +1334,7 @@ static int create_app(int argc, char* argv[],
 
     /* Did the user request a specific wdir? */
     if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "wdir", 0, 0))) {
-        param = pvalue->data.string;
+        param = pvalue->value.data.string;
         /* if this is a relative path, convert it to an absolute path */
         if (prte_path_is_absolute(param)) {
             app->app.cwd = strdup(param);
@@ -1365,7 +1362,7 @@ static int create_app(int argc, char* argv[],
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* if they specified a process set name, then pass it along */
     if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "pset", 0, 0))) {
-        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PSET_NAME, pvalue->data.string, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PSET_NAME, pvalue->value.data.string, PMIX_STRING);
     }
 #endif
 
@@ -1381,7 +1378,7 @@ static int create_app(int argc, char* argv[],
             return PRTE_ERR_FATAL;
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
-            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->value.data.string, PMIX_STRING);
             found = true;
         }
     }
@@ -1392,7 +1389,7 @@ static int create_app(int argc, char* argv[],
             return PRTE_ERR_FATAL;
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
-            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->data.string, PMIX_STRING);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->value.data.string, PMIX_STRING);
         }
     }
 
@@ -1401,7 +1398,7 @@ static int create_app(int argc, char* argv[],
         char **targ=NULL, *tval;
         for (i = 0; i < j; ++i) {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "host", i, 0);
-            prte_argv_append_nosize(&targ, pvalue->data.string);
+            prte_argv_append_nosize(&targ, pvalue->value.data.string);
         }
         tval = prte_argv_join(targ, ',');
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOST, tval, PMIX_STRING);
@@ -1411,10 +1408,10 @@ static int create_app(int argc, char* argv[],
     /* check for bozo error */
     if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "np", 0, 0)) ||
         NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "n", 0, 0))) {
-        if (0 > pvalue->data.integer) {
+        if (0 > pvalue->value.data.integer) {
             prte_show_help("help-prun.txt", "prun:negative-nprocs",
                            true, "prun", app->app.argv[0],
-                           pvalue->data.integer, NULL);
+                           pvalue->value.data.integer, NULL);
             return PRTE_ERR_FATAL;
         }
     }
@@ -1422,7 +1419,7 @@ static int create_app(int argc, char* argv[],
         /* we don't require that the user provide --np or -n because
          * the cmd line might stipulate a mapping policy that computes
          * the number of procs - e.g., a map-by ppr option */
-        app->app.maxprocs = pvalue->data.integer;
+        app->app.maxprocs = pvalue->value.data.integer;
     }
 
     /* see if we need to preload the binary to

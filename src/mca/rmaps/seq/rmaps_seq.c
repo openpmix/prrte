@@ -16,6 +16,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -100,7 +101,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     prte_list_item_t *item;
     prte_node_t *node, *nd;
     seq_node_t *sq, *save=NULL, *seq;;
-    prte_vpid_t vpid;
+    pmix_rank_t vpid;
     int32_t num_nodes;
     int rc;
     prte_list_t default_seq_list;
@@ -113,7 +114,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
                          "%s rmaps:seq called on job %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_JOBID_PRINT(jdata->jobid)));
+                         PRTE_JOBID_PRINT(jdata->nspace)));
 
     /* this mapper can only handle initial launch
      * when seq mapping is desired - allow
@@ -122,7 +123,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:seq: job %s is being restarted - seq cannot map",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper) {
@@ -130,7 +131,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
             /* a mapper has been specified, and it isn't me */
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: job %s not using sequential mapper",
-                                PRTE_JOBID_PRINT(jdata->jobid));
+                                PRTE_JOBID_PRINT(jdata->nspace));
             return PRTE_ERR_TAKE_NEXT_OPTION;
         }
         /* we need to process it */
@@ -140,14 +141,14 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
         /* I don't know how to do these - defer */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:seq: job %s not using seq mapper",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
  process:
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:seq: mapping job %s",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* flag that I did the mapping */
     if (NULL != jdata->map->last_mapper) {
@@ -169,7 +170,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     }
 
     /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL) &&
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
         PRTE_BIND_TO_HWTHREAD == PRTE_GET_BINDING_POLICY(jdata->map->binding)) {
         use_hwthread_cpus = true;
     } else {
@@ -197,7 +198,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
         }
 
         /* dash-host trumps hostfile */
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using dash-host nodes on app %s", app->app);
             PRTE_CONSTRUCT(&node_list, prte_list_t);
@@ -218,7 +219,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
             }
             PRTE_DESTRUCT(&node_list);
             seq_list = &sq_list;
-        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PRTE_STRING)) {
+        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
             if (NULL == hosts) {
                 rc = PRTE_ERR_NOT_FOUND;
                 goto error;
@@ -354,10 +355,10 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
                 }
             }
             /* assign the vpid */
-            proc->name.vpid = vpid++;
+            proc->name.rank = vpid++;
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: assign proc %s to node %s for app %s",
-                                PRTE_VPID_PRINT(proc->name.vpid), sq->hostname, app->app);
+                                PRTE_VPID_PRINT(proc->name.rank), sq->hostname, app->app);
 
             /* record the cpuset, if given */
             if (NULL != sq->cpuset) {
@@ -393,10 +394,10 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
                     hwloc_bitmap_list_asprintf(&cpu_bitmap, bitmap);
                     hwloc_bitmap_free(bitmap);
                 }
-                prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PRTE_STRING);
+                prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PMIX_STRING);
                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:seq: binding proc %s to cpuset %s bitmap %s",
-                                    PRTE_VPID_PRINT(proc->name.vpid), sq->cpuset, cpu_bitmap);
+                                    PRTE_VPID_PRINT(proc->name.rank), sq->cpuset, cpu_bitmap);
                 /* note that the user specified the mapping */
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYUSER);
                 PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_GIVEN);
@@ -411,12 +412,12 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
                 if (NULL != node->topology && NULL != node->topology->topo) {
                     locale = hwloc_get_root_obj(node->topology->topo);
                     prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
-                                       PRTE_ATTR_LOCAL, locale, PRTE_PTR);
+                                       PRTE_ATTR_LOCAL, locale, PMIX_POINTER);
                 }
             }
 
             /* add to the jdata proc array */
-            if (PRTE_SUCCESS != (rc = prte_pointer_array_set_item(jdata->procs, proc->name.vpid, proc))) {
+            if (PRTE_SUCCESS != (rc = prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc))) {
                 PRTE_ERROR_LOG(rc);
                 goto error;
             }
@@ -437,7 +438,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
 
     /* mark that this job is to be fully
      * described in the launch msg */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PRTE_BOOL);
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
 
     return PRTE_SUCCESS;
 

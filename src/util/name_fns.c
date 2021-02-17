@@ -14,6 +14,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,20 +36,13 @@
 
 #include "src/util/name_fns.h"
 
-#define PRTE_PRINT_NAME_ARGS_MAX_SIZE   50
+#define PRTE_PRINT_NAME_ARGS_MAX_SIZE   127
 #define PRTE_PRINT_NAME_ARG_NUM_BUFS    16
-
-#define PRTE_SCHEMA_DELIMITER_CHAR      '.'
-#define PRTE_SCHEMA_WILDCARD_CHAR       '*'
-#define PRTE_SCHEMA_WILDCARD_STRING     "*"
-#define PRTE_SCHEMA_INVALID_CHAR        '$'
-#define PRTE_SCHEMA_INVALID_STRING      "$"
 
 /* constructor - used to initialize namelist instance */
 static void prte_namelist_construct(prte_namelist_t* list)
 {
-    list->name.jobid = PRTE_JOBID_INVALID;
-    list->name.vpid = PRTE_VPID_INVALID;
+    PMIX_LOAD_PROCID(&list->name, NULL, PMIX_RANK_INVALID);
 }
 
 /* destructor - used to free any resources held by instance */
@@ -58,9 +52,9 @@ static void prte_namelist_destructor(prte_namelist_t* list)
 
 /* define instance of prte_class_t */
 PRTE_CLASS_INSTANCE(prte_namelist_t,              /* type name */
-                   prte_list_item_t,             /* parent "class" name */
-                   prte_namelist_construct,      /* constructor */
-                   prte_namelist_destructor);    /* destructor */
+                    prte_list_item_t,             /* parent "class" name */
+                    prte_namelist_construct,      /* constructor */
+                    prte_namelist_destructor);    /* destructor */
 
 static bool fns_init=false;
 
@@ -116,7 +110,7 @@ get_print_name_buffer(void)
     return (prte_print_args_buffers_t*) ptr;
 }
 
-char* prte_util_print_name_args(const prte_process_name_t *name)
+char* prte_util_print_name_args(const pmix_proc_t *name)
 {
     prte_print_args_buffers_t *ptr;
     char *job, *vpid;
@@ -133,7 +127,7 @@ char* prte_util_print_name_args(const prte_process_name_t *name)
         if (PRTE_PRINT_NAME_ARG_NUM_BUFS == ptr->cntr) {
             ptr->cntr = 0;
         }
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "[NO-NAME]");
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[NO-NAME]");
         return ptr->buffers[ptr->cntr-1];
     }
 
@@ -142,8 +136,8 @@ char* prte_util_print_name_args(const prte_process_name_t *name)
      * that the print_args function has been initialized, so
      * we don't need to duplicate that here
      */
-    job = prte_util_print_jobids(name->jobid);
-    vpid = prte_util_print_vpids(name->vpid);
+    job = prte_util_print_jobids(name->nspace);
+    vpid = prte_util_print_vpids(name->rank);
 
     /* get the next buffer */
     ptr = get_print_name_buffer();
@@ -165,99 +159,7 @@ char* prte_util_print_name_args(const prte_process_name_t *name)
     return ptr->buffers[ptr->cntr-1];
 }
 
-char* prte_util_print_jobids(const prte_jobid_t job)
-{
-    prte_print_args_buffers_t *ptr;
-    unsigned long tmp1, tmp2;
-
-    ptr = get_print_name_buffer();
-
-    if (NULL == ptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return prte_print_args_null;
-    }
-
-    /* cycle around the ring */
-    if (PRTE_PRINT_NAME_ARG_NUM_BUFS == ptr->cntr) {
-        ptr->cntr = 0;
-    }
-
-    if (PRTE_JOBID_INVALID == job) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "[INVALID]");
-    } else if (PRTE_JOBID_WILDCARD == job) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "[WILDCARD]");
-    } else {
-        /* find the job on our list */
-        tmp1 = PRTE_JOB_FAMILY((unsigned long)job);
-        tmp2 = PRTE_LOCAL_JOBID((unsigned long)job);
-        snprintf(ptr->buffers[ptr->cntr++],
-                 PRTE_PRINT_NAME_ARGS_MAX_SIZE,
-                 "[%lu,%lu]", tmp1, tmp2);
-    }
-    return ptr->buffers[ptr->cntr-1];
-}
-
-char* prte_util_print_job_family(const prte_jobid_t job)
-{
-    prte_print_args_buffers_t *ptr;
-    unsigned long tmp1;
-
-    ptr = get_print_name_buffer();
-
-    if (NULL == ptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return prte_print_args_null;
-    }
-
-    /* cycle around the ring */
-    if (PRTE_PRINT_NAME_ARG_NUM_BUFS == ptr->cntr) {
-        ptr->cntr = 0;
-    }
-
-    if (PRTE_JOBID_INVALID == job) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "INVALID");
-    } else if (PRTE_JOBID_WILDCARD == job) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "WILDCARD");
-    } else {
-        tmp1 = PRTE_JOB_FAMILY((unsigned long)job);
-        snprintf(ptr->buffers[ptr->cntr++],
-                 PRTE_PRINT_NAME_ARGS_MAX_SIZE,
-                 "%lu", tmp1);
-    }
-    return ptr->buffers[ptr->cntr-1];
-}
-
-char* prte_util_print_local_jobid(const prte_jobid_t job)
-{
-    prte_print_args_buffers_t *ptr;
-    unsigned long tmp1;
-
-    ptr = get_print_name_buffer();
-
-    if (NULL == ptr) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return prte_print_args_null;
-    }
-
-    /* cycle around the ring */
-    if (PRTE_PRINT_NAME_ARG_NUM_BUFS == ptr->cntr) {
-        ptr->cntr = 0;
-    }
-
-    if (PRTE_JOBID_INVALID == job) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "INVALID");
-    } else if (PRTE_JOBID_WILDCARD == job) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "WILDCARD");
-    } else {
-        tmp1 = (unsigned long)job & 0x0000ffff;
-        snprintf(ptr->buffers[ptr->cntr++],
-                 PRTE_PRINT_NAME_ARGS_MAX_SIZE,
-                 "%lu", tmp1);
-    }
-    return ptr->buffers[ptr->cntr-1];
-}
-
-char* prte_util_print_vpids(const prte_vpid_t vpid)
+char* prte_util_print_jobids(const pmix_nspace_t job)
 {
     prte_print_args_buffers_t *ptr;
 
@@ -273,32 +175,129 @@ char* prte_util_print_vpids(const prte_vpid_t vpid)
         ptr->cntr = 0;
     }
 
-    if (PRTE_VPID_INVALID == vpid) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "INVALID");
-    } else if (PRTE_VPID_WILDCARD == vpid) {
-        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "WILDCARD");
+    if (0 == strlen(job)) {
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[INVALID]");
     } else {
         snprintf(ptr->buffers[ptr->cntr++],
                  PRTE_PRINT_NAME_ARGS_MAX_SIZE,
-                 "%ld", (long)vpid);
+                 "%s", job);
     }
     return ptr->buffers[ptr->cntr-1];
 }
 
+char* prte_util_print_job_family(const pmix_nspace_t job)
+{
+    prte_print_args_buffers_t *ptr;
+    char *cptr;
 
+    ptr = get_print_name_buffer();
+
+    if (NULL == ptr) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return prte_print_args_null;
+    }
+
+    /* cycle around the ring */
+    if (PRTE_PRINT_NAME_ARG_NUM_BUFS == ptr->cntr) {
+        ptr->cntr = 0;
+    }
+
+    /* see if the job is invalid */
+    if (PMIX_NSPACE_INVALID(job)) {
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[INVALID]");
+    } else {
+        /* find the '@' sign delimiting the job family */
+        cptr = strrchr(job, '@');
+        if (NULL == cptr) {
+            /* this isn't a PRRTE job */
+            snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
+        } else {
+            *cptr = '\0';
+            snprintf(ptr->buffers[ptr->cntr++],
+                     PRTE_PRINT_NAME_ARGS_MAX_SIZE,
+                     "%s", job);
+            *cptr = '@';
+        }
+    }
+    return ptr->buffers[ptr->cntr-1];
+}
+
+char* prte_util_print_local_jobid(const pmix_nspace_t job)
+{
+    prte_print_args_buffers_t *ptr;
+    char *cptr;
+
+    ptr = get_print_name_buffer();
+
+    if (NULL == ptr) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return prte_print_args_null;
+    }
+
+    /* cycle around the ring */
+    if (PRTE_PRINT_NAME_ARG_NUM_BUFS == ptr->cntr) {
+        ptr->cntr = 0;
+    }
+
+    /* see if the job is invalid */
+    if (PMIX_NSPACE_INVALID(job)) {
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[INVALID]");
+    } else {
+        /* find the '@' sign delimiting the job family */
+        cptr = strrchr(job, '@');
+        if (NULL == cptr) {
+            /* this isn't a PRRTE job */
+            snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
+        } else {
+            ++cptr;
+            snprintf(ptr->buffers[ptr->cntr++],
+                     PRTE_PRINT_NAME_ARGS_MAX_SIZE,
+                     "%s", cptr);
+        }
+    }
+    return ptr->buffers[ptr->cntr-1];
+}
+
+char* prte_util_print_vpids(const pmix_rank_t vpid)
+{
+    prte_print_args_buffers_t *ptr;
+
+    ptr = get_print_name_buffer();
+
+    if (NULL == ptr) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return prte_print_args_null;
+    }
+
+    /* cycle around the ring */
+    if (PRTE_PRINT_NAME_ARG_NUM_BUFS == ptr->cntr) {
+        ptr->cntr = 0;
+    }
+
+    if (PMIX_RANK_INVALID == vpid) {
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "INVALID");
+    } else if (PMIX_RANK_WILDCARD == vpid) {
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "WILDCARD");
+    } else {
+        snprintf(ptr->buffers[ptr->cntr++],
+                 PRTE_PRINT_NAME_ARGS_MAX_SIZE,
+                 "%u", vpid);
+    }
+    return ptr->buffers[ptr->cntr-1];
+}
 
 /***   STRING FUNCTIONS   ***/
-int prte_util_convert_vpid_to_string(char **vpid_string, const prte_vpid_t vpid)
+int prte_util_convert_vpid_to_string(char **vpid_string, const pmix_rank_t vpid)
 {
     /* check for wildcard value - handle appropriately */
-    if (PRTE_VPID_WILDCARD == vpid) {
-        *vpid_string = strdup(PRTE_SCHEMA_WILDCARD_STRING);
+    if (PMIX_RANK_WILDCARD == vpid) {
+        *vpid_string = strdup("WILDCARD");
         return PRTE_SUCCESS;
     }
 
     /* check for invalid value - handle appropriately */
-    if (PRTE_VPID_INVALID == vpid) {
-        *vpid_string = strdup(PRTE_SCHEMA_INVALID_STRING);
+    if (PMIX_RANK_INVALID == vpid) {
+        *vpid_string = strdup("INVALID");
         return PRTE_SUCCESS;
     }
 
@@ -310,33 +309,7 @@ int prte_util_convert_vpid_to_string(char **vpid_string, const prte_vpid_t vpid)
     return PRTE_SUCCESS;
 }
 
-
-int prte_util_convert_string_to_vpid(prte_vpid_t *vpid, const char* vpidstring)
-{
-    if (NULL == vpidstring) {  /* got an error */
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        *vpid = PRTE_VPID_INVALID;
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    /** check for wildcard character - handle appropriately */
-    if (0 == strcmp(PRTE_SCHEMA_WILDCARD_STRING, vpidstring)) {
-        *vpid = PRTE_VPID_WILDCARD;
-        return PRTE_SUCCESS;
-    }
-
-    /* check for invalid value */
-    if (0 == strcmp(PRTE_SCHEMA_INVALID_STRING, vpidstring)) {
-        *vpid = PRTE_VPID_INVALID;
-        return PRTE_SUCCESS;
-    }
-
-    *vpid = strtoul(vpidstring, NULL, 10);
-
-    return PRTE_SUCCESS;
-}
-
-int prte_util_convert_string_to_process_name(prte_process_name_t *name,
+int prte_util_convert_string_to_process_name(pmix_proc_t *name,
                                              const char* name_string)
 {
     char *p;
@@ -347,63 +320,44 @@ int prte_util_convert_string_to_process_name(prte_process_name_t *name,
         return PRTE_ERR_BAD_PARAM;
     }
 
-    p = strrchr(name_string, PRTE_SCHEMA_DELIMITER_CHAR); /** get last field -> vpid */
+    p = strrchr(name_string, '.'); /** get last field -> vpid */
 
     /* check for error */
     if (NULL == p) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
-    p++;
-
-    name->jobid = PRTE_PROC_MY_NAME->jobid;
-    name->vpid = strtoul(p, NULL, 10);
+    *p = '\0';
+    PMIX_LOAD_NSPACE(name->nspace, name_string);
+    *p = '.';
+    ++p;
+    name->rank = strtoul(p, NULL, 10);
 
     return PRTE_SUCCESS;
 }
 
 int prte_util_convert_process_name_to_string(char **name_string,
-                                             const prte_process_name_t* name)
+                                             const pmix_proc_t* name)
 {
-    prte_job_t *jdata;
+    char *job, *rank;
 
     if (NULL == name) { /* got an error */
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         return PRTE_ERR_BAD_PARAM;
     }
 
-    jdata = prte_get_job_data_object(name->jobid);
-
-    prte_asprintf(name_string, "%s%c%lu", jdata->nspace, PRTE_SCHEMA_DELIMITER_CHAR, (unsigned long)name->vpid);
-
-    return PRTE_SUCCESS;
-}
-
-
-/****    CREATE PROCESS NAME    ****/
-int prte_util_create_process_name(prte_process_name_t **name,
-                                  prte_jobid_t job,
-                                  prte_vpid_t vpid
-                                  )
-{
-    *name = NULL;
-
-    *name = (prte_process_name_t*)malloc(sizeof(prte_process_name_t));
-    if (NULL == *name) { /* got an error */
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
-    (*name)->jobid = job;
-    (*name)->vpid = vpid;
+    job = prte_util_print_jobids(name->nspace);
+    rank = prte_util_print_vpids(name->rank);
+    prte_asprintf(name_string, "%s.%s",job, rank);
 
     return PRTE_SUCCESS;
 }
+
 
 /****    COMPARE NAME FIELDS     ****/
 int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields,
-                                  const prte_process_name_t* name1,
-                                  const prte_process_name_t* name2)
+                                  const pmix_proc_t* name1,
+                                  const pmix_proc_t* name2)
 {
     /* handle the NULL pointer case */
     if (NULL == name1 && NULL == name2) {
@@ -425,13 +379,13 @@ int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields,
     /* check job id */
     if (PRTE_NS_CMP_JOBID & fields) {
         if (PRTE_NS_CMP_WILD & fields &&
-            (PRTE_JOBID_WILDCARD == name1->jobid ||
-             PRTE_JOBID_WILDCARD == name2->jobid)) {
+            (0 == strlen(name1->nspace) ||
+             0 == strlen(name2->nspace))) {
             goto check_vpid;
         }
-        if (name1->jobid < name2->jobid) {
+        if (strlen(name1->nspace) < strlen(name2->nspace)) {
             return PRTE_VALUE2_GREATER;
-        } else if (name1->jobid > name2->jobid) {
+        } else if (strlen(name1->nspace) > strlen(name2->nspace)) {
             return PRTE_VALUE1_GREATER;
         }
     }
@@ -442,13 +396,13 @@ int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields,
  check_vpid:
     if (PRTE_NS_CMP_VPID & fields) {
         if (PRTE_NS_CMP_WILD & fields &&
-            (PRTE_VPID_WILDCARD == name1->vpid ||
-             PRTE_VPID_WILDCARD == name2->vpid)) {
+            (PMIX_RANK_WILDCARD == name1->rank ||
+             PMIX_RANK_WILDCARD == name2->rank)) {
             return PRTE_EQUAL;
         }
-        if (name1->vpid < name2->vpid) {
+        if (name1->rank < name2->rank) {
             return PRTE_VALUE2_GREATER;
-        } else if (name1->vpid > name2->vpid) {
+        } else if (name1->rank > name2->rank) {
             return PRTE_VALUE1_GREATER;
         }
     }
@@ -459,89 +413,6 @@ int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields,
     * return that fact
     */
     return PRTE_EQUAL;
-}
-
-/* hash a vpid based on Robert Jenkin's algorithm - note
- * that the precise values of the constants in the algo are
- * irrelevant.
- */
-uint32_t  prte_util_hash_vpid(prte_vpid_t vpid) {
-    uint32_t hash;
-
-    hash = vpid;
-    hash = (hash + 0x7ed55d16) + (hash<<12);
-    hash = (hash ^ 0xc761c23c) ^ (hash>>19);
-    hash = (hash + 0x165667b1) + (hash<<5);
-    hash = (hash + 0xd3a2646c) ^ (hash<<9);
-    hash = (hash + 0xfd7046c5) + (hash<<3);
-    hash = (hash ^ 0xb55a4f09) ^ (hash>>16);
-    return hash;
-}
-
-/* sysinfo conversion to and from string */
-int prte_util_convert_string_to_sysinfo(char **cpu_type, char **cpu_model,
-                                        const char* sysinfo_string)
-{
-    char *temp, *token;
-    int return_code=PRTE_SUCCESS;
-
-    /* check for NULL string - error */
-    if (NULL == sysinfo_string) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    temp = strdup(sysinfo_string);  /** copy input string as the strtok process is destructive */
-    token = strchr(temp, PRTE_SCHEMA_DELIMITER_CHAR); /** get first field -> cpu_type */
-
-    /* check for error */
-    if (NULL == token) {
-        free(temp);
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        return PRTE_ERR_BAD_PARAM;
-    }
-    *token = '\0';
-    token++;
-
-    /* If type is a valid string get the value otherwise leave cpu_type untouched.
-     */
-    if (0 != strcmp(temp, PRTE_SCHEMA_INVALID_STRING)) {
-        *cpu_type = strdup(temp);
-    }
-
-    /* If type is a valid string get the value otherwise leave cpu_type untouched.
-     */
-    if (0 != strcmp(token, PRTE_SCHEMA_INVALID_STRING)) {
-        *cpu_model = strdup(token);
-    }
-
-    free(temp);
-
-    return return_code;
-}
-
-int prte_util_convert_sysinfo_to_string(char **sysinfo_string,
-                                        const char *cpu_type, const char *cpu_model)
-{
-    char *tmp;
-
-    /* check for no sysinfo values (like empty cpu_type) - where encountered, insert the
-     * invalid string so we can correctly parse the name string when
-     * it is passed back to us later
-     */
-    if (NULL == cpu_type) {
-        prte_asprintf(&tmp, "%s", PRTE_SCHEMA_INVALID_STRING);
-    } else {
-        prte_asprintf(&tmp, "%s", cpu_type);
-    }
-
-    if (NULL == cpu_model) {
-        prte_asprintf(sysinfo_string, "%s%c%s", tmp, PRTE_SCHEMA_DELIMITER_CHAR, PRTE_SCHEMA_INVALID_STRING);
-    } else {
-        prte_asprintf(sysinfo_string, "%s%c%s", tmp, PRTE_SCHEMA_DELIMITER_CHAR, cpu_model);
-    }
-    free(tmp);
-    return PRTE_SUCCESS;
 }
 
 char *prte_pretty_print_timing(int64_t secs, int64_t usecs)

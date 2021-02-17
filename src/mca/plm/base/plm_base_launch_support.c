@@ -42,10 +42,8 @@
 #include "src/util/prte_environ.h"
 #include "src/util/printf.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/dss/dss.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/prtecompress/prtecompress.h"
 
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/nidmap.h"
@@ -128,7 +126,7 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
 
     /* if we are not launching, then we just assume that all
      * daemons share our topology */
-    if (prte_do_not_launch || prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL)) {
+    if (prte_do_not_launch || prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, 0);
         t = node->topology;
         for (i=1; i < prte_node_pool->size; i++) {
@@ -167,7 +165,7 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
         caddy->jdata->total_slots_alloc = prte_ras_base.total_slots_alloc;
     }
 
-    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PMIX_BOOL)) {
         prte_ras_base_display_alloc(caddy->jdata);
     }
     /* ensure we update the routing plan */
@@ -189,7 +187,7 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
 
     /* if we are not launching and this is the daemon job, then
      * we are done */
-    if (prte_do_not_launch && PRTE_PROC_MY_NAME->jobid == caddy->jdata->jobid) {
+    if (prte_do_not_launch && PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
         PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_VM_READY);
         PRTE_RELEASE(caddy);
         return;
@@ -198,7 +196,7 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
     /* if we don't want to launch, then we at least want
      * to map so we can see where the procs would have
      * gone - so skip to the mapping state */
-    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         caddy->jdata->state = PRTE_JOB_STATE_ALLOCATION_COMPLETE;
         PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_MAP);
     } else {
@@ -291,7 +289,7 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
     caddy->jdata->state = caddy->job_state;
 
     /* start by getting a jobid */
-    if (PRTE_JOBID_INVALID == caddy->jdata->jobid) {
+    if (PMIX_NSPACE_INVALID(caddy->jdata->nspace)) {
         if (PRTE_SUCCESS != (rc = prte_plm_base_create_jobid(caddy->jdata))) {
             PRTE_ERROR_LOG(rc);
             PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
@@ -321,8 +319,8 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
         if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(caddy->jdata->apps, i))) {
             continue;
         }
-        if (!prte_get_attribute(&app->attributes, PRTE_APP_RECOV_DEF, NULL, PRTE_BOOL)) {
-            prte_set_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, PRTE_ATTR_LOCAL, &prte_max_restarts, PRTE_INT32);
+        if (!prte_get_attribute(&app->attributes, PRTE_APP_RECOV_DEF, NULL, PMIX_BOOL)) {
+            prte_set_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, PRTE_ATTR_LOCAL, &prte_max_restarts, PMIX_INT32);
         }
     }
 
@@ -350,17 +348,17 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
     prte_node_t *node;
     uint32_t h;
-    prte_vpid_t *vptr;
+    pmix_rank_t *vptr;
     int i, rc;
     char *serial_number;
-    prte_process_name_t requestor, *rptr;
+    pmix_proc_t requestor, *rptr;
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
     prte_output_verbose(5, prte_plm_base_framework.framework_output,
                         "%s complete_setup on job %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_JOBID_PRINT(caddy->jdata->jobid));
+                        PRTE_JOBID_PRINT(caddy->jdata->nspace));
 
     /* bozo check */
     if (PRTE_JOB_STATE_SYSTEM_PREP != caddy->job_state) {
@@ -370,14 +368,6 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
     }
     /* update job state */
     caddy->jdata->state = caddy->job_state;
-
-    /* get the orted job data object */
-    if (NULL == prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid)) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
-        PRTE_RELEASE(caddy);
-        return;
-    }
 
     /* convenience */
     jdata = caddy->jdata;
@@ -390,10 +380,10 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
      * might be a tool that wants IO forwarded to it. If that's the
      * situation, then the job object will contain an attribute
      * indicating that request */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FWDIO_TO_TOOL, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FWDIO_TO_TOOL, NULL, PMIX_BOOL)) {
         /* send a message to our IOF containing the requested pull */
         rptr = &requestor;
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&rptr, PRTE_NAME)) {
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&rptr, PMIX_PROC)) {
             PRTE_IOF_PROXY_PULL(jdata, rptr);
         } else {
             PRTE_IOF_PROXY_PULL(jdata, &jdata->originator);
@@ -416,7 +406,7 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
             }
             /* if we don't have a serial number, then we are not a coprocessor */
             serial_number = NULL;
-            if (!prte_get_attribute(&node->attributes, PRTE_NODE_SERIAL_NUMBER, (void**)&serial_number, PRTE_STRING)) {
+            if (!prte_get_attribute(&node->attributes, PRTE_NODE_SERIAL_NUMBER, (void**)&serial_number, PMIX_STRING)) {
                 continue;
             }
             if (NULL != serial_number) {
@@ -430,7 +420,7 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
                     PRTE_ERROR_LOG(rc);
                     break;
                 }
-                prte_set_attribute(&node->attributes, PRTE_NODE_HOSTID, PRTE_ATTR_LOCAL, vptr, PRTE_VPID);
+                prte_set_attribute(&node->attributes, PRTE_NODE_HOSTID, PRTE_ATTR_LOCAL, vptr, PMIX_PROC_RANK);
             }
         }
     }
@@ -463,7 +453,7 @@ static void timer_cb(int fd, short event, void *cbdata)
     }
 
     /* free event */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FAILURE_TIMER_EVENT, (void**)&timer, PRTE_PTR)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FAILURE_TIMER_EVENT, (void**)&timer, PMIX_POINTER)) {
         /* timer is an prte_timer_t object */
         PRTE_RELEASE(timer);
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_FAILURE_TIMER_EVENT);
@@ -493,23 +483,24 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:launch_apps for job %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_JOBID_PRINT(jdata->jobid)));
+                         PRTE_JOBID_PRINT(jdata->nspace)));
 
     /* pack the appropriate add_local_procs command */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FIXED_DVM, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FIXED_DVM, NULL, PMIX_BOOL)) {
         command = PRTE_DAEMON_DVM_ADD_PROCS;
     } else {
         command = PRTE_DAEMON_ADD_LOCAL_PROCS;
     }
-    if (PRTE_SUCCESS != (rc = prte_dss.pack(&jdata->launch_msg, &command, 1, PRTE_DAEMON_CMD))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_pack(NULL, &jdata->launch_msg, &command, 1, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         PRTE_RELEASE(caddy);
         return;
     }
 
     /* get the local launcher's required data */
-    if (PRTE_SUCCESS != (rc = prte_odls.get_add_procs_data(&jdata->launch_msg, jdata->jobid))) {
+    if (PRTE_SUCCESS != (rc = prte_odls.get_add_procs_data(&jdata->launch_msg, jdata->nspace))) {
         PRTE_ERROR_LOG(rc);
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
     }
@@ -532,17 +523,17 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:send launch msg for job %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_JOBID_PRINT(jdata->jobid)));
+                         PRTE_JOBID_PRINT(jdata->nspace)));
 
     /* if we don't want to launch the apps, now is the time to leave */
     if (prte_do_not_launch) {
         bool compressed;
-        uint8_t *cmpdata;
+        uint8_t *cmpdata = NULL;
         size_t cmplen;
         /* report the size of the launch message */
-        compressed = prte_compress.compress_block((uint8_t*)jdata->launch_msg.base_ptr,
-                                                  jdata->launch_msg.bytes_used,
-                                                  &cmpdata, &cmplen);
+        compressed = PMIx_Data_compress((uint8_t*)jdata->launch_msg.base_ptr,
+                                        jdata->launch_msg.bytes_used,
+                                        &cmpdata, &cmplen);
         if (compressed) {
             prte_output(0, "LAUNCH MSG RAW SIZE: %d COMPRESSED SIZE: %d",
                         (int)jdata->launch_msg.bytes_used, (int)cmplen);
@@ -553,14 +544,16 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
         prte_never_launched = true;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALL_JOBS_COMPLETE);
         PRTE_RELEASE(caddy);
+        if (NULL != cmpdata) {
+            free(cmpdata);
+        }
         return;
     }
 
     /* goes to all daemons */
     sig = PRTE_NEW(prte_grpcomm_signature_t);
-    sig->signature = (prte_process_name_t*)malloc(sizeof(prte_process_name_t));
-    sig->signature[0].jobid = PRTE_PROC_MY_NAME->jobid;
-    sig->signature[0].vpid = PRTE_VPID_WILDCARD;
+    sig->signature = (pmix_proc_t*)malloc(sizeof(pmix_proc_t));
+    PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
     sig->sz = 1;
     if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &jdata->launch_msg))) {
         PRTE_ERROR_LOG(rc);
@@ -569,8 +562,8 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
         PRTE_RELEASE(caddy);
         return;
     }
-    PRTE_DESTRUCT(&jdata->launch_msg);
-    PRTE_CONSTRUCT(&jdata->launch_msg, prte_buffer_t);
+    PMIX_DATA_BUFFER_DESTRUCT(&jdata->launch_msg);
+    PMIX_DATA_BUFFER_CONSTRUCT(&jdata->launch_msg);
     /* maintain accounting */
     PRTE_RELEASE(sig);
 
@@ -586,7 +579,7 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:launch defining timeout for job %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_JOBID_PRINT(jdata->jobid)));
+                             PRTE_JOBID_PRINT(jdata->nspace)));
         timer = PRTE_NEW(prte_timer_t);
         timer->payload = jdata;
         prte_event_evtimer_set(prte_event_base,
@@ -594,7 +587,7 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
         prte_event_set_priority(timer->ev, PRTE_ERROR_PRI);
         timer->tv.tv_sec = prte_startup_timeout;
         timer->tv.tv_usec = 0;
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_FAILURE_TIMER_EVENT, PRTE_ATTR_LOCAL, timer, PRTE_PTR);
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_FAILURE_TIMER_EVENT, PRTE_ATTR_LOCAL, timer, PMIX_POINTER);
         PRTE_POST_OBJECT(timer);
         prte_event_evtimer_add(timer->ev, &timer->tv);
     }
@@ -605,45 +598,34 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
 
 int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata)
 {
-    int ret;
-    prte_buffer_t *answer;
+    int rc;
+    pmix_data_buffer_t *answer;
     int room, *rmptr;
 
     /* if the requestor simply told us to terminate, they won't
      * be waiting for a response */
-    if (PRTE_JOBID_INVALID == jdata->originator.jobid) {
+    if (PMIX_NSPACE_INVALID(jdata->originator.nspace)) {
         return PRTE_SUCCESS;
     }
 
     /* if the response has already been sent, don't do it again */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PMIX_BOOL)) {
         return PRTE_SUCCESS;
     }
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* if the requestor was a tool, use PMIx to notify them of
      * launch complete as they won't be listening on PRRTE oob */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PMIX_BOOL)) {
         pmix_info_t *iptr;
-        pmix_proc_t controller;
-        pmix_nspace_t spawnednspace;
         time_t timestamp;
 
-        /* direct an event back to our controller telling them
-         * the namespace of the spawned job */
-        PRTE_PMIX_CONVERT_JOBID(ret, spawnednspace, jdata->jobid);
-        if (PRTE_SUCCESS != ret) {
-            return ret;
-        }
-        PRTE_PMIX_CONVERT_NAME(ret, &controller, &jdata->originator);
-        if (PRTE_SUCCESS != ret) {
-            return ret;
-        }
+        /* direct an event back to our controller */
         timestamp = time(NULL);
         PMIX_INFO_CREATE(iptr, 4);
         /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &controller, PMIX_PROC);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &jdata->originator, PMIX_PROC);
         /* pass the nspace of the spawned job */
-        PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, spawnednspace, PMIX_STRING);
+        PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, jdata->nspace, PMIX_STRING);
         /* not to be delivered to a default event handler */
         PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
         /* provide the timestamp */
@@ -655,56 +637,60 @@ int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata)
 #endif
 
     /* prep the response to the spawn requestor */
-    answer = PRTE_NEW(prte_buffer_t);
+    PMIX_DATA_BUFFER_CREATE(answer);
+
     /* pack the status */
-    if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &status, 1, PRTE_INT32))) {
-        PRTE_ERROR_LOG(ret);
-        PRTE_RELEASE(answer);
-        return ret;
+    rc = PMIx_Data_pack(NULL, answer, &status, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(answer);
+        return prte_pmix_convert_status(rc);
     }
     /* pack the jobid */
-    if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &jdata->jobid, 1, PRTE_JOBID))) {
-        PRTE_ERROR_LOG(ret);
-        PRTE_RELEASE(answer);
-        return ret;
+    rc = PMIx_Data_pack(NULL, answer, &jdata->nspace, 1, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(answer);
+        return prte_pmix_convert_status(rc);
     }
     /* pack the room number */
     rmptr = &room;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void**)&rmptr, PRTE_INT)) {
-        if (PRTE_SUCCESS != (ret = prte_dss.pack(answer, &room, 1, PRTE_INT))) {
-            PRTE_ERROR_LOG(ret);
-            PRTE_RELEASE(answer);
-            return ret;
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void**)&rmptr, PMIX_INT)) {
+        rc = PMIx_Data_pack(NULL, answer, &room, 1, PMIX_INT);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(answer);
+            return prte_pmix_convert_status(rc);
         }
     }
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:launch sending dyn release of job %s to %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_JOBID_PRINT(jdata->jobid),
+                         PRTE_JOBID_PRINT(jdata->nspace),
                          PRTE_NAME_PRINT(&jdata->originator)));
-    if (0 > (ret = prte_rml.send_buffer_nb(&jdata->originator, answer,
+    if (0 > (rc = prte_rml.send_buffer_nb(&jdata->originator, answer,
                                            PRTE_RML_TAG_LAUNCH_RESP,
                                            prte_rml_send_callback, NULL))) {
-        PRTE_ERROR_LOG(ret);
+        PRTE_ERROR_LOG(rc);
         PRTE_RELEASE(answer);
-        return ret;
+        return rc;
     }
 
     /* mark that we sent it */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, PRTE_ATTR_LOCAL, NULL, PRTE_BOOL);
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
     return PRTE_SUCCESS;
 }
 
 static uint32_t ntraces = 0;
 
-static void stack_trace_recv(int status, prte_process_name_t* sender,
-                             prte_buffer_t *buffer, prte_rml_tag_t tag,
+static void stack_trace_recv(int status, pmix_proc_t* sender,
+                             pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
                              void* cbdata)
 {
-    prte_buffer_t *blob;
+    pmix_data_buffer_t *blob;
     char *st;
     int32_t cnt;
-    prte_process_name_t name;
+    pmix_proc_t name;
     char *hostname;
     pid_t pid;
     prte_job_t *jdata = NULL;
@@ -715,12 +701,12 @@ static void stack_trace_recv(int status, prte_process_name_t* sender,
 
     /* unpack the stack_trace blob */
     cnt = 1;
-    while (PRTE_SUCCESS == prte_dss.unpack(buffer, &blob, &cnt, PRTE_BUFFER)) {
+    while (PMIX_SUCCESS == PMIx_Data_unpack(NULL, buffer, &blob, &cnt, PMIX_BUFFER)) {
         /* first piece is the name of the process */
         cnt = 1;
-        if (PRTE_SUCCESS != prte_dss.unpack(blob, &name, &cnt, PRTE_NAME) ||
-            PRTE_SUCCESS != prte_dss.unpack(blob, &hostname, &cnt, PRTE_STRING) ||
-            PRTE_SUCCESS != prte_dss.unpack(blob, &pid, &cnt, PRTE_PID)) {
+        if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, blob, &name, &cnt, PMIX_PROC) ||
+            PMIX_SUCCESS != PMIx_Data_unpack(NULL, blob, &hostname, &cnt, PMIX_STRING) ||
+            PMIX_SUCCESS != PMIx_Data_unpack(NULL, blob, &pid, &cnt, PMIX_PID)) {
             PRTE_RELEASE(blob);
             continue;
         }
@@ -728,21 +714,21 @@ static void stack_trace_recv(int status, prte_process_name_t* sender,
         free(hostname);
         /* unpack the stack_trace until complete */
         cnt = 1;
-        while (PRTE_SUCCESS == prte_dss.unpack(blob, &st, &cnt, PRTE_STRING)) {
+        while (PRTE_SUCCESS == PMIx_Data_unpack(NULL, blob, &st, &cnt, PMIX_STRING)) {
             fprintf(stderr, "\t%s", st);  // has its own newline
             free(st);
             cnt = 1;
         }
         fprintf(stderr, "\n");
         if (NULL == jdata) {
-            jdata = prte_get_job_data_object(name.jobid);
+            jdata = prte_get_job_data_object(name.nspace);
         }
-        PRTE_RELEASE(blob);
+        PMIX_DATA_BUFFER_RELEASE(blob);
         cnt = 1;
     }
     ++ntraces;
     if (prte_process_info.num_daemons == ntraces) {
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TRACE_TIMEOUT_EVENT, (void**)&timer, PRTE_PTR)) {
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TRACE_TIMEOUT_EVENT, (void**)&timer, PMIX_POINTER)) {
             /* timer is an prte_timer_t object */
             PRTE_RELEASE(timer);
             prte_remove_attribute(&jdata->attributes, PRTE_JOB_TRACE_TIMEOUT_EVENT);
@@ -751,8 +737,7 @@ static void stack_trace_recv(int status, prte_process_name_t* sender,
         PRTE_CONSTRUCT(&parray, prte_pointer_array_t);
         /* create an object */
         proc = PRTE_NEW(prte_proc_t);
-        proc->name.jobid = jdata->jobid;
-        proc->name.vpid = PRTE_VPID_WILDCARD;
+        PMIX_LOAD_PROCID(&proc->name, jdata->nspace, PMIX_RANK_WILDCARD);
         prte_pointer_array_add(&parray, proc);
         if (PRTE_SUCCESS != (rc = prte_plm.terminate_procs(&parray))) {
             PRTE_ERROR_LOG(rc);
@@ -774,8 +759,7 @@ static void stack_trace_timeout(int sd, short args, void *cbdata)
     PRTE_CONSTRUCT(&parray, prte_pointer_array_t);
     /* create an object */
     proc = PRTE_NEW(prte_proc_t);
-    proc->name.jobid = jdata->jobid;
-    proc->name.vpid = PRTE_VPID_WILDCARD;
+    PMIX_LOAD_PROCID(&proc->name, jdata->nspace, PMIX_RANK_WILDCARD);
     prte_pointer_array_add(&parray, proc);
     if (PRTE_SUCCESS != (rc = prte_plm.terminate_procs(&parray))) {
         PRTE_ERROR_LOG(rc);
@@ -798,7 +782,7 @@ static void timeout_cb(int fd, short event, void *cbdata)
     /* Display a useful message to the user */
     tp = &timeout;
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT,
-                             (void**)&tp, PRTE_INT)) {
+                             (void**)&tp, PMIX_INT)) {
         /* This shouldn't happen, but at least don't segv / display
            *something* if it does */
         timeout = -1;
@@ -807,16 +791,16 @@ static void timeout_cb(int fd, short event, void *cbdata)
                     true, timeout);
     PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_TIMEOUT);
     /* clear the timer */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT, (void**)&timer, PRTE_PTR)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT, (void**)&timer, PMIX_POINTER)) {
         /* timer is an prte_timer_t object */
         PRTE_RELEASE(timer);
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT);
     }
 
     /* see if they want proc states reported */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, NULL, PMIX_BOOL)) {
         /* don't use the opal_output system as it may be borked */
-        fprintf(stderr, "DATA FOR JOB: %s\n", PRTE_JOBID_PRINT(jdata->jobid));
+        fprintf(stderr, "DATA FOR JOB: %s\n", PRTE_JOBID_PRINT(jdata->nspace));
         fprintf(stderr, "\tNum apps: %d\tNum procs: %d\tJobState: %s\tAbort: %s\n",
                 (int)jdata->num_apps, (int)jdata->num_procs,
                 prte_job_state_to_str(jdata->state),
@@ -827,7 +811,7 @@ static void timeout_cb(int fd, short event, void *cbdata)
         for (i=0; i < jdata->procs->size; i++) {
             if (NULL != (proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, i))) {
                 fprintf(stderr, "\t\tRank: %s\tNode: %s\tPID: %u\tState: %s\tExitCode %d\n",
-                        PRTE_VPID_PRINT(proc->name.vpid),
+                        PRTE_VPID_PRINT(proc->name.rank),
                         (NULL == proc->node) ? "UNKNOWN" : proc->node->name,
                         (unsigned int)proc->pid,
                         prte_proc_state_to_str(proc->state), proc->exit_code);
@@ -837,11 +821,11 @@ static void timeout_cb(int fd, short event, void *cbdata)
     }
 
     /* see if they want stacktraces */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES, NULL, PMIX_BOOL)) {
         /* if they asked for stack_traces, attempt to get them, but timeout
          * if we cannot do so */
         prte_daemon_cmd_flag_t command = PRTE_DAEMON_GET_STACK_TRACES;
-        prte_buffer_t *buffer;
+        pmix_data_buffer_t *buffer;
         prte_grpcomm_signature_t *sig;
 
         fprintf(stderr, "Waiting for stack traces (this may take a few moments)...\n");
@@ -851,24 +835,25 @@ static void timeout_cb(int fd, short event, void *cbdata)
                                  PRTE_RML_PERSISTENT, stack_trace_recv, NULL);
 
         /* setup the buffer */
-        buffer = PRTE_NEW(prte_buffer_t);
+        PMIX_DATA_BUFFER_CREATE(buffer);
         /* pack the command */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &command, 1, PRTE_DAEMON_CMD))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_RELEASE(buffer);
+        rc = PMIx_Data_pack(NULL, buffer, &command, 1, PMIX_UINT8);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             goto giveup;
         }
         /* pack the jobid */
-        if (PRTE_SUCCESS != (rc = prte_dss.pack(buffer, &jdata->jobid, 1, PRTE_JOBID))) {
-            PRTE_ERROR_LOG(rc);
-            PRTE_RELEASE(buffer);
+        rc = PMIx_Data_pack(NULL, buffer, &jdata->nspace, 1, PMIX_PROC_NSPACE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             goto giveup;
         }
         /* goes to all daemons */
         sig = PRTE_NEW(prte_grpcomm_signature_t);
-        sig->signature = (prte_process_name_t*)malloc(sizeof(prte_process_name_t));
-        sig->signature[0].jobid = PRTE_PROC_MY_NAME->jobid;
-        sig->signature[0].vpid = PRTE_VPID_WILDCARD;
+        sig->signature = (pmix_proc_t*)malloc(sizeof(pmix_proc_t));
+        PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
         sig->sz = 1;
         if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, buffer))) {
             PRTE_ERROR_LOG(rc);
@@ -889,7 +874,7 @@ static void timeout_cb(int fd, short event, void *cbdata)
             prte_event_set_priority(timer->ev, PRTE_ERROR_PRI);
             timer->tv.tv_sec = prte_stack_trace_wait_timeout;
             timer->tv.tv_usec = 0;
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_TRACE_TIMEOUT_EVENT, PRTE_ATTR_LOCAL, timer, PRTE_PTR);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_TRACE_TIMEOUT_EVENT, PRTE_ATTR_LOCAL, timer, PMIX_POINTER);
             PRTE_POST_OBJECT(timer);
             prte_event_evtimer_add(timer->ev, &timer->tv);
         }
@@ -901,8 +886,7 @@ static void timeout_cb(int fd, short event, void *cbdata)
     PRTE_CONSTRUCT(&parray, prte_pointer_array_t);
     /* create an object */
     proc = PRTE_NEW(prte_proc_t);
-    proc->name.jobid = jdata->jobid;
-    proc->name.vpid = PRTE_VPID_WILDCARD;
+    PMIX_LOAD_PROCID(&proc->name, jdata->nspace, PMIX_RANK_WILDCARD);
     prte_pointer_array_add(&parray, proc);
     if (PRTE_SUCCESS != (rc = prte_plm.terminate_procs(&parray))) {
         PRTE_ERROR_LOG(rc);
@@ -918,7 +902,7 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
     prte_timer_t *timer=NULL;
     int time, *tp;
-    prte_process_name_t name;
+    pmix_proc_t name;
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -926,12 +910,12 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
     jdata = caddy->jdata;
 
     /* if a timer was defined, cancel it */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FAILURE_TIMER_EVENT, (void**)&timer, PRTE_PTR)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FAILURE_TIMER_EVENT, (void**)&timer, PMIX_POINTER)) {
         prte_event_evtimer_del(timer->ev);
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:launch deleting timeout for job %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_JOBID_PRINT(jdata->jobid)));
+                             PRTE_JOBID_PRINT(jdata->nspace)));
         PRTE_RELEASE(timer);
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_FAILURE_TIMER_EVENT);
     }
@@ -950,11 +934,10 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:launch wiring up iof for job %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_JOBID_PRINT(jdata->jobid)));
+                             PRTE_JOBID_PRINT(jdata->nspace)));
 
         /* push stdin - the IOF will know what to do with the specified target */
-        name.jobid = jdata->jobid;
-        name.vpid = jdata->stdin_target;
+        PMIX_LOAD_PROCID(&name, jdata->nspace, jdata->stdin_target);
 
         if (PRTE_SUCCESS != (rc = prte_iof.push(&name, PRTE_IOF_STDIN, 0))) {
             PRTE_ERROR_LOG(rc);
@@ -969,7 +952,7 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
 
     /* if the job has a timeout assigned to it, setup the timer for it */
     tp = &time;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, (void**)&tp, PRTE_INT)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, (void**)&tp, PMIX_INT)) {
         /* setup a timer to monitor execution time */
         timer = PRTE_NEW(prte_timer_t);
         timer->payload = jdata;
@@ -978,7 +961,7 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
         prte_event_set_priority(timer->ev, PRTE_ERROR_PRI);
         timer->tv.tv_sec = time;
         timer->tv.tv_usec = 0;
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT, PRTE_ATTR_LOCAL, timer, PRTE_PTR);
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT, PRTE_ATTR_LOCAL, timer, PMIX_POINTER);
         PRTE_POST_OBJECT(timer);
         prte_event_evtimer_add(timer->ev, &timer->tv);
     }
@@ -1000,13 +983,13 @@ void prte_plm_base_registered(int fd, short args, void *cbdata)
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:launch %s registered",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_JOBID_PRINT(jdata->jobid)));
+                         PRTE_JOBID_PRINT(jdata->nspace)));
 
     if (PRTE_JOB_STATE_REGISTERED != caddy->job_state) {
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:launch job %s not registered - state %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_JOBID_PRINT(jdata->jobid),
+                             PRTE_JOBID_PRINT(jdata->nspace),
                              prte_job_state_to_str(caddy->job_state)));
         PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
         PRTE_RELEASE(caddy);
@@ -1023,8 +1006,8 @@ static bool prted_failed_launch;
 static prte_job_t *jdatorted=NULL;
 
 /* callback for topology reports */
-void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
-                                   prte_buffer_t *buffer,
+void prte_plm_base_daemon_topology(int status, pmix_proc_t* sender,
+                                   pmix_data_buffer_t *buffer,
                                    prte_rml_tag_t tag, void *cbdata)
 {
     hwloc_topology_t topo;
@@ -1038,9 +1021,9 @@ void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
     uint32_t h;
     prte_job_t *jdata;
     uint8_t flag;
-    size_t inlen, cmplen;
-    uint8_t *packed_data, *cmpdata;
-    prte_buffer_t datbuf, *data;
+    pmix_data_buffer_t datbuf, *data;
+    pmix_byte_object_t bo, pbo;
+    pmix_topology_t ptopo;
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:daemon_topology recvd for daemon %s",
@@ -1049,63 +1032,55 @@ void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
 
     /* get the daemon job, if necessary */
     if (NULL == jdatorted) {
-        jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+        jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     }
-    if (NULL == (daemon = (prte_proc_t*)prte_pointer_array_get_item(jdatorted->procs, sender->vpid))) {
+    if (NULL == (daemon = (prte_proc_t*)prte_pointer_array_get_item(jdatorted->procs, sender->rank))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         prted_failed_launch = true;
         goto CLEANUP;
     }
-    PRTE_CONSTRUCT(&datbuf, prte_buffer_t);
+    PMIX_DATA_BUFFER_CONSTRUCT(&datbuf);
     /* unpack the flag to see if this payload is compressed */
     idx=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &flag, &idx, PRTE_INT8))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &flag, &idx, PMIX_INT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         prted_failed_launch = true;
         goto CLEANUP;
     }
-    if (flag) {
-        /* unpack the data size */
-        idx=1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &inlen, &idx, PRTE_SIZE))) {
-            PRTE_ERROR_LOG(rc);
-            prted_failed_launch = true;
-            goto CLEANUP;
-        }
-        /* unpack the unpacked data size */
-        idx=1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &cmplen, &idx, PRTE_SIZE))) {
-            PRTE_ERROR_LOG(rc);
-            prted_failed_launch = true;
-            goto CLEANUP;
-        }
-        /* allocate the space */
-        packed_data = (uint8_t*)malloc(inlen);
-        /* unpack the data blob */
-        idx = inlen;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, packed_data, &idx, PRTE_UINT8))) {
-            PRTE_ERROR_LOG(rc);
-            prted_failed_launch = true;
-            goto CLEANUP;
-        }
-        /* decompress the data */
-        if (prte_compress.decompress_block(&cmpdata, cmplen,
-                                           packed_data, inlen)) {
-            /* the data has been uncompressed */
-            prte_dss.load(&datbuf, cmpdata, cmplen);
-            data = &datbuf;
-        } else {
-            data = buffer;
-        }
-        free(packed_data);
-    } else {
-        data = buffer;
+    /* unpack the data */
+    idx = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &pbo, &idx, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        prted_failed_launch = true;
+        goto CLEANUP;
     }
+    /* if compressed, decompress it */
+    if (flag) {
+        /* decompress the data */
+        if (PMIx_Data_decompress((uint8_t**)&bo.bytes, &bo.size,
+                                 (uint8_t*)pbo.bytes, pbo.size)) {
+            /* the data has been uncompressed */
+            rc = PMIx_Data_load(&datbuf, &bo);
+            PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+        } else {
+            PMIX_ERROR_LOG(PMIX_ERROR);
+            prted_failed_launch = true;
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            goto CLEANUP;
+        }
+    } else {
+        rc = PMIx_Data_load(&datbuf, &pbo);
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+    data = &datbuf;
 
     /* unpack the topology signature for this node */
     idx=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(data, &sig, &idx, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, data, &sig, &idx, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         prted_failed_launch = true;
         goto CLEANUP;
     }
@@ -1130,11 +1105,15 @@ void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
 
     /* unpack the topology */
     idx=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(data, &topo, &idx, PRTE_HWLOC_TOPO))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, data, &ptopo, &idx, PMIX_TOPO);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         prted_failed_launch = true;
         goto CLEANUP;
     }
+    topo = ptopo.topology;
+    ptopo.topology = NULL;
+    PMIX_TOPOLOGY_DESTRUCT(&ptopo);
     /* Apply any CPU filters (not preserved by the XML) */
     prte_hwloc_base_filter_cpus(topo);
     /* record the final topology */
@@ -1148,8 +1127,9 @@ void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
 
     /* unpack any coprocessors */
     idx=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(data, &coprocessors, &idx, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, data, &coprocessors, &idx, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         prted_failed_launch = true;
         goto CLEANUP;
     }
@@ -1167,7 +1147,7 @@ void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
             /* compute the hash */
             PRTE_HASH_STR(sns[idx], h);
             /* mark that this coprocessor is hosted by this node */
-            prte_hash_table_set_value_uint32(prte_coprocessors, h, (void*)&daemon->name.vpid);
+            prte_hash_table_set_value_uint32(prte_coprocessors, h, (void*)&daemon->name.rank);
         }
         prte_argv_free(sns);
         free(coprocessors);
@@ -1175,13 +1155,14 @@ void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
     }
     /* see if this daemon is on a coprocessor */
     idx=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(data, &coprocessors, &idx, PRTE_STRING))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, data, &coprocessors, &idx, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         prted_failed_launch = true;
         goto CLEANUP;
     }
     if (NULL != coprocessors) {
-        if (prte_get_attribute(&daemon->node->attributes, PRTE_NODE_SERIAL_NUMBER, NULL, PRTE_STRING)) {
+        if (prte_get_attribute(&daemon->node->attributes, PRTE_NODE_SERIAL_NUMBER, NULL, PMIX_STRING)) {
             /* this is not allowed - a coprocessor cannot be host
              * to another coprocessor at this time
              */
@@ -1190,7 +1171,7 @@ void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
             free(coprocessors);
             goto CLEANUP;
         }
-        prte_set_attribute(&daemon->node->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_LOCAL, coprocessors, PRTE_STRING);
+        prte_set_attribute(&daemon->node->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_LOCAL, coprocessors, PMIX_STRING);
         free(coprocessors);
         prte_coprocessors_detected = true;
     }
@@ -1213,21 +1194,21 @@ void prte_plm_base_daemon_topology(int status, prte_process_name_t* sender,
                              jdatorted->num_reported, jdatorted->num_procs));
         if (jdatorted->num_procs == jdatorted->num_reported) {
             bool dvm = true;
-            uint32_t key;
-            void *nptr;
             jdatorted->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
             /* activate the daemons_reported state for all jobs
              * whose daemons were launched
              */
-            rc = prte_hash_table_get_first_key_uint32(prte_job_data, &key, (void **)&jdata, &nptr);
-            while (PRTE_SUCCESS == rc) {
-                if (PRTE_PROC_MY_NAME->jobid != jdata->jobid && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+            for (i=1; i < prte_job_data->size; i++) {
+                jdata = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, i);
+                if (NULL == jdata) {
+                    continue;
+                }
+                if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                     dvm = false;
                     if (PRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
                         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
                     }
                 }
-                rc = prte_hash_table_get_next_key_uint32(prte_job_data, &key, (void **)&jdata, nptr, &nptr);
             }
             if (dvm) {
                 /* must be launching a DVM - activate the state */
@@ -1243,16 +1224,17 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
-void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
-                                   prte_buffer_t *buffer,
+void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
+                                   pmix_data_buffer_t *buffer,
                                    prte_rml_tag_t tag, void *cbdata)
 {
     char *ptr;
-    int rc, idx;
+    int idx;
+    pmix_status_t ret;
     prte_proc_t *daemon=NULL;
     prte_job_t *jdata;
-    prte_process_name_t dname;
-    prte_buffer_t *relay;
+    pmix_proc_t dname;
+    pmix_data_buffer_t *relay;
     char *sig;
     prte_topology_t *t;
     hwloc_topology_t topo;
@@ -1260,15 +1242,23 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
     bool found;
     prte_daemon_cmd_flag_t cmd;
     char *myendian;
-    pmix_proc_t pproc;
     char *alias, **atmp;
     uint8_t naliases, ni;
     hwloc_obj_t root;
     prte_hwloc_topo_data_t *sum;
+    char *nodename = NULL;
+    pmix_info_t *info;
+    size_t n, ninfo;
+    pmix_byte_object_t pbo, bo;
+    pmix_data_buffer_t pbuf;
+    int32_t flag;
+    bool compressed;
+    pmix_data_buffer_t datbuf, *data;
+    pmix_topology_t ptopo;
 
     /* get the daemon job, if necessary */
     if (NULL == jdatorted) {
-        jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+        jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     }
 
     /* get my endianness */
@@ -1283,14 +1273,7 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
 
     /* multiple daemons could be in this buffer, so unpack until we exhaust the data */
     idx = 1;
-    while (PRTE_SUCCESS == (rc = prte_dss.unpack(buffer, &dname, &idx, PRTE_NAME))) {
-        char *nodename = NULL;
-        pmix_status_t ret;
-        pmix_info_t *info;
-        size_t n, ninfo;
-        prte_byte_object_t *bptr;
-        pmix_data_buffer_t pbuf;
-        int32_t flag;
+    while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, buffer, &dname, &idx, PMIX_PROC))) {
 
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:orted_report_launch from daemon %s",
@@ -1299,7 +1282,7 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
 
         atmp = NULL;
         /* update state and record for this daemon contact info */
-        if (NULL == (daemon = (prte_proc_t*)prte_pointer_array_get_item(jdatorted->procs, dname.vpid))) {
+        if (NULL == (daemon = (prte_proc_t*)prte_pointer_array_get_item(jdatorted->procs, dname.rank))) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             prted_failed_launch = true;
             goto CLEANUP;
@@ -1310,8 +1293,9 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
 
         /* unpack the flag indicating if we have info objects */
         idx = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &flag, &idx, PRTE_INT32))) {
-            PRTE_ERROR_LOG(rc);
+        ret = PMIx_Data_unpack(NULL, buffer, &flag, &idx, PMIX_INT32);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
             prted_failed_launch = true;
             goto CLEANUP;
         }
@@ -1319,36 +1303,37 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
         if (0 < flag) {
             /* unpack the byte object containing the info array */
             idx = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &bptr, &idx, PRTE_BYTE_OBJECT))) {
-                PRTE_ERROR_LOG(rc);
+            ret = PMIx_Data_unpack(NULL, buffer, &pbo, &idx, PMIX_BYTE_OBJECT);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
             /* load the bytes into a PMIx data buffer for unpacking */
             PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-            PMIX_DATA_BUFFER_LOAD(&pbuf, bptr->bytes, bptr->size);
-            bptr->bytes = NULL;
-            free(bptr);
-            /* setup the daemon name */
-            PMIX_LOAD_PROCID(&pproc, prte_process_info.myproc.nspace, dname.vpid);
+            ret = PMIx_Data_load(&pbuf, &pbo);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                prted_failed_launch = true;
+                goto CLEANUP;
+            }
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             /* unpack the number of info structs */
             idx = 1;
-            ret = PMIx_Data_unpack(&pproc, &pbuf, &ninfo, &idx, PMIX_SIZE);
+            ret = PMIx_Data_unpack(NULL, &pbuf, &ninfo, &idx, PMIX_SIZE);
             if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                rc = PRTE_ERROR;
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
             PMIX_INFO_CREATE(info, ninfo);
             idx = ninfo;
-            ret = PMIx_Data_unpack(&pproc, &pbuf, info, &idx, PMIX_INFO);
+            ret = PMIx_Data_unpack(NULL, &pbuf, info, &idx, PMIX_INFO);
             if (PMIX_SUCCESS != ret) {
                 PMIX_ERROR_LOG(ret);
                 PMIX_INFO_FREE(info, ninfo);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                rc = PRTE_ERROR;
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
@@ -1356,10 +1341,9 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
 
             for (n=0; n < ninfo; n++) {
                 /* store this in a daemon wireup buffer for later distribution */
-                if (PMIX_SUCCESS != (ret = PMIx_Store_internal(&pproc, info[n].key, &info[n].value))) {
+                if (PMIX_SUCCESS != (ret = PMIx_Store_internal(&dname, info[n].key, &info[n].value))) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_INFO_FREE(info, ninfo);
-                    rc = PRTE_ERROR;
                     prted_failed_launch = true;
                     goto CLEANUP;
                 }
@@ -1369,8 +1353,9 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
 
         /* unpack the node name */
         idx = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &nodename, &idx, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
+        ret = PMIx_Data_unpack(NULL, buffer, &nodename, &idx, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
             prted_failed_launch = true;
             goto CLEANUP;
         }
@@ -1403,15 +1388,17 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
         prte_argv_append_nosize(&atmp, nodename);
         /* unpack and store the provided aliases */
         idx = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &naliases, &idx, PRTE_UINT8))) {
-            PRTE_ERROR_LOG(rc);
+        ret = PMIx_Data_unpack(NULL, buffer, &naliases, &idx, PMIX_UINT8);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
             prted_failed_launch = true;
             goto CLEANUP;
         }
         for (ni=0; ni < naliases; ni++) {
             idx = 1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &alias, &idx, PRTE_STRING))) {
-                PRTE_ERROR_LOG(rc);
+            ret = PMIx_Data_unpack(NULL, buffer, &alias, &idx, PMIX_STRING);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
@@ -1420,15 +1407,16 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
         }
         if (0 < naliases) {
             alias = prte_argv_join(atmp, ',');
-            prte_set_attribute(&daemon->node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, alias, PRTE_STRING);
+            prte_set_attribute(&daemon->node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, alias, PMIX_STRING);
             free(alias);
         }
         prte_argv_free(atmp);
 
         /* unpack the topology signature for that node */
         idx=1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &sig, &idx, PRTE_STRING))) {
-            PRTE_ERROR_LOG(rc);
+        ret = PMIx_Data_unpack(NULL, buffer, &sig, &idx, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
             prted_failed_launch = true;
             goto CLEANUP;
         }
@@ -1438,99 +1426,109 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
 
         /* rank=1 always sends its topology back */
         topo = NULL;
-        if (1 == dname.vpid) {
-            uint8_t flag;
-            size_t inlen, cmplen;
-            uint8_t *packed_data, *cmpdata;
-            prte_buffer_t datbuf, *data;
-            PRTE_CONSTRUCT(&datbuf, prte_buffer_t);
+        if (1 == dname.rank) {
+            PMIX_DATA_BUFFER_CONSTRUCT(&datbuf);
             /* unpack the flag to see if this payload is compressed */
             idx=1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &flag, &idx, PRTE_INT8))) {
-                PRTE_ERROR_LOG(rc);
+            ret = PMIx_Data_unpack(NULL, buffer, &compressed, &idx, PMIX_BOOL);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
-            if (flag) {
-                /* unpack the data size */
-                idx=1;
-                if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &inlen, &idx, PRTE_SIZE))) {
-                    PRTE_ERROR_LOG(rc);
-                    prted_failed_launch = true;
-                    goto CLEANUP;
-                }
-                /* unpack the unpacked data size */
-                idx=1;
-                if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &cmplen, &idx, PRTE_SIZE))) {
-                    PRTE_ERROR_LOG(rc);
-                    prted_failed_launch = true;
-                    goto CLEANUP;
-                }
-                /* allocate the space */
-                packed_data = (uint8_t*)malloc(inlen);
-                /* unpack the data blob */
-                idx = inlen;
-                if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, packed_data, &idx, PRTE_UINT8))) {
-                    PRTE_ERROR_LOG(rc);
-                    prted_failed_launch = true;
-                    goto CLEANUP;
-                }
-                /* decompress the data */
-                if (prte_compress.decompress_block(&cmpdata, cmplen,
-                                                   packed_data, inlen)) {
-                    /* the data has been uncompressed */
-                    prte_dss.load(&datbuf, cmpdata, cmplen);
-                    data = &datbuf;
-                } else {
-                    data = buffer;
-                }
-                free(packed_data);
-            } else {
-                data = buffer;
+            /* unpack the data */
+            idx=1;
+            ret = PMIx_Data_unpack(NULL, buffer, &pbo, &idx, PMIX_BYTE_OBJECT);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                prted_failed_launch = true;
+                goto CLEANUP;
             }
+            if (compressed) {
+                /* decompress the data */
+                if (PMIx_Data_decompress((uint8_t**)&bo.bytes, &bo.size,
+                                         (uint8_t*)pbo.bytes, pbo.size)) {
+                    /* the data has been uncompressed */
+                    ret = PMIx_Data_load(&datbuf, &bo);
+                    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
+                        prted_failed_launch = true;
+                        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                        goto CLEANUP;
+                    }
+                } else {
+                    PMIX_ERROR_LOG(PMIX_ERROR);
+                    prted_failed_launch = true;
+                    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+                    goto CLEANUP;
+                }
+            } else {
+                ret = PMIx_Data_load(&datbuf, &pbo);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    prted_failed_launch = true;
+                    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                    goto CLEANUP;
+                }
+            }
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            data = &datbuf;
+
             /* unpack the available topology information */
             idx=1;
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(data, &topo, &idx, PRTE_HWLOC_TOPO))) {
-                PRTE_ERROR_LOG(rc);
+            ret = PMIx_Data_unpack(NULL, data, &ptopo, &idx, PMIX_TOPO);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
+            topo = ptopo.topology;
+            ptopo.topology = NULL;
+            PMIX_TOPOLOGY_DESTRUCT(&ptopo);
             /* setup the summary data for this topology as we will need
              * it when we go to map/bind procs to it */
             root = hwloc_get_root_obj(topo);
             root->userdata = (void*)PRTE_NEW(prte_hwloc_topo_data_t);
             sum = (prte_hwloc_topo_data_t*)root->userdata;
             sum->available = prte_hwloc_base_setup_summary(topo);
+            /* cleanup */
+            PMIX_DATA_BUFFER_DESTRUCT(data);
         }
 
         /* see if they provided their inventory */
         idx = 1;
-        if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &flag, &idx, PRTE_INT8))) {
-            PRTE_ERROR_LOG(rc);
+        ret = PMIx_Data_unpack(NULL, buffer, &flag, &idx, PMIX_INT8);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
             prted_failed_launch = true;
             goto CLEANUP;
         }
         if (1 == flag) {
-            if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &bptr, &idx, PRTE_BYTE_OBJECT))) {
-                PRTE_ERROR_LOG(rc);
+            ret = PMIx_Data_unpack(NULL, buffer, &pbo, &idx, PMIX_BYTE_OBJECT);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
             /* if nothing is present, then ignore it */
-            if (0 == bptr->size) {
-                free(bptr);
-            } else {
+            if (0 < pbo.size) {
                 prte_pmix_lock_t lock;
                 /* load the bytes into a PMIx data buffer for unpacking */
                 PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-                PMIX_DATA_BUFFER_LOAD(&pbuf, bptr->bytes, bptr->size);
-                free(bptr);
+                ret = PMIx_Data_load(&pbuf, &pbo);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    prted_failed_launch = true;
+                    goto CLEANUP;
+                }
                 idx = 1;
                 ret = PMIx_Data_unpack(NULL, &pbuf, &ninfo, &idx, PMIX_SIZE);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                    rc = PRTE_ERROR;
                     prted_failed_launch = true;
                     goto CLEANUP;
                 }
@@ -1541,7 +1539,6 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
                     PMIX_ERROR_LOG(ret);
                     PMIX_INFO_FREE(info, ninfo);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                    rc = PRTE_ERROR;
                     prted_failed_launch = true;
                     goto CLEANUP;
                 }
@@ -1551,7 +1548,6 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_INFO_FREE(info, ninfo);
-                    rc = PRTE_ERROR;
                     prted_failed_launch = true;
                     goto CLEANUP;
                 }
@@ -1601,11 +1597,12 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&dname)));
                 /* construct the request */
-                relay = PRTE_NEW(prte_buffer_t);
+                PMIX_DATA_BUFFER_CREATE(relay);
                 cmd = PRTE_DAEMON_REPORT_TOPOLOGY_CMD;
-                if (PRTE_SUCCESS != (rc = prte_dss.pack(relay, &cmd, 1, PRTE_DAEMON_CMD))) {
-                    PRTE_ERROR_LOG(rc);
-                    PRTE_RELEASE(relay);
+                ret = PMIx_Data_pack(NULL, relay, &cmd, 1, PMIX_UINT8);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_DATA_BUFFER_RELEASE(relay);
                     prted_failed_launch = true;
                     goto CLEANUP;
                 }
@@ -1645,27 +1642,25 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
             PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                  "%s plm:base:orted_report_launch job %s recvd %d of %d reported daemons",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_JOBID_PRINT(jdatorted->jobid),
+                                 PRTE_JOBID_PRINT(jdatorted->nspace),
                                  jdatorted->num_reported, jdatorted->num_procs));
             if (jdatorted->num_procs == jdatorted->num_reported) {
                 bool dvm = true;
-                uint32_t key;
-                void *nptr;
                 jdatorted->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
                 /* activate the daemons_reported state for all jobs
                  * whose daemons were launched
                  */
-                rc = prte_hash_table_get_first_key_uint32(prte_job_data, &key, (void **)&jdata, &nptr);
-                while (PRTE_SUCCESS == rc) {
-                    if (PRTE_PROC_MY_NAME->jobid == jdata->jobid || PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
-                        goto next;
+                for (i=1; i < prte_job_data->size; i++) {
+                    jdata = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, i);
+                    if (NULL == jdata) {
+                        continue;
                     }
-                    dvm = false;
-                    if (PRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
-                        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
+                    if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+                        dvm = false;
+                        if (PRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
+                            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
+                        }
                     }
-                  next:
-                    rc = prte_hash_table_get_next_key_uint32(prte_job_data, &key, (void **)&jdata, nptr, &nptr);
                 }
                 if (dvm) {
                     /* must be launching a DVM - activate the state */
@@ -1675,38 +1670,40 @@ void prte_plm_base_daemon_callback(int status, prte_process_name_t* sender,
         }
         idx = 1;
     }
-    if (PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
-        PRTE_ERROR_LOG(rc);
+    if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
+        PMIX_ERROR_LOG(ret);
         PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_FAILED_TO_START);
     }
 }
 
-void prte_plm_base_daemon_failed(int st, prte_process_name_t* sender,
-                                 prte_buffer_t *buffer,
+void prte_plm_base_daemon_failed(int st, pmix_proc_t* sender,
+                                 pmix_data_buffer_t *buffer,
                                  prte_rml_tag_t tag, void *cbdata)
 {
     int status, rc;
     int32_t n;
-    prte_vpid_t vpid;
+    pmix_rank_t vpid;
     prte_proc_t *daemon=NULL;
 
     /* get the daemon job, if necessary */
     if (NULL == jdatorted) {
-        jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+        jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     }
 
     /* unpack the daemon that failed */
     n=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &vpid, &n, PRTE_VPID))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &vpid, &n, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
         goto finish;
     }
 
     /* unpack the exit status */
     n=1;
-    if (PRTE_SUCCESS != (rc = prte_dss.unpack(buffer, &status, &n, PRTE_INT))) {
-        PRTE_ERROR_LOG(rc);
+    rc = PMIx_Data_unpack(NULL, buffer, &status, &n, PMIX_STATUS);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
         status = PRTE_ERROR_DEFAULT_EXIT_CODE;
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
     } else {
@@ -1818,7 +1815,7 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv,
 
     /* pass the total number of daemons that will be in the system */
     if (PRTE_PROC_IS_MASTER) {
-        jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid);
+        jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
         num_procs = jdata->num_procs;
     } else {
         num_procs = prte_process_info.num_daemons;
@@ -1907,7 +1904,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
                          "%s plm:base:setup_vm",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    if (NULL == (daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid))) {
+    if (NULL == (daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -1918,7 +1915,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
 
     /* if this job is being launched against a fixed DVM, then there is
      * nothing for us to do - the DVM will stand as is */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FIXED_DVM, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FIXED_DVM, NULL, PMIX_BOOL)) {
         /* mark that the daemons have reported so we can proceed */
         daemons->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
         map->num_new_daemons = 0;
@@ -1928,7 +1925,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     /* if this is a dynamic spawn, then we don't make any changes to
      * the virtual machine unless specifically requested to do so
      */
-    if (PRTE_JOBID_INVALID != jdata->originator.jobid) {
+    if (!PMIX_NSPACE_INVALID(jdata->originator.nspace)) {
         if (0 == map->num_nodes) {
             PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                  "%s plm:base:setup_vm creating map",
@@ -1995,8 +1992,8 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
      * look across all jobs and ensure that the "VM" contains
      * all nodes with application procs on them
      */
-    multi_sim = prte_get_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM, NULL, PRTE_BOOL);
-    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_NO_VM, NULL, PRTE_BOOL) || multi_sim) {
+    multi_sim = prte_get_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM, NULL, PMIX_BOOL);
+    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_NO_VM, NULL, PMIX_BOOL) || multi_sim) {
         PRTE_CONSTRUCT(&nodes, prte_list_t);
         /* loop across all nodes and include those that have
          * num_procs > 0 && no daemon already on them
@@ -2107,7 +2104,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
             }
             /* if the app provided a dash-host, then use those nodes */
             hosts = NULL;
-            if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PRTE_STRING)) {
+            if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                      "%s using dash_host",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -2117,7 +2114,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
                     return rc;
                 }
                 free(hosts);
-            } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PRTE_STRING)) {
+            } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
                 /* otherwise, if the app provided a hostfile, then use that */
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                      "%s using hostfile %s",
@@ -2390,20 +2387,20 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        proc->name.jobid = PRTE_PROC_MY_NAME->jobid;
-        if (PRTE_VPID_MAX-1 <= daemons->num_procs) {
+        PMIX_LOAD_NSPACE(&proc->name, PRTE_PROC_MY_NAME->nspace);
+        if (PMIX_RANK_VALID-1 <= daemons->num_procs) {
             /* no more daemons available */
             prte_show_help("help-prte-rmaps-base.txt", "out-of-vpids", true);
             PRTE_RELEASE(proc);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        proc->name.vpid = daemons->num_procs;  /* take the next available vpid */
+        proc->name.rank = daemons->num_procs;  /* take the next available vpid */
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:base:setup_vm add new daemon %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(&proc->name)));
         /* add the daemon to the daemon job object */
-        if (0 > (rc = prte_pointer_array_set_item(daemons->procs, proc->name.vpid, (void*)proc))) {
+        if (0 > (rc = prte_pointer_array_set_item(daemons->procs, proc->name.rank, (void*)proc))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -2427,13 +2424,13 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
         /* track number of daemons to be launched */
         ++map->num_new_daemons;
         /* and their starting vpid */
-        if (PRTE_VPID_INVALID == map->daemon_vpid_start) {
-            map->daemon_vpid_start = proc->name.vpid;
+        if (PMIX_RANK_INVALID == map->daemon_vpid_start) {
+            map->daemon_vpid_start = proc->name.rank;
         }
         /* loop across all app procs on this node and update their parent */
         for (i=0; i < node->procs->size; i++) {
             if (NULL != (pptr = (prte_proc_t*)prte_pointer_array_get_item(node->procs, i))) {
-                pptr->parent = proc->name.vpid;
+                pptr->parent = proc->name.rank;
             }
         }
     }
@@ -2460,7 +2457,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
      * caused it to happen */
     if (0 < map->num_new_daemons) {
         if (PRTE_SUCCESS != (rc = prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS,
-                                                     true, NULL, PRTE_BOOL))) {
+                                                     true, NULL, PMIX_BOOL))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }

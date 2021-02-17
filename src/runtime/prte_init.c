@@ -55,7 +55,6 @@
 #include "src/threads/threads.h"
 
 #include "src/mca/prtebacktrace/base/base.h"
-#include "src/mca/prtecompress/base/base.h"
 #include "src/mca/base/base.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
@@ -96,9 +95,11 @@ int prte_progress_thread_debug = -1;
 hwloc_cpuset_t prte_proc_applied_binding = NULL;
 int prte_cache_line_size = 128;
 
-prte_process_name_t prte_name_wildcard = {PRTE_JOBID_WILDCARD, PRTE_VPID_WILDCARD};
+pmix_proc_t prte_name_wildcard = {{0}, PMIX_RANK_WILDCARD};
 
-prte_process_name_t prte_name_invalid = {PRTE_JOBID_INVALID, PRTE_VPID_INVALID};
+pmix_proc_t prte_name_invalid = {{0}, PMIX_RANK_INVALID};
+
+pmix_nspace_t prte_nspace_wildcard = {0};
 
 static bool util_initialized = false;
 
@@ -192,13 +193,7 @@ int prte_init_util(prte_proc_type_t flags)
         goto error;
     }
 
-    /* Initialize the data storage service. */
-    if (PRTE_SUCCESS != (ret = prte_dss_open())) {
-        error = "prte_dss_open";
-        goto error;
-    }
-
-    /* initialize the mca */
+    /* Initialize the data storage service. */    /* initialize the mca */
     if (PRTE_SUCCESS != (ret = prte_mca_base_open())) {
         error = "mca_base_open";
         goto error;
@@ -285,8 +280,11 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
     pmix_server_register_params();
 
     /* setup the global job and node arrays */
-    prte_job_data = PRTE_NEW(prte_hash_table_t);
-    if (PRTE_SUCCESS != (ret = prte_hash_table_init(prte_job_data, 128))) {
+    prte_job_data = PRTE_NEW(prte_pointer_array_t);
+    if (PRTE_SUCCESS != (ret = prte_pointer_array_init(prte_job_data,
+                                                       PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                                       PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                                       PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup job array";
         goto error;

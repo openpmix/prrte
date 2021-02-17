@@ -6,6 +6,7 @@
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,7 +17,6 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/dss/dss.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -24,7 +24,6 @@
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/runtime/prte_globals.h"
-#include "src/runtime/data_type_support/prte_dt_support.h"
 #include "src/runtime/prte_wait.h"
 
 #include "src/mca/rml/base/rml_contact.h"
@@ -34,15 +33,15 @@
 
 static int init(void);
 static int finalize(void);
-static int delete_route(prte_process_name_t *proc);
-static int update_route(prte_process_name_t *target,
-                        prte_process_name_t *route);
-static prte_process_name_t get_route(prte_process_name_t *target);
-static int route_lost(const prte_process_name_t *route);
-static bool route_is_defined(const prte_process_name_t *target);
+static int delete_route(pmix_proc_t *proc);
+static int update_route(pmix_proc_t *target,
+                        pmix_proc_t *route);
+static pmix_proc_t get_route(pmix_proc_t *target);
+static int route_lost(const pmix_proc_t *route);
+static bool route_is_defined(const pmix_proc_t *target);
 static void update_routing_plan(void);
 static void get_routing_list(prte_list_t *coll);
-static int set_lifeline(prte_process_name_t *proc);
+static int set_lifeline(pmix_proc_t *proc);
 static size_t num_routes(void);
 
 prte_routed_module_t prte_routed_direct_module = {
@@ -59,8 +58,8 @@ prte_routed_module_t prte_routed_direct_module = {
     .num_routes = num_routes,
 };
 
-static prte_process_name_t mylifeline;
-static prte_process_name_t *lifeline = NULL;
+static pmix_proc_t mylifeline;
+static pmix_proc_t *lifeline = NULL;
 static prte_list_t my_children;
 
 static int init(void)
@@ -68,7 +67,7 @@ static int init(void)
     lifeline = NULL;
 
     if (PRTE_PROC_IS_DAEMON) {
-        PRTE_PROC_MY_PARENT->jobid = PRTE_PROC_MY_NAME->jobid;
+        PMIX_LOAD_NSPACE(PRTE_PROC_MY_PARENT->nspace, PRTE_PROC_MY_NAME->nspace);
         /* if we are using static ports, set my lifeline to point at my parent */
         if (prte_static_ports) {
             /* we will have been given our parent's vpid by MCA param */
@@ -76,7 +75,7 @@ static int init(void)
         } else {
             /* set our lifeline to the HNP - we will abort if that connection is lost */
             lifeline = PRTE_PROC_MY_HNP;
-            PRTE_PROC_MY_PARENT->vpid = 0;
+            PRTE_PROC_MY_PARENT->rank = 0;
         }
     }
     /* setup the list of children */
@@ -91,7 +90,7 @@ static int finalize(void)
     return PRTE_SUCCESS;
 }
 
-static int delete_route(prte_process_name_t *proc)
+static int delete_route(pmix_proc_t *proc)
 {
     PRTE_OUTPUT_VERBOSE((1, prte_routed_base_framework.framework_output,
                          "%s routed_direct_delete_route for %s",
@@ -103,8 +102,8 @@ static int delete_route(prte_process_name_t *proc)
     return PRTE_SUCCESS;
 }
 
-static int update_route(prte_process_name_t *target,
-                        prte_process_name_t *route)
+static int update_route(pmix_proc_t *target,
+                        pmix_proc_t *route)
 {
     PRTE_OUTPUT_VERBOSE((1, prte_routed_base_framework.framework_output,
                          "%s routed_direct_update: %s --> %s",
@@ -118,12 +117,11 @@ static int update_route(prte_process_name_t *target,
 }
 
 
-static prte_process_name_t get_route(prte_process_name_t *target)
+static pmix_proc_t get_route(pmix_proc_t *target)
 {
-    prte_process_name_t *ret, daemon;
+    pmix_proc_t *ret, daemon;
 
-    if (target->jobid == PRTE_JOBID_INVALID ||
-        target->vpid == PRTE_VPID_INVALID) {
+    if (PMIX_PROCID_INVALID(target)) {
         ret = PRTE_NAME_INVALID;
         goto found;
     }
@@ -136,15 +134,15 @@ static prte_process_name_t get_route(prte_process_name_t *target)
         goto found;
     }
 
-    daemon.jobid = PRTE_PROC_MY_NAME->jobid;
+    PMIX_LOAD_NSPACE(daemon.nspace, PRTE_PROC_MY_NAME->nspace);
     /* find out what daemon hosts this proc */
-    if (PRTE_VPID_INVALID == (daemon.vpid = prte_get_proc_daemon_vpid(target))) {
+    if (PMIX_RANK_INVALID == (daemon.rank = prte_get_proc_daemon_vpid(target))) {
         ret = PRTE_NAME_INVALID;
         goto found;
     }
 
     /* if the daemon is me, then send direct to the target! */
-    if (PRTE_PROC_MY_NAME->vpid == daemon.vpid) {
+    if (PRTE_PROC_MY_NAME->rank == daemon.rank) {
         ret = target;
         goto found;
     }
@@ -162,7 +160,7 @@ static prte_process_name_t get_route(prte_process_name_t *target)
     return *ret;
 }
 
-static int route_lost(const prte_process_name_t *route)
+static int route_lost(const pmix_proc_t *route)
 {
     prte_list_item_t *item;
     prte_routed_tree_t *child;
@@ -190,13 +188,12 @@ static int route_lost(const prte_process_name_t *route)
     /* if we are the HNP, and the route is a daemon,
      * see if it is one of our children - if so, remove it
      */
-    if (PRTE_PROC_IS_MASTER &&
-        route->jobid == PRTE_PROC_MY_NAME->jobid) {
+    if (PRTE_PROC_IS_MASTER && PMIX_CHECK_NSPACE(route->nspace, PRTE_PROC_MY_NAME->nspace)) {
         for (item = prte_list_get_first(&my_children);
              item != prte_list_get_end(&my_children);
              item = prte_list_get_next(item)) {
             child = (prte_routed_tree_t*)item;
-            if (child->vpid == route->vpid) {
+            if (child->rank == route->rank) {
                 prte_list_remove_item(&my_children, item);
                 PRTE_RELEASE(item);
                 return PRTE_SUCCESS;
@@ -209,13 +206,13 @@ static int route_lost(const prte_process_name_t *route)
 }
 
 
-static bool route_is_defined(const prte_process_name_t *target)
+static bool route_is_defined(const pmix_proc_t *target)
 {
     /* all routes are defined */
     return true;
 }
 
-static int set_lifeline(prte_process_name_t *proc)
+static int set_lifeline(pmix_proc_t *proc)
 {
     PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
                          "%s routed:direct: set lifeline to %s",
@@ -247,7 +244,7 @@ static void update_routing_plan(void)
     PRTE_CONSTRUCT(&my_children, prte_list_t);
 
     /* HNP is directly connected to each daemon */
-    if (NULL == (jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->jobid))) {
+    if (NULL == (jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return;
     }
@@ -256,7 +253,7 @@ static void update_routing_plan(void)
             continue;
         }
         child = PRTE_NEW(prte_routed_tree_t);
-        child->vpid = proc->name.vpid;
+        child->rank = proc->name.rank;
         prte_list_append(&my_children, &child->super);
     }
 

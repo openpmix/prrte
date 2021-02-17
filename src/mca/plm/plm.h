@@ -16,6 +16,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,9 +42,8 @@
 #include "types.h"
 
 #include "src/mca/mca.h"
-#include "src/dss/dss_types.h"
 #include "src/class/prte_pointer_array.h"
-
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
 #include "plm_types.h"
@@ -84,7 +84,7 @@ typedef int (*prte_plm_base_module_finalize_fn_t)(void);
  * Terminate any processes launched for the respective jobid by
  * this component.
  */
-typedef int (*prte_plm_base_module_terminate_job_fn_t)(prte_jobid_t);
+typedef int (*prte_plm_base_module_terminate_job_fn_t)(pmix_nspace_t);
 
 /**
  * Terminate the daemons
@@ -100,7 +100,7 @@ typedef int (*prte_plm_base_module_terminate_procs_fn_t)(prte_pointer_array_t *p
  * Signal any processes launched for the respective jobid by
  * this component.
  */
-typedef int (*prte_plm_base_module_signal_job_fn_t)(prte_jobid_t, int32_t);
+typedef int (*prte_plm_base_module_signal_job_fn_t)(pmix_nspace_t, int32_t);
 
 /**
  * plm module version 1.0.0

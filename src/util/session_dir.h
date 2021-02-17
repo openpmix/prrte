@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -109,12 +110,12 @@ BEGIN_C_DECLS
  * @retval OMPI_ERROR The directory cannot be found (if create is
  *                "false") or created (if create is "true").
  */
-PRTE_EXPORT int prte_session_dir(bool create, prte_process_name_t *proc);
+PRTE_EXPORT int prte_session_dir(bool create, pmix_proc_t *proc);
 
 /*
  * Setup session-related directory paths
  */
-PRTE_EXPORT int prte_session_setup_base(prte_process_name_t *proc);
+PRTE_EXPORT int prte_session_setup_base(pmix_proc_t *proc);
 
 PRTE_EXPORT int prte_setup_top_session_dir(void);
 
@@ -133,7 +134,7 @@ PRTE_EXPORT int prte_setup_top_session_dir(void);
  * @retval OMPI_ERROR If something prevents the tree from being
  *                properly cleaned up.
  */
-PRTE_EXPORT int prte_session_dir_finalize(prte_process_name_t *proc);
+PRTE_EXPORT int prte_session_dir_finalize(pmix_proc_t *proc);
 
 /** The prte_session_dir_cleanup() function performs a cleanup of the
  * session directory tree when a job is aborted. It cleans up all
@@ -144,7 +145,7 @@ PRTE_EXPORT int prte_session_dir_finalize(prte_process_name_t *proc);
  * @retval OMPI_ERROR If something prevents the tree from being
  *                properly cleaned up.
  */
-PRTE_EXPORT int prte_session_dir_cleanup(prte_jobid_t jobid);
+PRTE_EXPORT int prte_session_dir_cleanup(pmix_nspace_t jobid);
 
 END_C_DECLS
 

@@ -18,6 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -947,13 +948,13 @@ static int parse_env(prte_cmd_line_t *cmd_line,
 
     /* Check for rankfile option */
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "rankfile", 0, 0))) {
-        prte_rankfile = strdup(pval->data.string);
+        prte_rankfile = strdup(pval->value.data.string);
     }
 
     /* now process any tune file specification - the tune file processor
      * will police itself for duplicate values */
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "tune", 0, 0))) {
-        p1 = strip_quotes(pval->data.string);
+        p1 = strip_quotes(pval->value.data.string);
         rc = process_tune_files(p1, dstenv, ',');
         free(p1);
         if (PRTE_SUCCESS != rc) {
@@ -962,7 +963,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "initial-errhandler", 0, 0))) {
-        p1 = strip_quotes(pval->data.string);
+        p1 = strip_quotes(pval->value.data.string);
         rc = check_cache(&cache, &cachevals, "mpi_initial_errhandler", p1);
         free(p1);
         if (PRTE_SUCCESS != rc) {
@@ -989,10 +990,10 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the first value on the list is the name of the param */
             pval = prte_cmd_line_get_param(cmd_line, "omca", i, 0);
-            p1 = strip_quotes(pval->data.string);
+            p1 = strip_quotes(pval->value.data.string);
             /* next value on the list is the value */
             pval = prte_cmd_line_get_param(cmd_line, "omca", i, 1);
-            p2 = strip_quotes(pval->data.string);
+            p2 = strip_quotes(pval->value.data.string);
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
                 prte_argv_append_nosize(&envlist, p2);
@@ -1014,10 +1015,10 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the first value on the list is the name of the param */
             pval = prte_cmd_line_get_param(cmd_line, "gomca", i, 0);
-            p1 = strip_quotes(pval->data.string);
+            p1 = strip_quotes(pval->value.data.string);
             /* next value on the list is the value */
             pval = prte_cmd_line_get_param(cmd_line, "gomca", i, 1);
-            p2 = strip_quotes(pval->data.string);
+            p2 = strip_quotes(pval->value.data.string);
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
                 prte_argv_append_nosize(&envlist, p2);
@@ -1039,7 +1040,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the first value on the list is the name of the param */
             pval = prte_cmd_line_get_param(cmd_line, "mca", i, 0);
-            p1 = strip_quotes(pval->data.string);
+            p1 = strip_quotes(pval->value.data.string);
             /* check if this is one of ours */
             if (!check_generic(p1)) {
                 free(p1);
@@ -1047,7 +1048,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
             }
             /* next value on the list is the value */
             pval = prte_cmd_line_get_param(cmd_line, "mca", i, 1);
-            p2 = strip_quotes(pval->data.string);
+            p2 = strip_quotes(pval->value.data.string);
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
                 prte_argv_append_nosize(&envlist, p2);
@@ -1070,7 +1071,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the first value on the list is the name of the param */
             pval = prte_cmd_line_get_param(cmd_line, "gmca", i, 0);
-            p1 = strip_quotes(pval->data.string);
+            p1 = strip_quotes(pval->value.data.string);
             /* check if this is one of ours */
             if (!check_generic(p1)) {
                 free(p1);
@@ -1078,7 +1079,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
             }
             /* next value on the list is the value */
             pval = prte_cmd_line_get_param(cmd_line, "gmca", i, 1);
-            p2 = strip_quotes(pval->data.string);
+            p2 = strip_quotes(pval->value.data.string);
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
                 prte_argv_append_nosize(&envlist, p2);
@@ -1145,7 +1146,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the value is the envar */
             pval = prte_cmd_line_get_param(cmd_line, "x", i, 0);
-            p1 = strip_quotes(pval->data.string);
+            p1 = strip_quotes(pval->value.data.string);
             /* if there is an '=' in it, then they are setting a value */
             if (NULL != (p2 = strchr(p1, '='))) {
                 *p2 = '\0';
@@ -1247,10 +1248,10 @@ static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
     pmix_status_t rc;
 
     if (NULL != (pval = prte_cmd_line_get_param(cmdline, "stream-buffering", 0, 0))) {
-        u16 = pval->data.integer;
+        u16 = pval->value.data.integer;
         if (0 != u16 && 1 != u16 && 2 != u16) {
             /* bad value */
-            prte_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, pval->data.integer);
+            prte_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, pval->value.data.integer);
             return;
         }
         PMIX_INFO_LIST_ADD(rc, jobinfo, "OMPI_STREAM_BUFFERING", &u16, PMIX_UINT16);
@@ -1270,6 +1271,6 @@ static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "orte_tmpdir_base", 0, 0))) {
         prte_argv_append_nosize(argv, "--prtemca");
         prte_argv_append_nosize(argv, "prte_tmpdir_base");
-        prte_argv_append_nosize(argv, pval->data.string);
+        prte_argv_append_nosize(argv, pval->value.data.string);
     }
 }

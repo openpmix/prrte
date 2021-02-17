@@ -4,6 +4,7 @@
  *                         reserved.
  *
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -54,12 +55,12 @@ PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr_detector_module;
 /*
  * Propagator functions
  */
-int prte_errmgr_failure_propagate(prte_jobid_t *job, prte_process_name_t *daemon, prte_proc_state_t state);
-int prte_errmgr_failure_propagate_recv(prte_buffer_t* buffer);
+int prte_errmgr_failure_propagate(pmix_nspace_t *job, pmix_proc_t *daemon, prte_proc_state_t state);
+int prte_errmgr_failure_propagate_recv(pmix_data_buffer_t* buffer);
 int prte_errmgr_init_failure_propagate(void);
 int prte_errmgr_finalize_failure_propagate(void);
-bool errmgr_get_daemon_status(prte_process_name_t daemon);
-void errmgr_set_daemon_status(prte_process_name_t daemon);
+bool errmgr_get_daemon_status(pmix_proc_t daemon);
+void errmgr_set_daemon_status(pmix_proc_t daemon);
 END_C_DECLS
 
 #endif /* MCA_ERRMGR_DETECTOR_EXPORT_H */

@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -54,7 +55,6 @@
 #include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/argv.h"
-#include "src/class/prte_hash_table.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -74,7 +74,7 @@
 
 static void accept_connection(const int accepted_fd,
                               const struct sockaddr *addr);
-static void ping(const prte_process_name_t *proc);
+static void ping(const pmix_proc_t *proc);
 static void send_nb(prte_rml_send_t *msg);
 
 prte_oob_tcp_module_t prte_oob_tcp_module = {
@@ -113,7 +113,7 @@ static void accept_connection(const int accepted_fd,
 }
 
 /* API functions */
-static void ping(const prte_process_name_t *proc)
+static void ping(const pmix_proc_t *proc)
 {
     prte_oob_tcp_peer_t *peer;
 
@@ -168,7 +168,7 @@ static void ping(const prte_process_name_t *proc)
 static void send_nb(prte_rml_send_t *msg)
 {
     prte_oob_tcp_peer_t *peer;
-    prte_process_name_t hop;
+    pmix_proc_t hop;
 
 
     /* do we have a route to this peer (could be direct)? */

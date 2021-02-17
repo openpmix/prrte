@@ -16,6 +16,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,10 +31,9 @@
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 #include "src/mca/base/base.h"
-
 #include "src/mca/rml/rml.h"
 #include "src/mca/state/state.h"
-
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/grpcomm/base/base.h"
 
 
@@ -139,7 +139,7 @@ PRTE_CLASS_INSTANCE(prte_grpcomm_signature_t,
 static void ccon(prte_grpcomm_coll_t *p)
 {
     p->sig = NULL;
-    PRTE_CONSTRUCT(&p->bucket, prte_buffer_t);
+    PMIX_DATA_BUFFER_CONSTRUCT(&p->bucket);
     PRTE_CONSTRUCT(&p->distance_mask_recv, prte_bitmap_t);
     p->dmns = NULL;
     p->ndmns = 0;
@@ -154,7 +154,7 @@ static void cdes(prte_grpcomm_coll_t *p)
     if (NULL != p->sig) {
         PRTE_RELEASE(p->sig);
     }
-    PRTE_DESTRUCT(&p->bucket);
+    PMIX_DATA_BUFFER_DESTRUCT(&p->bucket);
     PRTE_DESTRUCT(&p->distance_mask_recv);
     free(p->dmns);
     free(p->buffers);

@@ -16,6 +16,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Inria.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,7 +48,6 @@
 #include "src/util/dash_host/dash_host.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/runtime/data_type_support/prte_dt_support.h"
 
 #include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/base/base.h"
@@ -69,7 +69,7 @@ static bool membind_warned=false;
  * to recording usage etc in the userdata object */
 
 
-static void reset_usage(prte_node_t *node, prte_jobid_t jobid)
+static void reset_usage(prte_node_t *node, pmix_nspace_t jobid)
 {
     int j;
     prte_proc_t *proc;
@@ -93,7 +93,7 @@ static void reset_usage(prte_node_t *node, prte_jobid_t jobid)
             continue;
         }
         /* ignore procs from this job */
-        if (proc->name.jobid == jobid) {
+        if (PMIX_CHECK_NSPACE(proc->name.nspace, jobid)) {
             prte_output_verbose(10, prte_rmaps_base_framework.framework_output,
                                 "%s reset_usage: ignoring proc %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -102,7 +102,7 @@ static void reset_usage(prte_node_t *node, prte_jobid_t jobid)
         }
         bound = NULL;
         /* get the object to which this proc is bound */
-        if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, (void**)&bound, PRTE_PTR) ||
+        if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, (void**)&bound, PMIX_POINTER) ||
             NULL == bound) {
             /* this proc isn't bound - ignore it */
             prte_output_verbose(10, prte_rmaps_base_framework.framework_output,
@@ -163,21 +163,21 @@ static int bind_generic(prte_job_t *jdata,
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind downward for job %s with bindings %s",
-                        PRTE_JOBID_PRINT(jdata->jobid),
+                        PRTE_JOBID_PRINT(jdata->nspace),
                         prte_hwloc_base_print_binding(jdata->map->binding));
     /* initialize */
     map = jdata->map;
     totalcpuset = hwloc_bitmap_alloc();
 
     dobind = false;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
         dobind = true;
     }
     /* reset usage */
-    reset_usage(node, jdata->jobid);
+    reset_usage(node, jdata->nspace);
 
     /* get the available processors on this node */
     root = hwloc_get_root_obj(node->topology->topo);
@@ -190,14 +190,14 @@ static int bind_generic(prte_job_t *jdata,
     available = hwloc_bitmap_dup(rdata->available);
 
     /* see if they want multiple cpus/rank */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRTE_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
         cpus_per_rank = u16;
     } else {
         cpus_per_rank = 1;
     }
 
     /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
@@ -205,7 +205,7 @@ static int bind_generic(prte_job_t *jdata,
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PRTE_STRING) &&
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING) &&
         NULL != job_cpuset) {
         mycpus = prte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
         hwloc_bitmap_and(available, mycpus, available);
@@ -218,14 +218,14 @@ static int bind_generic(prte_job_t *jdata,
             continue;
         }
         /* ignore procs from other jobs */
-        if (proc->name.jobid != jdata->jobid) {
+        if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
             continue;
         }
-        if ((int)PRTE_PROC_MY_NAME->vpid != node->index && !dobind) {
+        if ((int)PRTE_PROC_MY_NAME->rank != node->index && !dobind) {
             continue;
         }
 
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
             /* if we don't want to launch, then we are just testing the system,
              * so ignore questions about support capabilities
              */
@@ -278,7 +278,7 @@ static int bind_generic(prte_job_t *jdata,
 
         /* bozo check */
         locale = NULL;
-        if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRTE_PTR) ||
+        if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void**)&locale, PMIX_POINTER) ||
             NULL == locale) {
             prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-locale", true, PRTE_NAME_PRINT(&proc->name));
             hwloc_bitmap_free(totalcpuset);
@@ -322,7 +322,7 @@ static int bind_generic(prte_job_t *jdata,
             return PRTE_ERR_SILENT;
         }
         /* record the location */
-        prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, PRTE_ATTR_LOCAL, trg_obj, PRTE_PTR);
+        prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, PRTE_ATTR_LOCAL, trg_obj, PMIX_POINTER);
 
         /* start with a clean slate */
         hwloc_bitmap_zero(totalcpuset);
@@ -408,7 +408,7 @@ static int bind_generic(prte_job_t *jdata,
                             "%s PROC %s BITMAP %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(&proc->name), cpu_bitmap);
-        prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PRTE_STRING);
+        prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PMIX_STRING);
         if (NULL != cpu_bitmap) {
             free(cpu_bitmap);
         }
@@ -458,32 +458,32 @@ static int bind_in_place(prte_job_t *jdata,
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind in place for job %s with bindings %s",
-                        PRTE_JOBID_PRINT(jdata->jobid),
+                        PRTE_JOBID_PRINT(jdata->nspace),
                         prte_hwloc_base_print_binding(jdata->map->binding));
     /* initialize */
     map = jdata->map;
 
     dobind = false;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
         dobind = true;
     }
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PRTE_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING);
 
     /* see if they want multiple cpus/rank */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRTE_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
         cpus_per_rank = u16;
     } else {
         cpus_per_rank = 1;
     }
 
     /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
@@ -493,10 +493,10 @@ static int bind_in_place(prte_job_t *jdata,
         if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
-        if ((int)PRTE_PROC_MY_NAME->vpid != node->index && !dobind) {
+        if ((int)PRTE_PROC_MY_NAME->rank != node->index && !dobind) {
             continue;
         }
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
             /* if we don't want to launch, then we are just testing the system,
              * so ignore questions about support capabilities
              */
@@ -560,7 +560,7 @@ static int bind_in_place(prte_job_t *jdata,
          * to save space, so we need to reset the usage info to reflect
          * our own current state
          */
-        reset_usage(node, jdata->jobid);
+        reset_usage(node, jdata->nspace);
         /* get the available processors on this node */
         root = hwloc_get_root_obj(node->topology->topo);
         if (NULL == root->userdata) {
@@ -585,12 +585,12 @@ static int bind_in_place(prte_job_t *jdata,
                 continue;
             }
             /* ignore procs from other jobs */
-            if (proc->name.jobid != jdata->jobid) {
+            if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                 continue;
             }
             /* bozo check */
             locale = NULL;
-            if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void**)&locale, PRTE_PTR)) {
+            if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void**)&locale, PMIX_POINTER)) {
                 prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-locale", true, PRTE_NAME_PRINT(&proc->name));
                 hwloc_bitmap_free(available);
                 if (NULL != job_cpuset) {
@@ -728,9 +728,9 @@ static int bind_in_place(prte_job_t *jdata,
             hwloc_bitmap_and(mycpus, available, locale->cpuset);
             hwloc_bitmap_list_asprintf(&cpu_bitmap, mycpus);
             hwloc_bitmap_free(mycpus);
-            prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PRTE_STRING);
+            prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PMIX_STRING);
             /* update the location, in case it changed */
-            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, PRTE_ATTR_LOCAL, locale, PRTE_PTR);
+            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, PRTE_ATTR_LOCAL, locale, PMIX_POINTER);
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "%s BOUND PROC %s TO %s[%s:%u] on node %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -769,37 +769,37 @@ static int bind_to_cpuset(prte_job_t *jdata)
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PRTE_STRING) ||
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING) ||
         NULL == job_cpuset) {
         return PRTE_ERR_BAD_PARAM;
     }
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind job %s to cpus %s",
-                        PRTE_JOBID_PRINT(jdata->jobid), job_cpuset);
+                        PRTE_JOBID_PRINT(jdata->nspace), job_cpuset);
 
     /* initialize */
     map = jdata->map;
     mycpuset = hwloc_bitmap_alloc();
 
     dobind = false;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
         dobind = true;
     }
 
 
     /* see if they want multiple cpus/rank */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRTE_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
         cpus_per_rank = u16;
     } else {
         cpus_per_rank = 1;
     }
 
     /* see if they want are using hwthreads as cpus */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
@@ -809,10 +809,10 @@ static int bind_to_cpuset(prte_job_t *jdata)
         if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
-        if ((int)PRTE_PROC_MY_NAME->vpid != node->index && !dobind) {
+        if ((int)PRTE_PROC_MY_NAME->rank != node->index && !dobind) {
             continue;
         }
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
             /* if we don't want to launch, then we are just testing the system,
              * so ignore questions about support capabilities
              */
@@ -869,7 +869,7 @@ static int bind_to_cpuset(prte_job_t *jdata)
             hwloc_bitmap_free(mycpuset);
             return PRTE_ERR_NOT_FOUND;
         }
-        reset_usage(node, jdata->jobid);
+        reset_usage(node, jdata->nspace);
         hwloc_bitmap_zero(mycpuset);
 
         /* filter the node-available cpus against the specified "soft" cgroup */
@@ -881,7 +881,7 @@ static int bind_to_cpuset(prte_job_t *jdata)
                 continue;
             }
             /* ignore procs from other jobs */
-            if (proc->name.jobid != jdata->jobid) {
+            if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                 continue;
             }
             if (PRTE_BIND_ORDERED_REQUESTED(jdata->map->binding)) {
@@ -917,7 +917,7 @@ static int bind_to_cpuset(prte_job_t *jdata)
                 tset = mycpus;
             }
             hwloc_bitmap_list_asprintf(&cpu_bitmap, tset);
-            prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PRTE_STRING);
+            prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL, cpu_bitmap, PMIX_STRING);
             if (NULL != cpu_bitmap) {
                 free(cpu_bitmap);
             }
@@ -943,7 +943,7 @@ int prte_rmaps_base_compute_bindings(prte_job_t *jdata)
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: compute bindings for job %s with policy %s[%x]",
-                        PRTE_JOBID_PRINT(jdata->jobid),
+                        PRTE_JOBID_PRINT(jdata->nspace),
                         prte_hwloc_base_print_binding(jdata->map->binding), jdata->map->binding);
 
     map = PRTE_GET_MAPPING_POLICY(jdata->map->mapping);
@@ -956,7 +956,7 @@ int prte_rmaps_base_compute_bindings(prte_job_t *jdata)
 
     if (PRTE_BIND_TO_NONE == bind) {
         rc = PRTE_SUCCESS;
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, NULL, PRTE_STRING)) {
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, NULL, PMIX_STRING)) {
             /* "soft" cgroup was given but no other
              * binding directive was provided, so bind
              * to those specific cpus */
@@ -1014,7 +1014,7 @@ int prte_rmaps_base_compute_bindings(prte_job_t *jdata)
     if (bind == map) {
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps: bindings for job %s - bind in place",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         if (PRTE_SUCCESS != (rc = bind_in_place(jdata, hwb, clvl))) {
             PRTE_ERROR_LOG(rc);
         }
@@ -1029,13 +1029,13 @@ int prte_rmaps_base_compute_bindings(prte_job_t *jdata)
     /* initialize */
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: computing bindings for job %s",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     dobind = false;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
         dobind = true;
     }
 
@@ -1043,10 +1043,10 @@ int prte_rmaps_base_compute_bindings(prte_job_t *jdata)
         if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(jdata->map->nodes, i))) {
             continue;
         }
-        if ((int)PRTE_PROC_MY_NAME->vpid != node->index && !dobind) {
+        if ((int)PRTE_PROC_MY_NAME->rank != node->index && !dobind) {
             continue;
         }
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
             /* if we don't want to launch, then we are just testing the system,
              * so ignore questions about support capabilities
              */

@@ -18,6 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -549,25 +550,25 @@ static int setup_fork(prte_job_t *jdata,
      * up in the desired final state */
     PRTE_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t) {
         if (PRTE_JOB_SET_ENVAR == attr->key) {
-            prte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
+            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
         } else if (PRTE_JOB_ADD_ENVAR == attr->key) {
-            prte_setenv(attr->data.envar.envar, attr->data.envar.value, false, &app->env);
+            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
         } else if (PRTE_JOB_UNSET_ENVAR == attr->key) {
-            prte_unsetenv(attr->data.string, &app->env);
+            prte_unsetenv(attr->data.data.string, &app->env);
         } else if (PRTE_JOB_PREPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
             exists = false;
             for (i=0; NULL != app->env[i]; i++) {
                 saveptr = strchr(app->env[i], '=');   // cannot be NULL
                 *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.envar.envar)) {
+                if (0 == strcmp(app->env[i], attr->data.data.envar.envar)) {
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param;  // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", attr->data.envar.value,
-                                   attr->data.envar.separator, param);
+                    prte_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
+                                   attr->data.data.envar.separator, param);
                     *saveptr = '=';  // restore the current envar setting
-                    prte_setenv(attr->data.envar.envar, p2, true, &app->env);
+                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -577,7 +578,7 @@ static int setup_fork(prte_job_t *jdata,
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
+                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
             }
         } else if (PRTE_JOB_APPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
@@ -585,14 +586,14 @@ static int setup_fork(prte_job_t *jdata,
             for (i=0; NULL != app->env[i]; i++) {
                 saveptr = strchr(app->env[i], '=');   // cannot be NULL
                 *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.envar.envar)) {
+                if (0 == strcmp(app->env[i], attr->data.data.envar.envar)) {
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param;  // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", param, attr->data.envar.separator,
-                                   attr->data.envar.value);
+                    prte_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
+                                   attr->data.data.envar.value);
                     *saveptr = '=';  // restore the current envar setting
-                    prte_setenv(attr->data.envar.envar, p2, true, &app->env);
+                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -602,7 +603,7 @@ static int setup_fork(prte_job_t *jdata,
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
+                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
             }
         }
     }
@@ -610,25 +611,25 @@ static int setup_fork(prte_job_t *jdata,
     /* now do the same thing for any app-level attributes */
     PRTE_LIST_FOREACH(attr, &app->attributes, prte_attribute_t) {
         if (PRTE_APP_SET_ENVAR == attr->key) {
-            prte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
+            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
         } else if (PRTE_APP_ADD_ENVAR == attr->key) {
-            prte_setenv(attr->data.envar.envar, attr->data.envar.value, false, &app->env);
+            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
         } else if (PRTE_APP_UNSET_ENVAR == attr->key) {
-            prte_unsetenv(attr->data.string, &app->env);
+            prte_unsetenv(attr->data.data.string, &app->env);
         } else if (PRTE_APP_PREPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
             exists = false;
             for (i=0; NULL != app->env[i]; i++) {
                 saveptr = strchr(app->env[i], '=');   // cannot be NULL
                 *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.envar.envar)) {
+                if (0 == strcmp(app->env[i], attr->data.data.envar.envar)) {
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param;  // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", attr->data.envar.value,
-                                   attr->data.envar.separator, param);
+                    prte_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
+                                   attr->data.data.envar.separator, param);
                     *saveptr = '=';  // restore the current envar setting
-                    prte_setenv(attr->data.envar.envar, p2, true, &app->env);
+                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -638,7 +639,7 @@ static int setup_fork(prte_job_t *jdata,
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
+                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
             }
         } else if (PRTE_APP_APPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
@@ -646,14 +647,14 @@ static int setup_fork(prte_job_t *jdata,
             for (i=0; NULL != app->env[i]; i++) {
                 saveptr = strchr(app->env[i], '=');   // cannot be NULL
                 *saveptr = '\0';
-                if (0 == strcmp(app->env[i], attr->data.envar.envar)) {
+                if (0 == strcmp(app->env[i], attr->data.data.envar.envar)) {
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param;  // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", param, attr->data.envar.separator,
-                                   attr->data.envar.value);
+                    prte_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
+                                   attr->data.data.envar.value);
                     *saveptr = '=';  // restore the current envar setting
-                    prte_setenv(attr->data.envar.envar, p2, true, &app->env);
+                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -663,7 +664,7 @@ static int setup_fork(prte_job_t *jdata,
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.envar.envar, attr->data.envar.value, true, &app->env);
+                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
             }
         }
     }
@@ -764,7 +765,7 @@ static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
             if (NULL == pval) {
                 break;
             }
-            prte_argv_append_nosize(&hostfiles, pval->data.string);
+            prte_argv_append_nosize(&hostfiles, pval->value.data.string);
         }
         ptr = prte_argv_join(hostfiles, ',');
         prte_argv_free(hostfiles);
@@ -778,7 +779,7 @@ static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
             if (NULL == pval) {
                 break;
             }
-            prte_argv_append_nosize(&hosts, pval->data.string);
+            prte_argv_append_nosize(&hosts, pval->value.data.string);
         }
         ptr = prte_argv_join(hosts, ',');
         prte_argv_append_nosize(argv, ptr);
@@ -793,12 +794,12 @@ static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
     if (0 < (i = prte_cmd_line_get_ninsts(cmd_line, "launch-agent"))) {
         prte_argv_append_nosize(argv, "--launch-agent");
         pval = prte_cmd_line_get_param(cmd_line, "launch-agent", 0, 0);
-        prte_argv_append_nosize(argv, pval->data.string);
+        prte_argv_append_nosize(argv, pval->value.data.string);
     }
     if (0 < (i = prte_cmd_line_get_ninsts(cmd_line, "max-vm-size"))) {
         prte_argv_append_nosize(argv, "--max-vm-size");
         pval = prte_cmd_line_get_param(cmd_line, "max-vm-size", 0, 0);
-        prte_asprintf(&value, "%d", pval->data.integer);
+        prte_asprintf(&value, "%d", pval->value.data.integer);
         prte_argv_append_nosize(argv, value);
         free(value);
     }

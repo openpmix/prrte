@@ -21,6 +21,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,7 +65,6 @@
 #include "src/mca/prteif/prteif.h"
 #include "src/util/net.h"
 #include "src/util/argv.h"
-#include "src/class/prte_hash_table.h"
 #include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -103,9 +103,9 @@ static int component_startup(void);
 static void component_shutdown(void);
 static int component_send(prte_rml_send_t *msg);
 static char* component_get_addr(void);
-static int component_set_addr(prte_process_name_t *peer,
+static int component_set_addr(pmix_proc_t *peer,
                               char **uris);
-static bool component_is_reachable(prte_process_name_t *peer);
+static bool component_is_reachable(pmix_proc_t *peer);
 
 /*
  * Struct of function pointers and all that to let us be initialized
@@ -141,8 +141,7 @@ prte_oob_tcp_component_t prte_oob_tcp_component = {
  */
 static int tcp_component_open(void)
 {
-    PRTE_CONSTRUCT(&prte_oob_tcp_component.peers, prte_hash_table_t);
-    prte_hash_table_init(&prte_oob_tcp_component.peers, 32);
+    PRTE_CONSTRUCT(&prte_oob_tcp_component.peers, prte_list_t);
     PRTE_CONSTRUCT(&prte_oob_tcp_component.listeners, prte_list_t);
     if (PRTE_PROC_IS_MASTER) {
         PRTE_CONSTRUCT(&prte_oob_tcp_component.listen_thread, prte_thread_t);
@@ -180,7 +179,7 @@ static int tcp_component_open(void)
 static int tcp_component_close(void)
 {
     PRTE_LIST_DESTRUCT(&prte_oob_tcp_component.local_ifs);
-    PRTE_DESTRUCT(&prte_oob_tcp_component.peers);
+    PRTE_LIST_DESTRUCT(&prte_oob_tcp_component.peers);
 
     if (NULL != prte_oob_tcp_component.ipv4conns) {
         prte_argv_free(prte_oob_tcp_component.ipv4conns);
@@ -677,10 +676,7 @@ static int component_startup(void)
 
 static void component_shutdown(void)
 {
-    prte_oob_tcp_peer_t *peer;
-    int i = 0, rc;
-    uint64_t key;
-    void *node;
+    int i = 0;
 
     prte_output_verbose(2, prte_oob_base_framework.framework_output,
                         "%s TCP SHUTDOWN",
@@ -698,21 +694,6 @@ static void component_shutdown(void)
     } else {
         prte_output_verbose(2, prte_oob_base_framework.framework_output,
                         "no hnp or not active");
-    }
-
-    /* release all peers from the hash table */
-    rc = prte_hash_table_get_first_key_uint64(&prte_oob_tcp_component.peers, &key,
-                                              (void **)&peer, &node);
-    while (PRTE_SUCCESS == rc) {
-        if (NULL != peer) {
-            PRTE_RELEASE(peer);
-            rc = prte_hash_table_set_value_uint64(&prte_oob_tcp_component.peers, key, NULL);
-            if (PRTE_SUCCESS != rc) {
-                PRTE_ERROR_LOG(rc);
-            }
-        }
-        rc = prte_hash_table_get_next_key_uint64(&prte_oob_tcp_component.peers, &key,
-                                                 (void **) &peer, node, &node);
     }
 
     /* cleanup listen event list */
@@ -831,7 +812,7 @@ static int parse_uri(const uint16_t af_family,
     return PRTE_SUCCESS;
 }
 
-static int component_set_addr(prte_process_name_t *peer,
+static int component_set_addr(pmix_proc_t *peer,
                               char **uris)
 {
     char **addrs, **masks, *hptr;
@@ -959,16 +940,12 @@ static int component_set_addr(prte_process_name_t *peer,
 
             if (NULL == (pr = prte_oob_tcp_peer_lookup(peer))) {
                 pr = PRTE_NEW(prte_oob_tcp_peer_t);
-                pr->name.jobid = peer->jobid;
-                pr->name.vpid = peer->vpid;
+                PMIX_XFER_PROCID(&pr->name, peer);
                 prte_output_verbose(20, prte_oob_base_framework.framework_output,
                                     "%s SET_PEER ADDING PEER %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                     PRTE_NAME_PRINT(peer));
-                if (PRTE_SUCCESS != prte_hash_table_set_value_uint64(&prte_oob_tcp_component.peers, ui64, pr)) {
-                    PRTE_RELEASE(pr);
-                    return PRTE_ERR_TAKE_NEXT_OPTION;
-                }
+                prte_list_append(&prte_oob_tcp_component.peers, &pr->super);
             }
 
             maddr = PRTE_NEW(prte_oob_tcp_addr_t);
@@ -976,10 +953,7 @@ static int component_set_addr(prte_process_name_t *peer,
             if (PRTE_SUCCESS != (rc = parse_uri(af_family, host, ports, (struct sockaddr_storage*) &(maddr->addr)))) {
                 PRTE_ERROR_LOG(rc);
                 PRTE_RELEASE(maddr);
-                rc = prte_hash_table_set_value_uint64(&prte_oob_tcp_component.peers, ui64, NULL);
-                if (PRTE_SUCCESS != rc) {
-                    PRTE_ERROR_LOG(rc);
-                }
+                prte_list_remove_item(&prte_oob_tcp_component.peers, &pr->super);
                 PRTE_RELEASE(pr);
                 return PRTE_ERR_TAKE_NEXT_OPTION;
             }
@@ -1007,14 +981,13 @@ static int component_set_addr(prte_process_name_t *peer,
     return PRTE_ERR_TAKE_NEXT_OPTION;
 }
 
-static bool component_is_reachable(prte_process_name_t *peer)
+static bool component_is_reachable(pmix_proc_t *peer)
 {
-    prte_process_name_t hop;
+    pmix_proc_t hop;
 
     /* if we have a route to this peer, then we can reach it */
     hop = prte_routed.get_route(peer);
-    if (PRTE_JOBID_INVALID == hop.jobid ||
-        PRTE_VPID_INVALID == hop.vpid) {
+    if (PMIX_PROCID_INVALID(&hop)) {
         prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s is NOT reachable by TCP",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -1028,8 +1001,6 @@ static bool component_is_reachable(prte_process_name_t *peer)
 void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t*)cbdata;
-    uint64_t ui64;
-    int rc;
     prte_oob_base_peer_t *bpr;
 
     PRTE_ACQUIRE_OBJECT(pop);
@@ -1043,17 +1014,13 @@ void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
      * are in the same event base as the OOB base, so we can
      * directly access its storage
      */
-    memcpy(&ui64, (char*)&pop->peer, sizeof(uint64_t));
-    if (PRTE_SUCCESS != prte_hash_table_get_value_uint64(&prte_oob_base.peers,
-                                                         ui64, (void**)&bpr) || NULL == bpr) {
+    bpr = prte_oob_base_get_peer(&pop->peer);
+    if (NULL == bpr) {
         bpr = PRTE_NEW(prte_oob_base_peer_t);
+        PMIX_XFER_PROCID(&bpr->name, &pop->peer);
     }
     prte_bitmap_set_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
     bpr->component = &prte_oob_tcp_component.super;
-    if (PRTE_SUCCESS != (rc = prte_hash_table_set_value_uint64(&prte_oob_base.peers,
-                                                               ui64, bpr))) {
-        PRTE_ERROR_LOG(rc);
-    }
 
     PRTE_RELEASE(pop);
 }
@@ -1061,9 +1028,7 @@ void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
 void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t*)cbdata;
-    uint64_t ui64;
     prte_oob_base_peer_t *bpr;
-    int rc;
 
     PRTE_ACQUIRE_OBJECT(pop);
 
@@ -1073,15 +1038,11 @@ void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
                         PRTE_NAME_PRINT(&pop->peer));
 
     /* Mark that we no longer support this peer */
-    memcpy(&ui64, (char*)&pop->peer, sizeof(uint64_t));
-    if (PRTE_SUCCESS == prte_hash_table_get_value_uint64(&prte_oob_base.peers,
-                                                         ui64, (void**)&bpr) && NULL != bpr) {
+    bpr = prte_oob_base_get_peer(&pop->peer);
+    if (NULL != bpr) {
         prte_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
+        prte_list_remove_item(&prte_oob_base.peers, &bpr->super);
         PRTE_RELEASE(bpr);
-    }
-    if (PRTE_SUCCESS != (rc = prte_hash_table_set_value_uint64(&prte_oob_base.peers,
-                                                               ui64, NULL))) {
-        PRTE_ERROR_LOG(rc);
     }
 
     if (!prte_finalizing) {
@@ -1098,8 +1059,6 @@ void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
 void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t*)cbdata;
-    uint64_t ui64;
-    int rc;
     prte_oob_base_peer_t *bpr;
 
     PRTE_ACQUIRE_OBJECT(mop);
@@ -1110,16 +1069,12 @@ void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
                         PRTE_NAME_PRINT(&mop->hop));
 
     /* mark that we cannot reach this hop */
-    memcpy(&ui64, (char*)&(mop->hop), sizeof(uint64_t));
-    if (PRTE_SUCCESS != prte_hash_table_get_value_uint64(&prte_oob_base.peers,
-                                                         ui64, (void**)&bpr) || NULL == bpr) {
+    bpr = prte_oob_base_get_peer(&mop->hop);
+    if (NULL == bpr) {
         bpr = PRTE_NEW(prte_oob_base_peer_t);
+        PMIX_XFER_PROCID(&bpr->name, &mop->hop);
     }
     prte_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
-    if (PRTE_SUCCESS != (rc = prte_hash_table_set_value_uint64(&prte_oob_base.peers,
-                                                               ui64, NULL))) {
-        PRTE_ERROR_LOG(rc);
-    }
 
     /* report the error back to the OOB and let it try other components
      * or declare a problem
@@ -1134,9 +1089,10 @@ void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
 void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t*)cbdata;
-    uint64_t ui64;
     prte_rml_send_t *snd;
     prte_oob_base_peer_t *bpr;
+    pmix_status_t rc;
+    pmix_byte_object_t bo;
 
     PRTE_ACQUIRE_OBJECT(mop);
 
@@ -1152,10 +1108,8 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     }
 
    /* mark that this component cannot reach this hop */
-    memcpy(&ui64, (char*)&(mop->hop), sizeof(uint64_t));
-    if (PRTE_SUCCESS != prte_hash_table_get_value_uint64(&prte_oob_base.peers,
-                                                         ui64, (void**)&bpr) ||
-        NULL == bpr) {
+    bpr = prte_oob_base_get_peer(&mop->hop);
+    if (NULL == bpr) {
         /* the overall OOB has no knowledge of this hop. Only
          * way this could happen is if the peer contacted us
          * via this component, and it wasn't entered into the
@@ -1173,10 +1127,8 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     prte_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
 
     /* mark that this component cannot reach this destination either */
-    memcpy(&ui64, (char*)&(mop->snd->hdr.dst), sizeof(uint64_t));
-    if (PRTE_SUCCESS != prte_hash_table_get_value_uint64(&prte_oob_base.peers,
-                                                         ui64, (void**)&bpr) ||
-        NULL == bpr) {
+    bpr = prte_oob_base_get_peer(&mop->snd->hdr.dst);
+    if (NULL == bpr) {
         prte_output(0, "%s ERROR: message to %s requires routing and the OOB has no knowledge of this process",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     PRTE_NAME_PRINT(&mop->snd->hdr.dst));
@@ -1192,13 +1144,17 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     MCA_OOB_TCP_HDR_NTOH(&mop->snd->hdr);
     snd = PRTE_NEW(prte_rml_send_t);
     snd->retries = mop->rmsg->retries + 1;
-    snd->dst = mop->snd->hdr.dst;
-    snd->origin = mop->snd->hdr.origin;
+    PMIX_XFER_PROCID(&snd->dst, &mop->snd->hdr.dst);
+    PMIX_XFER_PROCID(&snd->origin, &mop->snd->hdr.origin);
     snd->tag = mop->snd->hdr.tag;
     snd->seq_num = mop->snd->hdr.seq_num;
-    snd->data = mop->snd->data;
-    snd->count = mop->snd->hdr.nbytes;
-    snd->cbfunc.iov = NULL;
+    bo.bytes = mop->snd->data;
+    bo.size = mop->snd->hdr.nbytes;
+    rc = PMIx_Data_load(&snd->dbuf, &bo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    }
+    snd->cbfunc = NULL;
     snd->cbdata = NULL;
     /* activate the OOB send state */
     PRTE_OOB_SEND(snd);

@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +31,6 @@
 #include "types.h"
 
 #include "src/mca/base/base.h"
-#include "src/class/prte_hash_table.h"
 #include "src/event/event-internal.h"
 
 #include "src/mca/oob/oob.h"
@@ -58,7 +58,7 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_nicaddr_t);
 /* Module definition */
 typedef void (*prte_oob_tcp_module_accept_connection_fn_t)(const int accepted_fd,
                                                           const struct sockaddr *addr);
-typedef void (*prte_oob_tcp_module_ping_fn_t)(const prte_process_name_t *proc);
+typedef void (*prte_oob_tcp_module_ping_fn_t)(const pmix_proc_t *proc);
 typedef void (*prte_oob_tcp_module_send_nb_fn_t)(prte_rml_send_t *msg);
 
 typedef struct {

@@ -15,6 +15,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -121,9 +122,9 @@ void prte_info_do_version(bool want_all, prte_cmd_line_t *cmd_line)
         count = prte_cmd_line_get_ninsts(cmd_line, "show-version");
         for (i = 0; i < count; ++i) {
             pval = prte_cmd_line_get_param(cmd_line, "show-version", (int)i, 0);
-            arg1 = pval->data.string;
+            arg1 = pval->value.data.string;
             pval = prte_cmd_line_get_param(cmd_line, "show-version", (int)i, 1);
-            scope = pval->data.string;
+            scope = pval->value.data.string;
 
             /* Version of PRTE */
 

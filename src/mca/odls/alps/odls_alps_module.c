@@ -21,6 +21,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -135,9 +136,9 @@
 /*
  * Module functions (function pointers used in a struct)
  */
-static int prte_odls_alps_launch_local_procs(prte_buffer_t *data);
+static int prte_odls_alps_launch_local_procs(pmix_data_buffer_t *data);
 static int prte_odls_alps_kill_local_procs(prte_pointer_array_t *procs);
-static int prte_odls_alps_signal_local_procs(const prte_process_name_t *proc, int32_t signal);
+static int prte_odls_alps_signal_local_procs(const pmix_proc_t *proc, int32_t signal);
 static int prte_odls_alps_restart_proc(prte_proc_t *child);
 
 /*
@@ -648,9 +649,9 @@ static int odls_alps_fork_local_proc(void *cdptr)
  * Launch all processes allocated to the current node.
  */
 
-int prte_odls_alps_launch_local_procs(prte_buffer_t *data)
+int prte_odls_alps_launch_local_procs(pmix_data_buffer_t *data)
 {
-    prte_jobid_t job;
+    pmix_nspace_t job;
     int rc;
 
     /* construct the list of children we are to launch */
@@ -713,7 +714,7 @@ static int send_signal(pid_t pid, int signal)
     return rc;
 }
 
-static int prte_odls_alps_signal_local_procs(const prte_process_name_t *proc, int32_t signal)
+static int prte_odls_alps_signal_local_procs(const pmix_proc_t *proc, int32_t signal)
 {
     int rc;
 

@@ -15,6 +15,7 @@
  * Copyright (c) 2016-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -120,8 +121,8 @@
 
 #include "src/class/prte_object.h"
 #include "src/class/prte_list.h"
-#include "src/dss/dss_types.h"
 #include "src/threads/mutex.h"
+#include "src/pmix/pmix-internal.h"
 
 #define PRTE_CMD_OPTIONS_MAX  15
 
@@ -560,9 +561,9 @@ PRTE_EXPORT int prte_cmd_line_get_ninsts(prte_cmd_line_t *cmd,
  * caller.
  */
 PRTE_EXPORT prte_value_t *prte_cmd_line_get_param(prte_cmd_line_t *cmd,
-                                                     const char *opt,
-                                                     int instance_num,
-                                                     int param_num);
+                                                  const char *opt,
+                                                  int instance_num,
+                                                  int param_num);
 
 /**
  * Return the entire "tail" of unprocessed argv from a PRTE

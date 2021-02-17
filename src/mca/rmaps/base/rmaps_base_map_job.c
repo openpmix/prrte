@@ -36,7 +36,6 @@
 #include "src/util/string_copy.h"
 #include "src/mca/base/base.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/dss/dss.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ras/base/base.h"
@@ -58,10 +57,10 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     bool did_map, pernode = false, perpackage = false;
     prte_rmaps_base_selected_module_t *mod;
     prte_job_t *parent = NULL;
-    prte_vpid_t nprocs;
+    pmix_rank_t nprocs;
     prte_app_context_t *app;
     bool inherit = false;
-    prte_process_name_t name, *nptr;
+    pmix_proc_t name, *nptr;
     char *tmp, *p;
     uint16_t u16 = 0;
     uint16_t *u16ptr = &u16, cpus_per_rank;
@@ -76,22 +75,22 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: mapping job %s",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* if this is a dynamic job launch and they didn't explicitly
      * request inheritance, then don't inherit the launch directives */
     nptr = &name;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PRTE_NAME)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PMIX_PROC)) {
         /* if the launch proxy is me, then this is the initial launch from
          * a proxy scenario, so we don't really have a parent */
-        if (PRTE_PROC_MY_NAME->jobid == name.jobid) {
+        if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, name.nspace)) {
             parent = NULL;
             /* we do allow inheritance of the defaults */
             inherit = true;
-        } else if (NULL != (parent = prte_get_job_data_object(name.jobid))) {
-            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PRTE_BOOL)) {
+        } else if (NULL != (parent = prte_get_job_data_object(name.nspace))) {
+            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
                 inherit = true;
-            } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PRTE_BOOL)) {
+            } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
                 inherit = false;
                 parent = NULL;
             } else if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
@@ -103,9 +102,9 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             }
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps: dynamic job %s %s inherit launch directives - parent %s is %s",
-                                PRTE_JOBID_PRINT(jdata->jobid),
+                                PRTE_JOBID_PRINT(jdata->nspace),
                                 inherit ? "will" : "will not",
-                                (NULL == parent) ? "N/A" : PRTE_JOBID_PRINT((parent->jobid)),
+                                (NULL == parent) ? "N/A" : PRTE_JOBID_PRINT((parent->nspace)),
                                 (NULL == parent) ? "NULL" : ((PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL) ? "TOOL" : "NON-TOOL")));
         } else {
             inherit = true;
@@ -121,35 +120,35 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     if (inherit && NULL != parent) {
         /* if not already assigned, inherit the parent's ppr */
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, NULL, PRTE_STRING)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, NULL, PMIX_STRING)) {
             /* get the parent job's ppr, if it had one */
-            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PPR, (void**)&tmp, PRTE_STRING)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PPR, tmp, PRTE_STRING);
+            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PPR, (void**)&tmp, PMIX_STRING)) {
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PPR, tmp, PMIX_STRING);
                 free(tmp);
             }
         }
         /* if not already assigned, inherit the parent's pes/proc */
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PRTE_UINT16)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16)) {
             /* get the parent job's pes/proc, if it had one */
-            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRTE_UINT16)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PES_PER_PROC, u16ptr, PRTE_UINT16);
+            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PES_PER_PROC, u16ptr, PMIX_UINT16);
 
             }
         }
         /* if not already assigned, inherit the parent's cpu designation */
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL) &&
-            !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PRTE_BOOL)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
+            !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
             /* get the parent job's designation, if it had one */
-            if (prte_get_attribute(&parent->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL);
-            } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_CORE_CPUS, NULL, PRTE_BOOL)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS, NULL, PRTE_BOOL);
+            if (prte_get_attribute(&parent->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
+            } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL);
             } else {
                 /* default */
                 if (prte_rmaps_base.hwthread_cpus) {
-                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL);
+                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
                 } else {
-                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS, NULL, PRTE_BOOL);
+                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL);
                 }
             }
         }
@@ -166,7 +165,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void**)&tmp, PRTE_STRING)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void**)&tmp, PMIX_STRING)) {
         if (NULL != strcasestr(tmp, "node")) {
             pernode = true;
             /* get the ppn */
@@ -225,18 +224,18 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
 
     /* set some convenience params */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRTE_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
         cpus_per_rank = u16;
     } else {
         cpus_per_rank = 1;
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthreads = true;
     }
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: setting mapping policies for job %s nprocs %d",
-                        PRTE_JOBID_PRINT(jdata->jobid), (int)nprocs);
+                        PRTE_JOBID_PRINT(jdata->nspace), (int)nprocs);
 
     /* set the default mapping policy IFF it wasn't provided */
     if (!PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
@@ -349,7 +348,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             }
         }
         if (!did_map) {
-            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PRTE_UINT16)) {
+            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16)) {
                 /* bind to cpus */
                 if (use_hwthreads) {
                     /* if we are using hwthread cpus, then bind to those */
@@ -455,7 +454,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
      * undefined topologies to match our own so the mapper
      * can operate
      */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         prte_node_t *node;
         prte_topology_t *t0;
         int i;
@@ -534,10 +533,10 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
         /* compute the ranks and add the proc objects
          * to the jdata->procs array */
         if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_vpids(jdata))) {
@@ -560,7 +559,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
-    } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PRTE_BOOL)) {
+    } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
         /* compute and save local ranks */
         if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_local_ranks(jdata))) {
             PRTE_ERROR_LOG(rc);
@@ -586,15 +585,15 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_total_procs += jdata->num_procs;
 
     /* if it is a dynamic spawn, save the bookmark on the parent's job too */
-    if (PRTE_JOBID_INVALID != jdata->originator.jobid) {
-        if (NULL != (parent = prte_get_job_data_object(jdata->originator.jobid))) {
+    if (!PMIX_NSPACE_INVALID(jdata->originator.nspace)) {
+        if (NULL != (parent = prte_get_job_data_object(jdata->originator.nspace))) {
             parent->bookmark = jdata->bookmark;
         }
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRTE_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
         /* display the map */
         prte_rmaps_base_display_map(jdata);
     }
@@ -614,14 +613,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     PRTE_RELEASE(caddy);
 }
 
-static void prte_print_map(char **output, prte_job_t *jdata);
-static void prte_print_node(char **output,
-                             prte_job_t *jdata,
-                             prte_node_t *src);
-static void prte_print_proc(char **output,
-                             prte_job_t *jdata,
-                             prte_proc_t *src);
-
 void prte_rmaps_base_display_map(prte_job_t *jdata)
 {
     /* ignore daemon job */
@@ -636,11 +627,11 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
     char *p0bitmap, *procbitmap;
 
     /* only have rank=0 output this */
-    if (0 != PRTE_PROC_MY_NAME->vpid) {
+    if (0 != PRTE_PROC_MY_NAME->rank) {
         return;
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
         /* intended solely to test mapping methods, this output
          * can become quite long when testing at scale. Rather
          * than enduring all the malloc/free's required to
@@ -666,7 +657,7 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
                 if (proc->job != jdata) {
                     continue;
                 }
-                if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, (void**)&bd, PRTE_PTR)) {
+                if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, (void**)&bd, PMIX_POINTER)) {
                     if (NULL == bd) {
                         tmp1 = strdup("UNBOUND");
                     } else {
@@ -676,7 +667,7 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
                     tmp1 = strdup("UNBOUND");
                 }
                 prte_output(prte_clean_output, "\t\t<process rank=%s app_idx=%ld local_rank=%lu node_rank=%lu binding=%s>",
-                            PRTE_VPID_PRINT(proc->name.vpid),  (long)proc->app_idx,
+                            PRTE_VPID_PRINT(proc->name.rank),  (long)proc->app_idx,
                             (unsigned long)proc->local_rank,
                             (unsigned long)proc->node_rank, tmp1);
                 free(tmp1);
@@ -693,7 +684,7 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
             return;
         }
         p0bitmap = NULL;
-        if (prte_get_attribute(&p0->attributes, PRTE_PROC_CPU_BITMAP, (void**)&p0bitmap, PRTE_STRING) &&
+        if (prte_get_attribute(&p0->attributes, PRTE_PROC_CPU_BITMAP, (void**)&p0bitmap, PMIX_STRING) &&
             NULL != p0bitmap) {
             prte_output(prte_clean_output, "\t<locality>");
             for (j=1; j < node->procs->size; j++) {
@@ -704,14 +695,14 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
                     continue;
                 }
                 procbitmap = NULL;
-                if (prte_get_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, (void**)&procbitmap, PRTE_STRING) &&
+                if (prte_get_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, (void**)&procbitmap, PMIX_STRING) &&
                     NULL != procbitmap) {
                     locality = prte_hwloc_base_get_relative_locality(node->topology->topo,
                                                                      p0bitmap,
                                                                      procbitmap);
                     prte_output(prte_clean_output, "\t\t<rank=%s rank=%s locality=%s>",
-                                PRTE_VPID_PRINT(p0->name.vpid),
-                                PRTE_VPID_PRINT(proc->name.vpid),
+                                PRTE_VPID_PRINT(p0->name.rank),
+                                PRTE_VPID_PRINT(proc->name.rank),
                                 prte_hwloc_base_print_locality(locality));
                 }
             }
@@ -725,376 +716,8 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
             }
         }
     } else {
-        prte_print_map(&output, jdata);
+        prte_map_print(&output, jdata);
         prte_output(prte_clean_output, "%s\n", output);
         free(output);
     }
-}
-
-static void prte_print_map(char **output, prte_job_t *jdata)
-{
-    char *tmp=NULL, *tmp2, *tmp3;
-    int32_t i, j;
-    prte_node_t *node;
-    prte_proc_t *proc;
-    prte_job_map_t *src = jdata->map;
-    uint16_t u16, *u16ptr = &u16;
-    char *ppr, *cpus_per_rank, *cpu_type, *cpuset=NULL;
-
-    /* set default result */
-    *output = NULL;
-
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PRTE_BOOL)) {
-        /* need to create the output in XML format */
-        prte_asprintf(&tmp, "<map>\n");
-        /* loop through nodes */
-        for (i=0; i < src->nodes->size; i++) {
-            if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(src->nodes, i))) {
-                continue;
-            }
-            prte_print_node(&tmp2, jdata, node);
-            prte_asprintf(&tmp3, "%s%s", tmp, tmp2);
-            free(tmp2);
-            free(tmp);
-            tmp = tmp3;
-            /* for each node, loop through procs and print their rank */
-            for (j=0; j < node->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, j))) {
-                    continue;
-                }
-                if (proc->job != jdata) {
-                    continue;
-                }
-                prte_print_proc(&tmp2, jdata, proc);
-                prte_asprintf(&tmp3, "%s%s", tmp, tmp2);
-                free(tmp2);
-                free(tmp);
-                tmp = tmp3;
-            }
-            prte_asprintf(&tmp3, "%s\t</host>\n", tmp);
-            free(tmp);
-            tmp = tmp3;
-        }
-        prte_asprintf(&tmp2, "%s</map>\n", tmp);
-        free(tmp);
-        *output = tmp2;
-        return;
-
-    }
-
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void**)&ppr, PRTE_STRING)) {
-        ppr = strdup("N/A");
-    }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PRTE_UINT16)) {
-        prte_asprintf(&cpus_per_rank, "%d", (int)u16);
-    } else {
-        cpus_per_rank = strdup("N/A");
-    }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
-        cpu_type = "HWT";
-    } else {
-        cpu_type = "CORE";
-    }
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&cpuset, PRTE_STRING)) {
-        if (NULL == prte_hwloc_default_cpu_list) {
-            cpuset = strdup("N/A");
-        } else {
-            cpuset = strdup(prte_hwloc_default_cpu_list);
-        }
-    }
-
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRTE_BOOL)) {
-        prte_asprintf(&tmp, "\n=================================   JOB MAP   =================================\n"
-                       "Data for JOB %s offset %s Total slots allocated %lu\n"
-                       "Mapper requested: %s  Last mapper: %s  Mapping policy: %s  Ranking policy: %s\n"
-                       "Binding policy: %s  Cpu set: %s  PPR: %s  Cpus-per-rank: %s  Cpu Type: %s",
-                       PRTE_JOBID_PRINT(jdata->jobid), PRTE_VPID_PRINT(jdata->offset),
-                       (long unsigned)jdata->total_slots_alloc,
-                       (NULL == src->req_mapper) ? "NULL" : src->req_mapper,
-                       (NULL == src->last_mapper) ? "NULL" : src->last_mapper,
-                       prte_rmaps_base_print_mapping(src->mapping),
-                       prte_rmaps_base_print_ranking(src->ranking),
-                       prte_hwloc_base_print_binding(src->binding),
-                       cpuset, ppr, cpus_per_rank, cpu_type);
-
-        if (PRTE_VPID_INVALID == src->daemon_vpid_start) {
-            prte_asprintf(&tmp2, "%s\nNum new daemons: %ld\tNew daemon starting vpid INVALID\nNum nodes: %ld",
-                           tmp, (long)src->num_new_daemons, (long)src->num_nodes);
-        } else {
-            prte_asprintf(&tmp2, "%s\nNum new daemons: %ld\tNew daemon starting vpid %ld\nNum nodes: %ld",
-                           tmp, (long)src->num_new_daemons, (long)src->daemon_vpid_start,
-                           (long)src->num_nodes);
-        }
-        free(tmp);
-        tmp = tmp2;
-    } else {
-        /* this is being printed for a user, so let's make it easier to see */
-        prte_asprintf(&tmp, "\n========================   JOB MAP   ========================\n"
-                       "Data for JOB %s offset %s Total slots allocated %lu\n"
-                       "    Mapping policy: %s  Ranking policy: %s Binding policy: %s\n"
-                       "    Cpu set: %s  PPR: %s  Cpus-per-rank: %s  Cpu Type: %s\n",
-                       PRTE_JOBID_PRINT(jdata->jobid), PRTE_VPID_PRINT(jdata->offset),
-                       (long unsigned)jdata->total_slots_alloc,
-                       prte_rmaps_base_print_mapping(src->mapping),
-                       prte_rmaps_base_print_ranking(src->ranking),
-                       prte_hwloc_base_print_binding(src->binding),
-                       cpuset, ppr, cpus_per_rank, cpu_type);
-    }
-    free(ppr);
-    free(cpus_per_rank);
-    free(cpuset);
-
-
-    for (i=0; i < src->nodes->size; i++) {
-        if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(src->nodes, i))) {
-            continue;
-        }
-        prte_print_node(&tmp2, jdata, node);
-        prte_asprintf(&tmp3, "%s\n%s", tmp, tmp2);
-        free(tmp);
-        free(tmp2);
-        tmp = tmp3;
-    }
-
-    /* let's make it easier to see */
-    prte_asprintf(&tmp2, "%s\n\n=============================================================\n", tmp);
-    free(tmp);
-    tmp = tmp2;
-
-    /* set the return */
-    *output = tmp;
-
-    return;
-}
-
-static void prte_print_node(char **output,
-                             prte_job_t *jdata,
-                             prte_node_t *src)
-{
-    char *tmp, *tmp2, *tmp3, *pfx2 = "    ", *pfx3;
-    int32_t i;
-    prte_proc_t *proc;
-    char **alias;
-
-    /* set default result */
-    *output = NULL;
-
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PRTE_BOOL)) {
-        /* need to create the output in XML format */
-        prte_asprintf(&tmp, "%s<host name=\"%s\" slots=\"%d\" max_slots=\"%d\">\n", pfx2,
-                       (NULL == src->name) ? "UNKNOWN" : src->name,
-                       (int)src->slots, (int)src->slots_max);
-        /* does this node have any aliases? */
-        tmp3 = NULL;
-        if (prte_get_attribute(&src->attributes, PRTE_NODE_ALIAS, (void**)&tmp3, PRTE_STRING)) {
-            alias = prte_argv_split(tmp3, ',');
-            for (i=0; NULL != alias[i]; i++) {
-                prte_asprintf(&tmp2, "%s%s\t<noderesolve resolved=\"%s\"/>\n", tmp, pfx2, alias[i]);
-                free(tmp);
-                tmp = tmp2;
-            }
-            prte_argv_free(alias);
-        }
-        if (NULL != tmp3) {
-            free(tmp3);
-        }
-        *output = tmp;
-        return;
-    }
-
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRTE_BOOL)) {
-        /* just provide a simple output for users */
-        prte_asprintf(&tmp, "\n%sData for node: %s\tNum slots: %ld\tMax slots: %ld\tNum procs: %ld",
-                       pfx2, (NULL == src->name) ? "UNKNOWN" : src->name,
-                       (long)src->slots, (long)src->slots_max, (long)src->num_procs);
-        if (0 == src->num_procs) {
-            *output = tmp;
-            return;
-        }
-        goto PRINT_PROCS;
-    }
-
-    tmp3 = prte_ras_base_flag_string(src);
-    prte_asprintf(&tmp, "\n%sData for node: %s\tState: %0x\tFlags: %s",
-             pfx2, (NULL == src->name) ? "UNKNOWN" : src->name, src->state, tmp3);
-    free(tmp3);
-    /* does this node have any aliases? */
-    tmp3 = NULL;
-    if (prte_get_attribute(&src->attributes, PRTE_NODE_ALIAS, (void**)&tmp3, PRTE_STRING)) {
-        alias = prte_argv_split(tmp3, ',');
-        for (i=0; NULL != alias[i]; i++) {
-            prte_asprintf(&tmp2, "%s\n%s                resolved from %s", tmp, pfx2, alias[i]);
-            free(tmp);
-            tmp = tmp2;
-        }
-        prte_argv_free(alias);
-    }
-    if (NULL != tmp3) {
-        free(tmp3);
-    }
-
-    prte_asprintf(&tmp2, "%s\n%s        Daemon: %s\tDaemon launched: %s", tmp, pfx2,
-             (NULL == src->daemon) ? "Not defined" : PRTE_NAME_PRINT(&(src->daemon->name)),
-             PRTE_FLAG_TEST(src, PRTE_NODE_FLAG_DAEMON_LAUNCHED) ? "True" : "False");
-    free(tmp);
-    tmp = tmp2;
-
-    prte_asprintf(&tmp2, "%s\n%s            Num slots: %ld\tSlots in use: %ld\tOversubscribed: %s", tmp, pfx2,
-             (long)src->slots, (long)src->slots_inuse,
-             PRTE_FLAG_TEST(src, PRTE_NODE_FLAG_OVERSUBSCRIBED) ? "TRUE" : "FALSE");
-    free(tmp);
-    tmp = tmp2;
-
-    prte_asprintf(&tmp2, "%s\n%s            Num slots allocated: %ld\tMax slots: %ld", tmp, pfx2,
-             (long)src->slots, (long)src->slots_max);
-    free(tmp);
-    tmp = tmp2;
-
-    tmp3 = NULL;
-    if (prte_get_attribute(&src->attributes, PRTE_NODE_USERNAME, (void**)&tmp3, PRTE_STRING)) {
-        prte_asprintf(&tmp2, "%s\n%s            Username on node: %s", tmp, pfx2, tmp3);
-        free(tmp3);
-        free(tmp);
-        tmp = tmp2;
-    }
-
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, NULL, PRTE_BOOL)
-        && NULL != src->topology) {
-        prte_asprintf(&tmp2, "%s\n%s            Detected Resources:\n", tmp, pfx2);
-        free(tmp);
-        tmp = tmp2;
-
-        tmp2 = NULL;
-        prte_asprintf(&pfx3, "%s                ", pfx2);
-        prte_dss.print(&tmp2, pfx3, src->topology->topo, PRTE_HWLOC_TOPO);
-        free(pfx3);
-        prte_asprintf(&tmp3, "%s%s", tmp, tmp2);
-        free(tmp);
-        free(tmp2);
-        tmp = tmp3;
-    }
-
-    prte_asprintf(&tmp2, "%s\n%s            Num procs: %ld\tNext node_rank: %ld", tmp, pfx2,
-             (long)src->num_procs, (long)src->next_node_rank);
-    free(tmp);
-    tmp = tmp2;
-
- PRINT_PROCS:
-    for (i=0; i < src->procs->size; i++) {
-        if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(src->procs, i))) {
-            continue;
-        }
-        if (proc->job != jdata) {
-            continue;
-        }
-        prte_print_proc(&tmp2, jdata, proc);
-        prte_asprintf(&tmp3, "%s%s", tmp, tmp2);
-        free(tmp);
-        free(tmp2);
-        tmp = tmp3;
-    }
-
-    /* set the return */
-    *output = tmp;
-
-    return;
-}
-
-static void prte_print_proc(char **output,
-                             prte_job_t *jdata,
-                             prte_proc_t *src)
-{
-    char *tmp, *tmp3, *tmp4, *pfx2 = "        ";
-    hwloc_obj_t loc=NULL;
-    char *locale, *tmp2;
-    hwloc_cpuset_t mycpus;
-    char *str, *cpu_bitmap=NULL;
-    bool use_hwthread_cpus;
-
-    /* set default result */
-    *output = NULL;
-
-    /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
-        use_hwthread_cpus = true;
-    } else {
-        use_hwthread_cpus = false;
-    }
-
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PRTE_BOOL)) {
-        /* need to create the output in XML format */
-        if (0 == src->pid) {
-            prte_asprintf(output, "%s<process rank=\"%s\" status=\"%s\"/>\n", pfx2,
-                           PRTE_VPID_PRINT(src->name.vpid), prte_proc_state_to_str(src->state));
-        } else {
-            prte_asprintf(output, "%s<process rank=\"%s\" pid=\"%d\" status=\"%s\"/>\n", pfx2,
-                           PRTE_VPID_PRINT(src->name.vpid), (int)src->pid, prte_proc_state_to_str(src->state));
-        }
-        return;
-    }
-
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PRTE_BOOL)) {
-        if (prte_get_attribute(&src->attributes, PRTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, PRTE_STRING) &&
-            NULL != cpu_bitmap && NULL != src->node->topology && NULL != src->node->topology->topo) {
-            mycpus = hwloc_bitmap_alloc();
-            hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
-            if (NULL == (str = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, src->node->topology->topo))) {
-                str = strdup("UNBOUND");
-            }
-            hwloc_bitmap_free(mycpus);
-            prte_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: %s", pfx2,
-                     PRTE_JOBID_PRINT(src->name.jobid), (long)src->app_idx,
-                     PRTE_VPID_PRINT(src->name.vpid), str);
-            free(str);
-            free(cpu_bitmap);
-        } else {
-            /* just print a very simple output for users */
-            prte_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: N/A", pfx2,
-                           PRTE_JOBID_PRINT(src->name.jobid), (long)src->app_idx,
-                           PRTE_VPID_PRINT(src->name.vpid));
-        }
-
-        /* set the return */
-        *output = tmp;
-        return;
-    }
-
-    prte_asprintf(&tmp, "\n%sData for proc: %s", pfx2, PRTE_NAME_PRINT(&src->name));
-
-    prte_asprintf(&tmp3, "%s\n%s        Pid: %ld\tLocal rank: %lu\tNode rank: %lu\tApp rank: %d", tmp, pfx2,
-             (long)src->pid, (unsigned long)src->local_rank, (unsigned long)src->node_rank, src->app_rank);
-    free(tmp);
-    tmp = tmp3;
-
-    if (prte_get_attribute(&src->attributes, PRTE_PROC_HWLOC_LOCALE, (void**)&loc, PRTE_PTR)) {
-        if (NULL != loc) {
-            locale = prte_hwloc_base_cset2str(loc->cpuset, use_hwthread_cpus, src->node->topology->topo);
-        } else {
-            locale = strdup("UNKNOWN");
-        }
-    } else {
-        locale = strdup("UNKNOWN");
-    }
-    if (prte_get_attribute(&src->attributes, PRTE_PROC_CPU_BITMAP, (void**)&cpu_bitmap, PRTE_STRING) &&
-        NULL != src->node->topology && NULL != src->node->topology->topo) {
-        mycpus = hwloc_bitmap_alloc();
-        hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
-        tmp2 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, src->node->topology->topo);
-        hwloc_bitmap_free(mycpus);
-    } else {
-        tmp2 = strdup("UNBOUND");
-    }
-    prte_asprintf(&tmp4, "%s\n%s        State: %s\tApp_context: %ld\n%s\tMapped:  %s\n%s\tBinding: %s", tmp, pfx2,
-                   prte_proc_state_to_str(src->state), (long)src->app_idx, pfx2, locale, pfx2, tmp2);
-    free(locale);
-    free(tmp);
-    free(tmp2);
-    if (NULL != cpu_bitmap) {
-        free(cpu_bitmap);
-    }
-
-    /* set the return */
-    *output = tmp4;
-
-    return;
 }

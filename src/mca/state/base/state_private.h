@@ -5,6 +5,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -57,7 +58,7 @@ PRTE_EXPORT int prte_state_base_remove_job_state(prte_job_state_t state);
 PRTE_EXPORT void prte_util_print_job_state_machine(void);
 
 
-PRTE_EXPORT void prte_state_base_activate_proc_state(prte_process_name_t *proc,
+PRTE_EXPORT void prte_state_base_activate_proc_state(pmix_proc_t *proc,
                                                        prte_proc_state_t state);
 
 PRTE_EXPORT int prte_state_base_add_proc_state(prte_proc_state_t state,
@@ -81,7 +82,7 @@ PRTE_EXPORT void prte_state_base_report_progress(int fd, short argc, void *cbdat
 PRTE_EXPORT void prte_state_base_track_procs(int fd, short argc, void *cbdata);
 PRTE_EXPORT void prte_state_base_check_all_complete(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_state_base_check_fds(prte_job_t *jdata);
-PRTE_EXPORT void prte_state_base_notify_data_server(prte_process_name_t *target);
+PRTE_EXPORT void prte_state_base_notify_data_server(pmix_proc_t *target);
 
 END_C_DECLS
 #endif

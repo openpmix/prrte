@@ -15,6 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,13 +31,13 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/dss/dss_types.h"
+#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
 /* define the orted command flag type */
 typedef uint8_t prte_daemon_cmd_flag_t;
-#define PRTE_DAEMON_CMD_T   PRTE_UINT8
+#define PRTE_DAEMON_CMD   PMIX_UINT8
 
 
 /*

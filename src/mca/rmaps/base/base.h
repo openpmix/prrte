@@ -13,6 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -97,12 +98,12 @@ PRTE_EXPORT int prte_rmaps_base_assign_locations(prte_job_t *jdata);
  * Utility routines to get/set vpid mapping for the job
  */
 
-PRTE_EXPORT int prte_rmaps_base_get_vpid_range(prte_jobid_t jobid,
-                                                 prte_vpid_t *start,
-                                                 prte_vpid_t *range);
-PRTE_EXPORT int prte_rmaps_base_set_vpid_range(prte_jobid_t jobid,
-                                                 prte_vpid_t start,
-                                                 prte_vpid_t range);
+PRTE_EXPORT int prte_rmaps_base_get_vpid_range(pmix_nspace_t jobid,
+                                                 pmix_rank_t *start,
+                                                 pmix_rank_t *range);
+PRTE_EXPORT int prte_rmaps_base_set_vpid_range(pmix_nspace_t jobid,
+                                                 pmix_rank_t start,
+                                                 pmix_rank_t range);
 
 /* pretty-print functions */
 PRTE_EXPORT char* prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping);

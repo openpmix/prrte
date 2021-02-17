@@ -55,7 +55,6 @@
 #include "src/util/attr.h"
 #include "src/util/proc_info.h"
 #include "src/util/name_fns.h"
-#include "src/util/error_strings.h"
 #include "src/runtime/runtime.h"
 
 
@@ -73,6 +72,7 @@ PRTE_EXPORT extern bool prte_event_base_active; /* instantiated in src/runtime/p
 PRTE_EXPORT extern bool prte_proc_is_bound;  /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern int prte_progress_thread_debug;  /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_tool_basename;   // argv[0] of prun or one of its symlinks
+
 /**
  * Global indicating where this process was bound to at launch (will
  * be NULL if !prte_proc_is_bound)
@@ -82,12 +82,14 @@ PRTE_EXPORT extern hwloc_cpuset_t prte_proc_applied_binding;  /* instantiated in
 
 /* Shortcut for some commonly used names */
 #define PRTE_NAME_WILDCARD      (&prte_name_wildcard)
-PRTE_EXPORT extern prte_process_name_t prte_name_wildcard;  /** instantiated in src/runtime/prte_init.c */
+PRTE_EXPORT extern pmix_proc_t prte_name_wildcard;  /** instantiated in src/runtime/prte_init.c */
 #define PRTE_NAME_INVALID       (&prte_name_invalid)
-PRTE_EXPORT extern prte_process_name_t prte_name_invalid;  /** instantiated in src/runtime/prte_init.c */
+PRTE_EXPORT extern pmix_proc_t prte_name_invalid;  /** instantiated in src/runtime/prte_init.c */
+#define PRTE_JOBID_WILDCARD     (prte_nspace_wildcard)
+PRTE_EXPORT extern pmix_nspace_t prte_nspace_wildcard;  /** instantiated in src/runtime/prte_init.c */
 
-#define PRTE_PROC_MY_NAME       (&prte_process_info.my_name)
-#define PRTE_PROC_MY_PROCID     (&prte_process_info.myproc)
+#define PRTE_PROC_MY_NAME       (&prte_process_info.myproc)
+#define PRTE_PROC_MY_PROCID     (&prte_process_info.myproc)  // backward compatibility synonym
 
 /* define a special name that point to my parent (aka the process that spawned me) */
 #define PRTE_PROC_MY_PARENT     (&prte_process_info.my_parent)
@@ -95,10 +97,19 @@ PRTE_EXPORT extern prte_process_name_t prte_name_invalid;  /** instantiated in s
 /* define a special name that belongs to prte master */
 #define PRTE_PROC_MY_HNP        (&prte_process_info.my_hnp)
 
-PRTE_EXPORT extern bool prte_in_parallel_debugger;
+/* define some types so we can store the generic
+ * values and still *know* how to convert it for PMIx */
+typedef int prte_status_t;
+typedef uint32_t prte_proc_state_t;  // assigned values in src/mca/plm/plm_types.h
+#define PRTE_PROC_STATE_T   PMIX_UINT32
+
+/* define the results values for comparisons so we can change them in only one place */
+#define PRTE_VALUE1_GREATER  +1
+#define PRTE_VALUE2_GREATER  -1
+#define PRTE_EQUAL            0
 
 /* error manager callback function */
-typedef void (*prte_err_cb_fn_t)(prte_process_name_t *proc, prte_proc_state_t state, void *cbdata);
+typedef void (*prte_err_cb_fn_t)(pmix_proc_t *proc, prte_proc_state_t state, void *cbdata);
 
 /* define an object for timer events */
 typedef struct {
@@ -225,7 +236,7 @@ typedef struct {
     /** State of the app_context */
     prte_app_state_t state;
     /** First MPI rank of this app_context in the job */
-    prte_vpid_t first_rank;
+    pmix_rank_t first_rank;
     /** Standard argv-style array, including a final NULL pointer */
     char  **argv;
     /** Standard environ-style array, including a final NULL pointer */
@@ -256,7 +267,7 @@ typedef struct {
     /* daemon on this node */
     struct prte_proc_t *daemon;
     /** number of procs on this node */
-    prte_vpid_t num_procs;
+    prte_node_rank_t num_procs;
     /* array of pointers to procs on this node */
     prte_pointer_array_t *procs;
     /* next node rank on this node */
@@ -303,11 +314,11 @@ typedef struct {
     /* personality for this job */
     char **personality;
     /* jobid for this job */
-    prte_jobid_t jobid;
     pmix_nspace_t nspace;
+    int index;  // index in the job array where this is stored
     /* offset to the total number of procs so shared memory
      * components can potentially connect to any spawned jobs*/
-    prte_vpid_t offset;
+    pmix_rank_t offset;
     /* app_context array for this job */
     prte_pointer_array_t *apps;
     /* number of app_contexts in the array */
@@ -315,11 +326,11 @@ typedef struct {
     /* rank desiring stdin - for now, either one rank, all ranks
      * (wildcard), or none (invalid)
      */
-    prte_vpid_t stdin_target;
+    pmix_rank_t stdin_target;
     /* total slots allocated to this job */
     int32_t total_slots_alloc;
     /* number of procs in this job */
-    prte_vpid_t num_procs;
+    pmix_rank_t num_procs;
     /* array of pointers to procs in this job */
     prte_pointer_array_t *procs;
     /* map of the job */
@@ -334,31 +345,31 @@ typedef struct {
     /* state of the overall job */
     prte_job_state_t state;
     /* number of procs mapped */
-    prte_vpid_t num_mapped;
+    pmix_rank_t num_mapped;
     /* number of procs launched */
-    prte_vpid_t num_launched;
+    pmix_rank_t num_launched;
     /* number of procs reporting contact info */
-    prte_vpid_t num_reported;
+    pmix_rank_t num_reported;
     /* number of procs terminated */
-    prte_vpid_t num_terminated;
+    pmix_rank_t num_terminated;
     /* number of daemons reported launched so we can track progress */
-    prte_vpid_t num_daemons_reported;
+    pmix_rank_t num_daemons_reported;
     /* number of procs ready for debug */
-    prte_vpid_t num_ready_for_debug;
+    pmix_rank_t num_ready_for_debug;
     /* originator of a dynamic spawn */
-    prte_process_name_t originator;
+    pmix_proc_t originator;
     /* number of local procs */
-    prte_vpid_t num_local_procs;
+    pmix_rank_t num_local_procs;
     /* flags */
     prte_job_flags_t flags;
     /* attributes */
     prte_list_t attributes;
     /* launch msg buffer */
-    prte_buffer_t launch_msg;
+    pmix_data_buffer_t launch_msg;
     /* track children of this job */
     prte_list_t children;
     /* track the launcher of these jobs */
-    prte_jobid_t launcher;
+    pmix_nspace_t launcher;
 } prte_job_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_t);
 
@@ -366,13 +377,13 @@ struct prte_proc_t {
     /** Base object so this can be put on a list */
     prte_list_item_t super;
     /* process name */
-    prte_process_name_t name;
+    pmix_proc_t name;
     prte_job_t *job;
     pmix_rank_t rank;
     /* the vpid of my parent - the daemon vpid for an app
      * or the vpid of the parent in the routing tree of
      * a daemon */
-    prte_vpid_t parent;
+    pmix_rank_t parent;
     /* pid */
     pid_t pid;
     /* local rank amongst my peers on the node
@@ -424,30 +435,81 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_proc_t);
  * an mpirun-unique qualifer to eliminate any global name
  * service
  */
-PRTE_EXPORT   prte_job_t* prte_get_job_data_object(prte_jobid_t job);
+PRTE_EXPORT prte_job_t* prte_get_job_data_object(const pmix_nspace_t job);
 
 /**
- * Set a job data object
- * This will return the 'old' object at the specified location.
- * If there was none then NULL is returned.
+ * Set a job data object - returns an error if it cannot add the object
+ * to the array
  */
-PRTE_EXPORT prte_job_t* prte_set_job_data_object(prte_jobid_t jobid, prte_job_t *jdata);
+PRTE_EXPORT int prte_set_job_data_object(prte_job_t *jdata);
+
+/** Pack/unpack a job object */
+PRTE_EXPORT int prte_job_pack(pmix_data_buffer_t *bkt,
+                              prte_job_t *job);
+PRTE_EXPORT int prte_job_unpack(pmix_data_buffer_t *bkt,
+                                prte_job_t **job);
+PRTE_EXPORT int prte_job_copy(prte_job_t **dest,
+                              prte_job_t *src);
+PRTE_EXPORT void prte_job_print(char **output,
+                                prte_job_t *jdata);
+
+/** Pack/unpack an app-context */
+PRTE_EXPORT int prte_app_pack(pmix_data_buffer_t *bkt,
+                              prte_app_context_t *app);
+PRTE_EXPORT int prte_app_unpack(pmix_data_buffer_t *bkt,
+                                prte_app_context_t **app);
+PRTE_EXPORT int prte_app_copy(prte_app_context_t **dest,
+                              prte_app_context_t *src);
+PRTE_EXPORT void prte_app_print(char **output,
+                                prte_job_t *jdata,
+                                prte_app_context_t *src);
+
+/** Pack/unpack a proc*/
+PRTE_EXPORT int prte_proc_pack(pmix_data_buffer_t *bkt,
+                               prte_proc_t *proc);
+PRTE_EXPORT int prte_proc_unpack(pmix_data_buffer_t *bkt,
+                                 prte_proc_t **proc);
+PRTE_EXPORT int prte_proc_copy(prte_proc_t **dest,
+                               prte_proc_t *src);
+PRTE_EXPORT void prte_proc_print(char **output,
+                                 prte_job_t *jdata,
+                                 prte_proc_t *src);
+
+/** Pack/unpack a job map */
+PRTE_EXPORT int prte_map_pack(pmix_data_buffer_t *bkt,
+                              struct prte_job_map_t *map);
+PRTE_EXPORT int prte_map_unpack(pmix_data_buffer_t *bkt,
+                                struct prte_job_map_t **map);
+PRTE_EXPORT int prte_map_copy(struct prte_job_map_t **dest,
+                              struct prte_job_map_t *src);
+PRTE_EXPORT void prte_map_print(char **output, prte_job_t *jdata);
+
+
+PRTE_EXPORT int prte_node_pack(pmix_data_buffer_t *bkt,
+                              prte_node_t *node);
+PRTE_EXPORT int prte_node_unpack(pmix_data_buffer_t *bkt,
+                                 prte_node_t **node);
+PRTE_EXPORT int prte_node_copy(prte_node_t **dest,
+                               prte_node_t *src);
+PRTE_EXPORT void prte_node_print(char **output,
+                                 prte_job_t *jdata,
+                                 prte_node_t *src);
 
 /**
  * Get a proc data object
  */
-PRTE_EXPORT prte_proc_t* prte_get_proc_object(prte_process_name_t *proc);
+PRTE_EXPORT prte_proc_t* prte_get_proc_object(const pmix_proc_t *proc);
 
 /**
  * Get the daemon vpid hosting a given proc
  */
-PRTE_EXPORT prte_vpid_t prte_get_proc_daemon_vpid(prte_process_name_t *proc);
+PRTE_EXPORT pmix_rank_t prte_get_proc_daemon_vpid(const pmix_proc_t *proc);
 
 /* Get the hostname of a proc */
-PRTE_EXPORT char* prte_get_proc_hostname(prte_process_name_t *proc);
+PRTE_EXPORT char* prte_get_proc_hostname(const pmix_proc_t *proc);
 
 /* get the node rank of a proc */
-PRTE_EXPORT prte_node_rank_t prte_get_proc_node_rank(prte_process_name_t *proc);
+PRTE_EXPORT prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc);
 
 /* check to see if two nodes match */
 PRTE_EXPORT bool prte_node_match(prte_node_t *n1, char *name);
@@ -513,11 +575,11 @@ PRTE_EXPORT extern float prte_max_timeout;
 PRTE_EXPORT extern prte_timer_t *prte_mpiexec_timeout;
 
 /* global arrays for data storage */
-PRTE_EXPORT extern prte_hash_table_t *prte_job_data;
+PRTE_EXPORT extern prte_pointer_array_t *prte_job_data;
 PRTE_EXPORT extern prte_pointer_array_t *prte_node_pool;
 PRTE_EXPORT extern prte_pointer_array_t *prte_node_topologies;
 PRTE_EXPORT extern prte_pointer_array_t *prte_local_children;
-PRTE_EXPORT extern prte_vpid_t prte_total_procs;
+PRTE_EXPORT extern pmix_rank_t prte_total_procs;
 
 /* IOF controls */
 /* generate new xterm windows to display output from specified ranks */

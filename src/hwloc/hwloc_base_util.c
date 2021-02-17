@@ -20,6 +20,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019-2020 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -2134,4 +2135,78 @@ int prte_hwloc_base_topology_set_flags (hwloc_topology_t topology, unsigned long
 #endif
     }
     return hwloc_topology_set_flags(topology, flags);
+}
+
+#define PRTE_HWLOC_MAX_STRING   2048
+
+static void print_hwloc_obj(char **output, char *prefix,
+                            hwloc_topology_t topo, hwloc_obj_t obj)
+{
+    hwloc_obj_t obj2;
+    char string[1024], *tmp, *tmp2, *pfx;
+    unsigned i;
+    struct hwloc_topology_support *support;
+
+    /* print the object type */
+    hwloc_obj_type_snprintf(string, 1024, obj, 1);
+    prte_asprintf(&pfx, "\n%s\t", (NULL == prefix) ? "" : prefix);
+    prte_asprintf(&tmp, "%sType: %s Number of child objects: %u%sName=%s",
+                  (NULL == prefix) ? "" : prefix, string, obj->arity,
+                  pfx, (NULL == obj->name) ? "NULL" : obj->name);
+    if (0 < hwloc_obj_attr_snprintf(string, 1024, obj, pfx, 1)) {
+        /* print the attributes */
+        prte_asprintf(&tmp2, "%s%s%s", tmp, pfx, string);
+        free(tmp);
+        tmp = tmp2;
+    }
+    /* print the cpusets - apparently, some new HWLOC types don't
+     * have cpusets, so protect ourselves here
+     */
+    if (NULL != obj->cpuset) {
+        hwloc_bitmap_snprintf(string, PRTE_HWLOC_MAX_STRING, obj->cpuset);
+        prte_asprintf(&tmp2, "%s%sCpuset:  %s", tmp, pfx, string);
+        free(tmp);
+        tmp = tmp2;
+    }
+    if (HWLOC_OBJ_MACHINE == obj->type) {
+        /* root level object - add support values */
+        support = (struct hwloc_topology_support*)hwloc_topology_get_support(topo);
+        prte_asprintf(&tmp2, "%s%sBind CPU proc:   %s%sBind CPU thread: %s", tmp, pfx,
+                      (support->cpubind->set_thisproc_cpubind) ? "TRUE" : "FALSE", pfx,
+                      (support->cpubind->set_thisthread_cpubind) ? "TRUE" : "FALSE");
+        free(tmp);
+        tmp = tmp2;
+        prte_asprintf(&tmp2, "%s%sBind MEM proc:   %s%sBind MEM thread: %s", tmp, pfx,
+                      (support->membind->set_thisproc_membind) ? "TRUE" : "FALSE", pfx,
+                      (support->membind->set_thisthread_membind) ? "TRUE" : "FALSE");
+        free(tmp);
+        tmp = tmp2;
+    }
+    prte_asprintf(&tmp2, "%s%s\n", (NULL == *output) ? "" : *output, tmp);
+    free(tmp);
+    free(pfx);
+    prte_asprintf(&pfx, "%s\t", (NULL == prefix) ? "" : prefix);
+    for (i=0; i < obj->arity; i++) {
+        obj2 = obj->children[i];
+        /* print the object */
+        print_hwloc_obj(&tmp2, pfx, topo, obj2);
+    }
+    free(pfx);
+    if (NULL != *output) {
+        free(*output);
+    }
+    *output = tmp2;
+}
+
+int prte_hwloc_print(char **output, char *prefix, hwloc_topology_t src)
+{
+    hwloc_obj_t obj;
+    char *tmp=NULL;
+
+    /* get root object */
+    obj = hwloc_get_root_obj(src);
+    /* print it */
+    print_hwloc_obj(&tmp, prefix, src, obj);
+    *output = tmp;
+    return PRTE_SUCCESS;
 }

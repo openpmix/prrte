@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,7 +61,6 @@
 #include "src/util/output.h"
 #include "src/util/net.h"
 #include "src/util/error.h"
-#include "src/class/prte_hash_table.h"
 #include "src/event/event-internal.h"
 
 #include "src/util/name_fns.h"
@@ -123,11 +123,9 @@ static int send_msg(prte_oob_tcp_peer_t* peer, prte_oob_tcp_send_t* msg)
         if (NULL != msg->data) {
             /* relay message - just send that data */
             iov[1].iov_base = msg->data;
-        } else if (NULL != msg->msg->buffer) {
-            /* buffer send */
-            iov[1].iov_base = msg->msg->buffer->base_ptr;
         } else {
-            iov[1].iov_base = msg->msg->data;
+            /* buffer send */
+            iov[1].iov_base = msg->msg->dbuf.base_ptr;
         }
         iov[1].iov_len = ntohl(msg->hdr.nbytes);
         remain += ntohl(msg->hdr.nbytes);
@@ -247,7 +245,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                                         (int)ntohl(msg->hdr.nbytes), peer->sd);
                     PRTE_RELEASE(msg);
                     peer->send_msg = NULL;
-                } else if (NULL != msg->msg->buffer) {
+                } else {
                     /* we are done - notify the RML */
                     prte_output_verbose(2, prte_oob_base_framework.framework_output,
                                         "%s MESSAGE SEND COMPLETE TO %s OF %d BYTES ON SOCKET %d",
@@ -258,42 +256,6 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                     PRTE_RML_SEND_COMPLETE(msg->msg);
                     PRTE_RELEASE(msg);
                     peer->send_msg = NULL;
-                } else if (NULL != msg->msg->data) {
-                    /* this was a relay we have now completed - no need to
-                     * notify the RML as the local proc didn't initiate
-                     * the send
-                     */
-                    prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                                        "%s MESSAGE RELAY COMPLETE TO %s OF %d BYTES ON SOCKET %d",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                        PRTE_NAME_PRINT(&(peer->name)),
-                                        (int)ntohl(msg->hdr.nbytes), peer->sd);
-                    msg->msg->status = PRTE_SUCCESS;
-                    PRTE_RELEASE(msg);
-                    peer->send_msg = NULL;
-                } else {
-                    /* rotate to the next iovec */
-                    msg->iovnum++;
-                    if (msg->iovnum < msg->msg->count) {
-                        msg->sdptr = msg->msg->iov[msg->iovnum].iov_base;
-                        msg->sdbytes = msg->msg->iov[msg->iovnum].iov_len;
-                        /* exit this event to give the event lib
-                         * a chance to progress any other pending
-                         * actions
-                         */
-                        return;
-                    } else {
-                        /* this message is complete - notify the RML */
-                        prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                                            "%s MESSAGE SEND COMPLETE TO %s OF %d BYTES ON SOCKET %d",
-                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                            PRTE_NAME_PRINT(&(peer->name)),
-                                            (int)ntohl(msg->hdr.nbytes), peer->sd);
-                        msg->msg->status = PRTE_SUCCESS;
-                        PRTE_RML_SEND_COMPLETE(msg->msg);
-                        PRTE_RELEASE(msg);
-                        peer->send_msg = NULL;
-                    }
                 }
                 /* fall thru to queue the next message */
             } else if (PRTE_ERR_RESOURCE_BUSY == rc ||
@@ -431,6 +393,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
     prte_oob_tcp_peer_t* peer = (prte_oob_tcp_peer_t*)cbdata;
     int rc;
     prte_rml_send_t *snd;
+    pmix_byte_object_t bo;
 
     PRTE_ACQUIRE_OBJECT(peer);
 
@@ -558,8 +521,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                                     peer->recv_msg->hdr.tag);
 
                 /* am I the intended recipient (header was already converted back to host order)? */
-                if (peer->recv_msg->hdr.dst.jobid == PRTE_PROC_MY_NAME->jobid &&
-                    peer->recv_msg->hdr.dst.vpid == PRTE_PROC_MY_NAME->vpid) {
+                if (PMIX_CHECK_PROCID(&peer->recv_msg->hdr.dst, PRTE_PROC_MY_NAME)) {
                     /* yes - post it to the RML for delivery */
                     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                         "%s DELIVERING TO RML tag = %d seq_num = %d",
@@ -581,17 +543,19 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                                         PRTE_NAME_PRINT(&peer->recv_msg->hdr.dst));
                     snd = PRTE_NEW(prte_rml_send_t);
                     snd->dst = peer->recv_msg->hdr.dst;
-                    snd->origin = peer->recv_msg->hdr.origin;
+                    PMIX_XFER_PROCID(&snd->origin, &peer->recv_msg->hdr.origin);
                     snd->tag = peer->recv_msg->hdr.tag;
-                    snd->data = peer->recv_msg->data;
+                    bo.bytes = peer->recv_msg->data;
+                    bo.size = peer->recv_msg->hdr.nbytes;
+                    rc = PMIx_Data_load(&snd->dbuf, &bo);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                    }
                     snd->seq_num = peer->recv_msg->hdr.seq_num;
-                    snd->count = peer->recv_msg->hdr.nbytes;
-                    snd->cbfunc.iov = NULL;
+                    snd->cbfunc = NULL;
                     snd->cbdata = NULL;
                     /* activate the OOB send state */
                     PRTE_OOB_SEND(snd);
-                    /* protect the data */
-                    peer->recv_msg->data = NULL;
                     /* cleanup */
                     PRTE_RELEASE(peer->recv_msg);
                 }

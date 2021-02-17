@@ -17,6 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,7 +37,6 @@
 #include "src/class/prte_bitmap.h"
 #include "src/class/prte_list.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/class/prte_hash_table.h"
 #include "src/event/event-internal.h"
 
 #include "src/mca/oob/oob.h"
@@ -52,7 +52,7 @@ typedef struct {
     int                  max_retries;        /**< max number of retries before declaring peer gone */
     prte_list_t          events;             /**< events for monitoring connections */
     int                  peer_limit;         /**< max size of tcp peer cache */
-    prte_hash_table_t    peers;              // connection addresses for peers
+    prte_list_t          peers;              // connection addresses for peers
 
     /* Port specifications */
     char*              if_include;           /**< list of ip interfaces to include */

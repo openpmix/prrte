@@ -16,6 +16,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -101,6 +102,7 @@ static int prte_iof_base_close(void)
             PRTE_RELEASE(prte_iof_base.iof_write_stderr);
         }
     }
+    PRTE_LIST_DESTRUCT(&prte_iof_base.requests);
     return prte_mca_base_framework_components_close(&prte_iof_base_framework, NULL);
 }
 
@@ -131,6 +133,7 @@ static int prte_iof_base_open(prte_mca_base_open_flag_t flags)
          * unix text utils).
          */
     }
+    PRTE_CONSTRUCT(&prte_iof_base.requests, prte_list_t);
 
     /* Open up all available components */
     return prte_mca_base_framework_components_open(&prte_iof_base_framework, flags);
@@ -187,11 +190,13 @@ PRTE_CLASS_INSTANCE(prte_iof_proc_t,
                    prte_iof_base_proc_construct,
                    prte_iof_base_proc_destruct);
 
+PRTE_CLASS_INSTANCE(prte_iof_request_t,
+                    prte_list_item_t,
+                    NULL, NULL);
 
 static void prte_iof_base_sink_construct(prte_iof_sink_t* ptr)
 {
-    ptr->daemon.jobid = PRTE_JOBID_INVALID;
-    ptr->daemon.vpid = PRTE_VPID_INVALID;
+    PMIX_LOAD_PROCID(&ptr->daemon, NULL, PMIX_RANK_INVALID);
     ptr->wev = PRTE_NEW(prte_iof_write_event_t);
     ptr->xoff = false;
     ptr->exclusive = false;
@@ -218,6 +223,8 @@ static void prte_iof_base_read_event_construct(prte_iof_read_event_t* rev)
     rev->proc = NULL;
     rev->fd = -1;
     rev->active = false;
+    rev->activated = false;
+    rev->always_readable = false;
     rev->ev = prte_event_alloc();
     rev->sink = NULL;
     rev->tv.tv_sec = 0;

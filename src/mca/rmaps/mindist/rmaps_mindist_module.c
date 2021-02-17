@@ -17,6 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2018 Mellanox Technologies, Inc.
  *                         All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -93,7 +94,7 @@ static int mindist_map(prte_job_t *jdata)
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:mindist: job %s is being restarted - mindist cannot map",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper &&
@@ -101,14 +102,14 @@ static int mindist_map(prte_job_t *jdata)
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:mindist: job %s not using mindist mapper",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (PRTE_MAPPING_BYDIST != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         /* not me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:mindist: job %s not using mindist mapper",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
@@ -137,7 +138,7 @@ static int mindist_map(prte_job_t *jdata)
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:mindist: mapping job %s",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* flag that I did the mapping */
     if (NULL != jdata->map->last_mapper) {
@@ -149,7 +150,7 @@ static int mindist_map(prte_job_t *jdata)
     jdata->num_procs = 0;
 
     /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
@@ -157,11 +158,11 @@ static int mindist_map(prte_job_t *jdata)
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PRTE_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING);
 
     /* get the target device */
     device = NULL;
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DIST_DEVICE, (void**)device, PRTE_STRING) ||
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DIST_DEVICE, (void**)device, PMIX_STRING) ||
         NULL == device) {
         if (NULL == job_cpuset) {
             free(job_cpuset);
@@ -408,7 +409,7 @@ static int mindist_map(prte_job_t *jdata)
                             }
                             nprocs_mapped++;
                             j++;
-                            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
                         }
                         if ((nprocs_mapped == (int)app->num_procs) || ((int)num_procs_to_assign == j)) {
                             break;
@@ -495,16 +496,16 @@ static int assign_locations(prte_job_t *jdata)
         /* the mapper should have been set to me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:mindist: job %s not using mindist mapper",
-                            PRTE_JOBID_PRINT(jdata->jobid));
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:mindist: assign locations for job %s",
-                        PRTE_JOBID_PRINT(jdata->jobid));
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         use_hwthread_cpus = true;
     } else {
         use_hwthread_cpus = false;
@@ -512,7 +513,7 @@ static int assign_locations(prte_job_t *jdata)
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PRTE_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING);
 
     /* start assigning procs to objects, filling each object as we go until
      * all procs are assigned. If one pass doesn't catch all the required procs,
@@ -575,10 +576,10 @@ static int assign_locations(prte_job_t *jdata)
                     if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, k))) {
                         continue;
                     }
-                    if (proc->name.jobid != jdata->jobid) {
+                    if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                         continue;
                     }
-                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PRTE_PTR);
+                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:mindist: assigning proc %d to numa %d", k, numa->index);
                     ++j;

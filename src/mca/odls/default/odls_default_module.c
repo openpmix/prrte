@@ -21,6 +21,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -140,9 +141,9 @@
 /*
  * Module functions (function pointers used in a struct)
  */
-static int prte_odls_default_launch_local_procs(prte_buffer_t *data);
+static int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data);
 static int prte_odls_default_kill_local_procs(prte_pointer_array_t *procs);
-static int prte_odls_default_signal_local_procs(const prte_process_name_t *proc, int32_t signal);
+static int prte_odls_default_signal_local_procs(const pmix_proc_t *proc, int32_t signal);
 static int prte_odls_default_restart_proc(prte_proc_t *child);
 
 /*
@@ -398,7 +399,7 @@ static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     }
 
 #if PRTE_HAVE_STOP_ON_EXEC
-    if (prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PRTE_BOOL)) {
+    if (prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
         errno = 0;
         i = ptrace(PRTE_TRACEME, 0, 0, 0);
         if  (0 != errno) {
@@ -450,7 +451,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 
 #if PRTE_HAVE_STOP_ON_EXEC
     if (NULL != cd->child &&
-        prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PRTE_BOOL)) {
+        prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
         rc = waitpid(cd->child->pid, &status, WUNTRACED);
         if (-1 == rc) {
             /* doomed */
@@ -662,10 +663,10 @@ static int odls_default_fork_local_proc(void *cdptr)
  * Launch all processes allocated to the current node.
  */
 
-int prte_odls_default_launch_local_procs(prte_buffer_t *data)
+int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data)
 {
     int rc;
-    prte_jobid_t job;
+    pmix_nspace_t job;
 
     /* construct the list of children we are to launch */
     if (PRTE_SUCCESS != (rc = prte_odls_base_default_construct_child_list(data, &job))) {
@@ -731,7 +732,7 @@ static int send_signal(pid_t pd, int signal)
     return rc;
 }
 
-static int prte_odls_default_signal_local_procs(const prte_process_name_t *proc, int32_t signal)
+static int prte_odls_default_signal_local_procs(const pmix_proc_t *proc, int32_t signal)
 {
     int rc;
 

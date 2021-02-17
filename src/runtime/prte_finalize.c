@@ -47,7 +47,8 @@
 
 int prte_finalize(void)
 {
-    int rc;
+    int rc, n;
+    prte_job_t *jdata = NULL, *child_jdata = NULL, *next_jdata = NULL;
 
     PRTE_ACQUIRE_THREAD(&prte_init_lock);
     if (!prte_initialized) {
@@ -69,10 +70,6 @@ int prte_finalize(void)
      * be ignored if no listeners were registered */
     prte_stop_listening();
 
-#if 0
-    uint32_t key;
-    prte_job_t *jdata = NULL, *child_jdata = NULL, *next_jdata = NULL;
-    void *elt = NULL;
     /* release the cache */
     PRTE_RELEASE(prte_cache);
 
@@ -80,34 +77,26 @@ int prte_finalize(void)
      *
      * There is the potential for a prte_job_t object to still be in the
      * children list of another prte_job_t object, both objects stored in the
-     * prte_job_data hash table. If this happens then an assert will be raised
+     * prte_job_data array. If this happens then an assert will be raised
      * when the first prte_job_t object is released when iterating over the
      * prte_job_data structure. Therefore, we traverse the children list of
      * every prte_job_t in the prte_job_data hash, removing all children
      * references before iterating over the prte_job_data hash table to
      * release the prte_job_t objects.
      */
-    PRTE_HASH_TABLE_FOREACH(key, uint32, jdata, prte_job_data) {
-        if (NULL != jdata) {
-            // Remove all children from the list
-            // We do not want to destruct this list here since that occurs in the
-            // prte_job_t destructor - which will happen in the next loop.
-            PRTE_LIST_FOREACH_SAFE(child_jdata, next_jdata, &jdata->children, prte_job_t) {
-                prte_list_remove_item(&jdata->children, &child_jdata->super);
-            }
+    for (n=0; n < prte_job_data->size; n++) {
+        jdata = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, n);
+        if (NULL == jdata) {
+            continue;
         }
+        // Remove all children from the list
+        // We do not want to destruct this list here since that occurs in the
+        // prte_job_t destructor - which will happen in the next loop.
+        PRTE_LIST_FOREACH_SAFE(child_jdata, next_jdata, &jdata->children, prte_job_t) {
+            prte_list_remove_item(&jdata->children, &child_jdata->super);
+        }
+        PRTE_RELEASE(jdata);
     }
-
-    jdata = NULL;
-    do {
-        rc = prte_hash_table_get_next_key_uint32(prte_job_data, &key, (void**)&jdata, NULL, &elt);
-        if (PRTE_SUCCESS == rc) {
-            prte_hash_table_remove_value_uint32(prte_job_data, key);
-            if (NULL != jdata) {
-                PRTE_RELEASE(jdata);
-            }
-        }
-    } while (PRTE_SUCCESS == rc);
     PRTE_RELEASE(prte_job_data);
 
     if (prte_do_not_launch) {
@@ -166,7 +155,6 @@ int prte_finalize(void)
     free (prte_process_info.nodename);
     prte_process_info.nodename = NULL;
 
-#endif
     /* call the finalize function for this environment */
     if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {
         return rc;

@@ -14,6 +14,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -215,7 +216,7 @@ prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts, char ***env)
 
 
 int
-prte_iof_base_setup_parent(const prte_process_name_t* name,
+prte_iof_base_setup_parent(const pmix_proc_t* name,
                            prte_iof_base_io_conf_t *opts)
 {
     int ret;
@@ -248,7 +249,7 @@ prte_iof_base_setup_parent(const prte_process_name_t* name,
     return PRTE_SUCCESS;
 }
 
-int prte_iof_base_setup_output_files(const prte_process_name_t* dst_name,
+int prte_iof_base_setup_output_files(const pmix_proc_t* dst_name,
                                      prte_job_t *jobdat,
                                      prte_iof_proc_t *proct)
 {
@@ -260,7 +261,7 @@ int prte_iof_base_setup_output_files(const prte_process_name_t* dst_name,
 
     /* see if we are to output to a directory */
     dirname = NULL;
-    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_OUTPUT_TO_DIRECTORY, (void**)&dirname, PRTE_STRING) &&
+    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_OUTPUT_TO_DIRECTORY, (void**)&dirname, PMIX_STRING) &&
         NULL != dirname) {
         np = jobdat->num_procs / 10;
         /* determine the number of digits required for max vpid */
@@ -292,12 +293,12 @@ int prte_iof_base_setup_output_files(const prte_process_name_t* dst_name,
 
         /* construct the directory where the output files will go */
         if (usejobid) {
-            prte_asprintf(&outdir, "%s/%d/rank.%0*lu", dirname,
-                     (int)PRTE_LOCAL_JOBID(proct->name.jobid),
-                     numdigs, (unsigned long)proct->name.vpid);
+            prte_asprintf(&outdir, "%s/%s/rank.%0*u", dirname,
+                          PRTE_LOCAL_JOBID_PRINT(proct->name.nspace),
+                          numdigs, proct->name.rank);
         } else {
-            prte_asprintf(&outdir, "%s/rank.%0*lu", dirname,
-                     numdigs, (unsigned long)proct->name.vpid);
+            prte_asprintf(&outdir, "%s/rank.%0*u", dirname,
+                          numdigs, proct->name.rank);
         }
         /* ensure the directory exists */
         if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(outdir, S_IRWXU|S_IRGRP|S_IXGRP))) {
@@ -325,7 +326,7 @@ int prte_iof_base_setup_output_files(const prte_process_name_t* dst_name,
             /* if they asked for stderr to be combined with stdout, then we
              * only create one file and tell the IOF to put both streams
              * into it. Otherwise, we create separate files for each stream */
-            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PRTE_BOOL)) {
+            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
                 /* just use the stdout sink */
                 PRTE_RETAIN(proct->revstdout->sink);
                 proct->revstdout->sink->tag = PRTE_IOF_STDMERGE;  // show that it is merged
@@ -350,7 +351,7 @@ int prte_iof_base_setup_output_files(const prte_process_name_t* dst_name,
 
     /* see if we are to output to a file */
     dirname = NULL;
-    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_OUTPUT_TO_FILE, (void**)&dirname, PRTE_STRING) &&
+    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_OUTPUT_TO_FILE, (void**)&dirname, PMIX_STRING) &&
         NULL != dirname) {
         np = jobdat->num_procs / 10;
         /* determine the number of digits required for max vpid */
@@ -389,9 +390,9 @@ int prte_iof_base_setup_output_files(const prte_process_name_t* dst_name,
         }
         if (NULL != proct->revstdout && NULL == proct->revstdout->sink) {
             /* setup the stdout sink */
-            prte_asprintf(&outfile, "%s.%d.%0*lu", dirname,
-                           (int)PRTE_LOCAL_JOBID(proct->name.jobid),
-                           numdigs, (unsigned long)proct->name.vpid);
+            prte_asprintf(&outfile, "%s.%s.%0*u", dirname,
+                          PRTE_LOCAL_JOBID_PRINT(proct->name.nspace),
+                          numdigs, proct->name.rank);
             fdout = open(outfile, O_CREAT|O_RDWR|O_TRUNC, 0644);
             free(outfile);
             if (fdout < 0) {
@@ -415,4 +416,42 @@ int prte_iof_base_setup_output_files(const prte_process_name_t* dst_name,
     }
 
     return PRTE_SUCCESS;
+}
+
+void prte_iof_base_check_target(prte_iof_proc_t *proct)
+{
+    prte_iof_request_t *preq;
+    prte_iof_sink_t *sink;
+
+    if (!proct->copy) {
+        return;
+    }
+
+    /* see if any tools are waiting for this proc */
+    PRTE_LIST_FOREACH(preq, &prte_iof_base.requests, prte_iof_request_t) {
+        if (PMIX_CHECK_PROCID(&preq->target, &proct->name)) {
+            if (NULL == proct->subscribers) {
+                proct->subscribers = PRTE_NEW(prte_list_t);
+            }
+            if (PRTE_IOF_STDOUT & preq->stream) {
+                PRTE_IOF_SINK_DEFINE(&sink, &proct->name, -1, PRTE_IOF_STDOUT, NULL);
+                PMIX_XFER_PROCID(&sink->daemon, &preq->requestor);
+                sink->exclusive = (PRTE_IOF_EXCLUSIVE & preq->stream);
+                prte_list_append(proct->subscribers, &sink->super);
+            }
+            if (!prte_iof_base.redirect_app_stderr_to_stdout &&
+                PRTE_IOF_STDERR & preq->stream) {
+                PRTE_IOF_SINK_DEFINE(&sink, &proct->name, -1, PRTE_IOF_STDERR, NULL);
+                PMIX_XFER_PROCID(&sink->daemon, &preq->requestor);
+                sink->exclusive = (PRTE_IOF_EXCLUSIVE & preq->stream);
+                prte_list_append(proct->subscribers, &sink->super);
+            }
+            if (PRTE_IOF_STDDIAG & preq->stream) {
+                PRTE_IOF_SINK_DEFINE(&sink, &proct->name, -1, PRTE_IOF_STDDIAG, NULL);
+                PMIX_XFER_PROCID(&sink->daemon, &preq->requestor);
+                sink->exclusive = (PRTE_IOF_EXCLUSIVE & preq->stream);
+                prte_list_append(proct->subscribers, &sink->super);
+            }
+        }
+    }
 }
