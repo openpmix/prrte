@@ -33,7 +33,6 @@
 #include "src/util/proc_info.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/errmgr/detector/errmgr_detector.h"
-#include "src/mca/prtecompress/prtecompress.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "grpcomm_bmg.h"
 
@@ -207,7 +206,6 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PRTE_FORCED_TERMINATE(ret);
-        PRTE_DESTRUCT(&coll);
         PMIX_DATA_BUFFER_RELEASE(rly);
         return;
     }
@@ -221,7 +219,6 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 PRTE_FORCED_TERMINATE(ret);
                 PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-                PRTE_DESTRUCT(&coll);
                 PMIX_DATA_BUFFER_RELEASE(rly);
                 return;
             }
@@ -230,7 +227,6 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             PRTE_FORCED_TERMINATE(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-            PRTE_DESTRUCT(&coll);
             PMIX_DATA_BUFFER_RELEASE(rly);
             return;
         }
@@ -240,7 +236,6 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             PRTE_FORCED_TERMINATE(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-            PRTE_DESTRUCT(&coll);
             PMIX_DATA_BUFFER_RELEASE(rly);
             return;
         }
