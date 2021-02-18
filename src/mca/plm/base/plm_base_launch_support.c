@@ -1042,7 +1042,7 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t* sender,
     PMIX_DATA_BUFFER_CONSTRUCT(&datbuf);
     /* unpack the flag to see if this payload is compressed */
     idx=1;
-    rc = PMIx_Data_unpack(NULL, buffer, &flag, &idx, PMIX_INT8);
+    rc = PMIx_Data_unpack(NULL, buffer, &flag, &idx, PMIX_BOOL);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         prted_failed_launch = true;
