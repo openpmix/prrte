@@ -17,6 +17,7 @@
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,12 +44,8 @@
  * Local functions
  */
 
-static int prte_rmaps_rank_file_register(void);
-static int prte_rmaps_rank_file_open(void);
-static int prte_rmaps_rank_file_close(void);
 static int prte_rmaps_rank_file_query(prte_mca_base_module_t **module, int *priority);
 
-static int my_priority;
 
 prte_rmaps_rf_component_t prte_rmaps_rank_file_component = {
     {
@@ -61,10 +58,7 @@ prte_rmaps_rf_component_t prte_rmaps_rank_file_component = {
             .mca_component_name = "rank_file",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                         PRTE_RELEASE_VERSION),
-            .mca_open_component = prte_rmaps_rank_file_open,
-            .mca_close_component = prte_rmaps_rank_file_close,
             .mca_query_component = prte_rmaps_rank_file_query,
-            .mca_register_component_params = prte_rmaps_rank_file_register,
         },
         .base_data = {
             /* The component is checkpoint ready */
@@ -73,78 +67,10 @@ prte_rmaps_rf_component_t prte_rmaps_rank_file_component = {
     }
 };
 
-/**
-  * component register/open/close/init function
-  */
-static int prte_rmaps_rank_file_register(void)
-{
-    prte_mca_base_component_t *c = &prte_rmaps_rank_file_component.super.base_version;
-    int tmp;
-
-    my_priority = 0;
-    (void) prte_mca_base_component_var_register(c, "priority", "Priority of the rank_file rmaps component",
-                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                           PRTE_INFO_LVL_9,
-                                           PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
-    tmp = prte_mca_base_component_var_register(c, "path",
-                                          "Name of the rankfile to be used for mapping processes (relative or absolute path)",
-                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_5,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_rankfile);
-    (void) prte_mca_base_var_register_synonym(tmp, "prte", "prte", NULL, "rankfile", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
-
-    prte_rmaps_rank_file_component.physical = false;
-    (void) prte_mca_base_component_var_register(c, "physical", "Rankfile contains physical cpu designations",
-                                           PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                           PRTE_INFO_LVL_5,
-                                           PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                           &prte_rmaps_rank_file_component.physical);
-
-
-    return PRTE_SUCCESS;
-}
-
-static int prte_rmaps_rank_file_open(void)
-{
-    /* ensure we flag mapping by user */
-    if (NULL != prte_rankfile) {
-        if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping)) {
-            /* if a non-default mapping is already specified, then we
-             * have an error
-             */
-            prte_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "mapping",
-                           "RANK_FILE", prte_rmaps_base_print_mapping(prte_rmaps_base.mapping));
-            PRTE_SET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping, PRTE_MAPPING_CONFLICTED);
-            return PRTE_ERR_SILENT;
-        }
-        PRTE_SET_MAPPING_POLICY(prte_rmaps_base.mapping, PRTE_MAPPING_BYUSER);
-        PRTE_SET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping, PRTE_MAPPING_GIVEN);
-        /* make us first */
-        my_priority = 10000;
-    }
-
-    return PRTE_SUCCESS;
-}
-
 static int prte_rmaps_rank_file_query(prte_mca_base_module_t **module, int *priority)
 {
-    *priority = my_priority;
+    *priority = 0;
     *module = (prte_mca_base_module_t *)&prte_rmaps_rank_file_module;
-    return PRTE_SUCCESS;
-}
-
-/**
- *  Close all subsystems.
- */
-
-static int prte_rmaps_rank_file_close(void)
-{
-    int tmp = prte_mca_base_var_find("prte", "prte", NULL, "rankfile");
-
-    if (0 <= tmp) {
-        prte_mca_base_var_deregister(tmp);
-    }
-
     return PRTE_SUCCESS;
 }
 

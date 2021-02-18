@@ -197,8 +197,23 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
             continue;
         }
 
-        /* dash-host trumps hostfile */
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
+        /* specified seq file trumps all */
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void**)&hosts, PMIX_STRING)) {
+            if (NULL == hosts) {
+                rc = PRTE_ERR_NOT_FOUND;
+                goto error;
+            }
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts, app->app);
+            PRTE_CONSTRUCT(&sq_list, prte_list_t);
+            rc = process_file(hosts, &sq_list);
+            free(hosts);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_LIST_DESTRUCT(&sq_list);
+                goto error;
+            }
+            seq_list = &sq_list;
+        } else if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using dash-host nodes on app %s", app->app);
             PRTE_CONSTRUCT(&node_list, prte_list_t);

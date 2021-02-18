@@ -150,10 +150,6 @@ static prte_cmd_line_init_t cmd_line_init[] = {
       "Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]",
       PRTE_CMD_LINE_OTYPE_LAUNCH },
 
-    { '\0', "rankfile", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Name of file to specify explicit task mapping",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-
     /* mpiexec mandated form launch key parameters */
     { '\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Specify the initial error handler that is attached to predefined communicators during the first MPI call.",
@@ -364,6 +360,12 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--tune")) {
         rc = prte_schizo_base_convert(argv, i, 2, "--tune", NULL, NULL);
     }
+    /* --rankfile X -> map-by rankfile:file=X */
+    else if (0 == strcmp(option, "--rankfile")) {
+        prte_asprintf(&p2, "rankfile:file=%s", pargs[i+1]);
+        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
+        free(p2);
+    }
 
     return rc;
 }
@@ -391,6 +393,7 @@ static void register_deprecated_cli(prte_list_t *convertors)
         "--ppr",
         "--amca",
         "--am",
+        "--rankfile",
         NULL
     };
 
@@ -944,11 +947,6 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         xparams = NULL;
         prte_argv_free(xvals);
         xvals = NULL;
-    }
-
-    /* Check for rankfile option */
-    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "rankfile", 0, 0))) {
-        prte_rankfile = strdup(pval->value.data.string);
     }
 
     /* now process any tune file specification - the tune file processor

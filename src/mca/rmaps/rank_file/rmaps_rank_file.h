@@ -14,6 +14,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +44,6 @@ int prte_rmaps_rank_file_lex_destroy (void);
 struct prte_rmaps_rf_component_t {
     prte_rmaps_base_component_t super;
     char *slot_list;
-    bool physical;
 };
 typedef struct prte_rmaps_rf_component_t prte_rmaps_rf_component_t;
 
