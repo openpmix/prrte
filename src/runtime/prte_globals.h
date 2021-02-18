@@ -591,7 +591,6 @@ PRTE_EXPORT extern bool prte_report_launch_progress;
 /* allocation specification */
 PRTE_EXPORT extern char *prte_default_hostfile;
 PRTE_EXPORT extern bool prte_default_hostfile_given;
-PRTE_EXPORT extern char *prte_rankfile;
 PRTE_EXPORT extern int prte_num_allocated_nodes;
 PRTE_EXPORT extern char *prte_default_dash_host;
 

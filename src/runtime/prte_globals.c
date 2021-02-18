@@ -135,7 +135,6 @@ bool prte_report_launch_progress = false;
 /* allocation specification */
 char *prte_default_hostfile = NULL;
 bool prte_default_hostfile_given = false;
-char *prte_rankfile = NULL;
 int prte_num_allocated_nodes = 0;
 char *prte_default_dash_host = NULL;
 

@@ -194,6 +194,10 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         free(tmp);
     } else if (PRTE_MAPPING_SEQ == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         sequential = true;
+    } else if (PRTE_MAPPING_BYUSER == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        /* defer */
+        nprocs = 10; // number doesn't matter as long as it is > 2
+        goto compute;
     }
 
     /* estimate the number of procs for assigning default mapping/ranking policies */
@@ -223,6 +227,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
     }
 
+compute:
     /* set some convenience params */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
         cpus_per_rank = u16;

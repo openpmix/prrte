@@ -2098,61 +2098,66 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         default_hostfile_used = false;
         PRTE_CONSTRUCT(&tnodes, prte_list_t);
-        for (i=0; i < jdata->apps->size; i++) {
-            if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
-                continue;
+        hosts = NULL;
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void**)&hosts, PMIX_STRING)) {
+            /* use the file, if provided */
+            PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                                 "%s using rank/seqfile %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 hosts));
+            if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&tnodes, hosts))) {
+                PRTE_ERROR_LOG(rc);
+                free(hosts);
+                return rc;
             }
-            /* if the app provided a dash-host, then use those nodes */
-            hosts = NULL;
-            if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
-                PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                     "%s using dash_host",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-                if (PRTE_SUCCESS != (rc = prte_util_add_dash_host_nodes(&tnodes, hosts, false))) {
-                    PRTE_ERROR_LOG(rc);
-                    free(hosts);
-                    return rc;
+            free(hosts);
+        } else {
+            for (i=0; i < jdata->apps->size; i++) {
+                if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
+                    continue;
                 }
-                free(hosts);
-            } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
-                /* otherwise, if the app provided a hostfile, then use that */
-                PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                     "%s using hostfile %s",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
-                if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&tnodes, hosts))) {
-                    PRTE_ERROR_LOG(rc);
-                    free(hosts);
-                    return rc;
-                }
-                free(hosts);
-            } else if (NULL != prte_rankfile) {
-                /* use the rankfile, if provided */
-                PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                     "%s using rankfile %s",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     prte_rankfile));
-                if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&tnodes,
-                                                                       prte_rankfile))) {
-                    PRTE_ERROR_LOG(rc);
-                    return rc;
-                }
-            } else if (NULL != prte_default_hostfile) {
-                if (!default_hostfile_used) {
-                    /* fall back to the default hostfile, if provided */
+                /* if the app provided a dash-host, then use those nodes */
+                hosts = NULL;
+                if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
                     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                         "%s using default hostfile %s",
-                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                         prte_default_hostfile));
-                    if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&tnodes,
-                                                                           prte_default_hostfile))) {
+                                         "%s using dash_host",
+                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    if (PRTE_SUCCESS != (rc = prte_util_add_dash_host_nodes(&tnodes, hosts, false))) {
                         PRTE_ERROR_LOG(rc);
+                        free(hosts);
                         return rc;
                     }
-                    /* only include it once */
-                    default_hostfile_used = true;
+                    free(hosts);
+                } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
+                    /* otherwise, if the app provided a hostfile, then use that */
+                    PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                                         "%s using hostfile %s",
+                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
+                    if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&tnodes, hosts))) {
+                        PRTE_ERROR_LOG(rc);
+                        free(hosts);
+                        return rc;
+                    }
+                    free(hosts);
+                } else if (NULL != prte_default_hostfile) {
+                    if (!default_hostfile_used) {
+                        /* fall back to the default hostfile, if provided */
+                        PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                                             "%s using default hostfile %s",
+                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                             prte_default_hostfile));
+                        if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&tnodes,
+                                                                               prte_default_hostfile))) {
+                            PRTE_ERROR_LOG(rc);
+                            return rc;
+                        }
+                        /* only include it once */
+                        default_hostfile_used = true;
+                    }
                 }
             }
         }
+
         /* cycle thru the resulting list, finding the nodes on
          * the node pool array while removing ourselves
          * and all nodes that are down or otherwise unusable

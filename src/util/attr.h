@@ -186,6 +186,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_CORE_CPUS              (PRTE_JOB_START_KEY + 80)    // bool - job requests core cpus
 #define PRTE_JOB_PPR                    (PRTE_JOB_START_KEY + 81)    // char* - string specifying the procs-per-resource pattern
 #define PRTE_JOB_NOINHERIT              (PRTE_JOB_START_KEY + 82)    // bool do NOT inherit parent's mapping/ranking/binding policies
+#define PRTE_JOB_FILE                   (PRTE_JOB_START_KEY + 83)    // char* - file to use for sequential or rankfile mapping
 
 #define PRTE_JOB_MAX_KEY   300
 

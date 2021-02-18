@@ -287,22 +287,23 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* nothing was found, or no active module was alive. We first see
-     * if we were given a rankfile - if so, use it as the hosts will be
+     * if we were given a rank/seqfile - if so, use it as the hosts will be
      * taken from the mapping */
-    if (NULL != prte_rankfile) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void**)&hosts, PMIX_STRING)) {
         PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-                             "%s ras:base:allocate parsing rankfile %s",
+                             "%s ras:base:allocate parsing rank/seqfile %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             prte_rankfile));
+                             hosts));
 
-        /* a rankfile was provided - parse it */
-        if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes,
-                                                               prte_rankfile))) {
+        /* a rank/seqfile was provided - parse it */
+        if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hosts))) {
             PRTE_DESTRUCT(&nodes);
             PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
             PRTE_RELEASE(caddy);
+            free(hosts);
             return;
         }
+        free(hosts);
     }
 
     /* if something was found in the rankfile, we use that as our global

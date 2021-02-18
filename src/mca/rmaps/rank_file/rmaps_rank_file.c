@@ -90,6 +90,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     prte_mca_base_component_t *c = &prte_rmaps_rank_file_component.super.base_version;
     char *slots, *jobslots = NULL;
     bool initial_map=true;
+    char *rankfile = NULL;
 
     /* only handle initial launch of rf job */
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
@@ -106,14 +107,29 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    if (PRTE_MAPPING_BYUSER != PRTE_GET_MAPPING_POLICY(prte_rmaps_base.mapping)) {
+    if (PRTE_MAPPING_BYUSER != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         /* NOT FOR US */
+        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                            "mca:rmaps:rf: job %s not using rankfile policy",
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (PRTE_BIND_ORDERED_REQUESTED(jdata->map->binding)) {
         /* NOT FOR US */
+        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                            "mca:rmaps:rf: job %s binding order requested - rank_file cannot map",
+                            PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void**)&rankfile, PMIX_STRING) ||
+        NULL == rankfile) {
+        /* we cannot do it */
+        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                            "mca:rmaps:rf: job %s no rankfile specified",
+                            PRTE_JOBID_PRINT(jdata->nspace));
+        return PRTE_ERR_BAD_PARAM;
+    }
+
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rank_file: mapping job %s",
                         PRTE_JOBID_PRINT(jdata->nspace));
@@ -160,15 +176,13 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     PRTE_CONSTRUCT(&rankmap, prte_pointer_array_t);
 
     /* parse the rankfile, storing its results in the rankmap */
-    if ( NULL != prte_rankfile ) {
-        if ( PRTE_SUCCESS != (rc = prte_rmaps_rank_file_parse(prte_rankfile))) {
-            PRTE_ERROR_LOG(rc);
-            goto error;
-        }
+    if (PRTE_SUCCESS != (rc = prte_rmaps_rank_file_parse(rankfile))) {
+        rc = PRTE_ERR_SILENT;
+        goto error;
     }
 
     /* cycle through the app_contexts, mapping them sequentially */
-    for(i=0; i < jdata->apps->size; i++) {
+    for (i=0; i < jdata->apps->size; i++) {
         if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
@@ -187,15 +201,13 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
 
         /* we already checked for sanity, so it's okay to just do here */
         if (0 == app->num_procs) {
-            if (NULL != prte_rankfile) {
-                /* if we were given a rankfile, then we set the number of procs
-                 * to the number of entries in that rankfile
-                 */
-                app->num_procs = num_ranks;
-            } else {
-                /** set the num_procs to equal the number of slots on these mapped nodes */
-                app->num_procs = num_slots;
-            }
+            /* set the number of procs to the number of entries in that rankfile */
+            app->num_procs = num_ranks;
+        }
+        if (0 == app->num_procs) {
+            prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+            rc = PRTE_ERR_SILENT;
+            goto error;
         }
         for (k=0; k < app->num_procs; k++) {
             rank = vpid_start + k;
@@ -209,7 +221,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                     slots = prte_hwloc_default_cpu_list;
                 } else {
                     /* all ranks must be specified */
-                    prte_show_help("help-rmaps_rank_file.txt", "missing-rank", true, rank, prte_rankfile);
+                    prte_show_help("help-rmaps_rank_file.txt", "missing-rank", true, rank, rankfile);
                     rc = PRTE_ERR_SILENT;
                     goto error;
                 }
@@ -237,11 +249,12 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                 }
                 /* if we still have nothing, then something is very wrong */
                 if (NULL == node) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                     rc = PRTE_ERR_OUT_OF_RESOURCE;
                     goto error;
                 }
             } else {
-                if (0 == strlen(rfmap->slot_list)) {
+               if (0 == strlen(rfmap->slot_list)) {
                     /* rank was specified but no slot list given - that's an error */
                     prte_show_help("help-rmaps_rank_file.txt","no-slot-list", true, rank, rfmap->node_name);
                     rc = PRTE_ERR_SILENT;
@@ -287,7 +300,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
                 ++(jdata->map->num_nodes);
             }
-            if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, i))) {
+           if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, i))) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 rc = PRTE_ERR_OUT_OF_RESOURCE;
                 goto error;
@@ -372,10 +385,16 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     /* mark the job as fully described */
     prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
 
+    if (NULL != rankfile) {
+        free(rankfile);
+    }
     return rc;
 
  error:
     PRTE_LIST_DESTRUCT(&node_list);
+    if (NULL != rankfile) {
+        free(rankfile);
+    }
 
     return rc;
 }
@@ -408,7 +427,6 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
     if (NULL == prte_rmaps_rank_file_in) {
         prte_show_help("help-rmaps_rank_file.txt", "no-rankfile", true, rankfile);
         rc = PRTE_ERR_NOT_FOUND;
-        PRTE_ERROR_LOG(rc);
         goto unlock;
     }
 

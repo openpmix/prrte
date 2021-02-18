@@ -70,6 +70,9 @@ typedef struct {
     bool inherit;
     /* whether or not we are using hwthreads as independent cpus by default */
     bool hwthread_cpus;
+    /* default file for use in sequential and rankfile mapping
+     * when the directive comes thru MCA param */
+    char *file;
 } prte_rmaps_base_t;
 
 /**
