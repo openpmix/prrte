@@ -1226,19 +1226,38 @@ pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
 {
     prte_iof_sink_t *sink;
     size_t i;
+    bool stop = false;
+
+    /* no really good way to do this - we have to search the directives to
+     * see if we are being asked to stop the specified channels before
+     * we can process them */
+    for (i=0; i < ndirs; i++) {
+        if (PMIX_CHECK_KEY(&directives[i], PMIX_IOF_STOP)) {
+            stop = PMIX_INFO_TRUE(&directives[i]);
+            break;
+        }
+    }
 
     /* Set up I/O forwarding sinks and handlers for stdout and stderr for each proc 
      * requesting I/O forwarding */
     for (i = 0; i < nprocs; i++) {
         if (channels & PMIX_FWD_STDOUT_CHANNEL) {
-            PRTE_IOF_SINK_DEFINE(&sink, &procs[i], fileno(stdout), PRTE_IOF_STDOUT,
-                                 prte_iof_base_write_handler);
-            PRTE_IOF_SINK_ACTIVATE(sink->wev);
+            if (stop) {
+                /* ask the IOF to stop forwarding this channel */
+            } else {
+                PRTE_IOF_SINK_DEFINE(&sink, &procs[i], fileno(stdout), PRTE_IOF_STDOUT,
+                                     prte_iof_base_write_handler);
+                PRTE_IOF_SINK_ACTIVATE(sink->wev);
+            }
         }
         if (channels & PMIX_FWD_STDERR_CHANNEL) {
-            PRTE_IOF_SINK_DEFINE(&sink, &procs[i], fileno(stderr), PRTE_IOF_STDERR,
-                                 prte_iof_base_write_handler);
-            PRTE_IOF_SINK_ACTIVATE(sink->wev);
+            if (stop) {
+                /* ask the IOF to stop forwarding this channel */
+            } else {
+                PRTE_IOF_SINK_DEFINE(&sink, &procs[i], fileno(stderr), PRTE_IOF_STDERR,
+                                     prte_iof_base_write_handler);
+                PRTE_IOF_SINK_ACTIVATE(sink->wev);
+            }
         }
     }
     return PMIX_OPERATION_SUCCEEDED;
