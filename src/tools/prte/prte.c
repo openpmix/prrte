@@ -871,42 +871,51 @@ int main(int argc, char *argv[])
     prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON,
                             PRTE_RML_PERSISTENT, prte_daemon_recv, NULL);
 
+    /* default to a persistent DVM */
+    prte_persistent = true;
+
+    /* if we are told to daemonize, then we cannot have apps */
+    if (!prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
+        /* see if they want to run an application - let's parse
+         * the cmd line to get it */
+        rc = parse_locals(&apps, pargc, pargv);
+
+        /* did they provide an app? */
+        if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
+            if (proxyrun) {
+                prte_show_help("help-prun.txt", "prun:executable-not-specified",
+                               true, prte_tool_basename, prte_tool_basename);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+            /* nope - just need to wait for instructions */
+        } else {
+            /* they did provide an app - this is only allowed
+             * when running as a proxy! */
+            if (!proxyrun) {
+                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given",
+                               true, prte_tool_basename, prte_tool_basename);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+            /* mark that we are not a persistent DVM */
+            prte_persistent = false;
+        }
+    }
+
     /* spawn the DVM - we skip the initial steps as this
      * isn't a user-level application */
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOCATE);
 
-    if (prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
-        /* cannot be any apps */
+    /* we need to loop the event library until the DVM is alive */
+    while (prte_event_base_active && !prte_dvm_ready) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+    }
+
+    if (prte_persistent) {
         goto proceed;
     }
 
-    /* see if they want to run an application - let's parse
-     * the cmd line to get it */
-    rc = parse_locals(&apps, pargc, pargv);
-
-    /* did they provide an app? */
-    if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
-        if (proxyrun) {
-            prte_show_help("help-prun.txt", "prun:executable-not-specified",
-                           true, prte_tool_basename, prte_tool_basename);
-            PRTE_UPDATE_EXIT_STATUS(rc);
-            goto DONE;
-        }
-        /* nope - just need to wait for instructions */
-        goto proceed;
-    } else {
-        /* they did provide an app - this is only allowed
-         * when running as a proxy! */
-        if (!proxyrun) {
-            prte_show_help("help-prun.txt", "prun:executable-incorrectly-given",
-                           true, prte_tool_basename, prte_tool_basename);
-            PRTE_UPDATE_EXIT_STATUS(rc);
-            goto DONE;
-        }
-    }
-
-    /* mark that we are not a persistent DVM */
-    prte_persistent = false;
     /* setup to capture job-level info */
     PMIX_INFO_LIST_START(jinfo);
 

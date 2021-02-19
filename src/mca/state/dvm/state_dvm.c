@@ -538,6 +538,7 @@ static void check_complete(int fd, short args, void *cbdata)
             }
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             PRTE_RELEASE(caddy);
+            prte_dvm_ready = false;
             return;
         }
         PRTE_RELEASE(caddy);

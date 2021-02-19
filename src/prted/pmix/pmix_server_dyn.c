@@ -630,6 +630,8 @@ static void interim(int sd, short args, void *cbdata)
         PMIX_LOAD_NSPACE(nspace, NULL);
         prc = prte_pmix_convert_rc(rc);
         cd->spcbfunc(prc, nspace, cd->cbdata);
+        /* this isn't going to launch, so indicate that */
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
     }
     PRTE_RELEASE(cd);
 }

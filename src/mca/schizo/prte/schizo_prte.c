@@ -833,6 +833,47 @@ static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
 
 static int check_sanity(prte_cmd_line_t *cmd_line)
 {
+    prte_value_t *pval;
+    int n;
+    char **args;
+    char *mappers[] = {
+        "slot",
+        "hwthread",
+        "core",
+        "l1cache",
+        "l2cache",
+        "l3cache",
+        "package",
+        "node",
+        "seq",
+        "dist",
+        "ppr",
+        "rankfile",
+        NULL
+    };
+    char *rankers[] = {
+        "slot",
+        "hwthread",
+        "core",
+        "l1cache",
+        "l2cache",
+        "l3cache",
+        "package",
+        "node",
+        NULL
+    };
+    char *binders[] = {
+        "none",
+        "hwthread",
+        "core",
+        "l1cache",
+        "l2cache",
+        "l3cache",
+        "package",
+        NULL
+    };
+    bool good;
+
     if (1 < prte_cmd_line_get_ninsts(cmd_line, "map-by")) {
         prte_show_help("help-schizo-base.txt", "multi-instances",
                        true, "map-by");
@@ -848,5 +889,64 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
                        true, "bind-to");
         return PRTE_ERR_SILENT;
     }
+
+    /* quick check that we have valid directives */
+    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "map-by", 0, 0))) {
+        args = prte_argv_split(pval->value.data.string, ':');
+        good = false;
+        for (n=0; NULL != mappers[n]; n++) {
+            if (0 == strcasecmp(args[0], mappers[n])) {
+                good = true;
+                break;
+            }
+        }
+        if (!good) {
+            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "mapping", args[0]);
+        }
+        prte_argv_free(args);
+        if (good) {
+            return PRTE_SUCCESS;
+        }
+        return PRTE_ERR_SILENT;
+    }
+
+    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "rank-by", 0, 0))) {
+        args = prte_argv_split(pval->value.data.string, ':');
+        good = false;
+        for (n=0; NULL != rankers[n]; n++) {
+            if (0 == strcasecmp(args[0], rankers[n])) {
+                good = true;
+                break;
+            }
+        }
+        if (!good) {
+            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "ranking", args[0]);
+        }
+        prte_argv_free(args);
+        if (good) {
+            return PRTE_SUCCESS;
+        }
+        return PRTE_ERR_SILENT;
+    }
+
+    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "bind-to", 0, 0))) {
+        args = prte_argv_split(pval->value.data.string, ':');
+        good = false;
+        for (n=0; NULL != binders[n]; n++) {
+            if (0 == strcasecmp(args[0], binders[n])) {
+                good = true;
+                break;
+            }
+        }
+        if (!good) {
+            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "binding", args[0]);
+        }
+        prte_argv_free(args);
+        if (good) {
+            return PRTE_SUCCESS;
+        }
+        return PRTE_ERR_SILENT;
+    }
+
     return PRTE_SUCCESS;
 }
