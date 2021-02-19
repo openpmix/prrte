@@ -987,7 +987,7 @@ static void rollup(int status, pmix_proc_t* sender,
 {
     pmix_proc_t child;
     int32_t flag, cnt;
-    pmix_byte_object_t *boptr;
+    pmix_byte_object_t bo;
     pmix_data_buffer_t pbkt;
     pmix_info_t *info;
     pmix_proc_t proc;
@@ -1006,7 +1006,7 @@ static void rollup(int status, pmix_proc_t* sender,
             goto report;
         }
     } else {
-        /* xfer the contents of the rollup to our bucket */
+       /* xfer the contents of the rollup to our bucket */
         prc = PMIx_Data_copy_payload(bucket, buffer);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
@@ -1027,26 +1027,28 @@ static void rollup(int status, pmix_proc_t* sender,
             goto report;
         }
         if (0 < flag) {
-            PMIX_LOAD_PROCID(&proc, prte_process_info.myproc.nspace, sender->rank);
+           PMIX_LOAD_PROCID(&proc, prte_process_info.myproc.nspace, sender->rank);
             /* we have connection info */
             cnt = 1;
-            prc = PMIx_Data_unpack(&proc, buffer, &boptr, &cnt, PMIX_BYTE_OBJECT);
+            prc = PMIx_Data_unpack(&proc, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
             if (PMIX_SUCCESS != prc) {
                 PMIX_ERROR_LOG(prc);
                 goto report;
             }
             /* it was packed using PMIx, so unpack it the same way */
             PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-            prc = PMIx_Data_load(&pbkt, boptr);
+            prc = PMIx_Data_load(&pbkt, &bo);
             cnt = 1;
             if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&proc, &pbkt, &ninfo, &cnt, PMIX_SIZE))) {
                 PMIX_ERROR_LOG(prc);
+                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 goto report;
             }
             PMIX_INFO_CREATE(info, ninfo);
             cnt = ninfo;
             if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&proc, &pbkt, (void*)info, &cnt, PMIX_INFO))) {
                 PMIX_ERROR_LOG(prc);
+                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 goto report;
             }
             for (cnt=0; cnt < (int)ninfo; cnt++) {
@@ -1054,6 +1056,7 @@ static void rollup(int status, pmix_proc_t* sender,
                 if (PMIX_SUCCESS != prc) {
                     PMIX_ERROR_LOG(prc);
                     PMIX_INFO_FREE(info, (size_t)flag);
+                    PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                     goto report;
                 }
             }
