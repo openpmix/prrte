@@ -303,48 +303,48 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
 
     /* --display-devel-map  ->  map-by :displaydevel */
     if (0 == strcmp(option, "--display-devel-map")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDEVEL");
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDEVEL", true);
     }
     /* --display-map  ->  --map-by :display */
     else if (0 == strcmp(option, "--display-map")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAY");
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAY", true);
     }
     /* --display-topo  ->  --map-by :displaytopo */
     else if (0 == strcmp(option, "--display-topo")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYTOPO");
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYTOPO", true);
     }
     /* --display-diffable-map  ->  --map-by :displaydiff */
     else if (0 == strcmp(option, "--display-diff")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDIFF");
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDIFF", true);
     }
     /* --report-bindings  ->  --bind-to :report */
     else if (0 == strcmp(option, "--report-bindings")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", NULL, "REPORT");
+        rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", NULL, "REPORT", true);
     }
     /* --display-allocation  ->  --map-by :displayalloc */
     else if (0 == strcmp(option, "--display-allocation")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYALLOC");
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYALLOC", true);
     }
     /* --do-not-launch  ->   --map-by :donotlaunch*/
     else if (0 == strcmp(option, "--do-not-launch")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DONOTLAUNCH");
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DONOTLAUNCH", true);
     }
     /* --tag-output  ->  --map-by :tagoutput */
     else if (0 == strcmp(option, "--tag-output")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "TAGOUTPUT");
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "TAGOUTPUT", true);
     }
     /* --timestamp-output  ->  --map-by :timestampoutput */
     else if (0 == strcmp(option, "--timestamp-output")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "TIMESTAMPOUTPUT");
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "TIMESTAMPOUTPUT", true);
     }
     /* --xml  ->  --map-by :xmloutput */
     else if (0 == strcmp(option, "--xml")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "XMLOUTPUT");
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "XMLOUTPUT", true);
     }
     /* -N ->   map-by ppr:N:node */
     else if (0 == strcmp(option, "-N")) {
         prte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
-        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
+        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL, true);
         free(p2);
     }
     /* --map-by socket ->  --map-by package */
