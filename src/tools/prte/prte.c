@@ -1303,7 +1303,7 @@ static int create_app(int argc, char* argv[],
 {
     char cwd[PRTE_PATH_MAX];
     int i, j, count, rc;
-    char *param, *value;
+    char *param, *value, *ptr;
     prte_pmix_app_t *app = NULL;
     bool found = false;
     char *appname = NULL;
@@ -1332,6 +1332,30 @@ static int create_app(int argc, char* argv[],
         goto cleanup;
     }
 
+    /* get the cwd - we may need it in several places */
+    if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
+        prte_show_help("help-prun.txt", "prun:init-failure",
+                       true, "get the cwd", rc);
+        goto cleanup;
+    }
+
+    /* Did the user specify a path to the executable? */
+    if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "path", 0, 0))) {
+        param = pvalue->value.data.string;
+        /* if this is a relative path, convert it to an absolute path */
+        if (prte_path_is_absolute(param)) {
+            value = strdup(param);
+        } else {
+            /* construct the absolute path */
+            value = prte_os_path(false, cwd, param, NULL);
+        }
+        /* construct the new argv[0] */
+        ptr = prte_os_path(false, value, app->app.argv[0], NULL);
+        free(value);
+        free(app->app.argv[0]);
+        app->app.argv[0] = ptr;
+    }
+
     /* Did the user request a specific wdir? */
     if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "wdir", 0, 0))) {
         param = pvalue->value.data.string;
@@ -1339,23 +1363,12 @@ static int create_app(int argc, char* argv[],
         if (prte_path_is_absolute(param)) {
             app->app.cwd = strdup(param);
         } else {
-            /* get the cwd */
-            if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
-                prte_show_help("help-prun.txt", "prun:init-failure",
-                               true, "get the cwd", rc);
-                goto cleanup;
-            }
             /* construct the absolute path */
             app->app.cwd = prte_os_path(false, cwd, param, NULL);
         }
     } else if (prte_cmd_line_is_taken(prte_cmd_line, "set-cwd-to-session-dir")) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
     } else {
-        if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
-            prte_show_help("help-prun.txt", "prun:init-failure",
-                           true, "get the cwd", rc);
-            goto cleanup;
-        }
         app->app.cwd = strdup(cwd);
     }
 
