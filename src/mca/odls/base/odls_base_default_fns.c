@@ -274,13 +274,6 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
         }
     }
 
-    /* compute the ranks and add the proc objects
-     * to the jdata->procs array */
-    if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_vpids(jdata))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
     /* assemble the node and proc map info */
     list = NULL;
     procs = NULL;
