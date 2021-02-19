@@ -538,18 +538,19 @@ compute:
         }
     }
 
+    /* compute the ranks and add the proc objects
+     * to the jdata->procs array */
+    if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_vpids(jdata))) {
+        PRTE_ERROR_LOG(rc);
+        jdata->exit_code = rc;
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+        goto cleanup;
+    }
+
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) ||
         prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
         prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) ||
         prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
-        /* compute the ranks and add the proc objects
-         * to the jdata->procs array */
-        if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_vpids(jdata))) {
-            PRTE_ERROR_LOG(rc);
-            jdata->exit_code = rc;
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-            goto cleanup;
-        }
         /* compute and save local ranks */
         if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_local_ranks(jdata))) {
             PRTE_ERROR_LOG(rc);
