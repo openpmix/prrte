@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2020      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -98,4 +99,9 @@ multiple times in one or more files, but with conflicting values:
   Value:  %s
 
 We cannot determine which value was intended, and therefore are unable to proceed.
+Please correct your command line.
+#
+[multi-instances]
+ERROR: The "%s" command line option was listed more than once on the command line.
+Only one instance of this option is permitted.
 Please correct your command line.

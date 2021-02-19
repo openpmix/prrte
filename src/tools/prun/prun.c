@@ -716,6 +716,21 @@ int prun(int argc, char *argv[])
         return rc;
     }
 
+    /* check command line sanity - ensure there aren't multiple instances of
+     * options where there should be only one */
+    rc = prte_schizo.check_sanity(prte_cmd_line);
+    if (PRTE_SUCCESS != rc) {
+        if (PRTE_ERR_SILENT != rc) {
+            fprintf(stderr, "%s: command line error (%s)\n",
+                    prte_tool_basename,
+                    prte_strerror(rc));
+        }
+        param = prte_argv_join(pargv, ' ');
+        fprintf(stderr, "\n******* Cmd line: %s\n\n\n", param);
+        free(param);
+        return rc;
+    }
+
     if (prte_cmd_line_is_taken(prte_cmd_line, "verbose")) {
         verbose = true;
     }
