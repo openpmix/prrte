@@ -53,6 +53,7 @@ prte_schizo_API_module_t prte_schizo = {
     .setup_child = prte_schizo_base_setup_child,
     .job_info = prte_schizo_base_job_info,
     .get_remaining_time = prte_schizo_base_get_remaining_time,
+    .check_sanity = prte_schizo_base_check_sanity,
     .finalize = prte_schizo_base_finalize
 };
 
@@ -237,7 +238,7 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
             /* were we given a directive? */
             if (NULL != directive) {
                 /* does it conflict? */
-                if (0 != strncasecmp(pargs[j+1], directive, strlen(directive))) {
+                if (':' != pargs[j+1][0] && 0 != strncasecmp(pargs[j+1], directive, strlen(directive))) {
                     prte_asprintf(&help_str, "Conflicting directives \"%s %s\"", pargs[j+1], directive);
                     /* can't just call show_help as we want every instance to be reported */
                     output = prte_show_help_string("help-schizo-base.txt", "deprecated-fail", true,
@@ -247,7 +248,13 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                     free(help_str);
                     return PRTE_ERR_BAD_PARAM;
                 }
-                /* if they match, then nothing further to do */
+                /* no conflict on directive - see if we need to add it */
+                if (':' == pargs[j+1][0]) {
+                    prte_asprintf(&p2, "%s%s", directive, pargs[j+1]);
+                    free(pargs[j+1]);
+                    pargs[j+1] = p2;
+                    break;
+                }
             }
             /* were we given a modifier? */
             if (NULL != modifier) {
@@ -290,7 +297,17 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                         free(help_str);
                         return PRTE_ERR_BAD_PARAM;
                     }
-                    prte_asprintf(&p2, "%s:%s", pargs[j+1], modifier);
+                    /* if the directive is ppr, then the new modifier must be prepended */
+                    if (NULL != directive && 0 == strcasecmp(directive, "ppr")) {
+                        /* if we don't already have ppr in the modifier, be sure to add it */
+                        if (NULL == strstr(modifier, "ppr")) {
+                            prte_asprintf(&p2, "ppr:%s:%s", modifier, pargs[j+1]);
+                        } else {
+                            prte_asprintf(&p2, "%s:%s", modifier, pargs[j+1]);
+                        }
+                    } else {
+                        prte_asprintf(&p2, "%s:%s", pargs[j+1], modifier);
+                    }
                 }
                 free(pargs[j+1]);
                 pargs[j+1] = p2;

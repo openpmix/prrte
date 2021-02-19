@@ -67,6 +67,7 @@ static int define_session_dir(char **tmpdir);
 static int detect_proxy(char **argv);
 static int allow_run_as_root(prte_cmd_line_t *cmd_line);
 static void wrap_args(char **args);
+static int check_sanity(prte_cmd_line_t *cmd_line);
 
 prte_schizo_base_module_t prte_schizo_prte_module = {
     .define_cli = define_cli,
@@ -78,7 +79,8 @@ prte_schizo_base_module_t prte_schizo_prte_module = {
     .define_session_dir = define_session_dir,
     .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root,
-    .wrap_args = wrap_args
+    .wrap_args = wrap_args,
+    .check_sanity = check_sanity
 };
 
 
@@ -827,4 +829,24 @@ static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
             free(param);
         }
     }
+}
+
+static int check_sanity(prte_cmd_line_t *cmd_line)
+{
+    if (1 < prte_cmd_line_get_ninsts(cmd_line, "map-by")) {
+        prte_show_help("help-schizo-base.txt", "multi-instances",
+                       true, "map-by");
+        return PRTE_ERR_SILENT;
+    }
+    if (1 < prte_cmd_line_get_ninsts(cmd_line, "rank-by")) {
+        prte_show_help("help-schizo-base.txt", "multi-instances",
+                       true, "rank-by");
+        return PRTE_ERR_SILENT;
+    }
+    if (1 < prte_cmd_line_get_ninsts(cmd_line, "bind-to")) {
+        prte_show_help("help-schizo-base.txt", "multi-instances",
+                       true, "bind-to");
+        return PRTE_ERR_SILENT;
+    }
+    return PRTE_SUCCESS;
 }

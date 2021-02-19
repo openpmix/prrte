@@ -3,6 +3,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -280,6 +281,22 @@ int prte_schizo_base_get_remaining_time(uint32_t *timeleft)
         }
     }
     return PRTE_ERR_NOT_SUPPORTED;
+}
+
+int prte_schizo_base_check_sanity(prte_cmd_line_t *cmdline)
+{
+    int rc;
+    prte_schizo_base_active_module_t *mod;
+
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+        if (NULL != mod->module->check_sanity) {
+            rc = mod->module->check_sanity(cmdline);
+            if (PRTE_SUCCESS != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                return rc;
+            }
+        }
+    }
+    return PRTE_SUCCESS;
 }
 
 void prte_schizo_base_finalize(void)

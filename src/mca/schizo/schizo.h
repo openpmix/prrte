@@ -5,6 +5,7 @@
  *                         reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -145,6 +146,9 @@ typedef int (*prte_schizo_base_module_get_rem_time_fn_t)(uint32_t *timeleft);
 /* give the components a chance to add job info */
 typedef void (*prte_schizo_base_module_job_info_fn_t)(prte_cmd_line_t *cmdline, void *jobinfo);
 
+/* give the components a chance to check sanity */
+typedef int (*prte_schizo_base_module_check_sanity_fn_t)(prte_cmd_line_t *cmdline);
+
 /*
  * schizo module version 1.3.0
  */
@@ -164,6 +168,7 @@ typedef struct {
     prte_schizo_base_module_setup_child_fn_t               setup_child;
     prte_schizo_base_module_get_rem_time_fn_t              get_remaining_time;
     prte_schizo_base_module_job_info_fn_t                  job_info;
+    prte_schizo_base_module_check_sanity_fn_t              check_sanity;
     prte_schizo_base_module_finalize_fn_t                  finalize;
 } prte_schizo_base_module_t;
 
@@ -187,6 +192,7 @@ typedef struct {
     prte_schizo_base_module_setup_child_fn_t               setup_child;
     prte_schizo_base_module_get_rem_time_fn_t              get_remaining_time;
     prte_schizo_base_module_job_info_fn_t                  job_info;
+    prte_schizo_base_module_check_sanity_fn_t              check_sanity;
     prte_schizo_base_module_finalize_fn_t                  finalize;
 } prte_schizo_API_module_t;
 
