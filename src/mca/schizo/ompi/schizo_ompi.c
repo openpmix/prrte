@@ -150,6 +150,10 @@ static prte_cmd_line_init_t cmd_line_init[] = {
       "Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]",
       PRTE_CMD_LINE_OTYPE_LAUNCH },
 
+    { '\0', "rankfile", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Name of file to specify explicit task mapping",
+        PRTE_CMD_LINE_OTYPE_LAUNCH },
+
     /* mpiexec mandated form launch key parameters */
     { '\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Specify the initial error handler that is attached to predefined communicators during the first MPI call.",
@@ -254,7 +258,7 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
 
     /* --nolocal -> --map-by :nolocal */
     if (0 == strcmp(option, "--nolocal")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "NOLOCAL");
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "NOLOCAL", true);
     }
     /* --oversubscribe -> --map-by :OVERSUBSCRIBE
      * --nooversubscribe -> --map-by :NOOVERSUBSCRIBE
@@ -268,103 +272,104 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
         } else {
             modifier = "OVERSUBSCRIBE";
         }
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, modifier);
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, modifier, true);
     }
     /* --use-hwthread-cpus -> --bind-to hwthread */
     else if (0 == strcmp(option, "--use-hwthread-cpus")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", "hwthread", NULL);
+        rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", "hwthread", NULL, true);
     }
     /* --cpu-set and --cpu-list -> --map-by pe-list:X
      */
     else if (0 == strcmp(option, "--cpu-set") ||
              0 == strcmp(option, "--cpu-list") ) {
         prte_asprintf(&p2, "PE-LIST=%s", pargs[i+1]);
-        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2);
+        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2, true);
         free(p2);
     }
     /* --bind-to-core and --bind-to-socket -> --bind-to X */
     else if (0 == strcmp(option, "--bind-to-core")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", "core", NULL);
+        rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", "core", NULL, true);
     }
     else if (0 == strcmp(option, "--bind-to-socket")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", "socket", NULL);
+        rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", "socket", NULL, true);
     }
     /* --bynode -> "--map-by X --rank-by X" */
     else if (0 == strcmp(option, "--bynode")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", "node", NULL);
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", "node", NULL, true);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
         // paired with rank-by - note that we would have already removed the
         // ith location where the option was stored, so don't do it again
-        rc = prte_schizo_base_convert(argv, i, 0, "--rank-by", "node", NULL);
+        rc = prte_schizo_base_convert(argv, i, 0, "--rank-by", "node", NULL, true);
     }
     /* --bycore -> "--map-by X --rank-by X" */
     else if (0 == strcmp(option, "--bycore")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", "core", NULL);
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", "core", NULL, true);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
         // paired with rank-by - note that we would have already removed the
         // ith location where the option was stored, so don't do it again
-        rc = prte_schizo_base_convert(argv, i, 0, "--rank-by", "core", NULL);
+        rc = prte_schizo_base_convert(argv, i, 0, "--rank-by", "core", NULL, true);
     }
     /* --byslot -> "--map-by X --rank-by X" */
     else if (0 == strcmp(option, "--byslot")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", "slot", NULL);
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", "slot", NULL, true);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
         // paired with rank-by - note that we would have already removed the
         // ith location where the option was stored, so don't do it again
-        rc = prte_schizo_base_convert(argv, i, 0, "--rank-by", "slot", NULL);
+        rc = prte_schizo_base_convert(argv, i, 0, "--rank-by", "slot", NULL, true);
     }
     /* --cpus-per-proc/rank X -> --map-by :pe=X */
     else if (0 == strcmp(option, "--cpus-per-proc") ||
              0 == strcmp(option, "--cpus-per-rank") ) {
         prte_asprintf(&p2, "pe=%s", pargs[i+1]);
-        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2);
+        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2, true);
         free(p2);
     }
     /* --npernode X and --npersocket X -> --map-by ppr:X:node/socket */
     else if (0 == strcmp(option, "--npernode")) {
         prte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
-        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
+        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL, true);
         free(p2);
     }
     else if (0 == strcmp(option, "--pernode")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", "ppr:1:node", NULL);
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", "ppr:1:node", NULL, true);
     }
     else if (0 == strcmp(option, "--npersocket")) {
         prte_asprintf(&p2, "ppr:%s:socket", pargs[i+1]);
-        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
+        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL, true);
         free(p2);
    }
     /* --ppr X -> --map-by ppr:X */
     else if (0 == strcmp(option, "--ppr")) {
         /* if they didn't specify a complete pattern, then this is an error */
         if (NULL == strchr(pargs[i+1], ':')) {
-            prte_show_help("help-schizo-base.txt", "bad-ppr", true, pargs[i+1]);
+            prte_show_help("help-schizo-base.txt", "bad-ppr", true, pargs[i+1], true);
             return PRTE_ERR_BAD_PARAM;
         }
         prte_asprintf(&p2, "ppr:%s", pargs[i+1]);
-        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
+        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL, true);
         free(p2);
     }
     /* --am[ca] X -> --tune X */
     else if (0 == strcmp(option, "--amca") ||
              0 == strcmp(option, "--am")) {
-        rc = prte_schizo_base_convert(argv, i, 2, "--tune", NULL, NULL);
+        rc = prte_schizo_base_convert(argv, i, 2, "--tune", NULL, NULL, true);
     }
     /* --tune X -> aggregate */
     else if (0 == strcmp(option, "--tune")) {
-        rc = prte_schizo_base_convert(argv, i, 2, "--tune", NULL, NULL);
+        rc = prte_schizo_base_convert(argv, i, 2, "--tune", NULL, NULL, true);
     }
     /* --rankfile X -> map-by rankfile:file=X */
     else if (0 == strcmp(option, "--rankfile")) {
-        prte_asprintf(&p2, "rankfile:file=%s", pargs[i+1]);
-        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL);
+        prte_asprintf(&p2, "file=%s", pargs[i+1]);
+        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", "rankfile", p2, false);
         free(p2);
+        rc = PRTE_ERR_SILENT;
     }
 
     return rc;

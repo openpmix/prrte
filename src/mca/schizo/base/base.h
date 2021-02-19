@@ -2,6 +2,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -68,7 +69,8 @@ PRTE_CLASS_DECLARATION(prte_schizo_base_active_module_t);
 
 /* base support functions */
 PRTE_EXPORT int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
-                                           char *option, char *directive, char *modifier);
+                                         char *option, char *directive,
+                                         char *modifier, bool report);
 
 /* the base stub functions */
 PRTE_EXPORT int prte_schizo_base_define_cli(prte_cmd_line_t *cli);

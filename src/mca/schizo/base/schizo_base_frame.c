@@ -3,6 +3,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -173,7 +174,8 @@ static int check_modifiers(char *modifier, char **checks, prte_schizo_conflicts_
 }
 
 int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
-                              char *option, char *directive, char *modifier)
+                             char *option, char *directive,
+                             char *modifier, bool report)
 {
     bool found;
     char *p2, *help_str, *old_arg;
@@ -292,13 +294,15 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                 }
                 free(pargs[j+1]);
                 pargs[j+1] = p2;
-                prte_asprintf(&help_str, "%s %s", option, p2);
-                /* can't just call show_help as we want every instance to be reported */
-                output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
-                                                pargs[idx], help_str);
-                fprintf(stderr, "%s\n", output);
-                free(output);
-                free(help_str);
+                if (report) {
+                    prte_asprintf(&help_str, "%s %s", option, p2);
+                    /* can't just call show_help as we want every instance to be reported */
+                    output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                                                    pargs[idx], help_str);
+                    fprintf(stderr, "%s\n", output);
+                    free(output);
+                    free(help_str);
+                }
             }
         }
     }
@@ -351,11 +355,13 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
         } else {
             help_str = strdup(pargs[idx]);
         }
-        /* can't just call show_help as we want every instance to be reported */
-        output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
-                        old_arg, help_str);
-        fprintf(stderr, "%s\n", output);
-        free(output);
+        if (report) {
+            /* can't just call show_help as we want every instance to be reported */
+            output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                                           old_arg, help_str);
+            fprintf(stderr, "%s\n", output);
+            free(output);
+        }
         if (NULL != p2) {
             free(p2);
         }
