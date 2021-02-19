@@ -102,6 +102,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_FLAG_OVERSUBSCRIBED     0x0800   // at least one node in the job is oversubscribed
 #define PRTE_JOB_FLAG_TOOL               0x1000   // job is a tool
 #define PRTE_JOB_FLAG_LAUNCHER           0x2000   // job is also a launcher
+#define PRTE_JOB_FLAG_ERR_REPORTED       0x4000   // error report for job has been output
 
 /***   JOB ATTRIBUTE KEYS   ***/
 #define PRTE_JOB_START_KEY   PRTE_NODE_MAX_KEY

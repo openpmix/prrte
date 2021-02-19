@@ -293,15 +293,54 @@ static char* print_aborted_job(prte_job_t *job,
  * exit status of the aborted procs.
  */
 
-char* prte_dump_aborted_procs(prte_job_t *jdata)
+static char* dump_job(prte_job_t *job)
+
 {
-    prte_job_t *job, *launcher;
     int32_t i;
     prte_proc_t *proc, *pptr;
     prte_app_context_t *approc;
     prte_node_t *node;
+
+    /* cycle through and count the number that were killed or aborted */
+    for (i=0; i < job->procs->size; i++) {
+        if (NULL == (pptr = (prte_proc_t*)prte_pointer_array_get_item(job->procs, i))) {
+            /* array is left-justified - we are done */
+            break;
+        }
+        if (PRTE_PROC_STATE_FAILED_TO_START == pptr->state ||
+            PRTE_PROC_STATE_FAILED_TO_LAUNCH == pptr->state) {
+            ++num_failed_start;
+        } else if (PRTE_PROC_STATE_ABORTED == pptr->state) {
+            ++num_aborted;
+        } else if (PRTE_PROC_STATE_ABORTED_BY_SIG == pptr->state) {
+            ++num_killed;
+        } else if (PRTE_PROC_STATE_SENSOR_BOUND_EXCEEDED == pptr->state) {
+            ++num_killed;
+        }
+    }
+    /* see if there is a guilty party */
+    proc = NULL;
+    if (!prte_get_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC, (void**)&proc, PMIX_POINTER) ||
+        NULL == proc) {
+        return NULL;
+    }
+
+    approc = (prte_app_context_t*)prte_pointer_array_get_item(job->apps, proc->app_idx);
+    node = proc->node;
+    return print_aborted_job(job, approc, proc, node);
+}
+
+char* prte_dump_aborted_procs(prte_job_t *jdata)
+{
+    prte_job_t *job, *launcher;
     char *output = NULL;
 
+    /* if we already reported it, then don't do it again */
+    if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ERR_REPORTED)) {
+        return NULL;
+    }
+    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ERR_REPORTED);
+    
     /* if this job is not a launcher itself, then get the launcher for this job */
     if (PMIX_NSPACE_INVALID(jdata->launcher)) {
         launcher = jdata;
@@ -315,35 +354,16 @@ char* prte_dump_aborted_procs(prte_job_t *jdata)
 
     /* cycle thru all the children of this launcher to find the
      * one that caused the error */
-    PRTE_LIST_FOREACH(job, &launcher->children, prte_job_t) {
-        /* cycle through and count the number that were killed or aborted */
-        for (i=0; i < job->procs->size; i++) {
-            if (NULL == (pptr = (prte_proc_t*)prte_pointer_array_get_item(job->procs, i))) {
-                /* array is left-justified - we are done */
+    /* if this is a non-persistent job, it won't have any child
+     * jobs, so look at it directly */
+    if (0 == prte_list_get_size(&launcher->children)) {
+        output = dump_job(jdata);
+    } else {
+        PRTE_LIST_FOREACH(job, &launcher->children, prte_job_t) {
+            output = dump_job(job);
+            if (NULL != output) {
                 break;
             }
-            if (PRTE_PROC_STATE_FAILED_TO_START == pptr->state ||
-                PRTE_PROC_STATE_FAILED_TO_LAUNCH == pptr->state) {
-                ++num_failed_start;
-            } else if (PRTE_PROC_STATE_ABORTED == pptr->state) {
-                ++num_aborted;
-            } else if (PRTE_PROC_STATE_ABORTED_BY_SIG == pptr->state) {
-                ++num_killed;
-            } else if (PRTE_PROC_STATE_SENSOR_BOUND_EXCEEDED == pptr->state) {
-                ++num_killed;
-            }
-        }
-        /* see if there is a guilty party */
-        proc = NULL;
-        if (!prte_get_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC, (void**)&proc, PMIX_POINTER) ||
-            NULL == proc) {
-            continue;
-        }
-
-        approc = (prte_app_context_t*)prte_pointer_array_get_item(job->apps, proc->app_idx);
-        node = proc->node;
-        if (NULL != (output = print_aborted_job(job, approc, proc, node))) {
-            break;
         }
     }
 

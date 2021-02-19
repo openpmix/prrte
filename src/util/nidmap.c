@@ -952,7 +952,6 @@ int prte_util_generate_ppn(prte_job_t *jdata,
                            pmix_data_buffer_t *buf)
 {
     uint16_t ppn;
-    int32_t nbytes;
     int rc = PRTE_SUCCESS;
     prte_app_idx_t i;
     int j, k;
@@ -1001,7 +1000,6 @@ int prte_util_generate_ppn(prte_job_t *jdata,
                 }
             }
         }
-        nbytes = bucket.bytes_used;
 
         if (PMIx_Data_compress((uint8_t*)bucket.base_ptr, bucket.bytes_used,
                                (uint8_t**)&bo.bytes, &sz)) {

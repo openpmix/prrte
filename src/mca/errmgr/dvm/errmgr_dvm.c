@@ -651,7 +651,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* output a message indicating we failed to launch a daemon */
             prte_show_help("help-errmgr-base.txt", "failed-daemon-launch", true);
         }
-        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FAILED_TO_START);
         break;
 
     case PRTE_PROC_STATE_CALLED_ABORT:
