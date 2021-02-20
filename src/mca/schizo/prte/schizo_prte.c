@@ -872,7 +872,7 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
         "package",
         NULL
     };
-    bool good;
+    bool good = false;
 
     if (1 < prte_cmd_line_get_ninsts(cmd_line, "map-by")) {
         prte_show_help("help-schizo-base.txt", "multi-instances",
@@ -892,6 +892,10 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
 
     /* quick check that we have valid directives */
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "map-by", 0, 0))) {
+        /* if it starts with a ':', then these are just modifiers */
+        if (':' == pval->value.data.string[0]) {
+            goto rnk;
+        }
         args = prte_argv_split(pval->value.data.string, ':');
         good = false;
         for (n=0; NULL != mappers[n]; n++) {
@@ -902,15 +906,18 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
         }
         if (!good) {
             prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "mapping", args[0]);
+            prte_argv_free(args);
+            return PRTE_ERR_SILENT;
         }
         prte_argv_free(args);
-        if (good) {
-            return PRTE_SUCCESS;
-        }
-        return PRTE_ERR_SILENT;
     }
 
+rnk:
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "rank-by", 0, 0))) {
+        /* if it starts with a ':', then these are just modifiers */
+        if (':' == pval->value.data.string[0]) {
+            goto bnd;
+        }
         args = prte_argv_split(pval->value.data.string, ':');
         good = false;
         for (n=0; NULL != rankers[n]; n++) {
@@ -921,15 +928,18 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
         }
         if (!good) {
             prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "ranking", args[0]);
+            prte_argv_free(args);
+            return PRTE_ERR_SILENT;
         }
         prte_argv_free(args);
-        if (good) {
-            return PRTE_SUCCESS;
-        }
-        return PRTE_ERR_SILENT;
     }
 
+bnd:
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "bind-to", 0, 0))) {
+        /* if it starts with a ':', then these are just modifiers */
+        if (':' == pval->value.data.string[0]) {
+            goto done;
+        }
         args = prte_argv_split(pval->value.data.string, ':');
         good = false;
         for (n=0; NULL != binders[n]; n++) {
@@ -940,13 +950,12 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
         }
         if (!good) {
             prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "binding", args[0]);
-        }
+            prte_argv_free(args);
+            return PRTE_ERR_SILENT;
+       }
         prte_argv_free(args);
-        if (good) {
-            return PRTE_SUCCESS;
-        }
-        return PRTE_ERR_SILENT;
     }
 
+done:
     return PRTE_SUCCESS;
 }
