@@ -191,7 +191,6 @@ void prte_data_server(int status, pmix_proc_t* sender,
     uint8_t command;
     int32_t count;
     prte_data_object_t *data;
-    pmix_byte_object_t bo;
     pmix_data_buffer_t *answer, *reply;
     int rc, k;
     uint32_t ninfo, i;
@@ -671,7 +670,6 @@ void prte_data_server(int status, pmix_proc_t* sender,
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(answer);
-            free(bo.bytes);
             goto SEND_ERROR;
         }
 
