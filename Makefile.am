@@ -23,7 +23,7 @@
 #
 
 SUBDIRS = config contrib src include
-DIST_SUBDIRS = config contrib src
+DIST_SUBDIRS = config contrib src include
 EXTRA_DIST = README INSTALL VERSION Doxyfile LICENSE autogen.pl
 
 include examples/Makefile.include
