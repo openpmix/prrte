@@ -25,6 +25,7 @@
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
 # Copyright (c) 2018      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
+# Copyright (c) 2021      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -1197,6 +1198,8 @@ AC_CONFIG_FILES([
     Makefile
     config/Makefile
     contrib/Makefile
+    include/Makefile
+    include/prte_version.h
 ])
 
 PRTE_CONFIG_FILES

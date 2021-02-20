@@ -18,6 +18,7 @@ dnl                         reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl
 dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2021      Nanook Consulting  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -232,6 +233,19 @@ else
 fi
 AC_DEFINE_UNQUOTED(PRTE_PROXY_VERSION_STRING, "$PRTE_PROXY_VERSION_STRING",
                    [Version string to be returned by prte when in proxy mode])
+
+#
+# Save the actual version in an external header file so that
+# packages that use us can know what version we are
+#
+prtemajor=${PRTE_MAJOR_VERSION}L
+prteminor=${PRTE_MINOR_VERSION}L
+prterelease=${PRTE_RELEASE_VERSION}L
+prtenumeric=$(printf 0x%4.4x%2.2x%2.2x $PRTE_MAJOR_VERSION $PRTE_MINOR_VERSION $PRTE_RELEASE_VERSION)
+AC_SUBST(prtemajor)
+AC_SUBST(prteminor)
+AC_SUBST(prterelease)
+AC_SUBST(prtenumeric)
 
 AC_MSG_CHECKING([if a proxy package name for prte is required])
 AC_ARG_WITH(proxy-package-name,

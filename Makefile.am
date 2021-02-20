@@ -14,6 +14,7 @@
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017-2018 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
+# Copyright (c) 2021      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,7 +22,7 @@
 # $HEADER$
 #
 
-SUBDIRS = config contrib src
+SUBDIRS = config contrib src include
 DIST_SUBDIRS = config contrib src
 EXTRA_DIST = README INSTALL VERSION Doxyfile LICENSE autogen.pl
 
