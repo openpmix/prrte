@@ -14,6 +14,7 @@
 # Copyright (c) 2011      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -408,16 +409,6 @@ directive.
 Please specify a mapping level that has more than one cpu, or
 else let us define a default mapping that will allow multiple
 cpus-per-proc.
-#
-[seq:not-enough-resources]
-A sequential map was requested, but not enough node entries
-were given to support the requested number of processes:
-
-  Num procs:  %d
-  Num nodes:  %d
-
-We cannot continue - please adjust either the number of processes
-or provide more node locations in the file.
 #
 [device-not-specified]
 The request to map processes by distance could not be completed

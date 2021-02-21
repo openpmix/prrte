@@ -295,7 +295,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
                                 "mca:rmaps:seq: setting num procs to %s for app %s",
                                 PRTE_VPID_PRINT(app->num_procs), app->app);
         } else if (num_nodes < app->num_procs) {
-            prte_show_help("help-prte-rmaps-base.txt", "seq:not-enough-resources", true,
+            prte_show_help("help-prte-rmaps-seq.txt", "seq:not-enough-resources", true,
                            app->num_procs, num_nodes);
             return PRTE_ERR_SILENT;
         }

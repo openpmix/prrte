@@ -12,6 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2021      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,7 +22,26 @@
 # This is the US/English general help file for PRTE's prun.
 #
 [prte-rmaps-seq:resource-not-found]
-The specified hostfile contained a node (%s) that is not in your
+The specified sequence file contained a node (%s) that is not in your
 allocation. We therefore cannot map a process rank to it. Please
-check your allocation and hostfile to ensure the hostfile only
+check your allocation and sequence file to ensure the latter only
 contains allocated nodes.
+#
+[seq:not-enough-resources]
+A sequential map was requested, but not enough node entries
+were given to support the requested number of processes:
+
+  Num procs:  %d
+  Num nodes:  %d
+
+The sequential mapper requires that there be a node entry for
+every process in the job, and it processes the provided file
+using each node entry to identify the node where that numbered
+rank is to be placed.
+
+Note that you can provide a separate sequence file (different
+from a hostfile that specifies the number of slots on each node)
+for use by the sequential mapper in its assignments by using the
+appropriate modifier:
+
+  Example: --map-by seq:file=myseqfile
