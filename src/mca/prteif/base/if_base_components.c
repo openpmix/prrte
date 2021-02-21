@@ -3,6 +3,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,7 +23,6 @@
 
 /* instantiate the global list of interfaces */
 prte_list_t prte_if_list = {{0}};
-bool prte_if_do_not_resolve = false;
 bool prte_if_retain_loopback = false;
 
 static int prte_if_base_register (prte_mca_base_register_flag_t flags);
@@ -41,13 +41,6 @@ PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prteif, NULL, prte_if_base_register,
 
 static int prte_if_base_register (prte_mca_base_register_flag_t flags)
 {
-    prte_if_do_not_resolve = false;
-    (void) prte_mca_base_framework_var_register (&prte_prteif_base_framework, "do_not_resolve",
-                                                  "If nonzero, do not attempt to resolve interfaces",
-                                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE,
-                                                  PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ,
-                                                  &prte_if_do_not_resolve);
-
     prte_if_retain_loopback = false;
     (void) prte_mca_base_framework_var_register (&prte_prteif_base_framework, "retain_loopback",
                                                   "If nonzero, retain loopback interfaces",

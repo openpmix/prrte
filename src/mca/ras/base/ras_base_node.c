@@ -205,7 +205,7 @@ int prte_ras_base_node_insert(prte_list_t* nodes, prte_job_t *jdata)
                 PRTE_ERROR_LOG(rc);
                 return rc;
             }
-            if (prte_do_not_launch) {
+            if (prte_get_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
                 /* create a daemon for this node since we won't be launching
                  * and the mapper needs to see a daemon - this is used solely
                  * for testing the mappers */

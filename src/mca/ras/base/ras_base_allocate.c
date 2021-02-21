@@ -258,7 +258,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         prte_managed_allocation = true;
         /* since it is managed, we do not attempt to resolve
          * the nodenames */
-        prte_if_do_not_resolve = true;
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_RESOLVE, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
         /* store the results in the global resource pool - this removes the
          * list items
          */

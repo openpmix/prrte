@@ -266,9 +266,24 @@ static int check_modifiers(char *ck, prte_job_t *jdata,
                 djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
                 prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
                                     NULL, PMIX_BOOL);
-                prte_do_not_launch = true;
             }
 
+        } else if (0 == strcasecmp(ck2[i], "DONOTRESOLVE")) {
+            if (NULL == jdata) {
+                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                               "mapping policy", ck2[i]);
+                return PRTE_ERR_SILENT;
+            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_RESOLVE, PRTE_ATTR_GLOBAL,
+                               NULL, PMIX_BOOL);
+            /* if we are not in a persistent DVM, then make sure we don't try to launch
+             * the daemons either */
+            if (!prte_persistent) {
+                djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_RESOLVE, PRTE_ATTR_GLOBAL,
+                                   NULL, PMIX_BOOL);
+            }
+            
         } else if (0 == strcasecmp(ck2[i], "NOLOCAL")) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_NO_USE_LOCAL);
 

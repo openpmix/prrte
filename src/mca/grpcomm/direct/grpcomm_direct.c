@@ -359,7 +359,7 @@ static void xcast_recv(int status, pmix_proc_t* sender,
     prte_daemon_cmd_flag_t command = PRTE_DAEMON_NULL_CMD;
     pmix_data_buffer_t datbuf, *data;
     bool compressed;
-    prte_job_t *jdata;
+    prte_job_t *jdata, *daemons;
     prte_proc_t *rec;
     prte_list_t coll;
     prte_grpcomm_signature_t sig;
@@ -492,7 +492,8 @@ static void xcast_recv(int status, pmix_proc_t* sender,
         return;
     }
 
-    if (!prte_do_not_launch) {
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (!prte_get_attribute(&daemons->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         /* get the list of next recipients from the routed module */
         prte_routed.get_routing_list(&coll);
 

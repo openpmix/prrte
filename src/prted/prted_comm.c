@@ -449,7 +449,8 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
             prte_output(0, "%s prted_cmd: received exit cmd",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         }
-        if (prte_do_not_launch) {
+        jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             return;
         }
@@ -492,7 +493,8 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         /* this is an abnormal termination */
         prte_abnormal_term_ordered = true;
 
-        if (prte_do_not_launch) {
+        jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             return;
         }

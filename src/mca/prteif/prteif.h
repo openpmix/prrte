@@ -6,6 +6,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -95,7 +96,6 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_if_t);
 PRTE_EXPORT extern prte_list_t prte_if_list;
 
 /* global flags */
-PRTE_EXPORT extern bool prte_if_do_not_resolve;
 PRTE_EXPORT extern bool prte_if_retain_loopback;
 
 /**

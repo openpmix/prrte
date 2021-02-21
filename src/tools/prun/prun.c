@@ -979,6 +979,12 @@ int prun(int argc, char *argv[])
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->value.data.string, PMIX_STRING);
+        if (NULL != strcasestr(pval->value.data.string, "DONOTLAUNCH")) {
+            PMIX_INFO_LIST_ADD(ret, jinfo, "PRTE_JOB_DO_NOT_LAUNCH", NULL, PMIX_BOOL);
+        }
+        if (NULL != strcasestr(pval->value.data.string, "DONOTRESOLVE")) {
+            PMIX_INFO_LIST_ADD(ret, jinfo, "PRTE_JOB_DO_NOT_RESOLVE", NULL, PMIX_BOOL);
+        }
     }
 
     /* if the user specified a ranking policy, then set it */

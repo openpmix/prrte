@@ -126,7 +126,8 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
 
     /* if we are not launching, then we just assume that all
      * daemons share our topology */
-    if (prte_do_not_launch || prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
+        PMIX_CHECK_NSPACE(caddy->jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
         node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, 0);
         t = node->topology;
         for (i=1; i < prte_node_pool->size; i++) {
@@ -185,20 +186,11 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
-    /* if we are not launching and this is the daemon job, then
-     * we are done */
-    if (prte_do_not_launch && PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
-        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_VM_READY);
-        PRTE_RELEASE(caddy);
-        return;
-    }
-
     /* if we don't want to launch, then we at least want
      * to map so we can see where the procs would have
      * gone - so skip to the mapping state */
     if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
-        caddy->jdata->state = PRTE_JOB_STATE_ALLOCATION_COMPLETE;
-        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_MAP);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
     } else {
         /* move the state machine along */
         caddy->jdata->state = PRTE_JOB_STATE_ALLOCATION_COMPLETE;
@@ -526,7 +518,7 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
                          PRTE_JOBID_PRINT(jdata->nspace)));
 
     /* if we don't want to launch the apps, now is the time to leave */
-    if (prte_do_not_launch) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         bool compressed;
         uint8_t *cmpdata = NULL;
         size_t cmplen;
