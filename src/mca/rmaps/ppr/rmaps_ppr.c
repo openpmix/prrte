@@ -286,6 +286,14 @@ static int ppr_mapper(prte_job_t *jdata)
              * that many procs on this node
              */
             if (PRTE_HWLOC_NODE_LEVEL == start) {
+                if (ppr[start] > node->slots_available) {
+                    /* not enough slots available for this request */
+                    prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                                   true, ppr[start], app->app);
+                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    rc = PRTE_ERR_SILENT;
+                    goto error;
+                }
                 obj = hwloc_get_root_obj(node->topology->topo);
                 for (j=0; j < ppr[start] && nprocs_mapped < total_procs; j++) {
                     if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, idx))) {
@@ -299,10 +307,10 @@ static int ppr_mapper(prte_job_t *jdata)
                 /* get the number of lowest resources on this node */
                 nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                            lowest, cache_level);
-                /* Map up to number of slots on node or number of specified resource on node
+                /* Map up to number of slots_available on node or number of specified resource on node
                  * whichever is less. */
-                if (node->slots < (int)nobjs) {
-                    num_available = node->slots;
+                if (node->slots_available < (int)nobjs) {
+                    num_available = node->slots_available;
                 }
                 else {
                     num_available = nobjs;

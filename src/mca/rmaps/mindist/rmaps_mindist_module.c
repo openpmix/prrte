@@ -333,8 +333,8 @@ static int mindist_map(prte_job_t *jdata)
                             }
                         }
                         /* if slots < avg + extra (adjusted for cpus/proc), then try to take all */
-                        if ((node->slots - node->slots_inuse) < (navg + extra_procs_to_assign)) {
-                            num_procs_to_assign = node->slots - node->slots_inuse;
+                        if (node->slots_available < (navg + extra_procs_to_assign)) {
+                            num_procs_to_assign = node->slots_available;
                             /* if we can't take any proc, skip following steps */
                             if (num_procs_to_assign == 0) {
                                 continue;
@@ -349,8 +349,8 @@ static int mindist_map(prte_job_t *jdata)
                                             navg, num_procs_to_assign, extra_procs_to_assign);
                     }
                 } else {
-                    num_procs_to_assign = ((int)app->num_procs - nprocs_mapped) > node->slots ?
-                            node->slots : ((int)app->num_procs - nprocs_mapped);
+                    num_procs_to_assign = ((int)app->num_procs - nprocs_mapped) > node->slots_available ?
+                            node->slots_available : ((int)app->num_procs - nprocs_mapped);
                 }
 
                 if (bynode) {

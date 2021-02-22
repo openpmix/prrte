@@ -88,7 +88,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
         }
 
         /* assign a number of procs equal to the number of available slots */
-        num_procs_to_assign = node->slots - node->slots_inuse;
+        num_procs_to_assign = node->slots_available;
 
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:slot assigning %d procs to node %s",
@@ -162,11 +162,10 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
                 --nxtra_nodes;
             }
         }
-        if(node->slots <= node->slots_inuse) {
+        if (node->slots <= node->slots_inuse) {
             /* nodes are already oversubscribed */
             num_procs_to_assign = extra_procs_to_assign;
-        }
-        else {
+        } else {
             /* nodes have some room */
             num_procs_to_assign = node->slots - node->slots_inuse + extra_procs_to_assign;
         }
@@ -335,8 +334,8 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                     }
                 }
                 /* if slots < avg + extra (adjusted for cpus/proc), then try to take all */
-                if ((node->slots - node->slots_inuse) < (navg + extra_procs_to_assign)) {
-                    num_procs_to_assign = node->slots - node->slots_inuse;
+                if (node->slots_available < (navg + extra_procs_to_assign)) {
+                    num_procs_to_assign = node->slots_available;
                     /* if we can't take any proc, skip following steps */
                     if (num_procs_to_assign == 0) {
                         continue;
@@ -406,7 +405,6 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
             if (NULL != node->topology && NULL != node->topology->topo) {
                 obj = hwloc_get_root_obj(node->topology->topo);
             }
-
             PRTE_OUTPUT_VERBOSE((20, prte_rmaps_base_framework.framework_output,
                                  "%s ADDING PROC TO NODE %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
@@ -552,7 +550,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata,
                 start = (jdata->bkmark_obj + 1) % nobjs;
             }
             /* compute the number of procs to go on this node */
-            nprocs = node->slots - node->slots_inuse;
+            nprocs = node->slots_available;
             prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rr: calculated nprocs %d", nprocs);
             if (nprocs < 1) {
@@ -856,7 +854,11 @@ static int byobj_span(prte_job_t *jdata,
                 return PRTE_ERR_SILENT;
             }
             /* determine how many to map */
-            nprocs = navg;
+            if (navg <= node->slots_available) {
+                nprocs = navg;
+            } else {
+                nprocs = node->slots_available;
+            }
             if (0 < nxtra_objs) {
                 nprocs++;
                 nxtra_objs--;

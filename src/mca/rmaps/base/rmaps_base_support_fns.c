@@ -462,6 +462,7 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
                 } else {
                     s = node->slots - node->slots_inuse;
                 }
+                node->slots_available = s;
                 /* add the available slots */
                 PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s node %s has %d slots available",
@@ -510,8 +511,9 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
              item != prte_list_get_end(allocated_nodes);
              item = prte_list_get_next(item)) {
             node = (prte_node_t*)item;
-            prte_output(0, "    node: %s daemon: %s", node->name,
-                        (NULL == node->daemon) ? "NULL" : PRTE_VPID_PRINT(node->daemon->name.rank));
+            prte_output(0, "    node: %s daemon: %s slots_available: %d", node->name,
+                        (NULL == node->daemon) ? "NULL" : PRTE_VPID_PRINT(node->daemon->name.rank),
+                        node->slots_available);
         }
     }
 
