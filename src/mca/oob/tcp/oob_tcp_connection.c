@@ -176,7 +176,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     remote_list = PRTE_NEW(prte_list_t);
     if (NULL == remote_list) {
         prte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        PRTE_FORCED_TERMINATE(1);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
         return;
     }
 
@@ -188,7 +188,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         interface = PRTE_NEW(prte_if_t);
         if (NULL == interface) {
             prte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-            PRTE_FORCED_TERMINATE(1);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
             goto cleanup;
         }
         interface->af_family = addr->addr.ss_family;
@@ -308,7 +308,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
              * and return them as "unreachable"
              */
             prte_output(0, "%s CANNOT CREATE SOCKET", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-            PRTE_FORCED_TERMINATE(1);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
             goto cleanup;
         }
 
@@ -333,7 +333,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                          prte_socket_errno );
 
             CLOSE_THE_SOCKET(peer->sd);
-            PRTE_FORCED_TERMINATE(1);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
             goto cleanup;
         }
 
@@ -492,7 +492,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                     rc);
         /* close the socket */
         CLOSE_THE_SOCKET(peer->sd);
-        PRTE_FORCED_TERMINATE(1);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
     }
 
 cleanup:

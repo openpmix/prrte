@@ -20,6 +20,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -349,7 +350,7 @@ static int rsh_component_query(prte_mca_base_module_t **module, int *priority)
         if (NULL != prte_plm_rsh_component.agent) {
             prte_show_help("help-plm-rsh.txt", "agent-not-found", true,
                            prte_plm_rsh_component.agent);
-            PRTE_FORCED_TERMINATE(PRTE_ERR_NOT_FOUND);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_NEVER_LAUNCHED);
             return PRTE_ERR_FATAL;
         }
         /* this isn't an error - we just cannot be selected */

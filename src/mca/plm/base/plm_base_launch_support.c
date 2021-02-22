@@ -228,7 +228,7 @@ static void files_ready(int status, void *cbdata)
     prte_job_t *jdata = (prte_job_t*)cbdata;
 
     if (PRTE_SUCCESS != status) {
-        PRTE_FORCED_TERMINATE(status);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FILES_POSN_FAILED);
     } else {
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP);
     }
@@ -245,7 +245,7 @@ void prte_plm_base_vm_ready(int fd, short args, void *cbdata)
 
     /* position any required files */
     if (PRTE_SUCCESS != prte_filem.preposition_files(caddy->jdata, files_ready, caddy->jdata)) {
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FILES_POSN_FAILED);
     }
 
     /* cleanup */
@@ -281,7 +281,7 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     if (PRTE_JOB_STATE_INIT != caddy->job_state) {
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PRTE_RELEASE(caddy);
         return;
     }
@@ -292,7 +292,7 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
     if (PMIX_NSPACE_INVALID(caddy->jdata->nspace)) {
         if (PRTE_SUCCESS != (rc = prte_plm_base_create_jobid(caddy->jdata))) {
             PRTE_ERROR_LOG(rc);
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
             PRTE_RELEASE(caddy);
             return;
         }
@@ -362,7 +362,7 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
 
     /* bozo check */
     if (PRTE_JOB_STATE_SYSTEM_PREP != caddy->job_state) {
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PRTE_RELEASE(caddy);
         return;
     }
@@ -473,7 +473,7 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
     jdata = caddy->jdata;
 
     if (PRTE_JOB_STATE_LAUNCH_APPS != caddy->job_state) {
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PRTE_RELEASE(caddy);
         return;
     }
@@ -494,7 +494,7 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
     rc = PMIx_Data_pack(NULL, &jdata->launch_msg, &command, 1, PMIX_UINT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PRTE_RELEASE(caddy);
         return;
     }
@@ -502,7 +502,7 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
     /* get the local launcher's required data */
     if (PRTE_SUCCESS != (rc = prte_odls.get_add_procs_data(&jdata->launch_msg, jdata->nspace))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
     }
 
     PRTE_RELEASE(caddy);
@@ -558,7 +558,7 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &jdata->launch_msg))) {
         PRTE_ERROR_LOG(rc);
         PRTE_RELEASE(sig);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PRTE_RELEASE(caddy);
         return;
     }
@@ -991,7 +991,7 @@ void prte_plm_base_registered(int fd, short args, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_JOBID_PRINT(jdata->nspace),
                              prte_job_state_to_str(caddy->job_state)));
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FORCED_EXIT);
         PRTE_RELEASE(caddy);
         return;
     }
@@ -1720,10 +1720,11 @@ void prte_plm_base_daemon_failed(int st, pmix_proc_t* sender,
 
   finish:
     if (NULL == daemon) {
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_PROC_STATE_FAILED_TO_START);
         return;
+    } else {
+        PRTE_ACTIVATE_PROC_STATE(&daemon->name, PRTE_PROC_STATE_FAILED_TO_START);
     }
-    PRTE_ACTIVATE_PROC_STATE(&daemon->name, PRTE_PROC_STATE_FAILED_TO_START);
 }
 
 int prte_plm_base_setup_prted_cmd(int *argc, char ***argv)
@@ -2053,7 +2054,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
             /* well, if the HNP doesn't have any procs, and neither did
              * anyone else...then we have a big problem
              */
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
             return PRTE_ERR_FATAL;
         }
         goto process;

@@ -444,13 +444,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
         prte_argv_free(env);
     }
 
-    /* cleanup the caddy */
-    PRTE_RELEASE(state);
-
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
     }
+
+    /* cleanup the caddy */
+    PRTE_RELEASE(state);
 }
 
 

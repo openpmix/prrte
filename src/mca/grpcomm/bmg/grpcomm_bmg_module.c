@@ -196,7 +196,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_RELEASE(rly);
         PMIX_DATA_BUFFER_RELEASE(relay);
-        PRTE_FORCED_TERMINATE(ret);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
         return;
      }
@@ -205,7 +205,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
     ret = PMIx_Data_unpack(NULL, buffer, &pbo, &cnt, PMIX_BYTE_OBJECT);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
-        PRTE_FORCED_TERMINATE(ret);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(rly);
         return;
     }
@@ -217,7 +217,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
             ret = PMIx_Data_load(&datbuf, &bo);
             if (PMIX_SUCCESS != ret) {
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-                PRTE_FORCED_TERMINATE(ret);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
                 PMIX_DATA_BUFFER_RELEASE(rly);
                 return;
@@ -225,7 +225,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
         } else {
             PMIX_ERROR_LOG(PMIX_ERROR);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-            PRTE_FORCED_TERMINATE(ret);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
             PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
             PMIX_DATA_BUFFER_RELEASE(rly);
             return;
@@ -234,7 +234,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
         ret = PMIx_Data_load(&datbuf, &pbo);
         if (PMIX_SUCCESS != ret) {
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-            PRTE_FORCED_TERMINATE(ret);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
             PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
             PMIX_DATA_BUFFER_RELEASE(rly);
             return;
@@ -249,6 +249,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         goto CLEANUP;
     }
     PMIX_PROC_CREATE(sig.signature, sig.sz);
@@ -257,7 +258,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-        PRTE_FORCED_TERMINATE(ret);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_PROC_FREE(sig.signature, sig.sz);
         goto CLEANUP;
     }
@@ -270,7 +271,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-        PRTE_FORCED_TERMINATE(ret);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         goto CLEANUP;
     }
 
@@ -279,7 +280,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-        PRTE_FORCED_TERMINATE(ret);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         goto CLEANUP;
     }
 
@@ -289,7 +290,7 @@ static void rbcast_recv(int status, pmix_proc_t* sender,
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-        PRTE_FORCED_TERMINATE(ret);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         goto CLEANUP;
     }
     if( prte_grpcomm_rbcast_cb[cbtype](relay) ) {

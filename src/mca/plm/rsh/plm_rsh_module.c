@@ -1290,8 +1290,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     return;
 
  cleanup:
+    PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
     PRTE_RELEASE(state);
-    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 
 /**

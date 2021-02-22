@@ -235,7 +235,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                     /* an allocation is required, so this is fatal */
                     PRTE_DESTRUCT(&nodes);
                     prte_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
-                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
                     PRTE_RELEASE(caddy);
                     return;
                 } else {
@@ -247,7 +247,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
             }
             PRTE_ERROR_LOG(rc);
             PRTE_DESTRUCT(&nodes);
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
             return;
         }
@@ -265,7 +265,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
             PRTE_ERROR_LOG(rc);
             PRTE_DESTRUCT(&nodes);
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
             return;
         }
@@ -277,7 +277,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
          */
         PRTE_DESTRUCT(&nodes);
         prte_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
         PRTE_RELEASE(caddy);
         return;
     }
@@ -298,7 +298,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         /* a rank/seqfile was provided - parse it */
         if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hosts))) {
             PRTE_DESTRUCT(&nodes);
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
             free(hosts);
             return;
@@ -315,7 +315,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
          */
         if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
             PRTE_ERROR_LOG(rc);
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
             return;
         }
@@ -345,7 +345,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
             if (PRTE_SUCCESS != (rc = prte_util_add_dash_host_nodes(&nodes, hosts, true))) {
                 free(hosts);
                 PRTE_DESTRUCT(&nodes);
-                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
                 PRTE_RELEASE(caddy);
                 return;
             }
@@ -362,7 +362,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
          */
         if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
             PRTE_ERROR_LOG(rc);
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
             return;
         }
@@ -400,7 +400,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                 free(hosts);
                 PRTE_DESTRUCT(&nodes);
                 /* set an error event */
-                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
                 PRTE_RELEASE(caddy);
                 return;
             }
@@ -417,7 +417,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
          */
         if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
             PRTE_ERROR_LOG(rc);
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
             return;
         }
@@ -437,7 +437,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes,
                                                                prte_default_hostfile))) {
             PRTE_DESTRUCT(&nodes);
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
             return;
         }
@@ -452,7 +452,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
          */
         if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
             PRTE_ERROR_LOG(rc);
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
             return;
         }
@@ -473,7 +473,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     if (NULL == node) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         PRTE_DESTRUCT(&nodes);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
         PRTE_RELEASE(caddy);
         return;
     }
@@ -495,7 +495,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, jdata))) {
         PRTE_ERROR_LOG(rc);
         PRTE_DESTRUCT(&nodes);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
         PRTE_RELEASE(caddy);
         return;
     }
@@ -514,7 +514,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                                                      NULL, PMIX_GLOBAL, NULL, 0,
                                                      NULL, NULL))) {
             PMIX_ERROR_LOG(ret);
-            PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
         }
     }

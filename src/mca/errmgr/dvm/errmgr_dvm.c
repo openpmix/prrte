@@ -288,13 +288,10 @@ static void job_errors(int fd, short args, void *cbdata)
         return;
     }
 
-    /* if the jdata is NULL, then we ignore it as this
-     * is reporting an unrecoverable error
-     */
+    /* if the jdata is NULL, then it is referencing the daemon job */
     if (NULL == caddy->jdata) {
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        PRTE_RELEASE(caddy);
-        return;
+        caddy->jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        PRTE_RETAIN(caddy->jdata);
     }
 
     /* update the state */

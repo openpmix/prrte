@@ -176,11 +176,13 @@ typedef int32_t prte_job_state_t;
 #define PRTE_JOB_STATE_ALLOC_FAILED            (PRTE_JOB_STATE_ERROR + 18)  /* job failed to obtain an allocation */
 #define PRTE_JOB_STATE_MAP_FAILED              (PRTE_JOB_STATE_ERROR + 19)  /* job failed to map */
 #define PRTE_JOB_STATE_CANNOT_LAUNCH           (PRTE_JOB_STATE_ERROR + 20)  /* resources were busy and so the job cannot be launched */
+#define PRTE_JOB_STATE_FILES_POSN_FAILED       (PRTE_JOB_STATE_ERROR + 21)
 
+#define PRTE_JOB_STATE_FT                      200
 /* define an FT event */
-#define PRTE_JOB_STATE_FT_CHECKPOINT           (PRTE_JOB_STATE_ERROR + 21)
-#define PRTE_JOB_STATE_FT_CONTINUE             (PRTE_JOB_STATE_ERROR + 22)
-#define PRTE_JOB_STATE_FT_RESTART              (PRTE_JOB_STATE_ERROR + 23)
+#define PRTE_JOB_STATE_FT_CHECKPOINT           (PRTE_JOB_STATE_FT + 1)
+#define PRTE_JOB_STATE_FT_CONTINUE             (PRTE_JOB_STATE_FT + 2)
+#define PRTE_JOB_STATE_FT_RESTART              (PRTE_JOB_STATE_FT + 3)
 
 
 /* Define a boundary so that external developers

@@ -958,14 +958,14 @@ static void recv_data(int fd, short args, void *cbdata)
          */
         PRTE_DESTRUCT(&nds);
         prte_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_ALLOC_FAILED);
     }
 
     /* store the found nodes */
     if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nds, jdata))) {
         PRTE_ERROR_LOG(rc);
         PRTE_DESTRUCT(&nds);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_ALLOC_FAILED);
         return;
     }
     PRTE_DESTRUCT(&nds);

@@ -337,7 +337,7 @@ void prte_iof_base_write_handler(int _fd, short event, void *cbdata)
                 /* if the list is getting too large, abort */
                 if (prte_iof_base.output_limit < prte_list_get_size(&wev->outputs)) {
                     prte_output(0, "IO Forwarding is running too far behind - something is blocking us from writing");
-                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     goto ABORT;
                 }
                 /* leave the write event running so it will call us again
@@ -360,7 +360,7 @@ void prte_iof_base_write_handler(int _fd, short event, void *cbdata)
             /* if the list is getting too large, abort */
             if (prte_iof_base.output_limit < prte_list_get_size(&wev->outputs)) {
                 prte_output(0, "IO Forwarding is running too far behind - something is blocking us from writing");
-                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 goto ABORT;
             }
             /* leave the write event running so it will call us again
