@@ -179,7 +179,7 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
     rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &name, &count, PMIX_PROC);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         return;
     }
 
@@ -189,14 +189,14 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
     /* get the job data object for this proc */
     if (NULL == (jdata = prte_get_job_data_object(name.nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         return;
     }
     /* get the proc object for it */
     proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, name.rank);
     if (NULL == proc || NULL == proc->node) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         return;
     }
 
@@ -207,7 +207,7 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
     rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, answer, &(proc->node->name), 1, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(answer);
         return;
     }
@@ -216,7 +216,7 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
                                           PRTE_RML_TAG_FILEM_BASE_RESP,
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(answer);
         return;
     }
@@ -244,7 +244,7 @@ static void filem_base_process_get_remote_path_cmd(pmix_proc_t* sender,
     rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &filename, &count, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         goto CLEANUP;
     }
 
@@ -295,14 +295,14 @@ static void filem_base_process_get_remote_path_cmd(pmix_proc_t* sender,
     rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, answer, &tmp_name, 1, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(answer);
         goto CLEANUP;
     }
     rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, answer, &file_type, 1, PMIX_INT);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(answer);
         goto CLEANUP;
     }
@@ -311,7 +311,7 @@ static void filem_base_process_get_remote_path_cmd(pmix_proc_t* sender,
                                           PRTE_RML_TAG_FILEM_BASE_RESP,
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(answer);
     }
 

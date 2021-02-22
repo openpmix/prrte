@@ -64,9 +64,7 @@ static void failed_cmd(int fd, short event, void *cbdata)
                          "%s plm:base:orted_cmd command timed out",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     PRTE_RELEASE(tm);
-/*
-    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
-*/
+    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
 }
 #endif
 

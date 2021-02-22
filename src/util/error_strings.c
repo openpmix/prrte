@@ -132,6 +132,8 @@ const char *prte_job_state_to_str(prte_job_state_t state)
         return "MAP FAILED";
     case PRTE_JOB_STATE_CANNOT_LAUNCH:
         return "CANNOT LAUNCH";
+    case PRTE_JOB_STATE_FILES_POSN_FAILED:
+        return "FILE PREPOSITION FAILED";
     case PRTE_JOB_STATE_FT_CHECKPOINT:
         return "FAULT TOLERANCE CHECKPOINT";
     case PRTE_JOB_STATE_FT_CONTINUE:

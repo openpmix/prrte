@@ -233,8 +233,7 @@ static void files_ready(int status, void *cbdata)
     prte_job_t *jdata = (prte_job_t*)cbdata;
 
     if (PRTE_SUCCESS != status) {
-        PRTE_FORCED_TERMINATE(status);
-        return;
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FILES_POSN_FAILED);
     } else {
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP);
     }
@@ -293,21 +292,21 @@ static void vm_ready(int fd, short args, void *cbdata)
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buf);
-                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
             rc = prte_util_nidmap_create(prte_node_pool, buf);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buf);
-                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
             /* provide the info on the capabilities of each node */
             if (PRTE_SUCCESS != (rc = prte_util_pass_node_info(buf))) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buf);
-                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
             /* get wireup info for daemons */
@@ -322,7 +321,7 @@ static void vm_ready(int fd, short args, void *cbdata)
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_RELEASE(wireup);
                     PMIX_DATA_BUFFER_RELEASE(buf);
-                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     return;
                 }
                 /* use the PMIx data support to pack it */
@@ -334,7 +333,7 @@ static void vm_ready(int fd, short args, void *cbdata)
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
                     PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     PMIX_INFO_DESTRUCT(&info);
                     PMIX_DATA_BUFFER_RELEASE(buf);
                     return;
@@ -343,7 +342,7 @@ static void vm_ready(int fd, short args, void *cbdata)
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
                     PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     PMIX_INFO_DESTRUCT(&info);
                     PMIX_DATA_BUFFER_RELEASE(buf);
                     return;
@@ -354,7 +353,7 @@ static void vm_ready(int fd, short args, void *cbdata)
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
                     PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     PMIX_INFO_DESTRUCT(&info);
                     PMIX_DATA_BUFFER_RELEASE(buf);
                 }
@@ -363,7 +362,7 @@ static void vm_ready(int fd, short args, void *cbdata)
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
                     PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     PMIX_INFO_DESTRUCT(&info);
                     PMIX_DATA_BUFFER_RELEASE(buf);
                 }
@@ -372,7 +371,7 @@ static void vm_ready(int fd, short args, void *cbdata)
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
                     PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     PMIX_INFO_DESTRUCT(&info);
                     PMIX_DATA_BUFFER_RELEASE(buf);
                 }
@@ -385,7 +384,7 @@ static void vm_ready(int fd, short args, void *cbdata)
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buf);
-                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
             /* release the data since it has now been copied into our buffer */
@@ -399,7 +398,7 @@ static void vm_ready(int fd, short args, void *cbdata)
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buf);
                 PMIX_PROC_FREE(sig.signature, 1);
-                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
             PMIX_DATA_BUFFER_RELEASE(buf);
@@ -433,7 +432,7 @@ static void vm_ready(int fd, short args, void *cbdata)
 
     /* position any required files */
     if (PRTE_SUCCESS != prte_filem.preposition_files(caddy->jdata, files_ready, caddy->jdata)) {
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_FILES_POSN_FAILED);
     }
     PRTE_RELEASE(caddy);
 }

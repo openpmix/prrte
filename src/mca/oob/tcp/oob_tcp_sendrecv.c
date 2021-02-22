@@ -272,7 +272,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                 PRTE_RML_SEND_COMPLETE(msg->msg);
                 PRTE_RELEASE(msg);
                 peer->send_msg = NULL;
-                PRTE_FORCED_TERMINATE(1);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
                 return;
             }
 
@@ -438,7 +438,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 PRTE_NAME_PRINT(&peer->name));
             prte_event_del(&peer->recv_event);
-            PRTE_FORCED_TERMINATE(1);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
             return;
         }
         break;
@@ -572,7 +572,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                             PRTE_NAME_PRINT(&(peer->name)));
                 /* turn off the recv event */
                 prte_event_del(&peer->recv_event);
-                PRTE_FORCED_TERMINATE(1);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
                 return;
             }
         }

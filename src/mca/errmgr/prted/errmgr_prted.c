@@ -258,13 +258,10 @@ static void job_errors(int fd, short args, void *cbdata)
         return;
     }
 
-    /* if the jdata is NULL, then we abort as this
-     * is reporting an unrecoverable error
-     */
+    /* if the jdata is NULL, then it is referencing the daemon job */
     if (NULL == caddy->jdata) {
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-        PRTE_RELEASE(caddy);
-        return;
+        caddy->jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        PRTE_RETAIN(caddy->jdata);
     }
 
     /* update the state */
@@ -286,7 +283,7 @@ static void job_errors(int fd, short args, void *cbdata)
         /* kill all local procs */
         killprocs(NULL, PMIX_RANK_WILDCARD);
         /* order termination */
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        prted_abort(PRTE_ERROR_DEFAULT_EXIT_CODE, "Daemon %s: comm failure", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         goto cleanup;
     case PRTE_JOB_STATE_HEARTBEAT_FAILED:
         /* let the HNP handle this */
@@ -412,7 +409,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* get the proc_t */
             if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc->rank))) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 goto cleanup;
             }
             /* leave the exit code alone - process this as a waitpid */
@@ -465,7 +462,7 @@ static void proc_errors(int fd, short args, void *cbdata)
 
     if (NULL == (child = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc->rank))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         goto cleanup;
     }
     /* if this is not a local proc for this job, we can
@@ -815,11 +812,12 @@ static void failed_start(prte_job_t *jobdat)
                 PRTE_FLAG_SET(child, PRTE_PROC_FLAG_IOF_COMPLETE);
                 /* ditto for waitpid */
                 PRTE_FLAG_SET(child, PRTE_PROC_FLAG_WAITPID);
+                PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_TERMINATED);
             }
         }
     }
     PRTE_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
-                         "%s errmgr:hnp: job %s repprted incomplete start",
+                         "%s errmgr:hnp: job %s reported incomplete start",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_JOBID_PRINT(jobdat->nspace)));
     return;

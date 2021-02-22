@@ -421,7 +421,7 @@ void prte_plm_base_recv(int status, pmix_proc_t* sender,
                     /* get the proc data object */
                     if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, vpid))) {
                         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FORCED_EXIT);
                         goto CLEANUP;
                     }
                     /* NEVER update the proc state before activating the state machine - let
@@ -485,7 +485,7 @@ void prte_plm_base_recv(int status, pmix_proc_t* sender,
     /* see if an error occurred - if so, wakeup the HNP so we can exit */
     if (PRTE_PROC_IS_MASTER && PRTE_SUCCESS != rc) {
         jdata = NULL;
-        PRTE_FORCED_TERMINATE(PRTE_ERROR_DEFAULT_EXIT_CODE);
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
     }
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,

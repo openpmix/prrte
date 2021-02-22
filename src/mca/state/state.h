@@ -73,13 +73,6 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
 /* For ease in debugging the state machine, it is STRONGLY recommended
  * that the functions be accessed using the following macros
  */
-#define PRTE_FORCED_TERMINATE(x)                                                    \
-    do {                                                                            \
-        if (!prte_abnormal_term_ordered) {                                          \
-            prte_output(0, "FORCE TERMINATE ORDERED AT %s:%d - error %s(%d)",       \
-                        __FILE__, __LINE__, PRTE_ERROR_NAME((x)), (x));             \
-        } \
-    } while(0);
 
 /* Timestamp for state printouts */
 #define PRTE_STATE_GET_TIMESTAMP(t)                                         \
