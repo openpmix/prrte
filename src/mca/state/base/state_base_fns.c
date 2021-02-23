@@ -482,11 +482,9 @@ static void _send_notification(int status,
                                pmix_proc_t *proc,
                                pmix_proc_t *target)
 {
-    pmix_data_buffer_t *buf;
     prte_grpcomm_signature_t sig;
     int rc;
     pmix_proc_t daemon;
-    pmix_byte_object_t pbo;
     pmix_info_t *info;
     size_t ninfo;
     pmix_data_buffer_t pbkt;
@@ -503,21 +501,31 @@ static void _send_notification(int status,
     /* pack the info for sending */
     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
 
+    /* we need to add a flag indicating this came from an invalid proc so that we will
+     * inject it into our own PMIx server library */
+    if (PRTE_SUCCESS != (rc = PMIx_Data_pack(NULL, &pbkt, &PRTE_NAME_INVALID->rank, 1, PMIX_PROC_RANK))) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+        return;
+    }
     /* pack the status code */
     code = prte_pmix_convert_rc(status);
     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &code, 1, PMIX_STATUS))) {
         PMIX_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return;
     }
     /* pack the source - it cannot be me as that will cause
      * the pmix server to upcall the event back to me */
     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, proc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return;
     }
     /* pack the range */
     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &range, 1, PMIX_DATA_RANGE))) {
         PMIX_ERROR_LOG(ret);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return;
     }
 
@@ -531,37 +539,17 @@ static void _send_notification(int status,
     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_FREE(info, ninfo);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return;
     }
     /* pack the infos themselves */
     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, info, ninfo, PMIX_INFO))) {
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_FREE(info, ninfo);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return;
     }
     PMIX_INFO_FREE(info, ninfo);
-
-    /* unload the data buffer */
-    ret = PMIx_Data_unload(&pbkt, &pbo);
-
-    /* insert into pmix_data_buffer_t */
-    PMIX_DATA_BUFFER_CREATE(buf);
-
-    /* we need to add a flag indicating this came from an invalid proc so that we will
-     * inject it into our own PMIx server library */
-    if (PRTE_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &PRTE_NAME_INVALID->rank, 1, PMIX_PROC_RANK))) {
-        PMIX_ERROR_LOG(rc);
-        free(pbo.bytes);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        return;
-    }
-    if (PRTE_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &pbo, 1, PMIX_BYTE_OBJECT))) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        free(pbo.bytes);
-        return;
-    }
-    free(pbo.bytes);
 
     if (PMIX_RANK_WILDCARD == target->rank) {
         /* xcast it to everyone */
@@ -570,11 +558,11 @@ static void _send_notification(int status,
         PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
         sig.sz = 1;
 
-        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(&sig, PRTE_RML_TAG_NOTIFICATION, buf))) {
+        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(&sig, PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
             PRTE_ERROR_LOG(rc);
         }
         PRTE_DESTRUCT(&sig);
-        PMIX_DATA_BUFFER_RELEASE(buf);
+        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
     } else {
         /* get the daemon hosting the proc to be notified */
         PMIX_LOAD_PROCID(&daemon, PRTE_PROC_MY_NAME->nspace, prte_get_proc_daemon_vpid(target));
@@ -585,11 +573,11 @@ static void _send_notification(int status,
                             PRTE_ERROR_NAME(status),
                             PRTE_NAME_PRINT(target),
                             PRTE_NAME_PRINT(&daemon));
-        if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(&daemon, buf,
+        if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(&daemon, &pbkt,
                                                           PRTE_RML_TAG_NOTIFICATION,
                                                           prte_rml_send_callback, NULL))) {
             PRTE_ERROR_LOG(rc);
-            PRTE_RELEASE(buf);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         }
     }
 }
