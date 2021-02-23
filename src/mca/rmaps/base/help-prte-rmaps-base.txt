@@ -509,3 +509,18 @@ specify the name of the rankfile.
 A ':' was found in a modifier specification but there is no modifier
 following the ':'. Please specify a modifier.
 #
+[invalid-combination]
+We cannot bind to hardware threads if we are not treating hardware
+threads as independent CPUs since the lowest allocatable unit is
+"core" by default. In order to bind to hardware threads, you must
+therefore specify that we treat hardware threads as independent CPUs
+by adding the "HWTCPUS" modifier to the "--map-by" directive.
+
+The combination "--map-by core:hwtcpus --bind-to hwthread" or
+"--map-by :hwtcpus --bind-to hwthread" will result in one process
+being placed on each core, with the process bound to the first
+hardware thread in that core.
+
+In contrast, a case such as "--map-by package:hwtcpus --bind-to hwthread"
+would result in each process being bound to successive hardware threads
+on each package.
