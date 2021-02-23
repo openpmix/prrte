@@ -120,13 +120,15 @@ static void launch_daemons(int fd, short args, void *cbdata);
 static int plm_alps_init(void)
 {
     int rc;
-
+    prte_job_t *daemons;
+    
     if (PRTE_SUCCESS != (rc = prte_plm_base_comm_start())) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
 
-    if (prte_do_not_launch) {
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         /* must map daemons since we won't be launching them */
         prte_plm_globals.daemon_nodes_assigned_at_launch = true;
     } else {
@@ -213,7 +215,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * launch the daemons - the user really wants to just
      * look at the proposed process map
      */
-    if (prte_do_not_launch) {
+    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         /* set the state to indicate the daemons reported - this
          * will trigger the daemons_reported event and cause the
          * job to move to the following step

@@ -518,7 +518,6 @@ PRTE_EXPORT bool prte_node_match(prte_node_t *n1, char *name);
 PRTE_EXPORT extern bool prte_debug_daemons_flag;
 PRTE_EXPORT extern bool prte_debug_daemons_file_flag;
 PRTE_EXPORT extern bool prte_leave_session_attached;
-PRTE_EXPORT extern bool prte_do_not_launch;
 PRTE_EXPORT extern bool prte_coprocessors_detected;
 PRTE_EXPORT extern prte_hash_table_t *prte_coprocessors;
 PRTE_EXPORT extern char *prte_topo_signature;

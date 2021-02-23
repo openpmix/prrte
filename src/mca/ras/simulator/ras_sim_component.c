@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -125,12 +126,15 @@ static int ras_sim_register(void)
 
 static int ras_sim_component_query(prte_mca_base_module_t **module, int *priority)
 {
+    prte_job_t *jdata;
+    
     if (NULL != prte_ras_simulator_component.num_nodes) {
         *module = (prte_mca_base_module_t *) &prte_ras_sim_module;
         *priority = 1000;
         /* cannot launch simulated nodes or resolve their names to addresses */
-        prte_do_not_launch = true;
-        prte_if_do_not_resolve = true;
+        jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_RESOLVE, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
         return PRTE_SUCCESS;
     }
 

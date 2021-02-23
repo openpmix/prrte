@@ -331,6 +331,10 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--do-not-launch")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DONOTLAUNCH", true);
     }
+    /* --do-not-resolve  ->   --map-by :donotresolve*/
+    else if (0 == strcmp(option, "--do-not-resolve")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DONOTRESOLVE", true);
+    }
     /* --tag-output  ->  --map-by :tagoutput */
     else if (0 == strcmp(option, "--tag-output")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "TAGOUTPUT", true);

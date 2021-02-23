@@ -447,6 +447,10 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB_PPR";
         case PRTE_JOB_NOINHERIT:
             return "JOB_NOINHERIT";
+        case PRTE_JOB_FILE:
+            return "JOB-FILE";
+        case PRTE_JOB_DO_NOT_RESOLVE:
+            return "DO-NOT-RESOLVE";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

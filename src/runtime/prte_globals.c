@@ -62,7 +62,6 @@ int prte_clean_output = -1;
 /* globals used by RTE */
 bool prte_debug_daemons_file_flag = false;
 bool prte_leave_session_attached = false;
-bool prte_do_not_launch = false;
 bool prte_coprocessors_detected = false;
 prte_hash_table_t *prte_coprocessors = NULL;
 char *prte_topo_signature = NULL;

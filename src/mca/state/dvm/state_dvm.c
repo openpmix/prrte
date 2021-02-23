@@ -283,7 +283,8 @@ static void vm_ready(int fd, short args, void *cbdata)
         prte_dvm_ready = true;
         /* if there is only one daemon in the job, then there
          * is just a little bit to do */
-        if (!prte_do_not_launch && 1 < prte_process_info.num_daemons) {
+        if (!prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
+            1 < prte_process_info.num_daemons) {
             /* send the daemon map to every daemon in this DVM - we
              * do this here so we don't have to do it for every
              * job we are going to launch */

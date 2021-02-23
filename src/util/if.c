@@ -19,6 +19,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -163,14 +164,6 @@ int prte_ifaddrtoname(const char* if_addr, char* if_name, int length)
     prte_if_t* intf;
     int error;
     struct addrinfo hints, *res = NULL, *r;
-
-    /* if the user asked us not to resolve interfaces, then just return */
-    if (prte_if_do_not_resolve) {
-        /* return not found so ifislocal will declare
-         * the node to be non-local
-         */
-        return PRTE_ERR_NOT_FOUND;
-    }
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;

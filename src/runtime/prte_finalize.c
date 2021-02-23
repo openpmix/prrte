@@ -99,10 +99,6 @@ int prte_finalize(void)
     }
     PRTE_RELEASE(prte_job_data);
 
-    if (prte_do_not_launch) {
-        exit(0);
-    }
-
 {
     prte_pointer_array_t * array = prte_node_topologies;
     int i;

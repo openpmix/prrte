@@ -88,6 +88,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/prteif/prteif.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
@@ -677,8 +678,7 @@ int main(int argc, char *argv[])
     if (prte_debug_flag || prte_debug_daemons_flag || prte_leave_session_attached) {
         prte_devel_level_output = true;
     }
-    prte_do_not_launch = prte_cmd_line_is_taken(prte_cmd_line, "do-not-launch");
-
+    
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
@@ -771,6 +771,15 @@ int main(int argc, char *argv[])
                        prte_tool_basename);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
+    }
+
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
+        if (NULL != strcasestr(pval->value.data.string, "DONOTLAUNCH")) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+        }
+        if (NULL != strcasestr(pval->value.data.string, "DONOTRESOLVE")) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_RESOLVE, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+        }
     }
 
     /* Did the user specify a prefix, or want prefix by default? */
@@ -1017,6 +1026,12 @@ int main(int argc, char *argv[])
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->value.data.string, PMIX_STRING);
+        if (NULL != strcasestr(pval->value.data.string, "DONOTLAUNCH")) {
+            PMIX_INFO_LIST_ADD(ret, jinfo, "PRTE_JOB_DO_NOT_LAUNCH", NULL, PMIX_BOOL);
+        }
+        if (NULL != strcasestr(pval->value.data.string, "DONOTRESOLVE")) {
+            PMIX_INFO_LIST_ADD(ret, jinfo, "PRTE_JOB_DO_NOT_RESOLVE", NULL, PMIX_BOOL);
+        }
     }
 
     /* if the user specified a ranking policy, then set it */
