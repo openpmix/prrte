@@ -133,19 +133,26 @@ To map processes across sets of objects:
 
 :   Map to the specified object. See defaults in Quick Summary. Supported
     options include `slot`, `hwthread`, `core`, `l1cache`, `l2cache`, `l3cache`,
-    `package`, `node`, `seq`, `dist`, `ppr`, and `rankfile`. Any object can
-    include modifiers by adding a colon (`:`) and any combination of:
-    `PE=n` (bind n processing elements to each process), `SPAN` (load balance
-    the processes across the allocation), `OVERSUBSCRIBE` (allow more processes
-    on a node than processing elements), `NOOVERSUBSCRIBE` (`!OVERSUBSCRIBE`),
-    `NOLOCAL` (do not launch processes on the same node as `prun`), `HWTCPUS`
-    (use hardware threads as cpu slots), `CORECPUS` (use cores as cpu slots),
-    `DEVICE=dev` (for `dist` policy), `INHERIT`, `NOINHERIT` (`!INHERIT`),
-    `PE-LIST=a,b` (comma-delimited ranges of cpus to use for this job processed
-    as an unordered pool of CPUs),
-    `FILE=%s` (path to file containing sequential or rankfile entries).
-    `ppr` policy example: `--map-by ppr:N:<object>` will launch `N` times the
-    number of objects of the specified type on each node.
+    `package`, `node`, `seq`, `dist`, `ppr`, and `rankfile`.
+
+Any object can include modifiers by adding a colon (`:`) and any combination
+of one or more of the following to the `--map-by` option:
+
+ - `PE=n` bind `n` processing elements to each process
+ - `SPAN` load balance the processes across the allocation
+ - `OVERSUBSCRIBE` allow more processes on a node than processing elements
+ - `NOOVERSUBSCRIBE` means `!OVERSUBSCRIBE`
+ - `NOLOCAL` do not launch processes on the same node as `prun`
+ - `HWTCPUS` use hardware threads as CPU slots
+ - `CORECPUS` use cores as CPU slots (default)
+ - `DEVICE=dev` device specifier for the `dist` policy
+ - `INHERIT`
+ - `NOINHERIT` means `!INHERIT`
+ - `PE-LIST=a,b` comma-delimited ranges of cpus to use for this job processed as an unordered pool of CPUs
+ - `FILE=%s` (path to file containing sequential or rankfile entries).
+
+`ppr` policy example: `--map-by ppr:N:<object>` will launch `N` times the
+number of objects of the specified type on each node.
 
 To order processes' ranks:
 
@@ -154,8 +161,13 @@ To order processes' ranks:
 :   Rank in round-robin fashion according to the specified object. See defaults
     in Quick Summary.
     Supported options include `slot`, `hwthread`, `core`, `l1cache`, `l2cache`,
-    `l3cache`, `package`, and `node`. Any object can include modifiers
-    by adding a colon : and any combination of: `SPAN` or `FILL`.
+    `l3cache`, `package`, and `node`.
+
+Any object can include modifiers by adding a colon (`:`) and any combination
+of one or more of the following to the `--rank-by` option:
+
+ - `SPAN`
+ - `FILL`
 
 To bind processes to sets of objects:
 
@@ -163,10 +175,13 @@ To bind processes to sets of objects:
 
 :   Bind processes to the specified object. See defaults in Quick Summary.
     Supported options include `none`, `hwthread`, `core`, `l1cache`,
-    `l2cache`, `l3cache`, and `package`. Any object can include modifiers
-    by adding a colon : and any combination of: `overload-allowed` (if
-    overloading of this object is allowed), and `if-supported` (if that object
-    is supported on this system).
+    `l2cache`, `l3cache`, and `package`.
+
+Any object can include modifiers by adding a colon (`:`) and any combination
+of one or more of the following to the `--bind-to` option:
+
+ - `overload-allowed` if overloading of this object is allowed
+ - `if-supported` if that object is supported on this system
 
 ## Diagnostics
 
@@ -373,6 +388,9 @@ To oversubscribe the nodes you can use the `:OVERSUBSCRIBE` qualifier to
 
 :   will launch processes 0-5 on node `aa`, 6-9 on `bb`, and 10-13 on `cc`.
 
+<!--
+// JJH TODO -- this does not work see https://github.com/openpmix/prrte/issues/770
+
 Limits to oversubscription can also be specified in the hostfile itself:
 ```
 % cat myhostfile
@@ -384,8 +402,6 @@ cc slots=4
 The `max_slots` field specifies such a limit. When it does, the `slots`
 value defaults to the limit. Now:
 
-// JJH TODO -- this does not work see https://github.com/openpmix/prrte/issues/770
-
 `prun --hostfile myhostfile --np 14 --map-by :OVERSUBSCRIBE ./a.out`
 
 :   causes the first 12 processes to be launched as before, but the
@@ -396,6 +412,7 @@ value defaults to the limit. Now:
 Using the `:NOOVERSUBSCRIBE` qualifier to `--map-by` option can be helpful
 since the PRTE DVM currently does not get "max_slots" values from the
 resource manager.
+-->
 
 Of course, `--np` can also be used with the `--host` option. For
 example,
@@ -416,15 +433,16 @@ example,
 :   launches 8 processes. Processes 0-1 on node `aa` since it has 2 slots and
     processes 2-7 on node `bb` since it has 6 slots.
 
-And here is a MIMD example:
-
+<!--
 // JJH TODO -- this does not work see https://github.com/openpmix/prrte/issues/771
+
+And here is a MIMD example:
 
 `prun --host aa --np 1 hostname : --host bb,cc --np 2 uptime`
 
 :   will launch process 0 running `hostname` on node `aa` and processes 1
     and 2 each running `uptime` on nodes `bb` and `cc`, respectively.
-
+-->
 
 ## Mapping, Ranking, and Binding: Fundamentals
 
@@ -511,7 +529,7 @@ prun option          MCA parameter key           value
 --map-by package     rmaps_base_mapping_policy   package
 --rank-by core       rmaps_base_ranking_policy   core
 --bind-to core       hwloc_base_binding_policy   core
---bind-to socket     hwloc_base_binding_policy   socket
+--bind-to package    hwloc_base_binding_policy   package
 --bind-to none       hwloc_base_binding_policy   none
 ```
 
@@ -609,6 +627,24 @@ general form of each line in the rankfile is:
 rank <N>=<hostname> slot=<slot list>
 ```
 
+For example:
+```
+$ cat myrankfile
+rank 0=c712f6n01 slot=10-12
+rank 1=c712f6n02 slot=0,1,4
+rank 2=c712f6n03 slot=1-2
+$ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
+```
+
+Means that
+
+```
+Rank 0 runs on node aa, bound to logical cores 10-12.
+Rank 1 runs on node bb, bound to logical cores 0, 1, and 4.
+Rank 2 runs on node cc, bound to logical cores 1 and 2.
+```
+
+<!--
 // JJH TODO this does not work see https://github.com/openpmix/prrte/issues/772
 
 For example:
@@ -627,28 +663,7 @@ Rank 0 runs on node aa, bound to logical package 1, cores 0-2.
 Rank 1 runs on node bb, bound to logical package 0, cores 0 and 1.
 Rank 2 runs on node cc, bound to logical cores 1 and 2.
 ```
-
-Rankfiles can alternatively be used to specify *physical* processor locations.
-In this case, the syntax is somewhat different. Packages are no longer
-recognized, and the slot number given must be the number of the physical PU as
-most OS's do not assign a unique physical identifier to each core in the node.
-Thus, a proper physical rankfile looks something like the following:
-
-```
-$ cat myphysicalrankfile
-rank 0=aa slot=1
-rank 1=bb slot=8
-rank 2=cc slot=6
-$ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
-```
-
-This means that
-
-```
-Rank 0 will run on node aa, bound to the core that contains physical PU 1
-Rank 1 will run on node bb, bound to the core that contains physical PU 8
-Rank 2 will run on node cc, bound to the core that contains physical PU 6
-```
+-->
 
 The hostnames listed above are "absolute," meaning that actual resolvable
 hostnames are specified. However, hostnames can also be specified as
@@ -662,8 +677,8 @@ from 0. For example:
 
 ```
 $ cat myrankfile
-rank 0=+n0 slot=1:0-2
-rank 1=+n1 slot=0:0,1
+rank 0=+n0 slot=10-12
+rank 1=+n1 slot=0,1,4
 rank 2=+n2 slot=1-2
 $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
 ```
@@ -718,11 +733,51 @@ These deprecated options will be removed in a future release.
 :   **(Deprecated: Use `--map-by :DISPLAYALLOC`)**
     Display the detected resource allocation.
 
+`--display-devel-map`
+
+:   **(Deprecated: Use `--map-by :DISPLAYDEVEL`)**
+    Display a detailed process map (mostly intended for developers) just
+    before launch.
+
+`--display-diff`
+
+:   **(Deprecated: Use `--map-by :DISPLAYDIFF`)**
+    Display a diffable process map (mostly intended for developers) just
+    before launch.
+
+`--display-diffable-map`
+
+:   **(Deprecated: Use `--map-by :DISPLAYDIFF`)**
+    Alias for `--display-diff`
+
 `--display-map`
 
 :   **(Deprecated: Use `--map-by :DISPLAY`)**
     Display a table showing the mapped location of each process prior to
     launch.
+
+`--display-topo`
+
+:   **(Deprecated: Use `--map-by :DISPLAYTOPO`)**
+    Display the topology as part of the process map (mostly intended for
+    developers) just before launch.
+
+`--do-not-launch`
+
+:   **(Deprecated: Use `--map-by :DONOTLAUNCH`)**
+    Perform all necessary operations to prepare to launch the application,
+    but do not actually launch it (usually used to test mapping patterns).
+
+`--do-not-resolve`
+
+:   **(Deprecated: Use `--map-by :DONOTRESOLVE`)**
+    Do not attempt to resolve interfaces - usually used to determine proposed
+    process placement/binding prior to obtaining an allocation.
+
+`-N <num>`
+
+:   **(Deprecated: Use `--map-by prr:<num>:node`)**
+    Launch `num` processes per node on all allocated nodes.
 
 `--nolocal`
 
@@ -779,7 +834,22 @@ These deprecated options will be removed in a future release.
 :   **(Deprecated: Use `--bind-to :REPORT`)**
     Report any bindings for launched processes.
 
+`--tag-output`
+
+:   **(Deprecated: Use `--map-by :TAGOUTPUT`)**
+    Tag all output with [job,rank]
+
+`--timestamp-output`
+
+:   **(Deprecated: Use `--map-by :TIMESTAMPOUTPUT`)**
+    Timestamp all application process output
+
 `--use-hwthread-cpus`
 
 :   **(Deprecated: Use `--map-by :HWTCPUS`)**
     Use hardware threads as independent cpus.
+
+`--xml`
+
+:   **(Deprecated: Use `--map-by :XMLOUTPUT`)**
+    Provide all output in XML format

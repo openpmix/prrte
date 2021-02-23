@@ -141,11 +141,6 @@ of the commonly used options.
     the SPMD model and will return an error (without beginning execution
     of the application) otherwise.
 
-`-N <num>`
-
-:   Launch `num` processes per node on all allocated nodes (synonym for
-    `--map-by prr:<num>:node`).
-
 ## I/O Management
 
 To manage standard I/O:
@@ -191,17 +186,17 @@ To manage standard I/O:
 
 :   Merge `stderr` to `stdout` for each process.
 
-`--tag-output`
+`--map-by :TAGOUTPUT`
 
 :   Tag each line of output to `stdout`, `stderr`, and `stddiag` with
     `[jobid, MCW_rank]<stdxxx>` indicating the jobid and rank of the process
     that generated the output, and the channel which generated it.
 
-`--timestamp-output`
+`--map-by :TIMESTAMPOUTPUT`
 
 :   Timestamp each line of output to `stdout`, `stderr`, and `stddiag`.
 
-`--xml`
+`--map-by :XMLOUTPUT`
 
 :   Provide all output to `stdout`, `stderr`, and `stddiag` in an xml format.
 
@@ -361,14 +356,10 @@ There are also other options:
 
 :   Disable recovery (resets all recovery options to off).
 
-`--do-not-launch`
+`--map-by :DONOTLAUNCH`
 
 :   Perform all necessary operations to prepare to launch the
     application, but do not actually launch it.
-
-`--do-not-resolve`
-
-:   Do not attempt to resolve interfaces.
 
 `--index-argv-by-rank`
 
@@ -393,20 +384,21 @@ There are also other options:
 The following options are useful for developers; they are not generally
 useful to most users:
 
-`--display-devel-allocation`
+`--map-by :DISPLAYALLOC`
 
 :   Display a detailed list of the allocation being used by this job.
 
-`--display-devel-map`
+`--map-by :DISPLAYDEVEL`
 
 :   Display a more detailed table showing the mapped location of each
     process prior to launch.
 
-`--display-diffable-map`
+`--map-by :DISPLAYDIFF`
 
-:   Display a diffable process map just before launch.
+:   Display a diffable process map (mostly intended for developers) just
+    before launch.
 
-`--display-topo`
+`--map-by :DISPLAYTOPO`
 
 :   Display the topology as part of the process map just before launch.
 
