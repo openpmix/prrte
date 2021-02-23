@@ -355,6 +355,14 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     }
     /* --map-by socket ->  --map-by package */
     else if (0 == strcmp(option, "--map-by")) {
+        /* if the option consists solely of qualifiers, then add
+         * the "core" default value */
+        if (':' == pargs[i+1][0]) {
+            prte_asprintf(&p2, "core%s", pargs[i+1]);
+            free(pargs[i+1]);
+            pargs[i+1] = p2;
+            return PRTE_OPERATION_SUCCEEDED;
+        }
         /* check the value of the option for "socket" */
         if (0 == strncasecmp(pargs[i+1], "socket", strlen("socket"))) {
             p1 = strdup(pargs[i+1]);  // save the original option
@@ -877,6 +885,7 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
         NULL
     };
     bool good = false;
+    bool hwtcpus = false;
 
     if (1 < prte_cmd_line_get_ninsts(cmd_line, "map-by")) {
         prte_show_help("help-schizo-base.txt", "multi-instances",
@@ -896,6 +905,9 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
 
     /* quick check that we have valid directives */
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "map-by", 0, 0))) {
+        if (NULL != strcasestr(pval->value.data.string, "HWTCPUS")) {
+            hwtcpus = true;
+        }
         /* if it starts with a ':', then these are just modifiers */
         if (':' == pval->value.data.string[0]) {
             goto rnk;
@@ -942,7 +954,7 @@ bnd:
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "bind-to", 0, 0))) {
         /* if it starts with a ':', then these are just modifiers */
         if (':' == pval->value.data.string[0]) {
-            goto done;
+            return PRTE_SUCCESS;
         }
         args = prte_argv_split(pval->value.data.string, ':');
         good = false;
@@ -956,10 +968,16 @@ bnd:
             prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "binding", args[0]);
             prte_argv_free(args);
             return PRTE_ERR_SILENT;
-       }
+        }
+        if (0 == strcasecmp(args[0], "HWTHREAD") && !hwtcpus) {
+            /* if we are told to bind-to hwt, then we have to be treating
+             * hwt's as the allocatable unit */
+            prte_show_help("help-prte-rmaps-base.txt", "invalid-combination", true);
+            prte_argv_free(args);
+            return PRTE_ERR_SILENT;
+        }
         prte_argv_free(args);
     }
 
-done:
     return PRTE_SUCCESS;
 }
