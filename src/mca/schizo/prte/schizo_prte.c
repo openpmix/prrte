@@ -482,16 +482,71 @@ static void register_deprecated_cli(prte_list_t *convertors)
     prte_list_append(convertors, &cv->super);
 }
 
+static void doit(char *tgt,
+                 char *src,
+                 char **srcenv,
+                 char ***dstenv,
+                 bool cmdline)
+{
+    char *param, *p1, *value, *tmp;
+    char **env = *dstenv;
+    size_t n;
+
+    param = strdup(src);
+    p1 = param + strlen(tgt);
+    value = strchr(param, '=');
+    *value = '\0';
+    value++;
+    /* check for duplicate in app->env - this
+     * would have been placed there by the
+     * cmd line processor. By convention, we
+     * always let the cmd line override the
+     * environment
+     */
+    if (cmdline) {
+        /* check if it is already present */
+        for (n=0; NULL != env[n]; n++) {
+            if (0 == strcmp(env[n], p1)) {
+                /* this param is already given */
+                free(param);
+                return;
+            }
+        }
+        prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                            "%s schizo:prte:parse_env adding %s %s to cmd line",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1, value);
+        prte_argv_append_nosize(dstenv, "--prtemca");
+        prte_argv_append_nosize(dstenv, p1);
+        prte_argv_append_nosize(dstenv, value);
+    } else {
+        /* push it into our environment with a PRTE_MCA_ prefix*/
+        if (0 != strcmp(tgt, "PRTE_MCA_")) {
+            prte_asprintf(&tmp, "PRTE_MCA_%s", p1);
+        } else {
+            tmp = strdup(param);
+        }
+        if (environ != srcenv) {
+           prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                "%s schizo:prte:parse_env pushing %s=%s into my environment",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmp, value);
+            prte_setenv(tmp, value, true, &environ);
+        }
+        prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                            "%s schizo:prte:parse_env pushing %s=%s into dest environment",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmp, value);
+        prte_setenv(tmp, value, true, dstenv);
+        free(tmp);
+    }
+    free(param);
+}
 
 static int parse_env(prte_cmd_line_t *cmd_line,
                      char **srcenv,
                      char ***dstenv,
                      bool cmdline)
 {
-    int i, n;
-    char *param, *p1;
-    char *value;
-    char **env = *dstenv;
+    int i, j;
+    char *p1;
 
     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:prte: parse_env",
@@ -499,47 +554,16 @@ static int parse_env(prte_cmd_line_t *cmd_line,
 
     for (i = 0; NULL != srcenv[i]; ++i) {
         if (0 == strncmp("PRTE_MCA_", srcenv[i], strlen("PRTE_MCA_"))) {
-            /* check for duplicate in app->env - this
-             * would have been placed there by the
-             * cmd line processor. By convention, we
-             * always let the cmd line override the
-             * environment
-             */
-            param = strdup(srcenv[i]);
-            p1 = param + strlen("PRTE_MCA_");
-            value = strchr(param, '=');
-            *value = '\0';
-            value++;
-            if (cmdline) {
-                /* check if it is already present */
-                for (n=0; NULL != env[n]; n++) {
-                    if (0 == strcmp(env[n], p1)) {
-                        /* this param is already given */
-                        goto next;
-                    }
+            doit("PRTE_MCA_", srcenv[i], srcenv, dstenv, cmdline);
+        } else if (0 == strncmp("OMPI_MCA_", srcenv[i], strlen("OMPI_MCA_"))) {
+            /* if this references one of the old ORTE frameworks, then take it here */
+            p1 = srcenv[i] + strlen("OMPI_MCA_");
+            for (j=0; NULL != frameworks[j]; j++) {
+                if (0 == strncmp(p1, frameworks[j], strlen(frameworks[j]))) {
+                    doit("OMPI_MCA_", srcenv[i], srcenv, dstenv, cmdline);
+                    break;
                 }
-                prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                     "%s schizo:prte:parse_env adding %s %s to cmd line",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1, value);
-                prte_argv_append_nosize(dstenv, "--prtemca");
-                prte_argv_append_nosize(dstenv, p1);
-                prte_argv_append_nosize(dstenv, value);
-            } else {
-                if (environ != srcenv) {
-                    /* push it into our environment */
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                         "%s schizo:prte:parse_env pushing %s=%s into my environment",
-                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param, value);
-                    prte_setenv(param, value, true, &environ);
-                }
-                prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                     "%s schizo:prte:parse_env pushing %s=%s into dest environment",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param, value);
-                prte_setenv(param, value, true, dstenv);
             }
-          next:
-            free(param);
-            env = *dstenv;
         }
     }
 
