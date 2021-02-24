@@ -82,25 +82,6 @@
 #endif
 
 /*
- *  Look for interface by name and returns its address
- *  as a dotted decimal formatted string.
- */
-
-int prte_ifnametoaddr(const char* if_name, struct sockaddr* addr, int length)
-{
-    prte_if_t* intf;
-
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t) {
-        if (strcmp(intf->if_name, if_name) == 0) {
-            memcpy(addr, &intf->if_addr, length);
-            return PRTE_SUCCESS;
-        }
-    }
-    return PRTE_ERROR;
-}
-
-
-/*
  *  Look for interface by name and returns its
  *  corresponding prte_list index.
  */
@@ -137,29 +118,11 @@ int prte_ifnametokindex(const char* if_name)
 
 
 /*
- *  Look for interface by prte_list index and returns its
- *  corresponding kernel index.
- */
-
-int prte_ifindextokindex(int if_index)
-{
-    prte_if_t* intf;
-
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t) {
-        if (if_index == intf->if_index) {
-            return intf->if_kernel_index;
-        }
-    }
-    return -1;
-}
-
-
-/*
  *  Attempt to resolve the adddress (given as either IPv4/IPv6 string
  *  or hostname) and lookup corresponding interface.
  */
 
-int prte_ifaddrtoname(const char* if_addr, char* if_name, int length)
+static int prte_ifaddrtoname(const char* if_addr, char* if_name, int length)
 {
     prte_if_t* intf;
     int error;
@@ -209,64 +172,6 @@ int prte_ifaddrtoname(const char* if_addr, char* if_name, int length)
     }
 
     /* if we get here, it wasn't found */
-    return PRTE_ERR_NOT_FOUND;
-}
-
-/*
- *  Attempt to resolve the address (given as either IPv4/IPv6 string
- *  or hostname) and return the kernel index of the interface
- *  on the same network as the specified address
- */
-int prte_ifaddrtokindex(const char* if_addr)
-{
-    prte_if_t* intf;
-    int error;
-    struct addrinfo hints, *res = NULL, *r;
-    int if_kernel_index;
-    size_t len;
-
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = PF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    error = getaddrinfo(if_addr, NULL, &hints, &res);
-
-    if (error) {
-        if (NULL != res) {
-            freeaddrinfo (res);
-        }
-        return PRTE_ERR_NOT_FOUND;
-    }
-
-    for (r = res; r != NULL; r = r->ai_next) {
-        PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t) {
-            if (AF_INET == r->ai_family && AF_INET == intf->af_family) {
-                struct sockaddr_in ipv4;
-                len = (r->ai_addrlen < sizeof(struct sockaddr_in)) ? r->ai_addrlen : sizeof(struct sockaddr_in);
-                memcpy(&ipv4, r->ai_addr, len);
-                if (prte_net_samenetwork((struct sockaddr*)&ipv4, (struct sockaddr*)&intf->if_addr, intf->if_mask)) {
-                    if_kernel_index = intf->if_kernel_index;
-                    freeaddrinfo (res);
-                    return if_kernel_index;
-                }
-            }
-#if PRTE_ENABLE_IPV6
-            else if (AF_INET6 == r->ai_family && AF_INET6 == intf->af_family) {
-                struct sockaddr_in6 ipv6;
-                len = (r->ai_addrlen < sizeof(struct sockaddr_in6)) ? r->ai_addrlen : sizeof(struct sockaddr_in6);
-                memcpy(&ipv6, r->ai_addr, len);
-                if (prte_net_samenetwork((struct sockaddr*)((struct sockaddr_in6*)&intf->if_addr),
-                                         (struct sockaddr*)&ipv6, intf->if_mask)) {
-                    if_kernel_index = intf->if_kernel_index;
-                    freeaddrinfo (res);
-                    return if_kernel_index;
-                }
-            }
-#endif
-        }
-    }
-    if (NULL != res) {
-        freeaddrinfo (res);
-    }
     return PRTE_ERR_NOT_FOUND;
 }
 
@@ -361,53 +266,17 @@ int prte_ifkindextoaddr(int if_kindex, struct sockaddr* if_addr, unsigned int le
 
 
 /*
- *  Lookup the interface by prte_list index and return the
- *  network mask assigned to the interface.
+ *  Lookup the interface by prte_list index and return
+ *  the associated name.
  */
 
-int prte_ifindextomask(int if_index, uint32_t* if_mask, int length)
+int prte_ifindextoname(int if_index, char* if_name, int length)
 {
-    prte_if_t* intf;
+    prte_if_t *intf;
 
     PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t) {
         if (intf->if_index == if_index) {
-            memcpy(if_mask, &intf->if_mask, length);
-            return PRTE_SUCCESS;
-        }
-    }
-    return PRTE_ERROR;
-}
-
-/*
- *  Lookup the interface by prte_list index and return the
- *  MAC assigned to the interface.
- */
-
-int prte_ifindextomac(int if_index, uint8_t mac[6])
-{
-    prte_if_t* intf;
-
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t) {
-        if (intf->if_index == if_index) {
-            memcpy(mac, &intf->if_mac, 6);
-            return PRTE_SUCCESS;
-        }
-    }
-    return PRTE_ERROR;
-}
-
-/*
- *  Lookup the interface by prte_list index and return the
- *  MTU assigned to the interface.
- */
-
-int prte_ifindextomtu(int if_index, int *mtu)
-{
-    prte_if_t* intf;
-
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t) {
-        if (intf->if_index == if_index) {
-            *mtu = intf->ifmtu;
+            prte_string_copy(if_name, intf->if_name, length);
             return PRTE_SUCCESS;
         }
     }
@@ -426,45 +295,6 @@ int prte_ifindextoflags(int if_index, uint32_t* if_flags)
     PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t) {
         if (intf->if_index == if_index) {
             memcpy(if_flags, &intf->if_flags, sizeof(uint32_t));
-            return PRTE_SUCCESS;
-        }
-    }
-    return PRTE_ERROR;
-}
-
-
-
-/*
- *  Lookup the interface by prte_list index and return
- *  the associated name.
- */
-
-int prte_ifindextoname(int if_index, char* if_name, int length)
-{
-    prte_if_t *intf;
-
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t) {
-        if (intf->if_index == if_index) {
-            prte_string_copy(if_name, intf->if_name, length);
-            return PRTE_SUCCESS;
-        }
-    }
-    return PRTE_ERROR;
-}
-
-
-/*
- *  Lookup the interface by kernel index and return
- *  the associated name.
- */
-
-int prte_ifkindextoname(int if_kindex, char* if_name, int length)
-{
-    prte_if_t *intf;
-
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t) {
-        if (intf->if_kernel_index == if_kindex) {
-            prte_string_copy(if_name, intf->if_name, length);
             return PRTE_SUCCESS;
         }
     }
@@ -704,20 +534,6 @@ void prte_ifgetaliases(char ***aliases)
    ethernet devices.  Just make everything a no-op error call */
 
 int
-prte_ifnametoaddr(const char* if_name,
-                  struct sockaddr* if_addr, int size)
-{
-    return PRTE_ERR_NOT_SUPPORTED;
-}
-
-int
-prte_ifaddrtoname(const char* if_addr,
-                  char* if_name, int size)
-{
-    return PRTE_ERR_NOT_SUPPORTED;
-}
-
-int
 prte_ifnametoindex(const char* if_name)
 {
     return PRTE_ERR_NOT_SUPPORTED;
@@ -725,12 +541,6 @@ prte_ifnametoindex(const char* if_name)
 
 int
 prte_ifnametokindex(const char* if_name)
-{
-    return PRTE_ERR_NOT_SUPPORTED;
-}
-
-int
-prte_ifindextokindex(int if_index)
 {
     return PRTE_ERR_NOT_SUPPORTED;
 }
@@ -760,19 +570,19 @@ prte_ifindextoname(int if_index, char* if_name, int length)
 }
 
 int
-prte_ifkindextoname(int kif_index, char* if_name, int length)
-{
-    return PRTE_ERR_NOT_SUPPORTED;
-}
-
-int
 prte_ifindextoaddr(int if_index, struct sockaddr* if_addr, unsigned int length)
 {
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
-int
-prte_ifindextomask(int if_index, uint32_t* if_addr, int length)
+int prte_ifkindextoaddr(int if_kindex,
+                        struct sockaddr* if_addr,
+                        unsigned int length)
+{
+    return PRTE_ERR_NOT_SUPPORTED;
+}
+
+int prte_ifindextoflags(int if_index, uint32_t* if_flags)
 {
     return PRTE_ERR_NOT_SUPPORTED;
 }
@@ -787,6 +597,11 @@ int
 prte_iftupletoaddr(const char *inaddr, uint32_t *net, uint32_t *mask)
 {
     return 0;
+}
+
+bool prte_ifisloopback(int if_index)
+{
+    return false;
 }
 
 int prte_ifmatches(int idx, char **nets)

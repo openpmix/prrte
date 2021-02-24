@@ -128,8 +128,10 @@ static pmix_proc_t myproc;
 static int create_app(int argc, char* argv[],
                       prte_list_t *jdata,
                       prte_pmix_app_t **app,
-                      bool *made_app, char ***app_env);
-static int parse_locals(prte_list_t *jdata, int argc, char* argv[]);
+                      bool *made_app, char ***app_env,
+                      char ***hostfiles, char ***hosts);
+static int parse_locals(prte_list_t *jdata, int argc, char* argv[],
+                        char ***hostfiles, char ***hosts);
 static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfile);
 static bool verbose = false;
 static prte_cmd_line_t *prte_cmd_line = NULL;
@@ -492,6 +494,9 @@ int main(int argc, char *argv[])
     pmix_proc_t pname;
     pmix_value_t *val;
     pmix_data_array_t darray;
+    char **hostfiles = NULL;
+    char **hosts = NULL;
+    bool donotlaunch = false;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
@@ -776,9 +781,7 @@ int main(int argc, char *argv[])
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
         if (NULL != strcasestr(pval->value.data.string, "DONOTLAUNCH")) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-        }
-        if (NULL != strcasestr(pval->value.data.string, "DONOTRESOLVE")) {
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_RESOLVE, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            donotlaunch = true;
         }
     }
 
@@ -832,46 +835,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* Did the user specify a hostfile. Need to check for both
-     * hostfile and machine file.
-     * We can only deal with one hostfile per app context, otherwise give an error.
-     */
-    if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "hostfile"))) {
-        if(1 < j) {
-            prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
-                           true, prte_tool_basename, NULL);
-            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-            goto DONE;
-        } else {
-            pval = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
-            prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_LOCAL, pval->value.data.string, PMIX_STRING);
-        }
-    }
-    if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "machinefile"))) {
-        if(1 < j || prte_get_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, NULL, PMIX_STRING)) {
-            prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
-                           true, prte_tool_basename, NULL);
-            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-            goto DONE;
-        } else {
-            pval = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
-            prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_LOCAL, pval->value.data.string, PMIX_STRING);
-        }
-    }
-
-    /* Did the user specify any hosts? */
-    if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "host"))) {
-        char **targ=NULL, *tval;
-        for (i = 0; i < j; ++i) {
-            pval = prte_cmd_line_get_param(prte_cmd_line, "host", i, 0);
-            prte_argv_append_nosize(&targ, pval->value.data.string);
-        }
-        tval = prte_argv_join(targ, ',');
-        prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, tval, PMIX_STRING);
-        prte_argv_free(targ);
-        free(tval);
-    }
-
     /* setup to listen for commands sent specifically to me, even though I would probably
      * be the one sending them! Unfortunately, since I am a participating daemon,
      * there are times I need to send a command to "all daemons", and that means *I* have
@@ -879,51 +842,6 @@ int main(int argc, char *argv[])
      */
     prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON,
                             PRTE_RML_PERSISTENT, prte_daemon_recv, NULL);
-
-    /* default to a persistent DVM */
-    prte_persistent = true;
-
-    /* if we are told to daemonize, then we cannot have apps */
-    if (!prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
-        /* see if they want to run an application - let's parse
-         * the cmd line to get it */
-        rc = parse_locals(&apps, pargc, pargv);
-
-        /* did they provide an app? */
-        if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
-            if (proxyrun) {
-                prte_show_help("help-prun.txt", "prun:executable-not-specified",
-                               true, prte_tool_basename, prte_tool_basename);
-                PRTE_UPDATE_EXIT_STATUS(rc);
-                goto DONE;
-            }
-            /* nope - just need to wait for instructions */
-        } else {
-            /* they did provide an app - this is only allowed
-             * when running as a proxy! */
-            if (!proxyrun) {
-                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given",
-                               true, prte_tool_basename, prte_tool_basename);
-                PRTE_UPDATE_EXIT_STATUS(rc);
-                goto DONE;
-            }
-            /* mark that we are not a persistent DVM */
-            prte_persistent = false;
-        }
-    }
-
-    /* spawn the DVM - we skip the initial steps as this
-     * isn't a user-level application */
-    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOCATE);
-
-    /* we need to loop the event library until the DVM is alive */
-    while (prte_event_base_active && !prte_dvm_ready) {
-        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
-    }
-
-    if (prte_persistent) {
-        goto proceed;
-    }
 
     /* setup to capture job-level info */
     PMIX_INFO_LIST_START(jinfo);
@@ -956,7 +874,7 @@ int main(int argc, char *argv[])
             /* don't free personality as we need it again later */
         }
     }
-
+    
     /* cannot have both files and directory set for output */
     param = NULL;
     ptr = NULL;
@@ -968,7 +886,7 @@ int main(int argc, char *argv[])
     }
     if (NULL != param && NULL != ptr) {
         prte_show_help("help-prted.txt", "both-file-and-dir-set", true,
-                        param, ptr);
+                       param, ptr);
         return PRTE_ERR_FATAL;
     } else if (NULL != param) {
         /* if we were asked to output to files, pass it along. */
@@ -1017,7 +935,7 @@ int main(int argc, char *argv[])
     /* check what user wants us to do with stdin */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "stdin", 0, 0))) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, pval->value.data.string, PMIX_STRING);
-     }
+    }
 
     /* if we want the argv's indexed, indicate that */
     if (prte_cmd_line_is_taken(prte_cmd_line, "index-argv-by-rank")) {
@@ -1025,12 +943,14 @@ int main(int argc, char *argv[])
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->value.data.string, PMIX_STRING);
-        if (NULL != strcasestr(pval->value.data.string, "DONOTLAUNCH")) {
-            PMIX_INFO_LIST_ADD(ret, jinfo, "PRTE_JOB_DO_NOT_LAUNCH", NULL, PMIX_BOOL);
-        }
-        if (NULL != strcasestr(pval->value.data.string, "DONOTRESOLVE")) {
-            PMIX_INFO_LIST_ADD(ret, jinfo, "PRTE_JOB_DO_NOT_RESOLVE", NULL, PMIX_BOOL);
+        if (donotlaunch && NULL == strcasestr(pval->value.data.string, "donotlaunch")) {
+            /* must add directive */
+            char *tval;
+            prte_asprintf(&tval, "%s:DONOTLAUNCH", pval->value.data.string);
+            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, tval, PMIX_STRING);
+            free(tval);
+        } else {
+            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->value.data.string, PMIX_STRING);
         }
     }
 
@@ -1145,7 +1065,7 @@ int main(int argc, char *argv[])
         }
         PMIX_INFO_FREE(mylock.info, mylock.ninfo);
     }
-
+    
     /* see if we ourselves were spawned by someone */
     ret = PMIx_Get(&prte_process_info.myproc, PMIX_PARENT_ID, NULL, 0, &val);
     if (PMIX_SUCCESS == ret) {
@@ -1168,6 +1088,107 @@ int main(int argc, char *argv[])
         PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
     } else {
         PMIX_LOAD_PROCID(&pname, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
+    }
+
+    /* default to a persistent DVM */
+    prte_persistent = true;
+
+    /* if we are told to daemonize, then we cannot have apps */
+    if (!prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
+        /* see if they want to run an application - let's parse
+         * the cmd line to get it */
+        rc = parse_locals(&apps, pargc, pargv, &hostfiles, &hosts);
+
+        /* did they provide an app? */
+        if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
+            if (proxyrun) {
+                prte_show_help("help-prun.txt", "prun:executable-not-specified",
+                               true, prte_tool_basename, prte_tool_basename);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+            /* nope - just need to wait for instructions */
+        } else {
+            /* they did provide an app - this is only allowed
+             * when running as a proxy! */
+            if (!proxyrun) {
+                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given",
+                               true, prte_tool_basename, prte_tool_basename);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+            /* mark that we are not a persistent DVM */
+            prte_persistent = false;
+        }
+    }
+
+    /* add any hostfile directives to the daemon job */
+    if (prte_persistent) {
+        if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "hostfile"))) {
+            if(1 < j) {
+                prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
+                               true, prte_tool_basename, NULL);
+                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                goto DONE;
+            } else {
+                pval = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
+                prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL, pval->value.data.string, PMIX_STRING);
+            }
+        }
+        if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "machinefile"))) {
+            if(1 < j || prte_get_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, NULL, PMIX_STRING)) {
+                prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
+                               true, prte_tool_basename, NULL);
+                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                goto DONE;
+            } else {
+                pval = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
+                prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL, pval->value.data.string, PMIX_STRING);
+            }
+        }
+        
+        /* Did the user specify any hosts? */
+        if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "host"))) {
+            char **targ=NULL, *tval;
+            for (i = 0; i < j; ++i) {
+                pval = prte_cmd_line_get_param(prte_cmd_line, "host", i, 0);
+                prte_argv_append_nosize(&targ, pval->value.data.string);
+            }
+            tval = prte_argv_join(targ, ',');
+            prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
+            prte_argv_free(targ);
+            free(tval);
+        }
+    } else {
+        /* the directives will be in the app(s) */
+        if (NULL != hostfiles) {
+            char *tval;
+            tval = prte_argv_join(hostfiles, ',');
+            prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
+            free(tval);
+            prte_argv_free(hostfiles);
+        }
+        if (NULL != hosts) {
+            char *tval;
+            tval = prte_argv_join(hosts, ',');
+            prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
+            free(tval);
+            prte_argv_free(hosts);
+        }
+    }
+    
+    /* spawn the DVM - we skip the initial steps as this
+     * isn't a user-level application */
+    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOCATE);
+
+    /* we need to loop the event library until the DVM is alive */
+    while (prte_event_base_active && !prte_dvm_ready) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+    }
+
+    if (prte_persistent) {
+        PMIX_INFO_LIST_RELEASE(jinfo);
+        goto proceed;
     }
 
     /* convert the job info into an array */
@@ -1245,7 +1266,8 @@ int main(int argc, char *argv[])
     exit(prte_exit_status);
 }
 
-static int parse_locals(prte_list_t *jdata, int argc, char* argv[])
+static int parse_locals(prte_list_t *jdata, int argc, char* argv[],
+                        char ***hostfiles, char ***hosts)
 {
     int i, rc;
     int temp_argc;
@@ -1272,7 +1294,9 @@ static int parse_locals(prte_list_t *jdata, int argc, char* argv[])
                     env = NULL;
                 }
                 app = NULL;
-                rc = create_app(temp_argc, temp_argv, jdata, &app, &made_app, &env);
+                rc = create_app(temp_argc, temp_argv, jdata,
+                                &app, &made_app, &env,
+                                hostfiles, hosts);
                 if (PRTE_SUCCESS != rc) {
                     /* Assume that the error message has already been
                        printed; */
@@ -1295,7 +1319,9 @@ static int parse_locals(prte_list_t *jdata, int argc, char* argv[])
 
     if (prte_argv_count(temp_argv) > 1) {
         app = NULL;
-        rc = create_app(temp_argc, temp_argv, jdata, &app, &made_app, &env);
+        rc = create_app(temp_argc, temp_argv, jdata,
+                        &app, &made_app, &env,
+                        hostfiles, hosts);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
@@ -1338,7 +1364,8 @@ static int parse_locals(prte_list_t *jdata, int argc, char* argv[])
 static int create_app(int argc, char* argv[],
                       prte_list_t *jdata,
                       prte_pmix_app_t **app_ptr,
-                      bool *made_app, char ***app_env)
+                      bool *made_app, char ***app_env,
+                      char ***hostfiles, char ***hosts)
 {
     char cwd[PRTE_PATH_MAX];
     int i, j, count, rc;
@@ -1431,6 +1458,7 @@ static int create_app(int argc, char* argv[],
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
             PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->value.data.string, PMIX_STRING);
+            prte_argv_append_nosize(hostfiles, pvalue->value.data.string);
             found = true;
         }
     }
@@ -1442,6 +1470,7 @@ static int create_app(int argc, char* argv[],
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
             PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->value.data.string, PMIX_STRING);
+            prte_argv_append_nosize(hostfiles, pvalue->value.data.string);
         }
     }
 
@@ -1451,7 +1480,8 @@ static int create_app(int argc, char* argv[],
         for (i = 0; i < j; ++i) {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "host", i, 0);
             prte_argv_append_nosize(&targ, pvalue->value.data.string);
-        }
+            prte_argv_append_nosize(hosts, pvalue->value.data.string);
+       }
         tval = prte_argv_join(targ, ',');
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOST, tval, PMIX_STRING);
         free(tval);

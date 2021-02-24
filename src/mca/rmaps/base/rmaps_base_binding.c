@@ -578,7 +578,6 @@ static int bind_in_place(prte_job_t *jdata,
             hwloc_bitmap_and(available, mycpus, available);
             hwloc_bitmap_free(mycpus);
         }
-
         /* cycle thru the procs */
         for (j=0; j < node->procs->size; j++) {
             if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, j))) {

@@ -14,6 +14,7 @@
  * Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2013-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,27 +62,6 @@ BEGIN_C_DECLS
     ( (n4)        & 0x000000FF)
 
 /**
- *  Lookup an interface by name and return its primary address.
- *
- *  @param if_name (IN)   Interface name
- *  @param if_addr (OUT)  Interface address buffer
- *  @param size    (IN)   Interface address buffer size
- */
-PRTE_EXPORT int prte_ifnametoaddr(const char* if_name,
-                                    struct sockaddr* if_addr,
-                                    int size);
-
-/**
- *  Lookup an interface by address and return its name.
- *
- *  @param if_addr (IN)   Interface address (hostname or dotted-quad)
- *  @param if_name (OUT)  Interface name buffer
- *  @param size    (IN)   Interface name buffer size
- */
-PRTE_EXPORT int prte_ifaddrtoname(const char* if_addr,
-                                    char* if_name, int size);
-
-/**
  *  Lookup an interface by name and return its prte_list index.
  *
  *  @param if_name (IN)  Interface name
@@ -96,21 +76,6 @@ PRTE_EXPORT int prte_ifnametoindex(const char* if_name);
  *  @return              Interface kernel index
  */
 PRTE_EXPORT int prte_ifnametokindex(const char* if_name);
-
-/*
- *  Attempt to resolve an address (given as either IPv4/IPv6 string
- *  or hostname) and return the kernel index of the interface
- *  that is on the same network as the specified address
- */
-PRTE_EXPORT int prte_ifaddrtokindex(const char* if_addr);
-
-/**
- *  Lookup an interface by prte_list index and return its kernel index.
- *
- *  @param if_name (IN)  Interface prte_list index
- *  @return              Interface kernel index
- */
-PRTE_EXPORT int prte_ifindextokindex(int if_index);
 
 /**
  *  Returns the number of available interfaces.
@@ -141,15 +106,6 @@ PRTE_EXPORT int prte_ifnext(int if_index);
 PRTE_EXPORT int prte_ifindextoname(int if_index, char* if_name, int);
 
 /**
- *  Lookup an interface by kernel index and return its name.
- *
- *  @param if_index (IN)  Interface kernel index
- *  @param if_name (OUT)  Interface name buffer
- *  @param size (IN)      Interface name buffer size
- */
-PRTE_EXPORT int prte_ifkindextoname(int if_kindex, char* if_name, int);
-
-/**
  *  Lookup an interface by index and return its primary address.
  *
  *  @param if_index (IN)  Interface index
@@ -161,32 +117,6 @@ PRTE_EXPORT int prte_ifindextoaddr(int if_index, struct sockaddr*,
 PRTE_EXPORT int prte_ifkindextoaddr(int if_kindex,
                                       struct sockaddr* if_addr,
                                       unsigned int length);
-
-/**
- *  Lookup an interface by index and return its network mask (in CIDR
- *  notation -- NOT the actual netmask itself!).
- *
- *  @param if_index (IN)  Interface index
- *  @param if_name (OUT)  Interface address buffer
- *  @param size (IN)      Interface address buffer size
- */
-PRTE_EXPORT int prte_ifindextomask(int if_index, uint32_t*, int);
-
-/**
- *  Lookup an interface by index and return its MAC address.
- *
- *  @param if_index (IN)  Interface index
- *  @param if_mac (OUT)   Interface's MAC address
- */
-PRTE_EXPORT int prte_ifindextomac(int if_index, uint8_t if_mac[6]);
-
-/**
- *  Lookup an interface by index and return its MTU.
- *
- *  @param if_index (IN)  Interface index
- *  @param if_mtu (OUT)   Interface's MTU
- */
-PRTE_EXPORT int prte_ifindextomtu(int if_index, int *mtu);
 
 /**
  *  Lookup an interface by index and return its flags.

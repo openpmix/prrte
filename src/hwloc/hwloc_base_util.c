@@ -310,11 +310,6 @@ int prte_hwloc_base_get_topology(void)
             PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
             return PRTE_ERR_NOT_SUPPORTED;
         }
-        /* filter the cpus thru any default cpu set */
-        if (PRTE_SUCCESS != (rc = prte_hwloc_base_filter_cpus(prte_hwloc_topology))) {
-            hwloc_topology_destroy(prte_hwloc_topology);
-            return rc;
-        }
     } else {
         prte_output_verbose(1, prte_hwloc_base_output,
                             "hwloc:base loading topology from file %s",
@@ -322,6 +317,12 @@ int prte_hwloc_base_get_topology(void)
         if (PRTE_SUCCESS != (rc = prte_hwloc_base_set_topology(prte_hwloc_base_topo_file))) {
             return rc;
         }
+    }
+
+    /* filter the cpus thru any default cpu set */
+    if (PRTE_SUCCESS != (rc = prte_hwloc_base_filter_cpus(prte_hwloc_topology))) {
+        hwloc_topology_destroy(prte_hwloc_topology);
+        return rc;
     }
 
     /* fill prte_cache_line_size global with the smallest L1 cache
