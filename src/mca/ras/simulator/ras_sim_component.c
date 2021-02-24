@@ -134,7 +134,6 @@ static int ras_sim_component_query(prte_mca_base_module_t **module, int *priorit
         /* cannot launch simulated nodes or resolve their names to addresses */
         jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
         prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_RESOLVE, PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
         return PRTE_SUCCESS;
     }
 

@@ -644,9 +644,9 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc,
     prte_pmix_server_op_caddy_t *cd;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s spawn upcalled on behalf of proc %s:%u",
+                        "%s spawn upcalled on behalf of proc %s:%u with %"PRIsize_t" job infos",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        proc->nspace, proc->rank);
+                        proc->nspace, proc->rank, ninfo);
 
     cd = PRTE_NEW(prte_pmix_server_op_caddy_t);
     PMIX_LOAD_PROCID(&cd->proc, proc->nspace, proc->rank);

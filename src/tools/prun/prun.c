@@ -982,9 +982,6 @@ int prun(int argc, char *argv[])
         if (NULL != strcasestr(pval->value.data.string, "DONOTLAUNCH")) {
             PMIX_INFO_LIST_ADD(ret, jinfo, "PRTE_JOB_DO_NOT_LAUNCH", NULL, PMIX_BOOL);
         }
-        if (NULL != strcasestr(pval->value.data.string, "DONOTRESOLVE")) {
-            PMIX_INFO_LIST_ADD(ret, jinfo, "PRTE_JOB_DO_NOT_RESOLVE", NULL, PMIX_BOOL);
-        }
     }
 
     /* if the user specified a ranking policy, then set it */
