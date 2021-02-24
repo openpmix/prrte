@@ -154,18 +154,6 @@ int prte_init_util(prte_proc_type_t flags)
         goto error;
     }
 
-    /* Register all MCA Params */
-    if (PRTE_SUCCESS != (ret = prte_register_params())) {
-        error = "prte_register_params";
-        goto error;
-    }
-
-    if (PRTE_SUCCESS != (ret = prte_hwloc_base_register())) {
-        error = "prte_hwloc_base_register";
-        goto error;
-    }
-
-
     if (PRTE_SUCCESS != (ret = prte_net_init())) {
         error = "prte_net_init";
         goto error;
@@ -188,7 +176,7 @@ int prte_init_util(prte_proc_type_t flags)
     }
 
     /* initialize the arch string */
-    if (PRTE_SUCCESS != (ret = prte_arch_init ())) {
+    if (PRTE_SUCCESS != (ret = prte_arch_init())) {
         error = "prte_arch_init";
         goto error;
     }
@@ -207,9 +195,6 @@ int prte_init_util(prte_proc_type_t flags)
     }
     /* add network aliases to our list of alias hostnames */
     prte_ifgetaliases(&prte_process_info.aliases);
-
-    /* open hwloc */
-    prte_hwloc_base_open();
 
     if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_backtrace_base_open";
@@ -276,8 +261,22 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
     }
     prte_process_info.proc_type = flags;
 
+    /* Register all MCA Params */
+    if (PRTE_SUCCESS != (ret = prte_register_params())) {
+        error = "prte_register_params";
+        goto error;
+    }
+
+    if (PRTE_SUCCESS != (ret = prte_hwloc_base_register())) {
+        error = "prte_hwloc_base_register";
+        goto error;
+    }
+
     /* let the pmix server register params */
     pmix_server_register_params();
+
+    /* open hwloc */
+    prte_hwloc_base_open();
 
     /* setup the global job and node arrays */
     prte_job_data = PRTE_NEW(prte_pointer_array_t);

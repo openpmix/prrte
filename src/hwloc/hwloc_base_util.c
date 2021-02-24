@@ -517,9 +517,9 @@ bool prte_hwloc_base_single_cpu(hwloc_cpuset_t cpuset)
 
 /* get the number of pu's under a given hwloc object */
 unsigned int prte_hwloc_base_get_npus(hwloc_topology_t topo,
-                                       bool use_hwthread_cpus,
-                                       hwloc_cpuset_t envelope,
-                                       hwloc_obj_t obj)
+                                      bool use_hwthread_cpus,
+                                      hwloc_cpuset_t envelope,
+                                      hwloc_obj_t obj)
 {
     unsigned int cnt = 0;
     hwloc_cpuset_t avail;
@@ -528,8 +528,12 @@ unsigned int prte_hwloc_base_get_npus(hwloc_topology_t topo,
         return 0;
     }
 
-    avail = hwloc_bitmap_alloc();
-    hwloc_bitmap_and(avail, obj->cpuset, envelope);
+    if (NULL == envelope) {
+        avail = hwloc_bitmap_dup(obj->cpuset);
+    } else {
+        avail = hwloc_bitmap_alloc();
+        hwloc_bitmap_and(avail, obj->cpuset, envelope);
+    }
 
     if (!use_hwthread_cpus) {
         /* if we are treating cores as cpus, then we really
@@ -607,43 +611,6 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo,
                    "obj-idx-failed", true,
                    hwloc_obj_type_string(obj->type), cache_level);
     return UINT_MAX;
-}
-
-/* hwloc treats cache objects as special
- * cases. Instead of having a unique type for each cache level,
- * there is a single cache object type, and the level is encoded
- * in an attribute union. So looking for cache objects involves
- * a multi-step test :-(
- */
-static hwloc_obj_t df_search(hwloc_topology_t topo,
-                             hwloc_obj_t start,
-                             hwloc_obj_type_t target,
-                             unsigned cache_level,
-                             unsigned int nobj,
-                             unsigned int *num_objs)
-{
-    int search_depth;
-
-    search_depth = hwloc_get_type_depth(topo, target);
-    if (HWLOC_TYPE_DEPTH_MULTIPLE == search_depth) {
-        /* either v1.x Cache, or Groups */
-#if HWLOC_API_VERSION >= 0x20000
-        return NULL;
-#else
-        if (cache_level != HWLOC_OBJ_CACHE) {
-            return NULL;
-        }
-        search_depth = hwloc_get_cache_type_depth(topo, cache_level, (hwloc_obj_cache_type_t) -1);
-#endif
-    }
-    if (HWLOC_TYPE_DEPTH_UNKNOWN == search_depth) {
-        return NULL;
-    }
-
-    if (num_objs) {
-        *num_objs = hwloc_get_nbobjs_by_depth(topo, search_depth);
-    }
-    return hwloc_get_obj_by_depth(topo, search_depth, nobj);
 }
 
 unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
@@ -859,13 +826,15 @@ static int package_core_to_cpu_set(char *package_core_list,
     int package_id, core_id;
     hwloc_obj_t package, core;
     hwloc_obj_type_t obj_type = HWLOC_OBJ_CORE;
+    unsigned int npus;
+    bool hwthreadcpus = false;
 
     package_core = prte_argv_split(package_core_list, ':');
     package_id = atoi(package_core[0]);
 
     /* get the object for this package id */
     if (NULL == (package = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0,
-                                                          package_id))) {
+                                                           package_id))) {
         prte_argv_free(package_core);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -876,7 +845,10 @@ static int package_core_to_cpu_set(char *package_core_list,
      */
     if (NULL == hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0)) {
         obj_type = HWLOC_OBJ_PU;
+        hwthreadcpus = true;
     }
+    npus = prte_hwloc_base_get_npus(topo, hwthreadcpus, NULL, package);
+    npus = npus * package_id;
 
     for (i=1; NULL != package_core[i]; i++) {
         if ('C' == package_core[i][0] ||
@@ -899,15 +871,10 @@ static int package_core_to_cpu_set(char *package_core_list,
             case 1:  /* only one core, or a list of cores, specified */
                 list = prte_argv_split(range[0], ',');
                 for (j=0; NULL != list[j]; j++) {
-                    core_id = atoi(list[j]);
+                    /* get the indexed core from this package */
+                    core_id = atoi(list[j]) + npus;
                     /* get that object */
-                    if (NULL == (core = df_search(topo, package, obj_type, 0,
-                                                  core_id, NULL))) {
-                        prte_argv_free(list);
-                        prte_argv_free(range);
-                        prte_argv_free(package_core);
-                        return PRTE_ERR_NOT_FOUND;
-                    }
+                    core = prte_hwloc_base_get_obj_by_type(topo, obj_type, 0, core_id);
                     /* get the cpus */
                     hwloc_bitmap_or(cpumask, cpumask, core->cpuset);
                 }
@@ -920,14 +887,11 @@ static int package_core_to_cpu_set(char *package_core_list,
                                     range[0], range[1]);
                 lower_range = atoi(range[0]);
                 upper_range = atoi(range[1]);
-                for (core_id=lower_range; core_id <= upper_range; core_id++) {
+                for (j=lower_range; j <= upper_range; j++) {
+                    /* get the indexed core from this package */
+                    core_id = j + npus;
                     /* get that object */
-                    if (NULL == (core = df_search(topo, package, obj_type, 0,
-                                                  core_id, NULL))) {
-                        prte_argv_free(range);
-                        prte_argv_free(package_core);
-                        return PRTE_ERR_NOT_FOUND;
-                    }
+                    core = prte_hwloc_base_get_obj_by_type(topo, obj_type, 0, core_id);
                     /* get the cpus add them into the result */
                     hwloc_bitmap_or(cpumask, cpumask, core->cpuset);
                 }
@@ -950,7 +914,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str,
                                     hwloc_topology_t topo,
                                     hwloc_cpuset_t cpumask)
 {
-    char **item, **rngs;
+    char **item, **rngs, *lst;
     int rc, i, j, k;
     hwloc_obj_t pu;
     char **range, **list;
@@ -983,14 +947,14 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str,
          * or if they use package:core notation, then parse the
          * package/core info
          */
-        if ('S' == item[i][0] ||
-            's' == item[i][0] ||
+        if ('P' == item[i][0] || 'p' == item[i][0] ||
+            'S' == item[i][0] || 's' == item[i][0] ||  // backward compatibility
             NULL != strchr(item[i], ':')) {
             /* specified a package */
             if (NULL == strchr(item[i], ':')) {
                 /* binding just to the package level, though
                  * it could specify multiple packages
-                 * Skip the S and look for a ranges
+                 * Skip the P and look for ranges
                  */
                 rngs = prte_argv_split(&item[i][1], ',');
                 for (j=0; NULL != rngs[j]; j++) {
@@ -1002,28 +966,15 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str,
                 }
                 prte_argv_free(rngs);
             } else {
-                /* binding to a package/whatever specification */
-                if ('S' == item[i][0] ||
-                    's' == item[i][0]) {
-                    rngs = prte_argv_split(&item[i][1], ',');
-                    for (j=0; NULL != rngs[j]; j++) {
-                        if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, cpumask))) {
-                            prte_argv_free(rngs);
-                            prte_argv_free(item);
-                            return rc;
-                        }
-                    }
-                    prte_argv_free(rngs);
+                if ('P' == item[i][0] || 'p' == item[i][0] ||
+                    'S' == item[i][0] || 's' == item[i][0]) {
+                    lst = &item[i][1];
                 } else {
-                    rngs = prte_argv_split(item[i], ',');
-                    for (j=0; NULL != rngs[j]; j++) {
-                        if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(rngs[j], topo, cpumask))) {
-                            prte_argv_free(rngs);
-                            prte_argv_free(item);
-                            return rc;
-                        }
-                    }
-                    prte_argv_free(rngs);
+                    lst = item[i];
+                }
+                if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(lst, topo, cpumask))) {
+                    prte_argv_free(item);
+                    return rc;
                 }
             }
         } else {
