@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2020-2021 Cisco Systems, Inc.  All rights reserved
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,11 +25,11 @@
  */
 /**
  * @file:
- * Part of the rsh launcher. See plm_rsh.h for an overview of how it works.
+ * Part of the ssh launcher. See plm_ssh.h for an overview of how it works.
  */
 
-#ifndef PRTE_PLM_RSH_EXPORT_H
-#define PRTE_PLM_RSH_EXPORT_H
+#ifndef PRTE_PLM_SSH_EXPORT_H
+#define PRTE_PLM_SSH_EXPORT_H
 
 #include "prte_config.h"
 
@@ -48,9 +48,9 @@ BEGIN_C_DECLS
 /**
  * PLS Component
  */
-struct prte_plm_rsh_component_t {
+struct prte_plm_ssh_component_t {
     prte_plm_base_component_t super;
-    bool force_rsh;
+    bool force_ssh;
     bool disable_qrsh;
     bool using_qrsh;
     bool daemonize_qrsh;
@@ -70,13 +70,13 @@ struct prte_plm_rsh_component_t {
     char *pass_libpath;
     char *chdir;
 };
-typedef struct prte_plm_rsh_component_t prte_plm_rsh_component_t;
+typedef struct prte_plm_ssh_component_t prte_plm_ssh_component_t;
 
-PRTE_MODULE_EXPORT extern prte_plm_rsh_component_t prte_plm_rsh_component;
-extern prte_plm_base_module_t prte_plm_rsh_module;
+PRTE_MODULE_EXPORT extern prte_plm_ssh_component_t prte_plm_ssh_component;
+extern prte_plm_base_module_t prte_plm_ssh_module;
 
-PRTE_MODULE_EXPORT char **prte_plm_rsh_search(const char* agent_list, const char *path);
+PRTE_MODULE_EXPORT char **prte_plm_ssh_search(const char* agent_list, const char *path);
 
 END_C_DECLS
 
-#endif /* PRTE_PLS_RSH_EXPORT_H */
+#endif /* PRTE_PLS_SSH_EXPORT_H */

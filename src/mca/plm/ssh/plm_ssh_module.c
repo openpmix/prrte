@@ -9,7 +9,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2006-2021 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2007-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2008-2009 Sun Microsystems, Inc.  All rights reserved.
@@ -99,24 +99,24 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
-#include "src/mca/plm/rsh/plm_rsh.h"
+#include "src/mca/plm/ssh/plm_ssh.h"
 
-static int rsh_init(void);
-static int rsh_launch(prte_job_t *jdata);
+static int ssh_init(void);
+static int ssh_launch(prte_job_t *jdata);
 static int remote_spawn(void);
-static int rsh_terminate_prteds(void);
-static int rsh_finalize(void);
+static int ssh_terminate_prteds(void);
+static int ssh_finalize(void);
 
-prte_plm_base_module_t prte_plm_rsh_module = {
-    .init = rsh_init,
+prte_plm_base_module_t prte_plm_ssh_module = {
+    .init = ssh_init,
     .set_hnp_name = prte_plm_base_set_hnp_name,
-    .spawn = rsh_launch,
+    .spawn = ssh_launch,
     .remote_spawn = remote_spawn,
     .terminate_job = prte_plm_base_prted_terminate_job,
-    .terminate_orteds = rsh_terminate_prteds,
+    .terminate_orteds = ssh_terminate_prteds,
     .terminate_procs = prte_plm_base_prted_kill_local_procs,
     .signal_job = prte_plm_base_prted_signal_local_procs,
-    .finalize = rsh_finalize
+    .finalize = ssh_finalize
 };
 
 typedef struct {
@@ -124,13 +124,13 @@ typedef struct {
     int argc;
     char **argv;
     prte_proc_t *daemon;
-} prte_plm_rsh_caddy_t;
-static void caddy_const(prte_plm_rsh_caddy_t *ptr)
+} prte_plm_ssh_caddy_t;
+static void caddy_const(prte_plm_ssh_caddy_t *ptr)
 {
     ptr->argv = NULL;
     ptr->daemon = NULL;
 }
-static void caddy_dest(prte_plm_rsh_caddy_t *ptr)
+static void caddy_dest(prte_plm_ssh_caddy_t *ptr)
 {
     if (NULL != ptr->argv) {
         prte_argv_free(ptr->argv);
@@ -139,22 +139,22 @@ static void caddy_dest(prte_plm_rsh_caddy_t *ptr)
         PRTE_RELEASE(ptr->daemon);
     }
 }
-PRTE_CLASS_INSTANCE(prte_plm_rsh_caddy_t,
+PRTE_CLASS_INSTANCE(prte_plm_ssh_caddy_t,
                    prte_list_item_t,
                    caddy_const, caddy_dest);
 
 typedef enum {
-    PRTE_PLM_RSH_SHELL_BASH = 0,
-    PRTE_PLM_RSH_SHELL_ZSH,
-    PRTE_PLM_RSH_SHELL_TCSH,
-    PRTE_PLM_RSH_SHELL_CSH,
-    PRTE_PLM_RSH_SHELL_KSH,
-    PRTE_PLM_RSH_SHELL_SH,
-    PRTE_PLM_RSH_SHELL_UNKNOWN
-} prte_plm_rsh_shell_t;
+    PRTE_PLM_SSH_SHELL_BASH = 0,
+    PRTE_PLM_SSH_SHELL_ZSH,
+    PRTE_PLM_SSH_SHELL_TCSH,
+    PRTE_PLM_SSH_SHELL_CSH,
+    PRTE_PLM_SSH_SHELL_KSH,
+    PRTE_PLM_SSH_SHELL_SH,
+    PRTE_PLM_SSH_SHELL_UNKNOWN
+} prte_plm_ssh_shell_t;
 
-/* These strings *must* follow the same order as the enum PRTE_PLM_RSH_SHELL_* */
-static const char *prte_plm_rsh_shell_name[7] = {
+/* These strings *must* follow the same order as the enum PRTE_PLM_SSH_SHELL_* */
+static const char *prte_plm_ssh_shell_name[7] = {
     "bash",
     "zsh",
     "tcsh",       /* tcsh has to be first otherwise strstr finds csh */
@@ -168,13 +168,13 @@ static const char *prte_plm_rsh_shell_name[7] = {
  * Local functions
  */
 static void set_handler_default(int sig);
-static prte_plm_rsh_shell_t find_shell(char *shell);
+static prte_plm_ssh_shell_t find_shell(char *shell);
 static int launch_agent_setup(const char *agent, char *path);
 static void ssh_child(int argc, char **argv) __prte_attribute_noreturn__;
-static int rsh_probe(char *nodename,
-                     prte_plm_rsh_shell_t *shell);
-static int setup_shell(prte_plm_rsh_shell_t *rshell,
-                       prte_plm_rsh_shell_t *lshell,
+static int ssh_probe(char *nodename,
+                     prte_plm_ssh_shell_t *shell);
+static int setup_shell(prte_plm_ssh_shell_t *sshell,
+                       prte_plm_ssh_shell_t *lshell,
                        char *nodename, int *argc, char ***argv);
 static void launch_daemons(int fd, short args, void *cbdata);
 static void process_launch_list(int fd, short args, void *cbdata);
@@ -183,19 +183,19 @@ static void process_launch_list(int fd, short args, void *cbdata);
 static int num_in_progress=0;
 static prte_list_t launch_list;
 static prte_event_t launch_event;
-static char *rsh_agent_path=NULL;
-static char **rsh_agent_argv=NULL;
+static char *ssh_agent_path=NULL;
+static char **ssh_agent_argv=NULL;
 
 /**
  * Init the module
  */
-static int rsh_init(void)
+static int ssh_init(void)
 {
     char *tmp;
     int rc;
 
     /* we were selected, so setup the launch agent */
-    if (prte_plm_rsh_component.using_qrsh) {
+    if (prte_plm_ssh_component.using_qrsh) {
         /* perform base setup for qrsh */
         prte_asprintf(&tmp, "%s/bin/%s", getenv("SGE_ROOT"), getenv("ARC"));
         if (PRTE_SUCCESS != (rc = launch_agent_setup("qrsh", tmp))) {
@@ -205,32 +205,32 @@ static int rsh_init(void)
         }
         free(tmp);
         /* automatically add -inherit and grid engine PE related flags */
-        prte_argv_append_nosize(&rsh_agent_argv, "-inherit");
+        prte_argv_append_nosize(&ssh_agent_argv, "-inherit");
         /* Don't use the "-noshell" flag as qrsh would have a problem
          * swallowing a long command */
-        prte_argv_append_nosize(&rsh_agent_argv, "-nostdin");
-        prte_argv_append_nosize(&rsh_agent_argv, "-V");
+        prte_argv_append_nosize(&ssh_agent_argv, "-nostdin");
+        prte_argv_append_nosize(&ssh_agent_argv, "-V");
         if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-            prte_argv_append_nosize(&rsh_agent_argv, "-verbose");
-            tmp = prte_argv_join(rsh_agent_argv, ' ');
+            prte_argv_append_nosize(&ssh_agent_argv, "-verbose");
+            tmp = prte_argv_join(ssh_agent_argv, ' ');
             prte_output_verbose(1, prte_plm_base_framework.framework_output,
-                                "%s plm:rsh: using \"%s\" for launching\n",
+                                "%s plm:ssh: using \"%s\" for launching\n",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmp);
             free(tmp);
         }
-    } else if(prte_plm_rsh_component.using_llspawn) {
+    } else if(prte_plm_ssh_component.using_llspawn) {
         /* perform base setup for llspawn */
         if (PRTE_SUCCESS != (rc = launch_agent_setup("llspawn", NULL))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
         prte_output_verbose(1, prte_plm_base_framework.framework_output,
-                            "%s plm:rsh: using \"%s\" for launching\n",
+                            "%s plm:ssh: using \"%s\" for launching\n",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            rsh_agent_path);
+                            ssh_agent_path);
     } else {
         /* not using qrsh or llspawn - use MCA-specified agent */
-        if (PRTE_SUCCESS != (rc = launch_agent_setup(prte_plm_rsh_component.agent, NULL))) {
+        if (PRTE_SUCCESS != (rc = launch_agent_setup(prte_plm_ssh_component.agent, NULL))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -262,11 +262,11 @@ static int rsh_init(void)
 /**
  * Callback on daemon exit.
  */
-static void rsh_wait_daemon(int sd, short flags, void *cbdata)
+static void ssh_wait_daemon(int sd, short flags, void *cbdata)
 {
     prte_job_t *jdata;
     prte_wait_tracker_t *t2 = (prte_wait_tracker_t*)cbdata;
-    prte_plm_rsh_caddy_t *caddy=(prte_plm_rsh_caddy_t*)t2->cbdata;
+    prte_plm_ssh_caddy_t *caddy=(prte_plm_ssh_caddy_t*)t2->cbdata;
     prte_proc_t *daemon = caddy->daemon;
     pmix_status_t rc;
 
@@ -338,7 +338,7 @@ static void rsh_wait_daemon(int sd, short flags, void *cbdata)
 
     /* release any delay */
     --num_in_progress;
-    if (num_in_progress < prte_plm_rsh_component.num_concurrent) {
+    if (num_in_progress < prte_plm_ssh_component.num_concurrent) {
         /* trigger continuation of the launch */
         prte_event_active(&launch_event, EV_WRITE, 1);
     }
@@ -354,7 +354,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
     int argc;
     char **argv;
     char *param, *value;
-    prte_plm_rsh_shell_t remote_shell, local_shell;
+    prte_plm_ssh_shell_t remote_shell, local_shell;
     int orted_argc;
     char **orted_argv;
     char *orted_cmd, *orted_prefix, *final_cmd;
@@ -395,12 +395,12 @@ static int setup_launch(int *argcptr, char ***argvptr,
     /*
      * Build argv array
      */
-    argv = prte_argv_copy(rsh_agent_argv);
+    argv = prte_argv_copy(ssh_agent_argv);
     argc = prte_argv_count(argv);
     /* if any ssh args were provided, now is the time to add them */
-    if (NULL != prte_plm_rsh_component.ssh_args) {
+    if (NULL != prte_plm_ssh_component.ssh_args) {
         char **ssh_argv;
-        ssh_argv = prte_argv_split(prte_plm_rsh_component.ssh_args, ' ');
+        ssh_argv = prte_argv_split(prte_plm_ssh_component.ssh_args, ' ');
         for (i=0; NULL != ssh_argv[i]; i++) {
             prte_argv_append(&argc, &argv, ssh_argv[i]);
         }
@@ -447,7 +447,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
      *   can be treated properly below
      *
      * Obviously, the latter two cases can be combined - just to make it
-     * even more interesting! Gotta love rsh/ssh...
+     * even more interesting! Gotta love ssh/ssh...
      */
     if (0 == orted_index) {
         /* single word cmd - this is the default scenario, but there could
@@ -468,11 +468,11 @@ static int setup_launch(int *argcptr, char ***argvptr,
 
     /* if the user specified a library path to pass, set it up now */
     param = prte_basename(prte_install_dirs.libdir);
-    if (NULL != prte_plm_rsh_component.pass_libpath) {
+    if (NULL != prte_plm_ssh_component.pass_libpath) {
         if (NULL != prefix_dir) {
-            prte_asprintf(&lib_base, "%s:%s/%s", prte_plm_rsh_component.pass_libpath, prefix_dir, param);
+            prte_asprintf(&lib_base, "%s:%s/%s", prte_plm_ssh_component.pass_libpath, prefix_dir, param);
         } else {
-            prte_asprintf(&lib_base, "%s:%s", prte_plm_rsh_component.pass_libpath, param);
+            prte_asprintf(&lib_base, "%s:%s", prte_plm_ssh_component.pass_libpath, param);
         }
     } else if (NULL != prefix_dir) {
         prte_asprintf(&lib_base, "%s/%s", prefix_dir, param);
@@ -507,10 +507,10 @@ static int setup_launch(int *argcptr, char ***argvptr,
     }
 
     if (NULL != lib_base || NULL != bin_base) {
-        if (PRTE_PLM_RSH_SHELL_SH == remote_shell ||
-            PRTE_PLM_RSH_SHELL_KSH == remote_shell ||
-            PRTE_PLM_RSH_SHELL_ZSH == remote_shell ||
-            PRTE_PLM_RSH_SHELL_BASH == remote_shell) {
+        if (PRTE_PLM_SSH_SHELL_SH == remote_shell ||
+            PRTE_PLM_SSH_SHELL_KSH == remote_shell ||
+            PRTE_PLM_SSH_SHELL_ZSH == remote_shell ||
+            PRTE_PLM_SSH_SHELL_BASH == remote_shell) {
             /* if there is nothing preceding orted, then we can just
              * assemble the cmd with the orted_cmd at the end. Otherwise,
              * we have to insert the orted_prefix in the right place
@@ -520,9 +520,9 @@ static int setup_launch(int *argcptr, char ***argvptr,
                             "LD_LIBRARY_PATH=%s%s$LD_LIBRARY_PATH ; export LD_LIBRARY_PATH ; "
                             "DYLD_LIBRARY_PATH=%s%s$DYLD_LIBRARY_PATH ; export DYLD_LIBRARY_PATH ; "
                             "%s %s",
-                            (NULL != prte_plm_rsh_component.chdir ? "cd " : " "),
-                            (NULL != prte_plm_rsh_component.chdir ? prte_plm_rsh_component.chdir : " "),
-                            (NULL != prte_plm_rsh_component.chdir ? " ; " : " "),
+                            (NULL != prte_plm_ssh_component.chdir ? "cd " : " "),
+                            (NULL != prte_plm_ssh_component.chdir ? prte_plm_ssh_component.chdir : " "),
+                            (NULL != prte_plm_ssh_component.chdir ? " ; " : " "),
                             (prte_prefix != NULL ? "PRTE_PREFIX=" : " "),
                             (prte_prefix != NULL ? prte_prefix : " "),
                             (prte_prefix != NULL ? " ; export PRTE_PREFIX;" : " "),
@@ -534,8 +534,8 @@ static int setup_launch(int *argcptr, char ***argvptr,
                             (NULL != lib_base ? ":" : " "),
                             (orted_prefix != NULL ? orted_prefix : " "),
                             (full_orted_cmd != NULL ? full_orted_cmd : " "));
-        } else if (PRTE_PLM_RSH_SHELL_TCSH == remote_shell ||
-                   PRTE_PLM_RSH_SHELL_CSH == remote_shell) {
+        } else if (PRTE_PLM_SSH_SHELL_TCSH == remote_shell ||
+                   PRTE_PLM_SSH_SHELL_CSH == remote_shell) {
             /* [t]csh is a bit more challenging -- we
                have to check whether LD_LIBRARY_PATH
                is already set before we try to set it.
@@ -563,9 +563,9 @@ static int setup_launch(int *argcptr, char ***argvptr,
                             "if ( $?OMPI_have_dllp == 1 ) "
                             "setenv DYLD_LIBRARY_PATH %s%s$DYLD_LIBRARY_PATH ; "
                             "%s %s",
-                            (NULL != prte_plm_rsh_component.chdir ? "cd " : " "),
-                            (NULL != prte_plm_rsh_component.chdir ? prte_plm_rsh_component.chdir : " "),
-                            (NULL != prte_plm_rsh_component.chdir ? " ; " : " "),
+                            (NULL != prte_plm_ssh_component.chdir ? "cd " : " "),
+                            (NULL != prte_plm_ssh_component.chdir ? prte_plm_ssh_component.chdir : " "),
+                            (NULL != prte_plm_ssh_component.chdir ? " ; " : " "),
                             (prte_prefix != NULL ? "setenv PRTE_PREFIX " : " "),
                             (prte_prefix != NULL ? prte_prefix : " "),
                             (prte_prefix != NULL ? " ;" : " "),
@@ -579,7 +579,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
                             (orted_prefix != NULL ? orted_prefix : " "),
                             (full_orted_cmd != NULL ? full_orted_cmd : " "));
         } else {
-            prte_show_help("help-plm-rsh.txt", "cannot-resolve-shell-with-prefix", true,
+            prte_show_help("help-plm-ssh.txt", "cannot-resolve-shell-with-prefix", true,
                            (NULL == prte_prefix) ? "NULL" : prte_prefix,
                            prefix_dir);
             if (NULL != bin_base) {
@@ -618,17 +618,17 @@ static int setup_launch(int *argcptr, char ***argvptr,
     /* if we are not tree launching or debugging, tell the daemon
      * to daemonize so we can launch the next group
      */
-    if (prte_plm_rsh_component.no_tree_spawn &&
+    if (prte_plm_ssh_component.no_tree_spawn &&
         !prte_debug_flag &&
         !prte_debug_daemons_flag &&
         !prte_debug_daemons_file_flag &&
         !prte_leave_session_attached &&
         /* Daemonize when not using qrsh.  Or, if using qrsh, only
          * daemonize if told to by user with daemonize_qrsh flag. */
-        ((!prte_plm_rsh_component.using_qrsh) ||
-         (prte_plm_rsh_component.using_qrsh && prte_plm_rsh_component.daemonize_qrsh)) &&
-        ((!prte_plm_rsh_component.using_llspawn) ||
-         (prte_plm_rsh_component.using_llspawn && prte_plm_rsh_component.daemonize_llspawn))) {
+        ((!prte_plm_ssh_component.using_qrsh) ||
+         (prte_plm_ssh_component.using_qrsh && prte_plm_ssh_component.daemonize_qrsh)) &&
+        ((!prte_plm_ssh_component.using_llspawn) ||
+         (prte_plm_ssh_component.using_llspawn && prte_plm_ssh_component.daemonize_llspawn))) {
         prte_argv_append(&argc, &argv, "--daemonize");
     }
 
@@ -643,11 +643,11 @@ static int setup_launch(int *argcptr, char ***argvptr,
     /* ensure that only the ssh plm is selected on the remote daemon */
     prte_argv_append(&argc, &argv, "--prtemca");
     prte_argv_append(&argc, &argv, "plm");
-    prte_argv_append(&argc, &argv, "rsh");
+    prte_argv_append(&argc, &argv, "ssh");
 
     /* if we are tree-spawning, tell our child daemons the
      * uri of their parent (me) */
-    if (!prte_plm_rsh_component.no_tree_spawn) {
+    if (!prte_plm_ssh_component.no_tree_spawn) {
         prte_argv_append(&argc, &argv, "--tree-spawn");
         prte_oob_base_get_addr(&param);
         prte_argv_append(&argc, &argv, "--prtemca");
@@ -657,7 +657,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
     }
 
     /* unless told otherwise... */
-    if (prte_plm_rsh_component.pass_environ_mca_params) {
+    if (prte_plm_ssh_component.pass_environ_mca_params) {
         /* now check our local environment for MCA params - add them
          * only if they aren't already present
          */
@@ -673,22 +673,22 @@ static int setup_launch(int *argcptr, char ***argvptr,
 
     value = prte_argv_join(argv, ' ');
     if (sysconf(_SC_ARG_MAX) < (int)strlen(value)) {
-        prte_show_help("help-plm-rsh.txt", "cmd-line-too-long",
+        prte_show_help("help-plm-ssh.txt", "cmd-line-too-long",
                        true, strlen(value), sysconf(_SC_ARG_MAX));
         free(value);
         return PRTE_ERR_SILENT;
     }
     free(value);
 
-    if (PRTE_PLM_RSH_SHELL_SH == remote_shell ||
-        PRTE_PLM_RSH_SHELL_KSH == remote_shell) {
+    if (PRTE_PLM_SSH_SHELL_SH == remote_shell ||
+        PRTE_PLM_SSH_SHELL_KSH == remote_shell) {
         prte_argv_append(&argc, &argv, ")");
     }
 
     if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
         param = prte_argv_join(argv, ' ');
         prte_output(prte_plm_base_framework.framework_output,
-                    "%s plm:rsh: final template argv:\n\t%s",
+                    "%s plm:ssh: final template argv:\n\t%s",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     (NULL == param) ? "NULL" : param);
         if (NULL != param) free(param);
@@ -725,7 +725,7 @@ static void ssh_child(int argc, char **argv)
      * about remote launches here
      */
     exec_argv = argv;
-    exec_path = strdup(rsh_agent_path);
+    exec_path = strdup(ssh_agent_path);
 
     /* Don't let ssh slurp all of our stdin! */
     fdin = open("/dev/null", O_RDWR);
@@ -761,13 +761,13 @@ static void ssh_child(int argc, char **argv)
     /* exec the daemon */
     var = prte_argv_join(argv, ' ');
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                         "%s plm:rsh: executing: (%s) [%s]",
+                         "%s plm:ssh: executing: (%s) [%s]",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          exec_path, (NULL == var) ? "NULL" : var));
     if (NULL != var) free(var);
 
     execve(exec_path, exec_argv, env);
-    prte_output(0, "plm:rsh: execv of %s failed with errno=%s(%d)\n",
+    prte_output(0, "plm:ssh: execv of %s failed with errno=%s(%d)\n",
                 exec_path, strerror(errno), errno);
     exit(-1);
 }
@@ -785,13 +785,14 @@ static int remote_spawn(void)
     int rc=PRTE_SUCCESS;
     bool failed_launch = true;
     pmix_proc_t target;
-    prte_plm_rsh_caddy_t *caddy;
+    prte_plm_ssh_caddy_t *caddy;
+    prte_job_t *daemons;
     prte_list_t coll;
     prte_namelist_t *child;
     pmix_status_t ret;
 
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                         "%s plm:rsh: remote spawn called",
+                         "%s plm:ssh: remote spawn called",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* if we hit any errors, tell the HNP it was us */
@@ -813,7 +814,7 @@ static int remote_spawn(void)
     /* if I have no children, just return */
     if (0 == prte_list_get_size(&coll)) {
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                             "%s plm:rsh: remote spawn - have no children!",
+                             "%s plm:ssh: remote spawn - have no children!",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         failed_launch = false;
         rc = PRTE_SUCCESS;
@@ -849,7 +850,7 @@ static int remote_spawn(void)
         /* pass the vpid */
         rc = prte_util_convert_vpid_to_string(&var, target.rank);
         if (PRTE_SUCCESS != rc) {
-            prte_output(0, "prte_plm_rsh: unable to get daemon vpid as string");
+            prte_output(0, "prte_plm_ssh: unable to get daemon vpid as string");
             exit(-1);
         }
         free(argv[proc_vpid_index]);
@@ -857,7 +858,7 @@ static int remote_spawn(void)
         free(var);
 
         /* we are in an event, so no need to protect the list */
-        caddy = PRTE_NEW(prte_plm_rsh_caddy_t);
+        caddy = PRTE_NEW(prte_plm_ssh_caddy_t);
         caddy->argc = argc;
         caddy->argv = prte_argv_copy(argv);
         /* fake a proc structure for the new daemon - will be released
@@ -871,11 +872,11 @@ static int remote_spawn(void)
     /* we NEVER use tree-spawn for secondary launches - e.g.,
      * due to a dynamic launch requesting add_hosts - so be
      * sure to turn it off here */
-    prte_plm_rsh_component.no_tree_spawn = true;
+    prte_plm_ssh_component.no_tree_spawn = true;
 
     /* trigger the event to start processing the launch list */
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                         "%s plm:rsh: activating launch event",
+                         "%s plm:ssh: activating launch event",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     prte_event_active(&launch_event, EV_WRITE, 1);
 
@@ -917,7 +918,7 @@ cleanup:
  * for launching the application.
  */
 
-static int rsh_launch(prte_job_t *jdata)
+static int ssh_launch(prte_job_t *jdata)
 {
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
         /* this is a restart situation - skip to the mapping stage */
@@ -933,22 +934,22 @@ static void process_launch_list(int fd, short args, void *cbdata)
 {
     prte_list_item_t *item;
     pid_t pid;
-    prte_plm_rsh_caddy_t *caddy;
+    prte_plm_ssh_caddy_t *caddy;
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
-    while (num_in_progress < prte_plm_rsh_component.num_concurrent) {
+    while (num_in_progress < prte_plm_ssh_component.num_concurrent) {
         item = prte_list_remove_first(&launch_list);
         if (NULL == item) {
             /* we are done */
             break;
         }
-        caddy = (prte_plm_rsh_caddy_t*)item;
+        caddy = (prte_plm_ssh_caddy_t*)item;
         /* register the sigchild callback */
         PRTE_FLAG_SET(caddy->daemon, PRTE_PROC_FLAG_ALIVE);
-        prte_wait_cb(caddy->daemon, rsh_wait_daemon, prte_event_base, (void*)caddy);
+        prte_wait_cb(caddy->daemon, ssh_wait_daemon, prte_event_base, (void*)caddy);
 
-        /* fork a child to exec the rsh/ssh session */
+        /* fork a child to exec the ssh/ssh session */
         pid = fork();
         if (pid < 0) {
             PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_CHILDREN);
@@ -960,7 +961,7 @@ static void process_launch_list(int fd, short args, void *cbdata)
         if (pid == 0) {
             /*
              * When the user presses CTRL-C, SIGINT is sent to the whole process
-             * group which terminates the rsh/ssh command. This can cause the
+             * group which terminates the ssh/ssh command. This can cause the
              * remote daemon to crash with a SIGPIPE when it tried to print out
              * status information. This has two concequences:
              * 1) The remote node is not cleaned up as it should. The local
@@ -972,12 +973,12 @@ static void process_launch_list(int fd, short args, void *cbdata)
              *
              * The solution here is to put the child processes in a separate
              * process group from the HNP. So when the user presses CTRL-C
-             * then only the HNP receives the signal, and not the rsh/ssh
+             * then only the HNP receives the signal, and not the ssh/ssh
              * child processes.
              */
 #if HAVE_SETPGID
             if( 0 != setpgid(0, 0) ) {
-                prte_output(0, "plm:rsh: Error: setpgid(0,0) failed in child with errno=%s(%d)\n",
+                prte_output(0, "plm:ssh: Error: setpgid(0,0) failed in child with errno=%s(%d)\n",
                             strerror(errno), errno);
                 exit(-1);
             }
@@ -990,7 +991,7 @@ static void process_launch_list(int fd, short args, void *cbdata)
             // - see comment in child section.
 #if HAVE_SETPGID
             if( 0 != setpgid(pid, pid) ) {
-                prte_output(0, "plm:rsh: Warning: setpgid(%ld,%ld) failed in parent with errno=%s(%d)\n",
+                prte_output(0, "plm:ssh: Warning: setpgid(%ld,%ld) failed in parent with errno=%s(%d)\n",
                             (long)pid, (long)pid, strerror(errno), errno);
                 // Ignore this error since the child is off and running.
                 // We still need to track it.
@@ -1003,7 +1004,7 @@ static void process_launch_list(int fd, short args, void *cbdata)
             caddy->daemon->pid = pid;
 
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                 "%s plm:rsh: recording launch of daemon %s",
+                                 "%s plm:ssh: recording launch of daemon %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&(caddy->daemon->name))));
             num_in_progress++;
@@ -1025,7 +1026,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     int32_t nnode;
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t*)cbdata;
-    prte_plm_rsh_caddy_t *caddy;
+    prte_plm_ssh_caddy_t *caddy;
     prte_list_t coll;
     char *username;
     int port, *portptr;
@@ -1084,12 +1085,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                         "%s plm:rsh: launching vm",
+                         "%s plm:ssh: launching vm",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     if ((0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output) ||
          prte_leave_session_attached) &&
-        prte_plm_rsh_component.num_concurrent < map->num_new_daemons) {
+        prte_plm_ssh_component.num_concurrent < map->num_new_daemons) {
         /**
          * If we are in '--debug-daemons' we keep the ssh connection
          * alive for the span of the run. If we use this option
@@ -1103,8 +1104,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * As we cannot run in this situation, pretty print the error
          * and return an error code.
          */
-        prte_show_help("help-plm-rsh.txt", "deadlock-params",
-                       true, prte_plm_rsh_component.num_concurrent, map->num_new_daemons);
+        prte_show_help("help-plm-ssh.txt", "deadlock-params",
+                       true, prte_plm_ssh_component.num_concurrent, map->num_new_daemons);
         PRTE_ERROR_LOG(PRTE_ERR_FATAL);
         rc = PRTE_ERR_SILENT;
         goto cleanup;
@@ -1166,7 +1167,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* if we are tree launching, find our children and create the launch cmd */
-    if (!prte_plm_rsh_component.no_tree_spawn) {
+    if (!prte_plm_ssh_component.no_tree_spawn) {
        /* get the updated routing list */
         PRTE_CONSTRUCT(&coll, prte_list_t);
         prte_routed.get_routing_list(&coll);
@@ -1188,7 +1189,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         }
 
         /* if we are tree launching, only launch our own children */
-        if (!prte_plm_rsh_component.no_tree_spawn) {
+        if (!prte_plm_ssh_component.no_tree_spawn) {
             PRTE_LIST_FOREACH(child, &coll, prte_namelist_t) {
                 if (child->name.rank == node->daemon->name.rank) {
                     goto launch;
@@ -1196,7 +1197,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             }
             /* didn't find it - ignore this node */
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                 "%s plm:rsh:launch daemon %s not a child of mine",
+                                 "%s plm:ssh:launch daemon %s not a child of mine",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_VPID_PRINT(node->daemon->name.rank)));
             continue;
@@ -1206,7 +1207,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* if this daemon already exists, don't launch it! */
         if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                 "%s plm:rsh:launch daemon already exists on node %s",
+                                 "%s plm:ssh:launch daemon already exists on node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  node->name));
             continue;
@@ -1218,7 +1219,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         if (NULL == node->daemon) {
             PRTE_ERROR_LOG(PRTE_ERR_FATAL);
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                 "%s plm:rsh:launch daemon failed to be defined on node %s",
+                                 "%s plm:ssh:launch daemon failed to be defined on node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  node->name));
             continue;
@@ -1238,7 +1239,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* pass the vpid */
         rc = prte_util_convert_vpid_to_string(&var, node->daemon->name.rank);
         if (PRTE_SUCCESS != rc) {
-            prte_output(0, "prte_plm_rsh: unable to get daemon vpid as string");
+            prte_output(0, "prte_plm_ssh: unable to get daemon vpid as string");
             exit(-1);
         }
         free(argv[proc_vpid_index]);
@@ -1246,12 +1247,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
         free(var);
 
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                             "%s plm:rsh: adding node %s to launch list",
+                             "%s plm:ssh: adding node %s to launch list",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              node->name));
 
         /* we are in an event, so no need to protect the list */
-        caddy = PRTE_NEW(prte_plm_rsh_caddy_t);
+        caddy = PRTE_NEW(prte_plm_ssh_caddy_t);
         caddy->argc = argc;
         caddy->argv = prte_argv_copy(argv);
         /* insert the alternate port if any */
@@ -1270,14 +1271,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* we NEVER use tree-spawn for secondary launches - e.g.,
      * due to a dynamic launch requesting add_hosts - so be
      * sure to turn it off here */
-    prte_plm_rsh_component.no_tree_spawn = true;
+    prte_plm_ssh_component.no_tree_spawn = true;
 
     /* set the job state to indicate the daemons are launched */
     state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
 
     /* trigger the event to start processing the launch list */
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                         "%s plm:rsh: activating launch event",
+                         "%s plm:ssh: activating launch event",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     PRTE_POST_OBJECT(state);
     prte_event_active(&launch_event, EV_WRITE, 1);
@@ -1297,7 +1298,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 /**
  * Terminate the orteds for a given job
  */
-static int rsh_terminate_prteds(void)
+static int ssh_terminate_prteds(void)
 {
     int rc;
 
@@ -1308,7 +1309,7 @@ static int rsh_terminate_prteds(void)
     return rc;
 }
 
-static int rsh_finalize(void)
+static int ssh_finalize(void)
 {
     int rc, i;
     prte_job_t *jdata;
@@ -1350,10 +1351,10 @@ static int rsh_finalize(void)
             }
         }
     }
-    free(prte_plm_rsh_component.agent_path);
-    free(rsh_agent_path);
-    prte_argv_free(prte_plm_rsh_component.agent_argv);
-    prte_argv_free(rsh_agent_argv);
+    free(prte_plm_ssh_component.agent_path);
+    free(ssh_agent_path);
+    prte_argv_free(prte_plm_ssh_component.agent_argv);
+    prte_argv_free(ssh_agent_argv);
 
     return rc;
 }
@@ -1371,33 +1372,33 @@ static void set_handler_default(int sig)
 }
 
 
-static prte_plm_rsh_shell_t find_shell(char *shell)
+static prte_plm_ssh_shell_t find_shell(char *shell)
 {
     int i         = 0;
     char *sh_name = NULL;
 
     if( (NULL == shell) || (strlen(shell) == 1) ) {
         /* Malformed shell */
-        return PRTE_PLM_RSH_SHELL_UNKNOWN;
+        return PRTE_PLM_SSH_SHELL_UNKNOWN;
     }
 
     sh_name = rindex(shell, '/');
     if( NULL == sh_name ) {
         /* Malformed shell */
-        return PRTE_PLM_RSH_SHELL_UNKNOWN;
+        return PRTE_PLM_SSH_SHELL_UNKNOWN;
     }
 
     /* skip the '/' */
     ++sh_name;
-    for (i = 0; i < (int)(sizeof (prte_plm_rsh_shell_name) /
-                          sizeof(prte_plm_rsh_shell_name[0])); ++i) {
-        if (NULL != strstr(sh_name, prte_plm_rsh_shell_name[i])) {
-            return (prte_plm_rsh_shell_t)i;
+    for (i = 0; i < (int)(sizeof (prte_plm_ssh_shell_name) /
+                          sizeof(prte_plm_ssh_shell_name[0])); ++i) {
+        if (NULL != strstr(sh_name, prte_plm_ssh_shell_name[i])) {
+            return (prte_plm_ssh_shell_t)i;
         }
     }
 
     /* We didn't find it */
-    return PRTE_PLM_RSH_SHELL_UNKNOWN;
+    return PRTE_PLM_SSH_SHELL_UNKNOWN;
 }
 
 static int launch_agent_setup(const char *agent, char *path)
@@ -1406,49 +1407,49 @@ static int launch_agent_setup(const char *agent, char *path)
     int i;
 
     /* if no agent was provided, then report not found */
-    if (NULL == prte_plm_rsh_component.agent && NULL == agent) {
+    if (NULL == prte_plm_ssh_component.agent && NULL == agent) {
         return PRTE_ERR_NOT_FOUND;
     }
 
     /* search for the argv */
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                         "%s plm:rsh_setup on agent %s path %s",
+                         "%s plm:ssh_setup on agent %s path %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (NULL == agent) ? prte_plm_rsh_component.agent : agent,
+                         (NULL == agent) ? prte_plm_ssh_component.agent : agent,
                          (NULL == path) ? "NULL" : path));
-    rsh_agent_argv = prte_plm_rsh_search(agent, path);
+    ssh_agent_argv = prte_plm_ssh_search(agent, path);
 
-    if (0 == prte_argv_count(rsh_agent_argv)) {
+    if (0 == prte_argv_count(ssh_agent_argv)) {
         /* nothing was found */
         return PRTE_ERR_NOT_FOUND;
     }
 
     /* see if we can find the agent in the path */
-    rsh_agent_path = prte_path_findv(rsh_agent_argv[0], X_OK, environ, path);
+    ssh_agent_path = prte_path_findv(ssh_agent_argv[0], X_OK, environ, path);
 
-    if (NULL == rsh_agent_path) {
+    if (NULL == ssh_agent_path) {
         /* not an error - just report not found */
-        prte_argv_free(rsh_agent_argv);
+        prte_argv_free(ssh_agent_argv);
         return PRTE_ERR_NOT_FOUND;
     }
 
-    bname = prte_basename(rsh_agent_argv[0]);
+    bname = prte_basename(ssh_agent_argv[0]);
     if (NULL != bname && 0 == strcmp(bname, "ssh")) {
         /* if xterm option was given, add '-X', ensuring we don't do it twice */
         if (NULL != prte_xterm) {
-            prte_argv_append_unique_nosize(&rsh_agent_argv, "-X");
+            prte_argv_append_unique_nosize(&ssh_agent_argv, "-X");
         } else if (0 >= prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
             /* if debug was not specified, and the user didn't explicitly
              * specify X11 forwarding/non-forwarding, add "-x" if it
              * isn't already there (check either case)
              */
-            for (i = 1; NULL != rsh_agent_argv[i]; ++i) {
-                if (0 == strcasecmp("-x", rsh_agent_argv[i])) {
+            for (i = 1; NULL != ssh_agent_argv[i]; ++i) {
+                if (0 == strcasecmp("-x", ssh_agent_argv[i])) {
                     break;
                 }
             }
-            if (NULL == rsh_agent_argv[i]) {
-                prte_argv_append_nosize(&rsh_agent_argv, "-x");
+            if (NULL == ssh_agent_argv[i]) {
+                prte_argv_append_nosize(&ssh_agent_argv, "-x");
             }
         }
     }
@@ -1463,8 +1464,8 @@ static int launch_agent_setup(const char *agent, char *path)
 /**
  * Check the Shell variable and system type on the specified node
  */
-static int rsh_probe(char *nodename,
-                     prte_plm_rsh_shell_t *shell)
+static int ssh_probe(char *nodename,
+                     prte_plm_ssh_shell_t *shell)
 {
     char ** argv;
     int argc, rc = PRTE_SUCCESS, i;
@@ -1473,21 +1474,21 @@ static int rsh_probe(char *nodename,
     char outbuf[4096];
 
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                         "%s plm:rsh: going to check SHELL variable on node %s",
+                         "%s plm:ssh: going to check SHELL variable on node %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          nodename));
 
-    *shell = PRTE_PLM_RSH_SHELL_UNKNOWN;
+    *shell = PRTE_PLM_SSH_SHELL_UNKNOWN;
     if (pipe(fd)) {
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                             "%s plm:rsh: pipe failed with errno=%d",
+                             "%s plm:ssh: pipe failed with errno=%d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              errno));
         return PRTE_ERR_IN_ERRNO;
     }
     if ((pid = fork()) < 0) {
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                             "%s plm:rsh: fork failed with errno=%d",
+                             "%s plm:ssh: fork failed with errno=%d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              errno));
         return PRTE_ERR_IN_ERRNO;
@@ -1495,14 +1496,14 @@ static int rsh_probe(char *nodename,
     else if (pid == 0) {          /* child */
         if (dup2(fd[1], 1) < 0) {
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                 "%s plm:rsh: dup2 failed with errno=%d",
+                                 "%s plm:ssh: dup2 failed with errno=%d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  errno));
             exit(01);
         }
         /* Build argv array */
-        argv = prte_argv_copy(prte_plm_rsh_component.agent_argv);
-        argc = prte_argv_count(prte_plm_rsh_component.agent_argv);
+        argv = prte_argv_copy(prte_plm_ssh_component.agent_argv);
+        argc = prte_argv_count(prte_plm_ssh_component.agent_argv);
         prte_argv_append(&argc, &argv, nodename);
         prte_argv_append(&argc, &argv, "echo $SHELL");
 
@@ -1511,7 +1512,7 @@ static int rsh_probe(char *nodename,
     }
     if (close(fd[1])) {
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                             "%s plm:rsh: close failed with errno=%d",
+                             "%s plm:ssh: close failed with errno=%d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              errno));
         return PRTE_ERR_IN_ERRNO;
@@ -1528,7 +1529,7 @@ static int rsh_probe(char *nodename,
                 if (errno == EINTR)
                     continue;
                 PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                                     "%s plm:rsh: Unable to detect the remote shell (error %s)",
+                                     "%s plm:ssh: Unable to detect the remote shell (error %s)",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      strerror(errno)));
                 rc = PRTE_ERR_IN_ERRNO;
@@ -1548,10 +1549,10 @@ static int rsh_probe(char *nodename,
         if( NULL != sh_name ) {
             sh_name++; /* skip '/' */
             /* Search for the substring of known shell-names */
-            for (i = 0; i < (int)(sizeof (prte_plm_rsh_shell_name)/
-                                  sizeof(prte_plm_rsh_shell_name[0])); i++) {
-                if ( NULL != strstr(sh_name, prte_plm_rsh_shell_name[i]) ) {
-                    *shell = (prte_plm_rsh_shell_t)i;
+            for (i = 0; i < (int)(sizeof (prte_plm_ssh_shell_name)/
+                                  sizeof(prte_plm_ssh_shell_name[0])); i++) {
+                if ( NULL != strstr(sh_name, prte_plm_ssh_shell_name[i]) ) {
+                    *shell = (prte_plm_ssh_shell_t)i;
                     break;
                 }
             }
@@ -1559,24 +1560,24 @@ static int rsh_probe(char *nodename,
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                         "%s plm:rsh: node %s has SHELL: %s",
+                         "%s plm:ssh: node %s has SHELL: %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          nodename,
-                         (PRTE_PLM_RSH_SHELL_UNKNOWN == *shell) ? "UNHANDLED" : (char*)prte_plm_rsh_shell_name[*shell]));
+                         (PRTE_PLM_SSH_SHELL_UNKNOWN == *shell) ? "UNHANDLED" : (char*)prte_plm_ssh_shell_name[*shell]));
 
     return rc;
 }
 
-static int setup_shell(prte_plm_rsh_shell_t *rshell,
-                       prte_plm_rsh_shell_t *lshell,
+static int setup_shell(prte_plm_ssh_shell_t *sshell,
+                       prte_plm_ssh_shell_t *lshell,
                        char *nodename, int *argc, char ***argv)
 {
-    prte_plm_rsh_shell_t remote_shell, local_shell;
+    prte_plm_ssh_shell_t remote_shell, local_shell;
     char *param;
     int rc;
 
     /* What is our local shell? */
-    local_shell = PRTE_PLM_RSH_SHELL_UNKNOWN;
+    local_shell = PRTE_PLM_SSH_SHELL_UNKNOWN;
 
 #if PRTE_ENABLE_GETPWUID
     {
@@ -1593,46 +1594,46 @@ static int setup_shell(prte_plm_rsh_shell_t *rshell,
     /* If we didn't find it in getpwuid(), try looking at the $SHELL
        environment variable (see https://svn.open-mpi.org/trac/ompi/ticket/1060)
     */
-    if (PRTE_PLM_RSH_SHELL_UNKNOWN == local_shell &&
+    if (PRTE_PLM_SSH_SHELL_UNKNOWN == local_shell &&
         NULL != (param = getenv("SHELL"))) {
         local_shell = find_shell(param);
     }
 
-    if (PRTE_PLM_RSH_SHELL_UNKNOWN == local_shell) {
+    if (PRTE_PLM_SSH_SHELL_UNKNOWN == local_shell) {
         prte_output(0, "WARNING: local probe returned unhandled shell:%s assuming bash\n",
                     (NULL != param) ? param : "unknown");
-        local_shell = PRTE_PLM_RSH_SHELL_BASH;
+        local_shell = PRTE_PLM_SSH_SHELL_BASH;
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                         "%s plm:rsh: local shell: %d (%s)",
+                         "%s plm:ssh: local shell: %d (%s)",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         local_shell, prte_plm_rsh_shell_name[local_shell]));
+                         local_shell, prte_plm_ssh_shell_name[local_shell]));
 
     /* What is our remote shell? */
-    if (prte_plm_rsh_component.assume_same_shell) {
+    if (prte_plm_ssh_component.assume_same_shell) {
         remote_shell = local_shell;
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                             "%s plm:rsh: assuming same remote shell as local shell",
+                             "%s plm:ssh: assuming same remote shell as local shell",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     } else {
-        rc = rsh_probe(nodename, &remote_shell);
+        rc = ssh_probe(nodename, &remote_shell);
 
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
 
-        if (PRTE_PLM_RSH_SHELL_UNKNOWN == remote_shell) {
-            prte_output(0, "WARNING: rsh probe returned unhandled shell; assuming bash\n");
-            remote_shell = PRTE_PLM_RSH_SHELL_BASH;
+        if (PRTE_PLM_SSH_SHELL_UNKNOWN == remote_shell) {
+            prte_output(0, "WARNING: ssh probe returned unhandled shell; assuming bash\n");
+            remote_shell = PRTE_PLM_SSH_SHELL_BASH;
         }
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                         "%s plm:rsh: remote shell: %d (%s)",
+                         "%s plm:ssh: remote shell: %d (%s)",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         remote_shell, prte_plm_rsh_shell_name[remote_shell]));
+                         remote_shell, prte_plm_ssh_shell_name[remote_shell]));
 
     /* Do we need to source .profile on the remote side?
        - sh: yes (see bash(1))
@@ -1642,8 +1643,8 @@ static int setup_shell(prte_plm_rsh_shell_t *rshell,
        - zsh: no (see http://zsh.sourceforge.net/FAQ/zshfaq03.html#l19)
     */
 
-    if (PRTE_PLM_RSH_SHELL_SH == remote_shell ||
-        PRTE_PLM_RSH_SHELL_KSH == remote_shell) {
+    if (PRTE_PLM_SSH_SHELL_SH == remote_shell ||
+        PRTE_PLM_SSH_SHELL_KSH == remote_shell) {
         int i;
         char **tmp;
         tmp = prte_argv_split("( test ! -r ./.profile || . ./.profile;", ' ');
@@ -1657,7 +1658,7 @@ static int setup_shell(prte_plm_rsh_shell_t *rshell,
     }
 
     /* pass results back */
-    *rshell = remote_shell;
+    *sshell = remote_shell;
     *lshell = local_shell;
 
     return PRTE_SUCCESS;

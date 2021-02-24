@@ -11,7 +11,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2020-2021 Cisco Systems, Inc.  All rights reserved
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,15 +21,15 @@
 # This is the US/English general help file for PRTE's prun.
 #
 [agent-not-found]
-The value of the MCA parameter "plm_rsh_agent" was set to a path
+The value of the MCA parameter "plm_ssh_agent" was set to a path
 that could not be found:
 
-  plm_rsh_agent: %s
+  plm_ssh_agent: %s
 
 Please either unset the parameter, or check that the path is correct
 #
 [no-local-orted]
-The rsh PLS component was not able to find the executable "orted" in
+The ssh PLS component was not able to find the executable "orted" in
 your PATH or in the directory where PRTE was initially installed,
 and therefore cannot continue.
 
@@ -54,15 +54,15 @@ the prefix to be set overriding:
   %s
 
 [concurrency-less-than-zero]
-The value of the MCA parameter "pls_rsh_num_concurrent" is less than
+The value of the MCA parameter "pls_ssh_num_concurrent" is less than
 or equal to zero (%d).  This parameter is used to determine how many
-remote agents (typically rsh or ssh) to invoke concurrently while
-launching parallel jobs.
+remote agents (typically ssh) to invoke concurrently while launching
+parallel jobs.
 
 This value has automatically be reset to 1; processing will continue.
 
 [deadlock-params]
-The rsh launcher has been given a number of %d concurrent daemons to
+The ssh launcher has been given a number of %d concurrent daemons to
 launch and is in a debug-daemons option. However, the total number of
 daemons to launch (%d) is greater than this value. This is a scenario that
 will cause the system to deadlock.
@@ -76,7 +76,7 @@ entry in the password file). Please contact your system administrator
 for a fix.
 #
 [cannot-resolve-shell-with-prefix]
-The rsh launcher has been given a prefix to use, but could not determine
+The ssh launcher has been given a prefix to use, but could not determine
 the type of remote shell being used on the remote node. This is a fatal
 error as we cannot determine how to construct the cmd line to set your
 remote LD_LIBRARY_PATH and PATH environmental variables.
@@ -84,14 +84,14 @@ remote LD_LIBRARY_PATH and PATH environmental variables.
 The prefix we were given are:
 
 prte_prefix: %s
-prefix_dir: %s
+prefix_dir:  %s
 #
 [cmd-line-too-long]
 The cmd line to launch remote daemons is too long:
 
-  Length:         %d
+  Length:      %d
   Max length:  %d
 
-Consider setting -mca plm_rsh_pass_environ_mca_params 0 to
+Consider setting -mca plm_ssh_pass_environ_mca_params 0 to
 avoid including any environmentally set MCA parameters on the
 command line.

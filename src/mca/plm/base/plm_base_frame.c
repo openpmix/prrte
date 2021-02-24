@@ -30,6 +30,7 @@
 #include "src/util/output.h"
 #include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/base/prte_mca_base_alias.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/plm/plm.h"
@@ -65,6 +66,28 @@ static int mca_plm_base_register(prte_mca_base_register_flag_t flags)
                                                   PRTE_INFO_LVL_9,
                                                   PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                                   &prte_plm_globals.node_regex_threshold);
+
+    /* Note that we break abstraction rules here by listing a
+     specific BTL here in the base.  This is necessary, however,
+     due to extraordinary circumstances:
+
+     1. In PRRTE v2.0, we want to rename the "rsh" PLM to be
+        "ssh" to more closely represent its usage.
+
+     2. The MCA aliasing mechanism was therefore ported from
+        OMPI for this purpose. Both the component itself and
+        all of its MCA vars are aliased.
+
+     3. However -- at least as currently implemented -- by the time
+     individual components are registered, it's too late to make
+     aliases.  Hence, if we want to preserve the name "rsh" for
+     some sembalance of backwards compatibility (and we do!), we
+     have to register "rsh" as an "alias for ssh" up here in
+     the PLM base, before any PLM components are registered.
+
+     This is why we tolerate this abstraction break up here in the
+     PLM component base. */
+    (void) prte_mca_base_alias_register ("prte", "plm", "ssh", "rsh", PRTE_MCA_BASE_ALIAS_FLAG_NONE);
     return PRTE_SUCCESS;
 }
 
