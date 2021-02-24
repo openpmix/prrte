@@ -121,15 +121,15 @@ static int ssh_component_register(void)
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_ssh_component.num_concurrent);
 
-    prte_plm_rsh_component.force_rsh = false;
+    prte_plm_ssh_component.force_ssh = false;
     (void) prte_mca_base_component_var_register (c, "force_ssh", "Force the launcher to always use ssh",
                                             PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
                                             PRTE_MCA_BASE_VAR_FLAG_NONE,
                                             PRTE_INFO_LVL_2,
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_rsh_component.force_rsh);
+                                            &prte_plm_ssh_component.force_ssh);
 
-    prte_plm_rsh_component.disable_qrsh = false;
+    prte_plm_ssh_component.disable_qrsh = false;
     (void) prte_mca_base_component_var_register (c, "disable_qrsh",
                                             "Disable the use of qrsh when under the Grid Engine parallel environment",
                                             PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
@@ -165,7 +165,7 @@ static int ssh_component_register(void)
                                             PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                             &prte_plm_ssh_component.daemonize_llspawn);
 
-    prte_plm_rsh_component.priority = 10;
+    prte_plm_ssh_component.priority = 10;
     (void) prte_mca_base_component_var_register (c, "priority", "Priority of the ssh plm component",
                                             PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
                                             PRTE_MCA_BASE_VAR_FLAG_NONE,
