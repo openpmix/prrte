@@ -613,6 +613,41 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo,
     return UINT_MAX;
 }
 
+#if HWLOC_API_VERSION < 0x20000
+/* hwloc treats cache objects as special
+ * cases. Instead of having a unique type for each cache level,
+ * there is a single cache object type, and the level is encoded
+ * in an attribute union. So looking for cache objects involves
+ * a multi-step test :-(
+ */
+static hwloc_obj_t df_search(hwloc_topology_t topo,
+                             hwloc_obj_t start,
+                             hwloc_obj_type_t target,
+                             unsigned cache_level,
+                             unsigned int nobj,
+                             unsigned int *num_objs)
+{
+    int search_depth;
+    
+    search_depth = hwloc_get_type_depth(topo, target);
+    if (HWLOC_TYPE_DEPTH_MULTIPLE == search_depth) {
+        /* either v1.x Cache, or Groups */
+        if (cache_level != HWLOC_OBJ_CACHE) {
+            return NULL;
+        }
+        search_depth = hwloc_get_cache_type_depth(topo, cache_level, (hwloc_obj_cache_type_t) -1);
+    }
+    if (HWLOC_TYPE_DEPTH_UNKNOWN == search_depth) {
+        return NULL;
+    }
+    
+    if (num_objs) {
+        *num_objs = hwloc_get_nbobjs_by_depth(topo, search_depth);
+    }
+    return hwloc_get_obj_by_depth(topo, search_depth, nobj);
+}
+#endif
+
 unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
                                                 hwloc_obj_type_t target,
                                                 unsigned cache_level)
