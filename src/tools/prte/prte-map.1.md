@@ -533,6 +533,92 @@ prun option          MCA parameter key           value
 --bind-to none       hwloc_base_binding_policy   none
 ```
 
+## Difference between overloading and oversubscription
+
+This section explores the difference between these two options.
+
+ - `--bind-to <object>:overload-allowed` allows for binding more than one processes to this object.
+ - `--map-by :OVERSUBSCRIBE` allow more processes on a node than processing elements
+
+For the following examples consider a node with:
+ - Two processor packages,
+ - Ten cores per package, and
+ - Eight hardware threads per core.
+
+And the following hostfile:
+
+```
+$ cat myhostfile
+node01 slots=32
+node02 slots=32
+```
+
+The "slots" tells PRTE that it can place up to 32 processes before
+oversubscribing the node.
+
+If we run the following:
+```
+prterun --np 34 --hostfile myhostfile --map-by core --bind-to core hostname
+```
+
+It will return an error at the binding time indicating an overloading scenario.
+
+The mapping mechanism assigns 32 processes to `node01` matching the "slots"
+specification in the hostfile. The binding mechanism will bind the first 20
+processes to unique cores leaving it with 12 processes that it cannot bind
+without overloading one of the cores (putting more than one process on the
+core).
+
+Using the `overload-allowed` qualifier to the `--bind-to core` option tells
+PRTE that it may assign more than one process to a core.
+
+If we run the following:
+```
+prterun --np 34 --hostfile myhostfile --map-by core --bind-to core:overload-allowed hostname
+```
+
+This will run correctly placing 32 processes on `node01`, and 2 processes on
+`node02`. On `node01` two processes are bound to cores 0-11 accounting for
+the overloading of those cores.
+
+Alternatively, we could use hardware threads to give binding a lower level
+processing unit to bind to without overloading.
+
+If we run the following:
+```
+prterun --np 34 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
+```
+
+This will run correctly placing 32 processes on `node01`, and 2 processes on
+`node02`. On `node01` two processes are mapped to cores 0-11 but bound to
+different hardware threads on those cores (the logical first and second
+hardware thread) thus no hardware threads are overloaded at binding time.
+
+In both of the examples above the node is not oversubscribed at mapping time
+because the hostfile set the oversubscription limit to "slots=32" for each
+node. It is only after we exceed that limit that PRTE will throw an
+oversubscription error.
+
+Consider next if we ran the following:
+```
+prterun --np 66 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
+```
+
+This will return an error at mapping time indicating an oversubscription
+scenario. The mapping mechanism will assign all of the available slots
+(64 across 2 nodes) and be left two processes to map. The only way to map
+those processes is to exceed the number of available slots putting the job
+into an oversubscription scenario.
+
+You can force PRTE to oversubscribe the nodes by using the `:OVERSUBSCRIBE`
+modifier to the `--map-by` option as seen in the example below:
+```
+prterun --np 66 --hostfile myhostfile --map-by core:HWTCPUS:OVERSUBSCRIBE --bind-to hwthread hostname
+```
+
+This will run correctly placing 34 processes on `node01` and 32 on `node02`.
+Each process is bound to a unique hardware thread.
+
 ## Diagnostics
 
 PRTE provides various diagnostic reports that aid the user in verifying and
@@ -644,14 +730,11 @@ Rank 1 runs on node bb, bound to logical cores 0, 1, and 4.
 Rank 2 runs on node cc, bound to logical cores 1 and 2.
 ```
 
-<!--
-// JJH TODO this does not work see https://github.com/openpmix/prrte/issues/772
-
 For example:
 ```
 $ cat myrankfile
 rank 0=aa slot=1:0-2
-rank 1=bb slot=0:0,1
+rank 1=bb slot=0:0,1,4
 rank 2=cc slot=1-2
 $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
 ```
@@ -659,11 +742,10 @@ $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
 Means that
 
 ```
-Rank 0 runs on node aa, bound to logical package 1, cores 0-2.
-Rank 1 runs on node bb, bound to logical package 0, cores 0 and 1.
+Rank 0 runs on node aa, bound to logical package 1, cores 10-12 (the 0th through 2nd cores on that package).
+Rank 1 runs on node bb, bound to logical package 0, cores 0, 1, and 4.
 Rank 2 runs on node cc, bound to logical cores 1 and 2.
 ```
--->
 
 The hostnames listed above are "absolute," meaning that actual resolvable
 hostnames are specified. However, hostnames can also be specified as
