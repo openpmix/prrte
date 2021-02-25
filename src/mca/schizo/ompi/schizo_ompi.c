@@ -43,6 +43,8 @@
 #include "src/util/argv.h"
 #include "src/util/keyval_parse.h"
 #include "src/util/os_dirpath.h"
+#include "src/util/os_path.h"
+#include "src/util/path.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
 
@@ -633,13 +635,30 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
     for (i=0; NULL != tmp[i]; i++) {
         fp = fopen(tmp[i], "r");
         if (NULL == fp) {
-            prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);
-            prte_argv_free(tmp);
-            prte_argv_free(cache);
-            prte_argv_free(cachevals);
-            prte_argv_free(xparams);
-            prte_argv_free(xvals);
-            return PRTE_ERR_NOT_FOUND;
+            /* if the file given wasn't absolute, check in the default location */
+            if (prte_path_is_absolute(tmp[i])) {
+                prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i], p1);
+                prte_argv_free(tmp);
+                prte_argv_free(cache);
+                prte_argv_free(cachevals);
+                prte_argv_free(xparams);
+                prte_argv_free(xvals);
+                return PRTE_ERR_NOT_FOUND;
+            }
+            p1 = prte_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
+            fp = fopen(p1, "r");
+            if (NULL == fp) {
+                prte_show_help("help-schizo-base.txt", "missing-param-file-def", true,
+                               tmp[i], DEFAULT_PARAM_FILE_PATH);
+                prte_argv_free(tmp);
+                prte_argv_free(cache);
+                prte_argv_free(cachevals);
+                prte_argv_free(xparams);
+                prte_argv_free(xvals);
+                free(p1);
+                return PRTE_ERR_NOT_FOUND;
+            }
+            free(p1);
         }
         while (NULL != (line = schizo_getline(fp))) {
             if('\0' == line[0]) continue; /* skip empty lines */

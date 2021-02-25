@@ -13,6 +13,12 @@
 [missing-param-file]
 Unable to locate the variable file:
    %s
+[missing-param-file-def]
+Unable to locate the variable file:
+   %s
+either relative to the current working directory
+or in the default location:
+   %s
 #
 [bad-param-line]
 Parsing error in variable file:
