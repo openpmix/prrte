@@ -68,7 +68,7 @@ static int mca_plm_base_register(prte_mca_base_register_flag_t flags)
                                                   &prte_plm_globals.node_regex_threshold);
 
     /* Note that we break abstraction rules here by listing a
-     specific BTL here in the base.  This is necessary, however,
+     specific PLM here in the base.  This is necessary, however,
      due to extraordinary circumstances:
 
      1. In PRRTE v2.0, we want to rename the "rsh" PLM to be
