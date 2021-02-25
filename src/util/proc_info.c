@@ -153,6 +153,7 @@ void prte_setup_hostname(void)
 
     /* add "localhost" to our list of aliases */
     prte_argv_append_nosize(&prte_process_info.aliases, "localhost");
+    prte_argv_append_nosize(&prte_process_info.aliases, "127.0.0.1");
 
 }
 

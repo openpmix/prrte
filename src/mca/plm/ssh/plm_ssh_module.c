@@ -786,7 +786,6 @@ static int remote_spawn(void)
     bool failed_launch = true;
     pmix_proc_t target;
     prte_plm_ssh_caddy_t *caddy;
-    prte_job_t *daemons;
     prte_list_t coll;
     prte_namelist_t *child;
     pmix_status_t ret;
