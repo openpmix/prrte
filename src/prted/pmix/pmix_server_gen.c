@@ -1015,7 +1015,18 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
                 proct = (pmix_proc_t*)&targets[0];
                 PMIX_LOAD_NSPACE(&jobid, proct->nspace);
             }
+#if PMIX_NUMERIC_VERSION < 0x00040100
+            char *tmp = NULL;
+            if (0 < strlen(jobid)) {
+                tmp = strdup(jobid);
+            }
+            rc = PMIx_Data_pack(NULL, cmd, &tmp, 1, PMIX_STRING);
+            if (NULL != tmp) {
+                free(tmp);
+            }
+#else
             rc = PMIx_Data_pack(NULL, cmd, &jobid, 1, PMIX_PROC_NSPACE);
+#endif
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(cmd);

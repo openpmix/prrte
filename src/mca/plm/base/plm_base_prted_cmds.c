@@ -225,7 +225,18 @@ int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
     }
 
     /* pack the jobid */
+#if PMIX_NUMERIC_VERSION < 0x00040100
+    char *tmp = NULL;
+    if (0 < strlen(job)) {
+        tmp = strdup(job);
+    }
+    rc = PMIx_Data_pack(NULL, &cmd, &tmp, 1, PMIX_STRING);
+    if (NULL != tmp) {
+        free(tmp);
+    }
+#else
     rc = PMIx_Data_pack(NULL, &cmd, &job, 1, PMIX_PROC_NSPACE);
+#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&cmd);

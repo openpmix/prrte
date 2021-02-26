@@ -232,7 +232,14 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
                     }
                 }
                 /* pack the jobdata buffer */
+#if PMIX_NUMERIC_VERSION < 0x00040100
+                pmix_byte_object_t pbo;
+                pbo.bytes = (char*)priorjob.base_ptr;
+                pbo.size = priorjob.bytes_used;
+                rc = PMIx_Data_pack(NULL, &jobdata, &pbo, 1, PMIX_BYTE_OBJECT);
+#else
                 rc = PMIx_Data_pack(NULL, &jobdata, &priorjob, 1, PMIX_DATA_BUFFER);
+#endif
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
@@ -243,7 +250,14 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
             }
         }
         /* pack the jobdata buffer */
+#if PMIX_NUMERIC_VERSION < 0x00040100
+        pmix_byte_object_t pbo;
+        pbo.bytes = (char*)jobdata.base_ptr;
+        pbo.size = jobdata.bytes_used;
+        rc = PMIx_Data_pack(NULL, buffer, &pbo, 1, PMIX_BYTE_OBJECT);
+#else
         rc = PMIx_Data_pack(NULL, buffer, &jobdata, 1, PMIX_DATA_BUFFER);
+#endif
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
@@ -433,13 +447,28 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer,
     if (0 != flag) {
         /* unpack the buffer containing the info */
         cnt=1;
+#if PMIX_NUMERIC_VERSION < 0x00040100
+        rc = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
+        PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
+        dbuf.base_ptr = bo.bytes;
+        dbuf.bytes_used = bo.size;
+#else
         rc = PMIx_Data_unpack(NULL, buffer, &dbuf, &cnt, PMIX_DATA_BUFFER);
+#endif
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             goto REPORT_ERROR;
         }
         cnt=1;
-        while (PMIX_SUCCESS == (rc = PMIx_Data_unpack(NULL, &dbuf, &jdbuf, &cnt, PMIX_DATA_BUFFER))) {
+#if PMIX_NUMERIC_VERSION < 0x00040100
+        rc = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
+        PMIX_DATA_BUFFER_CONSTRUCT(&jdbuf);
+        jdbuf.base_ptr = bo.bytes;
+        jdbuf.bytes_used = bo.size;
+#else
+        rc = PMIx_Data_unpack(NULL, &dbuf, &jdbuf, &cnt, PMIX_DATA_BUFFER);
+#endif
+        while (PMIX_SUCCESS == rc) {
             /* unpack each job and add it to the local prte_job_data array */
             cnt=1;
             rc = prte_job_unpack(&jdbuf, &jdata);
@@ -493,6 +522,14 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer,
             cnt = 1;
         }
         PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+#if PMIX_NUMERIC_VERSION < 0x00040100
+        rc = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
+        PMIX_DATA_BUFFER_CONSTRUCT(&jdbuf);
+        jdbuf.base_ptr = bo.bytes;
+        jdbuf.bytes_used = bo.size;
+#else
+        rc = PMIx_Data_unpack(NULL, &dbuf, &jdbuf, &cnt, PMIX_DATA_BUFFER);
+#endif
     }
 
     /* unpack the job we are to launch */
