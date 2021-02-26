@@ -53,20 +53,8 @@ in a round-robin fashion by CPU slot. If running under a supported resource
 manager a hostfile is usually not required unless the caller wishes to further
 restrict the set of resources used for that job.
 
-Please note that PRTE automatically binds processes. Three binding
-patterns are used in the absence of any further directives:
-
-`Bind to core:`
-
-:   when the number of processes is <= 2
-
-`Bind to package:`
-
-:   when the number of processes is > 2
-
-`Bind to none:`
-
-:   when oversubscribed
+Please note that PRTE automatically binds processes. See prte-map(1) for
+defaults for the mapping, ranking, and binding of processes.
 
 If your application uses threads, then you probably want to ensure that
 you are either not bound at all (by specifying `--bind-to none`), or
@@ -291,8 +279,8 @@ below, for finer details on the MCA.
 
 `--gpmixmca <key> <value>`
 
-:   Pass global PMIx MCA parameters that are applicable to all contexts.
-    `<key>` is the parameter name; `<value>` is the parameter value.
+:   Pass global PMIx MCA parameters that are applicable to all application
+    contexts. `<key>` is the parameter name; `<value>` is the parameter value.
 
 `--mca <key> <value>`
 
@@ -309,9 +297,11 @@ below, for finer details on the MCA.
 :   Send arguments to various PRTE MCA modules. See the "MCA" section,
     below.
 
-`-pmixam <arg0>`
+`--pmixam <arg0>`
 
-:   Aggregate PMIx MCA parameter set file list.
+:   Aggregate PMIx MCA parameter set file list. The `arg0` argument is a
+    comma-separated list of tuning files. Each file containing MCA parameter
+    sets for this application context.
 
 ## Debugging Options
 

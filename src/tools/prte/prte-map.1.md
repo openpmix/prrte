@@ -23,8 +23,8 @@ job. Most of the command line controls are targeted to `prun` since each job has
 its own unique requirements.
 
 `prterun` is just a wrapper around `prte` for a single job PRTE DVM. It is
-doing the job of both `prte` and `prun`, and, as such, accept the sum all of
-thier command line arguments. Any example that uses `prun` can substitue the
+doing the job of both `prte` and `prun`, and, as such, accepts the sum all of
+their command line arguments. Any example that uses `prun` can substitute the
 use of `prterun` except where otherwise noted.
 
 The `prte` process attempts to automatically discover the nodes in the

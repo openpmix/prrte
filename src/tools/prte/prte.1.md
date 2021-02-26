@@ -99,8 +99,8 @@ Setting MCA parameters:
 
 `--gpmixmca <key> <value>`
 
-:   Pass global PMIx MCA parameters that are applicable to all contexts.
-    `<key>` is the parameter name; `<value>` is the parameter value.
+:   Pass global PMIx MCA parameters that are applicable to all application
+    contexts. `<key>` is the parameter name; `<value>` is the parameter value.
 
 `--mca <key> <value>`
 
@@ -117,9 +117,11 @@ Setting MCA parameters:
 :   Send arguments to various PRTE MCA modules. See the "MCA" section,
     below.
 
-`-pmixam <arg0>`
+`--pmixam <arg0>`
 
-:   Aggregate PMIx MCA parameter set file list.
+:   Aggregate PMIx MCA parameter set file list. The `arg0` argument is a
+    comma-separated list of tuning files. Each file containing MCA parameter
+    sets for this application context.
 
 The following options are useful for developers; they are not generally
 useful to most PRTE users:
