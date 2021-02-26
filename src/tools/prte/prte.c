@@ -1193,8 +1193,17 @@ int main(int argc, char *argv[])
 
     /* convert the job info into an array */
     PMIX_INFO_LIST_CONVERT(ret, jinfo, &darray);
-    iptr = (pmix_info_t*)darray.array;
-    ninfo = darray.size;
+    if (PMIX_ERR_EMPTY == ret) {
+        iptr = NULL;
+        ninfo = 0;
+    } else if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PRTE_UPDATE_EXIT_STATUS(rc);
+        goto DONE;
+    } else {
+        iptr = (pmix_info_t*)darray.array;
+        ninfo = darray.size;
+    }
     PMIX_INFO_LIST_RELEASE(jinfo);
 
     /* convert the apps to an array */
@@ -1208,8 +1217,19 @@ int main(int argc, char *argv[])
         papps[n].cwd = strdup(app->app.cwd);
         papps[n].maxprocs = app->app.maxprocs;
         PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);
-        papps[n].info = (pmix_info_t*)darray.array;
-        papps[n].ninfo = darray.size;
+        if (PMIX_SUCCESS != ret) {
+            if (PMIX_ERR_EMPTY == ret) {
+                papps[n].info = NULL;
+                papps[n].ninfo = 0;
+            } else {
+                PMIX_ERROR_LOG(ret);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+        } else {
+            papps[n].info = (pmix_info_t*)darray.array;
+            papps[n].ninfo = darray.size;
+        }
         /* pickup any relevant envars */
         rc = prte_schizo.parse_env(prte_cmd_line, environ, &papps[n].env, false);
         if (PRTE_SUCCESS != rc) {

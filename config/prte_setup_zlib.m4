@@ -5,6 +5,7 @@
 # Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -61,15 +62,6 @@ AC_DEFUN([PRTE_ZLIB_CONFIG],[
                            [$prte_zlib_libdir],
                            [prte_zlib_support=1],
                            [prte_zlib_support=0])
-        if test $prte_zlib_support = "1"; then
-            LIBS="$LIBS -lz"
-            if test "$prte_zlib_standard_header_location" != "yes"; then
-                CPPFLAGS="$CPPFLAGS $prte_zlib_CPPFLAGS"
-            fi
-            if test "$prte_zlib_standard_lib_location" != "yes"; then
-                LDFLAGS="$LDFLAGS $prte_zlib_LDFLAGS"
-            fi
-        fi
     fi
 
     if test ! -z "$with_zlib" && test "$with_zlib" != "no" && test "$prte_zlib_support" != "1"; then
@@ -86,5 +78,8 @@ AC_DEFUN([PRTE_ZLIB_CONFIG],[
 
     AC_DEFINE_UNQUOTED([PRTE_HAVE_ZLIB], [$prte_zlib_support],
                        [Whether or not we have zlib support])
+    AM_CONDITIONAL([PRTE_HAVE_ZLIB], [test $prte_lib_support -eq 1])
+    AC_SUBST(prte_zlib_CPPFLAGS)
+    AC_SUBST(prte_zlib_LDFLAGS)
     PRTE_VAR_SCOPE_POP
 ])dnl

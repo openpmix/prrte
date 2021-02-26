@@ -513,6 +513,59 @@ PRTE_EXPORT int prte_pmix_register_cleanup(char *path,
     }while(0)
 #endif
 
+#ifndef PMIX_XFER_PROCID
+#define PMIX_XFER_PROCID(a, b)      \
+    memcpy((a), (b), sizeof(pmix_proc_t))
+#endif
+
+
+#ifndef PMIX_NSPACE_INVALID
+#define PMIX_NSPACE_INVALID(a) \
+    (NULL == (a) || 0 == strlen((a)))
+#endif
+
+#ifndef PMIX_VALUE_XFER_DIRECT
+#define PMIX_VALUE_XFER_DIRECT(r, v, s)     \
+    (r) = pmix_value_xfer((v), (s))
+#endif
+
+#ifndef PMIX_PROCID_INVALID
+#define PMIX_PROCID_INVALID(a)  \
+    (PMIX_NSPACE_INVALID((a)->nspace) || PMIX_RANK_INVALID == (a)->rank)
+#endif
+
+#if PMIX_NUMERIC_VERSION < 0x00040100
+
+#undef PMIX_CHECK_NSPACE
+#define PMIX_CHECK_NSPACE(a, b) \
+    (PMIX_NSPACE_INVALID((a)) || PMIX_NSPACE_INVALID((b)) || 0 == strncmp((a), (b), PMIX_MAX_NSLEN))
+
+PRTE_EXPORT pmix_status_t PMIx_Data_load(pmix_data_buffer_t *buffer,
+                                         pmix_byte_object_t *payload);
+PRTE_EXPORT pmix_status_t PMIx_Data_unload(pmix_data_buffer_t *buffer,
+                                           pmix_byte_object_t *payload);
+PRTE_EXPORT bool PMIx_Data_compress(uint8_t *inbytes,
+                                    size_t size,
+                                    uint8_t **outbytes,
+                                    size_t *nbytes);
+PRTE_EXPORT bool PMIx_Data_decompress(uint8_t **outbytes,
+                                      size_t *nbytes,
+                                      uint8_t *inbytes,
+                                      size_t size);
+PRTE_EXPORT pmix_status_t PMIx_Data_embed(pmix_data_buffer_t *buffer,
+                                          const pmix_byte_object_t *payload);
+
+#undef PMIX_BYTE_OBJECT_LOAD
+#define PMIX_BYTE_OBJECT_LOAD(b, d, s)      \
+    do {                                    \
+        (b)->bytes = (char*)(d);            \
+        (d) = NULL;                         \
+        (b)->size = (s);                    \
+        (s) = 0;                            \
+    } while(0)
+
+#endif
+
 END_C_DECLS
 
 #endif

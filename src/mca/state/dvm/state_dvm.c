@@ -955,7 +955,18 @@ static void dvm_notify(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
+#if PMIX_NUMERIC_VERSION < 0x00040100
+    char *tmp = NULL;
+    if (0 < strlen(jdata->nspace)) {
+        tmp = strdup(jdata->nspace);
+    }
+    rc = PMIx_Data_pack(NULL, reply, (void*)&tmp, 1, PMIX_STRING);
+    if (NULL != tmp) {
+        free(tmp);
+    }
+#else
     rc = PMIx_Data_pack(NULL, reply, &jdata->nspace, 1, PMIX_PROC_NSPACE);
+#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);

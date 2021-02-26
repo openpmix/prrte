@@ -73,7 +73,16 @@ void pmix_server_launch_resp(int status, pmix_proc_t* sender,
 
     /* unpack the jobid */
     cnt = 1;
+#if PMIX_NUMERIC_VERSION < 0x00040100
+    char *tmp = NULL;
+    rc = PMIx_Data_unpack(NULL, buffer, &tmp, &cnt, PMIX_STRING);
+    PMIX_LOAD_NSPACE(jobid, tmp);
+    if (NULL != tmp) {
+        free(tmp);
+    }
+#else
     rc = PMIx_Data_unpack(NULL, buffer, &jobid, &cnt, PMIX_PROC_NSPACE);
+#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         ret = prte_pmix_convert_rc(rc);

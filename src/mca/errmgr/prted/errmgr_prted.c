@@ -171,7 +171,18 @@ static void prted_abort(int error_code, char *fmt, ...)
         goto cleanup;
     }
     /* pack the jobid */
+#if PMIX_NUMERIC_VERSION < 0x00040100
+    char *tmp = NULL;
+    if (0 < strlen(PRTE_PROC_MY_NAME->nspace)) {
+        tmp = strdup(PRTE_PROC_MY_NAME->nspace);
+    }
+    rc = PMIx_Data_pack(NULL, alert, (void*)&tmp, 1, PMIX_STRING);
+    if (NULL != tmp) {
+        free(tmp);
+    }
+#else
     rc = PMIx_Data_pack(NULL, alert, &PRTE_PROC_MY_NAME->nspace, 1, PMIX_PROC_NSPACE);
+#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(alert);
@@ -499,7 +510,18 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* pack only the data for this proc - have to start with the jobid
              * so the receiver can unpack it correctly
              */
+#if PMIX_NUMERIC_VERSION < 0x00040100
+            char *tmp = NULL;
+            if (0 < strlen(proc->nspace)) {
+                tmp = strdup(proc->nspace);
+            }
+            rc = PMIx_Data_pack(NULL, alert, (void*)&tmp, 1, PMIX_STRING);
+            if (NULL != tmp) {
+                free(tmp);
+            }
+#else
             rc = PMIx_Data_pack(NULL, alert, &proc->nspace, 1, PMIX_PROC_NSPACE);
+#endif
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
@@ -611,7 +633,18 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* pack only the data for this proc - have to start with the jobid
              * so the receiver can unpack it correctly
              */
+#if PMIX_NUMERIC_VERSION < 0x00040100
+            char *tmp = NULL;
+            if (0 < strlen(proc->nspace)) {
+                tmp = strdup(proc->nspace);
+            }
+            rc = PMIx_Data_pack(NULL, alert, (void*)&tmp, 1, PMIX_STRING);
+            if (NULL != tmp) {
+                free(tmp);
+            }
+#else
             rc = PMIx_Data_pack(NULL, alert, &proc->nspace, 1, PMIX_PROC_NSPACE);
+#endif
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
@@ -763,7 +796,18 @@ static int pack_state_update(pmix_data_buffer_t *alert, prte_job_t *jobdat)
     pmix_rank_t null=PMIX_RANK_INVALID;
 
     /* pack the jobid */
+#if PMIX_NUMERIC_VERSION < 0x00040100
+    char *tmp = NULL;
+    if (0 < strlen(jobdat->nspace)) {
+        tmp = strdup(jobdat->nspace);
+    }
+    rc = PMIx_Data_pack(NULL, alert, (void*)&tmp, 1, PMIX_STRING);
+    if (NULL != tmp) {
+        free(tmp);
+    }
+#else
     rc = PMIx_Data_pack(NULL, alert, &jobdat->nspace, 1, PMIX_PROC_NSPACE);
+#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return rc;
