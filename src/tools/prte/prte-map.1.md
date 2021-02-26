@@ -180,7 +180,7 @@ To bind processes to sets of objects:
 Any object can include modifiers by adding a colon (`:`) and any combination
 of one or more of the following to the `--bind-to` option:
 
- - `overload-allowed` if overloading of this object is allowed
+ - `overload-allowed` allows for binding more than one process in relation to a CPU
  - `if-supported` if that object is supported on this system
 
 ## Diagnostics
@@ -221,7 +221,7 @@ flexibility in the relative placement of processes.
 
 The third phase of **binding** actually binds each process to a given set of
 processors. This can improve performance if the operating system is placing
-processes suboptimally. For example, it might oversubscribe some multi-core
+processes sub-optimally. For example, it might oversubscribe some multi-core
 processor sockets, leaving other sockets idle; this can lead processes to
 contend unnecessarily for common resources. Or, it might spread processes out
 too widely; this can be suboptimal if application performance is sensitive to
@@ -531,17 +531,32 @@ prun option          MCA parameter key           value
 
 ## Difference between overloading and oversubscription
 
-This section explores the difference between these two options.
+This section explores the difference between these two options. Users are often
+confused by the difference between these two scenarios. As such this section
+provides a number of scenarios to help illustrate the differences.
 
- - `--bind-to <object>:overload-allowed` allows for binding more than one processes to this object.
  - `--map-by :OVERSUBSCRIBE` allow more processes on a node than processing elements
+ - `--bind-to <object>:overload-allowed` allows for binding more than one process in relation to a CPU
+
+The important thing to remember with _oversubscribing_ is that it can be
+defined separately from the actual number of CPUs on a node. This allows the
+mapper to place more or fewer processes per node than CPUs. By default, PRTE
+uses cores to determine slots in the absence of such information provided in
+the hostfile or by the resource manager (except in the case of the `--host`
+as described in the "Specifying Host Nodes" section).
+
+The important thing to remember with _overloading_ is that it is defined as
+binding more processes than CPUs. By default, PRTE uses cores as a means of
+counting the number of CPUs. However, the user can adjust this. For example
+when using the `:HWTCPUS` qualifier to the `--map-by` option PRTE will use
+hardware threads as a means of counting the number of CPUs.
 
 For the following examples consider a node with:
  - Two processor packages,
  - Ten cores per package, and
  - Eight hardware threads per core.
 
-And the following hostfile:
+Consider the node from above with the hostfile below:
 
 ```
 $ cat myhostfile
@@ -550,14 +565,14 @@ node02 slots=32
 ```
 
 The "slots" tells PRTE that it can place up to 32 processes before
-oversubscribing the node.
+_oversubscribing_ the node.
 
 If we run the following:
 ```
-prterun --np 34 --hostfile myhostfile --map-by core --bind-to core hostname
+prun --np 34 --hostfile myhostfile --map-by core --bind-to core hostname
 ```
 
-It will return an error at the binding time indicating an overloading scenario.
+It will return an error at the binding time indicating an _overloading_ scenario.
 
 The mapping mechanism assigns 32 processes to `node01` matching the "slots"
 specification in the hostfile. The binding mechanism will bind the first 20
@@ -570,7 +585,7 @@ PRTE that it may assign more than one process to a core.
 
 If we run the following:
 ```
-prterun --np 34 --hostfile myhostfile --map-by core --bind-to core:overload-allowed hostname
+prun --np 34 --hostfile myhostfile --map-by core --bind-to core:overload-allowed hostname
 ```
 
 This will run correctly placing 32 processes on `node01`, and 2 processes on
@@ -578,11 +593,11 @@ This will run correctly placing 32 processes on `node01`, and 2 processes on
 the overloading of those cores.
 
 Alternatively, we could use hardware threads to give binding a lower level
-processing unit to bind to without overloading.
+CPU to bind to without overloading.
 
 If we run the following:
 ```
-prterun --np 34 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
+prun --np 34 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
 ```
 
 This will run correctly placing 32 processes on `node01`, and 2 processes on
@@ -597,7 +612,7 @@ oversubscription error.
 
 Consider next if we ran the following:
 ```
-prterun --np 66 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
+prun --np 66 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
 ```
 
 This will return an error at mapping time indicating an oversubscription
@@ -609,11 +624,78 @@ into an oversubscription scenario.
 You can force PRTE to oversubscribe the nodes by using the `:OVERSUBSCRIBE`
 modifier to the `--map-by` option as seen in the example below:
 ```
-prterun --np 66 --hostfile myhostfile --map-by core:HWTCPUS:OVERSUBSCRIBE --bind-to hwthread hostname
+prun --np 66 --hostfile myhostfile --map-by core:HWTCPUS:OVERSUBSCRIBE --bind-to hwthread hostname
 ```
 
 This will run correctly placing 34 processes on `node01` and 32 on `node02`.
 Each process is bound to a unique hardware thread.
+
+### Overloading vs Oversubscription: Package Example
+
+Let's extend these examples by considering the package level.
+Consider the same node as before, but with the hostfile below:
+```
+$ cat myhostfile
+node01 slots=22
+node02 slots=22
+```
+
+The lowest level CPUs are 'cores' and we have 20 total (10 per package).
+
+If we run:
+```
+prun --np 20 --hostfile myhostfile --map-by package --bind-to package:REPORT hostname
+```
+
+Then 10 processes are mapped to each package, and bound at the package level.
+This is not overloading since we have 10 CPUs (cores) available in the package
+at the hardware level.
+
+However, if we run:
+```
+prun --np 21 --hostfile myhostfile --map-by package --bind-to package:REPORT hostname
+```
+
+Then 11 processes are mapped to the first package and 10 to the second package.
+At binding time we have an overloading scenario because there are only
+10 CPUs (cores) available in the package at the hardware level. So the first
+package is overloaded.
+
+### Overloading vs Oversubscription: Hardware Threads Example
+
+Similarly, if we consider hardware threads.
+
+Consider the same node as before, but with the hostfile below:
+```
+$ cat myhostfile
+node01 slots=165
+node02 slots=165
+```
+
+The lowest level CPUs are 'hwthreads' (because we are going to use the
+`:HWTCPUS` qualifier) and we have 160 total (80 per package).
+
+If we re-run (from the package example) and add the `:HWTCPUS` qualifier:
+```
+prun --np 21 --hostfile myhostfile --map-by package:HWTCPUS --bind-to package:REPORT hostname
+```
+
+Without the `:HWTCPUS` qualifier this would be overloading (as we saw
+previously). The mapper places 11 processes on the first package and 10 to the
+second package. The processes are still bound to the package level. However,
+with the `:HWTCPUS` qualifier, it is not overloading since we have
+80 CPUs (hwthreads) available in the package at the hardware level.
+
+Alternatively, if we run:
+```
+prun --np 161 --hostfile myhostfile --map-by package:HWTCPUS --bind-to package:REPORT hostname
+```
+
+Then 81 processes are mapped to the first package and 80 to the second package.
+At binding time we have an overloading scenario because there are only
+80 CPUs (hwthreads) available in the package at the hardware level.
+So the first package is overloaded.
+
 
 ## Diagnostics
 
