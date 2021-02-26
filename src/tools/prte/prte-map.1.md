@@ -433,16 +433,12 @@ example,
 :   launches 8 processes. Processes 0-1 on node `aa` since it has 2 slots and
     processes 2-7 on node `bb` since it has 6 slots.
 
-<!--
-// JJH TODO -- this does not work see https://github.com/openpmix/prrte/issues/771
-
 And here is a MIMD example:
 
 `prun --host aa --np 1 hostname : --host bb,cc --np 2 uptime`
 
 :   will launch process 0 running `hostname` on node `aa` and processes 1
     and 2 each running `uptime` on nodes `bb` and `cc`, respectively.
--->
 
 ## Mapping, Ranking, and Binding: Fundamentals
 
