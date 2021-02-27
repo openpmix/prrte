@@ -54,12 +54,6 @@ libprrte_la_DEPENDENCIES = $(libprrte_la_LIBADD)
 libprrte_la_LDFLAGS = -version-info $(libprrte_so_version)
 libprrte_la_CPPFLAGS =
 
-if PRTE_HAVE_ZLIB
-libprrte_la_LIBADD += -lzlib
-libprrte_la_CPPFLAGS += $(prte_zlib_CPPFLAGS)
-libprrte_la_LDFLAGS += $(prte_zlib_LDFLAGS)
-endif
-
 # included subdirectory Makefile.am's and appended-to variables
 headers =
 noinst_LTLIBRARIES =

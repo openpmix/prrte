@@ -1130,17 +1130,22 @@ CPPFLAGS="$CPP_INCLUDES $CPPFLAGS $PRTE_FINAL_CPPFLAGS"
 LDFLAGS="$LDFLAGS $PRTE_FINAL_LDFLAGS"
 LIBS="$LIBS $PRTE_FINAL_LIBS"
 
+AC_MSG_CHECKING([need zlib support])
+if test "$prte_zlib_support" == "1" && test "$prte_external_pmix_version_need_zlib" == "yes"; then
+    AC_MSG_RESULT([yes])
+    CPPFLAGS="$CPPFLAGS $prte_zlib_CPPFLAGS"
+    LDFLAGS="$LDFLAGS $prte_zlib_LDFLAGS"
+    LIBS="$LIBS -lz"
+else
+    AC_MSG_RESULT([no])
+fi
+
 #
 # Delayed the substitution of CFLAGS and CXXFLAGS until now because
 # they may have been modified throughout the course of this script.
 #
 
 AC_SUBST(CFLAGS)
-
-#
-# Aggregate MCA parameters directory
-#
-AC_SUBST([AMCA_PARAM_SETS_DIR], ['$(prtedatadir)/amca-param-sets'])
 
 ############################################################################
 # final wrapper compiler config
