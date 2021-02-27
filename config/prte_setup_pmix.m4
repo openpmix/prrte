@@ -17,6 +17,7 @@
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -108,6 +109,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
         prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
         prte_external_pmix_save_LDFLAGS=$LDFLAGS
         prte_external_pmix_save_LIBS=$LIBS
+        prte_external_pmix_version_need_zlib=no
 
         # if the pmix_version.h file does not exist, then
         # this must be from a pre-1.1.5 version
@@ -136,6 +138,19 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                                    prte_external_pmix_version=4x
                                    prte_external_pmix_version_found=4],
                                   [AC_MSG_RESULT([not found])])])
+
+        AS_IF([test "$prte_external_pmix_version_found" = "4"],
+              [AC_MSG_CHECKING([version 4.1])
+                AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                                    #include <pmix_version.h>
+                                                    #if (PMIX_VERSION_MAJOR == 4L && PMIX_VERSION_MINOR < 1L)
+                                                    #error "not version 4.1 or above"
+                                                    #endif
+                                                   ], [])],
+                                  [AC_MSG_RESULT([found])
+                                   prte_external_pmix_version_need_zlib=no],
+                                  [AC_MSG_RESULT([not found])
+                                   prte_external_pmix_version_need_zlib=yes])])
 
         AS_IF([test "$prte_external_pmix_version_found" = "0"],
               [AC_MSG_CHECKING([version 3x])

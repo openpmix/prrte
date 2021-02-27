@@ -78,8 +78,6 @@ AC_DEFUN([PRTE_ZLIB_CONFIG],[
 
     AC_DEFINE_UNQUOTED([PRTE_HAVE_ZLIB], [$prte_zlib_support],
                        [Whether or not we have zlib support])
-    AM_CONDITIONAL([PRTE_HAVE_ZLIB], [test $prte_lib_support -eq 1])
-    AC_SUBST(prte_zlib_CPPFLAGS)
-    AC_SUBST(prte_zlib_LDFLAGS)
+
     PRTE_VAR_SCOPE_POP
 ])dnl
