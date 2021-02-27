@@ -43,6 +43,8 @@
 
 #include "src/include/prte_stdint.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
+#include "src/util/error.h"
+#include "src/util/keyval_parse.h"
 #include "src/util/os_path.h"
 #include "src/util/path.h"
 #include "src/util/show_help.h"
@@ -65,14 +67,9 @@ static char *home = NULL;
 bool prte_mca_base_var_initialized = false;
 static char *prte_mca_base_envar_files = NULL;
 static char **prte_mca_base_var_file_list = NULL;
-static char *prte_mca_base_var_override_file = NULL;
-char *prte_mca_base_env_list = NULL;
-char *prte_mca_base_env_list_sep = PRTE_MCA_BASE_ENV_LIST_SEP_DEFAULT;
-char *prte_mca_base_env_list_internal = NULL;
 static bool prte_mca_base_var_suppress_override_warning = false;
 static prte_list_t prte_mca_base_var_file_values;
 static prte_list_t prte_mca_base_envar_file_values;
-static prte_list_t prte_mca_base_var_override_values;
 
 static int prte_mca_base_var_count = 0;
 
@@ -248,12 +245,50 @@ static char *append_filename_to_list(const char *filename)
     return NULL;
 }
 
+static void save_value(const char *file, int lineno,
+                       const char *name, const char *value)
+{
+    prte_mca_base_var_file_value_t *fv;
+    bool found = false;
+
+    /* First traverse through the list and ensure that we don't
+     already have a param of this name.  If we do, just replace the
+     value. */
+
+    PRTE_LIST_FOREACH(fv, &prte_mca_base_var_file_values, prte_mca_base_var_file_value_t) {
+        if (0 == strcmp(name, fv->mbvfv_var)) {
+            if (NULL != fv->mbvfv_value) {
+                free (fv->mbvfv_value);
+            }
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        /* We didn't already have the param, so append it to the list */
+        fv = PRTE_NEW(prte_mca_base_var_file_value_t);
+        if (NULL == fv) {
+            return;
+        }
+
+        fv->mbvfv_var = strdup(name);
+        prte_list_append(&prte_mca_base_var_file_values, &fv->super);
+    }
+
+    fv->mbvfv_value = value ? strdup(value) : NULL;
+    fv->mbvfv_file  = strdup(file);
+    fv->mbvfv_lineno = lineno;
+}
+
 /*
  * Set it up
  */
 int prte_mca_base_var_init(void)
 {
     int ret;
+    char *tmp;
+    prte_mca_base_var_file_value_t *fv;
 
     if (!prte_mca_base_var_initialized) {
         /* Init the value array for the param storage */
@@ -271,7 +306,6 @@ int prte_mca_base_var_init(void)
 
         PRTE_CONSTRUCT(&prte_mca_base_var_file_values, prte_list_t);
         PRTE_CONSTRUCT(&prte_mca_base_envar_file_values, prte_list_t);
-        PRTE_CONSTRUCT(&prte_mca_base_var_override_values, prte_list_t);
         PRTE_CONSTRUCT(&prte_mca_base_var_index_hash, prte_hash_table_t);
 
         ret = prte_hash_table_init (&prte_mca_base_var_index_hash, 1024);
@@ -288,6 +322,40 @@ int prte_mca_base_var_init(void)
 
         prte_mca_base_var_initialized = true;
 
+        /* READ THE DEFAULT PARAMS FILE(S) AND PUSH THE RESULTS
+         * INTO THE ENVIRONMENT */
+
+        /* We may need this later */
+        home = (char*)prte_home_directory();
+
+        /* start with the system default param file */
+        tmp = prte_os_path(false, prte_install_dirs.sysconfdir, "prte-mca-params.conf", NULL);
+        ret = prte_util_keyval_parse(tmp, save_value);
+        free(tmp);
+        if (PRTE_SUCCESS != ret && PRTE_ERR_NOT_FOUND != ret) {
+            PRTE_ERROR_LOG(ret);
+            return ret;
+        }
+
+#if PRTE_WANT_HOME_CONFIG_FILES
+        /* do the user's home default param files */
+        tmp = prte_os_path(false, home, ".prte", "prte-mca-params.conf", NULL);
+        ret = prte_util_keyval_parse(tmp, save_value);
+        free(tmp);
+        if (PRTE_SUCCESS != ret && PRTE_ERR_NOT_FOUND != ret) {
+            PRTE_ERROR_LOG(ret);
+            return ret;
+        }
+#endif
+
+        /* push the results into our environment, but do not overwrite
+         * a value if the user already has it set as their environment
+         * overrides anything from the default param files */
+        PRTE_LIST_FOREACH(fv, &prte_mca_base_var_file_values, prte_mca_base_var_file_value_t) {
+            prte_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+            prte_setenv(tmp, fv->mbvfv_value, false, &environ);
+            free(tmp);
+        }
     }
 
     return PRTE_SUCCESS;
@@ -882,12 +950,6 @@ void prte_mca_base_var_finalize (void)
         }
         PRTE_DESTRUCT(&prte_mca_base_envar_file_values);
 
-        while (NULL !=
-               (item = prte_list_remove_first(&prte_mca_base_var_override_values))) {
-            PRTE_RELEASE(item);
-        }
-        PRTE_DESTRUCT(&prte_mca_base_var_override_values);
-
         prte_mca_base_var_initialized = false;
         prte_mca_base_var_count = 0;
 
@@ -1335,12 +1397,7 @@ static int var_set_from_env (prte_mca_base_var_t *var, prte_mca_base_var_t *orig
     if (NULL != source_env) {
         if (0 == strncasecmp (source_env, "file:", 5)) {
             original->mbv_source_file = append_filename_to_list(source_env + 5);
-            if (NULL != prte_mca_base_var_override_file &&
-                0 == strcmp (var->mbv_source_file, prte_mca_base_var_override_file)) {
-                original->mbv_source = PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE;
-            } else {
-                original->mbv_source = PRTE_MCA_BASE_VAR_SOURCE_FILE;
-            }
+            original->mbv_source = PRTE_MCA_BASE_VAR_SOURCE_FILE;
         } else if (0 == strcasecmp (source_env, "command")) {
             var->mbv_source = PRTE_MCA_BASE_VAR_SOURCE_COMMAND_LINE;
         }
@@ -1472,12 +1529,6 @@ static int var_set_initial (prte_mca_base_var_t *var, prte_mca_base_var_t *origi
        order. If the default only flag is set the user will get a
        warning if they try to set a value from the environment or a
        file. */
-    ret = var_set_from_file (var, original, &prte_mca_base_var_override_values);
-    if (PRTE_SUCCESS == ret) {
-        var->mbv_flags = ~PRTE_MCA_BASE_VAR_FLAG_SETTABLE & (var->mbv_flags | PRTE_MCA_BASE_VAR_FLAG_OVERRIDE);
-        var->mbv_source = PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE;
-    }
-
     ret = var_set_from_env (var, original);
     if (PRTE_ERR_NOT_FOUND != ret) {
         return ret;

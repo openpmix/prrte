@@ -123,9 +123,6 @@ int prte_init_util(prte_proc_type_t flags)
     /* ensure we know the type of proc for when we finalize */
     prte_process_info.proc_type = flags;
 
-    /* set the nodename right away so anyone who needs it has it */
-    prte_setup_hostname();
-
     /* initialize the memory allocator */
     prte_malloc_init();
 
@@ -153,6 +150,11 @@ int prte_init_util(prte_proc_type_t flags)
         error = "mca_base_var_init";
         goto error;
     }
+
+    /* set the nodename so anyone who needs it has it - this
+     * must come AFTER we initialize the installdirs as it
+     * causes the MCA var system to initialize */
+    prte_setup_hostname();
 
     if (PRTE_SUCCESS != (ret = prte_net_init())) {
         error = "prte_net_init";

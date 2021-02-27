@@ -17,6 +17,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -737,11 +738,6 @@ PRTE_EXPORT int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_
 #define PRTE_MCA_COMPILETIME_VER "print_compiletime_version"
 #define PRTE_MCA_RUNTIME_VER "print_runtime_version"
 
-
-extern char *prte_mca_base_env_list;
-#define PRTE_MCA_BASE_ENV_LIST_SEP_DEFAULT ";"
-extern char *prte_mca_base_env_list_sep;
-extern char *prte_mca_base_env_list_internal;
 
 END_C_DECLS
 

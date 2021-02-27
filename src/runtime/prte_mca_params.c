@@ -208,41 +208,6 @@ int prte_register_params(void)
         return ret;
     }
 
-    /* register the envar-forwarding params */
-    (void)prte_mca_base_var_register ("prte", "mca", "base", "env_list",
-                                 "Set SHELL env variables",
-                                 PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
-                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_env_list);
-
-    prte_mca_base_env_list_sep = PRTE_MCA_BASE_ENV_LIST_SEP_DEFAULT;
-    (void)prte_mca_base_var_register ("prte", "mca", "base", "env_list_delimiter",
-                                 "Set SHELL env variables delimiter. Default: semicolon ';'",
-                                 PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
-                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_env_list_sep);
-
-    /* Set OMPI_MCA_mca_base_env_list variable, it might not be set before
-     * if mca variable was taken from amca conf file. Need to set it
-     * here because mca_base_var_process_env_list is called from schizo_ompi.c
-     * only when this env variable was set.
-     */
-    if (NULL != prte_mca_base_env_list) {
-        char *name = NULL;
-        (void) prte_mca_base_var_env_name ("prte_mca_base_env_list", &name);
-        if (NULL != name) {
-            prte_setenv(name, prte_mca_base_env_list, false, &environ);
-            free(name);
-        }
-    }
-
-    /* Register internal MCA variable mca_base_env_list_internal. It can be set only during
-     * parsing of amca conf file and contains SHELL env variables specified via -x there.
-     * Its format is the same as for mca_base_env_list.
-     */
-    (void)prte_mca_base_var_register ("prte", "mca", "base", "env_list_internal",
-            "Store SHELL env variables from amca conf file",
-            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_3,
-            PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_env_list_internal);
-
     /* get a clean output channel too - need to do this here because
      * we use it below, and prun and some other tools call this
      * function prior to calling prte_init
