@@ -11,6 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -34,11 +35,11 @@ install-data-local:
 	@ p="$(prte_config_files)"; \
         if test "$(prte_file_from_platform)" = "yes"; then \
 	    	if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
-		echo " $(INSTALL_DATA) $$d$$p $(DESTDIR)$(sysconfdir)/prte-mca-params.conf"; \
+            echo " $(INSTALL_DATA) $$d$$p $(DESTDIR)$(sysconfdir)/prte-mca-params.conf"; \
 		    $(INSTALL_DATA) $$d$$p $(DESTDIR)$(sysconfdir)/prte-mca-params.conf; \
         else \
             for file in $$p; do \
-			if test -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf; then \
+                if test -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf; then \
 		            echo "******************************* WARNING ************************************"; \
 		            echo "*** Not installing new $$file over existing file in:"; \
 		            echo "***   $(DESTDIR)$(sysconfdir)/$$file"; \

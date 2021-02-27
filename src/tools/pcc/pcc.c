@@ -17,6 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -246,7 +247,8 @@ expand_flags(char **argv)
 
 
 static void
-data_callback(const char *key, const char *value, char ***dstenv)
+data_callback(const char *file, int lineno,
+              const char *key, const char *value)
 {
     /* handle case where text file does not contain any special
        compiler options field */
@@ -331,7 +333,7 @@ data_init(const char *appname)
              prte_install_dirs.prtedatadir, PRTE_PATH_SEP, appname);
     if (NULL == datafile) return PRTE_ERR_TEMP_OUT_OF_RESOURCE;
 
-    ret = prte_util_keyval_parse(datafile, NULL, data_callback);
+    ret = prte_util_keyval_parse(datafile, data_callback);
     if( PRTE_SUCCESS != ret ) {
         fprintf(stderr, "Cannot open configuration file %s\n", datafile );
     }

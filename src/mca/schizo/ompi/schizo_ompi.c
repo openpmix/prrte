@@ -42,18 +42,17 @@
 
 #include "src/util/argv.h"
 #include "src/util/keyval_parse.h"
+#include "src/util/name_fns.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/path.h"
 #include "src/util/prte_environ.h"
+#include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/util/name_fns.h"
-#include "src/util/session_dir.h"
-#include "src/util/show_help.h"
 #include "src/runtime/prte_globals.h"
 
 #include "src/mca/schizo/base/base.h"
