@@ -393,7 +393,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         }
 
         launchid = 0;
-        if (!prte_get_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, (void**)&ldptr, PRTE_INT32)) {
+        if (!prte_get_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, (void**)&ldptr, PMIX_INT32)) {
             prte_show_help("help-plm-tm.txt", "tm-spawn-failed", true, argv[0], node->name, 0);
             rc = PRTE_ERROR;
             goto cleanup;
