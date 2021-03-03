@@ -676,7 +676,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
     uint8_t *flags = NULL;
     uint8_t *bytes = NULL;
     prte_topology_t *t2, *t3;
-    pmix_topology_t *ptopo;
+    pmix_topology_t ptopo;
     hwloc_topology_t topo;
     char *sig;
     pmix_data_buffer_t bucket;
@@ -753,9 +753,8 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
                 PMIX_ERROR_LOG(rc);
                 goto cleanup;
             }
-            topo = ptopo->topology;
-            ptopo->topology = NULL;
-            PMIX_TOPOLOGY_FREE(ptopo, 1);
+            topo = ptopo.topology;
+            ptopo.topology = NULL;
             /* record it */
             t2 = PRTE_NEW(prte_topology_t);
             t2->index = index;
