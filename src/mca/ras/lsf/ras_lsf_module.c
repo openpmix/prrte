@@ -122,7 +122,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
             directives_given = true;
         }
     } else if ((PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping)) ||
-               PRTE_BINDING_POLICY_IS_SET(prte_hwloc_binding_policy)) {
+               PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {
             directives_given = true;
     }
 
@@ -149,10 +149,10 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         /* tell the sequential mapper that all cpusets are to be treated as "physical" */
         prte_set_attribute(&jdata->attributes, PRTE_JOB_PHYSICAL_CPUIDS, true, NULL, PMIX_BOOL);
         /* LSF provides its info as hwthreads, so set the hwthread-as-cpus flag */
-        prte_hwloc_use_hwthreads_as_cpus = true;
+        prte_hwloc_default_use_hwthread_cpus = true;
         /* don't override something provided by the user, but default to bind-to hwthread */
-        if (!PRTE_BINDING_POLICY_IS_SET(prte_hwloc_binding_policy)) {
-            PRTE_SET_BINDING_POLICY(prte_hwloc_binding_policy, PRTE_BIND_TO_HWTHREAD);
+        if (!PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {
+            PRTE_SET_BINDING_POLICY(prte_hwloc_default_binding_policy, PRTE_BIND_TO_HWTHREAD);
         }
         /*
          * Do not set the hostfile attribute on each app_context since that
