@@ -781,14 +781,14 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         /* now get the array of assigned topologies */
         /* unpack the compression flag */
         cnt = 1;
-        rc = PMIx_Data_unpack(NULL, &bucket, &compressed, &cnt, PMIX_BOOL);
+        rc = PMIx_Data_unpack(NULL, buf, &compressed, &cnt, PMIX_BOOL);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             goto cleanup;
         }
         /* unpack the topologies object */
         cnt = 1;
-        rc = PMIx_Data_unpack(NULL, &bucket, &pbo, &cnt, PMIX_BYTE_OBJECT);
+        rc = PMIx_Data_unpack(NULL, buf, &pbo, &cnt, PMIX_BYTE_OBJECT);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             goto cleanup;
