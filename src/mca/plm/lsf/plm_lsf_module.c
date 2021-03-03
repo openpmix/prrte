@@ -388,7 +388,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
-        PRTE_ACTIVATE_JOB_STATE(state->jata, PRTE_JOB_STATE_FAILED_TO_START);
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
     }
 
     /* cleanup the caddy */
