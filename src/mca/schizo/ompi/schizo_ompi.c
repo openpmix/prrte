@@ -1228,6 +1228,7 @@ static int detect_proxy(char **argv)
     /* if the basename of the cmd was "mpirun" or "mpiexec",
      * we default to us */
     if (prte_schizo_base.test_proxy_launch ||
+        0 == strcmp(prte_tool_basename, "prterun") ||
         0 == strcmp(prte_tool_basename, "mpirun") ||
         0 == strcmp(prte_tool_basename, "mpiexec") ||
         0 == strcmp(prte_tool_basename, "oshrun")) {
