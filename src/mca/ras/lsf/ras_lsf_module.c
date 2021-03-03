@@ -146,8 +146,6 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         }
         PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_SEQ);
         jdata->map->req_mapper = strdup("seq"); // need sequential mapper
-        /* tell the sequential mapper that all cpusets are to be treated as "physical" */
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_PHYSICAL_CPUIDS, true, NULL, PMIX_BOOL);
         /* LSF provides its info as hwthreads, so set the hwthread-as-cpus flag */
         prte_hwloc_default_use_hwthread_cpus = true;
         /* don't override something provided by the user, but default to bind-to hwthread */
