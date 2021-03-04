@@ -39,7 +39,9 @@
 static int prte_ras_lsf_open(void);
 static int prte_ras_lsf_close(void);
 static int prte_ras_lsf_component_query(prte_mca_base_module_t **module, int *priority);
+static int prte_ras_lsf_register(void);
 
+bool prte_ras_lsf_skip_affinity_file = false;
 
 prte_ras_base_component_t prte_ras_lsf_component = {
     .base_version = {
@@ -54,6 +56,7 @@ prte_ras_base_component_t prte_ras_lsf_component = {
         .mca_open_component = prte_ras_lsf_open,
         .mca_close_component = prte_ras_lsf_close,
         .mca_query_component = prte_ras_lsf_component_query,
+        .mca_register_component_params = prte_ras_lsf_register,
     },
     .base_data = {
         /* The component is checkpoint ready */
@@ -94,4 +97,17 @@ static int prte_ras_lsf_close(void)
     return PRTE_SUCCESS;
 }
 
+static int prte_ras_lsf_register(void)
+{
+    prte_ras_lsf_skip_affinity_file = false;
+    (void) prte_mca_base_component_var_register(&prte_ras_lsf_component.base_version,
+                                                "skip_affinity_file",
+                                                "Skip processing the LSB_AFFINITY_HOSTFILE.",
+                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL,
+                                                0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                                                PRTE_INFO_LVL_3,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_ras_lsf_skip_affinity_file);
 
+    return PRTE_SUCCESS;
+}

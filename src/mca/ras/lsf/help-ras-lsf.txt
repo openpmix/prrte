@@ -35,4 +35,13 @@ The affinity file provided in LSB_AFFINITY_HOSTFILE could not be found:
   File:  %s
 
 We cannot continue.
+[affinity-file-found-not-used]
+The affinity file provided in LSB_AFFINITY_HOSTFILE could not be used:
 
+  File:   %s
+  Reason: %s
+
+Use the MCA parameter below to skip processing the LSB_AFFINITY_HOSTFILE
+and ignore any binding provided by LSF for this job. Doing so may
+require you to use the affinity options provided by PRTE.
+  --mca ras_lsf_skip_affinity_file true
