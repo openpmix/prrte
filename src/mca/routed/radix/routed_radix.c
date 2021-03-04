@@ -384,6 +384,8 @@ static void update_routing_plan(void)
     prte_list_item_t *item;
     int Level,Sum,NInLevel,Ii;
     int NInPrevLevel;
+    prte_job_t *dmns;
+    prte_proc_t *d;
 
     /* clear the list of children if any are already present */
     while (NULL != (item = prte_list_remove_first(&my_children))) {
@@ -420,11 +422,13 @@ static void update_routing_plan(void)
 
     if (0 < prte_output_get_verbosity(prte_routed_base_framework.framework_output)) {
         prte_output(0, "%s: parent %d num_children %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_PROC_MY_PARENT->rank, num_children);
+        dmns = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
         for (item = prte_list_get_first(&my_children);
              item != prte_list_get_end(&my_children);
              item = prte_list_get_next(item)) {
             child = (prte_routed_tree_t*)item;
-            prte_output(0, "%s: \tchild %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), child->rank);
+            d = (prte_proc_t*)prte_pointer_array_get_item(dmns->procs, child->rank);
+            prte_output(0, "%s: \tchild %d node %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), child->rank, d->node->name);
             for (j=0; j < (int)prte_process_info.num_daemons; j++) {
                 if (prte_bitmap_is_set_bit(&child->relatives, j)) {
                     prte_output(0, "%s: \t\trelation %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), j);
