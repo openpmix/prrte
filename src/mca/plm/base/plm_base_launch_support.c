@@ -1250,7 +1250,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
     pmix_proc_t dname;
     pmix_data_buffer_t *relay;
     char *sig;
-    prte_topology_t *t;
+    prte_topology_t *t, *mytopo;
     hwloc_topology_t topo;
     int i;
     bool found;
@@ -1276,12 +1276,12 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
     }
 
     /* get my endianness */
-    t = (prte_topology_t*)prte_pointer_array_get_item(prte_node_topologies, 0);
-    if (NULL == t) {
+    mytopo = (prte_topology_t*)prte_pointer_array_get_item(prte_node_topologies, 0);
+    if (NULL == mytopo) {
         /* should never happen */
         myendian = "unknown";
     } else {
-        myendian = strrchr(t->sig, ':');
+        myendian = strrchr(mytopo->sig, ':');
         ++myendian;
     }
 
@@ -1438,6 +1438,18 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
                              "%s RECEIVED TOPOLOGY SIG %s FROM NODE %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sig, nodename));
 
+        if (NULL == prte_base_compute_node_sig) {
+            prte_base_compute_node_sig = strdup(sig);
+            if (prte_hnp_is_allocated && 0 != strcmp(sig, mytopo->sig)) {
+                prte_hetero_nodes = true;
+            }
+        } else if (!prte_hetero_nodes) {
+            if (0 != strcmp(sig, prte_base_compute_node_sig) ||
+                (prte_hnp_is_allocated && 0 != strcmp(sig, mytopo->sig))) {
+                prte_hetero_nodes = true;
+            }
+        }
+
         /* rank=1 always sends its topology back */
         topo = NULL;
         if (1 == dname.rank) {
@@ -1458,57 +1470,62 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
-            if (compressed) {
-                /* decompress the data */
-                if (PMIx_Data_decompress((uint8_t**)&bo.bytes, &bo.size,
-                                         (uint8_t*)pbo.bytes, pbo.size)) {
-                    /* the data has been uncompressed */
-                    ret = PMIx_Data_load(&datbuf, &bo);
-                    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+            /* only need to process it if our signatures differ */
+            if (0 == strcmp(sig, mytopo->sig)) {
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            } else {
+                if (compressed) {
+                    /* decompress the data */
+                    if (PMIx_Data_decompress((uint8_t**)&bo.bytes, &bo.size,
+                                             (uint8_t*)pbo.bytes, pbo.size)) {
+                        /* the data has been uncompressed */
+                        ret = PMIx_Data_load(&datbuf, &bo);
+                        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+                        if (PMIX_SUCCESS != ret) {
+                            PMIX_ERROR_LOG(ret);
+                            prted_failed_launch = true;
+                            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                            goto CLEANUP;
+                        }
+                    } else {
+                        PMIX_ERROR_LOG(PMIX_ERROR);
+                        prted_failed_launch = true;
+                        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                        PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+                        goto CLEANUP;
+                    }
+                } else {
+                    ret = PMIx_Data_load(&datbuf, &pbo);
                     if (PMIX_SUCCESS != ret) {
                         PMIX_ERROR_LOG(ret);
                         prted_failed_launch = true;
                         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                         goto CLEANUP;
                     }
-                } else {
-                    PMIX_ERROR_LOG(PMIX_ERROR);
-                    prted_failed_launch = true;
-                    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-                    PMIX_BYTE_OBJECT_DESTRUCT(&bo);
-                    goto CLEANUP;
                 }
-            } else {
-                ret = PMIx_Data_load(&datbuf, &pbo);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+                data = &datbuf;
+
+                 /* unpack the available topology information */
+                idx=1;
+                ret = PMIx_Data_unpack(NULL, data, &ptopo, &idx, PMIX_TOPO);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     prted_failed_launch = true;
-                    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                     goto CLEANUP;
                 }
+                topo = ptopo.topology;
+                ptopo.topology = NULL;
+                PMIX_TOPOLOGY_DESTRUCT(&ptopo);
+                /* setup the summary data for this topology as we will need
+                 * it when we go to map/bind procs to it */
+                root = hwloc_get_root_obj(topo);
+                root->userdata = (void*)PRTE_NEW(prte_hwloc_topo_data_t);
+                sum = (prte_hwloc_topo_data_t*)root->userdata;
+                sum->available = prte_hwloc_base_setup_summary(topo);
+                /* cleanup */
+                PMIX_DATA_BUFFER_DESTRUCT(data);
             }
-            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-            data = &datbuf;
-
-            /* unpack the available topology information */
-            idx=1;
-            ret = PMIx_Data_unpack(NULL, data, &ptopo, &idx, PMIX_TOPO);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                prted_failed_launch = true;
-                goto CLEANUP;
-            }
-            topo = ptopo.topology;
-            ptopo.topology = NULL;
-            PMIX_TOPOLOGY_DESTRUCT(&ptopo);
-            /* setup the summary data for this topology as we will need
-             * it when we go to map/bind procs to it */
-            root = hwloc_get_root_obj(topo);
-            root->userdata = (void*)PRTE_NEW(prte_hwloc_topo_data_t);
-            sum = (prte_hwloc_topo_data_t*)root->userdata;
-            sum->available = prte_hwloc_base_setup_summary(topo);
-            /* cleanup */
-            PMIX_DATA_BUFFER_DESTRUCT(data);
         }
 
         /* see if they provided their inventory */
@@ -1605,7 +1622,6 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
                 prte_hwloc_base_filter_cpus(topo);
                 t->topo = topo;
             } else {
-                /* nope - save the signature and request the complete topology from that node */
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                      "%s REQUESTING TOPOLOGY FROM %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),

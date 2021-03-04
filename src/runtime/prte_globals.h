@@ -579,6 +579,8 @@ PRTE_EXPORT extern prte_pointer_array_t *prte_node_pool;
 PRTE_EXPORT extern prte_pointer_array_t *prte_node_topologies;
 PRTE_EXPORT extern prte_pointer_array_t *prte_local_children;
 PRTE_EXPORT extern pmix_rank_t prte_total_procs;
+PRTE_EXPORT extern char *prte_base_compute_node_sig;
+PRTE_EXPORT extern bool prte_hetero_nodes;
 
 /* IOF controls */
 /* generate new xterm windows to display output from specified ranks */

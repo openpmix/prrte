@@ -123,6 +123,8 @@ prte_pointer_array_t *prte_node_pool = NULL;
 prte_pointer_array_t *prte_node_topologies = NULL;
 prte_pointer_array_t *prte_local_children = NULL;
 pmix_rank_t prte_total_procs = 0;
+char *prte_base_compute_node_sig = NULL;
+bool prte_hetero_nodes = false;
 
 /* IOF controls */
 /* generate new xterm windows to display output from specified ranks */
