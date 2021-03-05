@@ -305,7 +305,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* enable local launch by the orteds */
     (void) prte_mca_base_var_env_name ("plm", &var);
-    prte_setenv(var, "rsh", true, &env);
+    prte_setenv(var, "ssh", true, &env);
     free(var);
 
     /* add our umask -- see big note in orted.c */
