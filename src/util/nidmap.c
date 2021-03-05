@@ -421,6 +421,12 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
             ++ntopos;
         }
         free(pt.source);
+        /* pack the number of topologies */
+        rc = PMIx_Data_pack(NULL, buffer, &ntopos, 1, PMIX_INT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto cleanup;
+        }
        /* send them along */
         if (PMIx_Data_compress((uint8_t*)bucket.base_ptr, bucket.bytes_used,
                                (uint8_t**)&bo.bytes, &sz)) {
@@ -448,12 +454,6 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
                 PMIX_DATA_BUFFER_DESTRUCT(&bucket);
                 goto cleanup;
             }
-        }
-        /* pack the number of topologies */
-        rc = PMIx_Data_pack(NULL, buffer, &ntopos, 1, PMIX_INT32);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            goto cleanup;
         }
         /* pack the info */
         rc = PMIx_Data_pack(NULL, buffer, &bo, 1, PMIX_BYTE_OBJECT);
