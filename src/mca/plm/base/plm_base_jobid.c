@@ -45,6 +45,7 @@ int prte_plm_base_set_hnp_name(void)
     /* we may have been passed a PMIx nspace to use */
     if (NULL != (evar = getenv("PMIX_SERVER_NSPACE"))) {
         PMIX_LOAD_PROCID(&prte_process_info.myproc, evar, 0);
+        prte_plm_globals.base_nspace = strdup(evar);
 
         if (NULL != (evar = getenv("PMIX_SERVER_RANK"))) {
             PRTE_PROC_MY_NAME->rank = strtoul(evar, NULL, 10);
