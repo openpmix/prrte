@@ -155,6 +155,8 @@ int prte_init_util(prte_proc_type_t flags)
      * must come AFTER we initialize the installdirs as it
      * causes the MCA var system to initialize */
     prte_setup_hostname();
+    /* load the output verbose stream */
+    prte_output_setup_stream_prefix();
 
     if (PRTE_SUCCESS != (ret = prte_net_init())) {
         error = "prte_net_init";

@@ -21,6 +21,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -194,7 +195,6 @@ bool prte_output_init(void)
             verbose.lds_want_stderr = true;
         }
     }
-    prte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prte_process_info.nodename, getpid());
 
     for (i = 0; i < PRTE_OUTPUT_MAX_STREAMS; ++i) {
         info[i].ldi_used = false;
@@ -224,6 +224,10 @@ bool prte_output_init(void)
     return true;
 }
 
+void prte_output_setup_stream_prefix(void)
+{
+    prte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prte_process_info.nodename, getpid());
+}
 
 /*
  * Open a stream

@@ -17,6 +17,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -507,6 +508,8 @@ struct prte_output_stream_t {
                                                         const char *prefix,
                                                         char **olddir,
                                                         char **oldprefix);
+
+PRTE_EXPORT void prte_output_setup_stream_prefix(void);
 
 #if PRTE_ENABLE_DEBUG
     /**

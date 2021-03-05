@@ -128,15 +128,12 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
     char *coprocessors;
     prte_job_map_t *map;
     prte_pmix_lock_t lk;
-    pmix_data_buffer_t pbkt;
     pmix_proc_t pname;
-    pmix_byte_object_t bo, bo2, pbo;
+    pmix_byte_object_t pbo;
     pmix_proc_t dmn;
     pmix_status_t pstatus;
-    pmix_info_t *info;
-    size_t n2, ninfo;
-    pmix_data_buffer_t wireup;
     pmix_topology_t ptopo;
+    pmix_value_t val;;
 
     /* unpack the command */
     n = 1;
@@ -275,80 +272,33 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
                 PRTE_ERROR_LOG(ret);
                 goto CLEANUP;
             }
-            /* unpack the wireup byte object */
+            /* unpack the wireup info */
             cnt=1;
-            ret = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                goto CLEANUP;
-            }
-            if (0 < bo.size) {
-                /* load it into a buffer */
-                PMIX_DATA_BUFFER_CONSTRUCT(&wireup);
-                ret = PMIx_Data_load(&wireup, &bo);
-                PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+            while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, buffer, &dmn, &cnt, PMIX_PROC))) {
+                PMIX_VALUE_CONSTRUCT(&val);
+                val.type = PMIX_STRING;
+                cnt = 1;
+                ret = PMIx_Data_unpack(NULL, buffer, &val.data.string, &cnt, PMIX_STRING);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
+                    ret = PRTE_ERR_UNPACK_FAILURE;
+                    break;
+                }
+
+                /* store it locally */
+                pstatus = PMIx_Store_internal(&dmn, PMIX_PROC_URI, &val);
+                PMIX_VALUE_DESTRUCT(&val);
+                if (PMIX_SUCCESS != pstatus) {
+                    PMIX_ERROR_LOG(pstatus);
+                    ret = PRTE_ERR_UNPACK_FAILURE;
                     goto CLEANUP;
                 }
-                cnt=1;
-                while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, &wireup, &dmn, &cnt, PMIX_PROC))) {
-                    /* unpack the byte object containing the contact info */
-                    cnt = 1;
-                    ret = PMIx_Data_unpack(NULL, &wireup, &bo2, &cnt, PMIX_BYTE_OBJECT);
-                    if (PMIX_SUCCESS != ret) {
-                        PMIX_ERROR_LOG(ret);
-                        break;
-                    }
-                    /* load into a PMIx buffer for unpacking */
-                    PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-                    ret = PMIx_Data_load(&pbkt, &bo2);
-                    PMIX_BYTE_OBJECT_DESTRUCT(&bo2);
-                    if (PMIX_SUCCESS != ret) {
-                        PMIX_ERROR_LOG(ret);
-                        break;
-                    }
-                    /* unpack the number of info's provided */
-                    cnt = 1;
-                    ret = PMIx_Data_unpack(NULL, &pbkt, &ninfo, &cnt, PMIX_SIZE);
-                    if (PMIX_SUCCESS != ret) {
-                        PMIX_ERROR_LOG(ret);
-                        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-                        ret = PRTE_ERR_UNPACK_FAILURE;
-                        break;
-                    }
-                    /* unpack the infos */
-                    PMIX_INFO_CREATE(info, ninfo);
-                    cnt = ninfo;
-                    ret = PMIx_Data_unpack(NULL, &pbkt, info, &cnt, PMIX_INFO);
-                    if (PMIX_SUCCESS != ret) {
-                        PMIX_ERROR_LOG(ret);
-                        PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-                        PMIX_INFO_FREE(info, ninfo);
-                        ret = PRTE_ERR_UNPACK_FAILURE;
-                        break;
-                    }
-
-                    /* store them locally */
-                    for (n2=0; n2 < ninfo; n2++) {
-                        pstatus = PMIx_Store_internal(PRTE_PROC_MY_PROCID, info[n2].key, &info[n2].value);
-                        if (PMIX_SUCCESS != pstatus) {
-                            PMIX_ERROR_LOG(pstatus);
-                            PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-                            PMIX_INFO_FREE(info, ninfo);
-                            ret = PRTE_ERR_UNPACK_FAILURE;
-                            goto CLEANUP;
-                        }
-                    }
-                    PMIX_INFO_FREE(info, ninfo);
-                    PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-                }
-                if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
-                    PMIX_ERROR_LOG(ret);
-                }
-                /* done with the wireup buffer - dump it */
-                PMIX_DATA_BUFFER_DESTRUCT(&wireup);
             }
+            if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
+                PMIX_ERROR_LOG(ret);
+            }
+            /* update the routing plan */
+            prte_routed.update_routing_plan();
         }
         break;
 
