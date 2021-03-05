@@ -261,20 +261,14 @@ static void vm_ready(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
     int rc, i;
-    pmix_data_buffer_t *buf;
+    pmix_data_buffer_t buf;
     prte_daemon_cmd_flag_t command = PRTE_DAEMON_PASS_NODE_INFO_CMD;
     prte_grpcomm_signature_t sig;
-    pmix_data_buffer_t *wireup;
     prte_job_t *jptr;
     prte_proc_t *dmn;
-    pmix_byte_object_t bo;
     int32_t v;
     pmix_value_t *val;
-    pmix_info_t info;
-    size_t ninfo;
-    pmix_data_buffer_t pbuf;
     pmix_status_t ret;
-    pmix_byte_object_t pbo;
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -288,31 +282,30 @@ static void vm_ready(int fd, short args, void *cbdata)
             /* send the daemon map to every daemon in this DVM - we
              * do this here so we don't have to do it for every
              * job we are going to launch */
-            PMIX_DATA_BUFFER_CREATE(buf);
-            rc = PMIx_Data_pack(NULL, buf, &command, 1, PMIX_UINT8);
+            PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+            rc = PMIx_Data_pack(NULL, &buf, &command, 1, PMIX_UINT8);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(buf);
+                PMIX_DATA_BUFFER_DESTRUCT(&buf);
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
-            rc = prte_util_nidmap_create(prte_node_pool, buf);
+            rc = prte_util_nidmap_create(prte_node_pool, &buf);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(buf);
+                PMIX_DATA_BUFFER_DESTRUCT(&buf);
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
             /* provide the info on the capabilities of each node */
-            if (PRTE_SUCCESS != (rc = prte_util_pass_node_info(buf))) {
+            if (PRTE_SUCCESS != (rc = prte_util_pass_node_info(&buf))) {
                 PRTE_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(buf);
+                PMIX_DATA_BUFFER_DESTRUCT(&buf);
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
             /* get wireup info for daemons */
             jptr = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-            PMIX_DATA_BUFFER_CREATE(wireup);
             for (v=0; v < jptr->procs->size; v++) {
                 if (NULL == (dmn = (prte_proc_t*)prte_pointer_array_get_item(jptr->procs, v))) {
                     continue;
@@ -320,89 +313,40 @@ static void vm_ready(int fd, short args, void *cbdata)
                 val = NULL;
                 if (PMIX_SUCCESS != (ret = PMIx_Get(&dmn->name, PMIX_PROC_URI, NULL, 0, &val)) || NULL == val) {
                     PMIX_ERROR_LOG(ret);
-                    PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PMIX_DATA_BUFFER_RELEASE(buf);
+                    PMIX_DATA_BUFFER_DESTRUCT(&buf);
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     return;
                 }
-                /* use the PMIx data support to pack it */
-                PMIX_INFO_LOAD(&info, PMIX_PROC_URI, val->data.string, PMIX_STRING);
+                rc = PMIx_Data_pack(NULL, &buf, &dmn->name, 1, PMIX_PROC);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                    return;
+                }
+                rc = PMIx_Data_pack(NULL, &buf, &val->data.string, 1, PMIX_STRING);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_DATA_BUFFER_DESTRUCT(&buf);
+                    PMIX_VALUE_RELEASE(val);
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                    return;
+                }
                 PMIX_VALUE_RELEASE(val);
-                ninfo = 1;
-                PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-                if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&dmn->name, &pbuf, &ninfo, 1, PMIX_SIZE))) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                    PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-                    PMIX_INFO_DESTRUCT(&info);
-                    PMIX_DATA_BUFFER_RELEASE(buf);
-                    return;
-                }
-                if (PMIX_SUCCESS != (ret = PMIx_Data_pack(&dmn->name, &pbuf, &info, ninfo, PMIX_INFO))) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                    PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-                    PMIX_INFO_DESTRUCT(&info);
-                    PMIX_DATA_BUFFER_RELEASE(buf);
-                    return;
-                }
-                PMIX_INFO_DESTRUCT(&info);
-                rc = PMIx_Data_unload(&pbuf, &pbo);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                    PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-                    PMIX_INFO_DESTRUCT(&info);
-                    PMIX_DATA_BUFFER_RELEASE(buf);
-                }
-                rc = PMIx_Data_pack(NULL, wireup, &dmn->name, 1, PMIX_PROC);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                    PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-                    PMIX_INFO_DESTRUCT(&info);
-                    PMIX_DATA_BUFFER_RELEASE(buf);
-                }
-                rc = PMIx_Data_pack(NULL, wireup, &pbo, 1, PMIX_BYTE_OBJECT);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                    PMIX_DATA_BUFFER_RELEASE(wireup);
-                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-                    PMIX_INFO_DESTRUCT(&info);
-                    PMIX_DATA_BUFFER_RELEASE(buf);
-                }
             }
-            /* put it in a byte object for xmission */
-            rc = PMIx_Data_unload(wireup, &bo);
-            PMIX_DATA_BUFFER_RELEASE(wireup);
-            /* pack the byte object - zero-byte objects are fine */
-            rc = PMIx_Data_pack(NULL, buf, &bo, 1, PMIX_BYTE_OBJECT);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(buf);
-                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-                return;
-            }
-            /* release the data since it has now been copied into our buffer */
-            PMIX_BYTE_OBJECT_DESTRUCT(&bo);
 
             /* goes to all daemons */
             PMIX_PROC_CREATE(sig.signature, 1);
             PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
             sig.sz = 1;
-            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(&sig, PRTE_RML_TAG_DAEMON, buf))) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(&sig, PRTE_RML_TAG_DAEMON, &buf))) {
                 PRTE_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(buf);
+                PMIX_DATA_BUFFER_DESTRUCT(&buf);
                 PMIX_PROC_FREE(sig.signature, 1);
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
-            PMIX_DATA_BUFFER_RELEASE(buf);
+            PMIX_DATA_BUFFER_DESTRUCT(&buf);
             PMIX_PROC_FREE(sig.signature, 1);
         }
         /* notify that the vm is ready */
