@@ -356,7 +356,6 @@ static void xcast_recv(int status, pmix_proc_t* sender,
     prte_namelist_t *nm;
     int ret, cnt;
     pmix_data_buffer_t *relay=NULL, *rly, *rlycopy;
-    prte_daemon_cmd_flag_t command = PRTE_DAEMON_NULL_CMD;
     pmix_data_buffer_t datbuf, *data;
     bool compressed;
     prte_job_t *jdata, *daemons;
@@ -365,6 +364,8 @@ static void xcast_recv(int status, pmix_proc_t* sender,
     prte_grpcomm_signature_t sig;
     prte_rml_tag_t tag;
     pmix_byte_object_t bo, pbo;
+    pmix_value_t val;
+    pmix_proc_t dmn;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct:xcast:recv: with %d bytes",
@@ -492,6 +493,62 @@ static void xcast_recv(int status, pmix_proc_t* sender,
         return;
     }
 
+    if (PRTE_RML_TAG_WIREUP == tag && !PRTE_PROC_IS_MASTER) {
+        if (PRTE_SUCCESS != (ret = prte_util_decode_nidmap(data))) {
+            PRTE_ERROR_LOG(ret);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+            PRTE_DESTRUCT(&coll);
+            PMIX_DATA_BUFFER_RELEASE(rly);
+            PMIX_DATA_BUFFER_RELEASE(relay);
+            return;
+        }
+        if (PRTE_SUCCESS != (ret = prte_util_parse_node_info(data))) {
+            PRTE_ERROR_LOG(ret);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+            PRTE_DESTRUCT(&coll);
+            PMIX_DATA_BUFFER_RELEASE(rly);
+            PMIX_DATA_BUFFER_RELEASE(relay);
+            return;
+        }
+        /* unpack the wireup info */
+        cnt=1;
+        while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, data, &dmn, &cnt, PMIX_PROC))) {
+            PMIX_VALUE_CONSTRUCT(&val);
+            val.type = PMIX_STRING;
+            cnt = 1;
+            ret = PMIx_Data_unpack(NULL, data, &val.data.string, &cnt, PMIX_STRING);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+                PRTE_DESTRUCT(&coll);
+                PMIX_DATA_BUFFER_RELEASE(rly);
+                PMIX_DATA_BUFFER_RELEASE(relay);
+                return;
+            }
+
+            /* store it locally */
+            ret = PMIx_Store_internal(&dmn, PMIX_PROC_URI, &val);
+            PMIX_VALUE_DESTRUCT(&val);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+                PRTE_DESTRUCT(&coll);
+                PMIX_DATA_BUFFER_RELEASE(rly);
+                PMIX_DATA_BUFFER_RELEASE(relay);
+                return;
+            }
+        }
+        if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
+            PMIX_ERROR_LOG(ret);
+        }
+        /* update the routing plan */
+        prte_routed.update_routing_plan();
+    }
+
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     if (!prte_get_attribute(&daemons->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         /* get the list of next recipients from the routed module */
@@ -565,11 +622,12 @@ static void xcast_recv(int status, pmix_proc_t* sender,
     PRTE_LIST_DESTRUCT(&coll);
     PMIX_DATA_BUFFER_RELEASE(rly);  // retain accounting
 
-    /* now pass the relay buffer to myself for processing - don't
+    /* now pass the relay buffer to myself for processing IFF it
+     * wasn't just a wireup message - don't
      * inject it into the RML system via send as that will compete
      * with the relay messages down in the OOB. Instead, pass it
      * directly to the RML message processor */
-    if (PRTE_DAEMON_DVM_NIDMAP_CMD != command) {
+    if (PRTE_RML_TAG_WIREUP != tag) {
         PRTE_RML_POST_MESSAGE(PRTE_PROC_MY_NAME, tag, 1,
                               relay->base_ptr, relay->bytes_used);
         relay->base_ptr = NULL;

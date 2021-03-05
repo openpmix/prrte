@@ -107,7 +107,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
     pmix_data_buffer_t *relay_msg;
     int ret;
     int32_t n;
-    int32_t signal, cnt;
+    int32_t signal;
     pmix_nspace_t job;
     pmix_data_buffer_t data, *answer;
     prte_job_t *jdata;
@@ -130,10 +130,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
     prte_pmix_lock_t lk;
     pmix_proc_t pname;
     pmix_byte_object_t pbo;
-    pmix_proc_t dmn;
-    pmix_status_t pstatus;
     pmix_topology_t ptopo;
-    pmix_value_t val;;
 
     /* unpack the command */
     n = 1;
@@ -257,51 +254,6 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
             PRTE_ERROR_LOG(ret);
         }
         break;
-
-    case PRTE_DAEMON_PASS_NODE_INFO_CMD:
-        if (prte_debug_daemons_flag) {
-            prte_output(0, "%s prted_cmd: received pass_node_info",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        }
-        if (!PRTE_PROC_IS_MASTER) {
-            if (PRTE_SUCCESS != (ret = prte_util_decode_nidmap(buffer))) {
-                PRTE_ERROR_LOG(ret);
-                goto CLEANUP;
-            }
-            if (PRTE_SUCCESS != (ret = prte_util_parse_node_info(buffer))) {
-                PRTE_ERROR_LOG(ret);
-                goto CLEANUP;
-            }
-            /* unpack the wireup info */
-            cnt=1;
-            while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, buffer, &dmn, &cnt, PMIX_PROC))) {
-                PMIX_VALUE_CONSTRUCT(&val);
-                val.type = PMIX_STRING;
-                cnt = 1;
-                ret = PMIx_Data_unpack(NULL, buffer, &val.data.string, &cnt, PMIX_STRING);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    ret = PRTE_ERR_UNPACK_FAILURE;
-                    break;
-                }
-
-                /* store it locally */
-                pstatus = PMIx_Store_internal(&dmn, PMIX_PROC_URI, &val);
-                PMIX_VALUE_DESTRUCT(&val);
-                if (PMIX_SUCCESS != pstatus) {
-                    PMIX_ERROR_LOG(pstatus);
-                    ret = PRTE_ERR_UNPACK_FAILURE;
-                    goto CLEANUP;
-                }
-            }
-            if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {
-                PMIX_ERROR_LOG(ret);
-            }
-            /* update the routing plan */
-            prte_routed.update_routing_plan();
-        }
-        break;
-
 
         /****    ADD_LOCAL_PROCS   ****/
     case PRTE_DAEMON_ADD_LOCAL_PROCS:
@@ -808,8 +760,6 @@ static char *get_prted_comm_cmd_str(int command)
     case PRTE_DAEMON_ABORT_PROCS_CALLED:
         return strdup("PRTE_DAEMON_ABORT_PROCS_CALLED");
 
-    case PRTE_DAEMON_DVM_NIDMAP_CMD:
-        return strdup("PRTE_DAEMON_DVM_NIDMAP_CMD");
     case PRTE_DAEMON_DVM_ADD_PROCS:
         return strdup("PRTE_DAEMON_DVM_ADD_PROCS");
 
@@ -821,9 +771,6 @@ static char *get_prted_comm_cmd_str(int command)
 
     case PRTE_DAEMON_DVM_CLEANUP_JOB_CMD:
         return strdup("PRTE_DAEMON_DVM_CLEANUP_JOB_CMD");
-
-    case PRTE_DAEMON_PASS_NODE_INFO_CMD:
-        return strdup("PRTE_DAEMON_PASS_NODE_INFO_CMD");
 
     default:
         return strdup("Unknown Command!");

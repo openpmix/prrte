@@ -223,7 +223,9 @@ int prte_ess_base_prted_setup(void)
      * a specific module to use
      */
     (void) prte_mca_base_var_env_name("plm", &param);
-    plm_in_use = !!(getenv(param));
+    if (NULL != getenv(param)) {
+        plm_in_use = true;
+    }
     free (param);
     if (plm_in_use)  {
         if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_plm_base_framework,
