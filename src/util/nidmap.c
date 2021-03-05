@@ -282,11 +282,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
     /* get our topology */
-    for (n=0; n < prte_node_topologies->size; n++) {
-        if (NULL != (t = (prte_topology_t*)prte_pointer_array_get_item(prte_node_topologies, n))) {
-            break;
-        }
-    }
+    t = (prte_topology_t*)prte_pointer_array_get_item(prte_node_topologies, 0);
     if (NULL == t) {
         /* should never happen */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -356,7 +352,7 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
     int8_t i8;
     int16_t i16;
     int32_t ntopos;
-    int rc, n, nbitmap;
+    int rc, m, n, nbitmap;
     bool compressed, unislots = true, uniflags = true;
     prte_node_t *nptr;
     pmix_byte_object_t bo;
@@ -364,6 +360,7 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
     pmix_data_buffer_t bucket;
     prte_topology_t *t;
     pmix_topology_t pt;
+    char **topos = NULL;
 
     /* make room for the number of slots on each node */
     nslots = sizeof(uint16_t) * prte_node_pool->size;
@@ -393,15 +390,7 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
             if (NULL == (t = (prte_topology_t*)prte_pointer_array_get_item(prte_node_topologies, n))) {
                 continue;
             }
-            /* pack the index */
-            rc = PMIx_Data_pack(NULL, &bucket, &t->index, 1, PMIX_INT);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_DESTRUCT(&bucket);
-                free(pt.source);
-                goto cleanup;
-            }
-            /* pack this topology string */
+            /* pack the topology string */
             rc = PMIx_Data_pack(NULL, &bucket, &t->sig, 1, PMIX_STRING);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
@@ -409,6 +398,8 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
                 free(pt.source);
                 goto cleanup;
             }
+            /* track it */
+            prte_argv_append_nosize(&topos, t->sig);
             /* pack the topology itself */
             pt.topology = t->topo;
             rc = PMIx_Data_pack(NULL, &bucket, &pt, 1, PMIX_TOPO);
@@ -473,13 +464,24 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
             continue;
         }
         /* track the topology, if required */
-        if (prte_hetero_nodes) {
-            i8 = nptr->topology->index;
-            rc = PMIx_Data_pack(NULL, &bucket, &i8, 1, PMIX_INT8);
+        if (prte_hetero_nodes && NULL != nptr->daemon) {
+            rc = PMIx_Data_pack(NULL, &bucket, &nptr->daemon->name.rank, 1, PMIX_PROC_RANK);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&bucket);
                 goto cleanup;
+            }
+            /* find this signature in the topos */
+            for (m=0; NULL != topos[m]; m++) {
+                if (0 == strcmp(topos[m], nptr->topology->sig)) {
+                    rc = PMIx_Data_pack(NULL, &bucket, &m, 1, PMIX_INT);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_DESTRUCT(&bucket);
+                        goto cleanup;
+                    }
+                    break;
+                }
             }
         }
         /* store the number of slots */
@@ -639,6 +641,9 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
     if (NULL != flags) {
         free(flags);
     }
+    if (NULL != topos) {
+        prte_argv_free(topos);
+    }
     return rc;
 }
 
@@ -647,8 +652,8 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
     int8_t i8;
     int16_t i16;
     int32_t ntopos;
-    bool compressed;
-    int rc = PRTE_SUCCESS, cnt, n, m, index;
+    bool compressed, found;
+    int rc = PRTE_SUCCESS, cnt, n, m;
     prte_node_t *nptr;
     size_t sz;
     pmix_byte_object_t pbo;
@@ -662,6 +667,8 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
     pmix_data_buffer_t bucket;
     hwloc_obj_t root;
     prte_hwloc_topo_data_t *sum;
+    char **topos = NULL;
+    pmix_rank_t drk;
 
     /* check to see if we have uniform topologies */
     cnt = 1;
@@ -680,7 +687,8 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             goto cleanup;
-        }        /* unpack the compression flag */
+        }
+        /* unpack the compression flag */
         cnt = 1;
         rc = PMIx_Data_unpack(NULL, buf, &compressed, &cnt, PMIX_BOOL);
         if (PMIX_SUCCESS != rc) {
@@ -719,13 +727,6 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
 
         for (n=0; n < ntopos; n++) {
-            /* unpack the index */
-            cnt = 1;
-            rc = PMIx_Data_unpack(NULL, &bucket, &index, &cnt, PMIX_INT);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                goto cleanup;
-            }
             /* unpack the signature */
             cnt = 1;
             rc = PMIx_Data_unpack(NULL, &bucket, &sig, &cnt, PMIX_STRING);
@@ -733,6 +734,8 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
                 PMIX_ERROR_LOG(rc);
                 goto cleanup;
             }
+            /* cache it */
+            prte_argv_append_nosize(&topos, sig);
             /* unpack the topology */
             cnt = 1;
             rc = PMIx_Data_unpack(NULL, &bucket, &ptopo, &cnt, PMIX_TOPO);
@@ -743,25 +746,34 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
             topo = ptopo.topology;
             ptopo.topology = NULL;
             PMIX_TOPOLOGY_DESTRUCT(&ptopo);
-            /* record it */
-            t2 = PRTE_NEW(prte_topology_t);
-            t2->index = index;
-            t2->sig = sig;
-            t2->topo = topo;
-            if (NULL != (t3 = (prte_topology_t*)prte_pointer_array_get_item(prte_node_topologies, index))) {
-                /* if this is our topology, then we have to protect it */
-                if (0 == strcmp(t3->sig, prte_topo_signature)) {
-                    t3->sig = NULL;
-                    t3->topo = NULL;
+            /* see if we already have it - there aren't many topologies
+             * in a cluster, so this won't take long */
+            found = false;
+            for (m=0; m < prte_node_topologies->size; m++) {
+                t3 = (prte_topology_t*)prte_pointer_array_get_item(prte_node_topologies, m);
+                if (NULL == t3) {
+                    continue;
                 }
-                PRTE_RELEASE(t3);
+                if (0 == strcmp(sig, t3->sig)) {
+                    found = true;
+                    break;
+                }
             }
-            /* need to ensure the summary is setup */
-            root = hwloc_get_root_obj(topo);
-            root->userdata = (void*)PRTE_NEW(prte_hwloc_topo_data_t);
-            sum = (prte_hwloc_topo_data_t*)root->userdata;
-            sum->available = prte_hwloc_base_setup_summary(topo);
-            prte_pointer_array_set_item(prte_node_topologies, index, t2);
+            if (found) {
+                hwloc_topology_destroy(topo);
+                free(sig);
+            } else {
+                /* record it */
+                t2 = PRTE_NEW(prte_topology_t);
+                t2->sig = sig;
+                t2->topo = topo;
+                /* need to ensure the summary is setup */
+                root = hwloc_get_root_obj(topo);
+                root->userdata = (void*)PRTE_NEW(prte_hwloc_topo_data_t);
+                sum = (prte_hwloc_topo_data_t*)root->userdata;
+                sum->available = prte_hwloc_base_setup_summary(topo);
+                t2->index = prte_pointer_array_add(prte_node_topologies, t2);
+            }
         }
         PMIX_DATA_BUFFER_DESTRUCT(&bucket);
 
@@ -803,18 +815,44 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         rc = PMIx_Data_load(&bucket, &pbo);
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);  // release pre-existing data
 
-        /* cycle across the node pool and assign the values */
-        for (n=0; n < prte_node_pool->size; n++) {
-            if (NULL != (nptr = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, n))) {
-                /* unpack the next topology index */
-                cnt = 1;
-                rc = PMIx_Data_unpack(NULL, &bucket, &i8, &cnt, PMIX_INT8);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    goto cleanup;
-                }
-                nptr->topology = prte_pointer_array_get_item(prte_node_topologies, i8);
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, &bucket, &drk, &cnt, PMIX_PROC_RANK);
+        while (PMIX_SUCCESS == rc) {
+            nptr = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, drk);
+            if (NULL == nptr) {
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                PMIX_DATA_BUFFER_DESTRUCT(&bucket);
+                goto cleanup;
             }
+            cnt = 1;
+            rc = PMIx_Data_unpack(NULL, &bucket, &m, &cnt, PMIX_INT);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_DESTRUCT(&bucket);
+                goto cleanup;
+            }
+            /* the topology signature we want is in that location in
+             * the topos argv array */
+            sig = topos[m];
+            /* find that signature in our topologies - might be at a
+             * different location */
+            for (m=0; m < prte_node_topologies->size; m++) {
+                t3 = (prte_topology_t*)prte_pointer_array_get_item(prte_node_topologies, m);
+                if (NULL == t3) {
+                    continue;
+                }
+                if (0 == strcmp(sig, t3->sig)) {
+                    nptr->topology = t3;
+                    break;
+                }
+            }
+            /* unpack the next daemon rank */
+            cnt = 1;
+            rc = PMIx_Data_unpack(NULL, &bucket, &drk, &cnt, PMIX_PROC_RANK);
+        }
+        if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto cleanup;
         }
     }
 
@@ -930,6 +968,9 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
     }
     if (NULL != flags) {
         free(flags);
+    }
+    if (NULL != topos) {
+        prte_argv_free(topos);
     }
     return rc;
 }
