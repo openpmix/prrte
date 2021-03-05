@@ -262,7 +262,6 @@ static void vm_ready(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
     int rc, i;
     pmix_data_buffer_t buf;
-    prte_daemon_cmd_flag_t command = PRTE_DAEMON_PASS_NODE_INFO_CMD;
     prte_grpcomm_signature_t sig;
     prte_job_t *jptr;
     prte_proc_t *dmn;
@@ -275,7 +274,7 @@ static void vm_ready(int fd, short args, void *cbdata)
     /* if this is my job, then we are done */
     if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
         prte_dvm_ready = true;
-        /* if there is only one daemon in the job, then there
+        /* if there is more than one daemon in the job, then there
          * is just a little bit to do */
         if (!prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
             1 < prte_process_info.num_daemons) {
@@ -283,13 +282,6 @@ static void vm_ready(int fd, short args, void *cbdata)
              * do this here so we don't have to do it for every
              * job we are going to launch */
             PMIX_DATA_BUFFER_CONSTRUCT(&buf);
-            rc = PMIx_Data_pack(NULL, &buf, &command, 1, PMIX_UINT8);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_DESTRUCT(&buf);
-                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-                return;
-            }
             rc = prte_util_nidmap_create(prte_node_pool, &buf);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
@@ -339,7 +331,7 @@ static void vm_ready(int fd, short args, void *cbdata)
             PMIX_PROC_CREATE(sig.signature, 1);
             PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
             sig.sz = 1;
-            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(&sig, PRTE_RML_TAG_DAEMON, &buf))) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(&sig, PRTE_RML_TAG_WIREUP, &buf))) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&buf);
                 PMIX_PROC_FREE(sig.signature, 1);

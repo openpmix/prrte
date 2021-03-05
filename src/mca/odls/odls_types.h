@@ -77,8 +77,6 @@ typedef uint8_t prte_daemon_cmd_flag_t;
 /* process called "errmgr.abort_procs" */
 #define PRTE_DAEMON_ABORT_PROCS_CALLED      (prte_daemon_cmd_flag_t) 28
 
-/* nidmap for the DVM */
-#define PRTE_DAEMON_DVM_NIDMAP_CMD          (prte_daemon_cmd_flag_t) 29
 /* add procs for the DVM */
 #define PRTE_DAEMON_DVM_ADD_PROCS           (prte_daemon_cmd_flag_t) 30
 
@@ -93,9 +91,6 @@ typedef uint8_t prte_daemon_cmd_flag_t;
 
 /* tell DVM daemons to cleanup resources from job */
 #define PRTE_DAEMON_DVM_CLEANUP_JOB_CMD     (prte_daemon_cmd_flag_t) 34
-
-/* pass node info */
-#define PRTE_DAEMON_PASS_NODE_INFO_CMD      (prte_daemon_cmd_flag_t) 35
 
 /*
  * Struct written up the pipe from the child to the parent.
