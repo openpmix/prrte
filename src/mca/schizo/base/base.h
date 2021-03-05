@@ -47,7 +47,6 @@ PRTE_EXPORT    int prte_schizo_base_select(void);
 typedef struct {
     /* list of active modules */
     prte_list_t active_modules;
-    char **personalities;
     bool test_proxy_launch;
 } prte_schizo_base_t;
 
@@ -73,22 +72,15 @@ PRTE_EXPORT int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                                          char *modifier, bool report);
 
 /* the base stub functions */
-PRTE_EXPORT int prte_schizo_base_define_cli(prte_cmd_line_t *cli);
 PRTE_EXPORT int prte_schizo_base_parse_cli(int argc, int start, char **argv,
                                              char *personality, char ***target);
-PRTE_EXPORT int prte_schizo_base_parse_deprecated_cli(prte_cmd_line_t *cmdline,
-                                                        int *argc, char ***argv);
 
-PRTE_EXPORT void prte_schizo_base_parse_proxy_cli(prte_cmd_line_t *cmd_line,
-                                                    char ***argv);
 PRTE_EXPORT int prte_schizo_base_parse_env(prte_cmd_line_t *cmd_line,
                                              char **srcenv,
                                              char ***dstenv,
                                              bool cmdline);
-PRTE_EXPORT int prte_schizo_base_detect_proxy(char **argv);
-PRTE_EXPORT int prte_schizo_base_define_session_dir(char **tmpdir);
+PRTE_EXPORT prte_schizo_base_module_t* prte_schizo_base_detect_proxy(char *cmdpath);
 
-PRTE_EXPORT int prte_schizo_base_allow_run_as_root(prte_cmd_line_t *cmd_line);
 PRTE_EXPORT void prte_schizo_base_wrap_args(char **args);
 PRTE_EXPORT int prte_schizo_base_setup_app(prte_app_context_t *app);
 PRTE_EXPORT int prte_schizo_base_setup_fork(prte_job_t *jdata,
@@ -101,6 +93,14 @@ PRTE_EXPORT void prte_schizo_base_job_info(prte_cmd_line_t *cmdline, void *jobin
 PRTE_EXPORT int prte_schizo_base_get_remaining_time(uint32_t *timeleft);
 PRTE_EXPORT int prte_schizo_base_check_sanity(prte_cmd_line_t *cmdline);
 PRTE_EXPORT void prte_schizo_base_finalize(void);
+PRTE_EXPORT void prte_schizo_base_root_error_msg(void);
+PRTE_EXPORT char *prte_schizo_base_getline(FILE *fp);
+PRTE_EXPORT bool prte_schizo_base_check_ini(char *cmdpath, char *file);
+PRTE_EXPORT char* prte_schizo_base_strip_quotes(char *p);
+PRTE_EXPORT int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
+                                                        int *argc, char ***argv,
+                                                        char **options,
+                                                        prte_schizo_convertor_fn_t convert);
 
 END_C_DECLS
 

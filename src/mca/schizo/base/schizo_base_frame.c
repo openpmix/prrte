@@ -39,14 +39,9 @@
  */
 prte_schizo_base_t prte_schizo_base = {{{0}}};
 prte_schizo_API_module_t prte_schizo = {
-    .define_cli = prte_schizo_base_define_cli,
     .parse_cli = prte_schizo_base_parse_cli,
-    .parse_deprecated_cli = prte_schizo_base_parse_deprecated_cli,
-    .parse_proxy_cli = prte_schizo_base_parse_proxy_cli,
     .parse_env = prte_schizo_base_parse_env,
     .detect_proxy = prte_schizo_base_detect_proxy,
-    .define_session_dir = prte_schizo_base_define_session_dir,
-    .allow_run_as_root = prte_schizo_base_allow_run_as_root,
     .wrap_args = prte_schizo_base_wrap_args,
     .setup_app = prte_schizo_base_setup_app,
     .setup_fork = prte_schizo_base_setup_fork,
@@ -57,19 +52,8 @@ prte_schizo_API_module_t prte_schizo = {
     .finalize = prte_schizo_base_finalize
 };
 
-static char *personalities = "prte";
-
 static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
 {
-    /* pickup any defined personalities */
-    prte_mca_base_var_register("prte", "schizo", "base", "personalities",
-                                "Comma-separated list of personalities",
-                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                PRTE_INFO_LVL_9,
-                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                &personalities);
-
     /* test proxy launch */
     prte_schizo_base.test_proxy_launch = false;
     prte_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch",
@@ -86,9 +70,6 @@ static int prte_schizo_base_close(void)
 {
     /* cleanup globals */
     PRTE_LIST_DESTRUCT(&prte_schizo_base.active_modules);
-    if (NULL != prte_schizo_base.personalities) {
-        prte_argv_free(prte_schizo_base.personalities);
-    }
 
     return prte_mca_base_framework_components_close(&prte_schizo_base_framework, NULL);
 }
@@ -103,10 +84,6 @@ static int prte_schizo_base_open(prte_mca_base_open_flag_t flags)
 
     /* init the globals */
     PRTE_CONSTRUCT(&prte_schizo_base.active_modules, prte_list_t);
-    prte_schizo_base.personalities = NULL;
-    if (NULL != personalities) {
-        prte_schizo_base.personalities = prte_argv_split(personalities, ',');
-    }
 
     /* Open up all available components */
     rc = prte_mca_base_framework_components_open(&prte_schizo_base_framework, flags);
@@ -119,20 +96,6 @@ PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, schizo, "PRTE Schizo Subsystem",
                                  prte_schizo_base_register,
                                  prte_schizo_base_open, prte_schizo_base_close,
                                  prte_schizo_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
-
-static void cvcon(prte_convertor_t *p)
-{
-    p->options = NULL;
-}
-static void cvdes(prte_convertor_t *p)
-{
-    if (NULL != p->options) {
-        prte_argv_free(p->options);
-    }
-}
-PRTE_CLASS_INSTANCE(prte_convertor_t,
-                     prte_list_item_t,
-                     cvcon, cvdes);
 
 typedef struct {
     char *name;

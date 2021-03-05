@@ -18,6 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -53,8 +54,6 @@
 static int define_cli(prte_cmd_line_t *cli);
 static int parse_cli(int argc, int start, char **argv,
                      char *personality, char ***target);
-static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
-                            char ***argv);
 static int parse_env(prte_cmd_line_t *cmd_line,
                      char **srcenv,
                      char ***dstenv,
@@ -62,9 +61,9 @@ static int parse_env(prte_cmd_line_t *cmd_line,
 static void wrap_args(char **args);
 
 prte_schizo_base_module_t prte_schizo_pmix_module = {
+    .name = "pmix",
     .define_cli = define_cli,
     .parse_cli = parse_cli,
-    .parse_proxy_cli = parse_proxy_cli,
     .parse_env = parse_env,
     .wrap_args = wrap_args
 };
@@ -321,40 +320,6 @@ static void wrap_args(char **args)
             prte_asprintf(&tstr, "\"%s\"", args[i]);
             free(args[i]);
             args[i] = tstr;
-        }
-    }
-}
-
-static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
-                            char ***argv)
-{
-    int i;
-    char *ptr;
-    char *param, *value;
-
-    /* harvest all the MCA params in the environ */
-    for (i = 0; NULL != environ[i]; ++i) {
-        if (0 == strncmp("PMIX_MCA", environ[i], strlen("PMIX_MCA"))) {
-            /* check for duplicate in app->env - this
-             * would have been placed there by the
-             * cmd line processor. By convention, we
-             * always let the cmd line override the
-             * environment
-             */
-            param = strdup(environ[i]);
-            ptr = &param[strlen("PMIX_MCA_")];
-            value = strchr(param, '=');
-            if (NULL == value) {
-                /* should never happen */
-                free(param);
-                continue;
-            }
-            *value = '\0';
-            value++;
-            prte_argv_append_nosize(argv, "--pmixmca");
-            prte_argv_append_nosize(argv, ptr);
-            prte_argv_append_nosize(argv, value);
-            free(param);
         }
     }
 }

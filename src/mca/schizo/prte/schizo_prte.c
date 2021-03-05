@@ -38,10 +38,13 @@
 #include "src/util/argv.h"
 #include "src/util/prte_environ.h"
 #include "src/util/os_dirpath.h"
+#include "src/util/os_path.h"
+#include "src/util/path.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/util/name_fns.h"
 #include "src/util/session_dir.h"
@@ -52,100 +55,34 @@
 #include "schizo_prte.h"
 
 static int define_cli(prte_cmd_line_t *cli);
-static void register_deprecated_cli(prte_list_t *convertors);
 static int parse_cli(int argc, int start, char **argv,
                      char *personality, char ***target);
-static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
-                            char ***argv);
+static int parse_deprecated_cli(prte_cmd_line_t *cmdline,
+                                int *argc, char ***argv);
 static int parse_env(prte_cmd_line_t *cmd_line,
                      char **srcenv,
                      char ***dstenv,
                      bool cmdline);
 static int setup_fork(prte_job_t *jdata,
                       prte_app_context_t *context);
-static int define_session_dir(char **tmpdir);
-static int detect_proxy(char **argv);
-static int allow_run_as_root(prte_cmd_line_t *cmd_line);
+static int detect_proxy(char *argv);
+static void allow_run_as_root(prte_cmd_line_t *cmd_line);
 static void wrap_args(char **args);
 static int check_sanity(prte_cmd_line_t *cmd_line);
+static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
 
 prte_schizo_base_module_t prte_schizo_prte_module = {
+    .name = "prte",
     .define_cli = define_cli,
-    .register_deprecated_cli = register_deprecated_cli,
     .parse_cli = parse_cli,
-    .parse_proxy_cli = parse_proxy_cli,
+    .parse_deprecated_cli = parse_deprecated_cli,
     .parse_env = parse_env,
     .setup_fork = setup_fork,
-    .define_session_dir = define_session_dir,
     .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root,
     .wrap_args = wrap_args,
-    .check_sanity = check_sanity
-};
-
-
-/* Cmd-line options common to PRTE master/daemons/tools */
-static prte_cmd_line_init_t cmd_line_init[] = {
-    /* Various "obvious" generalized options */
-    { 'h', "help", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "This help message", PRTE_CMD_LINE_OTYPE_GENERAL },
-    { 'V', "version", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Print version and exit", PRTE_CMD_LINE_OTYPE_GENERAL },
-    { 'v', "verbose", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Be verbose", PRTE_CMD_LINE_OTYPE_GENERAL },
-    { 'q', "quiet", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Suppress helpful messages", PRTE_CMD_LINE_OTYPE_GENERAL },
-
-      /* DVM-related options */
-    { '\0', "tmpdir", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Set the root for the session directory tree",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "allow-run-as-root", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Allow execution as root (STRONGLY DISCOURAGED)",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "personality", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Comma-separated list of programming model, languages, and containers being used (default=\"prte\")",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "prefix", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Prefix to be used to look for PRTE executables",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "noprefix", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Disable automatic --prefix behavior",
-      PRTE_CMD_LINE_OTYPE_DVM },
-
-
-    /* setup MCA parameters */
-    { '\0', "mca", 2, PRTE_CMD_LINE_TYPE_STRING,
-      "Pass context-specific MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "prtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
-      "Pass context-specific PRTE MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-
-    /* Request parseable help output */
-    { '\0', "prte_info_pretty", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "When used in conjunction with other parameters, the output is displayed in 'prte_info_prettyprint' format (default)",
-      PRTE_CMD_LINE_OTYPE_GENERAL },
-    { '\0', "parsable", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "When used in conjunction with other parameters, the output is displayed in a machine-parsable format",
-       PRTE_CMD_LINE_OTYPE_GENERAL },
-    { '\0', "parseable", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Synonym for --parsable",
-      PRTE_CMD_LINE_OTYPE_GENERAL },
-
-    /* Set a hostfile */
-    { '\0', "hostfile", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Provide a hostfile",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "machinefile", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Provide a hostfile",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { 'H', "host", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "List of hosts to invoke processes on",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-
-    /* End of list */
-    { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
+    .check_sanity = check_sanity,
+    .job_info = job_info
 };
 
 static char *frameworks[] = {
@@ -173,6 +110,36 @@ static char *frameworks[] = {
     NULL,
 };
 
+static prte_cmd_line_init_t prte_dvm_cmd_line_init[] = {
+    /* do not print a "ready" message */
+    { '\0', "no-ready-msg", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "Do not print a DVM ready message",
+        PRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "daemonize", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "Daemonize the DVM daemons into the background",
+        PRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "system-server", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "Start the DVM as the system server",
+        PRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "set-sid", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "Direct the DVM daemons to separate from the current session",
+        PRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "report-pid", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Printout pid on stdout [-], stderr [+], or a file [anything else]",
+        PRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "report-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Printout URI on stdout [-], stderr [+], or a file [anything else]",
+        PRTE_CMD_LINE_OTYPE_DVM },
+    { '\0',  "test-suicide", 1, PRTE_CMD_LINE_TYPE_BOOL,
+        "Suicide instead of clean abort after delay",
+        PRTE_CMD_LINE_OTYPE_DEBUG },
+    { '\0', "personality", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Comma-separated list of programming model, languages, and containers being used (default=\"prte\")",
+        PRTE_CMD_LINE_OTYPE_LAUNCH },
+
+    /* End of list */
+    { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
+};
 
 static int define_cli(prte_cmd_line_t *cli)
 {
@@ -187,30 +154,19 @@ static int define_cli(prte_cmd_line_t *cli)
         return PRTE_ERR_BAD_PARAM;
     }
 
-    /* we always are used, so just add ours to the end */
-    rc = prte_cmd_line_add(cli, cmd_line_init);
+    rc = prte_cmd_line_add(cli, prte_cmd_line_init);
     if (PRTE_SUCCESS != rc){
         return rc;
     }
 
+    if (PRTE_PROC_IS_MASTER) {
+        rc = prte_cmd_line_add(cli, prte_dvm_cmd_line_init);
+        if (PRTE_SUCCESS != rc){
+            return rc;
+        }
+    }
+
     return PRTE_SUCCESS;
-}
-
-static char *strip_quotes(char *p)
-{
-    char *pout;
-
-    /* strip any quotes around the args */
-    if ('\"' == p[0]) {
-        pout = strdup(&p[1]);
-    } else {
-        pout = strdup(p);
-    }
-    if ('\"' == pout[strlen(pout)- 1]) {
-        pout[strlen(pout)-1] = '\0';
-    }
-    return pout;
-
 }
 
 static int parse_cli(int argc, int start, char **argv,
@@ -236,8 +192,8 @@ static int parse_cli(int argc, int start, char **argv,
                 /* this is an error */
                 return PRTE_ERR_FATAL;
             }
-            p1 = strip_quotes(argv[i+1]);
-            p2 = strip_quotes(argv[i+2]);
+            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
+            p2 = prte_schizo_base_strip_quotes(argv[i+2]);
             if (NULL == target) {
                 /* push it into our environment */
                 asprintf(&param, "PRTE_MCA_%s", p1);
@@ -257,8 +213,8 @@ static int parse_cli(int argc, int start, char **argv,
                 /* this is an error */
                 return PRTE_ERR_FATAL;
             }
-            p1 = strip_quotes(argv[i+1]);
-            p2 = strip_quotes(argv[i+2]);
+            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
+            p2 = prte_schizo_base_strip_quotes(argv[i+2]);
 
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
@@ -294,7 +250,7 @@ static int parse_cli(int argc, int start, char **argv,
     return PRTE_SUCCESS;
 }
 
-static int parse_deprecated_cli(char *option, char ***argv, int i)
+static int convert_deprecated_cli(char *option, char ***argv, int i)
 {
     int rc = PRTE_ERR_NOT_FOUND;
     char **pargs = *argv;
@@ -452,9 +408,11 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     return rc;
 }
 
-static void register_deprecated_cli(prte_list_t *convertors)
+static int parse_deprecated_cli(prte_cmd_line_t *cmdline,
+                                int *argc, char ***argv)
 {
-    prte_convertor_t *cv;
+    pmix_status_t rc;
+
     char *options[] = {
         "--display-devel-map",
         "--display-map",
@@ -473,10 +431,10 @@ static void register_deprecated_cli(prte_list_t *convertors)
         NULL
     };
 
-    cv = PRTE_NEW(prte_convertor_t);
-    cv->options = prte_argv_copy(options);
-    cv->convert = parse_deprecated_cli;
-    prte_list_append(convertors, &cv->super);
+    rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv,
+                                                 options, convert_deprecated_cli);
+
+    return rc;
 }
 
 static void doit(char *tgt,
@@ -575,7 +533,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the value is the envar */
             pval = prte_cmd_line_get_param(cmd_line, "x", i, 0);
-            p1 = strip_quotes(pval->value.data.string);
+            p1 = prte_schizo_base_strip_quotes(pval->value.data.string);
             /* if there is an '=' in it, then they are setting a value */
             if (NULL != (p2 = strchr(p1, '='))) {
                 *p2 = '\0';
@@ -784,54 +742,59 @@ static int setup_fork(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
-static int define_session_dir(char **tmpdir)
+static int detect_proxy(char *cmdpath)
 {
-    int uid;
-    pid_t mypid;
+    prte_output_verbose(2, prte_schizo_base_framework.framework_output,
+                        "%s[%s]: detect proxy with %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        __FILE__, cmdpath);
 
-    /* setup a session directory based on our userid and pid */
-    uid = geteuid();
-    mypid = getpid();
-
-    prte_asprintf(tmpdir, "%s/%s.session.%lu.%lu",
-                   prte_tmp_directory(), prte_tool_basename,
-                   (unsigned long)uid,
-                   (unsigned long)mypid);
-
-    return PRTE_SUCCESS;
-}
-
-static int detect_proxy(char **argv)
-{
-    /* if the basename of the cmd was "mpirun" or "mpiexec",
-     * we default to us */
-    if (prte_schizo_base.test_proxy_launch ||
-        0 == strcmp(prte_tool_basename, "prterun")) {
-        /* add us to the personalities */
-        prte_argv_append_unique_nosize(&prte_schizo_base.personalities, "prte");
-        return PRTE_SUCCESS;
+    /* we are lowest priority, so we will be checked last */
+    if (NULL == cmdpath) {
+        /* must use us */
+        return 100;
     }
 
-    return PRTE_ERR_TAKE_NEXT_OPTION;
+    /* if this isn't a full path, then it is a list
+     * of personalities we need to check */
+    if (!prte_path_is_absolute(cmdpath)) {
+        /* if it contains "prte", then we are available */
+        if (NULL != strstr(cmdpath, "prte") ||
+            NULL != strstr(cmdpath, "prrte")) {
+            return 100;
+        }
+    }
+
+    /* if it is in our install path, then it belongs to us */
+    if (NULL != strstr(cmdpath, prte_install_dirs.prefix)) {
+        return 100;
+    }
+
+    /* we are always the lowest priority */
+    return prte_schizo_prte_component.priority;
 }
 
-static int allow_run_as_root(prte_cmd_line_t *cmd_line)
+static void allow_run_as_root(prte_cmd_line_t *cmd_line)
 {
-    /* we always run last */
     char *r1, *r2;
 
     if (prte_cmd_line_is_taken(cmd_line, "allow-run-as-root")) {
-        return PRTE_SUCCESS;
+        return;
     }
 
     if (NULL != (r1 = getenv("PRTE_ALLOW_RUN_AS_ROOT")) &&
         NULL != (r2 = getenv("PRTE_ALLOW_RUN_AS_ROOT_CONFIRM"))) {
         if (0 == strcmp(r1, "1") && 0 == strcmp(r2, "1")) {
-            return PRTE_SUCCESS;
+            return;
         }
     }
 
-    return PRTE_ERR_TAKE_NEXT_OPTION;
+    prte_schizo_base_root_error_msg();
+}
+
+static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
+{
+    return;
 }
 
 static void wrap_args(char **args)
@@ -855,89 +818,6 @@ static void wrap_args(char **args)
             prte_asprintf(&tstr, "\"%s\"", args[i]);
             free(args[i]);
             args[i] = tstr;
-        }
-    }
-}
-
-static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
-                            char ***argv)
-{
-    int i, j;
-    prte_value_t *pval;
-    char **hostfiles = NULL;
-    char **hosts = NULL;
-    char *ptr;
-    char *param, *value;
-
-    /* check for hostfile and/or dash-host options */
-    if (0 < (i = prte_cmd_line_get_ninsts(cmd_line, "hostfile"))) {
-        prte_argv_append_nosize(argv, "--hostfile");
-        for (j=0; j < i; j++) {
-            pval = prte_cmd_line_get_param(cmd_line, "hostfile", j, 0);
-            if (NULL == pval) {
-                break;
-            }
-            prte_argv_append_nosize(&hostfiles, pval->value.data.string);
-        }
-        ptr = prte_argv_join(hostfiles, ',');
-        prte_argv_free(hostfiles);
-        prte_argv_append_nosize(argv, ptr);
-        free(ptr);
-    }
-    if (0 < (i = prte_cmd_line_get_ninsts(cmd_line, "host"))) {
-        prte_argv_append_nosize(argv, "--host");
-        for (j=0; j < i; j++) {
-            pval = prte_cmd_line_get_param(cmd_line, "host", j, 0);
-            if (NULL == pval) {
-                break;
-            }
-            prte_argv_append_nosize(&hosts, pval->value.data.string);
-        }
-        ptr = prte_argv_join(hosts, ',');
-        prte_argv_append_nosize(argv, ptr);
-        free(ptr);
-    }
-    if (0 < (i = prte_cmd_line_get_ninsts(cmd_line, "daemonize"))) {
-        prte_argv_append_nosize(argv, "--daemonize");
-    }
-    if (0 < (i = prte_cmd_line_get_ninsts(cmd_line, "set-sid"))) {
-        prte_argv_append_nosize(argv, "--set-sid");
-    }
-    if (0 < (i = prte_cmd_line_get_ninsts(cmd_line, "launch-agent"))) {
-        prte_argv_append_nosize(argv, "--launch-agent");
-        pval = prte_cmd_line_get_param(cmd_line, "launch-agent", 0, 0);
-        prte_argv_append_nosize(argv, pval->value.data.string);
-    }
-    if (0 < (i = prte_cmd_line_get_ninsts(cmd_line, "max-vm-size"))) {
-        prte_argv_append_nosize(argv, "--max-vm-size");
-        pval = prte_cmd_line_get_param(cmd_line, "max-vm-size", 0, 0);
-        prte_asprintf(&value, "%d", pval->value.data.integer);
-        prte_argv_append_nosize(argv, value);
-        free(value);
-    }
-    /* harvest all the MCA params in the environ */
-    for (i = 0; NULL != environ[i]; ++i) {
-        if (0 == strncmp("PRTE_MCA", environ[i], strlen("PRTE_MCA"))) {
-            /* check for duplicate in app->env - this
-             * would have been placed there by the
-             * cmd line processor. By convention, we
-             * always let the cmd line override the
-             * environment
-             */
-            param = strdup(environ[i]);
-            ptr = &param[strlen("PRTE_MCA_")];
-            value = strchr(param, '=');
-            if (NULL == value) {
-                /* should never happen */
-                free(param);
-                continue;
-            }
-            *value = '\0';
-            value++;
-            prte_argv_append_nosize(argv, "--prtemca");
-            prte_argv_append_nosize(argv, ptr);
-            prte_argv_append_nosize(argv, value);
-            free(param);
         }
     }
 }
