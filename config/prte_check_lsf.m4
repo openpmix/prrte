@@ -86,12 +86,21 @@ AC_DEFUN([PRTE_CHECK_LSF],[
                     [prte_check_lsf_happy="no"],
                     [prte_check_lsf_happy="yes"])
 
+          # liblsf requires shm_open, shm_unlink, which are in librt
+          PRTE_SEARCH_LIBS_COMPONENT([shm_open_rt], [shm_open], [rt],
+                        [shm_open_rt_happy="yes"],
+                        [shm_open_rt_happy="no"])
+
+          AS_IF([test "$shm_open_rt_happy" = "no"],
+                    [prte_check_lsf_happy="no"],
+                    [prte_check_lsf_happy="yes"])
+
           # liblsb requires liblsf - using ls_info as a test for liblsf presence
           PRTE_CHECK_PACKAGE([ls_info_lsf],
                      [lsf/lsf.h],
                      [lsf],
                      [ls_info],
-                     [$yp_all_nsl_LIBS],
+                     [$yp_all_nsl_LIBS $shm_open_rt_LIBS],
                      [$prte_check_lsf_dir],
                      [$prte_check_lsf_libdir],
                      [ls_info_lsf_happy="yes"],
@@ -115,7 +124,7 @@ AC_DEFUN([PRTE_CHECK_LSF],[
                         [lsf/lsbatch.h],
                         [bat],
                         [lsb_launch],
-                        [$ls_info_lsf_LIBS $yp_all_nsl_LIBS],
+                        [$ls_info_lsf_LIBS $yp_all_nsl_LIBS $shm_open_rt_LIBS],
                         [$prte_check_lsf_dir],
                         [$prte_check_lsf_libdir],
                         [prte_check_lsf_happy="yes"],
