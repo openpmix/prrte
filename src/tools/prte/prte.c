@@ -305,7 +305,10 @@ static prte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "pset", 1, PRTE_CMD_LINE_TYPE_STRING,
       "User-specified name assigned to the processes in their given application",
       PRTE_CMD_LINE_OTYPE_LAUNCH },
-
+    /* Set default global hostfile */
+    { '\0', "default-hostfile", 1, PRTE_CMD_LINE_TYPE_STRING,
+      "Provide a default hostfile",
+      PRTE_CMD_LINE_OTYPE_LAUNCH },
 
 
     /* Developer options */
