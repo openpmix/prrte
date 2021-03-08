@@ -132,7 +132,7 @@ AC_DEFUN([PRTE_CHECK_TM],[
                                               [_PRTE_CHECK_PACKAGE_LIB([prte_check_tm],
 					                               [pbs],
 					                               [tm_init],
-					                               [-lcrypto],
+					                               [-lcrypto -lz],
 					                               [$prte_check_tm_dir],
 					                               [$prte_check_tm_libdir],
 					                               [prte_check_tm_found="yes"],
