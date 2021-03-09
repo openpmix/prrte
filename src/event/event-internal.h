@@ -8,6 +8,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,6 +60,7 @@ typedef struct event_base prte_event_base_t;
 typedef struct event prte_event_t;
 
 PRTE_EXPORT extern prte_event_base_t *prte_sync_event_base;
+PRTE_EXPORT extern prte_event_base_t *prte_event_base;
 
 PRTE_EXPORT int prte_event_base_open(void);
 PRTE_EXPORT int prte_event_base_close(void);

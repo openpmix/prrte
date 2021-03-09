@@ -184,6 +184,7 @@ static void _client_abort(int sd, short args, void *cbdata)
     prte_job_t *jdata;
     prte_proc_t *p, *ptr;
     int i;
+    int rc = PRTE_SUCCESS;
 
     PRTE_ACQUIRE_OBJECT(cd);
 
@@ -193,7 +194,8 @@ static void _client_abort(int sd, short args, void *cbdata)
         /* find the named process */
         p = NULL;
         if (NULL == (jdata = prte_get_job_data_object(cd->proc.nspace))) {
-            return;
+            rc = PRTE_ERR_NOT_FOUND;
+            goto release;
         }
         for (i=0; i < jdata->procs->size; i++) {
             if (NULL == (ptr = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, i))) {
@@ -213,9 +215,10 @@ static void _client_abort(int sd, short args, void *cbdata)
         PRTE_ACTIVATE_PROC_STATE(&p->name, PRTE_PROC_STATE_CALLED_ABORT);
     }
 
+release:
     /* release the caller */
     if (NULL != cd->cbfunc) {
-        cd->cbfunc(PRTE_SUCCESS, cd->cbdata);
+        cd->cbfunc(rc, cd->cbdata);
     }
     PRTE_RELEASE(cd);
 }

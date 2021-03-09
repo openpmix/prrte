@@ -89,6 +89,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/prteif/prteif.h"
+#include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
@@ -124,6 +125,12 @@ typedef struct {
 
 static pmix_nspace_t spawnednspace;
 static pmix_proc_t myproc;
+static bool forcibly_die=false;
+static prte_event_t term_handler;
+static prte_event_t die_handler;
+static int term_pipe[2];
+static prte_atomic_lock_t prun_abort_inprogress_lock = PRTE_ATOMIC_LOCK_INIT;
+static prte_list_t forwarded_signals;
 
 static int create_app(int argc, char* argv[],
                       prte_list_t *jdata,
@@ -136,6 +143,12 @@ static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfil
 static bool verbose = false;
 static prte_cmd_line_t *prte_cmd_line = NULL;
 static bool want_prefix_by_default = (bool) PRTE_WANT_PRTE_PREFIX_BY_DEFAULT;
+static void abort_signal_callback(int signal);
+static void clean_abort(int fd, short flags, void *arg);
+static void signal_forward_callback(int signal);
+static void epipe_signal_callback(int signal);
+static int prep_singleton(const char *name);
+
 
 /* prun-specific options */
 static prte_cmd_line_init_t cmd_line_init[] = {
@@ -172,8 +185,14 @@ static prte_cmd_line_init_t cmd_line_init[] = {
       "Printout pid on stdout [-], stderr [+], or a file [anything else]",
       PRTE_CMD_LINE_OTYPE_DVM },
     { '\0', "report-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Printout URI on stdout [-], stderr [+], or a file [anything else]",
+      "Printout URI on stdout [-], stderr [+], a file descriptor [int], or a file [anything else]",
       PRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "singleton", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "ID of the singleton process that started us",
+        PRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "keepalive", 1, PRTE_CMD_LINE_TYPE_INT,
+        "Pipe to monitor - DVM will terminate upon closure",
+        PRTE_CMD_LINE_OTYPE_DVM },
 
 
     /* Debug options */
@@ -500,13 +519,58 @@ int main(int argc, char *argv[])
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
+    PRTE_CONSTRUCT(&forwarded_signals, prte_list_t);
 
+    prte_atomic_lock_init(&prun_abort_inprogress_lock, PRTE_ATOMIC_LOCK_UNLOCKED);
     /* init the tiny part of PRTE we use */
     prte_init_util(PRTE_PROC_MASTER);
 
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
+
+    /** setup callbacks for abort signals - from this point
+     * forward, we need to abort in a manner that allows us
+     * to cleanup. However, we cannot directly use libevent
+     * to trap these signals as otherwise we cannot respond
+     * to them if we are stuck in an event! So instead use
+     * the basic POSIX trap functions to handle the signal,
+     * and then let that signal handler do some magic to
+     * avoid the hang
+     *
+     * NOTE: posix traps don't allow us to do anything major
+     * in them, so use a pipe tied to a libevent event to
+     * reach a "safe" place where the termination event can
+     * be created
+     */
+    if (0 != (rc = pipe(term_pipe))) {
+        exit(1);
+    }
+    /* setup an event to attempt normal termination on signal */
+    rc = prte_event_base_open();
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "Unable to initialize event library\n");
+        exit(1);
+    }
+    prte_event_set(prte_event_base, &term_handler, term_pipe[0], PRTE_EV_READ, clean_abort, NULL);
+    prte_event_add(&term_handler, NULL);
+
+    /* Set both ends of this pipe to be close-on-exec so that no
+     children inherit it */
+    if (prte_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS ||
+        prte_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
+        fprintf(stderr, "unable to set the pipe to CLOEXEC\n");
+        prte_progress_thread_finalize(NULL);
+        exit(1);
+    }
+
+    /* point the signal trap to a function that will activate that event */
+    signal(SIGTERM, abort_signal_callback);
+    signal(SIGINT, abort_signal_callback);
+    signal(SIGHUP, abort_signal_callback);
+
+    /* setup callback for SIGPIPE */
+    signal(SIGPIPE, epipe_signal_callback);
 
     /* because we have to use the schizo framework prior to parsing the
      * incoming argv for cmd line options, do a hacky search to support
@@ -593,6 +657,13 @@ int main(int argc, char *argv[])
                     prte_strerror(rc));
         }
        return rc;
+    }
+
+    /* if we were given a keepalive pipe, set up to monitor it now */
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "keepalive", 0, 0))) {
+        prte_event_set(prte_event_base, &die_handler, pval->value.data.integer, PRTE_EV_READ, clean_abort, NULL);
+        prte_event_add(&die_handler, NULL);
+        prte_fd_set_cloexec(pval->value.data.integer);  // don't let children inherit this
     }
 
     /* let the schizo components take a pass at it to get the MCA params - this
@@ -720,6 +791,12 @@ int main(int argc, char *argv[])
     /* don't aggregate help messages as that will apply job-to-job */
     prte_setenv("PRTE_MCA_prte_base_help_aggregate", "0", true, &environ);
 
+    /* if we are supporting a singleton, push its ID into the environ
+     * so it can get picked up and registered by server init */
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "singleton", 0, 0))) {
+        prte_setenv("PMIX_MCA_singleton", pval->value.data.string, true, &environ);
+    }
+
     /* Setup MCA params */
     prte_register_params();
 
@@ -745,7 +822,16 @@ int main(int argc, char *argv[])
     }
     memcpy(&myproc, val->data.proc, sizeof(pmix_proc_t));
     PMIX_VALUE_RELEASE(val);
-    
+
+    /* if we are supporting a singleton, add it to our jobs */
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "singleton", 0, 0))) {
+        rc = prep_singleton(pval->value.data.string);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            goto DONE;
+        }
+    }
+
     /* check for launch directives in case we were launched by a
      * tool wanting to direct our operation - this needs to be
      * done prior to starting the DVM as it may include instructions
@@ -1707,4 +1793,186 @@ static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfil
         free(app->app.argv[index]);
         app->app.argv[index] = str;
     }
+}
+
+static void clean_abort(int fd, short flags, void *arg)
+{
+    /* if we have already ordered this once, don't keep
+     * doing it to avoid race conditions
+     */
+    if (prte_atomic_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
+        if (forcibly_die) {
+            /* exit with a non-zero status */
+            exit(1);
+        }
+        fprintf(stderr, "%s: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n", prte_tool_basename);
+        forcibly_die = true;
+        /* reset the event */
+        prte_event_add(&term_handler, NULL);
+        return;
+    }
+
+    fflush(stderr);
+    PMIx_server_finalize();
+    /* exit with a non-zero status */
+    exit(1);
+}
+
+static struct timeval current, last={0,0};
+static bool first = true;
+
+/*
+ * Attempt to terminate the job and wait for callback indicating
+ * the job has been aborted.
+ */
+static void abort_signal_callback(int fd)
+{
+    uint8_t foo = 1;
+    char *msg = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
+
+    /* if this is the first time thru, just get
+     * the current time
+     */
+    if (first) {
+        first = false;
+        gettimeofday(&current, NULL);
+    } else {
+        /* get the current time */
+        gettimeofday(&current, NULL);
+        /* if this is within 5 seconds of the
+         * last time we were called, then just
+         * exit - we are probably stuck
+         */
+        if ((current.tv_sec - last.tv_sec) < 5) {
+            exit(1);
+        }
+        if (-1 == write(1, (void*)msg, strlen(msg))) {
+            exit(1);
+        }
+    }
+    /* save the time */
+    last.tv_sec = current.tv_sec;
+    /* tell the event lib to attempt to abnormally terminate */
+    if (-1 == write(term_pipe[1], &foo, 1)) {
+        exit(1);
+    }
+}
+
+static void signal_forward_callback(int signum)
+{
+    pmix_status_t rc;
+    pmix_proc_t proc;
+    pmix_info_t info;
+
+    if (verbose){
+        fprintf(stderr, "%s: Forwarding signal %d to job\n",
+                prte_tool_basename, signum);
+    }
+
+    /* send the signal out to the processes */
+    PMIX_LOAD_PROCID(&proc, spawnednspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+    rc = PMIx_Job_control(&proc, 1, &info, 1, NULL, NULL);
+#else
+    rc = PMIx_Job_control(&proc, 1, &info, 1);
+#endif
+    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
+        fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)",
+                signum, spawnednspace, PMIx_Error_string(rc));
+    }
+}
+
+/**
+ * Deal with sigpipe errors
+ */
+static int sigpipe_error_count=0;
+static void epipe_signal_callback(int signal)
+{
+    sigpipe_error_count++;
+
+    if (10 < sigpipe_error_count) {
+        /* time to abort */
+        prte_output(0, "%s: SIGPIPE detected - aborting", prte_tool_basename);
+        clean_abort(0, 0, NULL);
+    }
+
+    return;
+}
+
+static int prep_singleton(const char *name)
+{
+    char *ptr, *p1;
+    prte_job_t *jdata;
+    prte_node_t *node;
+    prte_proc_t *proc;
+    int rc;
+    pmix_rank_t rank;
+    prte_app_context_t *app;
+    char cwd[PRTE_PATH_MAX];
+
+    ptr = strdup(name);
+    p1 = strrchr(ptr, '.');
+    *p1 = '\0';
+    ++p1;
+    rank = strtoul(p1, NULL, 10);
+    jdata = PRTE_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, ptr);
+    free(ptr);
+    rc = prte_set_job_data_object(jdata);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        PRTE_RELEASE(jdata);
+        return PRTE_ERR_FATAL;
+    }
+    /* must have an app */
+    app = PRTE_NEW(prte_app_context_t);
+    app->app = strdup(jdata->nspace);
+    app->num_procs = 1;
+    prte_argv_append_nosize(&app->argv, app->app);
+    getcwd(cwd, sizeof(cwd));
+    app->cwd = strdup(cwd);
+    prte_pointer_array_set_item(jdata->apps, 0, app);
+    jdata->num_apps = 1;
+
+    /* add a map */
+    jdata->map = PRTE_NEW(prte_job_map_t);
+    /* add our node to the map since the singleton must
+     * be here */
+    node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, PRTE_PROC_MY_NAME->rank);
+    PRTE_RETAIN(node);
+    prte_pointer_array_add(jdata->map->nodes, node);
+    ++(jdata->map->num_nodes);
+
+    /* create a proc for the singleton */
+    proc = PRTE_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&proc->name, jdata->nspace, rank);
+    proc->rank = proc->name.rank;
+    proc->parent = PRTE_PROC_MY_NAME->rank;
+    proc->app_idx = 0;
+    proc->app_rank = rank;
+    proc->local_rank = 0;
+    proc->node_rank = 0;
+    proc->state = PRTE_PROC_STATE_RUNNING;
+    /* link it to the job */
+    PRTE_RETAIN(jdata);
+    proc->job = jdata;
+    /* link it to the app */
+    PRTE_RETAIN(proc);
+    prte_pointer_array_set_item(&app->procs, rank, proc);
+    app->first_rank = rank;
+    /* link it to the node */
+    PRTE_RETAIN(node);
+    proc->node = node;
+    /* add it to the job */
+    prte_pointer_array_set_item(jdata->procs, rank, proc);
+    jdata->num_procs = 1;
+    jdata->num_local_procs = 1;
+    /* add it to the node */
+    PRTE_RETAIN(proc);
+    prte_pointer_array_add(node->procs, proc);
+    node->num_procs = 1;
+    node->slots_inuse = 1;
+
+    return PRTE_SUCCESS;
 }
