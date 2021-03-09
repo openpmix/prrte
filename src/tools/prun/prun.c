@@ -350,7 +350,7 @@ static prte_cmd_line_init_t cmd_line_init[] = {
     { '\0', "bind-to", 1, PRTE_CMD_LINE_TYPE_STRING,
       "Binding policy for job. Allowed values: none, hwthread, core, l1cache, l2cache, "
       "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
-      "the default when np<=2, and \"socket\" is the default when np>2). Allowed colon-delimited qualifiers: "
+      "the default when np<=2, and \"package\" is the default when np>2). Allowed colon-delimited qualifiers: "
       "overload-allowed, if-supported",
       PRTE_CMD_LINE_OTYPE_BINDING },
 

@@ -20,21 +20,24 @@ $ /usr/local/bin/prte ...
 is equivalent to
 
 ```
-$ prte --prefix /usr/local
+$ prte --prefix /usr/local ...
 ```
 
 # QUICK SUMMARY
 
 `prte` will establish a DVM that can be used to execute subsequent
 applications. Use of `prte` can be advantageous, for example, when
-you want to execute a number of short-lived tasks. In such cases, the
-time required to start the PRTE DVM can be a significant fraction of
-the time to execute the overall application. Thus, creating a persistent
-DVM can speed the overall execution. In addition, a persistent DVM will
-support executing multiple parallel applications while maintaining
-separation between their respective cores.
+you want to execute a number of short-lived tasks (e.g., in a workflow
+scenario). In such cases, the time required to start the PRTE DVM can be a
+significant fraction of the time to execute the overall application. Thus,
+creating a persistent PRTE DVM can speed the overall execution. In addition, a
+persistent PRTE DVM will support executing multiple parallel applications while
+maintaining separation between their respective cores.
 
 # OPTIONS
+
+This section includes many commonly used options. There may be other options
+listed with `prte --help`.
 
 `-h, --help`
 
@@ -43,10 +46,42 @@ separation between their respective cores.
 `-V, --version`
 
 :   Print version number. If no other arguments are given, this will
-    also cause prte to exit.
+    also cause `prte` to exit.
+
+`--daemonize`
+
+:   Daemonize the DVM daemons into the background
+
+`--no-ready-msg`
+
+:   Do not print a DVM ready message
+
+`--report-pid <arg0>`
+
+:   Print out `prte`'s PID during startup. The `<arg0>` must be a `-` to
+    indicate that the PID is to be output to `stdout`, a `+` to indicate that
+    the PID is to be output to `stderr`, or a filename to which the PID is to
+    be written.
+
+`--report-uri <arg0>`
+
+:   Print out `prte`'s URI during startup. The `<arg0>` must be a `-` to
+    indicate that the URI is to be output to `stdout`, a `+` to indicate that
+    the URI is to be output to `stderr`, or a filename to which the URI is to
+    be written.
+
+`--system-server`
+
+:   Start the DVM as the system server
+
+`--prefix <dir>`
+
+:   Prefix directory that will be used to set the `PATH` and
+    `LD_LIBRARY_PATH` on the remote node before invoking the PRTE
+    daemon.
 
 Use one of the following options to specify which hosts (nodes) of the
-cluster to use for the DVM.
+cluster to use for the DVM. See prte-map(1) for more details.
 
 `-H, --host <host1,host2,...,hostN>`
 
@@ -60,30 +95,33 @@ cluster to use for the DVM.
 
 :   Synonym for `-hostfile`.
 
-`--prefix <dir>`
-
-:   Prefix directory that will be used to set the `PATH` and
-    `LD_LIBRARY_PATH` on the remote node before invoking the PRTE
-    daemon.
-
 Setting MCA parameters:
 
-`--gmca <key> <value>`
+`--gpmixmca <key> <value>`
 
-:   Pass global MCA parameters that are applicable to all contexts.
-    `<key>` is the parameter name; `<value>` is the parameter value.
+:   Pass global PMIx MCA parameters that are applicable to all application
+    contexts. `<key>` is the parameter name; `<value>` is the parameter value.
 
 `--mca <key> <value>`
 
 :   Send arguments to various MCA modules. See the "MCA" section,
     below.
 
-`--report-uri <channel>`
+`--pmixmca <key> <value>`
 
-:   Print out prte's URI during startup. The channel must be
-    either a '-' to indicate that the URI is to be output to stdout, a
-    '+' to indicate that the URI is to be output to stderr, or a
-    filename to which the URI is to be written.
+:   Send arguments to various PMIx MCA modules. See the "MCA" section,
+    below.
+
+`--prtemca <key> <value>`
+
+:   Send arguments to various PRTE MCA modules. See the "MCA" section,
+    below.
+
+`--pmixam <arg0>`
+
+:   Aggregate PMIx MCA parameter set file list. The `arg0` argument is a
+    comma-separated list of tuning files. Each file containing MCA parameter
+    sets for this application context.
 
 The following options are useful for developers; they are not generally
 useful to most PRTE users:
@@ -97,38 +135,23 @@ useful to most PRTE users:
 :   Enable debugging of the PRTE daemons in the DVM, storing output in
     files.
 
-There may be other options listed with `prte --help`.
 
 # DESCRIPTION
 
 `prte` starts a Distributed Virtual Machine (DVM) by launching a
 daemon on each node of the allocation, as modified or specified by the
-`--host` and `--hostfile` options. Applications can subsequently be
-executed using the `prun` command. The DVM remains in operation until
-receiving the `pterm` command.
+`--host` and `--hostfile` options (See prte-map(1) for more details).
+Applications can subsequently be executed using the `prun` command. The DVM
+remains in operation until receiving the `pterm` command.
 
-## Specifying Host Nodes
+When starting the Distributed Virtual Machine (DVM), `prte` will prefer to use
+the process starter provided by a supported resource manager to start the
+`prted` daemons on the allocated compute nodes. If a supported resource manager
+or process starter is not available then `rsh` or `ssh` are used with a
+corresponding hostfile, or if no hostfile is provided then all `X` copies are
+run on the `localhost`.
 
-Host nodes can be identified on the `prte` command line with the
-`--host` option or in a hostfile.
+# RETURN VALUE
 
-For example,
-
-`prte -H aa,aa,bb ./a.out`
-
-:   launches two processes on node aa and one on bb.
-
-Or, consider the hostfile
-
-```
-$ cat myhostfile aa slots=2 bb slots=2 cc slots=2
-```
-
-Here, we list both the host names (`aa`, `bb`, and `cc`) but also how
-many "slots" there are for each. Slots indicate how many processes can
-potentially execute on a node. For best performance, the number of
-slots may be chosen to be the number of cores on the node or the
-number of processor sockets. If the hostfile does not provide slots
-information, a default of 1 is assumed. When running under resource
-managers (e.g., SLURM, Torque, etc.), PRTE will obtain both the
-hostnames and the number of slots directly from the resource manger.
+`prte` returns `0` if no abnormal daemon failure occurs during the life of the
+DVM, and non-zero otherwise.

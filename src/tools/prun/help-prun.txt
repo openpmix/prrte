@@ -27,7 +27,7 @@ attempting to %s.  Returned value %d instead of PRTE_SUCCESS.
 [prun:usage]
 %s (%s) %s
 
-Usage: %s [OPTION]...
+Usage: %s [ options ] <program> [ <args> ]
 Submit job to the PMIx Reference RTE
 
 %s
