@@ -17,7 +17,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2018      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2018-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -545,8 +545,12 @@ static int parse_env(prte_cmd_line_t *cmd_line,
                      char ***dstenv,
                      bool cmdline)
 {
-    int i, j;
-    char *p1;
+    int i, j, n;
+    char *p1, *p2;
+    char **env;
+    prte_value_t *pval;
+    char **xparams=NULL, **xvals=NULL;
+    char *param, *value;
 
     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:prte: parse_env",
@@ -565,6 +569,80 @@ static int parse_env(prte_cmd_line_t *cmd_line,
                 }
             }
         }
+    }
+
+    env = *dstenv;
+
+    /* now look for -x options - not allowed to conflict with a -mca option */
+    if (NULL != cmd_line && 0 < (j = prte_cmd_line_get_ninsts(cmd_line, "x"))) {
+        for (i = 0; i < j; ++i) {
+            /* the value is the envar */
+            pval = prte_cmd_line_get_param(cmd_line, "x", i, 0);
+            p1 = strip_quotes(pval->value.data.string);
+            /* if there is an '=' in it, then they are setting a value */
+            if (NULL != (p2 = strchr(p1, '='))) {
+                *p2 = '\0';
+                ++p2;
+            } else {
+                p2 = getenv(p1);
+                if (NULL == p2) {
+                    prte_show_help("help-schizo-base.txt",
+                                   "missing-envar-param", true,
+                                   p1);
+                    free(p1);
+                    continue;
+                }
+            }
+
+            /* check if it is already present in the environment */
+            for (n=0; NULL != env && NULL != env[n]; n++) {
+                param = strdup(env[n]);
+                value = strchr(param, '=');
+                *value = '\0';
+                value++;
+                /* check if parameter is already present */
+                if (0 == strcmp(param, p1)) {
+                    /* we do have it - check for same value */
+                    if (0 != strcmp(value, p2)) {
+                        /* this is an error - different values */
+                        prte_show_help("help-schizo-base.txt",
+                                       "duplicate-mca-value", true,
+                                       p1, p2, value);
+                        free(param);
+                        return PRTE_ERR_BAD_PARAM;
+                    }
+                }
+                free(param);
+            }
+
+            /* check if we already processed a conflicting -x version with MCA prefix */
+            if (NULL != xparams) {
+                for (i=0; NULL != xparams[i]; i++) {
+                    if (0 == strncmp("PRTE_MCA_", p1, strlen("PRTE_MCA_")) ||
+                        0 == strncmp("OMPI_MCA_", p1, strlen("OMPI_MCA_"))) {
+                        /* this is an error - different values */
+                        prte_show_help("help-schizo-base.txt",
+                                       "duplicate-mca-value", true,
+                                       p1, p2, xvals[i]);
+                        return PRTE_ERR_BAD_PARAM;
+                    }
+                }
+            }
+
+            /* cache this for later inclusion - do not modify dstenv in this loop */
+            prte_argv_append_nosize(&xparams, p1);
+            prte_argv_append_nosize(&xvals, p2);
+            free(p1);
+        }
+    }
+
+    /* add the -x values */
+    if (NULL != xparams) {
+        for (i=0; NULL != xparams[i]; i++) {
+            prte_setenv(xparams[i], xvals[i], true, dstenv);
+        }
+        prte_argv_free(xparams);
+        prte_argv_free(xvals);
     }
 
     return PRTE_SUCCESS;

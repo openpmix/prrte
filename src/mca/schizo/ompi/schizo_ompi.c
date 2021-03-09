@@ -17,7 +17,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2018-2020 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2018-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -452,7 +452,7 @@ static int check_cache_noadd(char ***c1, char ***c2,
                 if (0 != strcmp(cachevals[k], p2)) {
                     /* this is an error */
                     prte_show_help("help-schizo-base.txt",
-                                    "duplicate-value", true,
+                                    "duplicate-mca-value", true,
                                     p1, p2, cachevals[k]);
                     return PRTE_ERR_BAD_PARAM;
                 }
@@ -1162,40 +1162,6 @@ static int parse_env(prte_cmd_line_t *cmd_line,
     }
     prte_argv_free(envlist);
 
-    /* now look for -x options - not allowed to conflict with a -mca option */
-    if (0 < (j = prte_cmd_line_get_ninsts(cmd_line, "x"))) {
-        for (i = 0; i < j; ++i) {
-            /* the value is the envar */
-            pval = prte_cmd_line_get_param(cmd_line, "x", i, 0);
-            p1 = strip_quotes(pval->value.data.string);
-            /* if there is an '=' in it, then they are setting a value */
-            if (NULL != (p2 = strchr(p1, '='))) {
-                *p2 = '\0';
-                ++p2;
-            } else {
-                p2 = getenv(p1);
-                if (NULL == p2) {
-                    free(p1);
-                    continue;
-                }
-            }
-            /* not allowed to duplicate anything from an MCA param on the cmd line */
-            rc = check_cache_noadd(&cache, &cachevals, p1, p2);
-            if (PRTE_SUCCESS != rc) {
-                prte_argv_free(cache);
-                prte_argv_free(cachevals);
-                free(p1);
-                prte_argv_free(xparams);
-                prte_argv_free(xvals);
-                return rc;
-            }
-            /* cache this for later inclusion */
-            prte_argv_append_nosize(&xparams, p1);
-            prte_argv_append_nosize(&xvals, p2);
-            free(p1);
-        }
-    }
-
     /* process the resulting cache into the dstenv */
     if (NULL != cache) {
         for (i=0; NULL != cache[i]; i++) {
@@ -1210,15 +1176,6 @@ static int parse_env(prte_cmd_line_t *cmd_line,
     }
     prte_argv_free(cache);
     prte_argv_free(cachevals);
-
-    /* add the -x values */
-    if (NULL != xparams) {
-        for (i=0; NULL != xparams[i]; i++) {
-            prte_setenv(xparams[i], xvals[i], true, dstenv);
-        }
-        prte_argv_free(xparams);
-        prte_argv_free(xvals);
-    }
 
     return PRTE_SUCCESS;
 }

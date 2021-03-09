@@ -96,8 +96,11 @@ An incorrect value for the "--stream-buffering" option was given:
 Valid values are limited to 0, 1, or 2. Your application will continue, but
 please correct your command line in the future.
 #
-[duplicate-value]
-WARNING: an MCA parameter was listed more than once on the command line, or
+[missing-envar-param]
+Warning: Could not find the environment variable: %s
+#
+[duplicate-mca-value]
+Error: an MCA parameter was listed more than once on the command line, or
 multiple times in one or more files, but with conflicting values:
 
   Param:  %s
