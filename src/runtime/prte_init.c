@@ -241,7 +241,6 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
         error = "prte_event_base_open";
         goto error;
     }
-    prte_event_use_threads();
 
     /* ensure we know the type of proc for when we finalize */
     prte_process_info.proc_type = flags;
@@ -335,10 +334,6 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
         error = "prte_ess_base_select";
         goto error;
     }
-
-    /* PRTE tools "block" in their own loop over the event
-     * base, so no progress thread is required */
-    prte_event_base = prte_sync_event_base;
 
     /* initialize the RTE for this environment */
     if (PRTE_SUCCESS != (ret = prte_ess.init(*pargc, *pargv))) {

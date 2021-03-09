@@ -250,12 +250,26 @@ int prte_cmd_line_parse(prte_cmd_line_t *cmd, bool ignore_unknown,
         if (0 == strcmp(cmd->lcl_argv[i], "--")) {
             ++i;
             while (i < cmd->lcl_argc) {
-                prte_argv_append(&cmd->lcl_tail_argc, &cmd->lcl_tail_argv,
-                                 cmd->lcl_argv[i]);
+                if (0 != strcmp(cmd->lcl_argv[i], "&") ||
+                    '>' != cmd->lcl_argv[i][0] ||
+                    '<' != cmd->lcl_argv[i][0]) {
+                    prte_argv_append(&cmd->lcl_tail_argc, &cmd->lcl_tail_argv,
+                                     cmd->lcl_argv[i]);
+                }
                 ++i;
             }
 
             break;
+        }
+
+        /* is it the ampersand or an output redirection? if so,
+         * then that should be at the end of the cmd line - either
+         * way, we ignore it */
+        else if (0 == strcmp(cmd->lcl_argv[i], "&") ||
+                 '>' == cmd->lcl_argv[i][0] ||
+                 '<' == cmd->lcl_argv[i][0]) {
+            ++i;
+            continue;
         }
 
         /* If it's not an option, then this is an error.  Note that

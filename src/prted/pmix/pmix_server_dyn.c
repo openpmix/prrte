@@ -838,6 +838,7 @@ static void _cnct(int sd, short args, void *cbdata)
     }
 
   release:
+    rc = prte_pmix_convert_rc(rc);
     if (NULL != cd->cbfunc) {
         cd->cbfunc(rc, cd->cbdata);
     }
