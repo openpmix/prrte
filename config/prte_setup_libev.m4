@@ -6,6 +6,7 @@
 # Copyright (c) 2017-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -19,11 +20,11 @@ AC_DEFUN([PRTE_LIBEV_CONFIG],[
     PRTE_VAR_SCOPE_PUSH([prte_event_dir prte_event_libdir prte_event_defaults prte_check_libev_save_CPPFLAGS prte_check_libev_save_LDFLAGS prte_check_libev_save_LIBS])
 
     AC_ARG_WITH([libev],
-                [AC_HELP_STRING([--with-libev=DIR],
+                [AS_HELP_STRING([--with-libev=DIR],
                                 [Search for libev headers and libraries in DIR ])],
                 [], [with_libev=no])
     AC_ARG_WITH([libev-libdir],
-                [AC_HELP_STRING([--with-libev-libdir=DIR],
+                [AS_HELP_STRING([--with-libev-libdir=DIR],
                                 [Search for libev libraries in DIR ])])
 
     prte_libev_support=0

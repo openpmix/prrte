@@ -30,19 +30,19 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     PRTE_VAR_SCOPE_PUSH([prte_external_pmix_save_CPPFLAGS prte_external_pmix_save_LDFLAGS prte_external_pmix_save_LIBS])
 
     AC_ARG_WITH([pmix],
-                [AC_HELP_STRING([--with-pmix(=DIR)],
+                [AS_HELP_STRING([--with-pmix(=DIR)],
                                 [Where to find PMIx support, optionally adding DIR to the search path])])
 
     AC_ARG_WITH([pmix-libdir],
-                [AC_HELP_STRING([--with-pmix-libdir=DIR],
+                [AS_HELP_STRING([--with-pmix-libdir=DIR],
                                 [Look for libpmix in the given directory DIR, DIR/lib or DIR/lib64])])
 
     AC_ARG_WITH([pmix-header],
-                [AC_HELP_STRING([--with-pmix-header=HEADER],
+                [AS_HELP_STRING([--with-pmix-header=HEADER],
                                 [The value that should be included in C files to include pmix.h])])
 
     AC_ARG_ENABLE([pmix-devel-support],
-                  [AC_HELP_STRING([--enable-pmix-devel-support],
+                  [AS_HELP_STRING([--enable-pmix-devel-support],
                                   [Add necessary wrapper flags to enable access to PMIx devel headers])])
 
     if test "x$with_pmix_header" != "x"; then

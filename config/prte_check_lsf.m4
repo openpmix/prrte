@@ -17,6 +17,7 @@ dnl Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 dnl                         reserved.
 dnl Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
 dnl Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -30,11 +31,11 @@ dnl
 AC_DEFUN([PRTE_CHECK_LSF],[
     AS_IF([test -z "$prte_check_lsf_happy"],[
        AC_ARG_WITH([lsf],
-               [AC_HELP_STRING([--with-lsf(=DIR)],
+               [AS_HELP_STRING([--with-lsf(=DIR)],
                        [Build LSF support])])
        PRTE_CHECK_WITHDIR([lsf], [$with_lsf], [include/lsf/lsbatch.h])
        AC_ARG_WITH([lsf-libdir],
-               [AC_HELP_STRING([--with-lsf-libdir=DIR],
+               [AS_HELP_STRING([--with-lsf-libdir=DIR],
                        [Search for LSF libraries in DIR])])
        PRTE_CHECK_WITHDIR([lsf-libdir], [$with_lsf_libdir], [libbat.*])
 

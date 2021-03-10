@@ -16,6 +16,7 @@ dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 dnl                         reserved.
 dnl Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -50,7 +51,7 @@ AC_DEFUN([PRTE_CHECK_TM],[
 	PRTE_VAR_SCOPE_PUSH([prte_check_tm_found prte_check_tm_dir prte_check_tm_pbs_config prte_check_tm_LDFLAGS_save prte_check_tm_CPPFLAGS_save prte_check_tm_LIBS_save])
 
 	AC_ARG_WITH([tm],
-                    [AC_HELP_STRING([--with-tm(=DIR)],
+                    [AS_HELP_STRING([--with-tm(=DIR)],
                                     [Build TM (Torque, PBSPro, and compatible) support, optionally adding DIR/include, DIR/lib, and DIR/lib64 to the search path for headers and libraries])])
 	PRTE_CHECK_WITHDIR([tm], [$with_tm], [include/tm.h])
 

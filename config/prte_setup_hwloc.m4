@@ -3,6 +3,7 @@
 # Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
 # Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -16,15 +17,15 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
     PRTE_VAR_SCOPE_PUSH([prte_hwloc_dir prte_hwloc_libdir prte_hwloc_standard_lib_location prte_hwloc_standard_header_location prte_check_hwloc_save_CPPFLAGS prte_check_hwloc_save_LDFLAGS prte_check_hwloc_save_LIBS])
 
     AC_ARG_WITH([hwloc],
-                [AC_HELP_STRING([--with-hwloc=DIR],
+                [AS_HELP_STRING([--with-hwloc=DIR],
                                 [Search for hwloc headers and libraries in DIR ])])
 
     AC_ARG_WITH([hwloc-libdir],
-                [AC_HELP_STRING([--with-hwloc-libdir=DIR],
+                [AS_HELP_STRING([--with-hwloc-libdir=DIR],
                                 [Search for hwloc libraries in DIR ])])
 
     AC_ARG_WITH([hwloc-header],
-                [AC_HELP_STRING([--with-hwloc-header=HEADER],
+                [AS_HELP_STRING([--with-hwloc-header=HEADER],
                                 [The value that should be included in C files to include hwloc.h])])
 
     prte_hwloc_support=0
