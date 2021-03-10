@@ -1,28 +1,32 @@
-dnl -*- shell-script -*-
-dnl
-dnl Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
-dnl                         University Research and Technology
-dnl                         Corporation.  All rights reserved.
-dnl Copyright (c) 2004-2005 The University of Tennessee and The University
-dnl                         of Tennessee Research Foundation.  All rights
-dnl                         reserved.
-dnl Copyright (c) 2004-2010 High Performance Computing Center Stuttgart,
-dnl                         University of Stuttgart.  All rights reserved.
-dnl Copyright (c) 2004-2005 The Regents of the University of California.
-dnl                         All rights reserved.
-dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
-dnl Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
-dnl Copyright (c) 2013      Mellanox Technologies, Inc.
-dnl                         All rights reserved.
-dnl Copyright (c) 2015      Research Organization for Information Science
-dnl                         and Technology (RIST). All rights reserved.
-dnl Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
-dnl $COPYRIGHT$
-dnl
-dnl Additional copyrights may follow
-dnl
-dnl $HEADER$
-dnl
+# -*- shell-script -*-
+# PMIx copyrights:
+# Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
+#
+#########################
+#
+# Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
+#                         University Research and Technology
+#                         Corporation.  All rights reserved.
+# Copyright (c) 2004-2005 The University of Tennessee and The University
+#                         of Tennessee Research Foundation.  All rights
+#                         reserved.
+# Copyright (c) 2004-2010 High Performance Computing Center Stuttgart,
+#                         University of Stuttgart.  All rights reserved.
+# Copyright (c) 2004-2005 The Regents of the University of California.
+#                         All rights reserved.
+# Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
+# Copyright (c) 2010-2018 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2013      Mellanox Technologies, Inc.
+#                         All rights reserved.
+# Copyright (c) 2015      Intel, Inc. All rights reserved.
+#########################
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
 
 #
 # Search the generated warnings for
@@ -46,13 +50,7 @@ AC_DEFUN([_PRTE_ATTRIBUTE_FAIL_SEARCH],[
 ])
 
 #
-# Check for one specific attribute by compiling with C and C++
-# and possibly using a cross-check.
-#
-# If the cross-check is defined, a static function "usage" should be
-# defined, which is to be called from main (to circumvent warnings
-# regarding unused function in main file)
-#       static int usage (int * argument);
+# Check for one specific attribute by compiling with C
 #
 # The last argument is for specific CFLAGS, that need to be set
 # for the compiler to generate a warning on the cross-check.
@@ -62,9 +60,9 @@ AC_DEFUN([_PRTE_CHECK_SPECIFIC_ATTRIBUTE], [
     AC_MSG_CHECKING([for __attribute__([$1])])
     AC_CACHE_VAL(prte_cv___attribute__[$1], [
         #
-        # Try to compile using the C compiler, then C++
+        # Try to compile using the C compiler
         #
-        AC_TRY_COMPILE([$2],[],
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [$2])],
                        [
                         #
                         # In case we did succeed: Fine, but was this due to the
@@ -75,53 +73,6 @@ AC_DEFUN([_PRTE_CHECK_SPECIFIC_ATTRIBUTE], [
                         _PRTE_ATTRIBUTE_FAIL_SEARCH([$1])
                        ],
                        [prte_cv___attribute__[$1]=0])
-
-        # Only test C++ if we're building Open MPI (i.e.,
-        # project_ompi).  PRTE and ORTE do not use C++ at all, so
-        # let's not add a C++ compiler into their requirement list.
-        m4_ifdef([project_ompi],
-                 [if test "$prte_cv___attribute__[$1]" = "1" ; then
-                      AC_LANG_PUSH(C++)
-                      AC_TRY_COMPILE([
-                           extern "C" {
-                           $2
-                           }],[],
-                           [
-                            prte_cv___attribute__[$1]=1
-                            _PRTE_ATTRIBUTE_FAIL_SEARCH([$1])
-                           ],[prte_cv___attribute__[$1]=0])
-                      AC_LANG_POP(C++)
-                  fi])
-
-        #
-        # If the attribute is supported by both compilers,
-        # try to recompile a *cross-check*, IFF defined.
-        #
-        if test "$prte_cv___attribute__[$1]" = "1" && test "[$3]" != "" ; then
-            ac_c_werror_flag_safe=$ac_c_werror_flag
-            ac_c_werror_flag="yes"
-            CFLAGS_safe=$CFLAGS
-            CFLAGS="$CFLAGS [$4]"
-
-            AC_TRY_COMPILE([$3],
-                [
-                 int i=4711;
-                 i=usage(&i);
-                ],
-                [prte_cv___attribute__[$1]=0],
-                [
-                 #
-                 # In case we did NOT succeed: Fine, but was this due to the
-                 # attribute being ignored? Grep for IgNoRe in conftest.err
-                 # and if found, reset the prte_cv__attribute__var=0
-                 #
-                 prte_cv___attribute__[$1]=1
-                 _PRTE_ATTRIBUTE_FAIL_SEARCH([$1])
-                ])
-
-            ac_c_werror_flag=$ac_c_werror_flag_safe
-            CFLAGS=$CFLAGS_safe
-        fi
     ])
 
     if test "$prte_cv___attribute__[$1]" = "1" ; then
@@ -161,29 +112,27 @@ AC_DEFUN([PRTE_CHECK_ATTRIBUTES], [
   AC_MSG_CHECKING(for __attribute__)
 
   AC_CACHE_VAL(prte_cv___attribute__, [
-    AC_TRY_COMPILE(
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([],
       [#include <stdlib.h>
        /* Check for the longest available __attribute__ (since gcc-2.3) */
        struct foo {
            char a;
            int x[2] __attribute__ ((__packed__));
         };
-      ],
-      [],
+      ])],
       [prte_cv___attribute__=1],
       [prte_cv___attribute__=0],
     )
 
     if test "$prte_cv___attribute__" = "1" ; then
-        AC_TRY_COMPILE(
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([],
           [#include <stdlib.h>
            /* Check for the longest available __attribute__ (since gcc-2.3) */
            struct foo {
                char a;
                int x[2] __attribute__ ((__packed__));
             };
-          ],
-          [],
+          ])],
           [prte_cv___attribute__=1],
           [prte_cv___attribute__=0],
         )
@@ -223,7 +172,7 @@ AC_DEFUN([PRTE_CHECK_ATTRIBUTES], [
     prte_cv___attribute__weak_alias=0
     prte_cv___attribute__destructor=0
     prte_cv___attribute__optnone=0
-    prte_cv___attribute__error=0
+    prte_cv___attribute__extension=0
   else
     AC_MSG_RESULT([yes])
 
@@ -268,13 +217,6 @@ AC_DEFUN([PRTE_CHECK_ATTRIBUTES], [
         [
          int foo(int arg1, int arg2) __attribute__ ((__deprecated__("compiler allows argument")));
          int foo(int arg1, int arg2) { return arg1 * arg2 + arg1; }
-        ],
-        [],
-        [])
-
-    _PRTE_CHECK_SPECIFIC_ATTRIBUTE([error],
-        [
-         int foo(int arg1, int arg2) __attribute__ ((__error__("")));
         ],
         [],
         [])
@@ -637,6 +579,4 @@ AC_DEFUN([PRTE_CHECK_ATTRIBUTES], [
                      [Whether your compiler has __attribute__ optnone or not])
   AC_DEFINE_UNQUOTED(PRTE_HAVE_ATTRIBUTE_EXTENSION, [$prte_cv___attribute__extension],
                      [Whether your compiler has __attribute__ extension or not])
-  AC_DEFINE_UNQUOTED(PRTE_HAVE_ATTRIBUTE_ERROR, [$prte_cv___attribute__error],
-                     [Whether your compiler has __attribute__ error or not])
 ])

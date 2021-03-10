@@ -10,10 +10,10 @@ dnl Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
 dnl                         University of Stuttgart.  All rights reserved.
 dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
-dnl Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2014      Intel, Inc. All rights reserved.
 dnl Copyright (c) 2016-2019 Research Organization for Information Science
 dnl                         and Technology (RIST).  All rights reserved.
-dnl Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -27,7 +27,7 @@ dnl On EM64T, icc-8.1 before version 8.1.027 segfaulted, since
 dnl va_start was miscompiled...
 dnl
 AC_MSG_CHECKING([whether icc-8.1 for EM64T works with variable arguments])
-AC_TRY_RUN([
+AC_RUN_IFELSE([AC_LANG_SOURCE([
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,7 +50,9 @@ int main ()
   return 0;
 }
 
-],[prte_ac_icc_varargs=`test -f conftestval`],[prte_ac_icc_varargs=1],[prte_ac_icc_varargs=1])
+])],
+[prte_ac_icc_varargs=`test -f conftestval`],
+[prte_ac_icc_varargs=1],[prte_ac_icc_varargs=1])
 
 if test "$prte_ac_icc_varargs" = "1"; then
     AC_MSG_WARN([*** Problem running configure test!])
