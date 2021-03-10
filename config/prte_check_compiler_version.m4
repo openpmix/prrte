@@ -1,11 +1,11 @@
 dnl -*- shell-script -*-
 dnl
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
-dnl Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2013-2017 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2019      Research Organization for Information Science
 dnl                         and Technology (RIST).  All rights reserved.
 dnl
-dnl Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -35,7 +35,7 @@ AC_DEFUN([PRTE_CHECK_COMPILER], [
     [
             CPPFLAGS_orig=$CPPFLAGS
             CPPFLAGS="-I${top_srcdir}/src/include $CPPFLAGS"
-            AC_TRY_RUN([
+AC_RUN_IFELSE([AC_LANG_SOURCE([
 #include <stdio.h>
 #include <stdlib.h>
 #include "prte_portable_platform.h"
@@ -49,11 +49,14 @@ int main (int argc, char * argv[])
     fclose(f);
     return 0;
 }
-            ], [
+            ])],
+            [
                 eval prte_cv_compiler_$1=`cat conftestval`;
-            ], [
+            ],
+            [
                 eval prte_cv_compiler_$1=0
-            ], [
+            ],
+            [
                 eval prte_cv_compiler_$1=0
             ])
             CPPFLAGS=$CPPFLAGS_orig
@@ -68,7 +71,7 @@ AC_DEFUN([PRTE_CHECK_COMPILER_STRING], [
     [
             CPPFLAGS_orig=$CPPFLAGS
             CPPFLAGS="-I${top_srcdir}/src/include $CPPFLAGS"
-            AC_TRY_RUN([
+AC_RUN_IFELSE([AC_LANG_SOURCE([
 #include <stdio.h>
 #include <stdlib.h>
 #include "prte_portable_platform.h"
@@ -82,11 +85,14 @@ int main (int argc, char * argv[])
     fclose(f);
     return 0;
 }
-            ], [
+            ])],
+            [
                 eval prte_cv_compiler_$1=`cat conftestval`;
-            ], [
+            ],
+            [
                 eval prte_cv_compiler_$1=UNKNOWN
-            ], [
+            ],
+            [
                 eval prte_cv_compiler_$1=UNKNOWN
             ])
             CPPFLAGS=$CPPFLAGS_orig
@@ -104,7 +110,7 @@ AC_DEFUN([PRTE_CHECK_COMPILER_STRINGIFY], [
     [
             CPPFLAGS_orig=$CPPFLAGS
             CPPFLAGS="-I${top_srcdir}/src/include $CPPFLAGS"
-            AC_TRY_RUN([
+            AC_RUN_IFELSE([AC_LANG_SOURCE([
 #include <stdio.h>
 #include <stdlib.h>
 #include "prte_portable_platform.h"
@@ -118,7 +124,7 @@ int main (int argc, char * argv[])
     fclose(f);
     return 0;
 }
-            ], [
+            ])], [
                 eval prte_cv_compiler_$1=`cat conftestval`;
             ], [
                 eval prte_cv_compiler_$1=UNKNOWN

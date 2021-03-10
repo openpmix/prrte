@@ -14,6 +14,7 @@
 # Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 #                         reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -31,7 +32,7 @@
 AC_DEFUN([PRTE_CHECK_GRIDENGINE],[
     if test -z "$prte_gridengine_build" ; then
 	AC_ARG_WITH([sge],
-                    [AC_HELP_STRING([--with-sge],
+                    [AS_HELP_STRING([--with-sge],
                                     [Build SGE or Grid Engine support (default: no)])])
 
 	AC_MSG_CHECKING([if user requested SGE build])

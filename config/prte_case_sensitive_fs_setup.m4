@@ -12,6 +12,7 @@ dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright (c) 2019      Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -62,7 +63,7 @@ rm -f conf_fs_test.$$ CONF_FS_TEST.$$
 #
 AC_MSG_CHECKING([if configuring for case sensitive filesystem])
 AC_ARG_WITH(cs_fs,
-            AC_HELP_STRING([--with-cs-fs],
+            AS_HELP_STRING([--with-cs-fs],
                            [Destination FS is case sensitive (default: set to value of the build FS's case sensitivity)]))
 
 if test "$with_cs_fs" = "yes"; then
