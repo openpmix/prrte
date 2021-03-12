@@ -43,6 +43,13 @@ BEGIN_C_DECLS
 
 PRTE_EXPORT extern int prte_pmix_verbose_output;
 
+typedef struct {
+    prte_list_item_t super;
+    pmix_app_t app;
+    void *info;
+} prte_pmix_app_t;
+PRTE_CLASS_DECLARATION(prte_pmix_app_t);
+
 /* define a caddy for pointing to pmix_info_t that
  * are to be included in an answer */
 typedef struct {

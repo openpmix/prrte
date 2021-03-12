@@ -12,6 +12,7 @@
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,6 +70,7 @@ PRTE_EXPORT void prte_plm_base_launch_apps(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_post_launch(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_registered(int fd, short args, void *cbdata);
+PRTE_EXPORT void prte_plm_base_wrap_args(char **args);
 
 END_C_DECLS
 

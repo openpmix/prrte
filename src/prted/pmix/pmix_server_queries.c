@@ -261,12 +261,6 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_DEBUG_SUPPORT, tmp, PMIX_STRING);
                 free(tmp);
                 prte_list_append(&results, &kv->super);
-            } else if (0 == strcmp(q->keys[n], PMIX_TIME_REMAINING)) {
-                if (PRTE_SUCCESS == prte_schizo.get_remaining_time(&key)) {
-                    kv = PRTE_NEW(prte_info_item_t);
-                    PMIX_INFO_LOAD(&kv->info, PMIX_TIME_REMAINING, &key, PMIX_UINT32);
-                    prte_list_append(&results, &kv->super);
-                }
             } else if (0 == strcmp(q->keys[n], PMIX_HWLOC_XML_V1)) {
                 if (NULL != prte_hwloc_topology) {
                     char *xmlbuffer=NULL;

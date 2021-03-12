@@ -76,6 +76,7 @@
 #include "src/prted/prted.h"
 
 #include "src/mca/plm/plm.h"
+#include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "plm_slurm.h"
 
@@ -446,7 +447,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* protect the args in case someone has a script wrapper around srun */
-    prte_schizo.wrap_args(argv);
+    prte_plm_base_wrap_args(argv);
 
     /* setup environment */
     env = prte_argv_copy(prte_launch_environ);

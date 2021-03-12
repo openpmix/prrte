@@ -669,7 +669,7 @@ static int setup_launch(int *argcptr, char ***argvptr,
     }
 
     /* protect the params */
-    prte_schizo.wrap_args(argv);
+    prte_plm_base_wrap_args(argv);
 
     value = prte_argv_join(argv, ' ');
     if (sysconf(_SC_ARG_MAX) < (int)strlen(value)) {

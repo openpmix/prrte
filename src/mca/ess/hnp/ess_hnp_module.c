@@ -103,27 +103,6 @@ prte_ess_base_module_t prte_ess_hnp_module = {
     .abort = rte_abort
 };
 
-/* local globals */
-static bool signals_set=false;
-static bool forcibly_die=false;
-static prte_event_t term_handler;
-static prte_event_t epipe_handler;
-static int term_pipe[2];
-static prte_event_t *forward_signals_events = NULL;
-
-static void abort_signal_callback(int signal);
-static void clean_abort(int fd, short flags, void *arg);
-static void epipe_signal_callback(int fd, short flags, void *arg);
-static void signal_forward_callback(int fd, short event, void *arg);
-
-static void setup_sighandler(int signal, prte_event_t *ev,
-                             prte_event_cbfunc_t cbfunc)
-{
-    prte_event_signal_set(prte_event_base, ev, signal, cbfunc, ev);
-    prte_event_set_priority(ev, PRTE_ERROR_PRI);
-    prte_event_signal_add(ev, NULL);
-}
-
 static int rte_init(int argc, char **argv)
 {
     int ret;
@@ -138,7 +117,6 @@ static int rte_init(int argc, char **argv)
     uint32_t h;
     int idx;
     prte_topology_t *t;
-    prte_ess_base_signal_t *sig;
     pmix_value_t pval;
     pmix_status_t pret;
 
@@ -148,56 +126,6 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
-    /* setup callback for SIGPIPE */
-    setup_sighandler(SIGPIPE, &epipe_handler, epipe_signal_callback);
-    /** setup callbacks for abort signals - from this point
-     * forward, we need to abort in a manner that allows us
-     * to cleanup. However, we cannot directly use libevent
-     * to trap these signals as otherwise we cannot respond
-     * to them if we are stuck in an event! So instead use
-     * the basic POSIX trap functions to handle the signal,
-     * and then let that signal handler do some magic to
-     * avoid the hang
-     *
-     * NOTE: posix traps don't allow us to do anything major
-     * in them, so use a pipe tied to a libevent event to
-     * reach a "safe" place where the termination event can
-     * be created
-     */
-    pipe(term_pipe);
-    /* setup an event to attempt normal termination on signal */
-    prte_event_set(prte_event_base, &term_handler, term_pipe[0], PRTE_EV_READ, clean_abort, NULL);
-    prte_event_set_priority(&term_handler, PRTE_ERROR_PRI);
-    prte_event_add(&term_handler, NULL);
-
-    /* Set both ends of this pipe to be close-on-exec so that no
-       children inherit it */
-    if (prte_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS ||
-        prte_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
-        error = "unable to set the pipe to CLOEXEC";
-        goto error;
-    }
-
-    /* point the signal trap to a function that will activate that event */
-    signal(SIGTERM, abort_signal_callback);
-    signal(SIGINT, abort_signal_callback);
-    signal(SIGHUP, abort_signal_callback);
-
-    /** setup callbacks for signals we should forward */
-    if (0 < (idx = prte_list_get_size(&prte_ess_base_signals))) {
-        forward_signals_events = (prte_event_t*)malloc(sizeof(prte_event_t) * idx);
-        if (NULL == forward_signals_events) {
-            ret = PRTE_ERR_OUT_OF_RESOURCE;
-            error = "unable to malloc";
-            goto error;
-        }
-        idx = 0;
-        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t) {
-            setup_sighandler(sig->signal, forward_signals_events + idx, signal_forward_callback);
-            ++idx;
-        }
-    }
-    signals_set = true;
     /* get the local topology */
     if (NULL == prte_hwloc_topology) {
         if (PRTE_SUCCESS != (ret = prte_hwloc_base_get_topology())) {
@@ -628,24 +556,6 @@ static int rte_init(int argc, char **argv)
 static int rte_finalize(void)
 {
     char *contact_path;
-    prte_ess_base_signal_t *sig;
-    unsigned int i;
-
-    if (signals_set) {
-        /* Remove the epipe handler */
-        prte_event_signal_del(&epipe_handler);
-        /* remove the term handler */
-        prte_event_del(&term_handler);
-        /** Remove the USR signal handlers */
-        i = 0;
-        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t) {
-            prte_event_signal_del(forward_signals_events + i);
-            ++i;
-        }
-        free (forward_signals_events);
-        forward_signals_events = NULL;
-        signals_set = false;
-    }
 
     /* shutdown the pmix server */
     pmix_server_finalize();
@@ -713,117 +623,4 @@ static void rte_abort(int status, bool report)
     prte_proc_info_finalize();
     /* just exit */
     exit(status);
-}
-
-static void clean_abort(int fd, short flags, void *arg)
-{
-    /* if we have already ordered this once, don't keep
-     * doing it to avoid race conditions
-     */
-    if (prte_atomic_trylock(&prte_abort_inprogress_lock)) { /* returns 1 if already locked */
-        if (forcibly_die) {
-            /* kill any local procs */
-            prte_odls.kill_local_procs(NULL);
-            /* whack any lingering session directory files from our jobs */
-            prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
-            /* cleanup our pmix server */
-            PMIx_server_finalize();
-            /* exit with a non-zero status */
-            exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
-        }
-        fprintf(stderr, "%s: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n", prte_tool_basename);
-        forcibly_die = true;
-        /* reset the event */
-        prte_event_add(&term_handler, NULL);
-        return;
-    }
-    /* ensure we exit with a non-zero status */
-    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-
-    /* ensure that the forwarding of stdin stops */
-    prte_job_term_ordered = true;
-    /* tell us to be quiet - hey, the user killed us with a ctrl-c,
-     * so need to tell them that!
-     */
-    prte_execute_quiet = true;
-    /* We are in an event handler; the job completed procedure
-       will delete the signal handler that is currently running
-       (which is a Bad Thing), so we can't call it directly.
-       Instead, we have to exit this handler and setup to call
-       job_completed() after this. */
-    prte_plm.terminate_orteds();;
-}
-
-static struct timeval current, last={0,0};
-static bool first = true;
-
-/*
- * Attempt to terminate the job and wait for callback indicating
- * the job has been aborted.
- */
-static void abort_signal_callback(int fd)
-{
-    uint8_t foo = 1;
-    char *msg = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
-
-    /* if this is the first time thru, just get
-     * the current time
-     */
-    if (first) {
-        first = false;
-        gettimeofday(&current, NULL);
-    } else {
-        /* get the current time */
-        gettimeofday(&current, NULL);
-        /* if this is within 5 seconds of the
-         * last time we were called, then just
-         * exit - we are probably stuck
-         */
-        if ((current.tv_sec - last.tv_sec) < 5) {
-            exit(1);
-        }
-        write(1, (void*)msg, strlen(msg));
-    }
-    /* save the time */
-    last.tv_sec = current.tv_sec;
-    /* tell the event lib to attempt to abnormally terminate */
-    write(term_pipe[1], &foo, 1);
-}
-
-/**
- * Deal with sigpipe errors
- */
-static int sigpipe_error_count=0;
-static void epipe_signal_callback(int fd, short flags, void *arg)
-{
-    sigpipe_error_count++;
-
-    if (10 < sigpipe_error_count) {
-        /* time to abort */
-        prte_output(0, "%s: SIGPIPE detected on fd %d - aborting", prte_tool_basename, fd);
-        clean_abort(0, 0, NULL);
-    }
-
-    return;
-}
-
-/**
- * Pass user signals to the remote application processes
- */
-static void  signal_forward_callback(int fd, short event, void *arg)
-{
-    prte_event_t *signal = (prte_event_t*)arg;
-    int signum, ret;
-
-    signum = PRTE_EVENT_SIGNAL(signal);
-    if (!prte_execute_quiet){
-        fprintf(stderr, "%s: Forwarding signal %d to job\n",
-                prte_tool_basename, signum);
-    }
-
-    /** send the signal out to the processes, including any descendants */
-    if (PRTE_SUCCESS != (ret = prte_plm.signal_job(PRTE_JOBID_WILDCARD, signum))) {
-        fprintf(stderr, "Signal %d could not be sent to the job (returned %d)",
-                signum, ret);
-    }
 }

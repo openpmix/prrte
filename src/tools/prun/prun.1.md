@@ -263,6 +263,11 @@ To manage files and runtime environment:
     before executing the program. Only one environment variable can be
     specified per `-x` option. Existing environment variables can be
     specified or new variable names specified with corresponding values.
+    If multiple `-x` options with the same variable name (regardless of value)
+    are provided then the last one listed on the command line will take
+    precedence, and the others will be ignored. The exception to this
+    is for PRTE_MCA_ prefixed environment variables which will report
+    an error in that scenario if any of the values differ.
     For example: `$ prun -x DISPLAY -x OFILE=/tmp/out ...`
 
 The parser for the `-x` option is not very sophisticated; it does not

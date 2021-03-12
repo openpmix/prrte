@@ -46,9 +46,11 @@ PRTE_EXPORT int prte_daemon_process_commands(pmix_proc_t* sender,
                                              pmix_data_buffer_t *buffer,
                                              prte_rml_tag_t tag);
 
-END_C_DECLS
+PRTE_EXPORT int prte_parse_locals(prte_cmd_line_t *prte_cmd_line,
+                                  prte_list_t *jdata,
+                                  int argc, char* argv[],
+                                  char ***hostfiles, char ***hosts);
 
-/* Local function */
-int send_to_local_applications(prte_pointer_array_t *dead_names);
+END_C_DECLS
 
 #endif /* PRTED_H */

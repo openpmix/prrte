@@ -17,7 +17,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2018-2020 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2018-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -59,168 +59,31 @@
 #include "schizo_ompi.h"
 
 static int define_cli(prte_cmd_line_t *cli);
-static void register_deprecated_cli(prte_list_t *convertors);
 static int parse_cli(int argc, int start,
                      char **argv,
-                     char *personality,
                      char ***target);
-static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
-                            char ***argv);
+static int parse_deprecated_cli(prte_cmd_line_t *cmdline,
+                                int *argc, char ***argv);
 static int parse_env(prte_cmd_line_t *cmd_line,
                      char **srcenv,
                      char ***dstenv,
                      bool cmdline);
-static int detect_proxy(char **argv);
-static int allow_run_as_root(prte_cmd_line_t *cmd_line);
+static int detect_proxy(char *argv);
+static void allow_run_as_root(prte_cmd_line_t *cmd_line);
 static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
+static int check_sanity(prte_cmd_line_t *cmd_line);
 
 prte_schizo_base_module_t prte_schizo_ompi_module = {
+    .name = "ompi",
     .define_cli = define_cli,
-    .register_deprecated_cli = register_deprecated_cli,
     .parse_cli = parse_cli,
-    .parse_proxy_cli = parse_proxy_cli,
+    .parse_deprecated_cli = parse_deprecated_cli,
     .parse_env = parse_env,
     .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root,
-    .job_info = job_info
+    .job_info = job_info,
+    .check_sanity = check_sanity
 };
-
-static char *frameworks[] = {
-    /* OPAL frameworks */
-    "allocator",
-    "backtrace",
-    "btl",
-    "compress",
-    "crs",
-    "dl",
-    "event",
-    "hwloc",
-    "if",
-    "installdirs",
-    "memchecker",
-    "memcpy",
-    "memory",
-    "mpool",
-    "patcher",
-    "pmix",
-    "pstat",
-    "rcache",
-    "reachable",
-    "shmem",
-    "threads",
-    "timer",
-    /* OMPI frameworks */
-    "mpi", /* global options set in runtime/ompi_mpi_params.c */
-    "bml",
-    "coll",
-    "fbtl",
-    "fcoll",
-    "fs",
-    "hook",
-    "io",
-    "mtl",
-    "op",
-    "osc",
-    "pml",
-    "sharedfp",
-    "topo",
-    "vprotocol",
-    /* OSHMEM frameworks */
-    "memheap",
-    "scoll",
-    "spml",
-    "sshmem",
-    NULL,
-};
-
-
-/* Cmd-line options common to PRTE master/daemons/tools */
-static prte_cmd_line_init_t cmd_line_init[] = {
-
-    /* setup MCA parameters */
-    { '\0', "omca", 2, PRTE_CMD_LINE_TYPE_STRING,
-      "Pass context-specific OMPI MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "gomca", 2, PRTE_CMD_LINE_TYPE_STRING,
-      "Pass global OMPI MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "tune", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Profile options file list for OMPI applications",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "stream-buffering", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-
-    { '\0', "rankfile", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Name of file to specify explicit task mapping",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-
-    /* mpiexec mandated form launch key parameters */
-    { '\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Specify the initial error handler that is attached to predefined communicators during the first MPI call.",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "with-ft", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Specify the type(s) of error handling that the application will use.",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-
-    /* DVM-specific options */
-    /* uri of PMIx publish/lookup server, or at least where to get it */
-    { '\0', "ompi-server", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Specify the URI of the publish/lookup server, or the name of the file (specified as file:filename) that contains that info",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    /* fwd mpirun port */
-    { '\0', "fwd-mpirun-port", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Forward mpirun port to compute node daemons so all will use it",
-      PRTE_CMD_LINE_OTYPE_DVM },
-
-    /* Display Commumication Protocol : MPI_Init */
-    { '\0', "display-comm", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Display table of communication methods between ranks during MPI_Init",
-      PRTE_CMD_LINE_OTYPE_GENERAL },
-
-    /* Display Commumication Protocol : MPI_Finalize */
-    { '\0', "display-comm-finalize", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Display table of communication methods between ranks during MPI_Finalize",
-      PRTE_CMD_LINE_OTYPE_GENERAL },
-
-
-    /* End of list */
-    { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
-};
-
-static bool checkus(void)
-{
-    bool takeus = false;
-    char *ptr;
-    size_t i;
-    uint vers;
-
-    /* if they gave us a list of personalities,
-     * see if we are included */
-    if (NULL != prte_schizo_base.personalities) {
-        for (i=0; NULL != prte_schizo_base.personalities[i]; i++) {
-            if (0 == strcmp(prte_schizo_base.personalities[i], "ompi")) {
-                /* they didn't specify a level, so we will service
-                 * them just in case */
-                takeus = true;
-                break;
-            }
-            if (0 == strncmp(prte_schizo_base.personalities[i], "ompi", 4)) {
-                /* if they specifically requested an ompi level greater
-                 * than or equal to us, then we service it */
-                ptr = &prte_schizo_base.personalities[i][4];
-                vers = strtoul(ptr, NULL, 10);
-                if (vers >= 5) {
-                    takeus = true;
-                }
-                break;
-            }
-        }
-    }
-
-    return takeus;
-}
-
 
 static int define_cli(prte_cmd_line_t *cli)
 {
@@ -235,22 +98,11 @@ static int define_cli(prte_cmd_line_t *cli)
         return PRTE_ERR_BAD_PARAM;
     }
 
-    if (!checkus()) {
-        return PRTE_ERR_TAKE_NEXT_OPTION;
-    }
-
-    rc = prte_cmd_line_add(cli, cmd_line_init);
-    if (PRTE_SUCCESS != rc){
-        return rc;
-    }
-
-    /* see if we were given a location where we can get
-     * the list of OMPI frameworks */
-
-    return PRTE_SUCCESS;
+    rc = prte_cmd_line_add(cli, ompi_cmd_line_init);
+    return rc;
 }
 
-static int parse_deprecated_cli(char *option, char ***argv, int i)
+static int convert_deprecated_cli(char *option, char ***argv, int i)
 {
     char **pargs, *p2, *modifier;
     int rc = PRTE_SUCCESS;
@@ -376,9 +228,11 @@ static int parse_deprecated_cli(char *option, char ***argv, int i)
     return rc;
 }
 
-static void register_deprecated_cli(prte_list_t *convertors)
+static int parse_deprecated_cli(prte_cmd_line_t *cmdline,
+                                int *argc, char ***argv)
 {
-    prte_convertor_t *cv;
+    pmix_status_t rc;
+
     char *options[] = {
         "--nolocal",
         "--oversubscribe",
@@ -403,31 +257,10 @@ static void register_deprecated_cli(prte_list_t *convertors)
         NULL
     };
 
-    if (!checkus()) {
-        return;
-    }
+    rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv,
+                                                 options, convert_deprecated_cli);
 
-    cv = PRTE_NEW(prte_convertor_t);
-    cv->options = prte_argv_copy(options);
-    cv->convert = parse_deprecated_cli;
-    prte_list_append(convertors, &cv->super);
-}
-
-static char *strip_quotes(char *p)
-{
-    char *pout;
-
-    /* strip any quotes around the args */
-    if ('\"' == p[0]) {
-        pout = strdup(&p[1]);
-    } else {
-        pout = strdup(p);
-    }
-    if ('\"' == pout[strlen(pout)- 1]) {
-        pout[strlen(pout)-1] = '\0';
-    }
-    return pout;
-
+    return rc;
 }
 
 static int check_cache_noadd(char ***c1, char ***c2,
@@ -452,7 +285,7 @@ static int check_cache_noadd(char ***c1, char ***c2,
                 if (0 != strcmp(cachevals[k], p2)) {
                     /* this is an error */
                     prte_show_help("help-schizo-base.txt",
-                                    "duplicate-value", true,
+                                    "duplicate-mca-value", true,
                                     p1, p2, cachevals[k]);
                     return PRTE_ERR_BAD_PARAM;
                 }
@@ -599,22 +432,6 @@ static int process_env_list(const char *env_list,
     return rc;
 }
 
-static char *schizo_getline(FILE *fp)
-{
-    char *ret, *buff;
-    char input[2048];
-
-    memset(input, 0, 2048);
-    ret = fgets(input, 2048, fp);
-    if (NULL != ret) {
-       input[strlen(input)-1] = '\0';  /* remove newline */
-       buff = strdup(input);
-       return buff;
-    }
-
-    return NULL;
-}
-
 static int process_tune_files(char *filename, char ***dstenv, char sep)
 {
     FILE *fp;
@@ -659,7 +476,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
             }
             free(p1);
         }
-        while (NULL != (line = schizo_getline(fp))) {
+        while (NULL != (line = prte_schizo_base_getline(fp))) {
             if('\0' == line[0]) continue; /* skip empty lines */
             opts = prte_argv_split_with_empty(line, ' ');
             if (NULL == opts) {
@@ -692,7 +509,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         fclose(fp);
                         return PRTE_ERR_BAD_PARAM;
                     }
-                    p1 = strip_quotes(opts[n+1]);
+                    p1 = prte_schizo_base_strip_quotes(opts[n+1]);
                     /* some idiot decided to allow spaces around an "=" sign, which is
                      * a violation of the Posix cmd line syntax. Rather than fighting
                      * the battle to correct their error, try to accommodate it here */
@@ -709,7 +526,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                             fclose(fp);
                             return PRTE_ERR_BAD_PARAM;
                         }
-                        p2 = strip_quotes(opts[n+3]);
+                        p2 = prte_schizo_base_strip_quotes(opts[n+3]);
                         prte_asprintf(&param, "%s=%s", p1, p2);
                         free(p1);
                         free(p2);
@@ -743,8 +560,8 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         fclose(fp);
                         return PRTE_ERR_BAD_PARAM;
                     }
-                    p1 = strip_quotes(opts[n+1]);
-                    p2 = strip_quotes(opts[n+2]);
+                    p1 = prte_schizo_base_strip_quotes(opts[n+1]);
+                    p2 = prte_schizo_base_strip_quotes(opts[n+2]);
                     if (0 == strcmp(p1, "mca_base_env_list")) {
                         /* next option must be the list of envars */
                         rc = process_env_list(p2, &xparams, &xvals, ';');
@@ -844,6 +661,54 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
     return PRTE_SUCCESS;
 }
 
+static char *ompi_frameworks[] = {
+    /* OPAL frameworks */
+    "allocator",
+    "backtrace",
+    "btl",
+    "compress",
+    "crs",
+    "dl",
+    "event",
+    "hwloc",
+    "if",
+    "installdirs",
+    "memchecker",
+    "memcpy",
+    "memory",
+    "mpool",
+    "patcher",
+    "pmix",
+    "pstat",
+    "rcache",
+    "reachable",
+    "shmem",
+    "threads",
+    "timer",
+    /* OMPI frameworks */
+    "mpi", /* global options set in runtime/ompi_mpi_params.c */
+    "bml",
+    "coll",
+    "fbtl",
+    "fcoll",
+    "fs",
+    "hook",
+    "io",
+    "mtl",
+    "op",
+    "osc",
+    "pml",
+    "sharedfp",
+    "topo",
+    "vprotocol",
+    /* OSHMEM frameworks */
+    "memheap",
+    "scoll",
+    "spml",
+    "sshmem",
+    NULL,
+};
+
 static bool check_generic(char *p1)
 {
     int j;
@@ -856,8 +721,8 @@ static bool check_generic(char *p1)
     } else if (0 == strcmp(p1, "mca_base_env_list")) {
         return true;
     } else {
-        for (j=0; NULL != frameworks[j]; j++) {
-            if (0 == strncmp(p1, frameworks[j], strlen(frameworks[j]))) {
+        for (j=0; NULL != ompi_frameworks[j]; j++) {
+            if (0 == strncmp(p1, ompi_frameworks[j], strlen(ompi_frameworks[j]))) {
                 return true;
             }
         }
@@ -868,41 +733,93 @@ static bool check_generic(char *p1)
 
 static int parse_cli(int argc, int start,
                      char **argv,
-                     char *personality,
                      char ***target)
 {
-    char *p1; int i;
-    if (NULL != personality &&
-        NULL != strstr(personality, "ompi")) {
-        return PRTE_ERR_TAKE_NEXT_OPTION;
-    }
+    char *p1, *p2;
+    int i;
+    pmix_status_t rc;
+    bool takeus;
+    char *param = NULL;
 
     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:ompi: parse_cli",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     for (i = 0; i < (argc-start); ++i) {
+        if (0 == strcmp("--omca", argv[i])) {
+            if (NULL == argv[i+1] || NULL == argv[i+2]) {
+                /* this is an error */
+                return PRTE_ERR_FATAL;
+            }
+            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
+            p2 = prte_schizo_base_strip_quotes(argv[i+2]);
+            if (NULL == target) {
+                /* push it into our environment */
+                asprintf(&param, "OMPI_MCA_%s", p1);
+                prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                    "%s schizo:ompi:parse_cli pushing %s into environment",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                prte_setenv(param, p2, true, &environ);
+            } else {
+                prte_argv_append_nosize(target, "--omca");
+                prte_argv_append_nosize(target, p1);
+                prte_argv_append_nosize(target, p2);
+            }
+            free(p1);
+            free(p2);
+            i += 2;
+            continue;
+        }
+        if (0 == strcmp("--mca", argv[i])) {
+            if (NULL == argv[i+1] || NULL == argv[i+2]) {
+                /* this is an error */
+                return PRTE_ERR_FATAL;
+            }
+            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
+            p2 = prte_schizo_base_strip_quotes(argv[i+2]);
+
+            /* this is a generic MCA designation, so see if the parameter it
+             * refers to belongs to one of our frameworks */
+            takeus = check_generic(p1);
+            if (takeus) {
+                if (NULL == target) {
+                    /* push it into our environment */
+                    prte_asprintf(&param, "OMPI_MCA_%s", p1);
+                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                        "%s schizo:ompi:parse_cli pushing %s into environment",
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                    prte_setenv(param, p2, true, &environ);
+                } else {
+                    prte_argv_append_nosize(target, "--omca");
+                    prte_argv_append_nosize(target, p1);
+                    prte_argv_append_nosize(target, p2);
+                }
+                free(p1);
+                free(p2);
+                i += 2;
+                continue;
+            }
+        }
         if (0 == strcmp("--with-ft", argv[i]) ||
             0 == strcmp("-with-ft", argv[i])) {
             if (NULL == argv[i+1]) {
                 /* this is an error */
                 return PRTE_ERR_FATAL;
             }
-            p1 = strip_quotes(argv[i+1]);
+            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
             if( 0 != strcmp("no", p1) &&
                 0 != strcmp("false", p1) &&
                 0 != strcmp("0", p1)) {
                 if (NULL == target) {
                     /* push it into our environment */
-                    char *param = NULL;
-                    asprintf(&param, "PRTE_MCA_prte_enable_ft");
+                    prte_asprintf(&param, "PRTE_MCA_prte_enable_ft");
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                            "%s schizo:ompi:parse_cli pushing %s into environment",
                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
                     prte_setenv(param, "true", true, &environ);
                     //prte_enable_ft = true;
                     prte_enable_recovery = true;
-                    asprintf(&param, "OMPI_MCA_mpi_ft_enable");
+                    prte_asprintf(&param, "OMPI_MCA_mpi_ft_enable");
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                            "%s schizo:ompi:parse_cli pushing %s into environment",
                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
@@ -921,7 +838,17 @@ static int parse_cli(int argc, int start,
            free(p1);
         }
     }
-    return PRTE_SUCCESS;
+
+    rc = prte_schizo_base_parse_prte(argc, start,
+                                     argv, target);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    rc = prte_schizo_base_parse_pmix(argc, start,
+                                     argv, target);
+
+    return rc;
 }
 
 static int parse_env(prte_cmd_line_t *cmd_line,
@@ -946,11 +873,6 @@ static int parse_env(prte_cmd_line_t *cmd_line,
     if (cmdline) {
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-
-    if (!checkus()) {
-        return PRTE_ERR_TAKE_NEXT_OPTION;
-    }
-
     /* Begin by examining the environment as the cmd line trumps all */
     env_set_flag = getenv("OMPI_MCA_mca_base_env_list");
     if (NULL != env_set_flag) {
@@ -975,7 +897,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
     /* now process any tune file specification - the tune file processor
      * will police itself for duplicate values */
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "tune", 0, 0))) {
-        p1 = strip_quotes(pval->value.data.string);
+        p1 = prte_schizo_base_strip_quotes(pval->value.data.string);
         rc = process_tune_files(p1, dstenv, ',');
         free(p1);
         if (PRTE_SUCCESS != rc) {
@@ -984,7 +906,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "initial-errhandler", 0, 0))) {
-        p1 = strip_quotes(pval->value.data.string);
+        p1 = prte_schizo_base_strip_quotes(pval->value.data.string);
         rc = check_cache(&cache, &cachevals, "mpi_initial_errhandler", p1);
         free(p1);
         if (PRTE_SUCCESS != rc) {
@@ -1011,10 +933,10 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the first value on the list is the name of the param */
             pval = prte_cmd_line_get_param(cmd_line, "omca", i, 0);
-            p1 = strip_quotes(pval->value.data.string);
+            p1 = prte_schizo_base_strip_quotes(pval->value.data.string);
             /* next value on the list is the value */
             pval = prte_cmd_line_get_param(cmd_line, "omca", i, 1);
-            p2 = strip_quotes(pval->value.data.string);
+            p2 = prte_schizo_base_strip_quotes(pval->value.data.string);
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
                 prte_argv_append_nosize(&envlist, p2);
@@ -1036,10 +958,10 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the first value on the list is the name of the param */
             pval = prte_cmd_line_get_param(cmd_line, "gomca", i, 0);
-            p1 = strip_quotes(pval->value.data.string);
+            p1 = prte_schizo_base_strip_quotes(pval->value.data.string);
             /* next value on the list is the value */
             pval = prte_cmd_line_get_param(cmd_line, "gomca", i, 1);
-            p2 = strip_quotes(pval->value.data.string);
+            p2 = prte_schizo_base_strip_quotes(pval->value.data.string);
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
                 prte_argv_append_nosize(&envlist, p2);
@@ -1061,30 +983,28 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the first value on the list is the name of the param */
             pval = prte_cmd_line_get_param(cmd_line, "mca", i, 0);
-            p1 = strip_quotes(pval->value.data.string);
-            /* check if this is one of ours */
-            if (!check_generic(p1)) {
-                free(p1);
-                continue;
-            }
+            p1 = prte_schizo_base_strip_quotes(pval->value.data.string);
             /* next value on the list is the value */
             pval = prte_cmd_line_get_param(cmd_line, "mca", i, 1);
-            p2 = strip_quotes(pval->value.data.string);
-            /* treat mca_base_env_list as a special case */
-            if (0 == strcmp(p1, "mca_base_env_list")) {
-                prte_argv_append_nosize(&envlist, p2);
+            p2 = prte_schizo_base_strip_quotes(pval->value.data.string);
+            /* check if this is one of ours */
+            if (check_generic(p1)) {
+                /* treat mca_base_env_list as a special case */
+                if (0 == strcmp(p1, "mca_base_env_list")) {
+                    prte_argv_append_nosize(&envlist, p2);
+                    free(p1);
+                    free(p2);
+                    continue;
+                }
+                rc = check_cache(&cache, &cachevals, p1, p2);
                 free(p1);
                 free(p2);
-                continue;
-            }
-            rc = check_cache(&cache, &cachevals, p1, p2);
-            free(p1);
-            free(p2);
-            if (PRTE_SUCCESS != rc) {
-                prte_argv_free(cache);
-                prte_argv_free(cachevals);
-                prte_argv_free(envlist);
-                return rc;
+                if (PRTE_SUCCESS != rc) {
+                    prte_argv_free(cache);
+                    prte_argv_free(cachevals);
+                    prte_argv_free(envlist);
+                    return rc;
+                }
             }
         }
     }
@@ -1092,7 +1012,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the first value on the list is the name of the param */
             pval = prte_cmd_line_get_param(cmd_line, "gmca", i, 0);
-            p1 = strip_quotes(pval->value.data.string);
+            p1 = prte_schizo_base_strip_quotes(pval->value.data.string);
             /* check if this is one of ours */
             if (!check_generic(p1)) {
                 free(p1);
@@ -1100,7 +1020,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
             }
             /* next value on the list is the value */
             pval = prte_cmd_line_get_param(cmd_line, "gmca", i, 1);
-            p2 = strip_quotes(pval->value.data.string);
+            p2 = prte_schizo_base_strip_quotes(pval->value.data.string);
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
                 prte_argv_append_nosize(&envlist, p2);
@@ -1167,7 +1087,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         for (i = 0; i < j; ++i) {
             /* the value is the envar */
             pval = prte_cmd_line_get_param(cmd_line, "x", i, 0);
-            p1 = strip_quotes(pval->value.data.string);
+            p1 = prte_schizo_base_strip_quotes(pval->value.data.string);
             /* if there is an '=' in it, then they are setting a value */
             if (NULL != (p2 = strchr(p1, '='))) {
                 *p2 = '\0';
@@ -1223,43 +1143,91 @@ static int parse_env(prte_cmd_line_t *cmd_line,
     return PRTE_SUCCESS;
 }
 
-static int detect_proxy(char **argv)
+static int detect_proxy(char *cmdpath)
 {
+    char *evar;
+    char *inipath = NULL;
+
+
+    prte_output_verbose(2, prte_schizo_base_framework.framework_output,
+                        "%s[%s]: detect proxy with %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        __FILE__, cmdpath);
+
+    if (NULL == cmdpath) {
+        return 0;
+    }
+    /* if this isn't a full path, then it is a list
+     * of personalities we need to check */
+    if (!prte_path_is_absolute(cmdpath)) {
+        /* if it contains "ompi", then we are available */
+        if (NULL != strstr(cmdpath, "ompi")) {
+            return 100;
+        }
+        return 0;
+    }
+
+    /* look for the OMPIHOME envar to tell us where OMPI
+     * was installed */
+    evar = getenv("OMPIHOME");
+    if (NULL != evar) {
+        inipath = prte_os_path(false, evar, "ompi.ini", NULL);
+        if (prte_schizo_base_check_ini(cmdpath, inipath)) {
+            free(inipath);
+            return 100;
+        }
+        free(inipath);
+
+        inipath = prte_os_path(false, evar, "open-mpi.ini", NULL);
+        if (prte_schizo_base_check_ini(cmdpath, inipath)) {
+            free(inipath);
+            return 100;
+        }
+        free(inipath);
+
+        /* if the executable is in the OMPIHOME path, then
+         * it belongs to us - however, we exclude explicit
+         * calls to "prte" as that is intended to start
+         * the DVM */
+        if (NULL != strstr(cmdpath, evar) &&
+            0 != strcmp(prte_tool_basename, "prte")) {
+            return 100;
+        }
+    }
+
+    /* we may not have an ini file, or perhaps they don't
+     * have OMPIHOME set - but it still could be an MPI
+     * proxy, so let's check */
     /* if the basename of the cmd was "mpirun" or "mpiexec",
      * we default to us */
     if (prte_schizo_base.test_proxy_launch ||
         0 == strcmp(prte_tool_basename, "mpirun") ||
         0 == strcmp(prte_tool_basename, "mpiexec") ||
         0 == strcmp(prte_tool_basename, "oshrun")) {
-        /* add us to the personalities */
-        prte_argv_append_unique_nosize(&prte_schizo_base.personalities, "ompi5");
-        if (0 == strcmp(prte_tool_basename, "oshrun")) {
-            /* add oshmem to the personalities */
-            prte_argv_append_unique_nosize(&prte_schizo_base.personalities, "oshmem");
-        }
-        return PRTE_SUCCESS;
+        return prte_schizo_ompi_component.priority;
     }
 
-    return PRTE_ERR_TAKE_NEXT_OPTION;
+    /* if none of those were true, then it cannot be us */
+    return 0;
 }
 
-static int allow_run_as_root(prte_cmd_line_t *cmd_line)
+static void allow_run_as_root(prte_cmd_line_t *cmd_line)
 {
     /* we always run last */
     char *r1, *r2;
 
     if (prte_cmd_line_is_taken(cmd_line, "allow-run-as-root")) {
-        return PRTE_SUCCESS;
+        return;
     }
 
     if (NULL != (r1 = getenv("OMPI_ALLOW_RUN_AS_ROOT")) &&
         NULL != (r2 = getenv("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM"))) {
         if (0 == strcmp(r1, "1") && 0 == strcmp(r2, "1")) {
-            return PRTE_SUCCESS;
+            return;
         }
     }
 
-    return PRTE_ERR_TAKE_NEXT_OPTION;
+    prte_schizo_base_root_error_msg();
 }
 
 static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
@@ -1282,16 +1250,7 @@ static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
     }
 }
 
-static void parse_proxy_cli(prte_cmd_line_t *cmd_line,
-                            char ***argv)
+static int check_sanity(prte_cmd_line_t *cmd_line)
 {
-    prte_value_t *pval;
-
-    /* we need to convert some legacy ORTE cmd line options to their
-     * PRTE equivalent when launching as a proxy for mpirun */
-    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "orte_tmpdir_base", 0, 0))) {
-        prte_argv_append_nosize(argv, "--prtemca");
-        prte_argv_append_nosize(argv, "prte_tmpdir_base");
-        prte_argv_append_nosize(argv, pval->value.data.string);
-    }
+    return PRTE_SUCCESS;
 }

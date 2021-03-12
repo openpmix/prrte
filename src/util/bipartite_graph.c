@@ -3,6 +3,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -72,6 +73,7 @@ PRTE_CLASS_DECLARATION(prte_bp_graph_edge_t);
 PRTE_CLASS_INSTANCE(prte_bp_graph_edge_t, prte_object_t,
                    edge_constructor, edge_destructor);
 
+#if GRAPH_DEBUG
 static void dump_vec(const char *name, int *vec, int n)
     __prte_attribute_unused__;
 
@@ -116,7 +118,7 @@ static void dump_flow(int *flow, int n)
     }
     fprintf(stderr, "}\n");
 }
-
+#endif
 
 static int get_capacity(prte_bp_graph_t *g, int source, int target)
 {

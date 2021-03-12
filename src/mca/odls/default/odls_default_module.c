@@ -154,7 +154,7 @@ static void send_error_show_help(int fd, int exit_status,
                                  const char *file, const char *topic, ...)
     __prte_attribute_noreturn__;
 
-static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
+static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     __prte_attribute_noreturn__;
 
 
@@ -297,7 +297,7 @@ static void send_error_show_help(int fd, int exit_status,
     exit(exit_status);
 }
 
-static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
+static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
 {
     int i;
     sigset_t sigs;
