@@ -14,7 +14,6 @@ dnl Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2015      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -61,11 +60,11 @@ dnl
 #
 AC_DEFUN([PRTE_SETUP_COMPONENT_PACKAGE],[
     AC_ARG_WITH([$3],
-        [AS_HELP_STRING([--with-$3(=DIR)],
+        [AC_HELP_STRING([--with-$3(=DIR)],
                         [Build $3 support, optionally adding DIR/include, DIR/lib, and DIR/lib64 to the search path for headers and libraries])])
     PRTE_CHECK_WITHDIR([$3], [$with_$3], [$4])
     AC_ARG_WITH([$3-libdir],
-        [AS_HELP_STRING([--with-$3-libdir=DIR],
+        [AC_HELP_STRING([--with-$3-libdir=DIR],
                         [Search for the $3 libraries in DIR])])
     PRTE_CHECK_WITHDIR([$3-libdir], [$with_$3_libdir], [$5])
 

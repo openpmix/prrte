@@ -35,26 +35,41 @@ static const char *singularity_exec_argc_env_var_name = "SY_EXEC_ARGS";
 static int setup_fork(prte_job_t *jdata, prte_app_context_t *context);
 
 prte_schizo_base_module_t prte_schizo_singularity_module = {
-    .name = "singularity",
     .setup_fork = setup_fork
 };
 
 static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
 {
     int i;
+    bool takeus = false;
     char *pth = NULL; // Path to the directory where the Singularity binary is
     char *exec_args = NULL;
     pmix_envar_t envar;
     char **cmd_args = NULL;
 
-     /* even if they didn't specify, check to see if
-     * this involves a singularity container */
-    if (0 == strcmp(app->argv[0],"singularity") ||
-        NULL != strstr(app->argv[0], ".sif")) {
-        goto process;
+    if (NULL != prte_schizo_base.personalities &&
+        NULL != jdata->personality) {
+        /* see if we are included */
+        for (i=0; NULL != jdata->personality[i]; i++) {
+            if (0 == strcmp(jdata->personality[i], "singularity")) {
+                takeus = true;
+                break;
+            }
+        }
     }
-    /* guess not */
-    return PRTE_ERR_TAKE_NEXT_OPTION;
+    /* If we did not find the singularity binary in the environment of the
+     * application, we check if the arguments include the singularity
+     * command itself (assuming full path) or a Singularity image. */
+    if (!takeus) {
+        /* even if they didn't specify, check to see if
+         * this involves a singularity container */
+        if (0 == strcmp(app->argv[0],"singularity") ||
+            NULL != strstr(app->argv[0], ".sif")) {
+            goto process;
+        }
+        /* guess not */
+        return PRTE_ERR_TAKE_NEXT_OPTION;
+    }
 
   process:
     prte_output_verbose(1, prte_schizo_base_framework.framework_output,

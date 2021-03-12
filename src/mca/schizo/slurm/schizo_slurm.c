@@ -2,7 +2,6 @@
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Mellanox Technologies Ltd.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,12 +29,23 @@
 #include "schizo_slurm.h"
 
 static int get_remaining_time(uint32_t *timeleft);
+static int define_session_dir(char **tmpdir);
 
 prte_schizo_base_module_t prte_schizo_slurm_module = {
-    .name = "slurm",
+    .define_session_dir = define_session_dir,
     .get_remaining_time = get_remaining_time
 };
 
+static int define_session_dir(char **tmpdir)
+{
+    char *jid;
+
+    /* setup a session dir based on our slurm jobid */
+    jid = getenv("SLURM_JOBID");
+    prte_asprintf(tmpdir, "%s.session.%s", prte_tool_basename, jid);
+
+    return PRTE_SUCCESS;
+}
 static int get_remaining_time(uint32_t *timeleft)
 {
     char output[256], *cmd, *jobid, **res;

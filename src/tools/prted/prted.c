@@ -134,9 +134,9 @@ static char *prte_parent_uri = NULL;
 static prte_cmd_line_t *prte_cmd_line = NULL;
 
 /*
- * define the prted context table for obtaining parameters
+ * define the orted context table for obtaining parameters
  */
-prte_cmd_line_init_t prted_cmd_line_opts[] = {
+prte_cmd_line_init_t prte_cmd_line_opts[] = {
     /* DVM-specific options */
     /* uri of PMIx publish/lookup server, or at least where to get it */
     { '\0', "prte-server", 1, PRTE_CMD_LINE_TYPE_STRING,
@@ -157,9 +157,6 @@ prte_cmd_line_init_t prted_cmd_line_opts[] = {
     { '\0', "set-sid", 0, PRTE_CMD_LINE_TYPE_BOOL,
       "Direct the DVM daemons to separate from the current session",
       PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "prtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
-        "Pass context-specific PRTE MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
 
     /* Debug options */
     { '\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL,
@@ -263,9 +260,6 @@ int main(int argc, char *argv[])
     size_t z1=1;
     pmix_value_t *vptr;
     int32_t one=1;
-    char **pargv;
-    int pargc;
-    prte_schizo_base_module_t *schizo;
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -283,13 +277,48 @@ int main(int argc, char *argv[])
     /* init the tiny part of PRTE we use */
     prte_init_util(PRTE_PROC_DAEMON);
     prte_tool_basename = prte_basename(argv[0]);
-    pargc = argc;
-    pargv = prte_argv_copy(argv);
 
-    /* setup the cmd line - this is specific to the proxy */
+    /* because we have to use the schizo framework prior to parsing the
+     * incoming argv for cmd line options, do a hacky search to support
+     * passing of verbosity option for schizo debugging */
+    for (i=1; NULL != argv[i]; i++) {
+        if (0 == strcmp(argv[i], "schizo_base_verbose")) {
+            /* the next option is the verbosity level */
+            prte_setenv("PRTE_MCA_schizo_base_verbose", argv[i+1], true, &environ);
+            break;
+        }
+    }
+
+    /* setup our cmd line */
     prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
-    ret = prte_cmd_line_add(prte_cmd_line, prted_cmd_line_opts);
-    if (PRTE_SUCCESS != ret){
+    if (PRTE_SUCCESS != (ret = prte_cmd_line_add(prte_cmd_line, prte_cmd_line_opts))) {
+        PRTE_ERROR_LOG(ret);
+        return ret;
+    }
+
+    /* open the SCHIZO framework */
+    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
+                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        PRTE_ERROR_LOG(ret);
+        return ret;
+    }
+
+    if (PRTE_SUCCESS != (ret = prte_schizo_base_select())) {
+        PRTE_ERROR_LOG(ret);
+        return ret;
+    }
+    /* scan for personalities */
+    prte_argv_append_unique_nosize(&prte_schizo_base.personalities, "prte");
+    prte_argv_append_unique_nosize(&prte_schizo_base.personalities, "pmix");
+    for (i=0; NULL != argv[i]; i++) {
+        if (0 == strcmp(argv[i], "--personality")) {
+            prte_argv_append_unique_nosize(&prte_schizo_base.personalities, argv[i+1]);
+        }
+    }
+
+    /* setup the rest of the cmd line only once */
+    if (PRTE_SUCCESS != (ret = prte_schizo.define_cli(prte_cmd_line))) {
+        PRTE_ERROR_LOG(ret);
         return ret;
     }
 
@@ -303,6 +332,51 @@ int main(int argc, char *argv[])
        return ret;
     }
 
+    /* now let the schizo components take a pass at it to get the MCA params */
+    if (PRTE_SUCCESS != (ret = prte_schizo.parse_cli(argc, 0, argv, NULL, NULL))) {
+        if (PRTE_ERR_SILENT != ret) {
+            fprintf(stderr, "%s: command line error (%s)\n", argv[0],
+                    prte_strerror(ret));
+        }
+       return ret;
+    }
+
+    /* see if print version is requested. Do this before
+     * check for help so that --version --help works as
+     * one might expect. */
+     if (prte_cmd_line_is_taken(prte_cmd_line, "version")) {
+        fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n",
+                prte_tool_basename, "PMIx Reference RunTime Environment",
+                PRTE_VERSION, PACKAGE_BUGREPORT);
+        exit(0);
+    }
+
+    /* Check for help request */
+    if (prte_cmd_line_is_taken(prte_cmd_line, "help")) {
+        char *str, *args = NULL;
+        args = prte_cmd_line_get_usage_msg(prte_cmd_line, false);
+        str = prte_show_help_string("help-prun.txt", "prun:usage", false,
+                                    prte_tool_basename, "PRTE", PRTE_VERSION,
+                                    prte_tool_basename, args,
+                                    PACKAGE_BUGREPORT);
+        if (NULL != str) {
+            printf("%s", str);
+            free(str);
+        }
+        free(args);
+
+        /* If someone asks for help, that should be all we do */
+        exit(0);
+    }
+
+    /* check if we are running as root - if we are, then only allow
+     * us to proceed if the allow-run-as-root flag was given. Otherwise,
+     * exit with a giant warning flag
+     */
+    if (0 == geteuid()) {
+        prte_schizo.allow_run_as_root(prte_cmd_line);  // will exit us if not allowed
+    }
+
     /* save the environment for launch purposes. This MUST be
      * done so that we can pass it to any local procs we
      * spawn - otherwise, those local procs won't see any
@@ -310,36 +384,6 @@ int main(int argc, char *argv[])
      * orted was executed - e.g., by .csh
      */
     prte_launch_environ = prte_argv_copy(environ);
-
-    /* open the SCHIZO framework */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                                            PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
-        return ret;
-    }
-
-    if (PRTE_SUCCESS != (ret = prte_schizo_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        return ret;
-    }
-
-    /* get our schizo module */
-    schizo = prte_schizo.detect_proxy(NULL);
-    if (NULL == schizo || 0 != strcmp(schizo->name, "prte")) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true,
-                       prte_tool_basename, "NONE");
-        return 1;
-    }
-
-    /* parse the CLI to load the MCA params */
-    if (PRTE_SUCCESS != (ret = schizo->parse_cli(pargc, 0, pargv, NULL, NULL))) {
-        if (PRTE_ERR_SILENT != ret) {
-            fprintf(stderr, "%s: command line error (%s)\n",
-                    prte_tool_basename,
-                    prte_strerror(ret));
-        }
-        return ret;
-    }
 
     /* purge any ess/prte flags set in the environ when we were launched */
     prte_unsetenv("PRTE_MCA_ess", &prte_launch_environ);

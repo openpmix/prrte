@@ -14,7 +14,6 @@
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -224,8 +223,6 @@ static struct known_signal known_signals[] = {
         prte_list_append(&prte_ess_base_signals, &_sig->super);           \
     } while(0)
 
-static bool signals_added = false;
-
 int prte_ess_base_setup_signals(char *mysignals)
 {
     int i, sval, nsigs;
@@ -239,16 +236,13 @@ int prte_ess_base_setup_signals(char *mysignals)
         return PRTE_SUCCESS;
     }
 
-    if (!signals_added) {
-        /* we know that some signals are (nearly) always defined, regardless
-         * of environment, so add them here */
-        nsigs = sizeof(known_signals) / sizeof(struct known_signal);
-        for (i=0; i < nsigs; i++) {
-            if (known_signals[i].can_forward) {
-                ESS_ADDSIGNAL(known_signals[i].signal, known_signals[i].signame);
-            }
+    /* we know that some signals are (nearly) always defined, regardless
+     * of environment, so add them here */
+    nsigs = sizeof(known_signals) / sizeof(struct known_signal);
+    for (i=0; i < nsigs; i++) {
+        if (known_signals[i].can_forward) {
+            ESS_ADDSIGNAL(known_signals[i].signal, known_signals[i].signame);
         }
-        signals_added = true;  // only do this once
     }
 
     /* see if they asked for anything beyond those - note that they may

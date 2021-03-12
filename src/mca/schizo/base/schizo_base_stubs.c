@@ -15,8 +15,6 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include <ctype.h>
-
 #include "src/class/prte_list.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -25,6 +23,27 @@
 #include "src/util/name_fns.h"
 #include "src/util/show_help.h"
 #include "src/mca/schizo/base/base.h"
+
+static int process_deprecated_cli(prte_cmd_line_t *cmdline,
+                                  int *argc, char ***argv,
+                                  prte_list_t *convertors);
+
+ int prte_schizo_base_define_cli(prte_cmd_line_t *cli)
+{
+    int rc;
+    prte_schizo_base_active_module_t *mod;
+
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+        if (NULL != mod->module->define_cli) {
+            rc = mod->module->define_cli(cli);
+            if (PRTE_SUCCESS != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                PRTE_ERROR_LOG(rc);
+                return rc;
+            }
+        }
+    }
+    return PRTE_SUCCESS;
+}
 
 int prte_schizo_base_parse_cli(int argc, int start, char **argv,
                                 char *personality, char ***target)
@@ -42,6 +61,39 @@ int prte_schizo_base_parse_cli(int argc, int start, char **argv,
         }
     }
     return PRTE_SUCCESS;
+}
+
+int prte_schizo_base_parse_deprecated_cli(prte_cmd_line_t *cmdline,
+                                           int *argc, char ***argv)
+{
+    int rc;
+    prte_schizo_base_active_module_t *mod;
+    prte_list_t convertors;
+
+    PRTE_CONSTRUCT(&convertors, prte_list_t);
+
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+        if (NULL != mod->module->register_deprecated_cli) {
+            mod->module->register_deprecated_cli(&convertors);
+        }
+    }
+
+    rc = process_deprecated_cli(cmdline, argc, argv, &convertors);
+    PRTE_LIST_DESTRUCT(&convertors);
+
+    return rc;
+}
+
+void prte_schizo_base_parse_proxy_cli(prte_cmd_line_t *cmd_line,
+                                       char ***argv)
+{
+    prte_schizo_base_active_module_t *mod;
+
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+        if (NULL != mod->module->parse_proxy_cli) {
+            mod->module->parse_proxy_cli(cmd_line, argv);
+        }
+    }
 }
 
 int prte_schizo_base_parse_env(prte_cmd_line_t *cmd_line,
@@ -63,27 +115,68 @@ int prte_schizo_base_parse_env(prte_cmd_line_t *cmd_line,
     return PRTE_SUCCESS;
 }
 
-prte_schizo_base_module_t* prte_schizo_base_detect_proxy(char *cmdpath)
+int prte_schizo_base_detect_proxy(char **argv)
 {
+    int rc, ret = PRTE_ERR_TAKE_NEXT_OPTION;
     prte_schizo_base_active_module_t *mod;
-    prte_schizo_base_module_t *md = NULL;
-    int pri = -1, p;
 
     PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
         if (NULL != mod->module->detect_proxy) {
-            p = mod->module->detect_proxy(cmdpath);
-            if (pri < p) {
-                pri = p;
-                md = mod->module;
+            rc = mod->module->detect_proxy(argv);
+            if (PRTE_SUCCESS == rc) {
+                ret = PRTE_SUCCESS;  // indicate we are running as a proxy
+            } else if (PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                PRTE_ERROR_LOG(rc);
+                return rc;
             }
         }
     }
-    return md;
+    return ret;
 }
 
-PRTE_EXPORT void prte_schizo_base_root_error_msg(void)
+int prte_schizo_base_define_session_dir(char **tmpdir)
 {
-    fprintf(stderr, "%s has detected an attempt to run as root.\n\n", prte_tool_basename);
+    int rc;
+    prte_schizo_base_active_module_t *mod;
+
+    *tmpdir = NULL;
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+        if (NULL != mod->module->define_session_dir) {
+            rc = mod->module->define_session_dir(tmpdir);
+            if (PRTE_SUCCESS == rc) {
+                return rc;
+            }
+            if (PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                PRTE_ERROR_LOG(rc);
+                return rc;
+            }
+        }
+    }
+    return PRTE_SUCCESS;
+}
+
+int prte_schizo_base_allow_run_as_root(prte_cmd_line_t *cmd_line)
+{
+    int rc;
+    prte_schizo_base_active_module_t *mod;
+
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+        if (NULL != mod->module->allow_run_as_root) {
+            rc = mod->module->allow_run_as_root(cmd_line);
+            if (PRTE_SUCCESS == rc) {
+                return rc;
+            }
+        }
+    }
+
+    /* show_help is not yet available, so print an error manually */
+    fprintf(stderr, "--------------------------------------------------------------------------\n");
+    if (prte_cmd_line_is_taken(cmd_line, "help")) {
+        fprintf(stderr, "%s cannot provide the help message when run as root.\n\n", prte_tool_basename);
+    } else {
+        fprintf(stderr, "%s has detected an attempt to run as root.\n\n", prte_tool_basename);
+    }
+
     fprintf(stderr, "Running as root is *strongly* discouraged as any mistake (e.g., in\n");
     fprintf(stderr, "defining TMPDIR) or bug can result in catastrophic damage to the OS\n");
     fprintf(stderr, "file system, leaving your system in an unusable state.\n\n");
@@ -218,10 +311,9 @@ void prte_schizo_base_finalize(void)
 }
 
 
-int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
-                                            int *argc, char ***argv,
-                                            char **options,
-                                            prte_schizo_convertor_fn_t convert)
+static int process_deprecated_cli(prte_cmd_line_t *cmdline,
+                                  int *argc, char ***argv,
+                                  prte_list_t *convertors)
 {
     int pargc;
     char **pargs, *p2;
@@ -229,6 +321,7 @@ int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
     prte_cmd_line_init_t e;
     prte_cmd_line_option_t *option;
     bool found;
+    prte_convertor_t *cv;
 
     pargs = *argv;
     pargc = *argc;
@@ -260,7 +353,7 @@ int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
                 free(p2);
             } else {
                 prte_show_help("help-schizo-base.txt", "single-dash-error", true,
-                               p2, pargs[i]);
+                                p2, pargs[i]);
                 free(p2);
                 ret = PRTE_OPERATION_SUCCEEDED;
             }
@@ -268,37 +361,42 @@ int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
 
         /* is this an argument someone needs to convert? */
         found = false;
-        for (n=0; NULL != options[n]; n++) {
-            if (0 == strcmp(pargs[i], options[n])) {
-                rc = convert(options[n], argv, i);
-                if (PRTE_SUCCESS != rc &&
-                    PRTE_ERR_SILENT != rc &&
-                    PRTE_ERR_TAKE_NEXT_OPTION != rc &&
-                    PRTE_OPERATION_SUCCEEDED != rc) {
-                    return rc;
+        PRTE_LIST_FOREACH(cv, convertors, prte_convertor_t) {
+            for (n=0; NULL != cv->options[n]; n++) {
+                if (0 == strcmp(pargs[i], cv->options[n])) {
+                    rc = cv->convert(cv->options[n], argv, i);
+                    if (PRTE_SUCCESS != rc &&
+                        PRTE_ERR_SILENT != rc &&
+                        PRTE_ERR_TAKE_NEXT_OPTION != rc &&
+                        PRTE_OPERATION_SUCCEEDED != rc) {
+                        return rc;
+                    }
+                    if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
+                        /* we did the conversion but don't want
+                         * to deprecate i */
+                        rc = PRTE_SUCCESS;
+                    } else if (PRTE_OPERATION_SUCCEEDED == rc) {
+                        /* Advance past any command line option
+                         * parameters */
+                        memset(&e, 0, sizeof(prte_cmd_line_init_t));
+                        e.ocl_cmd_long_name = &pargs[i][2];
+                        option = prte_cmd_line_find_option(cmdline, &e);
+                        i += option->clo_num_params;
+                        rc = PRTE_ERR_SILENT;
+                    } else {
+                        --i;
+                    }
+                    found = true;
+                    if (PRTE_ERR_SILENT != rc) {
+                        ret = PRTE_OPERATION_SUCCEEDED;
+                    }
+                    pargs = *argv;
+                    pargc = prte_argv_count(pargs);
+                    break;  // for loop
                 }
-                if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
-                    /* we did the conversion but don't want
-                     * to deprecate i */
-                    rc = PRTE_SUCCESS;
-                } else if (PRTE_OPERATION_SUCCEEDED == rc) {
-                    /* Advance past any command line option
-                     * parameters */
-                    memset(&e, 0, sizeof(prte_cmd_line_init_t));
-                    e.ocl_cmd_long_name = &pargs[i][2];
-                    option = prte_cmd_line_find_option(cmdline, &e);
-                    i += option->clo_num_params;
-                    rc = PRTE_ERR_SILENT;
-                } else {
-                    --i;
-                }
-                found = true;
-                if (PRTE_ERR_SILENT != rc) {
-                    ret = PRTE_OPERATION_SUCCEEDED;
-                }
-                pargs = *argv;
-                pargc = prte_argv_count(pargs);
-                break;  // for loop
+            }
+            if (found) {
+                break;  // foreach loop
             }
         }
 
@@ -339,77 +437,3 @@ int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
 
     return ret;
 }
-
-char *prte_schizo_base_getline(FILE *fp)
-{
-    char *ret, *buff;
-    char input[2048];
-
-    memset(input, 0, 2048);
-    ret = fgets(input, 2048, fp);
-    if (NULL != ret) {
-        input[strlen(input)-1] = '\0';  /* remove newline */
-        buff = strdup(input);
-        return buff;
-    }
-
-    return NULL;
-}
-
-
-bool prte_schizo_base_check_ini(char *cmdpath, char *file)
-{
-    FILE *fp;
-    char *line;
-    size_t n;
-
-    if (NULL == cmdpath || NULL == file) {
-        return false;
-    }
-
-    /* look for an open-mpi.ini or ompi.ini file */
-    fp = fopen(file, "r");
-    if (NULL == fp) {
-        return false;
-    }
-    /* read the file to find the proxy defnitions */
-    while (NULL != (line = prte_schizo_base_getline(fp))) {
-        if('\0' == line[0]) {
-            continue; /* skip empty lines */
-        }
-        /* find the start of text in the line */
-        n = 0;
-        while ('\0' != line[n] && isspace(line[n])) {
-            ++n;
-        }
-        /* if the text starts with a '#' or the line
-         * is empty, then ignore it */
-        if ('\0' == line[n] || '#' == line[n]) {
-            /* empty line or comment */
-            continue;
-        }
-        if (0 == strcmp(cmdpath, &line[n])) {
-            /* this is us! */
-            return true;
-        }
-    }
-    return false;
-}
-
-char* prte_schizo_base_strip_quotes(char *p)
-{
-    char *pout;
-
-    /* strip any quotes around the args */
-    if ('\"' == p[0]) {
-        pout = strdup(&p[1]);
-    } else {
-        pout = strdup(p);
-    }
-    if ('\"' == pout[strlen(pout)- 1]) {
-        pout[strlen(pout)-1] = '\0';
-    }
-    return pout;
-
-}
-

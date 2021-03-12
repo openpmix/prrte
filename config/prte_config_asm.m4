@@ -9,7 +9,7 @@ dnl Copyright (c) 2004-2006 High Performance Computing Center Stuttgart,
 dnl                         University of Stuttgart.  All rights reserved.
 dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
-dnl Copyright (c) 2008-2018 Cisco Systems, Inc.  All rights reserved.
+dnl Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
 dnl Copyright (c) 2015-2018 Research Organization for Information Science
 dnl                         and Technology (RIST).  All rights reserved.
@@ -19,7 +19,6 @@ dnl Copyright (c) 2017      Amazon.com, Inc. or its affiliates.  All Rights
 dnl                         reserved.
 dnl Copyright (c) 2020      Google, LLC. All rights reserved.
 dnl Copyright (c) 2020      Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -304,29 +303,29 @@ AC_DEFUN([PRTE_CHECK_GCC_BUILTIN_CSWAP_INT128], [
 AC_DEFUN([PRTE_CHECK_GCC_ATOMIC_BUILTINS], [
   if test -z "$prte_cv_have___atomic" ; then
     AC_MSG_CHECKING([for 32-bit GCC built-in atomics])
-    AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+    AC_TRY_LINK([
 #include <stdint.h>
 uint32_t tmp, old = 0;
-uint64_t tmp64, old64 = 0;
+uint64_t tmp64, old64 = 0;], [
 __atomic_thread_fence(__ATOMIC_SEQ_CST);
 __atomic_compare_exchange_n(&tmp, &old, 1, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 __atomic_add_fetch(&tmp, 1, __ATOMIC_RELAXED);
 __atomic_compare_exchange_n(&tmp64, &old64, 1, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
-__atomic_add_fetch(&tmp64, 1, __ATOMIC_RELAXED);]],
+__atomic_add_fetch(&tmp64, 1, __ATOMIC_RELAXED);],
         [prte_cv_have___atomic=yes],
-        [prte_cv_have___atomic=no])])
+        [prte_cv_have___atomic=no])
     AC_MSG_RESULT([$prte_cv_have___atomic])
-    if test "$prte_cv_have___atomic" = "yes" ; then
+    if test $prte_cv_have___atomic = "yes" ; then
     AC_MSG_CHECKING([for 64-bit GCC built-in atomics])
-    AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+    AC_TRY_LINK([
 #include <stdint.h>
-uint64_t tmp64, old64 = 0;
+uint64_t tmp64, old64 = 0;], [
 __atomic_compare_exchange_n(&tmp64, &old64, 1, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
-__atomic_add_fetch(&tmp64, 1, __ATOMIC_RELAXED);]],
+__atomic_add_fetch(&tmp64, 1, __ATOMIC_RELAXED);],
             [prte_cv_have___atomic_64=yes],
-            [prte_cv_have___atomic_64=no])])
+            [prte_cv_have___atomic_64=no])
     AC_MSG_RESULT([$prte_cv_have___atomic_64])
-    if test "$prte_cv_have___atomic_64" = "yes" ; then
+    if test $prte_cv_have___atomic_64 = "yes" ; then
         AC_MSG_CHECKING([if 64-bit GCC built-in atomics are lock-free])
         AC_RUN_IFELSE([AC_LANG_PROGRAM([], [if (!__atomic_is_lock_free (8, 0)) { return 1; }])],
               [AC_MSG_RESULT([yes])],
@@ -462,12 +461,12 @@ AC_DEFUN([_PRTE_CHECK_ASM_LSYM],[
     $1="L"
     for sym in L .L $ L$ ; do
         asm_result=0
-        echo "configure: trying $sym" >&AS_MESSAGE_LOG_FD
+        echo "configure: trying $sym" >&AC_FD_CC
         PRTE_TRY_ASSEMBLE([foobar$prte_cv_asm_label_suffix
 ${sym}mytestlabel$prte_cv_asm_label_suffix],
             [# ok, we succeeded at assembling.  see if we can nm,
              # throwing the results in a file
-            if $NM conftest.$OBJEXT > conftest.out 2>&AS_MESSAGE_LOG_FD ; then
+            if $NM conftest.$OBJEXT > conftest.out 2>&AC_FD_CC ; then
                 if test "`$GREP mytestlabel conftest.out`" = "" ; then
                     # there was no symbol...  looks promising to me
                     $1="$sym"
@@ -479,8 +478,8 @@ ${sym}mytestlabel$prte_cv_asm_label_suffix],
                 fi
             else
                 # not so much on the NM goodness :/
-                echo "$NM failed.  Output from NM was:" >&AS_MESSAGE_LOG_FD
-                cat conftest.out >&AS_MESSAGE_LOG_FD
+                echo "$NM failed.  Output from NM was:" >&AC_FD_CC
+                cat conftest.out >&AC_FD_CC
                 AC_MSG_WARN([$NM could not read object file])
             fi
             ])
@@ -495,6 +494,7 @@ ${sym}mytestlabel$prte_cv_asm_label_suffix],
 # PRTE_CHECK_ASM_LSYM()
 # ---------------------
 AC_DEFUN([PRTE_CHECK_ASM_LSYM],[
+    AC_REQUIRE([AC_PROG_NM])
     AC_CACHE_CHECK([prefix for lsym labels],
                    [prte_cv_asm_lsym],
                    [_PRTE_CHECK_ASM_LSYM([prte_cv_asm_lsym])])
@@ -557,7 +557,7 @@ AC_DEFUN([_PRTE_CHECK_ASM_GSYM],[
     prte_cv_asm_gsym="none"
     for sym in "_" "" "." ; do
         asm_result=0
-        echo "configure: trying $sym" >&AS_MESSAGE_LOG_FD
+        echo "configure: trying $sym" >&AC_FD_CC
 cat > conftest_c.c <<EOF
 #ifdef __cplusplus
 extern "C" {
@@ -583,25 +583,25 @@ $prte_cv_asm_endproc ${sym}gsym_test_func
             [prte_compile="$CC $CFLAGS -I. conftest_c.c -c > conftest.cmpl 2>&1"
              if AC_TRY_EVAL(prte_compile) ; then
                 # save the warnings
-                 cat conftest.cmpl >&AS_MESSAGE_LOG_FD
+                 cat conftest.cmpl >&AC_FD_CC
                  prte_link="$CC $CFLAGS conftest_c.$OBJEXT conftest.$OBJEXT -o conftest  $LDFLAGS $LIBS > conftest.link 2>&1"
                  if AC_TRY_EVAL(prte_link) ; then
                      # save the warnings
-                     cat conftest.link >&AS_MESSAGE_LOG_FD
+                     cat conftest.link >&AC_FD_CC
                      asm_result=1
                  else
-                     cat conftest.link >&AS_MESSAGE_LOG_FD
-                     echo "configure: failed C program was: " >&AS_MESSAGE_LOG_FD
-                     cat conftest_c.c >&AS_MESSAGE_LOG_FD
-                     echo "configure: failed ASM program was: " >&AS_MESSAGE_LOG_FD
-                     cat conftest.s >&AS_MESSAGE_LOG_FD
+                     cat conftest.link >&AC_FD_CC
+                     echo "configure: failed C program was: " >&AC_FD_CC
+                     cat conftest_c.c >&AC_FD_CC
+                     echo "configure: failed ASM program was: " >&AC_FD_CC
+                     cat conftest.s >&AC_FD_CC
                      asm_result=0
                  fi
              else
                 # save output and failed program
-                 cat conftest.cmpl >&AS_MESSAGE_LOG_FD
-                 echo "configure: failed C program was: " >&AS_MESSAGE_LOG_FD
-                 cat conftest.c >&AS_MESSAGE_LOG_FD
+                 cat conftest.cmpl >&AC_FD_CC
+                 echo "configure: failed C program was: " >&AC_FD_CC
+                 cat conftest.c >&AC_FD_CC
                  asm_result=0
              fi],
             [asm_result=0])
@@ -649,6 +649,7 @@ dnl logarithmically, 0 otherwise
 dnl
 dnl #################################################################
 AC_DEFUN([PRTE_CHECK_ASM_ALIGN_LOG],[
+    AC_REQUIRE([AC_PROG_NM])
     AC_REQUIRE([AC_PROG_GREP])
     AC_CACHE_CHECK([if .align directive takes logarithmic value],
                    [prte_cv_asm_align_log],
@@ -662,7 +663,7 @@ foo$prte_cv_asm_label_suffix
         [prte_asm_addr=[`$NM conftest.$OBJEXT | $GREP foo | sed -e 's/.*\([0-9a-fA-F][0-9a-fA-F]\).*foo.*/\1/'`]],
         [prte_asm_addr=""])
     # test for both 16 and 10 (decimal and hex notations)
-    echo "configure: .align test address offset is $prte_asm_addr" >&AS_MESSAGE_LOG_FD
+    echo "configure: .align test address offset is $prte_asm_addr" >&AC_FD_CC
     if test "$prte_asm_addr" = "16" || test "$prte_asm_addr" = "10" ; then
        prte_cv_asm_align_log="yes"
     else
@@ -714,7 +715,7 @@ AC_DEFUN([_PRTE_CHECK_ASM_TYPE],[
     *)
         for type  in @ \# % ; do
             asm_result=0
-            echo "configure: trying $type" >&AS_MESSAGE_LOG_FD
+            echo "configure: trying $type" >&AC_FD_CC
             PRTE_TRY_ASSEMBLE([     .type mysym, ${type}function
 mysym:],
                  [prte_cv_asm_type="${type}"
@@ -1009,10 +1010,10 @@ dnl #################################################################
 AC_DEFUN([PRTE_CONFIG_ASM],[
     AC_REQUIRE([PRTE_SETUP_CC])
     AC_REQUIRE([AM_PROG_AS])
-    AC_ARG_ENABLE([c11-atomics],[AS_HELP_STRING([--enable-c11-atomics],
+    AC_ARG_ENABLE([c11-atomics],[AC_HELP_STRING([--enable-c11-atomics],
                   [Enable use of C11 atomics if available (default: enabled)])])
     AC_ARG_ENABLE([builtin-atomics],
-      [AS_HELP_STRING([--enable-builtin-atomics],
+      [AC_HELP_STRING([--enable-builtin-atomics],
          [Enable use of GCC built-in atomics (default: autodetect)])])
     PRTE_CHECK_C11_CSWAP_INT128
     prte_cv_asm_builtin="BUILTIN_NO"
@@ -1024,7 +1025,7 @@ AC_DEFUN([PRTE_CONFIG_ASM],[
         AC_MSG_WARN([C11 atomics were requested but are not supported])
         AC_MSG_ERROR([Cannot continue])
     elif test "$enable_builtin_atomics" = "yes" ; then
-    if test "$prte_cv_have___atomic" = "yes" ; then
+    if test $prte_cv_have___atomic = "yes" ; then
        prte_cv_asm_builtin="BUILTIN_GCC"
     else
         AC_MSG_WARN([GCC built-in atomics requested but not found.])
@@ -1102,7 +1103,7 @@ AC_DEFUN([PRTE_CONFIG_ASM],[
             PRTE_GCC_INLINE_ASSIGN='"1: li %0,0" : "=&r"(ret)'
             ;;
         *)
-        if test "$prte_cv_have___atomic" = "yes" ; then
+        if test $prte_cv_have___atomic = "yes" ; then
         prte_cv_asm_builtin="BUILTIN_GCC"
         else
         AC_MSG_ERROR([No atomic primitives available for $host])
@@ -1161,14 +1162,14 @@ AC_DEFUN([PRTE_CONFIG_ASM],[
     AS_IF([test "$prte_cv_asm_arch" = "PRTE_X86_64" || test "$prte_cv_asm_arch" = "PRTE_IA32"],
           [AC_MSG_CHECKING([for RDTSCP assembly support])
            AC_LANG_PUSH([C])
-           AC_RUN_IFELSE([AC_LANG_SOURCE([[
+           AC_TRY_RUN([[
 int main(int argc, char* argv[])
 {
   unsigned int rax, rdx;
   __asm__ __volatile__ ("rdtscp\n": "=a" (rax), "=d" (rdx):: "%rax", "%rdx");
   return 0;
 }
-           ]])],
+           ]],
            [result=1
             AC_MSG_RESULT([yes])],
            [AC_MSG_RESULT([no])],

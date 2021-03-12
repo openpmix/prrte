@@ -11,10 +11,10 @@ dnl                         University of Stuttgart.  All rights reserved.
 dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright (c) 2009      Sun Microsystems, Inc.  All rights reserved.
-dnl Copyright (c) 2014-2015 Intel, Inc. All rights reserved.
-dnl Copyright (c) 2015-2019 Research Organization for Information Science
-dnl                         and Technology (RIST).  All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2015      Research Organization for Information Science
+dnl                         and Technology (RIST). All rights reserved.
+dnl Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -29,7 +29,7 @@ dnl
 # Now that we require C99 compilers, we include stdbool.h
 # in the alignment test so that we can find the definition
 # of "bool" when we test for its alignment. We might be able
-# to avoid this if we test for alignment of _Bool, but
+# to avoid this if we test for alignemtn of _Bool, but
 # since we use "bool" in the code, let's be safe and check
 # what we use. Yes, they should be the same - but "should" and
 # "are" frequently differ
@@ -47,7 +47,6 @@ AC_DEFUN([PRTE_C_GET_ALIGNMENT],[
     diff = ((char *)&p->x) - ((char *)&p->c);
     free(p);
     fprintf(f, "%d\n", (diff >= 0) ? diff : -diff);
-    fclose(f);
 ]])],                         [AS_TR_SH([prte_cv_c_align_$1])=`cat conftestval`],
                                [AC_MSG_WARN([*** Problem running configure test!])
                                 AC_MSG_WARN([*** See config.log for details.])
@@ -55,12 +54,19 @@ AC_DEFUN([PRTE_C_GET_ALIGNMENT],[
                                [ # cross compile - do a non-executable test.  Trick
                                  # taken from the Autoconf 2.59c.  Switch to using
                                  # AC_CHECK_ALIGNOF when we can require Autoconf 2.60.
-                                 AC_CHECK_ALIGNOF([$1],
+                                 _AC_COMPUTE_INT([(long int) offsetof (prte__type_alignof_, y)],
+                                                 [AS_TR_SH([prte_cv_c_align_$1])],
                                                  [AC_INCLUDES_DEFAULT
-                                                  #include <stdbool.h> ])
-                                 AS_TR_SH([prte_cv_c_align_$1])
+#include <stdbool.h>
 
-])])
+#ifndef offsetof
+# define offsetof(type, member) ((char *) &((type *) 0)->member - (char *) 0)
+#endif
+typedef struct { char x; $1 y; } prte__type_alignof_;
+],
+                                                 [AC_MSG_WARN([*** Problem running configure test!])
+                                                  AC_MSG_WARN([*** See config.log for details.])
+                                                  AC_MSG_ERROR([*** Cannot continue.])])])])
 
 AC_DEFINE_UNQUOTED([$2], [$AS_TR_SH([prte_cv_c_align_$1])], [Alignment of type $1])
 eval "$2=$AS_TR_SH([prte_cv_c_align_$1])"
