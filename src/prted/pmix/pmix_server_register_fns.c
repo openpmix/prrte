@@ -578,14 +578,14 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
 #if PMIX_NUMERIC_VERSION >= 0x00040000
     /* first add the local procs, if they are defined */
     if (0 < nmsize) {
-        pmix_proc_t *procs;
+        pmix_proc_t *procs_tmp;
         PMIX_LOAD_KEY(pinfo[0].key, PMIX_LOCAL_PROCS);
         pinfo[0].value.type = PMIX_DATA_ARRAY;
         PMIX_DATA_ARRAY_CREATE(pinfo[0].value.data.darray, nmsize, PMIX_PROC);
-        procs = (pmix_proc_t*)pinfo[0].value.data.darray->array;
+        procs_tmp = (pmix_proc_t*)pinfo[0].value.data.darray->array;
         n = 0;
         PRTE_LIST_FOREACH(nm, &local_procs, prte_namelist_t) {
-            PMIX_LOAD_PROCID(&procs[n], nm->name.nspace, nm->name.rank);
+            PMIX_LOAD_PROCID(&procs_tmp[n], nm->name.nspace, nm->name.rank);
             ++n;
         }
     }

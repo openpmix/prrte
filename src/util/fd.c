@@ -194,7 +194,6 @@ static int fdmax = -1;
 void prte_close_open_file_descriptors(int protected_fd)
 {
     DIR *dir = opendir("/proc/self/fd");
-    int fd;
     struct dirent *files;
     int dir_scan_fd = -1;
 
@@ -208,7 +207,6 @@ void prte_close_open_file_descriptors(int protected_fd)
     if(dir_scan_fd < 0 ) {
         goto slow;
     }
-
 
     while (NULL != (files = readdir(dir))) {
         if (!isdigit(files->d_name[0])) {
@@ -233,7 +231,7 @@ void prte_close_open_file_descriptors(int protected_fd)
     if (0 > fdmax) {
         fdmax = sysconf(_SC_OPEN_MAX);
     }
-    for(fd=3; fd<fdmax; fd++) {
+    for(int fd=3; fd<fdmax; fd++) {
         if (fd != protected_fd) {
             close(fd);
         }

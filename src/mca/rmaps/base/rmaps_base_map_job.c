@@ -53,7 +53,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
     prte_job_t *jdata;
     prte_node_t *node;
-    int rc, i;
+    int rc;
     bool did_map, pernode = false, perpackage = false;
     prte_rmaps_base_selected_module_t *mod;
     prte_job_t *parent = NULL;
@@ -202,7 +202,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     /* estimate the number of procs for assigning default mapping/ranking policies */
     nprocs = 0;
-    for (i=0; i < jdata->apps->size; i++) {
+    for (int i=0; i < jdata->apps->size; i++) {
         if (NULL != (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
             if (0 == app->num_procs) {
                 prte_list_t nodes;
@@ -460,9 +460,7 @@ compute:
      * can operate
      */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
-        prte_node_t *node;
         prte_topology_t *t0;
-        int i;
         if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, 0))) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             PRTE_RELEASE(caddy);
@@ -471,7 +469,7 @@ compute:
             return;
         }
         t0 = node->topology;
-        for (i=1; i < prte_node_pool->size; i++) {
+        for (int i=1; i < prte_node_pool->size; i++) {
             if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, i))) {
                 continue;
             }
@@ -609,7 +607,7 @@ compute:
 
   cleanup:
       /* reset any node map flags we used so the next job will start clean */
-       for (i=0; i < jdata->map->nodes->size; i++) {
+       for (int i=0; i < jdata->map->nodes->size; i++) {
            if (NULL != (node = (prte_node_t*)prte_pointer_array_get_item(jdata->map->nodes, i))) {
                PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
            }

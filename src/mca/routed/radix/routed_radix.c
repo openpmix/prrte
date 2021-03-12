@@ -331,7 +331,7 @@ static int set_lifeline(pmix_proc_t *proc)
     return PRTE_SUCCESS;
 }
 
-static void radix_tree(int rank, int *num_children,
+static void radix_tree(int rank, int *num_children_out,
                        prte_list_t *children, prte_bitmap_t *relatives)
 {
     int i, peer, Sum, NInLevel;
@@ -356,7 +356,7 @@ static void radix_tree(int rank, int *num_children,
             if (NULL != children) {
                 /* this is a direct child - add it to my list */
                 prte_list_append(children, &child->super);
-                (*num_children)++;
+                (*num_children_out)++;
                 /* setup the relatives bitmap */
                 prte_bitmap_init(&child->relatives, prte_process_info.num_daemons);
                 /* point to the relatives */
