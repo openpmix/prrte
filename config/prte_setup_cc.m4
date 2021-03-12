@@ -292,6 +292,7 @@ AC_DEFUN([PRTE_SETUP_CC],[
         _PRTE_CHECK_SPECIFIC_CFLAGS(-Wmissing-prototypes, Wmissing_prototypes)
         _PRTE_CHECK_SPECIFIC_CFLAGS(-Wstrict-prototypes, Wstrict_prototypes)
         _PRTE_CHECK_SPECIFIC_CFLAGS(-Wcomment, Wcomment)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wshadow, Wshadow)
         _PRTE_CHECK_SPECIFIC_CFLAGS(-Werror-implicit-function-declaration, Werror_implicit_function_declaration)
         _PRTE_CHECK_SPECIFIC_CFLAGS(-Wno-long-double, Wno_long_double, int main() { long double x; })
         _PRTE_CHECK_SPECIFIC_CFLAGS(-fno-strict-aliasing, fno_strict_aliasing, int main () { int x; })
