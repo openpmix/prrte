@@ -13,7 +13,6 @@ dnl                         All rights reserved.
 dnl Copyright (c) 2007      Sun Microsystems, Inc.  All rights reserved.
 dnl Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -39,7 +38,7 @@ dnl the prte_qsort instead.
 # --------------------------------------------------------
 AC_DEFUN([PRTE_CHECK_BROKEN_QSORT],[
   AC_ARG_WITH([broken-qsort],
-              [AS_HELP_STRING([--with-broken-qsort],
+              [AC_HELP_STRING([--with-broken-qsort],
                               [Build with FreeBSD qsort instead of native qsort (default: no)])])
   AC_MSG_CHECKING([for broken qsort])
 

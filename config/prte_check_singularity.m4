@@ -2,7 +2,6 @@
 #
 # Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -16,7 +15,7 @@ AC_DEFUN([PRTE_CHECK_SINGULARITY],[
     PRTE_VAR_SCOPE_PUSH([spath have_singularity])
 
     AC_ARG_WITH([singularity],
-                [AS_HELP_STRING([--with-singularity(=DIR)],
+                [AC_HELP_STRING([--with-singularity(=DIR)],
                                 [Build support for the Singularity container, optionally adding DIR to the search path])])
     spath=
     AC_MSG_CHECKING([if Singularity is present])

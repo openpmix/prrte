@@ -410,7 +410,8 @@ int main(int argc, char *argv[])
     signal(SIGINT, abort_signal_callback);
     signal(SIGHUP, abort_signal_callback);
 
-    /* now initialize PMIx */
+    /* now initialize PMIx - we have to indicate we are a launcher so that we
+     * will provide rendezvous points for tools to connect to us */
     if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
         fprintf(stderr, "%s failed to initialize, likely due to no DVM being available\n", prte_tool_basename);
         exit(1);

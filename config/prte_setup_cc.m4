@@ -11,17 +11,12 @@ dnl                         University of Stuttgart.  All rights reserved.
 dnl Copyright (c) 2004-2006 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright (c) 2007-2009 Sun Microsystems, Inc.  All rights reserved.
-dnl Copyright (c) 2008-2015 Cisco Systems, Inc.  All rights reserved.
+dnl Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2012-2017 Los Alamos National Security, LLC. All rights
 dnl                         reserved.
 dnl Copyright (c) 2015-2019 Research Organization for Information Science
 dnl                         and Technology (RIST).  All rights reserved.
 dnl Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2020      Triad National Security, LLC. All rights
-dnl                         reserved.
-dnl Copyright (c) 2021      IBM Corporation.  All rights reserved.
-dnl
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -59,11 +54,11 @@ AC_DEFUN([PRTE_PROG_CC_C11_HELPER],[
     PRTE_CC_HELPER([if $CC $1 supports C11 _Atomic keyword], [prte_prog_cc_c11_helper__Atomic_available],
                    [[#include <stdatomic.h>]],[[static _Atomic long foo = 1;++foo;]])
 
-   PRTE_CC_HELPER([if $CC $1 supports C11 _c11_atomic functions], [prte_prog_cc_c11_atomic_function],
+    PRTE_CC_HELPER([if $CC $1 supports C11 _c11_atomic functions], [prte_prog_cc_c11_atomic_function],
                    [[#include <stdatomic.h>]],[[atomic_int acnt = 0; __c11_atomic_fetch_add(&acnt, 1, memory_order_relaxed);]])
-   if test $prte_prog_cc_c11_atomic_function -eq 1; then
-      AC_DEFINE_UNQUOTED([PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC], [$prte_prog_cc_c11_atomic_function], [Whether we have Clang __c11 atomic functions])
-   fi;
+    if test $prte_prog_cc_c11_atomic_function -eq 1; then
+        AC_DEFINE_UNQUOTED([PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC], [$prte_prog_cc_c11_atomic_function], [Whether we have Clang __c11 atomic functions])
+    fi;
 
     PRTE_CC_HELPER([if $CC $1 supports C11 _Generic keyword], [prte_prog_cc_c11_helper__Generic_available],
                    [[#define FOO(x) (_Generic (x, int: 1))]], [[static int x, y; y = FOO(x);]])
@@ -182,11 +177,8 @@ AC_DEFUN([PRTE_SETUP_CC],[
         # AC_MSG_WARNING([Open MPI requires a C11 (or newer) compiler])
         # AC_MSG_ERROR([Aborting.])
         # From Open MPI 1.7 on we require a C99 compiant compiler
-        # with autoconf 2.70 AC_PROG_CC makes AC_PROG_CC_C99 obsolete
-        m4_version_prereq([2.70],
-            [],
-            [AC_PROG_CC_C99])
-        # The C99 result of AC_PROG_CC is stored in ac_cv_prog_cc_c99
+        AC_PROG_CC_C99
+        # The result of AC_PROG_CC_C99 is stored in ac_cv_prog_cc_c99
         if test "x$ac_cv_prog_cc_c99" = xno ; then
             AC_MSG_WARN([Open MPI requires a C99 (or newer) compiler. C11 is recommended.])
             AC_MSG_ERROR([Aborting.])
@@ -226,6 +218,10 @@ AC_DEFUN([PRTE_SETUP_CC],[
                        [Whether C compiler supports __thread])
 
     PRTE_C_COMPILER_VENDOR([prte_c_vendor])
+
+    # Check for standard headers, needed here because needed before
+    # the types checks.
+    AC_HEADER_STDC
 
     # GNU C and autotools are inconsistent about whether this is
     # defined so let's make it true everywhere for now...  However, IBM
@@ -271,12 +267,11 @@ AC_DEFUN([PRTE_SETUP_CC],[
         PRTE_FLAGS_UNIQ(CFLAGS)
         PRTE_FLAGS_UNIQ(LDFLAGS)
         WANT_DEBUG=1
-   fi
+    fi
 
     # Do we want debugging?
     if test "$WANT_DEBUG" = "1" && test "$enable_debug_symbols" != "no" ; then
         CFLAGS="$CFLAGS -g"
-
         PRTE_FLAGS_UNIQ(CFLAGS)
         AC_MSG_WARN([-g has been added to CFLAGS (--enable-debug)])
     fi
@@ -299,18 +294,11 @@ AC_DEFUN([PRTE_SETUP_CC],[
         _PRTE_CHECK_SPECIFIC_CFLAGS(-Wall, Wall)
     fi
 
-    # Note: Some versions of clang (at least >= 3.5 -- perhaps
-    # older versions, too?) and xlc with -g (v16.1, perhaps older)
-    # will *warn* about -finline-functions, but still allow it.
-    # This is very annoying, so check for that warning, too.
-    # The clang warning looks like this:
-    # clang: warning: optimization flag '-finline-functions' is not supported
-    # clang: warning: argument unused during compilation: '-finline-functions'
-    # the xlc warning looks like this:
-    # warning: "-qinline" is not compatible with "-g". "-qnoinline" is being set.
-    _PRTE_CHECK_SPECIFIC_CFLAGS(-finline-functions, finline_functions)
-
+    # See if this version of gcc allows -finline-functions and/or
+    # -fno-strict-aliasing.  Even check the gcc-impersonating compilers.
     # Try to enable restrict keyword
+    _PRTE_CHECK_SPECIFIC_CFLAGS(-finline-functions, finline_functions)
+    
     RESTRICT_CFLAGS=
     case "$prte_c_vendor" in
         intel)
@@ -324,18 +312,14 @@ AC_DEFUN([PRTE_SETUP_CC],[
         _PRTE_CHECK_SPECIFIC_CFLAGS($RESTRICT_CFLAGS, restrict)
     fi
 
-    PRTE_FLAGS_UNIQ([CFLAGS])
-    AC_MSG_RESULT(CFLAGS result: $CFLAGS)
-
     # see if the C compiler supports __builtin_expect
     AC_CACHE_CHECK([if $CC supports __builtin_expect],
         [prte_cv_cc_supports___builtin_expect],
-        [AC_LINK_IFELSE([AC_LANG_PROGRAM([,
+        [AC_TRY_LINK([],
           [void *ptr = (void*) 0;
-           if (__builtin_expect (ptr != (void*) 0, 1)) return 0;
-          ]],
+           if (__builtin_expect (ptr != (void*) 0, 1)) return 0;],
           [prte_cv_cc_supports___builtin_expect="yes"],
-          [prte_cv_cc_supports___builtin_expect="no"])])])
+          [prte_cv_cc_supports___builtin_expect="no"])])
     if test "$prte_cv_cc_supports___builtin_expect" = "yes" ; then
         have_cc_builtin_expect=1
     else
@@ -347,11 +331,11 @@ AC_DEFUN([PRTE_SETUP_CC],[
     # see if the C compiler supports __builtin_prefetch
     AC_CACHE_CHECK([if $CC supports __builtin_prefetch],
         [prte_cv_cc_supports___builtin_prefetch],
-        [AC_LINK_IFELSE([AC_LANG_PROGRAM([
+        [AC_TRY_LINK([],
           [int ptr;
-           __builtin_prefetch(&ptr,0,0);]],
+           __builtin_prefetch(&ptr,0,0);],
           [prte_cv_cc_supports___builtin_prefetch="yes"],
-          [prte_cv_cc_supports___builtin_prefetch="no"])])])
+          [prte_cv_cc_supports___builtin_prefetch="no"])])
     if test "$prte_cv_cc_supports___builtin_prefetch" = "yes" ; then
         have_cc_builtin_prefetch=1
     else
@@ -363,11 +347,11 @@ AC_DEFUN([PRTE_SETUP_CC],[
     # see if the C compiler supports __builtin_clz
     AC_CACHE_CHECK([if $CC supports __builtin_clz],
         [prte_cv_cc_supports___builtin_clz],
-        [AC_LINK_IFELSE([AC_LANG_PROGRAM([
+        [AC_TRY_LINK([],
             [int value = 0xffff; /* we know we have 16 bits set */
-             if ((8*sizeof(int)-16) != __builtin_clz(value)) return 0;]],
+             if ((8*sizeof(int)-16) != __builtin_clz(value)) return 0;],
             [prte_cv_cc_supports___builtin_clz="yes"],
-            [prte_cv_cc_supports___builtin_clz="no"])])])
+            [prte_cv_cc_supports___builtin_clz="no"])])
     if test "$prte_cv_cc_supports___builtin_clz" = "yes" ; then
         have_cc_builtin_clz=1
     else
@@ -383,6 +367,7 @@ AC_DEFUN([PRTE_SETUP_CC],[
     # optimization is not prohibitive).  If we're using anything else,
     # be conservative and just use -O.
     #
+    # Note: gcc-impersonating compilers accept -O3
     if test "$WANT_DEBUG" = "1"; then
         OPTFLAGS=
     else
@@ -399,6 +384,8 @@ AC_DEFUN([PRTE_SETUP_CC],[
     AC_MSG_CHECKING([for C optimization flags])
     PRTE_ENSURE_CONTAINS_OPTFLAGS(["$CFLAGS"])
     AC_MSG_RESULT([$co_result])
+    PRTE_FLAGS_UNIQ([CFLAGS])
+    AC_MSG_RESULT(CFLAGS result: $CFLAGS)
     CFLAGS="$co_result"
     PRTE_VAR_SCOPE_POP
 ])

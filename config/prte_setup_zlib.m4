@@ -19,11 +19,11 @@ AC_DEFUN([PRTE_ZLIB_CONFIG],[
     PRTE_VAR_SCOPE_PUSH([prte_zlib_dir prte_zlib_libdir prte_zlib_standard_header_location prte_zlib_standard_lib_location])
 
     AC_ARG_WITH([zlib],
-                [AS_HELP_STRING([--with-zlib=DIR],
+                [AC_HELP_STRING([--with-zlib=DIR],
                                 [Search for zlib headers and libraries in DIR ])])
 
     AC_ARG_WITH([zlib-libdir],
-                [AS_HELP_STRING([--with-zlib-libdir=DIR],
+                [AC_HELP_STRING([--with-zlib-libdir=DIR],
                                 [Search for zlib libraries in DIR ])])
 
     prte_zlib_support=0

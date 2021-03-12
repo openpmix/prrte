@@ -15,7 +15,6 @@ dnl Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
 dnl Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2015-2016 Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -45,7 +44,7 @@ AC_DEFUN([_PRTE_CHECK_PACKAGE_HEADER], [
     AS_IF([test "$dir_prefix" = "/usr" || \
            test "$dir_prefix" = "/usr/local"],
            [ # try as is...
-            AC_MSG_NOTICE([looking for header without includes])
+            AC_VERBOSE([looking for header without includes])
             AC_CHECK_HEADERS([$2], [prte_check_package_header_happy="yes"], [])
             AS_IF([test "$prte_check_package_header_happy" = "no"],
                   [# no go on the as is - reset the cache and try again
@@ -95,7 +94,7 @@ AC_DEFUN([_PRTE_CHECK_PACKAGE_LIB], [
                   test "$prte_check_package_libdir" = "/usr" || \
                   test "$prte_check_package_libdir" = "/usr/local"],
                [ # try as is...
-                AC_MSG_NOTICE([looking for library without search path])
+                AC_VERBOSE([looking for library without search path])
                 AC_SEARCH_LIBS([$3], [$2],
                         [prte_check_package_lib_happy="yes"],
                         [prte_check_package_lib_happy="no"], [$4])
@@ -109,7 +108,7 @@ AC_DEFUN([_PRTE_CHECK_PACKAGE_LIB], [
                [AS_IF([test "$prte_check_package_libdir" != ""],
                     [$1_LDFLAGS="$$1_LDFLAGS -L$prte_check_package_libdir/lib"
                      LDFLAGS="$LDFLAGS -L$prte_check_package_libdir/lib"
-                     AC_MSG_NOTICE([looking for library in lib])
+                     AC_VERBOSE([looking for library in lib])
                      AC_SEARCH_LIBS([$3], [$2],
                                [prte_check_package_lib_happy="yes"],
                                [prte_check_package_lib_happy="no"], [$4])
@@ -123,7 +122,7 @@ AC_DEFUN([_PRTE_CHECK_PACKAGE_LIB], [
                [AS_IF([test "$prte_check_package_libdir" != ""],
                     [$1_LDFLAGS="$$1_LDFLAGS -L$prte_check_package_libdir/lib64"
                      LDFLAGS="$LDFLAGS -L$prte_check_package_libdir/lib64"
-                     AC_MSG_NOTICE([looking for library in lib64])
+                     AC_VERBOSE([looking for library in lib64])
                      AC_SEARCH_LIBS([$3], [$2],
                                [prte_check_package_lib_happy="yes"],
                                [prte_check_package_lib_happy="no"], [$4])

@@ -6,7 +6,6 @@
 # Copyright (c) 2017-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -20,14 +19,14 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     PRTE_VAR_SCOPE_PUSH([prte_event_dir prte_event_libdir prte_event_defaults prte_check_libevent_save_CPPFLAGS prte_check_libevent_save_LDFLAGS prte_check_libevent_save_LIBS])
 
     AC_ARG_WITH([libevent],
-                [AS_HELP_STRING([--with-libevent=DIR],
+                [AC_HELP_STRING([--with-libevent=DIR],
                                 [Search for libevent headers and libraries in DIR ])])
     AC_ARG_WITH([libevent-header],
-                [AS_HELP_STRING([--with-libevent-header=HEADER],
+                [AC_HELP_STRING([--with-libevent-header=HEADER],
                                 [The value that should be included in C files to include event.h])])
 
     AC_ARG_WITH([libevent-libdir],
-                [AS_HELP_STRING([--with-libevent-libdir=DIR],
+                [AC_HELP_STRING([--with-libevent-libdir=DIR],
                                 [Search for libevent libraries in DIR ])])
 
     prte_libevent_support=0

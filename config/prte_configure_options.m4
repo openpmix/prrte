@@ -35,7 +35,7 @@ prte_show_subtitle "PRTE Configuration options"
 #
 AC_MSG_CHECKING([if want prte "--prefix" behavior to be enabled by default])
 AC_ARG_ENABLE([prte-prefix-by-default],
-    [AS_HELP_STRING([--enable-prte-prefix-by-default],
+    [AC_HELP_STRING([--enable-prte-prefix-by-default],
         [Make "prte ..." behave exactly the same as "prte --prefix \$prefix" (where \$prefix is the value given to --prefix in configure)])])
 if test "$enable_prte_prefix_by_default" = "yes"; then
     AC_MSG_RESULT([yes])
@@ -64,7 +64,7 @@ fi
 
 AC_MSG_CHECKING([if want developer-level compiler pickyness])
 AC_ARG_ENABLE(picky,
-    AS_HELP_STRING([--enable-picky],
+    AC_HELP_STRING([--enable-picky],
                    [enable developer-level compiler pickyness when building Open MPI (default: disabled, unless a .git directory is found in the build tree)]))
 if test "$enable_picky" = "yes"; then
     AC_MSG_RESULT([yes])
@@ -85,7 +85,7 @@ fi
 #
 AC_MSG_CHECKING([if want developer-level debugging code])
 AC_ARG_ENABLE(debug,
-    AS_HELP_STRING([--enable-debug],
+    AC_HELP_STRING([--enable-debug],
                    [enable developer-level debugging code (not for general MPI users!) (default: disabled)]))
 if test "$enable_debug" = "yes"; then
     AC_MSG_RESULT([yes])
@@ -104,7 +104,7 @@ AC_DEFINE_UNQUOTED(PRTE_ENABLE_DEBUG, $WANT_DEBUG,
     [Whether we want developer-level debugging code or not])
 
 AC_ARG_ENABLE(debug-symbols,
-    AS_HELP_STRING([--disable-debug-symbols],
+    AC_HELP_STRING([--disable-debug-symbols],
         [Disable adding compiler flags to enable debugging symbols if --enable-debug is specified.  For non-debugging builds, this flag has no effect.]))
 
 #
@@ -112,7 +112,7 @@ AC_ARG_ENABLE(debug-symbols,
 #
 AC_MSG_CHECKING([if want to install project-internal header files])
 AC_ARG_WITH(devel-headers,
-    AS_HELP_STRING([--with-devel-headers],
+    AC_HELP_STRING([--with-devel-headers],
                    [Normal PRTE users/applications do not need this.  Developer headers are only necessary for authors doing deeper integration (default: disabled).]))
 if test "$with_devel_headers" = "yes"; then
     AC_MSG_RESULT([yes])
@@ -129,7 +129,7 @@ AM_CONDITIONAL(WANT_INSTALL_HEADERS, test "$WANT_INSTALL_HEADERS" = 1)
 
 AC_MSG_CHECKING([if want pretty-print stacktrace])
 AC_ARG_ENABLE([pretty-print-stacktrace],
-    [AS_HELP_STRING([--enable-pretty-print-stacktrace],
+    [AC_HELP_STRING([--enable-pretty-print-stacktrace],
                     [Pretty print stacktrace on process signal (default: enabled)])])
 if test "$enable_pretty_print_stacktrace" = "no" ; then
     AC_MSG_RESULT([no])
@@ -149,7 +149,7 @@ AC_DEFINE_UNQUOTED([PRTE_WANT_PRETTY_PRINT_STACKTRACE],
 
 AC_MSG_CHECKING([if want pty support])
 AC_ARG_ENABLE(pty-support,
-    AS_HELP_STRING([--enable-pty-support],
+    AC_HELP_STRING([--enable-pty-support],
                    [Enable/disable PTY support for STDIO forwarding.  (default: enabled)]))
 if test "$enable_pty_support" = "no" ; then
     AC_MSG_RESULT([no])
@@ -168,7 +168,7 @@ AC_DEFINE_UNQUOTED([PRTE_ENABLE_PTY_SUPPORT], [$PRTE_ENABLE_PTY_SUPPORT],
 
 AC_MSG_CHECKING([if want dlopen support])
 AC_ARG_ENABLE([dlopen],
-    [AS_HELP_STRING([--enable-dlopen],
+    [AC_HELP_STRING([--enable-dlopen],
                     [Whether build should attempt to use dlopen (or
                      similar) to dynamically load components.
                      Disabling dlopen implies --disable-mca-dso.
@@ -192,7 +192,7 @@ AC_DEFINE_UNQUOTED(PRTE_ENABLE_DLOPEN_SUPPORT, $PRTE_ENABLE_DLOPEN_SUPPORT,
 
 AC_MSG_CHECKING([for default value of mca_base_component_show_load_errors])
 AC_ARG_ENABLE([show-load-errors-by-default],
-    [AS_HELP_STRING([--enable-show-load-errors-by-default],
+    [AC_HELP_STRING([--enable-show-load-errors-by-default],
                     [Set the default value for the MCA parameter
                      mca_base_component_show_load_errors (but can be
                      overridden at run time by the usual
@@ -222,7 +222,7 @@ AC_DEFINE_UNQUOTED(PRTE_SHOW_LOAD_ERRORS_DEFAULT, $PRTE_SHOW_LOAD_ERRORS_DEFAULT
 #
 AC_MSG_CHECKING([if a proxy version string for prte is required])
 AC_ARG_WITH(proxy-version-string,
-    AS_HELP_STRING([--with-proxy-version-string],
+    AC_HELP_STRING([--with-proxy-version-string],
                    [Return the provided string when prte is used in proxy mode and the version is requested]))
 if test -n "$with_proxy_version_string"; then
     AC_MSG_RESULT([yes])
@@ -249,7 +249,7 @@ AC_SUBST(prtenumeric)
 
 AC_MSG_CHECKING([if a proxy package name for prte is required])
 AC_ARG_WITH(proxy-package-name,
-    AS_HELP_STRING([--with-proxy-package-name],
+    AC_HELP_STRING([--with-proxy-package-name],
                    [Return the provided string when prte is used in proxy mode and the package name is requested]))
 if test -n "$with_proxy_package_name"; then
     AC_MSG_RESULT([yes])
@@ -263,7 +263,7 @@ AC_DEFINE_UNQUOTED(PRTE_PROXY_PACKAGE_NAME, "$PRTE_PROXY_PACKAGE_NAME",
 
 AC_MSG_CHECKING([if a proxy bugreport path for prte is required])
 AC_ARG_WITH(proxy-bugreport,
-    AS_HELP_STRING([--with-proxy-bugreport],
+    AC_HELP_STRING([--with-proxy-bugreport],
                    [Return the provided string when prte is used in proxy mode and the PACKAGE_BUGREPORT is requested]))
 if test -n "$with_proxy_bugreport"; then
     AC_MSG_RESULT([yes])
@@ -280,7 +280,7 @@ AC_DEFINE_UNQUOTED(PRTE_PROXY_BUGREPORT, "$PRTE_PROXY_BUGREPORT",
 # Support per-user config files?
 #
 AC_ARG_ENABLE([per-user-config-files],
-   [AS_HELP_STRING([--enable-per-user-config-files],
+   [AC_HELP_STRING([--enable-per-user-config-files],
       [Disable per-user configuration files, to save disk accesses during job start-up.  This is likely desirable for large jobs.  Note that this can also be achieved by environment variables at run-time.  (default: enabled)])])
 if test "$enable_per_user_config_files" = "no" ; then
   result=0
@@ -295,7 +295,7 @@ AC_DEFINE_UNQUOTED([PRTE_WANT_HOME_CONFIG_FILES], [$result],
 #
 AC_MSG_CHECKING([if want IPv6 support])
 AC_ARG_ENABLE([ipv6],
-    [AS_HELP_STRING([--enable-ipv6],
+    [AC_HELP_STRING([--enable-ipv6],
         [Enable IPv6 support, but only if the underlying system supports it (default: disabled)])])
 if test "$enable_ipv6" = "yes"; then
     AC_MSG_RESULT([yes])
@@ -310,7 +310,7 @@ AC_DEFINE_UNQUOTED([PRTE_ENABLE_IPV6], [$prte_want_ipv6],
 
 # Add any extra lib?
 AC_ARG_WITH([prte-extra-lib],
-            AS_HELP_STRING([--with-prte-extra-lib=LIB],
+            AC_HELP_STRING([--with-prte-extra-lib=LIB],
                            [Link the output PRTE library to this extra lib (used in embedded mode)]))
 AC_MSG_CHECKING([for extra lib])
 AS_IF([test ! -z "$with_prte_extra_lib"],
@@ -328,7 +328,7 @@ AC_SUBST(PRTE_EXTRA_LIB)
 
 # Add any extra libtool lib?
 AC_ARG_WITH([prte-extra-ltlib],
-            AS_HELP_STRING([--with-prte-extra-ltlib=LIB],
+            AC_HELP_STRING([--with-prte-extra-ltlib=LIB],
                            [Link any embedded components/tools that require it to the provided libtool lib (used in embedded mode)]))
 AC_MSG_CHECKING([for extra ltlib])
 AS_IF([test ! -z "$with_prte_extra_ltlib"],
@@ -346,7 +346,7 @@ AC_SUBST(PRTE_EXTRA_LTLIB)
 
 # Add any extra LDFLAGS for the extra libs?
 AC_ARG_WITH([prte-extra-lib-ldflags],
-            AS_HELP_STRING([--with-prte-extra-lib-ldflags=flags],
+            AC_HELP_STRING([--with-prte-extra-lib-ldflags=flags],
                            [Where to find the extra libs]))
 AC_MSG_CHECKING([for extra lib LDFLAGS])
 AS_IF([test ! -z "$with_prte_extra_lib_ldflags"],
@@ -367,7 +367,7 @@ AC_SUBST(PRTE_EXTRA_LIB_LDFLAGS)
 #
 AC_MSG_CHECKING([if want package/brand string])
 AC_ARG_WITH([package-string],
-     [AS_HELP_STRING([--with-package-string=STRING],
+     [AC_HELP_STRING([--with-package-string=STRING],
                      [Use a branding string throughout Open MPI])])
 if test "$with_package_string" = "" || test "$with_package_string" = "no"; then
     with_package_string="Open MPI $PRTE_CONFIGURE_USER@$PRTE_CONFIGURE_HOST Distribution"
@@ -381,7 +381,7 @@ AC_MSG_RESULT([$with_package_string])
 #
 AC_MSG_CHECKING([if want ident string])
 AC_ARG_WITH([ident-string],
-     [AS_HELP_STRING([--with-ident-string=STRING],
+     [AC_HELP_STRING([--with-ident-string=STRING],
                      [Embed an ident string into Open MPI object files])])
 if test "$with_ident_string" = "" || test "$with_ident_string" = "no"; then
     with_ident_string="%VERSION%"
@@ -404,7 +404,7 @@ AC_MSG_RESULT([$with_ident_string])
 # some systems don't want/like getpwuid
 AC_MSG_CHECKING([if want getpwuid support])
 AC_ARG_ENABLE([getpwuid],
-    [AS_HELP_STRING([--disable-getpwuid],
+    [AC_HELP_STRING([--disable-getpwuid],
         [Disable getpwuid support (default: enabled)])])
 if test "$enable_getpwuid" = "no"; then
     AC_MSG_RESULT([no])
@@ -422,7 +422,7 @@ PRTE_ZLIB_CONFIG
 dnl Check for FT
 AC_MSG_CHECKING([if want fault tolerance support])
 AC_ARG_ENABLE([prte-ft],
-    [AS_HELP_STRING([--enable-prte-ft],
+    [AC_HELP_STRING([--enable-prte-ft],
         [ENable PRRTE fault tolerance support (default: disabled)])])
 if test "$enable_prte_ft" = "yes"; then
     AC_MSG_RESULT([yes])

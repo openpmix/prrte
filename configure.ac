@@ -40,35 +40,23 @@
 # Load in everything found by autogen.pl
 m4_include([config/autogen_found_items.m4])
 
+# Load the version number code
+m4_include([config/prte_get_version.m4])
+AC_LANG([C])
+
 # Init autoconf
 # We don't have the version number to put in here yet, and we can't
 # call PRTE_GET_VERSION (etc.) before AC_INIT.  So use the shell
 # version.  project_name_* comes from config/project_list.m4, which
 # was set during autogen.pl.
 
-AC_INIT([prte],
+AC_INIT([project_name_long],
         [m4_normalize(esyscmd([config/prte_get_version.sh VERSION --tarball]))],
-        [https://github.com/openpmix/prte/], [prte])
+        [https://github.com/openpmix/prte/], [project_name_short])
 
-AC_PREREQ(2.69)
+AC_PREREQ(2.60)
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
-# autotools expects to perform tests without interference
-# from user-provided CFLAGS, particularly -Werror flags.
-# Search for them here and cache any we find
-PRTE_CFLAGS_cache=
-PRTE_CFLAGS_pass=
-for val in $CFLAGS; do
-    if echo "$val" | grep -q -e "-W"; then
-        PRTE_CFLAGS_cache="$PRTE_CFLAGS_cache $val";
-    else
-        PRTE_CFLAGS_pass="$PRTE_CFLAGS_pass $val";
-    fi
-done
-CFLAGS=$PRTE_CFLAGS_pass
-# Load the version number code
-m4_include([config/prte_get_version.m4])
-
 PRTE_CAPTURE_CONFIGURE_CLI([PRTE_CONFIGURE_CLI])
 
 # Get our platform support file.  This has to be done very, very early
@@ -128,12 +116,6 @@ AM_INIT_AUTOMAKE([foreign dist-bzip2 subdir-objects no-define 1.12.2])
 # (even though they're supposed to be identical).  Shrug.
 
 AM_SILENT_RULES([yes])
-
-# set the language
-AC_LANG([C])
-# find NM
-AC_PROG_GREP
-LT_PATH_NM
 
 # Make configure depend on the VERSION file, since it's used in AC_INIT
 AC_SUBST([CONFIGURE_DEPENDENCIES], ['$(top_srcdir)/VERSION'])
@@ -290,8 +272,8 @@ fi
 # Part one of libtool magic.  Default to: enable shared, disable static.
 #
 
-AC_ENABLE_SHARED([])
-AC_DISABLE_STATIC([])
+AM_ENABLE_SHARED
+AM_DISABLE_STATIC
 PRTE_SETUP_WRAPPER_INIT
 
 ##################################
@@ -729,13 +711,9 @@ AC_MSG_CHECKING([the linker for support for the -fini option])
 PRTE_VAR_SCOPE_PUSH([LDFLAGS_save])
 LDFLAGS_save=$LDFLAGS
 LDFLAGS="$LDFLAGS_save -Wl,-fini -Wl,finalize"
-AC_LINK_IFELSE([AC_LANG_PROGRAM([[
-        void finalize (void) {}
-        ]])],
-        [AC_MSG_RESULT([yes])
-         prte_ld_have_fini=1],
-        [AC_MSG_RESULT([no])
-         prte_ld_have_fini=0])
+AC_TRY_LINK([void finalize (void) {}], [], [AC_MSG_RESULT([yes])
+        prte_ld_have_fini=1], [AC_MSG_RESULT([no])
+        prte_ld_have_fini=0])
 LDFLAGS=$LDFLAGS_save
 PRTE_VAR_SCOPE_POP
 
@@ -880,7 +858,7 @@ AC_PROG_EGREP
 #
 
 AM_PROG_AS
-AC_PROG_LEX(yywrap)
+AM_PROG_LEX
 
 # If we don't have Flex and we don't have a generated .c file
 # (distribution tarballs will have the .c file included, but git
@@ -1078,8 +1056,7 @@ if test "x$prte_cv_c_compiler_vendor" = "xsun"; then
     solaris_use_stlport4="yes"
 fi
 
-LT_INIT()
-LT_LANG([C])
+LT_INIT([dlopen win32-dll])
 
 
 # What's the suffix of shared libraries?  Inspired by generated
@@ -1162,18 +1139,6 @@ if test "$prte_zlib_support" == "1" && test "$prte_external_pmix_version_need_zl
 else
     AC_MSG_RESULT([no])
 fi
-
-# restore any user-provided Werror flags
-AS_IF([test ! -z "$PRTE_CFLAGS_cache"], [CFLAGS="$CFLAGS $PRTE_CFLAGS_cache"])
-
-# Delay setting pickyness until here so we
-# don't break configure code tests
-#if test "$WANT_PICKY_COMPILER" = "1"; then
-#    CFLAGS="$CFLAGS -Wall -Wextra -Werror"
-#fi
-
-# Cleanup duplicate flags
-PRTE_FLAGS_UNIQ(CFLAGS)
 
 #
 # Delayed the substitution of CFLAGS and CXXFLAGS until now because

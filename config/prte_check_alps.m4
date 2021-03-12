@@ -18,7 +18,6 @@ dnl                         reserved.
 dnl Copyright (c) 2019      Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2020      Triad National Security, LLC. All rights
 dnl                         reserved.
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -39,7 +38,7 @@ AC_DEFUN([PRTE_CHECK_ALPS_CLE4],[
     AC_MSG_CHECKING([Checking for ALPS components on a CLE 4 system with alps  $with_alps])
 
     AC_ARG_WITH([alps-libdir],
-                [AS_HELP_STRING([--with-alps-libdir=DIR],
+                [AC_HELP_STRING([--with-alps-libdir=DIR],
                 [Location of alps libraries (alpslli, alpsutil) (default: /usr/lib/alps (/opt/cray/xe-sysroot/default/user on eslogin nodes))])])
 
 #
@@ -90,7 +89,7 @@ AC_DEFUN([PRTE_CHECK_ALPS],[
     if test -z "$prte_check_cray_alps_happy"; then
 
         AC_ARG_WITH([alps],
-                    [AS_HELP_STRING([--with-alps(=DIR|yes|no)],
+                    [AC_HELP_STRING([--with-alps(=DIR|yes|no)],
                     [Build with ALPS scheduler component, optionally adding DIR/include, DIR/lib, and DIR/lib64 to the search path for headers and libraries (default: auto)])],[],with_alps=auto)
 
         if test -f /etc/opt/cray/release/clerelease; then
