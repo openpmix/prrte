@@ -153,8 +153,9 @@ int prte_setup_top_session_dir(void)
         }
 
         if (0 > prte_asprintf(&prte_process_info.top_session_dir,
-                         "%s/prte.%s.%lu", prte_process_info.tmpdir_base,
-                         prte_process_info.nodename, (unsigned long)uid)) {
+                              "%s/prte.session.%lu",
+                              prte_process_info.tmpdir_base,
+                              (unsigned long)uid)) {
             prte_process_info.top_session_dir = NULL;
             rc = PRTE_ERR_OUT_OF_RESOURCE;
             goto exit;
@@ -179,8 +180,11 @@ static int _setup_jobfam_session_dir(pmix_proc_t *proc)
         }
 
         if (0 > prte_asprintf(&prte_process_info.jobfam_session_dir,
-                         "%s/dvm.%lu", prte_process_info.top_session_dir,
-                         (unsigned long)prte_process_info.pid)) {
+                              "%s/%s/%s.%lu",
+                              prte_process_info.top_session_dir,
+                              prte_process_info.nodename,
+                              prte_tool_basename,
+                              (unsigned long)prte_process_info.pid)) {
             rc = PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
@@ -203,8 +207,9 @@ _setup_job_session_dir(pmix_proc_t *proc)
         }
         if (!PMIX_NSPACE_INVALID(proc->nspace)) {
             if (0 > prte_asprintf(&prte_process_info.job_session_dir,
-                             "%s/%s", prte_process_info.jobfam_session_dir,
-                             PRTE_LOCAL_JOBID_PRINT(proc->nspace))) {
+                                  "%s/%s",
+                                  prte_process_info.jobfam_session_dir,
+                                  PRTE_LOCAL_JOBID_PRINT(proc->nspace))) {
                 prte_process_info.job_session_dir = NULL;
                 rc = PRTE_ERR_OUT_OF_RESOURCE;
                 goto exit;

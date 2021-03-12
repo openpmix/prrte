@@ -96,6 +96,7 @@
 
 #include "src/prted/prted.h"
 #include "src/prted/pmix/pmix_server_internal.h"
+#include "prte.h"
 
 typedef struct {
     prte_list_item_t super;
@@ -125,12 +126,14 @@ typedef struct {
 
 static pmix_nspace_t spawnednspace;
 static pmix_proc_t myproc;
+static bool signals_set=false;
 static bool forcibly_die=false;
 static prte_event_t term_handler;
 static prte_event_t die_handler;
+static prte_event_t epipe_handler;
 static int term_pipe[2];
 static prte_atomic_lock_t prun_abort_inprogress_lock = PRTE_ATOMIC_LOCK_INIT;
-static prte_list_t forwarded_signals;
+static prte_event_t *forward_signals_events = NULL;
 
 static int create_app(int argc, char* argv[],
                       prte_list_t *jdata,
@@ -145,263 +148,9 @@ static prte_cmd_line_t *prte_cmd_line = NULL;
 static bool want_prefix_by_default = (bool) PRTE_WANT_PRTE_PREFIX_BY_DEFAULT;
 static void abort_signal_callback(int signal);
 static void clean_abort(int fd, short flags, void *arg);
-static void signal_forward_callback(int signal);
-static void epipe_signal_callback(int signal);
+static void signal_forward_callback(int fd, short args, void *cbdata);
+static void epipe_signal_callback(int fd, short args, void *cbdata);
 static int prep_singleton(const char *name);
-
-
-/* prun-specific options */
-static prte_cmd_line_init_t cmd_line_init[] = {
-
-    /* DVM options */
-    /* forward signals */
-    { '\0', "forward-signals", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Comma-delimited list of additional signals (names or integers) to forward to "
-      "application processes [\"none\" => forward nothing]. Signals provided by "
-      "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
-      PRTE_CMD_LINE_OTYPE_DVM},
-    /* do not print a "ready" message */
-    { '\0', "no-ready-msg", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Do not print a DVM ready message",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "daemonize", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Daemonize the DVM daemons into the background",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "system-server", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Start the DVM as the system server",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "set-sid", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Direct the DVM daemons to separate from the current session",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    /* maximum size of VM - typically used to subdivide an allocation */
-    { '\0', "max-vm-size", 1, PRTE_CMD_LINE_TYPE_INT,
-      "Number of daemons to start",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    /* Specify the launch agent to be used */
-    { '\0', "launch-agent", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Name of daemon executable used to start processes on remote nodes (default: prted)",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "report-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Printout URI on stdout [-], stderr [+], a file descriptor [int], or a file [anything else]",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "singleton", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "ID of the singleton process that started us",
-        PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "keepalive", 1, PRTE_CMD_LINE_TYPE_INT,
-        "Pipe to monitor - DVM will terminate upon closure",
-        PRTE_CMD_LINE_OTYPE_DVM },
-
-
-    /* Debug options */
-    { '\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Top-level PRTE debug switch (default: false)",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "debug-daemons", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Debug daemons",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "debug-verbose", 1, PRTE_CMD_LINE_TYPE_INT,
-      "Verbosity level for PRTE debug messages (default: 1)",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { 'd', "debug-devel", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Enable debugging of PRTE",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "debug-daemons-file", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Enable debugging of any PRTE daemons used by this application, storing output in files",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "leave-session-attached", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Do not discard stdout/stderr of remote PRTE daemons",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0',  "test-suicide", 1, PRTE_CMD_LINE_TYPE_BOOL,
-      "Suicide instead of clean abort after delay",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-
-
-    /* testing options */
-    { '\0', "timeout", 1, PRTE_CMD_LINE_TYPE_INT,
-      "Timeout the job after the specified number of seconds",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-#if PMIX_NUMERIC_VERSION >= 0x00040000
-    { '\0', "report-state-on-timeout", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Report all job and process states upon timeout",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "get-stack-traces", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Get stack traces of all application procs on timeout",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-#endif
-
-    /* Conventional options - for historical compatibility, support
-     * both single and multi dash versions */
-    /* Number of processes; -c, -n, --n, -np, and --np are all
-       synonyms */
-    { 'c', "np", 1, PRTE_CMD_LINE_TYPE_INT,
-      "Number of processes to run",
-      PRTE_CMD_LINE_OTYPE_GENERAL },
-    { 'n', "n", 1, PRTE_CMD_LINE_TYPE_INT,
-      "Number of processes to run",
-      PRTE_CMD_LINE_OTYPE_GENERAL },
-    { 'N', NULL, 1, PRTE_CMD_LINE_TYPE_INT,
-      "Number of processes to run per node",
-      PRTE_CMD_LINE_OTYPE_GENERAL },
-    /* Use an appfile */
-    { '\0',  "app", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Provide an appfile; ignore all other command line options",
-      PRTE_CMD_LINE_OTYPE_GENERAL },
-
-
-      /* Output options */
-    /* exit status reporting */
-    { '\0', "report-child-jobs-separately", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Return the exit status of the primary job only",
-      PRTE_CMD_LINE_OTYPE_OUTPUT },
-    /* select XML output */
-    { '\0', "xml", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Provide all output in XML format",
-      PRTE_CMD_LINE_OTYPE_OUTPUT },
-    /* tag output */
-    { '\0', "tag-output", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Tag all output with [job,rank]",
-      PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "timestamp-output", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Timestamp all application process output",
-      PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "output-directory", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Redirect output from application processes into filename/job/rank/std[out,err,diag]. A relative path value will be converted to an absolute path. The directory name may include a colon followed by a comma-delimited list of optional case-insensitive directives. Supported directives currently include NOJOBID (do not include a job-id directory level) and NOCOPY (do not copy the output to the stdout/err streams)",
-      PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "output-filename", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Redirect output from application processes into filename.rank. A relative path value will be converted to an absolute path. The directory name may include a colon followed by a comma-delimited list of optional case-insensitive directives. Supported directives currently include NOCOPY (do not copy the output to the stdout/err streams)",
-      PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "merge-stderr-to-stdout", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Merge stderr to stdout for each process",
-      PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "xterm", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Create a new xterm window and display output from the specified ranks there",
-      PRTE_CMD_LINE_OTYPE_OUTPUT },
-
-    /* select stdin option */
-    { '\0', "stdin", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Specify procs to receive stdin [rank, all, none] (default: 0, indicating rank 0)",
-      PRTE_CMD_LINE_OTYPE_INPUT },
-
-
-    /* User-level debugger arguments */
-    { '\0', "output-proctable", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Print the complete proctable to stdout [-], stderr [+], or a file [anything else] after launch",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "stop-on-exec", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "If supported, stop each process at start of execution",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-
-
-    /* Launch options */
-    /* Preload the binary on the remote machine */
-    { 's', "preload-binary", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Preload the binary on the remote machine before starting the remote process.",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    /* Preload files on the remote machine */
-    { '\0', "preload-files", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Preload the comma separated list of files to the remote machines current working directory before starting the remote process.",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    /* Export environment variables; potentially used multiple times,
-       so it does not make sense to set into a variable */
-    { 'x', NULL, 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the environment variable foo and takes its value from the current environment; \"-x foo=bar\" exports the environment variable name foo and sets its value to \"bar\" in the started processes; \"-x foo*\" exports all current environmental variables starting with \"foo\")",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "wdir", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Set the working directory of the started processes",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "wd", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Synonym for --wdir",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "set-cwd-to-session-dir", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Set the working directory of the started processes to their session directory",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "path", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "PATH to be used to look for executables to start processes",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "show-progress", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Output a brief periodic report on launch progress",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "pset", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "User-specified name assigned to the processes in their given application",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-    /* Set default global hostfile */
-    { '\0', "default-hostfile", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Provide a default hostfile",
-      PRTE_CMD_LINE_OTYPE_LAUNCH },
-
-
-    /* Developer options */
-    { '\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Perform all necessary operations to prepare to launch the application, but do not actually launch it (usually used to test mapping patterns)",
-      PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "display-devel-map", 0, PRTE_CMD_LINE_TYPE_BOOL,
-       "Display a detailed process map (mostly intended for developers) just before launch",
-       PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "display-topo", 0, PRTE_CMD_LINE_TYPE_BOOL,
-       "Display the topology as part of the process map (mostly intended for developers) just before launch",
-       PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "display-diffable-map", 0, PRTE_CMD_LINE_TYPE_BOOL,
-       "Display a diffable process map (mostly intended for developers) just before launch",
-       PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "report-bindings", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Whether to report process bindings to stderr",
-      PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "display-devel-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Display a detailed list (mostly intended for developers) of the allocation being used by this job",
-      PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "display-map", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Display the process map just before launch",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "display-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Display the allocation being used by this job",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-
-
-    /* Mapping options */
-    { '\0', "map-by", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache | "
-      "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr | "
-      "rankfile:FILE=<rankfile_path>]"
-      " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
-      "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
-      "DEVICE(for dist policy), INHERIT, NOINHERIT, PE-LIST=a,b (comma-delimited "
-      "ranges of cpus to use for this job)",
-      PRTE_CMD_LINE_OTYPE_MAPPING },
-
-      /* Ranking options */
-    { '\0', "rank-by", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache "
-      "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
-      PRTE_CMD_LINE_OTYPE_RANKING },
-
-      /* Binding options */
-    { '\0', "bind-to", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Binding policy for job. Allowed values: none, hwthread, core, l1cache, l2cache, "
-      "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
-      "the default when np<=2, and \"package\" is the default when np>2). Allowed colon-delimited qualifiers: "
-      "overload-allowed, if-supported",
-      PRTE_CMD_LINE_OTYPE_BINDING },
-
-
-    /* Fault Tolerance options */
-    { '\0', "enable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Enable recovery from process failure [Default = disabled]",
-      PRTE_CMD_LINE_OTYPE_FT },
-    { '\0', "max-restarts", 1, PRTE_CMD_LINE_TYPE_INT,
-      "Max number of times to restart a failed process",
-      PRTE_CMD_LINE_OTYPE_FT },
-    { '\0', "disable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Disable recovery (resets all recovery options to off)",
-      PRTE_CMD_LINE_OTYPE_FT },
-    { '\0', "continuous", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Job is to run until explicitly terminated",
-      PRTE_CMD_LINE_OTYPE_FT },
-
-
-    /* End of list */
-    { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
-};
-
 
 static void setupcbfunc(pmix_status_t status,
                         pmix_info_t info[], size_t ninfo,
@@ -478,30 +227,34 @@ static int wait_dvm(pid_t pid) {
     return 255;
 }
 
-int main(int argc, char *argv[])
+static void setup_sighandler(int signal, prte_event_t *ev,
+                             prte_event_cbfunc_t cbfunc)
+{
+    prte_event_signal_set(prte_event_base, ev, signal, cbfunc, ev);
+    prte_event_signal_add(ev, NULL);
+}
+
+int prte(int argc, char *argv[])
 {
     int rc=1, i, j;
-    char *param, *ptr, *tpath;
+    char *param, *ptr, *tpath, *fullpath;
     prte_pmix_lock_t lock;
     prte_list_t apps;
     prte_pmix_app_t *app;
     pmix_info_t *iptr, info;
     pmix_status_t ret;
     bool flag;
-    size_t m, n, ninfo, param_len;
+    size_t n, ninfo, param_len;
     pmix_app_t *papps;
     size_t napps;
     mylock_t mylock;
     prte_value_t *pval;
     uint32_t ui32;
-    char *mytmpdir;
     char **pargv;
     int pargc;
-    char **tmp;
     prte_job_t *jdata;
     prte_app_context_t *dapp;
     bool proxyrun = false;
-    char *personality = NULL;
     void *jinfo;
     pmix_proc_t pname;
     pmix_value_t *val;
@@ -509,15 +262,16 @@ int main(int argc, char *argv[])
     char **hostfiles = NULL;
     char **hosts = NULL;
     bool donotlaunch = false;
+    prte_schizo_base_module_t *schizo;
+    prte_ess_base_signal_t *sig;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
-    PRTE_CONSTRUCT(&forwarded_signals, prte_list_t);
-
     prte_atomic_lock_init(&prun_abort_inprogress_lock, PRTE_ATOMIC_LOCK_UNLOCKED);
     /* init the tiny part of PRTE we use */
     prte_init_util(PRTE_PROC_MASTER);
 
+    fullpath = prte_find_absolute_path(argv[0]);
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
@@ -557,35 +311,32 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    /* setup callback for SIGPIPE */
+    setup_sighandler(SIGPIPE, &epipe_handler, epipe_signal_callback);
+
     /* point the signal trap to a function that will activate that event */
     signal(SIGTERM, abort_signal_callback);
     signal(SIGINT, abort_signal_callback);
     signal(SIGHUP, abort_signal_callback);
 
-    /* setup callback for SIGPIPE */
-    signal(SIGPIPE, epipe_signal_callback);
-
     /* because we have to use the schizo framework prior to parsing the
      * incoming argv for cmd line options, do a hacky search to support
      * passing of options (e.g., verbosity) for schizo */
     for (i=1; NULL != argv[i]; i++) {
-        if (0 == strncmp(argv[i], "schizo", 6)) {
-            prte_asprintf(&param, "PRTE_MCA_%s", argv[i]);
-            prte_setenv(param, argv[i+1], true, &environ);
-            free(param);
+        if (0 == strcmp(argv[i], "--prtemca") ||
+            0 == strcmp(argv[i], "--mca")) {
+            if (0 == strncmp(argv[i+1], "schizo", 6)) {
+                prte_asprintf(&param, "PRTE_MCA_%s", argv[i+1]);
+                prte_setenv(param, argv[i+2], true, &environ);
+                free(param);
+                i += 2;
+            }
         }
-    }
-
-    /* setup our cmd line */
-    prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
-    if (PRTE_SUCCESS != (rc = prte_cmd_line_add(prte_cmd_line, cmd_line_init))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
     }
 
     /* open the SCHIZO framework */
     if (PRTE_SUCCESS != (rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                                    PRTE_MCA_BASE_OPEN_DEFAULT))) {
+                                                           PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -594,43 +345,57 @@ int main(int argc, char *argv[])
         PRTE_ERROR_LOG(rc);
         return rc;
     }
-    /* setup our common personalities */
-    prte_argv_append_unique_nosize(&prte_schizo_base.personalities, "prte");
-    prte_argv_append_unique_nosize(&prte_schizo_base.personalities, "pmix");
-    /* add anything they specified */
+
+    /* look for any personality specification */
+    ptr = NULL;
     for (i=0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
-            tmp = prte_argv_split(argv[i+1], ',');
-            for (m=0; NULL != tmp[m]; m++) {
-                prte_argv_append_unique_nosize(&prte_schizo_base.personalities, tmp[m]);
-            }
-            prte_argv_free(tmp);
+            ptr = argv[i+1];
+            break;
+        }
+    }
+    if (NULL == ptr) {
+        ptr = fullpath;
+    }
+
+    /* detect if we are running as a proxy and select the active
+     * schizo module for this tool */
+    schizo = prte_schizo.detect_proxy(ptr);
+    if (NULL == schizo) {
+        prte_show_help("help-schizo-base.txt", "no-proxy", true,
+                       prte_tool_basename, ptr);
+        return 1;
+    }
+    if (0 != strcmp(schizo->name, "prte")) {
+        proxyrun = true;
+    } else {
+        /* if we are using the "prte" personality, but we
+         * are not actually running as "prte" or are actively
+         * testing the proxy capability , then we are acting
+         * as a proxy */
+        if (0 != strcmp(prte_tool_basename, "prte") ||
+            prte_schizo_base.test_proxy_launch) {
+            proxyrun = true;
         }
     }
 
-    /* detect if we are running as a proxy */
-    rc = prte_schizo.detect_proxy(pargv);
-    if (PRTE_SUCCESS == rc) {
-        proxyrun = true;
-    } else if (PRTE_ERR_TAKE_NEXT_OPTION != rc) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
+    /* check if we are running as root - if we are, then only allow
+     * us to proceed if the allow-run-as-root flag was given. Otherwise,
+     * exit with a giant warning message
+     */
+    if (0 == geteuid()) {
+        schizo->allow_run_as_root(prte_cmd_line);  // will exit us if not allowed
     }
 
-    /* get our session directory */
-    if (PRTE_SUCCESS != (rc = prte_schizo.define_session_dir(&mytmpdir))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    /* setup the rest of the cmd line only once */
-    if (PRTE_SUCCESS != (rc = prte_schizo.define_cli(prte_cmd_line))) {
+    /* setup the cmd line - this is specific to the proxy */
+    prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
+    if (PRTE_SUCCESS != (rc = schizo->define_cli(prte_cmd_line))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
 
     /* handle deprecated options */
-    if (PRTE_SUCCESS != (rc = prte_schizo.parse_deprecated_cli(prte_cmd_line, &pargc, &pargv))) {
+    if (PRTE_SUCCESS != (rc = schizo->parse_deprecated_cli(prte_cmd_line, &pargc, &pargv))) {
         if (PRTE_OPERATION_SUCCEEDED == rc) {
             /* the cmd line was restructured - show them the end result */
             param = prte_argv_join(pargv, ' ');
@@ -659,10 +424,8 @@ int main(int argc, char *argv[])
         prte_fd_set_cloexec(pval->value.data.integer);  // don't let children inherit this
     }
 
-    /* let the schizo components take a pass at it to get the MCA params - this
-     * will include whatever default/user-level param files each schizo component
-     * supports */
-    if (PRTE_SUCCESS != (rc = prte_schizo.parse_cli(pargc, 0, pargv, NULL, NULL))) {
+    /* let the schizo components take a pass at it to get the MCA params */
+    if (PRTE_SUCCESS != (rc = schizo->parse_cli(pargc, 0, pargv, NULL, NULL))) {
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n",
                     prte_tool_basename,
@@ -673,7 +436,7 @@ int main(int argc, char *argv[])
 
     /* check command line sanity - ensure there aren't multiple instances of
      * options where there should be only one */
-    rc = prte_schizo.check_sanity(prte_cmd_line);
+    rc = schizo->check_sanity(prte_cmd_line);
     if (PRTE_SUCCESS != rc) {
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n",
@@ -694,26 +457,15 @@ int main(int argc, char *argv[])
      * check for help so that --version --help works as
      * one might expect. */
      if (prte_cmd_line_is_taken(prte_cmd_line, "version")) {
-        if (proxyrun) {
-            fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n",
-                    prte_tool_basename, PRTE_PROXY_PACKAGE_NAME,
-                    PRTE_PROXY_VERSION_STRING, PRTE_PROXY_BUGREPORT);
-        } else {
-            fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n",
-                    prte_tool_basename, "PMIx Reference RunTime Environment",
-                    PRTE_VERSION, PACKAGE_BUGREPORT);
-        }
-        exit(0);
+         schizo->output_version();
+         exit(0);
     }
 
     /* Check for help request */
     if (prte_cmd_line_is_taken(prte_cmd_line, "help")) {
         char *str, *args = NULL;
         args = prte_cmd_line_get_usage_msg(prte_cmd_line, false);
-        str = prte_show_help_string("help-prun.txt", "prun:usage", false,
-                                    prte_tool_basename, "PRTE", PRTE_VERSION,
-                                    prte_tool_basename, args,
-                                    PACKAGE_BUGREPORT);
+        str = schizo->print_help(args);
         if (NULL != str) {
             printf("%s", str);
             free(str);
@@ -722,14 +474,6 @@ int main(int argc, char *argv[])
 
         /* If someone asks for help, that should be all we do */
         exit(0);
-    }
-
-    /* check if we are running as root - if we are, then only allow
-     * us to proceed if the allow-run-as-root flag was given. Otherwise,
-     * exit with a giant warning flag
-     */
-    if (0 == geteuid()) {
-        prte_schizo.allow_run_as_root(prte_cmd_line);  // will exit us if not allowed
     }
 
     /* set debug flags */
@@ -815,6 +559,31 @@ int main(int argc, char *argv[])
     }
     memcpy(&myproc, val->data.proc, sizeof(pmix_proc_t));
     PMIX_VALUE_RELEASE(val);
+
+    /** setup callbacks for signals we should forward */
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "forward-signals", 0, 0))) {
+        param = pval->value.data.string;
+    } else {
+        param = NULL;
+    }
+    if (PRTE_SUCCESS != (rc = prte_ess_base_setup_signals(param))) {
+        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        goto DONE;
+    }
+    if (0 < (i = prte_list_get_size(&prte_ess_base_signals))) {
+        forward_signals_events = (prte_event_t*)malloc(sizeof(prte_event_t) * i);
+        if (NULL == forward_signals_events) {
+            ret = PRTE_ERR_OUT_OF_RESOURCE;
+            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            goto DONE;
+        }
+        i = 0;
+        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t) {
+            setup_sighandler(sig->signal, forward_signals_events + i, signal_forward_callback);
+            ++i;
+        }
+    }
+    signals_set = true;
 
     /* if we are supporting a singleton, add it to our jobs */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "singleton", 0, 0))) {
@@ -940,20 +709,8 @@ int main(int argc, char *argv[])
     }
 
     /* pass the personality */
-    for (i=0; NULL != prte_schizo_base.personalities[i]; i++) {
-        tmp = NULL;
-        if (0 != strcmp(prte_schizo_base.personalities[i], "prte") &&
-            0 != strcmp(prte_schizo_base.personalities[i], "pmix")) {
-            prte_argv_append_nosize(&tmp, prte_schizo_base.personalities[i]);
-        }
-        if (NULL != tmp) {
-            personality = prte_argv_join(tmp, ',');
-            prte_argv_free(tmp);
-            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, personality, PMIX_STRING);
-            /* don't free personality as we need it again later */
-        }
-    }
-    
+    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, schizo->name, PMIX_STRING);
+
     /* cannot have both files and directory set for output */
     param = NULL;
     ptr = NULL;
@@ -1093,10 +850,7 @@ int main(int argc, char *argv[])
     prte_schizo.job_info(prte_cmd_line, jinfo);
 
     /* pickup any relevant envars */
-    ninfo = 3;
-    if (NULL != personality) {
-        ++ninfo;
-    }
+    ninfo = 4;
     PMIX_INFO_CREATE(iptr, ninfo);
     flag = true;
     PMIX_INFO_LOAD(&iptr[0], PMIX_SETUP_APP_ENVARS, &flag, PMIX_BOOL);
@@ -1104,10 +858,7 @@ int main(int argc, char *argv[])
     PMIX_INFO_LOAD(&iptr[1], PMIX_USERID, &ui32, PMIX_UINT32);
     ui32 = getegid();
     PMIX_INFO_LOAD(&iptr[2], PMIX_GRPID, &ui32, PMIX_UINT32);
-    if (NULL != personality) {
-        PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, personality, PMIX_STRING);
-        free(personality);  // done with this now
-    }
+    PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, schizo->name, PMIX_STRING);
 
     PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
     ret = PMIx_server_setup_application(prte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc, &mylock);
@@ -1846,48 +1597,6 @@ static void abort_signal_callback(int fd)
     }
 }
 
-static void signal_forward_callback(int signum)
-{
-    pmix_status_t rc;
-    pmix_proc_t proc;
-    pmix_info_t info;
-
-    if (verbose){
-        fprintf(stderr, "%s: Forwarding signal %d to job\n",
-                prte_tool_basename, signum);
-    }
-
-    /* send the signal out to the processes */
-    PMIX_LOAD_PROCID(&proc, spawnednspace, PMIX_RANK_WILDCARD);
-    PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
-#if PMIX_NUMERIC_VERSION >= 0x00040000
-    rc = PMIx_Job_control(&proc, 1, &info, 1, NULL, NULL);
-#else
-    rc = PMIx_Job_control(&proc, 1, &info, 1);
-#endif
-    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-        fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)",
-                signum, spawnednspace, PMIx_Error_string(rc));
-    }
-}
-
-/**
- * Deal with sigpipe errors
- */
-static int sigpipe_error_count=0;
-static void epipe_signal_callback(int signal)
-{
-    sigpipe_error_count++;
-
-    if (10 < sigpipe_error_count) {
-        /* time to abort */
-        prte_output(0, "%s: SIGPIPE detected - aborting", prte_tool_basename);
-        clean_abort(0, 0, NULL);
-    }
-
-    return;
-}
-
 static int prep_singleton(const char *name)
 {
     char *ptr, *p1;
@@ -1963,4 +1672,46 @@ static int prep_singleton(const char *name)
     node->slots_inuse = 1;
 
     return PRTE_SUCCESS;
+}
+
+static void signal_forward_callback(int signum, short args, void *cbdata)
+{
+    pmix_status_t rc;
+    pmix_proc_t proc;
+    pmix_info_t info;
+
+    if (verbose){
+        fprintf(stderr, "%s: Forwarding signal %d to job\n",
+                prte_tool_basename, signum);
+    }
+
+    /* send the signal out to the processes */
+    PMIX_LOAD_PROCID(&proc, spawnednspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+    rc = PMIx_Job_control(&proc, 1, &info, 1, NULL, NULL);
+#else
+    rc = PMIx_Job_control(&proc, 1, &info, 1);
+#endif
+    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
+        fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)",
+                signum, spawnednspace, PMIx_Error_string(rc));
+    }
+}
+
+/**
+ * Deal with sigpipe errors
+ */
+static int sigpipe_error_count=0;
+static void epipe_signal_callback(int fd, short args, void *cbdata)
+{
+    sigpipe_error_count++;
+
+    if (10 < sigpipe_error_count) {
+        /* time to abort */
+        prte_output(0, "%s: SIGPIPE detected - aborting", prte_tool_basename);
+        clean_abort(0, 0, NULL);
+    }
+
+    return;
 }
