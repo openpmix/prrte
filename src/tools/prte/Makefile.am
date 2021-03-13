@@ -12,6 +12,7 @@
 # Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -51,7 +52,9 @@ man_MANS = $(man_pages_from_md)
 endif
 
 prte_SOURCES = \
-        prte.c
+        main.c \
+        prte.c \
+        prte.h
 
 prte_LDADD = \
     $(PRTE_EXTRA_LTLIB) \

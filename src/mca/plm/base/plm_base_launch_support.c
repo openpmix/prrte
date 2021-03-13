@@ -1914,6 +1914,33 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv,
     return PRTE_SUCCESS;
 }
 
+void prte_plm_base_wrap_args(char **args)
+{
+    int i;
+    char *tstr;
+
+    for (i=0; NULL != args && NULL != args[i]; i++) {
+        /* if the arg ends in "mca", then we wrap its arguments */
+        if (strlen(args[i]) > 3 && 0 == strcmp(args[i] + strlen(args[i]) - 3, "mca")) {
+            /* it was at the end */
+            if (NULL == args[i+1] || NULL == args[i+2]) {
+                /* this should be impossible as the error would
+                 * have been detected well before here, but just
+                 * be safe */
+                return;
+            }
+            i += 2;
+            /* if the argument already has quotes, then leave it alone */
+            if ('\"' == args[i][0]) {
+                continue;
+            }
+            prte_asprintf(&tstr, "\"%s\"", args[i]);
+            free(args[i]);
+            args[i] = tstr;
+        }
+    }
+}
+
 int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
 {
     prte_node_t *node, *nptr;

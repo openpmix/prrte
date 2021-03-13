@@ -21,18 +21,18 @@
  * $HEADER$
  */
 
-#ifndef PRUN_H
-#define PRUN_H
+#ifndef PRTE_H
+#define PRTE_H
 
 #include "prte_config.h"
 
 BEGIN_C_DECLS
 
 /**
- * Main body of prun functionality
+ * Main body of prte functionality
  */
-int prun(int argc, char *argv[]);
+int prte(int argc, char *argv[]);
 
 END_C_DECLS
 
-#endif /* PRTERUN_PRTERUN_H */
+#endif /* PRTE_H */

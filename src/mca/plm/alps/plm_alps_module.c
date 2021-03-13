@@ -411,7 +411,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* protect the args in case someone has a script wrapper around aprun */
-    prte_schizo.wrap_args(argv);
+    prte_plm_base_wrap_args(argv);
 
     /* setup environment */
     env = prte_argv_copy(prte_launch_environ);

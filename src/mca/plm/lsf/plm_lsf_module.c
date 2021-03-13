@@ -294,7 +294,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     free(vpid_string);
 
     /* protect the args in case someone has a script wrapper */
-    prte_schizo.wrap_args(argv);
+    prte_plm_base_wrap_args(argv);
 
     if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
         param = prte_argv_join(argv, ' ');

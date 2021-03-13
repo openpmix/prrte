@@ -446,6 +446,20 @@ int prte_pmix_register_cleanup(char *path, bool directory, bool ignore, bool job
 }
 
 /* CLASS INSTANTIATIONS */
+static void acon(prte_pmix_app_t *p)
+{
+    PMIX_APP_CONSTRUCT(&p->app);
+    PMIX_INFO_LIST_START(p->info);
+}
+static void ades(prte_pmix_app_t *p)
+{
+    PMIX_APP_DESTRUCT(&p->app);
+    PMIX_INFO_LIST_RELEASE(p->info);
+}
+PRTE_CLASS_INSTANCE(prte_pmix_app_t,
+                    prte_list_item_t,
+                    acon, ades);
+
 static void dsicon(prte_ds_info_t *p)
 {
     PMIX_PROC_CONSTRUCT(&p->source);

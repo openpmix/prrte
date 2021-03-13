@@ -76,6 +76,7 @@
 #include "src/mca/state/state.h"
 
 #include "src/mca/plm/plm.h"
+#include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "plm_tm.h"
 

@@ -16,6 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,6 +49,7 @@
 #include "src/util/argv.h"
 #include "src/mca/base/base.h"
 #include "src/mca/schizo/base/base.h"
+#include "src/util/path.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 #include "src/prted/pmix/pmix_server.h"
@@ -71,6 +73,43 @@ const char *prte_info_type_prte = "prte";
 const char *prte_info_type_base = "base";
 
 prte_pointer_array_t mca_types = {{0}};
+
+prte_cmd_line_init_t info_cmd_line_opts[] = {
+    { 'h', "help", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "This help message",
+        PRTE_CMD_LINE_OTYPE_GENERAL },
+    { 'V', "version", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "Print version and exit",
+        PRTE_CMD_LINE_OTYPE_GENERAL },
+   {'\0', "show-version", 2, PRTE_CMD_LINE_TYPE_STRING,
+        "Show version of PRTE or a component.  The first parameter can be the keywords \"prte\" or \"all\", a framework name (indicating all components in a framework), or a framework:component string (indicating a specific component).  The second parameter can be one of: full, major, minor, release, greek, svn.",
+        PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'\0', "param", 2, PRTE_CMD_LINE_TYPE_STRING,
+        "Show MCA parameters.  The first parameter is the framework (or the keyword \"all\"); the second parameter is the specific component name (or the keyword \"all\").",
+        PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'\0', "internal", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "Show internal MCA parameters (not meant to be modified by users)",
+        PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'\0', "path", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Show paths that PRTE was configured with.  Accepts the following parameters: prefix, bindir, libdir, incdir, mandir, pkglibdir, sysconfdir",
+        PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'\0', "arch", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "Show architecture PRTE was compiled on",
+        PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'c', "config", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "Show configuration options",
+        PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'\0', "hostname", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "Show the hostname that PRTE was configured "
+        "and built on",
+        PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'a', "all", 0, PRTE_CMD_LINE_TYPE_BOOL,
+        "Show all configuration options and MCA parameters",
+        PRTE_CMD_LINE_OTYPE_GENERAL},
+
+    /* End of list */
+    { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
+};
 
 int main(int argc, char *argv[])
 {
@@ -101,53 +140,8 @@ int main(int argc, char *argv[])
         exit(ret);
     }
 
-    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "show-version", 2,
-                            "Show version of PRTE or a component.  The first parameter can be the keywords \"prte\" or \"all\", a framework name (indicating all components in a framework), or a framework:component string (indicating a specific component).  The second parameter can be one of: full, major, minor, release, greek, svn.",
-                            PRTE_CMD_LINE_OTYPE_GENERAL);
-    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "param", 2,
-                            "Show MCA parameters.  The first parameter is the framework (or the keyword \"all\"); the second parameter is the specific component name (or the keyword \"all\").",
-                            PRTE_CMD_LINE_OTYPE_GENERAL);
-    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "internal", 0,
-                            "Show internal MCA parameters (not meant to be modified by users)",
-                            PRTE_CMD_LINE_OTYPE_GENERAL);
-    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "path", 1,
-                            "Show paths that PRTE was configured with.  Accepts the following parameters: prefix, bindir, libdir, incdir, mandir, pkglibdir, sysconfdir",
-                            PRTE_CMD_LINE_OTYPE_GENERAL);
-    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "arch", 0,
-                            "Show architecture PRTE was compiled on",
-                            PRTE_CMD_LINE_OTYPE_GENERAL);
-    prte_cmd_line_make_opt3(prte_info_cmd_line, 'c', "config", 0,
-                            "Show configuration options",
-                            PRTE_CMD_LINE_OTYPE_GENERAL);
-    prte_cmd_line_make_opt3(prte_info_cmd_line, '\0', "hostname", 0,
-                            "Show the hostname that PRTE was configured "
-                            "and built on",
-                            PRTE_CMD_LINE_OTYPE_GENERAL);
-    prte_cmd_line_make_opt3(prte_info_cmd_line, 'a', "all", 0,
-                            "Show all configuration options and MCA parameters",
-                            PRTE_CMD_LINE_OTYPE_GENERAL);
-
-    /* open the SCHIZO framework */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                                     PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
-        return ret;
-    }
-
-    if (PRTE_SUCCESS != (ret = prte_schizo_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        return ret;
-    }
-    /* scan for personalities */
-    for (i=0; NULL != argv[i]; i++) {
-        if (0 == strcmp(argv[i], "--personality")) {
-            prte_argv_append_nosize(&prte_schizo_base.personalities, argv[i+1]);
-        }
-    }
-
-    /* setup the rest of the cmd line only once */
-    if (PRTE_SUCCESS != (ret = prte_schizo.define_cli(prte_info_cmd_line))) {
-        PRTE_ERROR_LOG(ret);
+    ret = prte_cmd_line_add(prte_info_cmd_line, info_cmd_line_opts);
+    if (PRTE_SUCCESS != ret){
         return ret;
     }
 
