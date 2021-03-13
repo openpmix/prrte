@@ -1001,7 +1001,6 @@ static int output(int output_id, const char *format, va_list arglist)
                     ++ldi->ldi_file_num_lines_lost;
                 } else if (ldi->ldi_file_num_lines_lost > 0) {
                     char buffer[BUFSIZ];
-                    char *out = buffer;
                     memset(buffer, 0, BUFSIZ);
                     snprintf(buffer, BUFSIZ - 1,
                              "[WARNING: %d lines lost because the PRTE process session directory did\n not exist when prte_output() was invoked]\n",
@@ -1011,9 +1010,6 @@ static int output(int output_id, const char *format, va_list arglist)
                         return PRTE_ERR_FATAL;
                     }
                     ldi->ldi_file_num_lines_lost = 0;
-                    if (out != buffer) {
-                        free(out);
-                    }
                 }
             }
             if (ldi->ldi_fd != -1) {

@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
     if (!cmd_error &&
         (prte_cmd_line_is_taken(prte_info_cmd_line, "help") ||
          prte_cmd_line_is_taken(prte_info_cmd_line, "h"))) {
-        char *str, *usage;
+        char *usage;
 
         want_help = true;
         usage = prte_cmd_line_get_usage_msg(prte_info_cmd_line, false);

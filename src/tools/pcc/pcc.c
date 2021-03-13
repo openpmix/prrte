@@ -872,17 +872,17 @@ main(int argc, char *argv[])
                               (WIFSIGNALED(status) ? WTERMSIG(status) :
                                   (WIFSTOPPED(status) ? WSTOPSIG(status) : 255));
             if( (PRTE_SUCCESS != ret) || ((0 != exit_status) && (flags & COMP_SHOW_ERROR)) ) {
-                char* exec_command = prte_argv_join(exec_argv, ' ');
+                char* exec_cmd = prte_argv_join(exec_argv, ' ');
                 if( PRTE_SUCCESS != ret ) {
                     prte_show_help("help-pcc.txt", "spawn-failed", true,
-                                   exec_argv[0], strerror(status), exec_command, NULL);
+                                   exec_argv[0], strerror(status), exec_cmd, NULL);
                 } else {
 #if 0
                     prte_show_help("help-pcc.txt", "compiler-failed", true,
-                                   exec_argv[0], exit_status, exec_command, NULL);
+                                   exec_argv[0], exit_status, exec_cmd, NULL);
 #endif
                 }
-                free(exec_command);
+                free(exec_cmd);
             }
         }
     }
