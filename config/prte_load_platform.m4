@@ -14,6 +14,7 @@ dnl Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2015      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -25,11 +26,11 @@ dnl
 # --------------------
 AC_DEFUN([PRTE_LOAD_PLATFORM], [
     AC_ARG_WITH([prte-platform-patches-dir],
-        [AC_HELP_STRING([--with-prte-platform-patches-dir=DIR],
+        [AS_HELP_STRING([--with-prte-platform-patches-dir=DIR],
                         [Location of the platform patches directory. If you use this option, you must also use --with-platform.])])
 
     AC_ARG_WITH([prte-platform],
-        [AC_HELP_STRING([--with-prte-platform=FILE],
+        [AS_HELP_STRING([--with-prte-platform=FILE],
                         [Load options for build from FILE.  Options on the
                          command line not in FILE are used.  Options on the
                          command line and in FILE are replaced by what is

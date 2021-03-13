@@ -14,6 +14,7 @@
 # Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 #                         reserved.
 # Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,7 +27,7 @@
 AC_DEFUN([PRTE_CHECK_SLURM],[
     if test -z "$prte_check_slurm_happy" ; then
 	AC_ARG_WITH([slurm],
-           [AC_HELP_STRING([--with-slurm],
+           [AS_HELP_STRING([--with-slurm],
                            [Build SLURM scheduler component (default: yes)])])
 
 	if test "$with_slurm" = "no" ; then

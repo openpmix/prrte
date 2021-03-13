@@ -4,6 +4,7 @@ dnl Copyright (c) 2015-2017 Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2020      Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -39,7 +40,7 @@ AC_DEFUN([PRTE_LIBNL_SANITY_INIT], [
     prte_libnlv1_libs=
     prte_libnlv3_libs=
     AC_ARG_WITH([libnl],
-                [AC_HELP_STRING([--with-libnl(=DIR)],
+                [AS_HELP_STRING([--with-libnl(=DIR)],
                                 [Directory prefix for libnl (typically only necessary if libnl is installed in a location that the compiler/linker will not search by default)])])
 
     # The --with options carry two pieces of information: 1) do
@@ -365,5 +366,5 @@ AC_DEFUN([PRTE_CHECK_LIBNL_SUMMARY],[
           [AC_MSG_RESULT([(none)])])
     AS_IF([test -n "$prte_libnlv1_libs" && test -n "$prte_libnlv3_libs"],
           [AC_MSG_WARN([libnl v1 and libnl v3 have been found as dependent libraries])
-           AC_ERROR([This is a configuration that is known to cause run-time crashes])])
+           AC_MSG_ERROR([This is a configuration that is known to cause run-time crashes])])
 ])

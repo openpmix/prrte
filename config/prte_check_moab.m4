@@ -14,6 +14,7 @@
 # Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 #                         reserved.
 # Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -28,11 +29,11 @@ AC_DEFUN([PRTE_CHECK_MOAB],[
         PRTE_VAR_SCOPE_PUSH([prte_check_moab_$1_save_CPPFLAGS prte_check_moab_$1_save_LDFLAGS prte_check_moab_$1_save_LIBS])
 
         AC_ARG_WITH([moab],
-                    [AC_HELP_STRING([--with-moab],
+                    [AS_HELP_STRING([--with-moab],
                                     [Build MOAB scheduler component (default: yes)])])
         PRTE_CHECK_WITHDIR([moab], [$with_moab], [mapi.h])
         AC_ARG_WITH([moab-libdir],
-                    [AC_HELP_STRING([--with-moab-libdir=DIR],
+                    [AS_HELP_STRING([--with-moab-libdir=DIR],
                     [Search for Moab libraries in DIR])])
         PRTE_CHECK_WITHDIR([moab-libdir], [$with_moab_libdir], [libmoab.*])
 

@@ -15,8 +15,9 @@ dnl Copyright (c) 2015      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 dnl                         reserved.
-dnl Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
+dnl Copyright (c) 2017-2021 IBM Corporation.  All rights reserved.
 dnl Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -30,11 +31,11 @@ dnl
 AC_DEFUN([PRTE_CHECK_LSF],[
     AS_IF([test -z "$prte_check_lsf_happy"],[
        AC_ARG_WITH([lsf],
-               [AC_HELP_STRING([--with-lsf(=DIR)],
+               [AS_HELP_STRING([--with-lsf(=DIR)],
                        [Build LSF support])])
        PRTE_CHECK_WITHDIR([lsf], [$with_lsf], [include/lsf/lsbatch.h])
        AC_ARG_WITH([lsf-libdir],
-               [AC_HELP_STRING([--with-lsf-libdir=DIR],
+               [AS_HELP_STRING([--with-lsf-libdir=DIR],
                        [Search for LSF libraries in DIR])])
        PRTE_CHECK_WITHDIR([lsf-libdir], [$with_lsf_libdir], [libbat.*])
 
@@ -78,37 +79,27 @@ AC_DEFUN([PRTE_CHECK_LSF],[
           # on AIX it should be in libbsd
           # on HP-UX it should be in libBSD
           # on IRIX < 6 it should be in libsun (IRIX 6 and later it is in libc)
-          PRTE_SEARCH_LIBS_COMPONENT([yp_all_nsl], [yp_all], [nsl bsd BSD sun],
-                         [yp_all_nsl_happy="yes"],
-                         [yp_all_nsl_happy="no"])
-
-          AS_IF([test "$yp_all_nsl_happy" = "no"],
-                    [prte_check_lsf_happy="no"],
-                    [prte_check_lsf_happy="yes"])
+          AS_IF([test "$prte_check_lsf_happy" = "yes"],
+                [PRTE_SEARCH_LIBS_COMPONENT([yp_all_nsl], [yp_all], [nsl bsd BSD sun],
+                              [prte_check_lsf_happy="yes"],
+                              [prte_check_lsf_happy="no"])])
 
           # liblsf requires shm_open, shm_unlink, which are in librt
-          PRTE_SEARCH_LIBS_COMPONENT([shm_open_rt], [shm_open], [rt],
-                        [shm_open_rt_happy="yes"],
-                        [shm_open_rt_happy="no"])
+          AS_IF([test "$prte_check_lsf_happy" = "yes"],
+                [PRTE_SEARCH_LIBS_COMPONENT([shm_open_rt], [shm_open], [rt],
+                              [prte_check_lsf_happy="yes"],
+                              [prte_check_lsf_happy="no"])])
 
-          AS_IF([test "$shm_open_rt_happy" = "no"],
-                    [prte_check_lsf_happy="no"],
-                    [prte_check_lsf_happy="yes"])
-
-          # liblsb requires liblsf - using ls_info as a test for liblsf presence
-          PRTE_CHECK_PACKAGE([ls_info_lsf],
-                     [lsf/lsf.h],
-                     [lsf],
-                     [ls_info],
-                     [$yp_all_nsl_LIBS $shm_open_rt_LIBS],
-                     [$prte_check_lsf_dir],
-                     [$prte_check_lsf_libdir],
-                     [ls_info_lsf_happy="yes"],
-                     [ls_info_lsf_happy="no"])
-
-          AS_IF([test "$ls_info_lsf_happy" = "no"],
-                    [prte_check_lsf_happy="no"],
-                    [prte_check_lsf_happy="yes"])
+          AS_IF([test "$prte_check_lsf_happy" = "yes"],
+                [PRTE_CHECK_PACKAGE([ls_info_lsf],
+                           [lsf/lsf.h],
+                           [lsf],
+                           [ls_info],
+                           [$yp_all_nsl_LIBS $shm_open_rt_LIBS],
+                           [$prte_check_lsf_dir],
+                           [$prte_check_lsf_libdir],
+                           [prte_check_lsf_happy="yes"],
+                           [prte_check_lsf_happy="no"])])
 
           # test function of liblsb LSF package
           AS_IF([test "$prte_check_lsf_happy" = "yes"],
@@ -116,10 +107,6 @@ AC_DEFUN([PRTE_CHECK_LSF],[
                      AC_MSG_RESULT([$prte_check_lsf_dir_msg])
                      AC_MSG_CHECKING([for LSF library dir])
                      AC_MSG_RESULT([$prte_check_lsf_libdir_msg])
-                     AC_MSG_CHECKING([for liblsf function])
-                     AC_MSG_RESULT([$ls_info_lsf_happy])
-                     AC_MSG_CHECKING([for liblsf yp requirements])
-                     AC_MSG_RESULT([$yp_all_nsl_happy])
                      PRTE_CHECK_PACKAGE([prte_check_lsf],
                         [lsf/lsbatch.h],
                         [bat],
