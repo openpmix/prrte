@@ -36,6 +36,7 @@
 #include <ctype.h>
 
 #include "src/util/argv.h"
+#include "src/util/basename.h"
 #include "src/util/prte_environ.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
@@ -680,10 +681,12 @@ static int setup_fork(prte_job_t *jdata,
 
 static int detect_proxy(char *cmdpath)
 {
+    char *mybasename;
+
     prte_output_verbose(2, prte_schizo_base_framework.framework_output,
-                        "%s[%s]: detect proxy with %s",
+                        "%s[%s]: detect proxy with %s (%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        __FILE__, cmdpath);
+                        __FILE__, cmdpath, prte_tool_basename);
 
     /* we are lowest priority, so we will be checked last */
     if (NULL == cmdpath) {
@@ -701,10 +704,15 @@ static int detect_proxy(char *cmdpath)
         }
     }
 
-    /* if it is in our install path, then it belongs to us */
-    if (NULL != strstr(cmdpath, prte_install_dirs.prefix)) {
+    /* if it is not a symlink and is in our install path,
+     * then it belongs to us */
+    mybasename = prte_basename(cmdpath);
+    if (0 == strcmp(mybasename, prte_tool_basename) &&
+        NULL != strstr(cmdpath, prte_install_dirs.prefix)) {
+        free(mybasename);
         return 100;
     }
+    free(mybasename);
 
     /* we are always the lowest priority */
     return prte_schizo_prte_component.priority;
