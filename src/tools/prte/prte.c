@@ -351,6 +351,7 @@ int prte(int argc, char *argv[])
             proxyrun = true;
         }
     }
+    prte_output(0, "PROXY[%s] IS %s", schizo->name, proxyrun ? "TRUE" : "FALSE");
 
     /* check if we are running as root - if we are, then only allow
      * us to proceed if the allow-run-as-root flag was given. Otherwise,

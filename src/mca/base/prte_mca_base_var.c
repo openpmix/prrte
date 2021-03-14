@@ -1254,13 +1254,13 @@ int prte_mca_base_var_register (const char *project_name, const char *framework_
     }
 
     PRTE_LIST_FOREACH_DECL(alias_item, &alias->component_aliases, prte_mca_base_alias_item_t) {
-        prte_mca_base_var_syn_flag_t flags = PRTE_MCA_BASE_VAR_SYN_FLAG_NONE;
+        prte_mca_base_var_syn_flag_t inflags = PRTE_MCA_BASE_VAR_SYN_FLAG_NONE;
         if (alias_item->alias_flags & PRTE_MCA_BASE_ALIAS_FLAG_DEPRECATED) {
-            flags = PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED;
+            inflags = PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED;
         }
         (void) prte_mca_base_var_register_synonym (ret, project_name, framework_name,
                                                    alias_item->component_alias,
-                                                   variable_name, flags);
+                                                   variable_name, inflags);
     }
 
     return ret;

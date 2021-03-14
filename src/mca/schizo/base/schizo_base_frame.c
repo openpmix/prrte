@@ -312,8 +312,13 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
         old_arg = strdup(pargs[idx]);
         free(pargs[idx]);
         pargs[idx] = strdup(option);
-        /* delete arguments if needed */
-        if (1 < ntodelete) {
+        /* if the argument is --am or --amca, then we got
+         * here because there wasn't already a --tune argument.
+         * In this case, we don't want to delete anything as
+         * we are just substituting --tune for the original arg */
+        if (0 != strcmp(old_arg, "--am") &&
+            0 != strcasecmp(old_arg, "--amca") &&
+            1 < ntodelete) {
             prte_argv_delete(NULL, argv, idx+1, ntodelete-1);
         }
         if (0 == strcasecmp(option, "--tune")) {

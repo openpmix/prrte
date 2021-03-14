@@ -1182,6 +1182,11 @@ PRTE_FLAGS_UNIQ(CFLAGS)
 
 AC_SUBST(CFLAGS)
 
+#
+# Aggregate MCA parameters directory
+#
+AC_SUBST([AMCA_PARAM_SETS_DIR], ['$(prtedatadir)/amca-param-sets'])
+
 ############################################################################
 # final wrapper compiler config
 ############################################################################
