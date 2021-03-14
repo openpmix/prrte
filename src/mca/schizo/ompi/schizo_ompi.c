@@ -1150,9 +1150,9 @@ static int detect_proxy(char *cmdpath)
 
 
     prte_output_verbose(2, prte_schizo_base_framework.framework_output,
-                        "%s[%s]: detect proxy with %s",
+                        "%s[%s]: detect proxy with %s (%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        __FILE__, cmdpath);
+                        __FILE__, cmdpath, prte_tool_basename);
 
     if (NULL == cmdpath) {
         return 0;
