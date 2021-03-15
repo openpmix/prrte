@@ -131,6 +131,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
     pmix_proc_t pname;
     pmix_byte_object_t pbo;
     pmix_topology_t ptopo;
+    char *tmp;
 
     /* unpack the command */
     n = 1;
@@ -204,7 +205,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         /* unpack the jobid */
         n = 1;
 #if PMIX_NUMERIC_VERSION < 0x00040100
-        char *tmp = NULL;
+        tmp = NULL;
         ret = PMIx_Data_unpack(NULL, buffer, &tmp, &n, PMIX_STRING);
         PMIX_LOAD_NSPACE(job, tmp);
         if (NULL != tmp) {
@@ -661,16 +662,25 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         char *gstack_exec;
         gstack_exec = prte_find_absolute_path("gstack");
 
+        /* we have to at least include the nspace of this job
+         * in the reply to ensure the DVM master knows which
+         * job we are talking about */
+        tmp = (char*)job;
+        if (PMIX_SUCCESS != PMIx_Data_pack(NULL, answer, &tmp, 1, PMIX_STRING)) {
+            PMIX_DATA_BUFFER_DESTRUCT(&data);
+            break;
+        }
+
         /* hit each local process with a gstack command */
         for (i=0; i < prte_local_children->size; i++) {
             if (NULL != (proct = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i)) &&
                 PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE) &&
                 PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
-                PMIX_DATA_BUFFER_CREATE(relay_msg);
-                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, relay_msg, &proct->name, 1, PMIX_PROC) ||
-                    PMIX_SUCCESS != PMIx_Data_pack(NULL, relay_msg, &proct->node->name, 1, PMIX_STRING) ||
-                    PMIX_SUCCESS != PMIx_Data_pack(NULL, relay_msg, &proct->pid, 1, PMIX_PID)) {
-                    PMIX_DATA_BUFFER_RELEASE(relay_msg);
+                PMIX_DATA_BUFFER_CONSTRUCT(&data);
+                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->name, 1, PMIX_PROC) ||
+                    PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->node->name, 1, PMIX_STRING) ||
+                    PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->pid, 1, PMIX_PID)) {
+                    PMIX_DATA_BUFFER_DESTRUCT(&data);
                     break;
                 }
 
@@ -692,16 +702,22 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
                                     (NULL == gstack_exec) ? "gstack" : gstack_exec,
                                     proct->node->name);
                     if (PMIX_SUCCESS ==
-                        PMIx_Data_pack(NULL, relay_msg, &string_ptr, 1, PMIX_STRING)) {
-                        PMIx_Data_pack(NULL, answer, &relay_msg, 1, PMIX_BUFFER);
+                        PMIx_Data_pack(NULL, &data, &string_ptr, 1, PMIX_STRING)) {
+                        ret = PMIx_Data_unload(&data, &pbo);
+                        if (PMIX_SUCCESS != ret) {
+                            PMIX_ERROR_LOG(ret);
+                            PMIX_DATA_BUFFER_DESTRUCT(&data);
+                            break;
+                        }
+                        PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT);
                     }
-                    PMIX_DATA_BUFFER_RELEASE(relay_msg);
+                    PMIX_DATA_BUFFER_DESTRUCT(&data);
                     break;
                 }
                 /* Read the output a line at a time and pack it for transmission */
                 memset(path, 0, sizeof(path));
                 while (fgets(path, sizeof(path)-1, fp) != NULL) {
-                    if (PMIX_SUCCESS != PMIx_Data_pack(NULL, relay_msg, &pathptr, 1, PMIX_STRING)) {
+                    if (PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &pathptr, 1, PMIX_STRING)) {
                         PMIX_DATA_BUFFER_RELEASE(relay_msg);
                         break;
                     }
@@ -710,11 +726,17 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
                 /* close */
                 pclose(fp);
                 /* transfer this load */
-                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, answer, &relay_msg, 1, PMIX_BUFFER)) {
-                    PMIX_DATA_BUFFER_RELEASE(relay_msg);
+                ret = PMIx_Data_unload(&data, &pbo);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_DATA_BUFFER_DESTRUCT(&data);
                     break;
                 }
-                PMIX_DATA_BUFFER_RELEASE(relay_msg);
+                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, answer, &pbo, 1, PMIX_BYTE_OBJECT)) {
+                    PMIX_DATA_BUFFER_DESTRUCT(&data);
+                    break;
+                }
+                PMIX_DATA_BUFFER_DESTRUCT(&data);
             }
         }
         if (NULL != gstack_exec) {
