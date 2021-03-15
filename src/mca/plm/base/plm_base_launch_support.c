@@ -690,11 +690,12 @@ static void stack_trace_recv(int status, pmix_proc_t* sender,
                              pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
                              void* cbdata)
 {
-    pmix_data_buffer_t *blob;
+    pmix_byte_object_t pbo;
+    pmix_data_buffer_t blob;
     char *st;
     int32_t cnt;
     pmix_proc_t name;
-    char *hostname;
+    char *hostname, *nspace;
     pid_t pid;
     prte_job_t *jdata = NULL;
     prte_timer_t *timer;
@@ -702,36 +703,51 @@ static void stack_trace_recv(int status, pmix_proc_t* sender,
     prte_pointer_array_t parray;
     int rc;
 
+    prte_output_verbose(5, prte_plm_base_framework.framework_output,
+                        "%s: stacktrace recvd from %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(sender));
+
     /* unpack the stack_trace blob */
     cnt = 1;
-    while (PMIX_SUCCESS == PMIx_Data_unpack(NULL, buffer, &blob, &cnt, PMIX_BUFFER)) {
+    while (PMIX_SUCCESS == PMIx_Data_unpack(NULL, buffer, &nspace, &cnt, PMIX_STRING)) {
+        if (NULL == jdata) {
+            jdata = prte_get_job_data_object(nspace);
+        }
+        free(nspace);
+
+        if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, buffer, &pbo, &cnt, PMIX_BYTE_OBJECT)) {
+            continue;
+        }
+        PMIx_Data_load(&blob, &pbo);
         /* first piece is the name of the process */
         cnt = 1;
-        if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, blob, &name, &cnt, PMIX_PROC) ||
-            PMIX_SUCCESS != PMIx_Data_unpack(NULL, blob, &hostname, &cnt, PMIX_STRING) ||
-            PMIX_SUCCESS != PMIx_Data_unpack(NULL, blob, &pid, &cnt, PMIX_PID)) {
-            PRTE_RELEASE(blob);
+        if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, &blob, &name, &cnt, PMIX_PROC) ||
+            PMIX_SUCCESS != PMIx_Data_unpack(NULL, &blob, &hostname, &cnt, PMIX_STRING) ||
+            PMIX_SUCCESS != PMIx_Data_unpack(NULL, &blob, &pid, &cnt, PMIX_PID)) {
+            PMIX_DATA_BUFFER_DESTRUCT(&blob);
             continue;
         }
         fprintf(stderr, "STACK TRACE FOR PROC %s (%s, PID %lu)\n", PRTE_NAME_PRINT(&name), hostname, (unsigned long) pid);
         free(hostname);
         /* unpack the stack_trace until complete */
         cnt = 1;
-        while (PRTE_SUCCESS == PMIx_Data_unpack(NULL, blob, &st, &cnt, PMIX_STRING)) {
+        while (PRTE_SUCCESS == PMIx_Data_unpack(NULL, &blob, &st, &cnt, PMIX_STRING)) {
             fprintf(stderr, "\t%s", st);  // has its own newline
             free(st);
             cnt = 1;
         }
         fprintf(stderr, "\n");
-        if (NULL == jdata) {
-            jdata = prte_get_job_data_object(name.nspace);
-        }
-        PMIX_DATA_BUFFER_RELEASE(blob);
+        PMIX_DATA_BUFFER_DESTRUCT(&blob);
         cnt = 1;
     }
     ++ntraces;
     if (prte_process_info.num_daemons == ntraces) {
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TRACE_TIMEOUT_EVENT, (void**)&timer, PMIX_POINTER)) {
+        timer = NULL;
+        if (NULL != jdata &&
+            prte_get_attribute(&jdata->attributes, PRTE_JOB_TRACE_TIMEOUT_EVENT, (void**)&timer, PMIX_POINTER) &&
+            NULL != timer) {
+            prte_event_evtimer_del(timer->ev);
             /* timer is an prte_timer_t object */
             PRTE_RELEASE(timer);
             prte_remove_attribute(&jdata->attributes, PRTE_JOB_TRACE_TIMEOUT_EVENT);
@@ -741,11 +757,12 @@ static void stack_trace_recv(int status, pmix_proc_t* sender,
         /* create an object */
         proc = PRTE_NEW(prte_proc_t);
         PMIX_LOAD_PROCID(&proc->name, jdata->nspace, PMIX_RANK_WILDCARD);
-        prte_pointer_array_add(&parray, proc);
+        cnt = prte_pointer_array_add(&parray, proc);
         if (PRTE_SUCCESS != (rc = prte_plm.terminate_procs(&parray))) {
             PRTE_ERROR_LOG(rc);
         }
         PRTE_RELEASE(proc);
+        prte_pointer_array_set_item(&parray, cnt, NULL);
         PRTE_DESTRUCT(&parray);
         ntraces = 0;
     }
@@ -753,10 +770,21 @@ static void stack_trace_recv(int status, pmix_proc_t* sender,
 
 static void stack_trace_timeout(int sd, short args, void *cbdata)
 {
+    prte_timer_t *timer;
     prte_job_t *jdata = (prte_job_t*)cbdata;
     prte_proc_t *proc;
     prte_pointer_array_t parray;
     int rc;
+
+    /* clear the timer */
+    timer = NULL;
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT, (void**)&timer, PMIX_POINTER) &&
+        NULL != timer) {
+        prte_event_evtimer_del(timer->ev);
+        /* timer is an prte_timer_t object */
+        PRTE_RELEASE(timer);
+        prte_remove_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT);
+    }
 
     /* abort the job */
     PRTE_CONSTRUCT(&parray, prte_pointer_array_t);
@@ -767,8 +795,10 @@ static void stack_trace_timeout(int sd, short args, void *cbdata)
     if (PRTE_SUCCESS != (rc = prte_plm.terminate_procs(&parray))) {
         PRTE_ERROR_LOG(rc);
     }
+    return;
     PRTE_RELEASE(proc);
     PRTE_DESTRUCT(&parray);
+    PRTE_RELEASE(jdata);
 }
 
 /* catch job execution timeout */
@@ -793,12 +823,6 @@ static void timeout_cb(int fd, short event, void *cbdata)
     prte_show_help("help-plm-base.txt", "timeout",
                     true, timeout);
     PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_TIMEOUT);
-    /* clear the timer */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT, (void**)&timer, PMIX_POINTER)) {
-        /* timer is an prte_timer_t object */
-        PRTE_RELEASE(timer);
-        prte_remove_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT);
-    }
 
     /* see if they want proc states reported */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, NULL, PMIX_BOOL)) {
@@ -828,7 +852,7 @@ static void timeout_cb(int fd, short event, void *cbdata)
         /* if they asked for stack_traces, attempt to get them, but timeout
          * if we cannot do so */
         prte_daemon_cmd_flag_t command = PRTE_DAEMON_GET_STACK_TRACES;
-        pmix_data_buffer_t *buffer;
+        pmix_data_buffer_t buffer;
         prte_grpcomm_signature_t *sig;
 
         fprintf(stderr, "Waiting for stack traces (this may take a few moments)...\n");
@@ -838,12 +862,12 @@ static void timeout_cb(int fd, short event, void *cbdata)
                                  PRTE_RML_PERSISTENT, stack_trace_recv, NULL);
 
         /* setup the buffer */
-        PMIX_DATA_BUFFER_CREATE(buffer);
+        PMIX_DATA_BUFFER_CONSTRUCT(&buffer);
         /* pack the command */
-        rc = PMIx_Data_pack(NULL, buffer, &command, 1, PMIX_UINT8);
+        rc = PMIx_Data_pack(NULL, &buffer, &command, 1, PMIX_UINT8);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buffer);
+            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
             goto giveup;
         }
         /* pack the jobid */
@@ -852,16 +876,16 @@ static void timeout_cb(int fd, short event, void *cbdata)
         if (0 < strlen(jdata->nspace)) {
             tmp = strdup(jdata->nspace);
         }
-        rc = PMIx_Data_pack(NULL, buffer, &tmp, 1, PMIX_STRING);
+        rc = PMIx_Data_pack(NULL, &buffer, &tmp, 1, PMIX_STRING);
         if (NULL != tmp) {
             free(tmp);
         }
 #else
-        rc = PMIx_Data_pack(NULL, buffer, &jdata->nspace, 1, PMIX_PROC_NSPACE);
+        rc = PMIx_Data_pack(NULL, &buffer, &jdata->nspace, 1, PMIX_PROC_NSPACE);
 #endif
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buffer);
+            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
             goto giveup;
         }
         /* goes to all daemons */
@@ -869,23 +893,20 @@ static void timeout_cb(int fd, short event, void *cbdata)
         sig->signature = (pmix_proc_t*)malloc(sizeof(pmix_proc_t));
         PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
         sig->sz = 1;
-        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, buffer))) {
+        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &buffer))) {
             PRTE_ERROR_LOG(rc);
-            PRTE_RELEASE(buffer);
-            PRTE_RELEASE(sig);
+            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
             goto giveup;
         }
-        PRTE_RELEASE(buffer);
+        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
         /* maintain accounting */
         PRTE_RELEASE(sig);
         /* we will terminate after we get the stack_traces, but set a timeout
          * just in case we never hear back from everyone */
         if (prte_stack_trace_wait_timeout > 0) {
             timer = PRTE_NEW(prte_timer_t);
-            timer->payload = jdata;
             prte_event_evtimer_set(prte_event_base,
                                     timer->ev, stack_trace_timeout, jdata);
-            prte_event_set_priority(timer->ev, PRTE_ERROR_PRI);
             timer->tv.tv_sec = prte_stack_trace_wait_timeout;
             timer->tv.tv_usec = 0;
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TRACE_TIMEOUT_EVENT, PRTE_ATTR_LOCAL, timer, PMIX_POINTER);
