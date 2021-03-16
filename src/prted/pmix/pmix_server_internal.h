@@ -158,20 +158,20 @@ typedef struct {
 } prte_pmix_mdx_caddy_t;
 PRTE_CLASS_DECLARATION(prte_pmix_mdx_caddy_t);
 
-#define PRTE_IO_OP(t, nt, b, fn, cfn, cbd)                     \
+#define PRTE_IO_OP(t, nt, b, fn, cfn, cbd)                      \
     do {                                                        \
-        prte_pmix_server_op_caddy_t *_cd;                      \
-        _cd = PRTE_NEW(prte_pmix_server_op_caddy_t);          \
-        _cd->procs = (t);                                       \
+        prte_pmix_server_op_caddy_t *_cd;                       \
+        _cd = PRTE_NEW(prte_pmix_server_op_caddy_t);            \
+        _cd->procs = (pmix_proc_t*)(t);                         \
         _cd->nprocs = (nt);                                     \
         _cd->server_object = (void*)(b);                        \
         _cd->cbfunc = (cfn);                                    \
         _cd->cbdata = (cbd);                                    \
-        prte_event_set(prte_event_base, &(_cd->ev), -1,       \
-                        PRTE_EV_WRITE, (fn), _cd);             \
-        prte_event_set_priority(&(_cd->ev), PRTE_MSG_PRI);    \
-        PRTE_POST_OBJECT(_cd);                                 \
-        prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);      \
+        prte_event_set(prte_event_base, &(_cd->ev), -1,         \
+                        PRTE_EV_WRITE, (fn), _cd);              \
+        prte_event_set_priority(&(_cd->ev), PRTE_MSG_PRI);      \
+        PRTE_POST_OBJECT(_cd);                                  \
+        prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);        \
     } while(0);
 
 #define PRTE_DMX_REQ(p, i, ni, cf, ocf, ocd)                 \
