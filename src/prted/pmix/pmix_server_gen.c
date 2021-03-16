@@ -1303,8 +1303,6 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata)
     cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
 #endif
 
-    PMIX_BYTE_OBJECT_FREE(bo, 1);
-    PMIX_PROC_FREE(cd->procs, cd->nprocs);
     PRTE_RELEASE(cd);
 }
 
@@ -1314,27 +1312,8 @@ pmix_status_t pmix_server_stdin_fn(const pmix_proc_t *source,
                                    const pmix_byte_object_t *bo,
                                    pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
-    pmix_byte_object_t *bo_cpy = NULL;
-    pmix_proc_t *targets_cpy = NULL;
-    size_t n;
-
-    // We need to copy the object and the targets since we are shifting them
-    // so they would go out of scope after we return from this function.
-    PMIX_BYTE_OBJECT_CREATE(bo_cpy, 1);
-    bo_cpy->bytes = pmix_malloc(bo->size * sizeof(char));
-    if (NULL == bo_cpy->bytes) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-    }
-    memcpy(bo_cpy->bytes, bo->bytes, bo->size);
-    bo_cpy->size = bo->size;
-
-    PMIX_PROC_CREATE(targets_cpy, ntargets);
-    for( n = 0; n < ntargets; ++n ) {
-        PMIX_PROC_LOAD(&targets_cpy[n], targets[n].nspace, targets[n].rank);
-    }
-
     // Note: We are ignoring the directives / ndirs at the moment
-    PRTE_IO_OP(targets_cpy, ntargets, bo_cpy, pmix_server_stdin_push, cbfunc, cbdata);
+    PRTE_IO_OP(targets, ntargets, bo, pmix_server_stdin_push, cbfunc, cbdata);
 
     // Do not send PMIX_OPERATION_SUCCEEDED since the op hasn't completed yet.
     // We will send it back when we are done by calling the cbfunc.
