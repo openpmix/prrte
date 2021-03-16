@@ -331,6 +331,7 @@ static int hnp_pull(const pmix_proc_t* dst_name,
     PRTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, fd, PRTE_IOF_STDIN,
                          stdin_write_handler);
     PMIX_XFER_PROCID(&proct->stdinev->daemon, PRTE_PROC_MY_NAME);
+    PRTE_IOF_SINK_ACTIVATE(proct->stdinev->wev);
 
     return PRTE_SUCCESS;
 }

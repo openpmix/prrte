@@ -125,6 +125,13 @@ static void signal_forward_callback(int fd, short args, void *cbdata);
 static void epipe_signal_callback(int fd, short args, void *cbdata);
 static int prep_singleton(const char *name);
 
+static void opcbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_pmix_lock_t *lock = (prte_pmix_lock_t*)cbdata;
+    PRTE_ACQUIRE_OBJECT(lock);
+    PRTE_PMIX_WAKEUP_THREAD(lock);
+}
+
 static void setupcbfunc(pmix_status_t status,
                         pmix_info_t info[], size_t ninfo,
                         void *provided_cbdata,
@@ -1068,11 +1075,41 @@ int prte(int argc, char *argv[])
     }
 
   proceed:
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+    /* push our stdin to the apps */
+    PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
+    PMIX_INFO_CREATE(iptr, 1);
+    PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    ret = PMIx_IOF_push(&pname, 1, NULL, iptr, 1, opcbfunc, &lock);
+    if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+        prte_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
+    } else if (PMIX_SUCCESS == ret) {
+        PRTE_PMIX_WAIT_THREAD(&lock);
+    }
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(iptr, 1);
+#endif
+
     /* loop the event lib until an exit event is detected */
     while (prte_event_base_active) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
     PRTE_ACQUIRE_OBJECT(prte_event_base_active);
+
+#if PMIX_NUMERIC_VERSION >= 0x00040000
+    /* close the push of our stdin */
+    PMIX_INFO_LOAD(&info, PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    ret = PMIx_IOF_push(NULL, 0, NULL, &info, 1, opcbfunc, &lock);
+    if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+        prte_output(0, "IOF close of stdin failed: %s", PMIx_Error_string(ret));
+    } else if (PMIX_SUCCESS == ret) {
+        PRTE_PMIX_WAIT_THREAD(&lock);
+    }
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_DESTRUCT(&info);
+#endif
 
   DONE:
     /* cleanup and leave */
