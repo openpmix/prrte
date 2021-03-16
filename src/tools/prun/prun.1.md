@@ -684,7 +684,7 @@ Reflecting this advice, `prun` will refuse to run as root by default. To
 override this default, you can add the `--allow-run-as-root` option to
 the `prun` command line.
 
-## Exit status
+# RETURN VALUE
 
 There is no standard definition for what `prun` should return as an exit
 status. After considerable discussion, we settled on the following
@@ -712,42 +712,12 @@ description, the "primary" job is the initial application started by
     exit status in secondary jobs will be reported solely in a summary
     print statement.
 
-By default, PRTE DVM records and notes that processes exited with non-zero
-termination status. This is generally not considered an "abnormal
-termination" - i.e., the PRTE DVM will not abort a job if one or more
-processes return a non-zero status. Instead, the default behavior simply
-reports the number of processes terminating with non-zero status upon
-completion of the job.
-
-However, in some cases it can be desirable to have the job abort when
-any process terminates with non-zero status. For example, a non-PMIx job
-might detect a bad result from a calculation and want to abort, but
-doesn't want to generate a core file. Or a PMIx job might continue past
-a call to `PMIx_Finalize`, but indicate that all processes should abort
-due to some post-PMIx result.
-
-It is not anticipated that this situation will occur frequently.
-However, in the interest of serving the broader community, the PRTE DVM now has
-a means for allowing users to direct that jobs be aborted upon any
-process exiting with non-zero status. Setting the MCA parameter
-"prte_abort_on_non_zero_status" to 1 will cause the PRTE DVM to abort
-all processes once any process exits with non-zero status in that job.
-
-Terminations caused in this manner will be reported on the console as an
-"abnormal termination", with the first process to so exit identified
-along with its exit status.
-
-# RETURN VALUE
-
-`prun` returns 0 if all processes started by `prun` exit after calling
-`PMIx_Finalize`. A non-zero value is returned if an internal error
-occurred in `prun`, or one or more processes exited before calling
-`PMIx_Finalize`. If an internal error occurred in `prun`, the corresponding
-error code is returned. In the event that one or more processes exit
-before calling `PMIx_Finalize`, the return value of the rank of the
-process that `prun` first notices died before calling `PMIx_Finalize`
-will be returned. Note that, in general, this will be the first process
-that died but is not guaranteed to be so.
+By default, the job will abort when any process terminates with non-zero
+status. The MCA parameter `prte_abort_on_non_zero_status` can be set to
+`false` (or `0`) to cause the PRTE DVM to not abort a job if one or more
+processes return a non-zero status. In that situation the PRTE DVM records
+and notes that processes exited with non-zero termination status to
+report the approprate exit status of `prun` (per bullet points above).
 
 If the `--timeout` command line option is used and the timeout
 expires before the job completes (thereby forcing `prun` to kill the
