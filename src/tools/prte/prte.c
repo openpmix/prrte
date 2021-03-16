@@ -437,7 +437,15 @@ int prte(int argc, char *argv[])
      * check for help so that --version --help works as
      * one might expect. */
      if (prte_cmd_line_is_taken(prte_cmd_line, "version")) {
-         schizo->output_version();
+         if (proxyrun) {
+            fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n",
+                    prte_tool_basename, PRTE_PROXY_PACKAGE_NAME,
+                    PRTE_PROXY_VERSION_STRING, PRTE_PROXY_BUGREPORT);
+        } else {
+            fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n",
+                    prte_tool_basename, "PMIx Reference RunTime Environment",
+                    PRTE_VERSION, PACKAGE_BUGREPORT);
+        }
          exit(0);
     }
 
@@ -445,7 +453,10 @@ int prte(int argc, char *argv[])
     if (prte_cmd_line_is_taken(prte_cmd_line, "help")) {
         char *str, *args = NULL;
         args = prte_cmd_line_get_usage_msg(prte_cmd_line, false);
-        str = schizo->print_help(args);
+        str = prte_show_help_string("help-prun.txt", "prun:usage", false,
+                                    prte_tool_basename, "PRTE", PRTE_VERSION,
+                                    prte_tool_basename, args,
+                                    PACKAGE_BUGREPORT);
         if (NULL != str) {
             printf("%s", str);
             free(str);

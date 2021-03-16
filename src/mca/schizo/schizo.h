@@ -125,10 +125,6 @@ typedef void (*prte_schizo_base_module_job_info_fn_t)(prte_cmd_line_t *cmdline, 
 /* give the components a chance to check sanity */
 typedef int (*prte_schizo_base_module_check_sanity_fn_t)(prte_cmd_line_t *cmdline);
 
-typedef void (*prte_schizo_base_module_output_version_fn_t)(void);
-
-typedef char* (*prte_schizo_base_module_print_help_fn_t)(char *args);
-
 /*
  * schizo module version 1.3.0
  */
@@ -146,8 +142,6 @@ typedef struct {
     prte_schizo_base_module_setup_child_fn_t               setup_child;
     prte_schizo_base_module_job_info_fn_t                  job_info;
     prte_schizo_base_module_check_sanity_fn_t              check_sanity;
-    prte_schizo_base_module_output_version_fn_t            output_version;
-    prte_schizo_base_module_print_help_fn_t                print_help;
     prte_schizo_base_module_finalize_fn_t                  finalize;
 } prte_schizo_base_module_t;
 
