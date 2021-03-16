@@ -207,6 +207,16 @@ static void setup_sighandler(int signal, prte_event_t *ev,
     prte_event_signal_add(ev, NULL);
 }
 
+static prte_cmd_line_init_t cmd_line_init[] = {
+    /* override personality */
+    { '\0', "personality", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Specify the personality to be used",
+        PRTE_CMD_LINE_OTYPE_DVM },
+
+    /* End of list */
+    { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
+};
+
 int prte(int argc, char *argv[])
 {
     int rc=1, i, j;
@@ -363,6 +373,11 @@ int prte(int argc, char *argv[])
     /* setup the cmd line - this is specific to the proxy */
     prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
     if (PRTE_SUCCESS != (rc = schizo->define_cli(prte_cmd_line))) {
+        PRTE_ERROR_LOG(rc);
+        return rc;
+    }
+    /* add any prte-specific options */
+    if (PRTE_SUCCESS != (rc = prte_cmd_line_add(prte_cmd_line, cmd_line_init))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
