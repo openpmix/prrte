@@ -268,8 +268,8 @@ slots may be chosen to be the number of cores on the node or the
 number of processor sockets.
 
 If the hostfile does not provide slots information, the PRTE DVM will attempt
-to discover the number of cores (or hwthreads, if the `--use-hwthreads-as-cpus`
-option is set) and set the number of slots to that value.
+to discover the number of cores (or hwthreads, if the `:HWTCPUS` qualifier to
+the `--map-by` option is set) and set the number of slots to that value.
 
 Examples using the hostfile above with and without the `--host` option
 
