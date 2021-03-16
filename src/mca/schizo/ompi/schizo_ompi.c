@@ -152,9 +152,6 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
-        // paired with rank-by - note that we would have already removed the
-        // ith location where the option was stored, so don't do it again
-        rc = prte_schizo_base_convert(argv, i, 0, "--rank-by", "node", NULL, true);
     }
     /* --bycore -> "--map-by X --rank-by X" */
     else if (0 == strcmp(option, "--bycore")) {
@@ -162,9 +159,6 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
-        // paired with rank-by - note that we would have already removed the
-        // ith location where the option was stored, so don't do it again
-        rc = prte_schizo_base_convert(argv, i, 0, "--rank-by", "core", NULL, true);
     }
     /* --byslot -> "--map-by X --rank-by X" */
     else if (0 == strcmp(option, "--byslot")) {
@@ -172,9 +166,6 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
-        // paired with rank-by - note that we would have already removed the
-        // ith location where the option was stored, so don't do it again
-        rc = prte_schizo_base_convert(argv, i, 0, "--rank-by", "slot", NULL, true);
     }
     /* --cpus-per-proc/rank X -> --map-by :pe=X */
     else if (0 == strcmp(option, "--cpus-per-proc") ||

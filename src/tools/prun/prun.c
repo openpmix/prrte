@@ -314,6 +314,10 @@ static prte_cmd_line_init_t prte_tool_options[] = {
     { '\0', "dvm-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
         "Specify the URI of the DVM master, or the name of the file (specified as file:filename) that contains that info",
         PRTE_CMD_LINE_OTYPE_DVM },
+    /* override personality */
+    { '\0', "personality", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Specify the personality to be used",
+        PRTE_CMD_LINE_OTYPE_DVM },
 
     /* End of list */
     { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
