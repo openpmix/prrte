@@ -1156,17 +1156,17 @@ LIBS="$LIBS $PRTE_FINAL_LIBS"
 AC_MSG_CHECKING([need zlib support])
 if test "$prte_zlib_support" == "1" && test "$prte_external_pmix_version_need_zlib" == "yes"; then
     AC_MSG_RESULT([yes])
-    CPPFLAGS="$CPPFLAGS $prte_zlib_CPPFLAGS"
-    LDFLAGS="$LDFLAGS $prte_zlib_LDFLAGS"
-    LIBS="$LIBS -lz"
 elif test "$prte_zlib_support" != "1"; then
-    AC_MSG_RESULT([])
-    AC_MSG_WARN([AN EARLY VERSION OF PMIx HAS BEEN USED THAT DOES NOT])
-    AC_MSG_WARN([INCLUDE SUPPORT FOR COMPRESS/DECOMPRESS OF LARGE MESSAGES.])
-    AC_MSG_WARN([PRRTE REQUIRES SUCH SUPPORT TO BUILD. PLEASE ENSURE])
-    AC_MSG_WARN([THAT ZLIB IS AVAILABLE SO THAT PRRTE CAN DIRECTLY BUILD])
-    AC_MSG_WARN([AGAINST IT])
-    AC_MSG_ERROR([CANNOT CONTINUE])
+    AC_MSG_RESULT([yes])
+    AC_MSG_WARN([*************************************************])
+    AC_MSG_WARN([* PRRTE was unable to find a usable version     *])
+    AC_MSG_WARN([* of zlib and zlib-devel on the system. We will *])
+    AC_MSG_WARN([* be unable to compress large data streams.     *])
+    AC_MSG_WARN([* This may result in longer-than-normal startup *])
+    AC_MSG_WARN([* times and larger memory footprints. We will   *])
+    AC_MSG_WARN([* continue, but strongly recommend installing   *])
+    AC_MSG_WARN([* zlib for better user experience.              *])
+    AC_MSG_WARN([*************************************************])
 else
     AC_MSG_RESULT([no])
 fi
