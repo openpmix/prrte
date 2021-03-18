@@ -12,6 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -63,3 +64,11 @@ as the mapping.
 PRTE was unable to determine the number of nodes in your allocation. We
 are therefore assuming a very large number to ensure you receive proper error
 messages.
+#
+[compress-unavailable]
+PRRTE was unable to find a usable compression library
+on the system. We will therefore be unable to compress
+large data streams. This may result in longer-than-normal
+startup times and larger memory footprints. We will
+continue, but strongly recommend installing zlib or
+a comparable compression library for better user experience.

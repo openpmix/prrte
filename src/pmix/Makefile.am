@@ -14,6 +14,7 @@
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -22,6 +23,8 @@
 #
 
 # This makefile.am does not stand on its own - it is included from src/Makefile.am
+
+AM_CPPFLAGS = $(prte_zlib_CPPFLAGS)
 
 # Source code files
 headers += \

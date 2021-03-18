@@ -620,6 +620,7 @@ pmix_status_t PMIx_Data_load(pmix_data_buffer_t *buffer,
     return PMIX_SUCCESS;
 }
 
+#if PRTE_HAVE_ZLIB
 bool PMIx_Data_compress(uint8_t *inbytes,
                         size_t inlen,
                         uint8_t **outbytes,
@@ -637,6 +638,10 @@ bool PMIx_Data_compress(uint8_t *inbytes,
     /* set default output */
     *outbytes = NULL;
     *outlen = 0;
+
+    if (inlen < prte_base_compress_limit) {
+        return false;
+    }
 
     /* setup the stream */
     memset (&strm, 0, sizeof (strm));
@@ -741,6 +746,38 @@ bool PMIx_Data_decompress(uint8_t **outbytes,
     free(dest);
     return false;
 }
+#else
+
+bool PMIx_Data_compress(uint8_t *inbytes,
+                        size_t inlen,
+                        uint8_t **outbytes,
+                        size_t *outlen)
+{
+    /* set default output */
+    *outbytes = NULL;
+    *outlen = 0;
+
+    if (!prte_base_silence_compress_warn) {
+        prte_show_help("help-prte-runtime.txt", "compress-unavailable", true);
+        prte_base_silence_compress_warn = true;
+    }
+
+    return false;
+}
+
+
+bool PMIx_Data_decompress(uint8_t **outbytes,
+                          size_t *outlen,
+                          uint8_t *inbytes,
+                          size_t inlen)
+{
+    /* set the default error answer */
+    *outbytes = NULL;
+    *outlen = 0;
+
+    return false;
+}
+#endif
 
 pmix_status_t PMIx_Data_embed(pmix_data_buffer_t *buffer,
                               const pmix_byte_object_t *payload)
