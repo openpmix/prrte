@@ -641,6 +641,14 @@ extern char *prte_set_max_sys_limits;
 /* Enable/disable ft */
 PRTE_EXPORT extern bool prte_enable_ft;
 
+#if PMIX_NUMERIC_VERSION < 0x00040100
+#if PRTE_HAVE_ZLIB
+PRTE_EXPORT extern size_t prte_base_compress_limit;
+#else
+PRTE_EXPORT extern bool prte_base_silence_compress_warn;
+#endif
+#endif
+
 END_C_DECLS
 
 #endif /* PRTE_RUNTIME_PRTE_GLOBALS_H */
