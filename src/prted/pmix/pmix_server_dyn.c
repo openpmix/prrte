@@ -213,6 +213,7 @@ static void interim(int sd, short args, void *cbdata)
     /* create the job object */
     jdata = PRTE_NEW(prte_job_t);
     jdata->map = PRTE_NEW(prte_job_map_t);
+    PMIX_XFER_PROCID(&jdata->originator, requestor);
 
     /* transfer the apps across */
     for (n=0; n < cd->napps; n++) {

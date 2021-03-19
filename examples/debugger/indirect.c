@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,6 +32,8 @@
 #include <time.h>
 #include <pthread.h>
 #include <getopt.h>
+#include <string.h>
+#include <libgen.h>
 
 #include <pmix_tool.h>
 #include "debugger.h"
@@ -62,6 +65,8 @@ static void cbfunc(pmix_status_t status,
     myquery_data_t *mq = (myquery_data_t*)cbdata;
     size_t n;
 
+    printf("%s called with status %s\n", __FUNCTION__,
+           PMIx_Error_string(status));
     mq->status = status;
     /* save the returned info - the PMIx library "owns" it
      * and will release it and perform other cleanup actions
@@ -118,6 +123,8 @@ static void terminate_fn(size_t evhdlr_registration_id,
                          pmix_event_notification_cbfunc_fn_t cbfunc,
                          void *cbdata)
 {
+    printf("%s called with status %s\n", __FUNCTION__,
+           PMIx_Error_string(status));
     /* this example doesn't do anything further */
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
@@ -138,6 +145,7 @@ static void evhandler_reg_callbk(pmix_status_t status,
 {
     mylock_t *lock = (mylock_t*)cbdata;
 
+    printf("%s called with status %s\n", __FUNCTION__, PMIx_Error_string(status));
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
                    myproc.nspace, myproc.rank, status, (unsigned long)evhandler_ref);
@@ -174,6 +182,8 @@ static void spawn_cbfunc(size_t evhdlr_registration_id,
 
 static void cncbfunc(pmix_status_t status, void *cbdata)
 {
+    printf("%s called with status %s\n", __FUNCTION__,
+           PMIx_Error_string(status));
     mylock_t *mylock = (mylock_t*)cbdata;
     mylock->status = status;
     DEBUG_WAKEUP_THREAD(mylock);
@@ -190,6 +200,7 @@ int main(int argc, char **argv)
     pmix_app_t *app;
     size_t ninfo, napps;
     char *nspace = NULL;
+    char *requested_launcher;
     int i;
     pmix_query_t *query;
     size_t nq, n;
@@ -227,8 +238,9 @@ int main(int argc, char **argv)
     /* check to see if we are using an intermediate launcher - we only
      * support those we recognize */
     found = false;
+    requested_launcher = basename(argv[1]);
     for (n=0; NULL != launchers[n]; n++) {
-        if (0 == strcmp(argv[1], launchers[n])) {
+        if (0 == strcmp(requested_launcher, launchers[n])) {
             found = true;
         }
     }
@@ -324,20 +336,10 @@ fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
      * from the application as the launcher will have had it forwarded
      * to itself */
     PMIX_INFO_LIST_START(jinfo);
+    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_NOTIFY_JOB_EVENTS, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_SPAWN_TOOL, NULL, PMIX_BOOL); // we are spawning a tool
-    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL); // stop the IL in init so we can connect to it
-
-    /* setup launch directives - these are directives that we want
-     * the IL to apply to any applications it spawns for us */
-    PMIX_INFO_LIST_START(linfo);
-    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // have procs stop in init
-    PMIX_INFO_LIST_CONVERT(rc, linfo, &d2);
-    PMIX_INFO_LIST_RELEASE(linfo);
-    /* add it to our job info */
-    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_LAUNCH_DIRECTIVES, &d2, PMIX_DATA_ARRAY);
-    PMIX_DATA_ARRAY_DESTRUCT(&d2);
 
     /* convert job info to array */
     PMIX_INFO_LIST_CONVERT(rc, jinfo, &darray);
@@ -382,8 +384,9 @@ fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
     fprintf(stderr, "REGISTERING LAUNCH_COMPLETE HANDLER\n");
     DEBUG_CONSTRUCT_LOCK(&mylock);
     code = PMIX_LAUNCH_COMPLETE;
+    n = 0;
     PMIX_INFO_CREATE(info, 1);
-    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "LAUNCH-COMPLETE", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_HDLR_NAME, "LAUNCH-COMPLETE", PMIX_STRING);
     PMIx_Register_event_handler(&code, 1, info, 1,
                                 spawn_cbfunc, evhandler_reg_callbk, (void*)&mylock);
     while (regpending && ilactive) {
@@ -398,20 +401,24 @@ fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
 
     fprintf(stderr, "RELEASING %s\n", argv[1]);
     /* release the IL to spawn its job */
-    PMIX_INFO_CREATE(info, 3);
+    PMIX_INFO_CREATE(info, 2);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
     /* target this notification solely to that one tool */
     PMIX_INFO_LOAD(&info[1], PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);
-    PMIX_INFO_LOAD(&info[2], PMIX_EVENT_DO_NOT_CACHE, NULL, PMIX_BOOL);
+    //PMIX_INFO_LOAD(&info[2], PMIX_EVENT_DO_NOT_CACHE, NULL, PMIX_BOOL);
     PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, &myproc,
                       PMIX_RANGE_CUSTOM,
-                      info, 3, NULL, NULL);
-    PMIX_INFO_FREE(info, 3);
+                      info, 2, NULL, NULL);
+    PMIX_INFO_FREE(info, 2);
 fprintf(stderr, "WAITING FOR APPLICATION LAUNCH\n");
     /* wait for the IL to have launched its application */
-    while (dbactive && ilactive) {
-        struct timespec tp = {0, 500000};
+    int icount = 0;
+    while (dbactive && ilactive && icount < 10) {
+printf("dbactive=%d ilactive=%d\n", dbactive, ilactive);
+//        struct timespec tp = {0, 500000};
+        struct timespec tp = {0, 500000000};
         nanosleep(&tp, NULL);
+        ++icount;
     }
     if (!ilactive) {
         /* the launcher failed */
