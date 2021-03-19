@@ -435,6 +435,7 @@ fprintf(stderr, "APPLICATION HAS LAUNCHED: %s\n", (char*)appnspace);
     PMIX_ARGV_APPEND(rc, mydata->apps[0].argv, "./daemon");
     getcwd(cwd, 1024);  // point us to our current directory
     mydata->apps[0].cwd = strdup(cwd);
+    mydata->apps[0].maxprocs = 1;
     /* provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
     PMIX_INFO_LIST_START(dirs);
