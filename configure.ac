@@ -1156,6 +1156,8 @@ LIBS="$LIBS $PRTE_FINAL_LIBS"
 AC_MSG_CHECKING([need zlib support])
 if test "$prte_zlib_support" == "1" && test "$prte_external_pmix_version_need_zlib" == "yes"; then
     AC_MSG_RESULT([yes])
+    prte_add_zlib=yes
+    PRTE_SUMMARY_ADD([[Optional Packages]],[[zlib]], [prte_zlib], [$prte_add_zlib])
 elif test "$prte_zlib_support" != "1"; then
     AC_MSG_RESULT([yes])
     AC_MSG_WARN([*************************************************])
@@ -1167,9 +1169,13 @@ elif test "$prte_zlib_support" != "1"; then
     AC_MSG_WARN([* continue, but strongly recommend installing   *])
     AC_MSG_WARN([* zlib for better user experience.              *])
     AC_MSG_WARN([*************************************************])
+    prte_add_zlib=no
+    PRTE_SUMMARY_ADD([[Optional Packages]],[[zlib]], [prte_zlib], [$prte_add_zlib])
 else
     AC_MSG_RESULT([no])
+    prte_add_zlib=no
 fi
+AM_CONDITIONAL([PRTE_ADD_ZLIB], [test "$prte_add_zlib" = "yes"])
 
 # restore any user-provided Werror flags
 AS_IF([test ! -z "$PRTE_CFLAGS_cache"], [CFLAGS="$CFLAGS $PRTE_CFLAGS_cache"])

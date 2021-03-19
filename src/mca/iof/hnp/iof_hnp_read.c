@@ -114,7 +114,6 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     int32_t numbytes;
     prte_iof_proc_t *proct = (prte_iof_proc_t*)rev->proc;
     int rc;
-    prte_ns_cmp_bitmask_t mask=PRTE_NS_CMP_ALL;
     bool exclusive;
     prte_iof_sink_t *sink;
 
@@ -173,7 +172,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
             return;
         }
         /* if the daemon is me, then this is a local sink */
-        if (PRTE_EQUAL == prte_util_compare_name_fields(mask, PRTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
+        if (PMIX_CHECK_PROCID(PRTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
             PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                  "%s read %d bytes from stdin - writing to %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,

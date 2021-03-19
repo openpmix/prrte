@@ -23,8 +23,6 @@
 # $HEADER$
 #
 
-AM_CPPFLAGS = $(prte_zlib_CPPFLAGS)
-
 SUBDIRS = \
 	include \
 	etc \
@@ -47,15 +45,23 @@ DIST_SUBDIRS = \
 
 lib_LTLIBRARIES = libprrte.la
 libprrte_la_SOURCES =
+
 libprrte_la_LIBADD = \
         mca/base/libprrte_mca_base.la \
 		util/libprrteutil.la \
 		$(MCA_prte_FRAMEWORK_LIBS) \
-        $(prte_zlib_LIBS) \
 		$(PRTE_EXTRA_LIB)
-libprrte_la_DEPENDENCIES = $(libprrte_la_LIBADD)
-libprrte_la_LDFLAGS = -version-info $(libprrte_so_version) $(prte_zlib_LDFLAGS)
-libprrte_la_CPPFLAGS = $(prte_zlib_CPPFLAGS)
+libprrte_la_DEPENDENCIES =
+libprrte_la_LDFLAGS = -version-info $(libprrte_so_version)
+libprrte_la_CPPFLAGS =
+
+if PRTE_ADD_ZLIB
+libprrte_la_LIBADD += $(prte_zlib_LIBS)
+libprrte_la_DEPENDENCIES += $(libprrte_la_LIBADD)
+libprrte_la_LDFLAGS += $(prte_zlib_LDFLAGS)
+libprrte_la_CPPFLAGS += $(prte_zlib_CPPFLAGS)
+endif
+
 
 # included subdirectory Makefile.am's and appended-to variables
 headers =
