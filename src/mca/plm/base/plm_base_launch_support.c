@@ -937,7 +937,6 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
     prte_timer_t *timer=NULL;
     int time, *tp;
-    pmix_proc_t name;
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -963,21 +962,11 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
     /* update job state */
     caddy->jdata->state = caddy->job_state;
 
-    /* if we are not a persistent DVM, then we need to
-     * complete wiring up the iof */
-    if (!prte_persistent) {
-        PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                             "%s plm:base:launch wiring up iof for job %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_JOBID_PRINT(jdata->nspace)));
-
-        /* push stdin - the IOF will know what to do with the specified target */
-        PMIX_LOAD_PROCID(&name, jdata->nspace, jdata->stdin_target);
-
-        if (PRTE_SUCCESS != (rc = prte_iof.push(&name, PRTE_IOF_STDIN, 0))) {
-            PRTE_ERROR_LOG(rc);
-        }
-    }
+    /* complete wiring up the iof */
+    PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                         "%s plm:base:launch wiring up iof for job %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_JOBID_PRINT(jdata->nspace)));
 
     /* notify the spawn requestor */
     rc = prte_plm_base_spawn_reponse(PRTE_SUCCESS, jdata);

@@ -150,7 +150,13 @@ static int hnp_push(const pmix_proc_t* dst_name, prte_iof_tag_t src_tag, int fd)
     prte_list_append(&prte_iof_hnp_component.procs, &proct->super);
 
   SETUP:
-    /* set the file descriptor to non-blocking - do this before we setup
+    /* if we are pushing stdin, then ignore it - we
+     * get it from the "pull" */
+    if (PRTE_IOF_STDIN & src_tag) {
+        return PRTE_SUCCESS;
+    }
+
+    /* for stdout/stderr, set the file descriptor to non-blocking - do this before we setup
      * and activate the read event in case it fires right away
      */
     if((flags = fcntl(fd, F_GETFL, 0)) < 0) {
@@ -236,7 +242,11 @@ static int push_stdin(const pmix_proc_t* dst_name,
         return PRTE_ERR_NOT_FOUND;
     }
 
-    /* pass the data to the sink */
+    /* did they direct that the data go to this proc? */
+    if (NULL == proct->stdinev) {
+        /* nope - ignore it */
+        return PRTE_SUCCESS;
+    }
 
     /* if the daemon is me, then this is a local sink */
     if (PMIX_CHECK_PROCID(PRTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
@@ -307,7 +317,7 @@ static int hnp_pull(const pmix_proc_t* dst_name,
     /* set the file descriptor to non-blocking - do this before we setup
      * the sink in case it fires right away
      */
-    if((flags = fcntl(fd, F_GETFL, 0)) < 0) {
+    if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
         prte_output(prte_iof_base_framework.framework_output, "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
                     __FILE__, __LINE__, errno);
     } else {
