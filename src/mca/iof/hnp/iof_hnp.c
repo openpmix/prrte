@@ -417,6 +417,11 @@ static void hnp_complete(const prte_job_t *jdata)
             PRTE_RELEASE(proct);
         }
     }
+    /* although there may be output from other jobs in these sinks,
+     * be sure to flush it all out to ensure we get anything from
+     * this job */
+    prte_iof_base_write_handler(0, 0, prte_iof_base.iof_write_stdout);
+    prte_iof_base_write_handler(0, 0, prte_iof_base.iof_write_stderr);
 }
 
 static int finalize(void)
