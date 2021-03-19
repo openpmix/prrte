@@ -380,15 +380,24 @@ static void job_started(int fd, short args, void *cbdata)
     prte_job_t *jdata = caddy->jdata;
     pmix_info_t *iptr;
     time_t timestamp;
+    pmix_proc_t *nptr;
 
     /* if there is an originator for this job, notify them
      * that the first process of the job has been started */
-
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PMIX_BOOL)) {
+        /* dvm job => launch was requested by a TOOL, so we notify the launch proxy
+         * and NOT the originator (as that would be us) */
+        nptr = NULL;
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PMIX_PROC)
+            || NULL == nptr) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            return;
+        }
         timestamp = time(NULL);
         PMIX_INFO_CREATE(iptr, 4);
         /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &jdata->originator, PMIX_PROC);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, nptr, PMIX_PROC);
+        PMIX_PROC_RELEASE(nptr);
         /* pass the nspace of the spawned job */
         PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, jdata->nspace, PMIX_STRING);
         /* not to be delivered to a default event handler */

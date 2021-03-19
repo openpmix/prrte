@@ -604,18 +604,29 @@ int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PMIX_BOOL)) {
         return PRTE_SUCCESS;
     }
-#if PMIX_NUMERIC_VERSION >= 0x00040000
+
     /* if the requestor was a tool, use PMIx to notify them of
      * launch complete as they won't be listening on PRRTE oob */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PMIX_BOOL)) {
         pmix_info_t *iptr;
         time_t timestamp;
+        pmix_proc_t *nptr;
+
+        /* dvm job => launch was requested by a TOOL, so we notify the launch proxy
+         * and NOT the originator (as that would be us) */
+        nptr = NULL;
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PMIX_PROC)
+            || NULL == nptr) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            return PRTE_ERR_NOT_FOUND;
+        }
 
         /* direct an event back to our controller */
         timestamp = time(NULL);
         PMIX_INFO_CREATE(iptr, 4);
         /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, &jdata->originator, PMIX_PROC);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, nptr, PMIX_PROC);
+        PMIX_PROC_RELEASE(nptr);
         /* pass the nspace of the spawned job */
         PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, jdata->nspace, PMIX_STRING);
         /* not to be delivered to a default event handler */
@@ -626,7 +637,6 @@ int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata)
                           iptr, 4, NULL, NULL);
         PMIX_INFO_FREE(iptr, 4);
     }
-#endif
 
     /* prep the response to the spawn requestor */
     PMIX_DATA_BUFFER_CREATE(answer);
