@@ -1442,7 +1442,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
 
             /* do we want to setup stdin? */
             if (jobdat->stdin_target == PMIX_RANK_WILDCARD ||
-                 child->name.rank == jobdat->stdin_target) {
+                child->name.rank == jobdat->stdin_target) {
                 cd->opts.connect_stdin = true;
             } else {
                 cd->opts.connect_stdin = false;
