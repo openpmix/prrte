@@ -212,10 +212,8 @@ static void evhandler(size_t evhdlr_registration_id,
                 PMIX_LOAD_NSPACE(jobid, info[n].value.data.proc->nspace);
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
                 lock = (prte_pmix_lock_t*)info[n].value.data.ptr;
-        #ifdef PMIX_EVENT_TEXT_MESSAGE
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_TEXT_MESSAGE, PMIX_MAX_KEYLEN)) {
                 msg = info[n].value.data.string;
-        #endif
             }
         }
         if (verbose && PMIX_CHECK_NSPACE(jobid, myjobid)) {

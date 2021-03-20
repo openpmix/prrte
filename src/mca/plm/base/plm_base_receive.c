@@ -188,18 +188,7 @@ void prte_plm_base_recv(int status, pmix_proc_t* sender,
         }
 
         /* pack the jobid */
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        char *tmp = NULL;
-        if (0 < strlen(job)) {
-            tmp = strdup(job);
-        }
-        rc = PMIx_Data_pack(NULL, answer, &tmp, 1, PMIX_STRING);
-        if (NULL != tmp) {
-            free(tmp);
-        }
-#else
         rc = PMIx_Data_pack(NULL, answer, &job, 1, PMIX_PROC_NSPACE);
-#endif
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
@@ -353,13 +342,8 @@ void prte_plm_base_recv(int status, pmix_proc_t* sender,
         }
 
         /* pack an invalid jobid */
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        tmp = NULL;
-        rc = PMIx_Data_pack(NULL, answer, &tmp, 1, PMIX_STRING);
-#else
         PMIX_LOAD_NSPACE(job, NULL);
         rc = PMIx_Data_pack(NULL, answer, &job, 1, PMIX_PROC_NSPACE);
-#endif
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
@@ -386,16 +370,7 @@ void prte_plm_base_recv(int status, pmix_proc_t* sender,
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(sender));
         count = 1;
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        tmp = NULL;
-        rc = PMIx_Data_unpack(NULL, buffer, &tmp, &count, PMIX_STRING);
-        if (NULL != tmp) {
-            PMIX_LOAD_NSPACE(job, tmp);
-            free(tmp);
-        }
-#else
         rc = PMIx_Data_unpack(NULL, buffer, &job, &count, PMIX_PROC_NSPACE);
-#endif
         while (PMIX_SUCCESS == rc) {
             prte_output_verbose(5, prte_plm_base_framework.framework_output,
                                 "%s plm:base:receive got update_proc_state for job %s",
@@ -470,16 +445,7 @@ void prte_plm_base_recv(int status, pmix_proc_t* sender,
             }
             /* prepare for next job */
             count = 1;
-#if PMIX_NUMERIC_VERSION < 0x00040100
-            tmp = NULL;
-            rc = PMIx_Data_unpack(NULL, buffer, &tmp, &count, PMIX_STRING);
-            if (NULL != tmp) {
-                PMIX_LOAD_NSPACE(job, tmp);
-                free(tmp);
-            }
-#else
             rc = PMIx_Data_unpack(NULL, buffer, &job, &count, PMIX_PROC_NSPACE);
-#endif
         }
         if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
             PMIX_ERROR_LOG(rc);
@@ -491,15 +457,7 @@ void prte_plm_base_recv(int status, pmix_proc_t* sender,
 
     case PRTE_PLM_REGISTERED_CMD:
         count=1;
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        rc = PMIx_Data_unpack(NULL, buffer, &tmp, &count, PMIX_STRING);
-        PMIX_LOAD_NSPACE(job, tmp);
-        if (NULL != tmp) {
-            free(tmp);
-        }
-#else
         rc = PMIx_Data_unpack(NULL, buffer, &job, &count, PMIX_PROC_NSPACE);
-#endif
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             goto CLEANUP;

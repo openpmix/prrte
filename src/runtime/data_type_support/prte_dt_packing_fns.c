@@ -54,16 +54,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     prte_info_item_t *val;
 
     /* pack the nspace */
-#if PMIX_NUMERIC_VERSION < 0x00040100
-    char *tmp = NULL;
-    if (0 < strlen(job->nspace)) {
-        tmp = strdup(job->nspace);
-    }
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&tmp, 1, PMIX_STRING);
-    free(tmp);
-#else
     rc = PMIx_Data_pack(NULL, bkt, (void*)&job->nspace, 1, PMIX_PROC_NSPACE);
-#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -261,18 +252,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     }
 
     /* pack the launcher ID */
-#if PMIX_NUMERIC_VERSION < 0x00040100
-    tmp = NULL;
-    if (0 < strlen(job->launcher)) {
-        tmp = strdup(job->launcher);
-    }
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&tmp, 1, PMIX_STRING);
-    if (NULL != tmp) {
-        free(tmp);
-    }
-#else
     rc = PMIx_Data_pack(NULL, bkt, (void*)&job->launcher, 1, PMIX_PROC_NSPACE);
-#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);

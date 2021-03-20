@@ -654,12 +654,7 @@ static void signal_forward_callback(int fd, short event, void *arg)
     }
 
     /* pack the jobid */
-#if PMIX_NUMERIC_VERSION < 0x00040100
-    char *tmp = NULL;
-    rc = PMIx_Data_pack(NULL, cmd, (void*)&tmp, 1, PMIX_STRING);
-#else
     rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, cmd, &PRTE_JOBID_WILDCARD, 1, PMIX_PROC_NSPACE);
-#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(cmd);

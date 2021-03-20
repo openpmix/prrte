@@ -649,18 +649,7 @@ int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata)
         return prte_pmix_convert_status(rc);
     }
     /* pack the jobid */
-#if PMIX_NUMERIC_VERSION < 0x00040100
-    char *tmp = NULL;
-    if (0 < strlen(jdata->nspace)) {
-        tmp = strdup(jdata->nspace);
-    }
-    rc = PMIx_Data_pack(NULL, answer, &tmp, 1, PMIX_STRING);
-    if (NULL != tmp) {
-        free(tmp);
-    }
-#else
     rc = PMIx_Data_pack(NULL, answer, &jdata->nspace, 1, PMIX_PROC_NSPACE);
-#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(answer);
@@ -881,18 +870,7 @@ static void timeout_cb(int fd, short event, void *cbdata)
             goto giveup;
         }
         /* pack the jobid */
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        char *tmp = NULL;
-        if (0 < strlen(jdata->nspace)) {
-            tmp = strdup(jdata->nspace);
-        }
-        rc = PMIx_Data_pack(NULL, &buffer, &tmp, 1, PMIX_STRING);
-        if (NULL != tmp) {
-            free(tmp);
-        }
-#else
         rc = PMIx_Data_pack(NULL, &buffer, &jdata->nspace, 1, PMIX_PROC_NSPACE);
-#endif
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&buffer);

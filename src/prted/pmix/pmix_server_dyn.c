@@ -73,16 +73,7 @@ void pmix_server_launch_resp(int status, pmix_proc_t* sender,
 
     /* unpack the jobid */
     cnt = 1;
-#if PMIX_NUMERIC_VERSION < 0x00040100
-    char *tmp = NULL;
-    rc = PMIx_Data_unpack(NULL, buffer, &tmp, &cnt, PMIX_STRING);
-    PMIX_LOAD_NSPACE(jobid, tmp);
-    if (NULL != tmp) {
-        free(tmp);
-    }
-#else
     rc = PMIx_Data_unpack(NULL, buffer, &jobid, &cnt, PMIX_PROC_NSPACE);
-#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         ret = prte_pmix_convert_rc(rc);
@@ -316,11 +307,9 @@ static void interim(int sd, short args, void *cbdata)
                     prte_add_attribute(&app->attributes, PRTE_APP_APPEND_ENVAR,
                                        PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
                 } else if (PMIX_CHECK_KEY(info, PMIX_PSET_NAME)) {
                     prte_set_attribute(&app->attributes, PRTE_APP_PSET_NAME,
                                        PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
-#endif
                 } else {
                     /* unrecognized key */
                     if (9 < prte_output_get_verbosity(prte_pmix_server_globals.output)) {
@@ -578,7 +567,6 @@ static void interim(int sd, short args, void *cbdata)
             envar.separator = info->value.data.envar.separator;
             prte_add_attribute(&jdata->attributes, PRTE_JOB_APPEND_ENVAR,
                                PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
-#if PMIX_NUMERIC_VERSION >= 0x00040000
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
 
@@ -599,7 +587,6 @@ static void interim(int sd, short args, void *cbdata)
                 prte_add_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE,
                                    PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
             }
-#endif
         /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {
             /* cache for inclusion with job info at registration */

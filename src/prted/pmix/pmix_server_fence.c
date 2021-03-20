@@ -193,7 +193,6 @@ static void dmodex_req(int sd, short args, void *cbdata)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          req->tproc.nspace, req->tproc.rank);
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* check if they want us to refresh the cache */
     if (NULL != req->info) {
         size_t n;
@@ -205,7 +204,6 @@ static void dmodex_req(int sd, short args, void *cbdata)
             }
         }
     }
-#endif
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
                          "%s DMODX REQ REFRESH %s REQUIRED KEY %s",

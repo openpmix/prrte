@@ -155,12 +155,10 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
         app->app.cwd = strdup(cwd);
     }
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* if they specified a process set name, then pass it along */
     if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "pset", 0, 0))) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PSET_NAME, pvalue->value.data.string, PMIX_STRING);
     }
-#endif
 
     /* Did the user specify a hostfile. Need to check for both
      * hostfile and machine file.

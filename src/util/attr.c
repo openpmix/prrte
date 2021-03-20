@@ -633,12 +633,10 @@ int prte_attr_load(prte_attribute_t *kv,
         kv->data.data.rank = *(pmix_rank_t *)data;
         break;
 
-#if PMIX_NUMERIC_VERSION >= 0x00040100
     case PMIX_PROC_NSPACE:
         PMIX_PROC_CREATE(kv->data.data.proc, 1);
         PMIX_LOAD_NSPACE(kv->data.data.proc->nspace, (char*)data);
         break;
-#endif
 
     case PMIX_PROC:
         PMIX_PROC_CREATE(kv->data.data.proc, 1);
@@ -673,9 +671,7 @@ int prte_attr_unload(prte_attribute_t *kv,
         PMIX_STRING,
         PMIX_BYTE_OBJECT,
         PMIX_POINTER,
-#if PMIX_NUMERIC_VERSION >= 0x00040100
         PMIX_PROC_NSPACE,
-#endif
         PMIX_PROC,
         PMIX_ENVAR,
         PMIX_UNDEF
@@ -786,12 +782,10 @@ int prte_attr_unload(prte_attribute_t *kv,
         memcpy(*data, &kv->data.data.rank, sizeof(pmix_rank_t));
         break;
 
-#if PMIX_NUMERIC_VERSION >= 0x00040100
     case PMIX_PROC_NSPACE:
         PMIX_PROC_CREATE(*data, 1);
         memcpy(*data, kv->data.data.proc->nspace, sizeof(pmix_nspace_t));
         break;
-#endif
 
     case PMIX_PROC:
         PMIX_PROC_CREATE(*data, 1);

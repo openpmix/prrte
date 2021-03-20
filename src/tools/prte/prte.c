@@ -749,7 +749,6 @@ int prte(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
         free(ptr);
     } else if (NULL != ptr) {
-#if PMIX_NUMERIC_VERSION >= 0x00040000
         /* if we were asked to output to a directory, pass it along. */
         /* If the given filename isn't an absolute path, then
          * convert it to one so the name will be relative to
@@ -767,7 +766,6 @@ int prte(int argc, char *argv[])
         }
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
         free(param);
-#endif
     }
     /* if we were asked to merge stderr to stdout, mark it so */
     if (prte_cmd_line_is_taken(prte_cmd_line, "merge-stderr-to-stdout")) {
@@ -843,14 +841,12 @@ int prte(int argc, char *argv[])
         }
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT, &i, PMIX_INT);
     }
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     if (prte_cmd_line_is_taken(prte_cmd_line, "get-stack-traces")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_STACKTRACES, NULL, PMIX_BOOL);
     }
     if (prte_cmd_line_is_taken(prte_cmd_line, "report-state-on-timeout")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_REPORT_STATE, NULL, PMIX_BOOL);
     }
-#endif
 
     /* give the schizo components a chance to add to the job info */
     prte_schizo.job_info(prte_cmd_line, jinfo);
@@ -1101,7 +1097,6 @@ int prte(int argc, char *argv[])
     }
 
   proceed:
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
     PMIX_INFO_CREATE(iptr, 1);
@@ -1115,7 +1110,6 @@ int prte(int argc, char *argv[])
     }
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(iptr, 1);
-#endif
 
     /* loop the event lib until an exit event is detected */
     while (prte_event_base_active) {
@@ -1123,7 +1117,6 @@ int prte(int argc, char *argv[])
     }
     PRTE_ACQUIRE_OBJECT(prte_event_base_active);
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* close the push of our stdin */
     PMIX_INFO_LOAD(&info, PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
@@ -1135,7 +1128,6 @@ int prte(int argc, char *argv[])
     }
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_DESTRUCT(&info);
-#endif
 
   DONE:
     /* cleanup and leave */
@@ -1301,11 +1293,7 @@ static void signal_forward_callback(int signum, short args, void *cbdata)
     /* send the signal out to the processes */
     PMIX_LOAD_PROCID(&proc, spawnednspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     rc = PMIx_Job_control(&proc, 1, &info, 1, NULL, NULL);
-#else
-    rc = PMIx_Job_control(&proc, 1, &info, 1);
-#endif
     if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
         fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)",
                 signum, spawnednspace, PMIx_Error_string(rc));

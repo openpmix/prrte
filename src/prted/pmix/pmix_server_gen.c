@@ -591,10 +591,8 @@ static void _toolconn(int sd, short args, void *cbdata)
                 cd->target.rank = cd->info[n].value.data.rank;
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_HOSTNAME)) {
                 cd->operation = strdup(cd->info[n].value.data.string);
-#ifdef PMIX_CMD_LINE
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_CMD_LINE)) {
                 cd->cmdline = strdup(cd->info[n].value.data.string);
-#endif
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_LAUNCHER)) {
                 cd->launcher = PMIX_INFO_TRUE(&cd->info[n]);
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PROC_PID)) {
@@ -1018,18 +1016,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
                 proct = (pmix_proc_t*)&targets[0];
                 PMIX_LOAD_NSPACE(&jobid, proct->nspace);
             }
-#if PMIX_NUMERIC_VERSION < 0x00040100
-            char *tmp = NULL;
-            if (0 < strlen(jobid)) {
-                tmp = strdup(jobid);
-            }
-            rc = PMIx_Data_pack(NULL, cmd, &tmp, 1, PMIX_STRING);
-            if (NULL != tmp) {
-                free(tmp);
-            }
-#else
             rc = PMIx_Data_pack(NULL, cmd, &jobid, 1, PMIX_PROC_NSPACE);
-#endif
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(cmd);
@@ -1063,7 +1050,6 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor,
     return PMIX_OPERATION_SUCCEEDED;
 }
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
 static void relcb(void *cbdata)
 {
     prte_pmix_mdx_caddy_t *cd=(prte_pmix_mdx_caddy_t*)cbdata;
@@ -1148,9 +1134,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
     size_t i, mode = 0;
     pmix_server_pset_t *pset;
     bool fence = false;
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     pmix_byte_object_t *bo = NULL;
-#endif
 
     /* they are required to pass us an id */
     if (NULL == gpid) {
@@ -1166,10 +1150,8 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
             }
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
             fence = PMIX_INFO_TRUE(&directives[i]);
-#if PMIX_NUMERIC_VERSION >= 0x00040000
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ENDPT_DATA)) {
             bo = (pmix_byte_object_t*)&directives[i].value.data.bo;
-#endif
         }
     }
 
@@ -1211,7 +1193,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));
     }
     PMIX_DATA_BUFFER_CREATE(cd->buf);
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* if they provided us with a data blob, send it along */
     if (NULL != bo) {
         /* We don't own the byte_object and so we have to
@@ -1221,7 +1202,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
             PMIX_ERROR_LOG(rc);
         }
     }
-#endif
     /* pass it to the global collective algorithm */
     if (PRTE_SUCCESS != (rc = prte_grpcomm.allgather(cd->sig, cd->buf, mode,
                                                      group_release, cd))) {
@@ -1231,7 +1211,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
     }
     return PMIX_SUCCESS;
 }
-#endif
 
 pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
                                       const pmix_info_t directives[], size_t ndirs,
@@ -1292,16 +1271,12 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata)
         prte_iof.push_stdin(&cd->procs[n], (uint8_t*)bo->bytes, bo->size);
     }
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     if (NULL == bo->bytes || 0 == bo->size) {
         cd->cbfunc(PMIX_ERR_IOF_COMPLETE, cd->cbdata);
     }
     else {
         cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
-#else
-    cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
-#endif
 
     PRTE_RELEASE(cd);
 }

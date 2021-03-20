@@ -93,9 +93,7 @@ static void pmix_server_log(int status, pmix_proc_t* sender,
 #define PRTE_PMIX_SERVER_MIN_ROOMS    4096
 
 pmix_server_globals_t prte_pmix_server_globals = {0};
-#ifdef PMIX_TOPOLOGY2
 static pmix_topology_t mytopology = {0};
-#endif
 
 static pmix_server_module_t pmix_server = {
     .client_connected = pmix_server_client_connected_fn,
@@ -119,12 +117,9 @@ static pmix_server_module_t pmix_server = {
     .job_control = pmix_server_job_ctrl_fn,
     .iof_pull = pmix_server_iof_pull_fn,
     .push_stdin = pmix_server_stdin_fn,
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     .group = pmix_server_group_fn
-#endif
 };
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
 typedef struct {
     char *function;
     char **attrs;
@@ -223,7 +218,6 @@ static prte_regattr_input_t prte_attributes[] = {
     {.function = "PMIx_Notify_event", .attrs = (char *[]){"NONE", NULL}},
     {.function = ""},
 };
-#endif
 
 static void send_error(int status, pmix_proc_t *idreq,
                        pmix_proc_t *remote, int remote_room);
@@ -440,7 +434,6 @@ int pmix_server_init(void)
     /* if PMIx is version 4 or higher, then we can pass our
      * topology object down to the server library for its use
      * and for passing to any local clients */
-#ifdef PMIX_TOPOLOGY2
     mytopology.source = strdup("hwloc");
     mytopology.topology = prte_hwloc_topology;
     kv = PRTE_NEW(prte_info_item_t);
@@ -450,48 +443,6 @@ int pmix_server_init(void)
     kv = PRTE_NEW(prte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_SHARE_TOPOLOGY, NULL, PMIX_BOOL);
     prte_list_append(&ilist, &kv->super);
-#else
-#if HWLOC_API_VERSION < 0x20000
-     /* pass the topology string as we don't
-      * have HWLOC shared memory available - we do
-      * this so the procs won't read the topology
-      * themselves as this could overwhelm the local
-      * system on large-scale SMPs */
-    if (NULL != prte_hwloc_topology) {
-        char *xmlbuffer=NULL;
-        int len;
-        kv = PRTE_NEW(prte_info_item_t);
-        if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len)) {
-            PRTE_RELEASE(kv);
-            PRTE_DESTRUCT(&ilist);
-            return PRTE_ERROR;
-        }
-        PMIX_INFO_LOAD(&kv->info, PMIX_HWLOC_XML_V1, xmlbuffer, PMIX_STRING);
-        free(xmlbuffer);
-        prte_list_append(&ilist, &kv->super);
-    }
-#else
-    /* if shmem support is available, then we will share
-     * it since earlier versions of PMIx aren't able to
-     * do so on our behalf - if it isn't available, then export
-     * the topology as a v2 xml string */
-    if (!prte_hwloc_shmem_available) {
-        if (NULL != prte_hwloc_topology) {
-            char *xmlbuffer=NULL;
-            int len;
-            kv = PRTE_NEW(prte_info_item_t);
-            if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len, 0)) {
-                PRTE_RELEASE(kv);
-                PRTE_DESTRUCT(&ilist);
-                return PRTE_ERROR;
-            }
-            PMIX_INFO_LOAD(&kv->info, PMIX_HWLOC_XML_V2, xmlbuffer, PMIX_STRING);
-            free(xmlbuffer);
-            prte_list_append(&ilist, &kv->super);
-        }
-    }
-#endif
-#endif
 
     /* tell the server our temp directory */
     kv = PRTE_NEW(prte_info_item_t);
@@ -528,16 +479,12 @@ int pmix_server_init(void)
     /* if we are the MASTER, then we are the scheduler
      * as well as a gateway */
     if (PRTE_PROC_IS_MASTER) {
-#ifdef PMIX_SERVER_SCHEDULER
         kv = PRTE_NEW(prte_info_item_t);
         PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_SCHEDULER, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
-#endif
-#ifdef PMIX_SERVER_GATEWAY
         kv = PRTE_NEW(prte_info_item_t);
         PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_GATEWAY, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
-#endif
     }
 
     /* PRTE always allows remote tool connections */
@@ -553,12 +500,10 @@ int pmix_server_init(void)
         prte_list_append(&ilist, &kv->super);
     }
 
-#ifdef PMIX_HOSTNAME_KEEP_FQDN
     /* tell the server what we are doing with FQDN */
     kv = PRTE_NEW(prte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME_KEEP_FQDN, &prte_keep_fqdn_hostnames, PMIX_BOOL);
     prte_list_append(&ilist, &kv->super);
-#endif
 
     /* convert to an info array */
     ninfo = prte_list_get_size(&ilist) + 2;
@@ -583,7 +528,6 @@ int pmix_server_init(void)
     PMIX_INFO_FREE(info, ninfo);
     rc = PRTE_SUCCESS;
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* register our support */
     for (n=0; 0 != strlen(prte_attributes[n].function); n++) {
         prc = PMIx_Register_attributes(prte_attributes[n].function, prte_attributes[n].attrs);
@@ -598,7 +542,6 @@ int pmix_server_init(void)
     kv = PRTE_NEW(prte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, prte_process_info.nodename, PMIX_STRING);
     prte_list_append(&ilist, &kv->super);
-#ifdef PMIX_HOSTNAME_ALIASES
     // check for aliases
     if (NULL != prte_process_info.aliases) {
         kv = PRTE_NEW(prte_info_item_t);
@@ -607,7 +550,6 @@ int pmix_server_init(void)
         free(tmp);
         prte_list_append(&ilist, &kv->super);
     }
-#endif
     /* convert to an info array */
     ninfo = prte_list_get_size(&ilist);
     PMIX_INFO_CREATE(info, ninfo);
@@ -621,7 +563,6 @@ int pmix_server_init(void)
     prc = PMIx_server_register_resources(info, ninfo, NULL, NULL);
     PMIX_INFO_FREE(info, ninfo);
     rc = prte_pmix_convert_status(prc);
-#endif
 
     return rc;
 }
@@ -688,9 +629,7 @@ void pmix_server_finalize(void)
     PRTE_DESTRUCT(&prte_pmix_server_globals.reqs);
     PRTE_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
     PRTE_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
-#ifdef PMIX_TOPOLOGY2
     free(mytopology.source);
-#endif
     prte_pmix_server_globals.initialized = false;
 }
 

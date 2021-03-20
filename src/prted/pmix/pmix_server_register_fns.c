@@ -82,10 +82,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     prte_list_t local_procs;
     prte_namelist_t *nm;
     size_t nmsize;
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     pmix_server_pset_t *pset;
     pmix_cpuset_t cpuset;
-#endif
     uint32_t ui32;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
@@ -189,7 +187,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             kv = PRTE_NEW(prte_info_item_t);
             PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, node->name, PMIX_STRING);
             prte_list_append(&iarray->infolist, &kv->super);
-#ifdef PMIX_HOSTNAME_ALIASES
             /* add any aliases */
             if (prte_get_attribute(&node->attributes, PRTE_NODE_ALIAS, (void**)&regex, PMIX_STRING) &&
                 NULL != regex) {
@@ -198,7 +195,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 prte_list_append(&iarray->infolist, &kv->super);
                 free(regex);
             }
-#endif
             /* pass the node ID */
             kv = PRTE_NEW(prte_info_item_t);
             PMIX_INFO_LOAD(&kv->info, PMIX_NODEID, &node->index, PMIX_UINT32);
@@ -239,11 +235,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         }
         free(tmp);
         kv = PRTE_NEW(prte_info_item_t);
-#ifdef PMIX_REGEX
         PMIX_INFO_LOAD(&kv->info, PMIX_NODE_MAP, regex, PMIX_REGEX);
-#else
-        PMIX_INFO_LOAD(&kv->info, PMIX_NODE_MAP, regex, PMIX_STRING);
-#endif
         free(regex);
         prte_list_append(info, &kv->super);
     }
@@ -261,11 +253,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         }
         free(tmp);
         kv = PRTE_NEW(prte_info_item_t);
-#ifdef PMIX_REGEX
         PMIX_INFO_LOAD(&kv->info, PMIX_PROC_MAP, regex, PMIX_REGEX);
-#else
-        PMIX_INFO_LOAD(&kv->info, PMIX_PROC_MAP, regex, PMIX_STRING);
-#endif
         free(regex);
         prte_list_append(info, &kv->super);
     }
@@ -331,12 +319,10 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     PMIX_INFO_LOAD(&kv->info, PMIX_BINDTO, prte_hwloc_base_print_binding(jdata->map->binding), PMIX_STRING);
     prte_list_append(info, &kv->super);
 
-#ifdef PMIX_HOSTNAME_KEEP_FQDN
     /* tell the user what we did with FQDN */
     kv = PRTE_NEW(prte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME_KEEP_FQDN, &prte_keep_fqdn_hostnames, PMIX_BOOL);
     prte_list_append(info, &kv->super);
-#endif
 
     /* pass the top-level session directory - this is our jobfam session dir */
     kv = PRTE_NEW(prte_info_item_t);
@@ -379,7 +365,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         kv = PRTE_NEW(prte_info_item_t);
         PMIX_INFO_LOAD(&kv->info, PMIX_WDIR, app->cwd, PMIX_STRING);
         prte_list_append(&iarray->infolist, &kv->super);
-#if PMIX_NUMERIC_VERSION >= 0x00040000
         /* add the argv */
         tmp = prte_argv_join(app->argv, ' ');
         kv = PRTE_NEW(prte_info_item_t);
@@ -399,7 +384,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             prte_list_append(&prte_pmix_server_globals.psets, &pset->super);
             free(tmp);
         }
-#endif
         /* add to the main payload */
         prte_list_append(&appinfo, &iarray->super);
     }
@@ -437,7 +421,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 tmp = NULL;
                 if (prte_get_attribute(&pptr->attributes, PRTE_PROC_CPU_BITMAP, (void**)&tmp, PMIX_STRING) &&
                     NULL != tmp) {
-#if PMIX_NUMERIC_VERSION >= 0x00040000
                     /* provide the cpuset string for this proc */
                     kv = PRTE_NEW(prte_info_item_t);
                     PMIX_INFO_LOAD(&kv->info, PMIX_CPUSET, tmp, PMIX_STRING);
@@ -460,17 +443,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                     PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, tmp, PMIX_STRING);
                     prte_list_append(pmap, &kv->super);
                     free(tmp);
-#else
-                    /* generate the locality string ourselves */
-                    kv = PRTE_NEW(prte_info_item_t);
-                    PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, prte_hwloc_base_get_locality_string(prte_hwloc_topology, tmp), PMIX_STRING);
-                    prte_list_append(pmap, &kv->super);
-                    /* and also provide the cpuset string for this proc */
-                    kv = PRTE_NEW(prte_info_item_t);
-                    PMIX_INFO_LOAD(&kv->info, PMIX_CPUSET, tmp, PMIX_STRING);
-                    prte_list_append(pmap, &kv->super);
-                    free(tmp);
-#endif
                 } else {
                     /* the proc is not bound */
                     kv = PRTE_NEW(prte_info_item_t);
@@ -533,13 +505,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             PMIX_INFO_LOAD(&kv->info, PMIX_NODEID, &pptr->node->index, PMIX_UINT32);
             prte_list_append(pmap, &kv->super);
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
             /* reincarnation number */
             ui32 = 0;  // we are starting this proc for the first time
             kv = PRTE_NEW(prte_info_item_t);
             PMIX_INFO_LOAD(&kv->info, PMIX_REINCARNATION, &ui32, PMIX_UINT32);
             prte_list_append(pmap, &kv->super);
-#endif
 
             if (map->num_nodes < prte_hostname_cutoff) {
                 kv = PRTE_NEW(prte_info_item_t);
@@ -575,7 +545,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     }
     PMIX_INFO_CREATE(pinfo, ninfo);
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* first add the local procs, if they are defined */
     if (0 < nmsize) {
         pmix_proc_t *procs_tmp;
@@ -589,7 +558,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             ++n;
         }
     }
-#endif
 
     PRTE_LIST_DESTRUCT(&local_procs);
 

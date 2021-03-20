@@ -187,14 +187,6 @@ char *prte_daemon_cores = NULL;
 /* enable/disable ft */
 bool prte_enable_ft = false;
 
-#if PMIX_NUMERIC_VERSION < 0x00040100
-#if PRTE_HAVE_ZLIB
-size_t prte_base_compress_limit;
-#else
-bool prte_base_silence_compress_warn;
-#endif
-#endif
-
 int prte_dt_init(void)
 {
     /* set default output */
