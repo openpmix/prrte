@@ -500,7 +500,7 @@ AC_CHECK_HEADERS([alloca.h aio.h arpa/inet.h dirent.h \
     sys/types.h sys/uio.h sys/un.h net/uio.h sys/utsname.h sys/vfs.h sys/wait.h syslog.h \
     termios.h ulimit.h unistd.h util.h utmp.h malloc.h \
     ifaddrs.h crt_externs.h regex.h mntent.h paths.h \
-    ioLib.h sockLib.h hostLib.h shlwapi.h sys/synch.h db.h ndbm.h zlib.h ieee754.h])
+    ioLib.h sockLib.h hostLib.h shlwapi.h sys/synch.h db.h ndbm.h ieee754.h])
 
 AC_CHECK_HEADERS([sys/mount.h], [], [],
 [AC_INCLUDES_DEFAULT
@@ -1152,30 +1152,6 @@ CPP_INCLUDES="$(echo $cpp_includes | $SED 's/[[^ \]]* */'"$prte_cc_iquote"'&/g')
 CPPFLAGS="$CPP_INCLUDES $CPPFLAGS $PRTE_FINAL_CPPFLAGS"
 LDFLAGS="$LDFLAGS $PRTE_FINAL_LDFLAGS"
 LIBS="$LIBS $PRTE_FINAL_LIBS"
-
-AC_MSG_CHECKING([need zlib support])
-if test "$prte_zlib_support" == "1" && test "$prte_external_pmix_version_need_zlib" == "yes"; then
-    AC_MSG_RESULT([yes])
-    prte_add_zlib=yes
-    PRTE_SUMMARY_ADD([[Optional Packages]],[[zlib]], [prte_zlib], [$prte_add_zlib])
-elif test "$prte_zlib_support" != "1"; then
-    AC_MSG_RESULT([yes])
-    AC_MSG_WARN([*************************************************])
-    AC_MSG_WARN([* PRRTE was unable to find a usable version     *])
-    AC_MSG_WARN([* of zlib and zlib-devel on the system. We will *])
-    AC_MSG_WARN([* be unable to compress large data streams.     *])
-    AC_MSG_WARN([* This may result in longer-than-normal startup *])
-    AC_MSG_WARN([* times and larger memory footprints. We will   *])
-    AC_MSG_WARN([* continue, but strongly recommend installing   *])
-    AC_MSG_WARN([* zlib for better user experience.              *])
-    AC_MSG_WARN([*************************************************])
-    prte_add_zlib=no
-    PRTE_SUMMARY_ADD([[Optional Packages]],[[zlib]], [prte_zlib], [$prte_add_zlib])
-else
-    AC_MSG_RESULT([no])
-    prte_add_zlib=no
-fi
-AM_CONDITIONAL([PRTE_ADD_ZLIB], [test "$prte_add_zlib" = "yes"])
 
 # restore any user-provided Werror flags
 AS_IF([test ! -z "$PRTE_CFLAGS_cache"], [CFLAGS="$CFLAGS $PRTE_CFLAGS_cache"])

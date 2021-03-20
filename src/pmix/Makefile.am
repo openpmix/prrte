@@ -24,8 +24,6 @@
 
 # This makefile.am does not stand on its own - it is included from src/Makefile.am
 
-AM_CPPFLAGS = $(prte_zlib_CPPFLAGS)
-
 # Source code files
 headers += \
         pmix/pmix-internal.h

@@ -857,7 +857,6 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t* sender,
         }
     }
 
-#if PMIX_VERSION_MAJOR >=4
     /* see if they want us to await a particular key before sending
      * the response */
     if (NULL != info) {
@@ -868,7 +867,6 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t* sender,
             }
         }
     }
-#endif
 
     /* is this proc one of mine? */
     if (NULL == (jdata = prte_get_job_data_object(pproc.nspace))) {
