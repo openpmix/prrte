@@ -416,9 +416,6 @@ fi
 AC_DEFINE_UNQUOTED([PRTE_ENABLE_GETPWUID], [$prte_want_getpwuid],
                    [Disable getpwuid support (default: enabled)])
 
-dnl Check for zlib support
-PRTE_ZLIB_CONFIG
-
 dnl Check for FT
 AC_MSG_CHECKING([if want fault tolerance support])
 AC_ARG_ENABLE([prte-ft],
