@@ -1095,8 +1095,17 @@ int prte(int argc, char *argv[])
     if (verbose) {
         prte_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
     }
+    /* need to "pull" the IOF from the spawned job since we didn't
+     * go thru PMIx_Spawn to start it - and thus, PMIx didn't
+     * "pull" it for us */
+    PMIX_LOAD_PROCID(&pname, spawnednspace, PMIX_RANK_WILDCARD);
+    ret = PMIx_IOF_pull(&pname, 1, NULL, 0,
+                        PMIX_FWD_STDOUT_CHANNEL | PMIX_FWD_STDERR_CHANNEL | PMIX_FWD_STDDIAG_CHANNEL,
+                        NULL, NULL, NULL);
+    if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+        prte_output(0, "IOF pull failed: %s", PMIx_Error_string(ret));
+    }
 
-  proceed:
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
     PMIX_INFO_CREATE(iptr, 1);
@@ -1111,6 +1120,7 @@ int prte(int argc, char *argv[])
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(iptr, 1);
 
+proceed:
     /* loop the event lib until an exit event is detected */
     while (prte_event_base_active) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
