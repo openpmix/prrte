@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -259,6 +260,9 @@ static void iof_reg_callbk(pmix_status_t status, size_t evhandler_ref,
                 (unsigned long)evhandler_ref);
     }
     iof_handler_id = evhandler_ref;
+    if (SIZE_MAX == iof_handler_id) {
+        fprintf(stderr, "REGISTRATION RETURNED ERROR HANDLER ID");
+    }
     if (NULL == lock) {
         return;
     }
