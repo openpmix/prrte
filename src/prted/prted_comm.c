@@ -204,16 +204,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
     case PRTE_DAEMON_SIGNAL_LOCAL_PROCS:
         /* unpack the jobid */
         n = 1;
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        tmp = NULL;
-        ret = PMIx_Data_unpack(NULL, buffer, &tmp, &n, PMIX_STRING);
-        PMIX_LOAD_NSPACE(job, tmp);
-        if (NULL != tmp) {
-            free(tmp);
-        }
-#else
         ret = PMIx_Data_unpack(NULL, buffer, &job, &n, PMIX_PROC_NSPACE);
-#endif
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             goto CLEANUP;
@@ -475,16 +466,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
     case PRTE_DAEMON_DVM_CLEANUP_JOB_CMD:
         /* unpack the jobid */
         n = 1;
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        tmp = NULL;
-        ret = PMIx_Data_unpack(NULL, buffer, &tmp, &n, PMIX_STRING);
-        PMIX_LOAD_NSPACE(job, tmp);
-        if (NULL != tmp) {
-            free(tmp);
-        }
-#else
         ret = PMIx_Data_unpack(NULL, buffer, &job, &n, PMIX_PROC_NSPACE);
-#endif
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             goto CLEANUP;
@@ -640,16 +622,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
 
         /* unpack the jobid */
         n = 1;
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        tmp = NULL;
-        ret = PMIx_Data_unpack(NULL, buffer, &tmp, &n, PMIX_STRING);
-        PMIX_LOAD_NSPACE(job, tmp);
-        if (NULL != tmp) {
-            free(tmp);
-        }
-#else
         ret = PMIx_Data_unpack(NULL, buffer, &job, &n, PMIX_PROC_NSPACE);
-#endif
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             goto CLEANUP;

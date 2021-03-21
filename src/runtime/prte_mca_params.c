@@ -650,25 +650,5 @@ int prte_register_params(void)
                         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_enable_ft);
 #endif
 
-#if PMIX_NUMERIC_VERSION < 0x00040100
-#if PRTE_HAVE_ZLIB
-    prte_base_compress_limit = 4096;
-    prte_mca_base_var_register("prte", "prte", NULL, "compress_limit",
-                               "Threshold beyond which data will be compressed",
-                               PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0,
-                               PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_3,
-                               PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_base_compress_limit);
-#else
-    prte_base_silence_compress_warn = false;
-    prte_mca_base_var_register("prte", "prte", NULL, "silence_compression_warning",
-                               "Do not warn if compression unavailable",
-                               PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                               PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_3,
-                               PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_base_silence_compress_warn);
-#endif
-#endif
-
     return PRTE_SUCCESS;
 }

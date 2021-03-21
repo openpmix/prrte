@@ -78,9 +78,7 @@ static void _query(int sd, short args, void *cbdata)
     size_t m, n, p;
     uint32_t key, nodeid;
     char **nspaces, *hostname, *uri;
-#ifdef PMIX_QUERY_NAMESPACE_INFO
     char *cmdline;
-#endif
     char **ans, *tmp;
     prte_app_context_t *app;
     int matched;
@@ -88,9 +86,7 @@ static void _query(int sd, short args, void *cbdata)
     pmix_info_t *info;
     pmix_data_array_t *darray;
     prte_proc_t *proct;
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     size_t sz;
-#endif
 
     PRTE_ACQUIRE_OBJECT(cd);
 
@@ -179,7 +175,6 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_NAMESPACES, tmp, PMIX_STRING);
                 free(tmp);
                 prte_list_append(&results, &kv->super);
-#ifdef PMIX_QUERY_NAMESPACE_INFO
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NAMESPACE_INFO)) {
                 /* get the current jobids */
                 PRTE_CONSTRUCT(&stack, prte_list_t);
@@ -227,7 +222,6 @@ static void _query(int sd, short args, void *cbdata)
                     ++p;
                 }
                 PRTE_LIST_DESTRUCT(&stack);
-#endif
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_SPAWN_SUPPORT)) {
                 ans = NULL;
                 prte_argv_append_nosize(&ans, PMIX_HOST);
@@ -362,7 +356,6 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_URI, uri, PMIX_STRING);
                 free(uri);
                 prte_list_append(&results, &kv->super);
-    #ifdef PMIX_QUERY_PROC_TABLE
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PROC_TABLE)) {
                 /* construct a list of values with prte_proc_info_t
                  * entries for each proc in the indicated job */
@@ -384,9 +377,6 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_DATA_ARRAY_CREATE(darray, jdata->num_procs, PMIX_PROC_INFO);
                 kv->info.value.type = PMIX_DATA_ARRAY;
                 kv->info.value.data.darray = darray;
-        #if PMIX_NUMERIC_VERSION < 0x00030100
-                PMIX_PROC_INFO_CREATE(darray->array, jdata->num_local_procs);
-        #endif
                 procinfo = (pmix_proc_info_t*)darray->array;
                 p = 0;
                 for (k=0; k < jdata->procs->size; k++) {
@@ -427,9 +417,6 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_DATA_ARRAY_CREATE(darray, jdata->num_local_procs, PMIX_PROC_INFO);
                 kv->info.value.type = PMIX_DATA_ARRAY;
                 kv->info.value.data.darray = darray;
-        #if PMIX_NUMERIC_VERSION < 0x00030100
-                PMIX_PROC_INFO_CREATE(darray->array, jdata->num_local_procs);
-        #endif
                 procinfo = (pmix_proc_info_t*)darray->array;
                 p = 0;
                 for (k=0; k < jdata->procs->size; k++) {
@@ -451,8 +438,6 @@ static void _query(int sd, short args, void *cbdata)
                         ++p;
                     }
                 }
-    #endif
-    #ifdef PMIX_QUERY_NUM_PSETS
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NUM_PSETS)) {
                 kv = PRTE_NEW(prte_info_item_t);
                 sz = prte_list_get_size(&prte_pmix_server_globals.psets);
@@ -471,7 +456,6 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_PSET_NAMES, tmp, PMIX_STRING);
                 prte_list_append(&results, &kv->super);
                 free(tmp);
-    #endif
             } else if (0 == strcmp(q->keys[n], PMIX_JOB_SIZE)) {
                 jdata = prte_get_job_data_object(jobid);
                 if (NULL == jdata) {

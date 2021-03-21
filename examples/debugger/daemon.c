@@ -268,13 +268,7 @@ int main(int argc, char **argv)
      * the applicaton processes and the debugger daemons have the same
      * namespace, so this module uses the debugger namespace, which it knows.
      */
-#ifdef PMIX_LOAD_PROCID
     PMIX_LOAD_PROCID(&proc, myproc.nspace, PMIX_RANK_WILDCARD);
-#else
-    PMIX_PROC_CONSTRUCT(&proc);
-    (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_KEYLEN);
-    proc.rank = PMIX_RANK_WILDCARD;
-#endif
     rc = PMIx_Get(&proc, PMIX_DEBUG_JOB, NULL, 0, &val);
     if (PMIX_ERR_NOT_FOUND == rc) {
         /* Save the application namespace for later */

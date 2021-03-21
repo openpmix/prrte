@@ -232,14 +232,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
                     }
                 }
                 /* pack the jobdata buffer */
-#if PMIX_NUMERIC_VERSION < 0x00040100
-                pmix_byte_object_t pbo;
-                pbo.bytes = (char*)priorjob.base_ptr;
-                pbo.size = priorjob.bytes_used;
-                rc = PMIx_Data_pack(NULL, &jobdata, &pbo, 1, PMIX_BYTE_OBJECT);
-#else
                 rc = PMIx_Data_pack(NULL, &jobdata, &priorjob, 1, PMIX_DATA_BUFFER);
-#endif
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
@@ -250,14 +243,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
             }
         }
         /* pack the jobdata buffer */
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        pmix_byte_object_t pbo;
-        pbo.bytes = (char*)jobdata.base_ptr;
-        pbo.size = jobdata.bytes_used;
-        rc = PMIx_Data_pack(NULL, buffer, &pbo, 1, PMIX_BYTE_OBJECT);
-#else
         rc = PMIx_Data_pack(NULL, buffer, &jobdata, 1, PMIX_DATA_BUFFER);
-#endif
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
@@ -327,11 +313,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
             return prte_pmix_convert_status(ret);
         }
         free(tmp);
-#ifdef PMIX_REGEX
         PMIX_INFO_LOAD(&cd.info[0], PMIX_NODE_MAP, regex, PMIX_REGEX);
-#else
-        PMIX_INFO_LOAD(&cd.info[0], PMIX_NODE_MAP, regex, PMIX_STRING);
-#endif
         free(regex);
     }
 
@@ -347,11 +329,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
             return prte_pmix_convert_status(ret);
         }
         free(tmp);
-#ifdef PMIX_REGEX
         PMIX_INFO_LOAD(&cd.info[1], PMIX_PROC_MAP, regex, PMIX_REGEX);
-#else
-        PMIX_INFO_LOAD(&cd.info[1], PMIX_PROC_MAP, regex, PMIX_STRING);
-#endif
         free(regex);
     }
 
@@ -360,15 +338,8 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
      * the ability for transport specifications */
     (void)strncpy(cd.info[2].key, PMIX_ALLOC_NETWORK, PMIX_MAX_KEYLEN);
     cd.info[2].value.type = PMIX_DATA_ARRAY;
-#if PMIX_NUMERIC_VERSION < 0x00020203
-    PMIX_INFO_CREATE(info, 3);
-    cd.info[2].value.data.darray = (pmix_data_array_t*)malloc(sizeof(pmix_data_array_t));
-    cd.info[2].value.data.darray->array = info;
-    cd.info[2].value.data.darray->size = 3;
-#else
     PMIX_DATA_ARRAY_CREATE(cd.info[2].value.data.darray, 3, PMIX_INFO);
     info = (pmix_info_t*)cd.info[2].value.data.darray->array;
-#endif
     asprintf(&tmp, "%s.net", jdata->nspace);
     PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NETWORK_ID, tmp, PMIX_STRING);
     free(tmp);
@@ -447,27 +418,13 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer,
     if (0 != flag) {
         /* unpack the buffer containing the info */
         cnt=1;
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        rc = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
-        PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
-        dbuf.base_ptr = bo.bytes;
-        dbuf.bytes_used = bo.size;
-#else
         rc = PMIx_Data_unpack(NULL, buffer, &dbuf, &cnt, PMIX_DATA_BUFFER);
-#endif
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             goto REPORT_ERROR;
         }
         cnt=1;
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        rc = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
-        PMIX_DATA_BUFFER_CONSTRUCT(&jdbuf);
-        jdbuf.base_ptr = bo.bytes;
-        jdbuf.bytes_used = bo.size;
-#else
         rc = PMIx_Data_unpack(NULL, &dbuf, &jdbuf, &cnt, PMIX_DATA_BUFFER);
-#endif
         while (PMIX_SUCCESS == rc) {
             /* unpack each job and add it to the local prte_job_data array */
             cnt=1;
@@ -522,14 +479,7 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer,
             cnt = 1;
         }
         PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
-#if PMIX_NUMERIC_VERSION < 0x00040100
-        rc = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
-        PMIX_DATA_BUFFER_CONSTRUCT(&jdbuf);
-        jdbuf.base_ptr = bo.bytes;
-        jdbuf.bytes_used = bo.size;
-#else
         rc = PMIx_Data_unpack(NULL, &dbuf, &jdbuf, &cnt, PMIX_DATA_BUFFER);
-#endif
     }
 
     /* unpack the job we are to launch */

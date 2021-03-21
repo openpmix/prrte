@@ -321,12 +321,10 @@ PRTE_EXPORT extern pmix_status_t pmix_server_stdin_fn(const pmix_proc_t *source,
                                                        const pmix_byte_object_t *bo,
                                                        pmix_op_cbfunc_t cbfunc, void *cbdata);
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
 PRTE_EXPORT extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
                                                        const pmix_proc_t procs[], size_t nprocs,
                                                        const pmix_info_t directives[], size_t ndirs,
                                                        pmix_info_cbfunc_t cbfunc, void *cbdata);
-#endif
 
 PRTE_EXPORT void prte_pmix_server_tool_conn_complete(prte_job_t *jdata,
                                                        pmix_server_req_t *req);

@@ -140,15 +140,12 @@ static void defhandler(size_t evhdlr_registration_id,
 {
     prte_pmix_lock_t *lock = NULL;
     size_t n;
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     pmix_status_t rc;
-#endif
 
     if (verbose) {
         prte_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
     }
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     if (PMIX_ERR_IOF_FAILURE == status) {
         pmix_proc_t target;
         pmix_info_t directive;
@@ -164,7 +161,6 @@ static void defhandler(size_t evhdlr_registration_id,
         }
         goto progress;
     }
-#endif
 
     if (PMIX_ERR_UNREACH == status ||
         PMIX_ERR_LOST_CONNECTION == status) {
@@ -186,9 +182,7 @@ static void defhandler(size_t evhdlr_registration_id,
         /* release the lock */
         PRTE_PMIX_WAKEUP_THREAD(lock);
     }
-#if PMIX_NUMERIC_VERSION >= 0x00040000
   progress:
-#endif
     /* we _always_ have to execute the evhandler callback or
      * else the event progress engine will hang */
     if (NULL != cbfunc) {
@@ -225,10 +219,8 @@ static void evhandler(size_t evhdlr_registration_id,
                 PMIX_LOAD_NSPACE(jobid, info[n].value.data.proc->nspace);
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
                 lock = (prte_pmix_lock_t*)info[n].value.data.ptr;
-        #ifdef PMIX_EVENT_TEXT_MESSAGE
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_TEXT_MESSAGE, PMIX_MAX_KEYLEN)) {
                 msg = info[n].value.data.string;
-        #endif
             }
         }
         if (verbose && PMIX_CHECK_NSPACE(jobid, spawnednspace)) {
@@ -722,7 +714,6 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
         free(ptr);
     } else if (NULL != ptr) {
-#if PMIX_NUMERIC_VERSION >= 0x00040000
         /* If the given filename isn't an absolute path, then
          * convert it to one so the name will be relative to
          * the directory where prun was given as that is what
@@ -738,7 +729,6 @@ int prun(int argc, char *argv[])
         }
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
         free(param);
-#endif
     }
 
     /* if we were asked to merge stderr to stdout, mark it so */
@@ -811,14 +801,12 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT, &i, PMIX_INT);
     }
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     if (prte_cmd_line_is_taken(prte_cmd_line, "get-stack-traces")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_STACKTRACES, &flag, PMIX_BOOL);
     }
     if (prte_cmd_line_is_taken(prte_cmd_line, "report-state-on-timeout")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_REPORT_STATE, &flag, PMIX_BOOL);
     }
-#endif
 
     /* give the schizo components a chance to add to the job info */
     prte_schizo.job_info(prte_cmd_line, jinfo);
@@ -914,7 +902,6 @@ int prun(int argc, char *argv[])
         goto DONE;
     }
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
     PMIX_INFO_CREATE(iptr, 1);
@@ -928,7 +915,6 @@ int prun(int argc, char *argv[])
     }
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(iptr, 1);
-#endif
 
     /* register to be notified when
      * our job completes */
@@ -974,7 +960,6 @@ int prun(int argc, char *argv[])
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PRTE_PMIX_DESTRUCT_LOCK(&rellock);
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     /* close the push of our stdin */
     PMIX_INFO_LOAD(&info, PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
@@ -986,7 +971,6 @@ int prun(int argc, char *argv[])
     }
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_DESTRUCT(&info);
-#endif
 
   DONE:
     PRTE_LIST_FOREACH(evitm, &forwarded_signals, prte_event_list_item_t) {
@@ -1092,11 +1076,7 @@ static void signal_forward_callback(int signum)
     /* send the signal out to the processes */
     PMIX_LOAD_PROCID(&proc, spawnednspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     rc = PMIx_Job_control(&proc, 1, &info, 1, NULL, NULL);
-#else
-    rc = PMIx_Job_control(&proc, 1, &info, 1);
-#endif
     if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
         fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)",
                 signum, spawnednspace, PMIx_Error_string(rc));

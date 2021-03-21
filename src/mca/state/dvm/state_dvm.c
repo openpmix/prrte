@@ -768,15 +768,11 @@ static void dvm_notify(int sd, short args, void *cbdata)
         PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                              "%s state:dvm:dvm_notify notification requested",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-    #ifdef PMIX_EVENT_TEXT_MESSAGE
         /* if it was an abnormal termination, then construct an appropriate
          * error message */
         if (PRTE_SUCCESS != rc) {
             errmsg = prte_dump_aborted_procs(jdata);
         }
-    #else
-        errmsg = NULL;
-    #endif
         /* construct the info to be provided */
         if (NULL == errmsg) {
             ninfo = 3;
@@ -797,12 +793,10 @@ static void dvm_notify(int sd, short args, void *cbdata)
             pname.rank = PMIX_RANK_WILDCARD;
         }
         PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
-    #ifdef PMIX_EVENT_TEXT_MESSAGE
         if (NULL != errmsg) {
             PMIX_INFO_LOAD(&info[3], PMIX_EVENT_TEXT_MESSAGE, errmsg, PMIX_STRING);
             free(errmsg);
         }
-    #endif
 
         /* pack the info for sending */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
@@ -900,18 +894,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
-#if PMIX_NUMERIC_VERSION < 0x00040100
-    char *tmp = NULL;
-    if (0 < strlen(jdata->nspace)) {
-        tmp = strdup(jdata->nspace);
-    }
-    rc = PMIx_Data_pack(NULL, reply, (void*)&tmp, 1, PMIX_STRING);
-    if (NULL != tmp) {
-        free(tmp);
-    }
-#else
     rc = PMIx_Data_pack(NULL, reply, &jdata->nspace, 1, PMIX_PROC_NSPACE);
-#endif
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(reply);

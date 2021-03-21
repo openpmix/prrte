@@ -41,7 +41,6 @@ pmix_status_t prte_pmix_convert_rc(int rc)
 {
     switch (rc) {
 
-#if PMIX_NUMERIC_VERSION >= 0x00040000
     case PRTE_ERR_HEARTBEAT_ALERT:
     case PRTE_ERR_FILE_ALERT:
     case PRTE_ERR_HEARTBEAT_LOST:
@@ -57,7 +56,6 @@ pmix_status_t prte_pmix_convert_rc(int rc)
 
     case PRTE_ERR_JOB_CANCELLED:
         return PMIX_ERR_JOB_CANCELED;
-#endif
 
     case PRTE_ERR_DEBUGGER_RELEASE:
         return PMIX_ERR_DEBUGGER_RELEASE;
