@@ -88,6 +88,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/plm/plm.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/rml/rml.h"
@@ -1167,9 +1168,20 @@ static void clean_abort(int fd, short flags, void *arg)
     }
 
     fflush(stderr);
-    PMIx_server_finalize();
-    /* exit with a non-zero status */
-    exit(1);
+    /* ensure we exit with a non-zero status */
+    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+    /* ensure that the forwarding of stdin stops */
+    prte_job_term_ordered = true;
+    /* tell us to be quiet - hey, the user killed us with a ctrl-c,
+     * so need to tell them that!
+     */
+    prte_execute_quiet = true;
+    /* We are in an event handler; the job completed procedure
+     will delete the signal handler that is currently running
+     (which is a Bad Thing), so we can't call it directly.
+     Instead, we have to exit this handler and setup to call
+     job_completed() after this. */
+    prte_plm.terminate_orteds();
 }
 
 static struct timeval current, last={0,0};
