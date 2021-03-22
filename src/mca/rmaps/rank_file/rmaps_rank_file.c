@@ -91,6 +91,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     char *slots, *jobslots = NULL;
     bool initial_map=true;
     char *rankfile = NULL;
+    prte_binding_policy_t bind;
 
     /* only handle initial launch of rf job */
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
@@ -142,6 +143,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
 
     /* convenience def */
     map = jdata->map;
+    bind = PRTE_GET_BINDING_POLICY(jdata->map->binding);
 
     /* setup the node list */
     PRTE_CONSTRUCT(&node_list, prte_list_t);
@@ -323,7 +325,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
             /* set the vpid */
             proc->name.rank = rank;
 
-            if (NULL != slots) {
+            if (NULL != slots && PRTE_BIND_TO_NONE != bind) {
                 /* setup the bitmap */
                 hwloc_cpuset_t bitmap;
                 char *cpu_bitmap;
