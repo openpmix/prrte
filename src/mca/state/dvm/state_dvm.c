@@ -417,6 +417,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     if (jdata->num_procs == jdata->num_ready_for_debug) {
         /* generate the event notifying any connected tool that
          * the specified job is ready for debug */
+        // TODO?
     }
     PRTE_RELEASE(caddy);
 }
