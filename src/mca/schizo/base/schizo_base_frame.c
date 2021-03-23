@@ -112,6 +112,14 @@ static prte_schizo_conflicts_t bindto_modifiers[] = {
     {.name = ""}
 };
 
+static prte_schizo_conflicts_t output_modifiers[] = {
+    {.name = ""}
+};
+
+static prte_schizo_conflicts_t display_modifiers[] = {
+    {.name = ""}
+};
+
 static int check_modifiers(char *modifier, char **checks, prte_schizo_conflicts_t *conflicts)
 {
     int n, m, k;
@@ -153,6 +161,10 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
             modifiers = rankby_modifiers;
         } else if (0 == strcmp(option, "--bind-to")) {
             modifiers = bindto_modifiers;
+        } else if (0 == strcmp(option, "--output")) {
+            modifiers = output_modifiers;
+        } else if (0 == strcmp(option, "--display")) {
+            modifiers = display_modifiers;
         } else  {
             prte_output(0, "UNRECOGNIZED OPTION: %s", option);
             return PRTE_ERR_BAD_PARAM;
@@ -164,9 +176,9 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
     for (j=0; NULL != pargs[j]; j++) {
         if (0 == strcmp(pargs[j], option)) {
             found = true;
-            /* if it is a --tune option, then we need to simply append the
-             * comma-delimited list of files they gave to the existing one */
-            if (0 == strcasecmp(option, "--tune")) {
+            /* if it is a --tune, --output, or --display option, then we need to simply
+             * append the comma-delimited list of files they gave to the existing one */
+            if (0 == strcasecmp(option, "--tune") || 0 == strcasecmp(option, "--output") || 0 == strcasecmp(option, "--display")) {
                 /* it is possible someone gave this option more than once - avoid that here
                  * while preserving ordering of files */
                 if (j < idx) {
@@ -184,7 +196,7 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
                 prte_argv_free(tmp);
                 free(pargs[j+1]);
                 pargs[j+1] = p2;
-                if (0 != strcmp(pargs[j], "--tune")) {
+                if (0 != strcmp(pargs[j], "--tune") || 0 != strcmp(pargs[j], "--output") || 0 != strcmp(pargs[j], "--display")) {
                     prte_asprintf(&help_str, "%s %s", option, p2);
                     /* can't just call show_help as we want every instance to be reported */
                     output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
@@ -324,6 +336,12 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
         if (0 == strcasecmp(option, "--tune")) {
             p2 = NULL;
             prte_asprintf(&help_str, "%s %s", pargs[idx], pargs[idx+1]);
+        } else if (0 == strcasecmp(option, "--output") || 0 == strcasecmp(option, "--display")) {
+            if (NULL != directive) {
+                prte_asprintf(&p2, "%s:%s", directive, modifier);
+            } else {
+                p2 = strdup(modifier);
+            }
         } else if (NULL == directive) {
             prte_asprintf(&p2, ":%s", modifier);
         } else if (NULL == modifier) {
