@@ -245,15 +245,9 @@ static void init_complete(int sd, short args, void *cbdata)
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
-    /* nothing to do here but move along - if it is the
-     * daemon job, then next step is allocate */
-    if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
-        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_ALLOCATE);
-    } else {
-        /* we already did an allocation when we launched the DVM,
-         * so skip that step */
-        PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_ALLOCATION_COMPLETE);
-    }
+    /* need to go thru allocate step in case someone wants to
+     * expand the DVM */
+    PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_ALLOCATE);
     PRTE_RELEASE(caddy);
 }
 
@@ -270,10 +264,8 @@ static void vm_ready(int fd, short args, void *cbdata)
     pmix_status_t ret;
 
     PRTE_ACQUIRE_OBJECT(caddy);
-
     /* if this is my job, then we are done */
-    if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
-        prte_dvm_ready = true;
+    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, NULL, PMIX_BOOL)) {
         /* if there is more than one daemon in the job, then there
          * is just a little bit to do */
         if (!prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
@@ -341,6 +333,9 @@ static void vm_ready(int fd, short args, void *cbdata)
             PMIX_DATA_BUFFER_DESTRUCT(&buf);
             PMIX_PROC_FREE(sig.signature, 1);
         }
+    }
+    if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
+        prte_dvm_ready = true;
         /* notify that the vm is ready */
         if (0 > prte_state_base_parent_fd) {
             if (prte_state_base_ready_msg && prte_persistent) {
@@ -352,7 +347,6 @@ static void vm_ready(int fd, short args, void *cbdata)
             close(prte_state_base_parent_fd);
             prte_state_base_parent_fd = -1;
         }
-
         for (i=0; i < prte_cache->size; i++) {
             jptr = (prte_job_t*)prte_pointer_array_get_item(prte_cache, i);
             if (NULL != jptr) {
@@ -360,7 +354,6 @@ static void vm_ready(int fd, short args, void *cbdata)
                 prte_plm.spawn(jptr);
             }
         }
-
         /* progress the job */
         caddy->jdata->state = PRTE_JOB_STATE_VM_READY;
         PRTE_RELEASE(caddy);

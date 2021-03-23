@@ -958,13 +958,14 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t* sender,
     pmix_status_t prc, pret;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s dmdx:recv response from proc %s",
+                        "%s dmdx:recv response from proc %s with %d bytes",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(sender));
+                        PRTE_NAME_PRINT(sender), (int)buffer->bytes_used);
 
     d = PRTE_NEW(datacaddy_t);
 
     /* unpack the status */
+    cnt = 1;
     if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, &pret, &cnt, PMIX_STATUS))) {
         PMIX_ERROR_LOG(prc);
         PRTE_RELEASE(d);
