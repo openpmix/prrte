@@ -226,6 +226,9 @@ int prte_pmix_convert_status(pmix_status_t status)
     case PMIX_SUCCESS:
     case PMIX_OPERATION_SUCCEEDED:
         return PRTE_SUCCESS;
+    case PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER:
+        return PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER;
+
     default:
         return status;
     }

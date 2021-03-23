@@ -176,6 +176,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
     prte_proc_t *pptr;
     uint32_t uid;
     uint32_t gid;
+    pmix_byte_object_t pbo;
 
     /* get the job data pointer */
     if (NULL == (jdata = prte_get_job_data_object(job))) {
@@ -202,13 +203,13 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
             return rc;
         }
         PMIX_DATA_BUFFER_CONSTRUCT(&jobdata);
-        for (i=0; i < prte_job_data->size; i++) {
+        for (i=1; i < prte_job_data->size; i++) {
             jptr = prte_pointer_array_get_item(prte_job_data, i);
             if (NULL == jptr) {
                 continue;
             }
             /* skip the one we are launching now */
-            if (jptr != jdata && PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jptr->nspace)) {
+            if (jptr != jdata) {
                 PMIX_DATA_BUFFER_CONSTRUCT(&priorjob);
                 /* pack the job struct */
                 rc = prte_job_pack(&priorjob, jptr);
@@ -231,25 +232,38 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer,
                         return rc;
                     }
                 }
-                /* pack the jobdata buffer */
-                rc = PMIx_Data_pack(NULL, &jobdata, &priorjob, 1, PMIX_DATA_BUFFER);
+                /* unload the buffer */
+                rc = PMIx_Data_unload(&priorjob, &pbo);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_DESTRUCT(&priorjob);
+                    PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
+                    return rc;
+                }
+                /* add it to the jobdata buffer */
+                rc = PMIx_Data_pack(NULL, &jobdata, &pbo, 1, PMIX_BYTE_OBJECT);
+                PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
-                    PMIX_DATA_BUFFER_DESTRUCT(&priorjob);
                     return rc;
                 }
-                PMIX_DATA_BUFFER_DESTRUCT(&priorjob);
             }
         }
-        /* pack the jobdata buffer */
-        rc = PMIx_Data_pack(NULL, buffer, &jobdata, 1, PMIX_DATA_BUFFER);
+        /* unload the buffer */
+        rc = PMIx_Data_unload(&jobdata, &pbo);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
             return rc;
         }
-        PMIX_DATA_BUFFER_DESTRUCT(&jobdata);
+        /* add it to the message */
+        rc = PMIx_Data_pack(NULL, buffer, &pbo, 1, PMIX_BYTE_OBJECT);
+        PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return rc;
+        }
     } else {
         flag = 0;
         rc = PMIx_Data_pack(NULL, buffer, &flag, 1, PMIX_INT8);
@@ -392,7 +406,7 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer,
     size_t ninfo=0;
     pmix_status_t ret;
     pmix_data_buffer_t pbuf;
-    pmix_byte_object_t bo;
+    pmix_byte_object_t bo, pbo;
     size_t m;
     pmix_envar_t envt;
 
@@ -412,20 +426,41 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer,
     rc = PMIx_Data_unpack(NULL, buffer, &flag, &cnt, PMIX_INT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        rc = prte_pmix_convert_status(rc);
         goto REPORT_ERROR;
     }
 
     if (0 != flag) {
         /* unpack the buffer containing the info */
         cnt=1;
-        rc = PMIx_Data_unpack(NULL, buffer, &dbuf, &cnt, PMIX_DATA_BUFFER);
+        rc = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
+            rc = prte_pmix_convert_status(rc);
+            goto REPORT_ERROR;
+        }
+        if (PRTE_PROC_IS_MASTER) {
+            /* we don't need this */
+            PMIX_BYTE_OBJECT_DESTRUCT(&bo);
+            goto next;
+        }
+        PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
+        rc = PMIx_Data_load(&dbuf, &bo);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            rc = prte_pmix_convert_status(rc);
             goto REPORT_ERROR;
         }
         cnt=1;
-        rc = PMIx_Data_unpack(NULL, &dbuf, &jdbuf, &cnt, PMIX_DATA_BUFFER);
+        rc = PMIx_Data_unpack(NULL, &dbuf, &pbo, &cnt, PMIX_BYTE_OBJECT);
         while (PMIX_SUCCESS == rc) {
+            PMIX_DATA_BUFFER_CONSTRUCT(&jdbuf);
+            rc = PMIx_Data_load(&jdbuf, &pbo);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                rc = prte_pmix_convert_status(rc);
+                goto REPORT_ERROR;
+            }
             /* unpack each job and add it to the local prte_job_data array */
             cnt=1;
             rc = prte_job_unpack(&jdbuf, &jdata);
@@ -436,52 +471,55 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer,
                 goto REPORT_ERROR;
             }
             /* check to see if we already have this one */
-            if (NULL == prte_get_job_data_object(jdata->nspace)) {
-                /* nope - add it */
-                prte_set_job_data_object(jdata);
-            } else {
+            if (NULL != prte_get_job_data_object(jdata->nspace)) {
                 /* yep - so we can drop this copy */
                 jdata->index = -1;
                 PRTE_RELEASE(jdata);
-                PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
-                cnt=1;
-                continue;
-            }
-            /* unpack the location of each proc in this job */
-            for (v=0; v < jdata->num_procs; v++) {
-                if (NULL == (pptr = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, v))) {
-                    pptr = PRTE_NEW(prte_proc_t);
-                    PMIX_LOAD_PROCID(&pptr->name, jdata->nspace, v);
-                    prte_pointer_array_set_item(jdata->procs, v, pptr);
+            } else {
+                /* nope - add it */
+                prte_set_job_data_object(jdata);
+                /* unpack the location of each proc in this job */
+                for (v=0; v < jdata->num_procs; v++) {
+                    if (NULL == (pptr = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, v))) {
+                        pptr = PRTE_NEW(prte_proc_t);
+                        PMIX_LOAD_PROCID(&pptr->name, jdata->nspace, v);
+                        prte_pointer_array_set_item(jdata->procs, v, pptr);
+                    }
+                    cnt=1;
+                    rc = PMIx_Data_unpack(NULL, &jdbuf, &dmnvpid, &cnt, PMIX_PROC_RANK);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+                        PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
+                        goto REPORT_ERROR;
+                    }
+                    /* lookup the daemon */
+                    if (NULL == (dmn = (prte_proc_t*)prte_pointer_array_get_item(daemons->procs, dmnvpid))) {
+                        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                        rc = PRTE_ERR_NOT_FOUND;
+                        PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+                        PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
+                        goto REPORT_ERROR;
+                    }
+                    /* connect the two */
+                    PRTE_RETAIN(dmn->node);
+                    pptr->node = dmn->node;
                 }
-                cnt=1;
-                rc = PMIx_Data_unpack(NULL, &jdbuf, &dmnvpid, &n, PMIX_UINT32);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
-                    PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
-                    goto REPORT_ERROR;
-                }
-                /* lookup the daemon */
-                if (NULL == (dmn = (prte_proc_t*)prte_pointer_array_get_item(daemons->procs, dmnvpid))) {
-                    PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                    rc = PRTE_ERR_NOT_FOUND;
-                    PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
-                    PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
-                    goto REPORT_ERROR;
-                }
-                /* connect the two */
-                PRTE_RETAIN(dmn->node);
-                pptr->node = dmn->node;
             }
             /* release the buffer */
             PMIX_DATA_BUFFER_DESTRUCT(&jdbuf);
             cnt = 1;
+            rc = PMIx_Data_unpack(NULL, &dbuf, &pbo, &cnt, PMIX_BYTE_OBJECT);
         }
         PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
-        rc = PMIx_Data_unpack(NULL, &dbuf, &jdbuf, &cnt, PMIX_DATA_BUFFER);
+        if (PMIX_SUCCESS != rc && PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
+            PMIX_ERROR_LOG(rc);
+            rc = prte_pmix_convert_status(rc);
+            goto REPORT_ERROR;
+        }
     }
 
+next:
     /* unpack the job we are to launch */
     rc = prte_job_unpack(buffer, &jdata);
     if (PMIX_SUCCESS != rc) {
