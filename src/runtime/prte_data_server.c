@@ -208,6 +208,8 @@ void prte_data_server(int status, pmix_proc_t* sender,
     size_t n, nanswers;
     pmix_info_t *info;
     prte_list_t answers;
+    void *ilist;
+    pmix_data_array_t darray;
 
     prte_output_verbose(1, prte_data_server_output,
                         "%s data server got message from %s",
@@ -264,9 +266,9 @@ void prte_data_server(int status, pmix_proc_t* sender,
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             data->owner.nspace, data->owner.rank);
 
-        /* unpack the number of infos they published */
+        /* unpack the number of infos and directives they sent */
         count = 1;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &data->ninfo, &count, PMIX_SIZE))) {
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &ninfo, &count, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
             PRTE_RELEASE(data);
             rc = PRTE_ERR_UNPACK_FAILURE;
@@ -274,7 +276,7 @@ void prte_data_server(int status, pmix_proc_t* sender,
         }
 
         /* if it isn't at least one, then that's an error */
-        if (1 > data->ninfo) {
+        if (1 > ninfo) {
             ret = PMIX_ERR_BAD_PARAM;
             PMIX_ERROR_LOG(ret);
             PRTE_RELEASE(data);
@@ -283,27 +285,45 @@ void prte_data_server(int status, pmix_proc_t* sender,
         }
 
         /* create the space */
-        PMIX_INFO_CREATE(data->info, data->ninfo);
+        PMIX_INFO_CREATE(info, ninfo);
 
         /* unpack into it */
-        count = data->ninfo;
-        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, data->info, &count, PMIX_INFO))) {
+        count = ninfo;
+        if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, info, &count, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
             PRTE_RELEASE(data);
+            PMIX_INFO_FREE(info, ninfo);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
 
+        PMIX_INFO_LIST_START(ilist);
         /* check for directives */
-        for (n=0; n < data->ninfo; n++) {
-            if (0 == strcmp(data->info[n].key, PMIX_RANGE)) {
-                data->range = data->info[n].value.data.range;
-            } else if (0 == strcmp(data->info[n].key, PMIX_PERSISTENCE)) {
-                data->persistence = data->info[n].value.data.persist;
-            } else if (0 == strcmp(data->info[n].key, PMIX_USERID)) {
-                data->uid = data->info[n].value.data.uint32;
+        for (n=0; n < ninfo; n++) {
+            if (0 == strcmp(info[n].key, PMIX_RANGE)) {
+                data->range = info[n].value.data.range;
+            } else if (0 == strcmp(info[n].key, PMIX_PERSISTENCE)) {
+                data->persistence = info[n].value.data.persist;
+            } else if (0 == strcmp(info[n].key, PMIX_USERID)) {
+                data->uid = info[n].value.data.uint32;
+            } else {
+                /* add it to the list */
+                PMIX_INFO_LIST_XFER(ret, ilist, &info[n]);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    PRTE_RELEASE(data);
+                    rc = PRTE_ERR_UNPACK_FAILURE;
+                    PMIX_INFO_LIST_RELEASE(ilist);
+                    PMIX_INFO_FREE(info, ninfo);
+                    goto SEND_ERROR;
+                }
             }
         }
+        PMIX_INFO_FREE(info, ninfo);  // done with the array
+        PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
+        data->info = (pmix_info_t*)darray.array;
+        data->ninfo = darray.size;
+        PMIX_INFO_LIST_RELEASE(ilist);
 
         /* store this object */
         data->index = prte_pointer_array_add(&prte_data_server_store, data);
@@ -556,7 +576,7 @@ void prte_data_server(int status, pmix_proc_t* sender,
                                         "%s COMPARING %s %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         keys[i], data->info[n].key);
-                    if (0 == strncmp(data->info[n].key, keys[i], PMIX_MAX_KEYLEN)) {
+                    if (PMIX_CHECK_KEY(&data->info[n], keys[i])) {
                         rinfo = PRTE_NEW(prte_ds_info_t);
                         memcpy(&rinfo->source, &data->owner, sizeof(pmix_proc_t));
                         rinfo->info = &data->info[n];
@@ -565,7 +585,7 @@ void prte_data_server(int status, pmix_proc_t* sender,
                         prte_output_verbose(1, prte_data_server_output,
                                             "%s data server: adding %s to data from %s:%d",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), data->info[n].key,
-                                            data->owner.nspace, data->owner.rank);
+                                            PRTE_NAME_PRINT(&data->owner));
                     }
                 }
             }  // loop over stored data
@@ -602,9 +622,9 @@ void prte_data_server(int status, pmix_proc_t* sender,
                 }
                 if (PMIX_PERSIST_FIRST_READ == rinfo->persistence) {
                     prte_output_verbose(1, prte_data_server_output,
-                                        "%s REMOVING DATA FROM %s:%d FOR KEY %s",
+                                        "%s REMOVING DATA FROM %s FOR KEY %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                        rinfo->source.nspace, rinfo->source.rank,
+                                        PRTE_NAME_PRINT(&rinfo->source),
                                         rinfo->info->key);
                     memset(rinfo->info->key, 0, PMIX_MAX_KEYLEN+1);
                 }
@@ -672,7 +692,6 @@ void prte_data_server(int status, pmix_proc_t* sender,
             PMIX_DATA_BUFFER_RELEASE(answer);
             goto SEND_ERROR;
         }
-
         goto SEND_ANSWER;
 
     case PRTE_PMIX_UNPUBLISH_CMD:
