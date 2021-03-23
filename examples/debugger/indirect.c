@@ -225,9 +225,9 @@ int main(int argc, char **argv)
     char *tmp;
     pmix_nspace_t clientspace, dbnspace;
     pmix_value_t *val;
-    char *myuri;
+    char *myuri = NULL;
     void *jinfo, *linfo, *dirs;
-    myquery_data_t *mydata;
+    myquery_data_t *mydata = NULL;
 
     /* need to provide args */
     if (2 > argc) {
@@ -280,7 +280,7 @@ int main(int argc, char **argv)
     }
     myuri = strdup(val->data.string);
     PMIX_VALUE_RELEASE(val);
-fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
+    fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
 
     /* register an event handler to pickup when the IL
      * we spawned dies */
@@ -288,7 +288,7 @@ fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
     code = PMIX_ERR_LOST_CONNECTION;
     PMIX_INFO_CREATE(info, 1);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "LOST-CONNECTION", PMIX_STRING);
-    PMIx_Register_event_handler(&code, 1, NULL, 0,
+    PMIx_Register_event_handler(&code, 1, info, 1,
                                 terminate_fn, evhandler_reg_callbk, (void*)&mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
@@ -337,8 +337,8 @@ fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
      * to itself */
     PMIX_INFO_LIST_START(jinfo);
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_NOTIFY_JOB_EVENTS, NULL, PMIX_BOOL);
-    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
-    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
+    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
+    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_SPAWN_TOOL, NULL, PMIX_BOOL); // we are spawning a tool
 
     /* convert job info to array */
@@ -357,6 +357,7 @@ fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
         goto done;
     }
 
+    fprintf(stderr, "RECONNECT TO IL AT %s\n", clientspace);
     /* set the spawned launcher as our primary server - wait for
      * it to connect to us but provide a timeout so we don't hang
      * waiting forever. The launcher shall connect to us prior
@@ -389,17 +390,14 @@ fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
     PMIX_INFO_LOAD(&info[n], PMIX_EVENT_HDLR_NAME, "LAUNCH-COMPLETE", PMIX_STRING);
     PMIx_Register_event_handler(&code, 1, info, 1,
                                 spawn_cbfunc, evhandler_reg_callbk, (void*)&mylock);
-    while (regpending && ilactive) {
-        struct timespec tp = {0, 500000};
-        nanosleep(&tp, NULL);
-    }
+    DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
     PMIX_INFO_FREE(info, 1);
     if (!ilactive) {
         goto done;
     }
 
-    fprintf(stderr, "RELEASING %s\n", argv[1]);
+    fprintf(stderr, "RELEASING %s [%s:%d]\n", argv[1], proc.nspace, proc.rank);
     /* release the IL to spawn its job */
     PMIX_INFO_CREATE(info, 2);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
@@ -410,22 +408,29 @@ fprintf(stderr, "DEBUGGER URI: %s\n", myuri);
                       PMIX_RANGE_CUSTOM,
                       info, 2, NULL, NULL);
     PMIX_INFO_FREE(info, 2);
-fprintf(stderr, "WAITING FOR APPLICATION LAUNCH\n");
+    fprintf(stderr, "WAITING FOR APPLICATION LAUNCH\n");
     /* wait for the IL to have launched its application */
     int icount = 0;
-    while (dbactive && ilactive && icount < 10) {
-printf("dbactive=%d ilactive=%d\n", dbactive, ilactive);
-//        struct timespec tp = {0, 500000};
+    while (dbactive && ilactive) {
+        printf("dbactive=%d ilactive=%d (icount %d)\n", dbactive, ilactive, icount);
         struct timespec tp = {0, 500000000};
         nanosleep(&tp, NULL);
         ++icount;
+        if (icount > 10 ) {
+            fprintf(stderr, "Error: Failed to launch by the timeout\n");
+            goto done;
+        }
     }
     if (!ilactive) {
         /* the launcher failed */
         goto done;
     }
 
-fprintf(stderr, "APPLICATION HAS LAUNCHED: %s\n", (char*)appnspace);
+    if( NULL == appnspace ){
+        fprintf(stderr, "Error: The application has failed to launch\n");
+        goto done;
+    }
+    fprintf(stderr, "APPLICATION HAS LAUNCHED: %s\n", (char*)appnspace);
 
     /* setup the debugger */
     mydata = (myquery_data_t*)malloc(sizeof(myquery_data_t));
@@ -456,10 +461,14 @@ fprintf(stderr, "APPLICATION HAS LAUNCHED: %s\n", (char*)appnspace);
     /* spawn the daemons */
     fprintf(stderr, "Debugger: spawning %s\n", mydata->apps[0].cmd);
     rc = PMIx_Spawn(mydata->info, mydata->ninfo, mydata->apps, mydata->napps, dbnspace);
+    PMIX_INFO_FREE(mydata->info, mydata->ninfo);
+    PMIX_APP_FREE(mydata->apps, mydata->napps);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "Debugger daemons failed to launch with error: %s\n", PMIx_Error_string(rc));
+        free(mydata);
         goto done;
     }
+    free(mydata);
 
     /* wait for the IL to terminate */
     fprintf(stderr, "WAITING FOR IL TO TERMINATE\n");
@@ -470,6 +479,10 @@ fprintf(stderr, "APPLICATION HAS LAUNCHED: %s\n", (char*)appnspace);
 
   done:
  //   PMIx_tool_finalize();
+
+    if (NULL != myuri) {
+        free(myuri);
+    }
 
     return(rc);
 }
