@@ -74,7 +74,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     gid_t gid;
     prte_list_t *cache;
     hwloc_obj_t machine;
-    pmix_proc_t pproc;
+    pmix_proc_t pproc, *parentproc;
     pmix_status_t ret;
     pmix_info_t *pinfo, *iptr;
     size_t ninfo;
@@ -85,6 +85,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     pmix_server_pset_t *pset;
     pmix_cpuset_t cpuset;
     uint32_t ui32;
+    prte_job_t *parent = NULL;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
                         "%s register nspace for %s",
@@ -387,6 +388,17 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         /* add to the main payload */
         prte_list_append(&appinfo, &iarray->super);
     }
+
+    /* get the parent job that spawned this one */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&parentproc, PMIX_PROC)) {
+        parent = prte_get_job_data_object(parentproc->nspace);
+        if (NULL != parent
+            && (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL) || PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, parent->nspace))) {
+            PMIX_PROC_RELEASE(parentproc);
+            parent = NULL;
+        }
+    }
+
     /* for each proc in this job, create an object that
      * includes the info describing the proc so the recipient has a complete
      * picture. This allows procs to connect to each other without
@@ -476,6 +488,13 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             PMIX_INFO_LOAD(&kv->info, PMIX_GLOBAL_RANK, &vpid, PMIX_PROC_RANK);
             prte_list_append(pmap, &kv->super);
 
+            /* parent ID, if we were spawned by a non-tool */
+            if (NULL != parent) {
+                kv = PRTE_NEW(prte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_PARENT_ID, parentproc, PMIX_PROC);
+                prte_list_append(pmap, &kv->super);
+            }
+
             /* appnum */
             kv = PRTE_NEW(prte_info_item_t);
             PMIX_INFO_LOAD(&kv->info, PMIX_APPNUM, &pptr->app_idx, PMIX_UINT32);
@@ -532,6 +551,9 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             }
             prte_list_append(info, &kv->super);
         }
+    }
+    if (NULL != parent) {
+        PMIX_PROC_RELEASE(parentproc);
     }
 
     /* mark the job as registered */
