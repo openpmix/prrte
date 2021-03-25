@@ -167,3 +167,4 @@ test/get-immediate
 test/abort
 test/simple_spawn
 test/hello
+test/connect

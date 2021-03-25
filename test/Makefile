@@ -41,7 +41,8 @@ TESTS = \
 	attachtest/tool.c \
 	abort \
 	simple_spawn \
-	hello
+	hello \
+	connect
 
 all: $(TESTS)
 

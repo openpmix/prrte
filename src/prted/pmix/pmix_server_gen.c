@@ -1041,7 +1041,8 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     int32_t cnt;
     int rc = PRTE_SUCCESS;
     pmix_status_t ret;
-    size_t cid, n;
+    uint32_t cid;
+    size_t n;
     pmix_byte_object_t bo;
     int32_t byused;
 
@@ -1055,7 +1056,7 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     if (1 == cd->mode) {
         /* a context id was requested, get it */
         cnt = 1;
-        rc = PMIx_Data_unpack(NULL, buf, &cid, &cnt, PMIX_SIZE);
+        rc = PMIx_Data_unpack(NULL, buf, &cid, &cnt, PMIX_UINT32);
         /* error if they didn't return it */
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -1079,7 +1080,7 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
         PMIX_INFO_CREATE(cd->info, cd->ninfo);
         n = 0;
         if (1 == cd->mode) {
-            PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_CONTEXT_ID, &cid, PMIX_SIZE);
+            PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_CONTEXT_ID, &cid, PMIX_UINT32);
             ++n;
         }
         if (NULL != bo.bytes && 0 < bo.size) {
