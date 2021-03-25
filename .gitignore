@@ -164,3 +164,5 @@ test/get-nofence
 test/attachtest/app
 test/attachtest/tool
 test/get-immediate
+test/abort
+test/simple_spawn
