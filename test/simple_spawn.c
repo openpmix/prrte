@@ -77,12 +77,11 @@ int main(int argc, char *argv[])
         if (PMIX_SUCCESS != rc) {
             printf("Disonnect from children failed!\n");
         }
-        printf("%s.%u: Disconnect complete!\n", myproc.nspace, myproc.rank);
-    }
+        printf("%s.%u: Disconnect complete!\n", myproc.nspace, myproc.rank);    }
     /* Otherwise, we're the child */
     else {
-        printf("Hello from the child %s.%u of %d on host %s pid %ld\n", myproc.nspace, myproc.rank,
-               size, hostname, (long) pid);
+        printf("Hello from the child %s.%u of %d on host %s pid %ld\n",
+               myproc.nspace, myproc.rank, size, hostname, (long)pid);
         PMIX_LOAD_PROCID(&peers[0], val->data.proc->nspace, PMIX_RANK_WILDCARD);
         PMIX_LOAD_PROCID(&peers[1], myproc.nspace, PMIX_RANK_WILDCARD);
         PMIX_VALUE_RELEASE(val);

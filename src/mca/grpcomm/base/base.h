@@ -73,7 +73,7 @@ typedef struct {
     prte_list_t ongoing;
     prte_hash_table_t sig_table;
     char *transports;
-    size_t context_id;
+    uint32_t context_id;
 } prte_grpcomm_base_t;
 
 PRTE_EXPORT extern prte_grpcomm_base_t prte_grpcomm_base;
