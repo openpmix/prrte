@@ -20,7 +20,7 @@ Copyright (c) 2012      Sandia National Laboratories.  All rights reserved.
 Copyright (c) 2012      University of Houston. All rights reserved.
 Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
 # Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
-Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
+Copyright (c) 2018-2001 Amazon.com, Inc. or its affiliates.  All Rights
                         reserved.
 $COPYRIGHT$
 
@@ -37,7 +37,8 @@ version 1.0.
 Master (not on release branches yet)
 ------------------------------------
 
-*
+* Change the default component build behavior to prefer building components
+  as part of libpmix.so instead of individual DSOs.
 
 1.0.0: 17 July, 2019
 --------------------
