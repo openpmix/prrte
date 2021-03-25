@@ -214,7 +214,7 @@ int main(int argc, char **argv)
 {
     pmix_status_t rc;
     pmix_value_t *val;
-    pmix_proc_t proc;
+    pmix_proc_t proc, target_proc;
     pmix_info_t *info;
     size_t ninfo;
     pmix_query_t *query;
@@ -259,7 +259,7 @@ int main(int argc, char **argv)
      * Get the namespace of the job we are to debug. If the application and the
      * debugger daemons are spawned separately or if the debugger is attaching
      * to a running application, the debugger will set the application
-     * namespace in the PMIX_DEBUG_JOB attribute, and the daemon retrieves
+     * namespace in the PMIX_DEBUG_TARGET attribute, and the daemon retrieves
      * it by calling PMIx_Get.
      *
      * If the application processes and debugger daemons are spawned together
@@ -269,9 +269,15 @@ int main(int argc, char **argv)
      * namespace, so this module uses the debugger namespace, which it knows.
      */
     PMIX_LOAD_PROCID(&proc, myproc.nspace, PMIX_RANK_WILDCARD);
-    rc = PMIx_Get(&proc, PMIX_DEBUG_JOB, NULL, 0, &val);
+    rc = PMIx_Get(&proc, PMIX_DEBUG_TARGET, NULL, 0, &val);
     if (PMIX_ERR_NOT_FOUND == rc) {
         /* Save the application namespace for later */
+        // NOTE: This is a bug. The cospawned namespace should be more distinct.
+        /*
+        fprintf(stderr,
+                "[%s:%d:%lu] Warning: Could not find PMIX_DEBUG_TARGET. Assume Cospawn.\n",
+                myproc.nspace, myproc.rank);
+        */
         target_namespace = strdup(myproc.nspace);
         cospawned_namespace = 1;
     } else if (rc != PMIX_SUCCESS) {
@@ -283,16 +289,15 @@ int main(int argc, char **argv)
     }
     else {
         /* Verify that the expected data structures were returned */
-        if (NULL == val || PMIX_STRING != val->type ||
-                           NULL == val->data.string) {
+        if (NULL == val || PMIX_PROC != val->type) {
             fprintf(stderr, "[%s:%d:%lu] Failed to get job being debugged - NULL data returned\n",
                     myproc.nspace, myproc.rank, (unsigned long)pid);
             goto done;
         }
         printf("[%s:%d:%lu] PMIX_DEBUG_JOB is '%s'\n", proc.nspace, proc.rank,
-               (unsigned long) pid, val->data.string);
+               (unsigned long) pid, val->data.proc->nspace);
         /* Save the application namespace for later */
-        target_namespace = strdup(val->data.string);
+        target_namespace = strdup(val->data.proc->nspace);
         PMIX_VALUE_RELEASE(val);
     }
 
@@ -431,28 +436,38 @@ int main(int argc, char **argv)
      */
     (void)strncpy(proc.nspace, target_namespace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
-    n = 0;
-    ninfo = 2;
-    PMIX_INFO_CREATE(info, ninfo);
+    // Since we are using the 'wildcard' only one daemon should send
+    // the release message.
+    // If we are 'cospawned' then the daemons are not ranked separately
+    // from the application (this is a bug) so just have everyone
+    // send the release.
+    if (0 == myproc.rank || 1 == cospawned_namespace) {
+        n = 0;
+        ninfo = 2;
+        PMIX_INFO_CREATE(info, ninfo);
 
-    /* Send release notification to application namespace */
-    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);
-    n++;
+        /* Send release notification to application namespace */
+        PMIX_INFO_LOAD(&info[n], PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);
+        n++;
+        /* Don't send notification to default event handlers */
+        PMIX_INFO_LOAD(&info[n], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
 
-    /* Don't send notification to default event handlers */
-    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL); 
+        // Todo: Move this to the main tool
+        // https://github.com/openpmix/prrte/pull/857#discussion_r600849033
+        sleep(1);
 
-    printf("[%s:%u:%lu] Sending release\n", myproc.nspace, myproc.rank,
-           (unsigned long)pid);
-    rc = PMIx_Notify_event(PMIX_ERR_DEBUGGER_RELEASE,
-                           NULL, PMIX_RANGE_CUSTOM,
-                           info, ninfo, NULL, NULL);
-    if (PMIX_SUCCESS != rc) {
-        fprintf(stderr,
-                "[%s:%u:%lu] Sending release failed with error %s(%d)\n",
-                myproc.nspace, myproc.rank, (unsigned long)pid,
-                PMIx_Error_string(rc), rc);
-        goto done;
+        printf("[%s:%u:%lu] Sending release\n", myproc.nspace, myproc.rank,
+               (unsigned long)pid);
+        rc = PMIx_Notify_event(PMIX_DEBUGGER_RELEASE,
+                               NULL, PMIX_RANGE_CUSTOM,
+                               info, ninfo, NULL, NULL);
+        if (PMIX_SUCCESS != rc) {
+            fprintf(stderr,
+                    "[%s:%u:%lu] Sending release failed with error %s(%d)\n",
+                    myproc.nspace, myproc.rank, (unsigned long)pid,
+                    PMIx_Error_string(rc), rc);
+            goto done;
+        }
     }
 
     /* At this point the application processes should be running under debugger

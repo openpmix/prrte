@@ -229,7 +229,7 @@ static void evhandler_reg_callbk(pmix_status_t status,
     int i;
     mylock_t *lock = (mylock_t*)cbdata;
 
-    printf("%s called to register callback refid=%d\n", __FUNCTION__,
+    printf("%s called to register callback refid=%ld\n", __FUNCTION__,
            evhandler_ref);
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
@@ -252,7 +252,7 @@ static void iof_reg_callbk(pmix_status_t status, size_t evhandler_ref,
     int i;
     mylock_t *lock = (mylock_t*)cbdata;
 
-    printf("%s called to register/de-register IOF handler refid=%d\n",
+    printf("%s called to register/de-register IOF handler refid=%ld\n",
            __FUNCTION__, evhandler_ref);
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
@@ -278,8 +278,7 @@ static void iof_reg_callbk(pmix_status_t status, size_t evhandler_ref,
 
 static void iof_dereg_callbk(pmix_status_t status, void *cbdata)
 {
-    printf("%s called with status %s\n", __FUNCTION__,
-           PMIx_Error_string(status));
+    printf("%s called as reult of de-registering I/O forwarding\n", __FUNCTION__);
 }
 
 int main(int argc, char **argv)
@@ -343,7 +342,7 @@ int main(int argc, char **argv)
 static int attach_to_running_job(char *nspace)
 {
     pmix_status_t rc;
-    pmix_proc_t daemon_proc;
+    pmix_proc_t daemon_proc, target_proc;
     pmix_query_t *query;
     pmix_info_t *info;
     pmix_app_t *app;
@@ -403,7 +402,8 @@ static int attach_to_running_job(char *nspace)
     PMIX_INFO_LOAD(&info[n], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL);
     n++;
     /* Set the namespace to attach to */
-    PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_JOB, application_namespace, PMIX_STRING);
+    PMIX_LOAD_PROCID(&target_proc, application_namespace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_TARGET, &target_proc, PMIX_PROC);
     n++;
     /* Forward stdout to this process */
     PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);

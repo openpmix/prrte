@@ -768,10 +768,6 @@ compute:
         prte_rmaps_base_display_map(jdata);
     }
 
-    if (colocate_daemons) {
-        prte_rmaps_base_display_map(jdata);
-    }
-
     /* set the job state to the next position */
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_COMPLETE);
 

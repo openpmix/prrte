@@ -36,9 +36,19 @@
 #include "debugger.h"
 
 static pmix_proc_t myproc;
-static bool stop_on_exec = false;
 static char client_nspace[PMIX_MAX_NSLEN + 1];
 static char daemon_nspace[PMIX_MAX_NSLEN + 1];
+
+static bool stop_in_init = true;
+static bool stop_on_exec = false;
+static bool stop_in_init_supported = false;
+static bool stop_on_exec_supported = false;
+static bool cospawn_supported = false;
+static bool cospawn_reqd = false;
+static int app_npernode = 2; // > 0. Default 2 ppn
+static int app_np = 2; // <= 0 means use default from prte. Default to single node. Must be multiple of npernode
+static int daemon_colocate_per_proc = 0; // 0 = disable
+static int daemon_colocate_per_node = 0; // 0 = disable
 
 /* this is a callback function for the PMIx_Query
  * API. The query will callback with a status indicating
@@ -246,6 +256,7 @@ static int cospawn_launch(myrel_t *myrel) {
     mylock_t mylock;
     pmix_proc_t daemon_proc;
     char cwd[_POSIX_PATH_MAX + 1];
+    char map_str[128];
 
     printf("Calling %s to spawn application processes and debugger daemon\n",
            __FUNCTION__);
@@ -264,7 +275,8 @@ static int cospawn_launch(myrel_t *myrel) {
     PMIX_INFO_LOAD(&info[n], PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
     n++;
     /* Map spawned processes by slot */
-    PMIX_INFO_LOAD(&info[n], PMIX_MAPBY, "slot", PMIX_STRING);
+    sprintf(map_str, "ppr:%d:node", app_npernode);
+    PMIX_INFO_LOAD(&info[n], PMIX_MAPBY, map_str, PMIX_STRING);
 
     /* The application and daemon processes are being spawned together
      * so create 2 pmix_app_t structures. The first is parameters for
@@ -280,19 +292,26 @@ static int cospawn_launch(myrel_t *myrel) {
     getcwd(cwd, _POSIX_PATH_MAX);
     app[0].cwd = strdup(cwd);
     /* Two application processes */
-    app[0].maxprocs = 2;
+    if (app_np > 0) {
+        app[0].maxprocs = app_np;
+    }
 
-    app[0].ninfo = 1;
-    PMIX_INFO_CREATE(app[0].info, app[0].ninfo);
-    n = 0;
-    if (stop_on_exec) {
-        /* Stop application at first instruction */
-        PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_ON_EXEC, NULL,
-                       PMIX_BOOL);
+    if (stop_on_exec || stop_in_init) {
+        app[0].ninfo = 1;
+        PMIX_INFO_CREATE(app[0].info, app[0].ninfo);
+        n = 0;
+        if (stop_on_exec) {
+            /* Stop application at first instruction */
+            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_ON_EXEC, NULL,
+                           PMIX_BOOL);
+        } else if (stop_in_init) {
+            /* Stop application in PMIx_Init */
+            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_IN_INIT, NULL,
+                           PMIX_BOOL);
+        }
     } else {
-        /* Stop application in PMIx_Init */
-        PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_IN_INIT, NULL,
-                       PMIX_BOOL);
+        app[0].ninfo = 0;
+        app[0].info = NULL;
     }
 
     /* Set up the daemon executable */
@@ -303,7 +322,7 @@ static int cospawn_launch(myrel_t *myrel) {
     /* Set the working directory */
     app[1].cwd = strdup(cwd);
     /* One daemon process */
-    app[1].maxprocs = 1;
+    app[1].maxprocs = app_np / app_npernode;
     /* Provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
     app[1].ninfo = 3;
@@ -318,6 +337,7 @@ static int cospawn_launch(myrel_t *myrel) {
     /* Tell daemon that application is waiting for daemon to relase it */
     PMIX_INFO_LOAD(&app[1].info[n], PMIX_DEBUG_WAIT_FOR_NOTIFY, NULL,
                    PMIX_BOOL); 
+
     /* Spawn the job - the function will return when the app
      * has been launched */
     rc = PMIx_Spawn(info, ninfo, app, 2, client_nspace);
@@ -368,6 +388,8 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     mylock_t mylock;
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
     pmix_proc_t proc;
+    uint16_t num_daemons_per_node = 1;
+    char map_str[128];
 
     printf("Calling %s to spawn the debugger daemon\n", __FUNCTION__);
     /* Setup the debugger  spawn parameters*/
@@ -380,8 +402,10 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     /* Set the working directory to our current directory */
     getcwd(cwd, _POSIX_PATH_MAX);
     debugger[0].cwd = strdup(cwd);
-    /* Spawn one daemon process */
-    debugger[0].maxprocs = 1;
+    /* Spawn daemon processes - 1 per node if not colocating */
+    if (daemon_colocate_per_proc < 0 && daemon_colocate_per_node < 0) {
+        debugger[0].maxprocs = app_np / app_npernode;
+    }
     /* No spawn attributes set here, all are set in dinfo array */
     debugger[0].ninfo = 0;
     debugger[0].info = NULL;
@@ -390,15 +414,28 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     dninfo = 7;
     n = 0;
     PMIX_INFO_CREATE(dinfo, dninfo);
-    /* Launch one daemon per node */
-    PMIX_INFO_LOAD(&dinfo[n], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);
-    n++;
     /* Indicate a debugger daemon is being spawned */
     PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL);
     n++;
     /* Set the name of the namespace being debugged */
-    PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_JOB, appspace, PMIX_STRING);
+    PMIX_LOAD_PROCID(&proc, appspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_TARGET, &proc, PMIX_PROC);
     n++;
+    /* Number of daemons per node in the application allocation */
+    if (daemon_colocate_per_node > 0) {
+        PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_DAEMONS_PER_NODE, &daemon_colocate_per_node, PMIX_UINT16);
+        n++;
+    }
+    /* Number of daemons per proc in the application allocation */
+    else if (daemon_colocate_per_proc > 0) {
+        PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_DAEMONS_PER_PROC, &daemon_colocate_per_proc, PMIX_UINT16);
+        n++;
+    }
+    /* Launch one daemon per node -- only needed if co-launch is not supported */
+    else {
+        PMIX_INFO_LOAD(&dinfo[n], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);
+        n++;
+    }
     /* Notify this process when the job completes */
     PMIX_INFO_LOAD(&dinfo[n], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
     n++;
@@ -410,6 +447,7 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     n++;
     /* Forward stderr to this process */
     PMIX_INFO_LOAD(&dinfo[n], PMIX_FWD_STDERR, NULL, PMIX_BOOL);
+
     /* Spawn the daemons */
     printf("Debugger: spawning %s\n", debugger[0].cmd);
     rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, daemon_nspace);
@@ -457,7 +495,6 @@ int main(int argc, char **argv)
     pmix_query_t *query;
     size_t nq;
     myquery_data_t myquery_data;
-    bool cospawn = false, stop_on_exec = false, cospawn_reqd = false;
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
     mylock_t mylock;
     myrel_t myrel;
@@ -467,6 +504,7 @@ int main(int argc, char **argv)
     pmix_data_array_t darray;
     char *tmp;
     char cwd[_POSIX_PATH_MAX];
+    char map_str[128];
 
     pid = getpid();
 
@@ -475,14 +513,98 @@ int main(int argc, char **argv)
         if (0 == strcmp(argv[i], "-h") ||
             0 == strcmp(argv[i], "--help")) {
             /* print the usage message and exit */
-
+            printf("Direct Launch Example\n");
+            printf("$ prte --daemonize\n");
+            printf("$ %s [OPTIONS]\n", argv[0]);
+            printf("\n");
+            printf(" -c | --cospawn   Test Cospawn\n");
+            printf(" --stop-in-init   Stop application in init (Default)\n");
+            printf(" --stop-on-exec   Stop application on exec\n");
+            printf(" --stop-in-init   Stop application in init (Default)\n");
+            printf(" --app-npernode   Number of processes per node (Default: 2)\n");
+            printf(" --app-np         Number of total processes. Must be multiple of --app-npernode (Default: 2)\n");
+            printf(" --daemon-colocate-per-proc  Test Colaunch with Daemons Per Process (Default: 0 = off)\n");
+            printf(" --daemon-colocate-per-node  Test Colaunch with Daemons Per Node (Default: 0 = off)\n");
+            exit(0);
         }
-        if (0 == strcmp(argv[i], "-c") ||
-            0 == strcmp(argv[i], "--cospawn")){
+        else if (0 == strcmp(argv[i], "-c") ||
+                 0 == strcmp(argv[i], "--cospawn")){
             cospawn_reqd = true;
             break;
         }
+        else if (0 == strcmp(argv[i], "--stop-in-init")) {
+            stop_in_init = true;
+            stop_on_exec = false;
+            break;
+        }
+        else if (0 == strcmp(argv[i], "--stop-on-exec")) {
+            stop_in_init = false;
+            stop_on_exec = true;
+            break;
+        }
+        else if (0 == strcmp(argv[i], "--app-npernode")) {
+            ++i;
+            if (i >= argc && isdigit(argv[i][0]) ) {
+                fprintf(stderr, "Error: --app-npernode requires a positive integer argument\n");
+                exit(1);
+            }
+            app_npernode = atoi(argv[i]);
+            if (app_npernode <= 0) {
+                fprintf(stderr, "Error: --app-npernode requires a positive integer argument\n");
+                exit(1);
+            }
+        }
+        else if (0 == strcmp(argv[i], "--app-np")) {
+            ++i;
+            if (i >= argc && isdigit(argv[i][0]) ) {
+                fprintf(stderr, "Error: --app-np requires a positive integer argument\n");
+                exit(1);
+            }
+            app_np = atoi(argv[i]);
+            if (app_np < 0) {
+                fprintf(stderr, "Error: --app-np requires a positive integer argument\n");
+                exit(1);
+            }
+        }
+        else if (0 == strcmp(argv[i], "--daemon-colocate-per-proc")) {
+            ++i;
+            if (i >= argc && isdigit(argv[i][0]) ) {
+                fprintf(stderr, "Error: --daemon-colocate-per-proc requires a positive integer argument\n");
+                exit(1);
+            }
+            daemon_colocate_per_proc = atoi(argv[i]);
+            if (daemon_colocate_per_proc < 0) {
+                fprintf(stderr, "Error: --daemon-colocate-per-proc requires a positive integer argument\n");
+                exit(1);
+            }
+        }
+        else if (0 == strcmp(argv[i], "--daemon-colocate-per-node")) {
+            ++i;
+            if (i >= argc && isdigit(argv[i][0]) ) {
+                fprintf(stderr, "Error: --daemon-colocate-per-node requires a positive integer argument\n");
+                exit(1);
+            }
+            daemon_colocate_per_node = atoi(argv[i]);
+            if (daemon_colocate_per_node < 0) {
+                fprintf(stderr, "Error: --daemon-colocate-per-node requires a positive integer argument\n");
+                exit(1);
+            }
+        }
     }
+
+    if (daemon_colocate_per_node > 0 && daemon_colocate_per_proc > 0) {
+        fprintf(stderr, "Error: Both --daemon-colocate-per-node and --daemon-colocate-per-node options present, but are exclusive\n");
+        exit(1);
+    }
+    if (cospawn_reqd && (daemon_colocate_per_node > 0 || daemon_colocate_per_proc > 0)) {
+        fprintf(stderr, "Error: Cospawn and Colaunch are not supported at the same time\n");
+        exit(1);
+    }
+    if (app_np < app_npernode || app_np % app_npernode != 0) {
+        fprintf(stderr, "Error: --app-np must be a multiple of --app-npernode\n");
+        exit(1);
+    }
+
     info = NULL;
     ninfo = 2;
     n = 0;
@@ -567,22 +689,38 @@ int main(int argc, char **argv)
         if (0 == strcmp(myquery_data.info[n].key, PMIX_QUERY_SPAWN_SUPPORT)) {
             /* See if the cospawn attribute is included */
             if (NULL != strstr(myquery_data.info[n].value.data.string, PMIX_COSPAWN_APP)) {
-                cospawn = true;
-            } else {
-                cospawn = false;
+                cospawn_supported = true;
             }
         } else if (0 == strcmp(myquery_data.info[n].key, PMIX_QUERY_DEBUG_SUPPORT)) {
+            /* See if stop on exec is included */
             if (NULL != strstr(myquery_data.info[n].value.data.string, PMIX_DEBUG_STOP_ON_EXEC)) {
-                stop_on_exec = true;
-            } else {
-                stop_on_exec = false;
+                stop_on_exec_supported = true;
+            }
+            /* See if stop in init is included */
+            else if (NULL != strstr(myquery_data.info[n].value.data.string, PMIX_DEBUG_STOP_IN_INIT)) {
+                stop_in_init_supported = true;
             }
         }
     }
 
+    if (!stop_on_exec_supported && stop_on_exec) {
+        fprintf(stderr, "Error: Stop-on-exec requested but the RM does not support it\n");
+        goto done;
+    }
+
+    if (!stop_in_init_supported && stop_in_init) {
+        fprintf(stderr, "Error: Stop-in-init requested but the RM does not support it\n");
+        goto done;
+    }
+
+    if (!cospawn_supported && cospawn_reqd) {
+        fprintf(stderr, "Error: Cospawn requested but the RM does not support it\n");
+        goto done;
+    }
+
     /* If cospawn is available and they requested it, then we launch both
      * the app and the debugger daemons at the same time */
-    if (cospawn && cospawn_reqd) {
+    if (cospawn_supported && cospawn_reqd) {
         cospawn_launch(&myrel);
     } else {
         /* We must do these as separate launches, so do the app first */
@@ -593,7 +731,9 @@ int main(int argc, char **argv)
         PMIX_ARGV_APPEND(rc, app[0].argv, "./hello");
         getcwd(cwd, _POSIX_PATH_MAX);  // point us to our current directory
         app[0].cwd = strdup(cwd);
-        app[0].maxprocs = 2;
+        if (app_np > 0) {
+            app[0].maxprocs = app_np;
+        }
         app[0].ninfo = 0;
         /* Provide job-level directives so the apps do what the user requested */
         ninfo = 5;
@@ -605,7 +745,8 @@ int main(int argc, char **argv)
             PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // procs are to pause in PMIx_Init for debugger attach
         }
         n++;
-        PMIX_INFO_LOAD(&info[n], PMIX_MAPBY, "slot", PMIX_STRING);  // map by slot
+        sprintf(map_str, "ppr:%d:node", app_npernode);
+        PMIX_INFO_LOAD(&info[n], PMIX_MAPBY, map_str, PMIX_STRING); // 1 per node
         n++;
         PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
         n++;
