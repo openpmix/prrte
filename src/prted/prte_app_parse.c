@@ -114,6 +114,7 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
         rc = PRTE_ERR_NOT_FOUND;
         goto cleanup;
     }
+    app->app.cmd = strdup(app->app.argv[0]);
 
     /* get the cwd - we may need it in several places */
     if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
