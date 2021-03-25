@@ -703,12 +703,18 @@ static void doit(char *tgt,
         prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                             "%s schizo:prte:parse_env adding %s %s to cmd line",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1, value);
-        prte_argv_append_nosize(dstenv, "--prtemca");
+        if (0 == strcmp(tgt, "PMIX_MCA_")) {
+            prte_argv_append_nosize(dstenv, "--pmixmca");
+        } else {
+            prte_argv_append_nosize(dstenv, "--prtemca");
+        }
         prte_argv_append_nosize(dstenv, p1);
         prte_argv_append_nosize(dstenv, value);
     } else {
         /* push it into our environment with a PRTE_MCA_ prefix*/
-        if (0 != strcmp(tgt, "PRTE_MCA_")) {
+        if (0 == strcmp(tgt, "PMIX_MCA_")) {
+            prte_asprintf(&tmp, "PMIX_MCA_%s", p1);
+        }else if (0 != strcmp(tgt, "PRTE_MCA_")) {
             prte_asprintf(&tmp, "PRTE_MCA_%s", p1);
         } else {
             tmp = strdup(param);
@@ -775,6 +781,8 @@ static int parse_env(prte_cmd_line_t *cmd_line,
                     break;
                 }
             }
+        } else if (0 == strncmp("PMIX_MCA_", srcenv[i], strlen("PMIX_MCA_"))) {
+            doit("PMIX_MCA_", srcenv[i], srcenv, dstenv, cmdline);
         }
     }
 

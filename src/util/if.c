@@ -327,8 +327,11 @@ prte_ifislocal(const char *hostname)
      * function will not attempt to resolve the address if
      * told not to do so */
     if (PRTE_SUCCESS == prte_ifaddrtoname(hostname, addrname, ADDRLEN)) {
-        /* add this to our known aliases */
-        prte_argv_append_nosize(&prte_process_info.aliases, hostname);
+        if (0 != strcmp(hostname, "localhost") &&
+            0 != strcmp(hostname, "127.0.0.1")) {
+            /* add this to our known aliases */
+            prte_argv_append_nosize(&prte_process_info.aliases, hostname);
+        }
         return true;
     }
 
@@ -514,8 +517,13 @@ void prte_ifgetaliases(char ***aliases)
         if ((intf->if_flags & IFF_LOOPBACK) != 0) {
             continue;
         }
+        /* ignore the obvious */
         if (addr->sin_family == AF_INET) {
             inet_ntop(AF_INET, &(addr->sin_addr.s_addr), ipv4, INET_ADDRSTRLEN);
+            if (0 == strcmp(ipv4, "localhost") ||
+                0 == strcmp(ipv4, "127.0.0.1")) {
+                continue;
+            }
             prte_argv_append_nosize(aliases, ipv4);
         }
 #if PRTE_ENABLE_IPV6

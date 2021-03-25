@@ -150,11 +150,6 @@ void prte_setup_hostname(void)
     } else {
         prte_process_info.nodename = strdup(hostname);
     }
-
-    /* add "localhost" to our list of aliases */
-    prte_argv_append_nosize(&prte_process_info.aliases, "localhost");
-    prte_argv_append_nosize(&prte_process_info.aliases, "127.0.0.1");
-
 }
 
 bool prte_check_host_is_local(char *name)
@@ -162,7 +157,9 @@ bool prte_check_host_is_local(char *name)
     int i;
 
     for (i=0; NULL != prte_process_info.aliases[i]; i++) {
-        if (0 == strcmp(name, prte_process_info.aliases[i])) {
+        if (0 == strcmp(name, prte_process_info.aliases[i])
+            || 0 == strcmp(name, "localhost")
+            || 0 == strcmp(name, "127.0.0.1")) {
             return true;
         }
     }

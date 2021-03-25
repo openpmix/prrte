@@ -40,7 +40,8 @@ TESTS = \
 	attachtest/app.c \
 	attachtest/tool.c \
 	abort \
-	simple_spawn
+	simple_spawn \
+	hello
 
 all: $(TESTS)
 
