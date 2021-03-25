@@ -26,6 +26,7 @@
 EXTRA_DIST = \
         distscript.sh \
         prte_get_version.m4sh \
+        prte_get_version.sh \
         ltmain_nag_pthread.diff \
         ltmain_pgi_tp.diff \
         prte_mca_priority_sort.pl \
@@ -35,6 +36,3 @@ EXTRA_DIST = \
         md2nroff.pl \
         from-savannah/upstream-config.guess \
         from-savannah/upstream-config.sub
-
-maintainer-clean-local:
-	rm -f prte_get_version.sh
