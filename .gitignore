@@ -166,3 +166,4 @@ test/attachtest/tool
 test/get-immediate
 test/abort
 test/simple_spawn
+test/hello

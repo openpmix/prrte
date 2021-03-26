@@ -160,6 +160,9 @@ prte_cmd_line_init_t prted_cmd_line_opts[] = {
     { '\0', "prtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
         "Pass context-specific PRTE MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
         PRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "pmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
+        "Pass context-specific PMIx MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+        PRTE_CMD_LINE_OTYPE_LAUNCH },
 
     /* Debug options */
     { '\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL,
@@ -672,6 +675,7 @@ int main(int argc, char *argv[])
     /* include any non-loopback aliases for this node */
     for (n=0; NULL != prte_process_info.aliases[n]; n++) {
         if (0 != strcmp(prte_process_info.aliases[n], "localhost") &&
+            0 != strcmp(prte_process_info.aliases[n], "127.0.0.1") &&
             0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
             prte_argv_append_nosize(&nonlocal, prte_process_info.aliases[n]);
         }

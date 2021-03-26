@@ -241,7 +241,7 @@ int prte(int argc, char *argv[])
     mylock_t mylock;
     prte_value_t *pval;
     uint32_t ui32;
-    char **pargv, **targv;
+    char **pargv;
     int pargc;
     prte_job_t *jdata;
     prte_app_context_t *dapp;
@@ -255,6 +255,7 @@ int prte(int argc, char *argv[])
     bool donotlaunch = false;
     prte_schizo_base_module_t *schizo;
     prte_ess_base_signal_t *sig;
+    char **targv;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
@@ -498,6 +499,7 @@ int prte(int argc, char *argv[])
     if (prte_debug_flag || prte_debug_daemons_flag || prte_leave_session_attached) {
         prte_devel_level_output = true;
     }
+    
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
@@ -699,6 +701,137 @@ int prte(int argc, char *argv[])
 
     /* setup to capture job-level info */
     PMIX_INFO_LIST_START(jinfo);
+
+    /* see if we ourselves were spawned by someone */
+    ret = PMIx_Get(&prte_process_info.myproc, PMIX_PARENT_ID, NULL, 0, &val);
+    if (PMIX_SUCCESS == ret) {
+        PMIX_LOAD_PROCID(&pname, val->data.proc->nspace, val->data.proc->rank);
+        PMIX_VALUE_RELEASE(val);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
+        /* record that this tool is connected to us */
+        PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
+        PMIX_INFO_CREATE(iptr, 2);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_NSPACE, pname.nspace, PMIX_STRING);
+        PMIX_INFO_LOAD(&iptr[1], PMIX_RANK, &pname.rank, PMIX_PROC_RANK);
+        pmix_tool_connected_fn(iptr, 2, toolcbfunc, &mylock);
+        /* we have to cycle the event library here so we can process
+         * this request */
+        while (prte_event_base_active && mylock.lock.active) {
+            prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+        }
+        PRTE_ACQUIRE_OBJECT(&mylock.lock);
+        PMIX_INFO_FREE(iptr, 2);
+        PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
+    } else {
+        PMIX_LOAD_PROCID(&pname, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
+    }
+
+    /* default to a persistent DVM */
+    prte_persistent = true;
+
+    /* if we are told to daemonize, then we cannot have apps */
+    if (!prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
+        /* see if they want to run an application - let's parse
+         * the cmd line to get it */
+        rc = prte_parse_locals(prte_cmd_line, &apps, pargc, pargv, &hostfiles, &hosts);
+
+        /* did they provide an app? */
+        if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
+            if (proxyrun) {
+                prte_show_help("help-prun.txt", "prun:executable-not-specified",
+                               true, prte_tool_basename, prte_tool_basename);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+            /* nope - just need to wait for instructions */
+        } else {
+            /* they did provide an app - this is only allowed
+             * when running as a proxy! */
+            if (!proxyrun) {
+                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given",
+                               true, prte_tool_basename, prte_tool_basename);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+            /* mark that we are not a persistent DVM */
+            prte_persistent = false;
+        }
+    }
+
+    /* add any hostfile directives to the daemon job */
+    if (prte_persistent) {
+        if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "hostfile"))) {
+            if(1 < j) {
+                prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
+                               true, prte_tool_basename, NULL);
+                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                goto DONE;
+            } else {
+                pval = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
+                prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL, pval->value.data.string, PMIX_STRING);
+            }
+        }
+        if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "machinefile"))) {
+            if(1 < j || prte_get_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, NULL, PMIX_STRING)) {
+                prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
+                               true, prte_tool_basename, NULL);
+                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                goto DONE;
+            } else {
+                pval = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
+                prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL, pval->value.data.string, PMIX_STRING);
+            }
+        }
+
+        /* Did the user specify any hosts? */
+        if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "host"))) {
+            char **targ=NULL, *tval;
+            for (i = 0; i < j; ++i) {
+                pval = prte_cmd_line_get_param(prte_cmd_line, "host", i, 0);
+                prte_argv_append_nosize(&targ, pval->value.data.string);
+            }
+            tval = prte_argv_join(targ, ',');
+            prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
+            prte_argv_free(targ);
+            free(tval);
+        }
+    } else {
+        /* the directives will be in the app(s) */
+        if (NULL != hostfiles) {
+            char *tval;
+            tval = prte_argv_join(hostfiles, ',');
+            prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
+            free(tval);
+            prte_argv_free(hostfiles);
+        }
+        if (NULL != hosts) {
+            char *tval;
+            tval = prte_argv_join(hosts, ',');
+            prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
+            free(tval);
+            prte_argv_free(hosts);
+        }
+    }
+    /* pickup any relevant envars that need to go on the DVM cmd line */
+    rc = prte_schizo.parse_env(prte_cmd_line, environ, &pargv, true);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_UPDATE_EXIT_STATUS(rc);
+        goto DONE;
+    }
+
+    /* spawn the DVM - we skip the initial steps as this
+     * isn't a user-level application */
+    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOCATE);
+
+    /* we need to loop the event library until the DVM is alive */
+    while (prte_event_base_active && !prte_dvm_ready) {
+        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
+    }
+
+    if (prte_persistent) {
+        PMIX_INFO_LIST_RELEASE(jinfo);
+        goto proceed;
+    }
 
     /***** CHECK FOR LAUNCH DIRECTIVES - ADD THEM TO JOB INFO IF FOUND ****/
     PMIX_LOAD_PROCID(&pname, myproc.nspace, PMIX_RANK_WILDCARD);
@@ -907,7 +1040,13 @@ int prte(int argc, char *argv[])
     PMIX_INFO_LOAD(&iptr[1], PMIX_USERID, &ui32, PMIX_UINT32);
     ui32 = getegid();
     PMIX_INFO_LOAD(&iptr[2], PMIX_GRPID, &ui32, PMIX_UINT32);
-    PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, schizo->name, PMIX_STRING);
+    if (0 == strcasecmp(schizo->name, "prte")) {
+        param = strdup("prte");
+    } else {
+        prte_asprintf(&param, "%s,prte", schizo->name);
+    }
+    PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, param, PMIX_STRING);
+    free(param);
 
     PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
     ret = PMIx_server_setup_application(prte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc, &mylock);
@@ -938,128 +1077,6 @@ int prte(int argc, char *argv[])
             }
         }
         PMIX_INFO_FREE(mylock.info, mylock.ninfo);
-    }
-    /* see if we ourselves were spawned by someone */
-    ret = PMIx_Get(&prte_process_info.myproc, PMIX_PARENT_ID, NULL, 0, &val);
-    if (PMIX_SUCCESS == ret) {
-        PMIX_LOAD_PROCID(&pname, val->data.proc->nspace, val->data.proc->rank);
-        PMIX_VALUE_RELEASE(val);
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
-        /* record that this tool is connected to us */
-        PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
-        PMIX_INFO_CREATE(iptr, 2);
-        PMIX_INFO_LOAD(&iptr[0], PMIX_NSPACE, pname.nspace, PMIX_STRING);
-        PMIX_INFO_LOAD(&iptr[1], PMIX_RANK, &pname.rank, PMIX_PROC_RANK);
-        pmix_tool_connected_fn(iptr, 2, toolcbfunc, &mylock);
-        /* we have to cycle the event library here so we can process
-         * this request */
-        while (prte_event_base_active && mylock.lock.active) {
-            prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
-        }
-        PRTE_ACQUIRE_OBJECT(&mylock.lock);
-        PMIX_INFO_FREE(iptr, 2);
-        PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
-    } else {
-        PMIX_LOAD_PROCID(&pname, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
-    }
-
-    /* default to a persistent DVM */
-    prte_persistent = true;
-
-    /* if we are told to daemonize, then we cannot have apps */
-    if (!prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
-        /* see if they want to run an application - let's parse
-         * the cmd line to get it */
-        rc = prte_parse_locals(prte_cmd_line, &apps, pargc, pargv, &hostfiles, &hosts);
-
-        /* did they provide an app? */
-        if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
-            if (proxyrun) {
-                prte_show_help("help-prun.txt", "prun:executable-not-specified",
-                               true, prte_tool_basename, prte_tool_basename);
-                PRTE_UPDATE_EXIT_STATUS(rc);
-                goto DONE;
-            }
-            /* nope - just need to wait for instructions */
-        } else {
-            /* they did provide an app - this is only allowed
-             * when running as a proxy! */
-            if (!proxyrun) {
-                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given",
-                               true, prte_tool_basename, prte_tool_basename);
-                PRTE_UPDATE_EXIT_STATUS(rc);
-                goto DONE;
-            }
-            /* mark that we are not a persistent DVM */
-            prte_persistent = false;
-        }
-    }
-
-    /* add any hostfile directives to the daemon job */
-    if (prte_persistent) {
-        if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "hostfile"))) {
-            if(1 < j) {
-                prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
-                               true, prte_tool_basename, NULL);
-                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                goto DONE;
-            } else {
-                pval = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
-                prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL, pval->value.data.string, PMIX_STRING);
-            }
-        }
-        if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "machinefile"))) {
-            if(1 < j || prte_get_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, NULL, PMIX_STRING)) {
-                prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
-                               true, prte_tool_basename, NULL);
-                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                goto DONE;
-            } else {
-                pval = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
-                prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL, pval->value.data.string, PMIX_STRING);
-            }
-        }
-        /* Did the user specify any hosts? */
-        if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "host"))) {
-            char **targ=NULL, *tval;
-            for (i = 0; i < j; ++i) {
-                pval = prte_cmd_line_get_param(prte_cmd_line, "host", i, 0);
-                prte_argv_append_nosize(&targ, pval->value.data.string);
-            }
-            tval = prte_argv_join(targ, ',');
-            prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
-            prte_argv_free(targ);
-            free(tval);
-        }
-    } else {
-        /* the directives will be in the app(s) */
-        if (NULL != hostfiles) {
-            char *tval;
-            tval = prte_argv_join(hostfiles, ',');
-            prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
-            free(tval);
-            prte_argv_free(hostfiles);
-        }
-        if (NULL != hosts) {
-            char *tval;
-            tval = prte_argv_join(hosts, ',');
-            prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
-            free(tval);
-            prte_argv_free(hosts);
-        }
-    }
-    /* spawn the DVM - we skip the initial steps as this
-     * isn't a user-level application */
-    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOCATE);
-
-    /* we need to loop the event library until the DVM is alive */
-    while (prte_event_base_active && !prte_dvm_ready) {
-        prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
-    }
-
-    if (prte_persistent) {
-        PMIX_INFO_LIST_RELEASE(jinfo);
-        goto proceed;
     }
 
     /* convert the job info into an array */
