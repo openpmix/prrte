@@ -333,6 +333,12 @@ bool prte_node_match(prte_node_t *n1, char *name)
         return true;
     }
 
+    /* do the node and the name both refer to me? */
+    if (prte_check_host_is_local(n1->name) &&
+        prte_check_host_is_local(name)) {
+        return true;
+    }
+
     /* get the aliases for n1 and check those against "name" */
     if (prte_get_attribute(&n1->attributes, PRTE_NODE_ALIAS, (void**)&n1alias, PMIX_STRING)) {
         n1names = prte_argv_split(n1alias, ',');
