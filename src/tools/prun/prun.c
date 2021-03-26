@@ -335,7 +335,7 @@ int prun(int argc, char *argv[])
     prte_value_t *pval;
     uint32_t ui32;
     pid_t pid;
-    char **pargv;
+    char **pargv, **targv;
     int pargc;
     char *fullpath;
     prte_ess_base_signal_t *sig;
@@ -673,26 +673,67 @@ int prun(int argc, char *argv[])
     /* pass the personality */
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, schizo->name, PMIX_STRING);
 
-    /* check for stdout/err directives */
-    /* if we were asked to tag output, mark it so */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "tag-output")) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
-    }
+    /* get display options */
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "display", 0, 0))) {
+        targv = prte_argv_split(pval->value.data.string, ',');
 
-    /* if we were asked to timestamp output, mark it so */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "timestamp-output")) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
+        for (int idx = 0; idx < prte_argv_count(targv); idx++) {
+            if (0 == strcmp(targv[idx], "allocation")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYALLOC", PMIX_STRING);
+            }
+            if (0 == strcmp(targv[idx], "map")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);
+            }
+            if (0 == strcmp(targv[idx], "bind")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":REPORT", PMIX_STRING);
+            }
+            if (0 == strcmp(targv[idx], "proctable")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);
+            }
+            if (0 == strcmp(targv[idx], "allocation-devel")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDEVEL", PMIX_STRING);
+            }
+            if (0 == strcmp(targv[idx], "map-diffable")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDIFF", PMIX_STRING);
+            }
+            if (0 == strcmp(targv[idx], "topo")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYTOPO", PMIX_STRING);
+            }
+        }
+        prte_argv_free(targv);
     }
 
     /* cannot have both files and directory set for output */
-    param = NULL;
     ptr = NULL;
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output", 0, 0))) {
+        targv = prte_argv_split(pval->value.data.string, ',');
+
+        for (int idx = 0; idx < prte_argv_count(targv); idx++) {
+            if (0 == strcmp(targv[idx], "tag")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
+            }
+            if (0 == strcmp(targv[idx], "timestamp")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
+            }
+            if (0 == strcmp(targv[idx], "xml")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":XMLOUTPUT", PMIX_STRING);
+            }
+            if (0 == strcmp(targv[idx], "merge-stderr-to-stdout")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
+            }
+            if (NULL != (ptr = strchr(targv[idx], ':'))) {
+                ++ptr;
+                ptr = strdup(ptr);
+            }
+        }
+        prte_argv_free(targv);
+    }
+
+    param = NULL;
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output-filename", 0, 0))) {
         param = pval->value.data.string;
     }
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output-directory", 0, 0))) {
-        ptr = pval->value.data.string;
-    }
+
     if (NULL != param && NULL != ptr) {
         prte_show_help("help-prted.txt", "both-file-and-dir-set", true,
                         param, ptr);
@@ -729,11 +770,6 @@ int prun(int argc, char *argv[])
         }
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
         free(param);
-    }
-
-    /* if we were asked to merge stderr to stdout, mark it so */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "merge-stderr-to-stdout")) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
     }
 
     /* check what user wants us to do with stdin */

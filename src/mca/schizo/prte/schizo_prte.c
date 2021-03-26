@@ -200,6 +200,10 @@ static prte_cmd_line_init_t prte_cmd_line_init[] = {
         PRTE_CMD_LINE_OTYPE_GENERAL },
 
     /* output options */
+    { '\0', "output", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Comma-delimited list of options that control the output generated."
+        "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir:DIRNAME",
+        PRTE_CMD_LINE_OTYPE_OUTPUT },
     /* exit status reporting */
     { '\0', "report-child-jobs-separately", 0, PRTE_CMD_LINE_TYPE_BOOL,
         "Return the exit status of the primary job only",
@@ -320,6 +324,11 @@ static prte_cmd_line_init_t prte_cmd_line_init[] = {
         PRTE_CMD_LINE_OTYPE_LAUNCH },
 
 
+    /* display options */
+    { '\0', "display", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Comma-delimited list of options for displaying information about the allocation and job."
+        "Allowed values: allocation, map, bind, proctable, allocation, map-diffable, topo",
+        PRTE_CMD_LINE_OTYPE_DEBUG },
     /* developer options */
     { '\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
         "Perform all necessary operations to prepare to launch the application, but do not actually launch it (usually used to test mapping patterns)",
@@ -466,29 +475,37 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     char **pargs = *argv;
     char *p1, *p2, *tmp, *tmp2, *output;
 
-    /* --display-devel-map  ->  map-by :displaydevel */
+    /* --display-devel-map  -> --display allocation-devel */
     if (0 == strcmp(option, "--display-devel-map")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDEVEL", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation-devel", true);
     }
-    /* --display-map  ->  --map-by :display */
+    /* --display-devel-allocation  ->  --display allocation-devel */
+    if (0 == strcmp(option, "--display-devel-allocation")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation-devel", true);
+    }
+    /* --output-proctable  ->  --display proctable */
+    else if (0 == strcmp(option, "--output-proctable")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "proctable", true);
+    }
+    /* --display-map  ->  --display map */
     else if (0 == strcmp(option, "--display-map")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAY", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map", true);
     }
-    /* --display-topo  ->  --map-by :displaytopo */
+    /* --display-topo  ->  --display topo */
     else if (0 == strcmp(option, "--display-topo")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYTOPO", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "topo", true);
     }
-    /* --display-diffable-map  ->  --map-by :displaydiff */
+    /* --display-diffable-map  ->  --display map-diffable */
     else if (0 == strcmp(option, "--display-diff")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYDIFF", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-diffable", true);
     }
-    /* --report-bindings  ->  --bind-to :report */
+    /* --report-bindings  ->  --display bind */
     else if (0 == strcmp(option, "--report-bindings")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", NULL, "REPORT", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "bind", true);
     }
-    /* --display-allocation  ->  --map-by :displayalloc */
+    /* --display-allocation  ->  --display allocation */
     else if (0 == strcmp(option, "--display-allocation")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DISPLAYALLOC", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation", true);
     }
     /* --do-not-launch  ->   --map-by :donotlaunch*/
     else if (0 == strcmp(option, "--do-not-launch")) {
@@ -498,17 +515,21 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--do-not-resolve")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "DONOTRESOLVE", true);
     }
-    /* --tag-output  ->  --map-by :tagoutput */
+    /* --tag-output  ->  "--output tag */
     else if (0 == strcmp(option, "--tag-output")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "TAGOUTPUT", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--output", NULL, "tag", true);
     }
-    /* --timestamp-output  ->  --map-by :timestampoutput */
+    /* --timestamp-output  ->  --output timestamp */
     else if (0 == strcmp(option, "--timestamp-output")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "TIMESTAMPOUTPUT", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--output", NULL, "timestamp", true);
     }
-    /* --xml  ->  --map-by :xmloutput */
+    /* --output-directory DIR  ->  --output dir:DIR */
+    else if (0 == strcmp(option, "--output-directory")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--output", "dir", pargs[i+1], true);
+    }
+    /* --xml  ->  --output xml */
     else if (0 == strcmp(option, "--xml")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--map-by", NULL, "XMLOUTPUT", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--output", NULL, "xml", true);
     }
     /* -N ->   map-by ppr:N:node */
     else if (0 == strcmp(option, "-N")) {
@@ -625,6 +646,7 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline,
 
     char *options[] = {
         "--display-devel-map",
+        "--display-devel-allocation",
         "--display-map",
         "--display-topo",
         "--display-diff",
@@ -638,6 +660,7 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline,
         "--map-by",
         "--rank-by",
         "--bind-to",
+        "--output-proctable",
         NULL
     };
 

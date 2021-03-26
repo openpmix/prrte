@@ -217,6 +217,10 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
         PRTE_CMD_LINE_OTYPE_GENERAL },
 
     /* output options */
+    { '\0', "output", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Comma-delimited list of options that control the output generated."
+        "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir:DIRNAME",
+        PRTE_CMD_LINE_OTYPE_OUTPUT },
     /* exit status reporting */
     { '\0', "report-child-jobs-separately", 0, PRTE_CMD_LINE_TYPE_BOOL,
         "Return the exit status of the primary job only",
@@ -340,6 +344,11 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
         PRTE_CMD_LINE_OTYPE_LAUNCH },
 
 
+    /* display options */
+    { '\0', "display", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "Comma-delimited list of options for displaying information about the allocation and job."
+        "Allowed values: allocation, map, bind, proctable, allocation, map-diffable, topo",
+        PRTE_CMD_LINE_OTYPE_DEBUG },
     /* developer options */
     { '\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
         "Perform all necessary operations to prepare to launch the application, but do not actually launch it (usually used to test mapping patterns)",
