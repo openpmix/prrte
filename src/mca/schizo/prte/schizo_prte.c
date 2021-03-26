@@ -786,6 +786,11 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         }
     }
 
+    if (cmdline) {
+        /* if we are looking at the cmd line, then we are done */
+        return PRTE_SUCCESS;
+    }
+
     env = *dstenv;
 
     /* now look for -x options - not allowed to conflict with a -mca option */
