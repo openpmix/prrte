@@ -1112,6 +1112,26 @@ static int parse_cli(int argc, int start,
                 continue;
             }
         }
+        if (0 == strcmp("--map-by", argv[i])) {
+            /* if they set "inherit", then make this the default for prte */
+            if (NULL != strcasestr(argv[i+1], "inherit") &&
+                NULL == strcasestr(argv[i+1], "noinherit")) {
+                if (NULL == target) {
+                    /* push it into our environment */
+                    prte_setenv("PRTE_MCA_rmaps_default_inherit", "1", true, &environ);
+                    prte_setenv("PRTE_MCA_rmaps_default_mapping_policy", argv[i+1], true, &environ);
+                } else {
+                    prte_argv_append_nosize(target, "--prtemca");
+                    prte_argv_append_nosize(target, "rmaps_default_inherit");
+                    prte_argv_append_nosize(target, "1");
+                    prte_argv_append_nosize(target, "--prtemca");
+                    prte_argv_append_nosize(target, "rmaps_default_mapping_policy");
+                    prte_argv_append_nosize(target, argv[i+1]);
+                }
+            }
+        }
+
+#if PRTE_ENABLE_FT
         if (0 == strcmp("--with-ft", argv[i]) ||
             0 == strcmp("-with-ft", argv[i])) {
             if (NULL == argv[i+1]) {
@@ -1149,6 +1169,7 @@ static int parse_cli(int argc, int start,
             }
            free(p1);
         }
+#endif
     }
 
     rc = prte_schizo_base_parse_prte(argc, start,

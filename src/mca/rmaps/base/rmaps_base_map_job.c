@@ -60,7 +60,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     pmix_rank_t nprocs;
     prte_app_context_t *app;
     bool inherit = false;
-    pmix_proc_t name, *nptr;
+    pmix_proc_t *nptr;
     char *tmp, *p;
     uint16_t u16 = 0;
     uint16_t *u16ptr = &u16, cpus_per_rank;
@@ -79,15 +79,14 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     /* if this is a dynamic job launch and they didn't explicitly
      * request inheritance, then don't inherit the launch directives */
-    nptr = &name;
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PMIX_PROC)) {
         /* if the launch proxy is me, then this is the initial launch from
          * a proxy scenario, so we don't really have a parent */
-        if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, name.nspace)) {
+        if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, nptr->nspace)) {
             parent = NULL;
             /* we do allow inheritance of the defaults */
             inherit = true;
-        } else if (NULL != (parent = prte_get_job_data_object(name.nspace))) {
+        } else if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
             if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
                 inherit = true;
             } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
@@ -109,6 +108,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         } else {
             inherit = true;
         }
+        PMIX_PROC_RELEASE(nptr);
     } else {
         /* initial launch always takes on default MCA params for non-specified policies */
         inherit = true;
@@ -239,8 +239,9 @@ compute:
     }
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps: setting mapping policies for job %s nprocs %d",
-                        PRTE_JOBID_PRINT(jdata->nspace), (int)nprocs);
+                        "mca:rmaps: setting mapping policies for job %s nprocs %d inherit %s",
+                        PRTE_JOBID_PRINT(jdata->nspace), (int)nprocs,
+                        inherit ? "TRUE" : "FALSE");
 
     /* set the default mapping policy IFF it wasn't provided */
     if (!PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {

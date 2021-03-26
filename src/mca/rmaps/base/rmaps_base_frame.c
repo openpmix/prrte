@@ -633,7 +633,9 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
     if (NULL != spec) {
         free(spec);
     }
-    if (NULL != jdata) {
+    if (NULL == jdata) {
+        prte_rmaps_base.mapping = tmp;
+    } else {
         if (NULL == jdata->map) {
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             return PRTE_ERR_BAD_PARAM;
