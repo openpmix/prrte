@@ -343,6 +343,11 @@ There are also other options:
 
 :   Job is to run until explicitly terminated.
 
+`--dvm-uri`
+
+:   Specify the URI of the DVM master, or the name of the file (specified as
+    file:filename) that contains that info.
+
 `--enable-recovery`
 
 :   Enable recovery from process failure [Default = disabled].
@@ -363,6 +368,10 @@ There are also other options:
 `--max-restarts <num>`
 
 :   Max number of times to restart a failed process.
+
+`--pid`
+
+:   PID of the daemon to which we should connect.
 
 `--report-child-jobs-separately`
 
