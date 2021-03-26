@@ -415,6 +415,12 @@ static prte_cmd_line_init_t prte_dvm_cmd_line_init[] = {
     { '\0', "default-hostfile", 1, PRTE_CMD_LINE_TYPE_STRING,
         "Provide a default hostfile",
         PRTE_CMD_LINE_OTYPE_LAUNCH },
+    { '\0', "singleton", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "ID of the singleton process that started us",
+        PRTE_CMD_LINE_OTYPE_DVM },
+    { '\0', "keepalive", 1, PRTE_CMD_LINE_TYPE_INT,
+        "Pipe to monitor - DVM will terminate upon closure",
+        PRTE_CMD_LINE_OTYPE_DVM },
 
     /* End of list */
     { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }

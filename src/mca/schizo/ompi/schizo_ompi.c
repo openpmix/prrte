@@ -105,12 +105,6 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
         PRTE_CMD_LINE_OTYPE_GENERAL },
 
     /* mpirun options */
-    { '\0', "singleton", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "ID of the singleton process that started us",
-        PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "keepalive", 1, PRTE_CMD_LINE_TYPE_INT,
-        "Pipe to monitor - DVM will terminate upon closure",
-        PRTE_CMD_LINE_OTYPE_DVM },
     /* Specify the launch agent to be used */
     { '\0', "launch-agent", 1, PRTE_CMD_LINE_TYPE_STRING,
         "Name of daemon executable used to start processes on remote nodes (default: prted)",
