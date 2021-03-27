@@ -12,14 +12,15 @@
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
-
-AM_CPPFLAGS = $(ras_slurm_CPPFLAGS)
+# The Slurm plugin does not call any Slurm functions - it therefore
+# does NOT need to link against any Slurm libraries
 
 dist_prtedata_DATA = help-ras-slurm.txt
 
@@ -48,11 +49,9 @@ endif
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component)
 mca_ras_slurm_la_SOURCES = $(component_sources)
-mca_ras_slurm_la_LDFLAGS = -module -avoid-version $(ras_slurm_LDFLAGS)
-mca_ras_slurm_la_LIBADD = $(ras_slurm_LIBS) \
-                          $(top_builddir)/src/libprrte.la
+mca_ras_slurm_la_LDFLAGS = -module -avoid-version
+mca_ras_slurm_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(lib)
 libmca_ras_slurm_la_SOURCES = $(lib_sources)
-libmca_ras_slurm_la_LDFLAGS = -module -avoid-version $(ras_slurm_LDFLAGS)
-libmca_ras_slurm_la_LIBADD = $(ras_slurm_LIBS)
+libmca_ras_slurm_la_LDFLAGS = -module -avoid-version
