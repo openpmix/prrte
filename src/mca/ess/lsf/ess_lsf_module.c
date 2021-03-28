@@ -31,8 +31,6 @@
 #include <string.h>
 #include <ctype.h>
 
-#include <lsf/lsbatch.h>
-
 #include "src/util/prte_environ.h"
 #include "src/util/argv.h"
 
