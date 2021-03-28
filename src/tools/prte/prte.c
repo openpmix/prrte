@@ -116,7 +116,7 @@ static prte_event_t epipe_handler;
 static int term_pipe[2];
 static prte_atomic_lock_t prun_abort_inprogress_lock = PRTE_ATOMIC_LOCK_INIT;
 static prte_event_t *forward_signals_events = NULL;
-
+static char *mypidfile = NULL;
 static bool verbose = false;
 static prte_cmd_line_t *prte_cmd_line = NULL;
 static bool want_prefix_by_default = (bool) PRTE_WANT_PRTE_PREFIX_BY_DEFAULT;
@@ -827,6 +827,42 @@ int prte(int argc, char *argv[])
     while (prte_event_base_active && !prte_dvm_ready) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "report-pid", 0, 0))) {
+        /* if the string is a "-", then output to stdout */
+        if (0 == strcmp(pval->value.data.string, "-")) {
+            fprintf(stdout, "%lu\n", (unsigned long)getpid());
+        } else if (0 == strcmp(pval->value.data.string, "+")) {
+            /* output to stderr */
+            fprintf(stderr, "%lu\n", (unsigned long)getpid());
+        } else {
+            char *leftover;
+            int outpipe;
+            /* see if it is an integer pipe */
+            leftover = NULL;
+            outpipe = strtol(pval->value.data.string, &leftover, 10);
+            if (NULL == leftover || 0 == strlen(leftover)) {
+                /* stitch together the var names and URI */
+                prte_asprintf(&leftover, "%lu", (unsigned long)getpid());
+                /* output to the pipe */
+                rc = prte_fd_write(outpipe, strlen(leftover)+1, leftover);
+                free(leftover);
+                close(outpipe);
+            } else {
+                /* must be a file */
+                FILE *fp;
+                fp = fopen(pval->value.data.string, "w");
+                if (NULL == fp) {
+                    prte_output(0, "Impossible to open the file %s in write mode\n", pval->value.data.string);
+                    PRTE_UPDATE_EXIT_STATUS(1);
+                    goto DONE;
+                }
+                /* output my PID */
+                fprintf(fp, "%lu\n", (unsigned long)getpid());
+                fclose(fp);
+                mypidfile = strdup(pval->value.data.string);
+            }
+        }
+    }
 
     if (prte_persistent) {
         PMIX_INFO_LIST_RELEASE(jinfo);
@@ -1203,6 +1239,10 @@ proceed:
   DONE:
     /* cleanup and leave */
     prte_finalize();
+
+    if (NULL != mypidfile) {
+        unlink(mypidfile);
+    }
 
     if (prte_debug_flag) {
         fprintf(stderr, "exiting with status %d\n", prte_exit_status);
