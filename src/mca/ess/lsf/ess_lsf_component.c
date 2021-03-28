@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,8 +26,6 @@
 
 #include "prte_config.h"
 #include "constants.h"
-
-#include <lsf/lsbatch.h>
 
 #include "src/util/proc_info.h"
 
