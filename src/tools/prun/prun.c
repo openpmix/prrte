@@ -295,8 +295,8 @@ static prte_cmd_line_init_t prte_tool_options[] = {
         "Max number of times to try to connect",
         PRTE_CMD_LINE_OTYPE_DVM },
     /* provide a connection PID */
-    { '\0', "pid", 1, PRTE_CMD_LINE_TYPE_INT,
-        "PID of the daemon to which we should connect",
+    { '\0', "pid", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "PID of the daemon to which we should connect (int => PID or file:<file> for file containing the PID",
         PRTE_CMD_LINE_OTYPE_DVM },
     /* provide a connection namespace */
     { '\0', "namespace", 1, PRTE_CMD_LINE_TYPE_STRING,
@@ -592,9 +592,37 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0)) &&
-        0 < pval->value.data.integer) {
-        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0))) {
+        /* see if it is an integer value */
+        char *leftover;
+        leftover = NULL;
+        pid = strtol(pval->value.data.string, &leftover, 10);
+        if (NULL == leftover || 0 == strlen(leftover)) {
+            /* it is an integer */
+            PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
+        } else if (0 == strncasecmp(pval->value.data.string, "file", 4)) {
+            FILE *fp;
+            /* step over the file: prefix */
+            param = strchr(pval->value.data.string, ':');
+            if (NULL == param) {
+                /* malformed input */
+                prte_show_help("help-prun.txt", "bad-option-input", true,
+                               prte_tool_basename, "--pid",
+                               pval->value.data.string, "file:path");
+                return PRTE_ERR_BAD_PARAM;
+            }
+            ++param;
+            fp = fopen(param, "r");
+            if (NULL == fp) {
+                prte_show_help("help-prun.txt", "file-open-error", true,
+                               prte_tool_basename, "--pid",
+                               pval->value.data.string, param);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            fscanf(fp, "%lu", (unsigned long*)&pid);
+            fclose(fp);
+            PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
+        }
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "namespace", 0, 0))) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_NSPACE, pval->value.data.string, PMIX_STRING);

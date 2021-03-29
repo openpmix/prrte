@@ -13,6 +13,7 @@
 # Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -717,3 +718,21 @@ again.
 [prun:executable-incorrectly-given]
 The %s command was given with an application specified. %s is only used
 to start the persistent DVM - it cannot be used with an application.
+#
+[bad-option-input]
+%s was given an option that expected a string argument:
+
+  option: %s
+  argument: %s
+  expected: %s
+
+Please correct the option and try again.
+#
+[file-open-error]
+%s was unable to open the specified file provided as an option:
+
+  option: %s
+  argument: %s
+  file: %s
+
+Please correct the option and try again.
