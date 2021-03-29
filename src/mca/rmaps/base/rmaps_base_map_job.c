@@ -53,18 +53,20 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
     prte_job_t *jdata;
     prte_node_t *node;
+    prte_job_map_t *app_map, *daemon_map;
+    prte_proc_t *proc;
     int rc;
     bool did_map, pernode = false, perpackage = false;
     prte_rmaps_base_selected_module_t *mod;
-    prte_job_t *parent = NULL;
+    prte_job_t *parent = NULL, *target_jdata;
     pmix_rank_t nprocs;
     prte_app_context_t *app;
     bool inherit = false;
-    pmix_proc_t *nptr;
+    pmix_proc_t *nptr, *target_proc;
     char *tmp, *p;
-    uint16_t u16 = 0;
+    uint16_t u16 = 0, daemons_per_node = 0, daemons_per_proc = 0;
     uint16_t *u16ptr = &u16, cpus_per_rank;
-    bool use_hwthreads = false;
+    bool use_hwthreads = false, colocate_daemons = false;
     bool sequential = false;
     int32_t slots;
 
@@ -76,6 +78,162 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: mapping job %s",
                         PRTE_JOBID_PRINT(jdata->nspace));
+
+    /*
+     * Check for Colaunch
+     */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE,
+                           (void **) &u16ptr, PMIX_UINT16)) {
+        daemons_per_node = u16;
+        if (daemons_per_node <= 0) {
+            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_NODE value %u <= 0\n", daemons_per_node);
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+        colocate_daemons = true;
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC,
+                           (void **) &u16ptr, PMIX_UINT16)) {
+        if (daemons_per_node > 0) {
+            prte_output(0, "Error: Both PRTE_JOB_DEBUG_DAEMONS_PER_PROC and PRTE_JOB_DEBUG_DAEMONS_PER_NODE provided.");
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+        daemons_per_proc = u16;
+        if (daemons_per_proc <= 0) {
+            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC value %u <= 0\n", daemons_per_proc);
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+        colocate_daemons = true;
+    }
+    if (colocate_daemons) {
+        if (! prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_TARGET, (void **) &target_proc, PMIX_PROC)) {
+            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC/NODE provided without a Debug Target\n");
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+
+        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                            "mca:rmaps: mapping job %s: Colocate with %s",
+                            PRTE_JOBID_PRINT(jdata->nspace),
+                            PRTE_NAME_PRINT(target_proc));
+
+        target_jdata = prte_get_job_data_object(target_proc->nspace);
+        if (NULL == target_jdata) {
+            prte_output(0, "Unable to find app job %s\n", target_proc->nspace);
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+
+        // Note: The debugger tool is responsible for waiting for the
+        // processes to be ready to be debugged, if necessary.
+        // This is tracked on the job data structure as:
+        // target_jdata->num_ready_for_debug
+
+        app_map = target_jdata->map;
+
+        if (NULL == jdata->map) { // Just in case
+            jdata->map = PRTE_NEW(prte_job_map_t);
+        }
+
+        daemon_map = jdata->map;
+        daemon_map->req_mapper = NULL;
+        daemon_map->last_mapper = NULL;
+        daemon_map->num_new_daemons = 0;
+        daemon_map->daemon_vpid_start = 0;
+        daemon_map->num_nodes = 0;
+
+        daemon_map->mapping = 0;
+
+        daemon_map->binding = 0;
+        PRTE_SET_BINDING_POLICY(daemon_map->binding, PRTE_BIND_TO_NONE);
+
+        daemon_map->ranking = 0;
+        PRTE_SET_RANKING_POLICY(daemon_map->ranking, PRTE_RANK_BY_SLOT);
+
+        jdata->num_procs = 0;
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+
+        // Foreach node assigned to the target application
+        for (int i = 0; i < app_map->num_nodes; i++) {
+            node = (prte_node_t *) prte_pointer_array_get_item(app_map->nodes, i);
+            if (daemons_per_proc > 0) {
+                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps: mapping job %s: Assign %d daemons each process on node %s",
+                                    PRTE_JOBID_PRINT(jdata->nspace),
+                                    daemons_per_proc, node->name);
+            }
+            else if (daemons_per_node > 0) {
+                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps: mapping job %s: Assign %d daemons to node %s",
+                                    PRTE_JOBID_PRINT(jdata->nspace),
+                                    daemons_per_proc, node->name);
+            }
+
+            // Map the node to this job
+            PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
+            PRTE_RETAIN(node);
+            prte_pointer_array_add(daemon_map->nodes, node);
+            daemon_map->num_nodes += 1;
+
+            // Assign N daemons per node
+            if (daemons_per_node > 0 ) {
+                for (int pr = 0; pr < daemons_per_node; ++pr) {
+                    // Note: Assume only 1 app context for the daemons (0 == app->idx)
+                    if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, 0))) {
+                        jdata->exit_code = PRTE_ERR_OUT_OF_RESOURCE;
+                        PRTE_ERROR_LOG(jdata->exit_code);
+                        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                        goto cleanup;
+                    }
+                    jdata->num_procs += 1;
+                }
+            }
+            // Assign N daemons per process on this node
+            if (daemons_per_proc > 0 ) {
+                // Foreach application process associated with this job on this node
+                for (int npr = 0; npr < node->procs->size; ++npr) {
+                    if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, npr))) {
+                        continue;
+                    }
+                    if (proc->job != target_jdata) {
+                        continue;
+                    }
+                    for (int pr = 0; pr < daemons_per_proc; ++pr) {
+                        // Note: Assume only 1 app context for the daemons (0 == app->idx)
+                        if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, 0))) {
+                            jdata->exit_code = PRTE_ERR_OUT_OF_RESOURCE;
+                            PRTE_ERROR_LOG(jdata->exit_code);
+                            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                            goto cleanup;
+                        }
+                        jdata->num_procs += 1;
+                    }
+                }
+            }
+
+            // If we are oversubscribing the node, then set the necessary flags
+            if (node->slots < (int)(node->num_procs+1)) {
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+
+                PRTE_UNSET_MAPPING_DIRECTIVE(daemon_map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
+                PRTE_SET_MAPPING_DIRECTIVE(daemon_map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
+            }
+        }
+        goto ranking;
+    }
 
     /* if this is a dynamic job launch and they didn't explicitly
      * request inheritance, then don't inherit the launch directives */
@@ -132,7 +290,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             /* get the parent job's pes/proc, if it had one */
             if (prte_get_attribute(&parent->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
                 prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PES_PER_PROC, u16ptr, PMIX_UINT16);
-
             }
         }
         /* if not already assigned, inherit the parent's cpu designation */
@@ -315,6 +472,7 @@ compute:
         }
     }
 
+ ranking:
     /* set the default ranking policy IFF it wasn't provided */
     if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
         did_map = false;
@@ -480,28 +638,35 @@ compute:
         }
     }
 
-    /* cycle thru the available mappers until one agrees to map
-     * the job
-     */
-    did_map = false;
-    if (1 == prte_list_get_size(&prte_rmaps_base.selected_modules)) {
-        /* forced selection */
-        mod = (prte_rmaps_base_selected_module_t*)prte_list_get_first(&prte_rmaps_base.selected_modules);
-        jdata->map->req_mapper = strdup(mod->component->mca_component_name);
+    if (colocate_daemons) {
+        /* This is a mapping request for a tool daemon which is handled above
+         * so don't run any mapping modules */
+        did_map = true;
     }
-    PRTE_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t) {
-        if (PRTE_SUCCESS == (rc = mod->module->map_job(jdata)) ||
-            PRTE_ERR_RESOURCE_BUSY == rc) {
-            did_map = true;
-            break;
-        }
-        /* mappers return "next option" if they didn't attempt to
-         * map the job. anything else is a true error.
+    else {
+        /* cycle thru the available mappers until one agrees to map
+         * the job
          */
-        if (PRTE_ERR_TAKE_NEXT_OPTION != rc) {
-            jdata->exit_code = rc;
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-            goto cleanup;
+        did_map = false;
+        if (1 == prte_list_get_size(&prte_rmaps_base.selected_modules)) {
+            /* forced selection */
+            mod = (prte_rmaps_base_selected_module_t*)prte_list_get_first(&prte_rmaps_base.selected_modules);
+            jdata->map->req_mapper = strdup(mod->component->mca_component_name);
+        }
+        PRTE_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t) {
+            if (PRTE_SUCCESS == (rc = mod->module->map_job(jdata)) ||
+                PRTE_ERR_RESOURCE_BUSY == rc) {
+                did_map = true;
+                break;
+            }
+            /* mappers return "next option" if they didn't attempt to
+             * map the job. anything else is a true error.
+             */
+            if (PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+                jdata->exit_code = rc;
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
+            }
         }
     }
 

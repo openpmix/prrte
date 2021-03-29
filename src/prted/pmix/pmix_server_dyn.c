@@ -179,6 +179,8 @@ static void spawn(int sd, short args, void *cbdata)
     PRTE_RELEASE(req);
 }
 
+static int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info);
+
 static void interim(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t*)cbdata;
@@ -188,12 +190,10 @@ static void interim(int sd, short args, void *cbdata)
     prte_app_context_t *app;
     pmix_app_t *papp;
     pmix_info_t *info;
-    prte_list_t *cache;
     int rc, i;
     char cwd[PRTE_PATH_MAX];
     bool flag;
     size_t m, n;
-    prte_info_item_t *kv;
     uint16_t u16;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
@@ -327,16 +327,7 @@ static void interim(int sd, short args, void *cbdata)
         /***   PERSONALITY   ***/
         if (PMIX_CHECK_KEY(info, PMIX_PERSONALITY)) {
             jdata->personality = prte_argv_split(info->value.data.string, ',');
-            /* cache for inclusion with job info at registration as PMIx needs it too */
-            kv = PRTE_NEW(prte_info_item_t);
-            PMIX_INFO_XFER(&kv->info, info);
-            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PMIX_POINTER)) {
-                prte_list_append(cache, &kv->super);
-            } else {
-                cache = PRTE_NEW(prte_list_t);
-                prte_list_append(cache, &kv->super);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void*)cache, PMIX_POINTER);
-            }
+            pmix_server_cache_job_info(jdata, info);
 
         /***   REQUESTED MAPPER   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
@@ -538,6 +529,25 @@ static void interim(int sd, short args, void *cbdata)
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON);
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_DEBUGGER);
 
+        /***   CO-LOCATE TARGET FOR DEBUGGER DAEMONS    ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_TARGET)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DEBUG_TARGET,
+                               PRTE_ATTR_GLOBAL, info->value.data.proc,
+                               PMIX_PROC);
+            pmix_server_cache_job_info(jdata, info);
+
+        /***   NUMBER OF DEBUGGER_DAEMONS PER NODE   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_DAEMONS_PER_NODE)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE,
+                               PRTE_ATTR_GLOBAL, &info->value.data.uint16,
+                               PMIX_UINT16);
+
+        /***   NUMBER OF DEBUGGER_DAEMONS PER PROC   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_DAEMONS_PER_PROC)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC,
+                               PRTE_ATTR_GLOBAL, &info->value.data.uint16,
+                               PMIX_UINT16);
+
         /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
         /* there can be multiple of these, so we add them to the attribute list */
         } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
@@ -589,16 +599,7 @@ static void interim(int sd, short args, void *cbdata)
             }
         /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {
-            /* cache for inclusion with job info at registration */
-            kv = PRTE_NEW(prte_info_item_t);
-            PMIX_INFO_XFER(&kv->info, info);
-            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PMIX_POINTER)) {
-                prte_list_append(cache, &kv->super);
-            } else {
-                cache = PRTE_NEW(prte_list_t);
-                prte_list_append(cache, &kv->super);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void*)cache, PMIX_POINTER);
-            }
+            pmix_server_cache_job_info(jdata, info);
         }
     }
     /* if the job is missing a personality setting, add it */
@@ -631,6 +632,24 @@ static void interim(int sd, short args, void *cbdata)
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
     }
     PRTE_RELEASE(cd);
+}
+
+static int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info)
+{
+    prte_info_item_t *kv;
+    prte_list_t *cache;
+
+    /* cache for inclusion with job info at registration */
+    kv = PRTE_NEW(prte_info_item_t);
+    PMIX_INFO_XFER(&kv->info, info);
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PMIX_POINTER)) {
+        prte_list_append(cache, &kv->super);
+    } else {
+        cache = PRTE_NEW(prte_list_t);
+        prte_list_append(cache, &kv->super);
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void*)cache, PMIX_POINTER);
+    }
+    return 0;
 }
 
 int pmix_server_spawn_fn(const pmix_proc_t *proc,
