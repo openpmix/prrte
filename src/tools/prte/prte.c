@@ -247,7 +247,7 @@ int prte(int argc, char *argv[])
     prte_app_context_t *dapp;
     bool proxyrun = false;
     void *jinfo;
-    pmix_proc_t pname;
+    pmix_proc_t pname, parent;
     pmix_value_t *val;
     pmix_data_array_t darray;
     char **hostfiles = NULL;
@@ -705,14 +705,14 @@ int prte(int argc, char *argv[])
     /* see if we ourselves were spawned by someone */
     ret = PMIx_Get(&prte_process_info.myproc, PMIX_PARENT_ID, NULL, 0, &val);
     if (PMIX_SUCCESS == ret) {
-        PMIX_LOAD_PROCID(&pname, val->data.proc->nspace, val->data.proc->rank);
+        PMIX_LOAD_PROCID(&parent, val->data.proc->nspace, val->data.proc->rank);
         PMIX_VALUE_RELEASE(val);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
         /* record that this tool is connected to us */
         PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
         PMIX_INFO_CREATE(iptr, 2);
-        PMIX_INFO_LOAD(&iptr[0], PMIX_NSPACE, pname.nspace, PMIX_STRING);
-        PMIX_INFO_LOAD(&iptr[1], PMIX_RANK, &pname.rank, PMIX_PROC_RANK);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_NSPACE, parent.nspace, PMIX_STRING);
+        PMIX_INFO_LOAD(&iptr[1], PMIX_RANK, &parent.rank, PMIX_PROC_RANK);
         pmix_tool_connected_fn(iptr, 2, toolcbfunc, &mylock);
         /* we have to cycle the event library here so we can process
          * this request */
@@ -723,7 +723,7 @@ int prte(int argc, char *argv[])
         PMIX_INFO_FREE(iptr, 2);
         PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
     } else {
-        PMIX_LOAD_PROCID(&pname, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
+        PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
     }
 
     /* default to a persistent DVM */
@@ -1168,7 +1168,7 @@ int prte(int argc, char *argv[])
     }
 
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    ret = pmix_server_spawn_fn(&pname, iptr, ninfo, papps,
+    ret = pmix_server_spawn_fn(&parent, iptr, ninfo, papps,
                                napps, spcbfunc, &lock);
     if (PRTE_SUCCESS != ret) {
         prte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));

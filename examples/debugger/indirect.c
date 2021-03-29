@@ -340,6 +340,13 @@ int main(int argc, char **argv)
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_SPAWN_TOOL, NULL, PMIX_BOOL); // we are spawning a tool
+    /* create the launch directives to tell the launcher what
+     * to do with the app it is going to spawn for us */
+    PMIX_INFO_LIST_START(linfo);
+    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_CONVERT(rc, linfo, &darray);
+    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_LAUNCH_DIRECTIVES, &darray, PMIX_DATA_ARRAY);
+    PMIX_INFO_LIST_RELEASE(linfo);
 
     /* convert job info to array */
     PMIX_INFO_LIST_CONVERT(rc, jinfo, &darray);
@@ -349,6 +356,7 @@ int main(int argc, char **argv)
 
     /* spawn the launcher - the function will return when the launcher
      * has been started. */
+    fprintf(stderr, "SPAWNING LAUNCHER\n");
     rc = PMIx_Spawn(info, ninfo, app, napps, clientspace);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     PMIX_APP_FREE(app, napps);
