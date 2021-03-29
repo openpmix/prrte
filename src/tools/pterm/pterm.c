@@ -135,8 +135,8 @@ static prte_cmd_line_init_t cmd_line_init[] = {
       "Max number of times to try to connect",
       PRTE_CMD_LINE_OTYPE_DVM },
     /* provide a connection PID */
-    { '\0', "pid", 1, PRTE_CMD_LINE_TYPE_INT,
-      "PID of the session-level daemon to which we should connect",
+    { '\0', "pid", 1, PRTE_CMD_LINE_TYPE_STRING,
+        "PID of the daemon to which we should connect (int => PID or file:<file> for file containing the PID",
       PRTE_CMD_LINE_OTYPE_DVM },
     /* uri of the dvm, or at least where to get it */
     { '\0', "dvm-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
@@ -342,11 +342,44 @@ int main(int argc, char *argv[])
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0)) &&
         0 < pval->value.data.integer) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        pid = pval->value.data.integer;
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
-        prte_list_append(&tinfo, &ds->super);
+        /* see if it is an integer value */
+        char *leftover, *param;
+        leftover = NULL;
+        pid = strtol(pval->value.data.string, &leftover, 10);
+        if (NULL == leftover || 0 == strlen(leftover)) {
+            /* it is an integer */
+            ds = PRTE_NEW(prte_ds_info_t);
+            PMIX_INFO_CREATE(ds->info, 1);
+            pid = pval->value.data.integer;
+            PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
+            prte_list_append(&tinfo, &ds->super);
+        } else if (0 == strncasecmp(pval->value.data.string, "file", 4)) {
+            FILE *fp;
+            /* step over the file: prefix */
+            param = strchr(pval->value.data.string, ':');
+            if (NULL == param) {
+                /* malformed input */
+                prte_show_help("help-prun.txt", "bad-option-input", true,
+                               prte_tool_basename, "--pid",
+                               pval->value.data.string, "file:path");
+                return PRTE_ERR_BAD_PARAM;
+            }
+            ++param;
+            fp = fopen(param, "r");
+            if (NULL == fp) {
+                prte_show_help("help-prun.txt", "file-open-error", true,
+                               prte_tool_basename, "--pid",
+                               pval->value.data.string, param);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            fscanf(fp, "%lu", (unsigned long*)&pid);
+            fclose(fp);
+            ds = PRTE_NEW(prte_ds_info_t);
+            PMIX_INFO_CREATE(ds->info, 1);
+            pid = pval->value.data.integer;
+            PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
+            prte_list_append(&tinfo, &ds->super);
+        }
     }
     /* ensure we don't try to use the usock PTL component */
     ds = PRTE_NEW(prte_ds_info_t);
