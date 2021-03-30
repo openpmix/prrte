@@ -214,6 +214,10 @@ prte_job_t *prte_get_job_data_object(const pmix_nspace_t job)
     if (NULL == prte_job_data) {
         return NULL;
     }
+    /* if the nspace is invalid, then reject it */
+    if (PMIX_NSPACE_INVALID(job)) {
+        return NULL;
+    }
     for (i = 0; i < prte_job_data->size; i++) {
         if (NULL == (jptr = (prte_job_t *) prte_pointer_array_get_item(prte_job_data, i))) {
             continue;
@@ -234,7 +238,10 @@ int prte_set_job_data_object(prte_job_t *jdata)
     if (NULL == prte_job_data) {
         return PRTE_ERROR;
     }
-
+    /* if the nspace is invalid, then that's an error */
+    if (PMIX_NSPACE_INVALID(jdata->nspace)) {
+        return PRTE_ERROR;
+    }
     /* verify that we don't already have this object */
     for (i = 0; i < prte_job_data->size; i++) {
         if (NULL == (jptr = (prte_job_t *) prte_pointer_array_get_item(prte_job_data, i))) {

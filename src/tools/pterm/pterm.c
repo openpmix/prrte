@@ -229,15 +229,18 @@ int main(int argc, char *argv[])
 {
     int rc = PRTE_ERR_FATAL;
     prte_pmix_lock_t lock, rellock;
-    prte_list_t tinfo;
     pmix_info_t info, *iptr;
     pmix_status_t ret;
     bool flag;
-    prte_ds_info_t *ds;
-    size_t n, ninfo;
+    size_t ninfo;
     prte_value_t *pval;
     uint32_t ui32;
+    char *param;
     pid_t pid;
+    void *tinfo;
+    pmix_data_array_t darray;
+    char hostname[PRTE_PATH_MAX];
+    pmix_rank_t rank;
 
     /* init the globals */
     PRTE_CONSTRUCT(&job_info, prte_list_t);
@@ -247,6 +250,7 @@ int main(int argc, char *argv[])
     prte_init_util(PRTE_PROC_MASTER);
 
     prte_tool_basename = prte_basename(argv[0]);
+    gethostname(hostname, sizeof(hostname));
 
     /* setup our cmd line */
     prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
@@ -294,47 +298,40 @@ int main(int argc, char *argv[])
     }
 
     /* setup options */
-    PRTE_CONSTRUCT(&tinfo, prte_list_t);
+    PMIX_INFO_LIST_START(tinfo);
+
+    /* tell PMIx what our name should be */
+    prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, getpid());
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
+    free(param);
+    rank = 0;
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
+
     if (prte_cmd_line_is_taken(prte_cmd_line, "system-server-first")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
     } else if (prte_cmd_line_is_taken(prte_cmd_line, "system-server-only")) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0))
         && 0 < pval->value.data.integer) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
         ui32 = pval->value.data.integer;
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "num-connect-retries", 0, 0))
         && 0 < pval->value.data.integer) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
         ui32 = pval->value.data.integer;
-        PMIX_INFO_LOAD(ds->info, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0))
         && 0 < pval->value.data.integer) {
         /* see if it is an integer value */
-        char *leftover, *param;
+        char *leftover;
         leftover = NULL;
         pid = strtol(pval->value.data.string, &leftover, 10);
         if (NULL == leftover || 0 == strlen(leftover)) {
             /* it is an integer */
-            ds = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
             pid = pval->value.data.integer;
-            PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
-            prte_list_append(&tinfo, &ds->super);
+            PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
         } else if (0 == strncasecmp(pval->value.data.string, "file", 4)) {
             FILE *fp;
             /* step over the file: prefix */
@@ -354,37 +351,20 @@ int main(int argc, char *argv[])
             }
             fscanf(fp, "%lu", (unsigned long *) &pid);
             fclose(fp);
-            ds = PRTE_NEW(prte_ds_info_t);
-            PMIX_INFO_CREATE(ds->info, 1);
-            pid = pval->value.data.integer;
-            PMIX_INFO_LOAD(ds->info, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
-            prte_list_append(&tinfo, &ds->super);
+            PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
         }
     }
-    /* ensure we don't try to use the usock PTL component */
-    ds = PRTE_NEW(prte_ds_info_t);
-    PMIX_INFO_CREATE(ds->info, 1);
-    PMIX_INFO_LOAD(ds->info, PMIX_USOCK_DISABLE, NULL, PMIX_BOOL);
-    prte_list_append(&tinfo, &ds->super);
 
     /* if they specified the URI, then pass it along */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "dvm-uri", 0, 0))) {
-        ds = PRTE_NEW(prte_ds_info_t);
-        PMIX_INFO_CREATE(ds->info, 1);
-        PMIX_INFO_LOAD(ds->info, PMIX_SERVER_URI, pval->value.data.string, PMIX_STRING);
-        prte_list_append(&tinfo, &ds->super);
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_URI, pval->value.data.string, PMIX_STRING);
     }
 
     /* convert to array of info */
-    ninfo = prte_list_get_size(&tinfo);
-    PMIX_INFO_CREATE(iptr, ninfo);
-    n = 0;
-    PRTE_LIST_FOREACH(ds, &tinfo, prte_ds_info_t)
-    {
-        PMIX_INFO_XFER(&iptr[n], ds->info);
-        ++n;
-    }
-    PRTE_LIST_DESTRUCT(&tinfo);
+    PMIX_INFO_LIST_CONVERT(rc, tinfo, &darray);
+    iptr = (pmix_info_t *) darray.array;
+    ninfo = darray.size;
+    PMIX_INFO_LIST_RELEASE(tinfo);
 
     /** setup callbacks for abort signals - from this point
      * forward, we need to abort in a manner that allows us
