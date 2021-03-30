@@ -37,26 +37,26 @@
 #include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #include <time.h>
 #if HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 
-#include "src/util/output.h"
-#include "src/sys/atomic.h"
 #include "src/event/event-internal.h"
+#include "src/sys/atomic.h"
+#include "src/util/output.h"
 
-#include "types.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/threads.h"
+#include "types.h"
 
 BEGIN_C_DECLS
 
 /** typedef for callback function used in \c prte_wait_cb */
-typedef void (*prte_wait_cbfunc_t)(int fd, short args, void* cb);
+typedef void (*prte_wait_cbfunc_t)(int fd, short args, void *cb);
 
 /* define a tracker */
 typedef struct {
@@ -86,10 +86,9 @@ PRTE_EXPORT void prte_wait_disable(void);
  * time.
  */
 PRTE_EXPORT void prte_wait_cb(prte_proc_t *proc, prte_wait_cbfunc_t callback,
-                                prte_event_base_t *evb, void *data);
+                              prte_event_base_t *evb, void *data);
 
 PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
-
 
 /* In a few places, we need to barrier until something happens
  * that changes a flag to indicate we can release - e.g., waiting
@@ -98,21 +97,20 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
  * is active, then we need to just nanosleep to avoid cross-thread
  * confusion
  */
-#define PRTE_WAIT_FOR_COMPLETION(flg)                                   \
-    do {                                                                \
-        prte_output_verbose(1, prte_progress_thread_debug,              \
-                            "%s waiting on progress thread at %s:%d",   \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
-                            __FILE__, __LINE__);                        \
-        while ((flg)) {                                                 \
-            /* provide a short quiet period so we                       \
-             * don't hammer the cpu while waiting                       \
-             */                                                         \
-            struct timespec tp = {0, 100000};                           \
-            nanosleep(&tp, NULL);                                       \
-        }                                                               \
-        PRTE_ACQUIRE_OBJECT(flg);                                       \
-    }while(0);
+#define PRTE_WAIT_FOR_COMPLETION(flg)                                                \
+    do {                                                                             \
+        prte_output_verbose(1, prte_progress_thread_debug,                           \
+                            "%s waiting on progress thread at %s:%d",                \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__); \
+        while ((flg)) {                                                              \
+            /* provide a short quiet period so we                                    \
+             * don't hammer the cpu while waiting                                    \
+             */                                                                      \
+            struct timespec tp = {0, 100000};                                        \
+            nanosleep(&tp, NULL);                                                    \
+        }                                                                            \
+        PRTE_ACQUIRE_OBJECT(flg);                                                    \
+    } while (0);
 
 /**
  * In a number of places within the code, we want to setup a timer
@@ -133,29 +131,25 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
  * NOTE: the callback function is responsible for releasing the timer
  * event back to the event pool!
  */
-#define PRTE_DETECT_TIMEOUT(n, deltat, maxwait, cbfunc, cbd)                \
-    do {                                                                    \
-        prte_timer_t *tmp;                                                  \
-        int timeout;                                                        \
-        tmp =  PRTE_NEW(prte_timer_t);                                       \
-        tmp->payload = (cbd);                                               \
-        prte_event_evtimer_set(prte_event_base,                             \
-                               tmp->ev, (cbfunc), tmp);                     \
-        prte_event_set_priority(tmp->ev, PRTE_ERROR_PRI);                   \
-        timeout = (deltat) * (n);                                           \
-        if ((maxwait) > 0 && timeout > (maxwait)) {                         \
-            timeout = (maxwait);                                            \
-        }                                                                   \
-        tmp->tv.tv_sec = timeout/1000000;                                   \
-        tmp->tv.tv_usec = timeout%1000000;                                  \
-        PRTE_OUTPUT_VERBOSE((1, prte_debug_output,                          \
-                             "defining timeout: %ld sec %ld usec at %s:%d", \
-                            (long)tmp->tv.tv_sec, (long)tmp->tv.tv_usec,    \
-                            __FILE__, __LINE__));                           \
-        PRTE_POST_OBJECT(tmp);                                              \
-        prte_event_evtimer_add(tmp->ev, &tmp->tv);                          \
-    }while(0);                                                              \
-
+#define PRTE_DETECT_TIMEOUT(n, deltat, maxwait, cbfunc, cbd)                                      \
+    do {                                                                                          \
+        prte_timer_t *tmp;                                                                        \
+        int timeout;                                                                              \
+        tmp = PRTE_NEW(prte_timer_t);                                                             \
+        tmp->payload = (cbd);                                                                     \
+        prte_event_evtimer_set(prte_event_base, tmp->ev, (cbfunc), tmp);                          \
+        prte_event_set_priority(tmp->ev, PRTE_ERROR_PRI);                                         \
+        timeout = (deltat) * (n);                                                                 \
+        if ((maxwait) > 0 && timeout > (maxwait)) {                                               \
+            timeout = (maxwait);                                                                  \
+        }                                                                                         \
+        tmp->tv.tv_sec = timeout / 1000000;                                                       \
+        tmp->tv.tv_usec = timeout % 1000000;                                                      \
+        PRTE_OUTPUT_VERBOSE((1, prte_debug_output, "defining timeout: %ld sec %ld usec at %s:%d", \
+                             (long) tmp->tv.tv_sec, (long) tmp->tv.tv_usec, __FILE__, __LINE__)); \
+        PRTE_POST_OBJECT(tmp);                                                                    \
+        prte_event_evtimer_add(tmp->ev, &tmp->tv);                                                \
+    } while (0);
 
 /**
  * There are places in the code where we just want to periodically
@@ -166,23 +160,20 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
  * event back to the event pool when done! Otherwise, the finalize
  * function will take care of it.
  */
-#define PRTE_TIMER_EVENT(sec, usec, cbfunc, pri)                                \
-    do {                                                                        \
-        prte_timer_t *tm;                                                       \
-        tm = PRTE_NEW(prte_timer_t);                                             \
-        prte_event_evtimer_set(prte_event_base,                                 \
-                               tm->ev, (cbfunc), tm);                           \
-        prte_event_set_priority(tm->ev, (pri));                                 \
-        tm->tv.tv_sec = (sec) + (usec)/1000000;                                 \
-        tm->tv.tv_usec = (usec) % 1000000;                                      \
-        PRTE_OUTPUT_VERBOSE((1, prte_debug_output,                              \
-                             "defining timer event: %ld sec %ld usec at %s:%d", \
-                             (long)tm->tv.tv_sec, (long)tm->tv.tv_usec,         \
-                             __FILE__, __LINE__));                              \
-        PRTE_POST_OBJECT(tm);                                                   \
-        prte_event_evtimer_add(tm->ev, &tm->tv);                                \
-    }while(0);                                                                  \
-
+#define PRTE_TIMER_EVENT(sec, usec, cbfunc, pri)                                                \
+    do {                                                                                        \
+        prte_timer_t *tm;                                                                       \
+        tm = PRTE_NEW(prte_timer_t);                                                            \
+        prte_event_evtimer_set(prte_event_base, tm->ev, (cbfunc), tm);                          \
+        prte_event_set_priority(tm->ev, (pri));                                                 \
+        tm->tv.tv_sec = (sec) + (usec) / 1000000;                                               \
+        tm->tv.tv_usec = (usec) % 1000000;                                                      \
+        PRTE_OUTPUT_VERBOSE((1, prte_debug_output,                                              \
+                             "defining timer event: %ld sec %ld usec at %s:%d",                 \
+                             (long) tm->tv.tv_sec, (long) tm->tv.tv_usec, __FILE__, __LINE__)); \
+        PRTE_POST_OBJECT(tm);                                                                   \
+        prte_event_evtimer_add(tm->ev, &tm->tv);                                                \
+    } while (0);
 
 /**
  * \internal

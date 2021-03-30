@@ -10,6 +10,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,15 +19,15 @@
  */
 
 #if !defined(PRTE_THREADS_WAIT_SYNC_H)
-#define PRTE_THREADS_WAIT_SYNC_H
+#    define PRTE_THREADS_WAIT_SYNC_H
 
-#include "prte_config.h"
-#include "src/include/constants.h"
-#include "src/include/prefetch.h"
-#include "src/sys/atomic.h"
-#include "src/threads/threads.h"
-#include "src/util/error.h"
-#include <pthread.h>
+#    include "prte_config.h"
+#    include "src/include/constants.h"
+#    include "src/include/prefetch.h"
+#    include "src/sys/atomic.h"
+#    include "src/threads/threads.h"
+#    include "src/util/error.h"
+#    include <pthread.h>
 
 BEGIN_C_DECLS
 
@@ -40,10 +41,10 @@ typedef struct prte_wait_sync_t {
     volatile bool signaling;
 } prte_wait_sync_t;
 
-#define REQUEST_PENDING        (void*)0L
-#define REQUEST_COMPLETED      (void*)1L
+#    define REQUEST_PENDING   (void *) 0L
+#    define REQUEST_COMPLETED (void *) 1L
 
-#define PRTE_SYNC_WAIT(sync)    prte_sync_wait_mt (sync)
+#    define PRTE_SYNC_WAIT(sync) prte_sync_wait_mt(sync)
 
 /* The loop in release handles a race condition between the signaling
  * thread and the destruction of the condition variable. The signaling
@@ -53,30 +54,30 @@ typedef struct prte_wait_sync_t {
  * as possible. Note that the race window is small so spinning here
  * is more optimal than sleeping since this macro is called in
  * the critical path. */
-#define PRTE_WAIT_SYNC_RELEASE(sync)                  \
-        while ((sync)->signaling) {                   \
-            continue;                                 \
-        }                                             \
-        pthread_cond_destroy(&(sync)->condition);     \
+#    define PRTE_WAIT_SYNC_RELEASE(sync)          \
+        while ((sync)->signaling) {               \
+            continue;                             \
+        }                                         \
+        pthread_cond_destroy(&(sync)->condition); \
         pthread_mutex_destroy(&(sync)->lock);
 
-#define PRTE_WAIT_SYNC_RELEASE_NOWAIT(sync)           \
-        pthread_cond_destroy(&(sync)->condition);     \
+#    define PRTE_WAIT_SYNC_RELEASE_NOWAIT(sync)   \
+        pthread_cond_destroy(&(sync)->condition); \
         pthread_mutex_destroy(&(sync)->lock);
 
-
-#define PRTE_WAIT_SYNC_SIGNAL(sync)                   \
-        pthread_mutex_lock(&(sync->lock));            \
-        pthread_cond_signal(&sync->condition);        \
-        pthread_mutex_unlock(&(sync->lock));          \
+#    define PRTE_WAIT_SYNC_SIGNAL(sync)        \
+        pthread_mutex_lock(&(sync->lock));     \
+        pthread_cond_signal(&sync->condition); \
+        pthread_mutex_unlock(&(sync->lock));   \
         sync->signaling = false;
 
-#define PRTE_WAIT_SYNC_SIGNALLED(sync){               \
-        (sync)->signaling = false;                    \
-}
+#    define PRTE_WAIT_SYNC_SIGNALLED(sync) \
+        {                                  \
+            (sync)->signaling = false;     \
+        }
 
 PRTE_EXPORT int prte_sync_wait_mt(prte_wait_sync_t *sync);
-static inline int prte_sync_wait_st (prte_wait_sync_t *sync)
+static inline int prte_sync_wait_st(prte_wait_sync_t *sync)
 {
     while (sync->count > 0) {
     }
@@ -84,17 +85,16 @@ static inline int prte_sync_wait_st (prte_wait_sync_t *sync)
     return sync->status;
 }
 
-
-#define PRTE_WAIT_SYNC_INIT(sync,c)                             \
-    do {                                                        \
-        (sync)->count = (c);                                    \
-        (sync)->next = NULL;                                    \
-        (sync)->prev = NULL;                                    \
-        (sync)->status = 0;                                     \
-        (sync)->signaling = (0 != (c));                         \
-        pthread_cond_init (&(sync)->condition, NULL);           \
-        pthread_mutex_init (&(sync)->lock, NULL);               \
-    } while(0)
+#    define PRTE_WAIT_SYNC_INIT(sync, c)                 \
+        do {                                             \
+            (sync)->count = (c);                         \
+            (sync)->next = NULL;                         \
+            (sync)->prev = NULL;                         \
+            (sync)->status = 0;                          \
+            (sync)->signaling = (0 != (c));              \
+            pthread_cond_init(&(sync)->condition, NULL); \
+            pthread_mutex_init(&(sync)->lock, NULL);     \
+        } while (0)
 
 /**
  * Update the status of the synchronization primitive. If an error is
@@ -102,18 +102,17 @@ static inline int prte_sync_wait_st (prte_wait_sync_t *sync)
  * triggered. The status of the synchronization will be reported to
  * the waiting threads.
  */
-static inline void prte_wait_sync_update(prte_wait_sync_t *sync,
-                                         int updates, int status)
+static inline void prte_wait_sync_update(prte_wait_sync_t *sync, int updates, int status)
 {
-    if( PRTE_LIKELY(PRTE_SUCCESS == status) ) {
-        if( 0 != (PRTE_THREAD_ADD_FETCH32(&sync->count, -updates)) ) {
+    if (PRTE_LIKELY(PRTE_SUCCESS == status)) {
+        if (0 != (PRTE_THREAD_ADD_FETCH32(&sync->count, -updates))) {
             return;
         }
     } else {
         /* this is an error path so just use the atomic */
         sync->status = PRTE_ERROR;
-        prte_atomic_wmb ();
-        prte_atomic_swap_32 (&sync->count, 0);
+        prte_atomic_wmb();
+        prte_atomic_swap_32(&sync->count, 0);
     }
     PRTE_WAIT_SYNC_SIGNAL(sync);
 }

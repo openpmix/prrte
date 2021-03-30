@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,17 +25,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
-char*
-prte_ltostr(long num)
+char *prte_ltostr(long num)
 {
     /* waste a little bit of space, but always have a big enough buffer */
     int buflen = sizeof(long) * 8;
     char *buf = NULL;
     int ret = 0;
 
-    buf = (char*) malloc(sizeof(char) * buflen);
-    if (NULL == buf) return NULL;
+    buf = (char *) malloc(sizeof(char) * buflen);
+    if (NULL == buf)
+        return NULL;
 
     ret = snprintf(buf, buflen, "%ld", num);
     if (ret < 0) {
@@ -45,17 +45,16 @@ prte_ltostr(long num)
     return buf;
 }
 
-
-char*
-prte_dtostr(double num)
+char *prte_dtostr(double num)
 {
     /* waste a little bit of space, but always have a big enough buffer */
     int buflen = sizeof(long) * 8;
     char *buf = NULL;
     int ret = 0;
 
-    buf = (char*) malloc(sizeof(char) * buflen);
-    if (NULL == buf) return NULL;
+    buf = (char *) malloc(sizeof(char) * buflen);
+    if (NULL == buf)
+        return NULL;
 
     ret = snprintf(buf, buflen, "%f", num);
     if (ret < 0) {

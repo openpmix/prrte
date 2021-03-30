@@ -13,6 +13,7 @@
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,9 +62,9 @@ BEGIN_C_DECLS
  */
 
 /**
-* RMAPS module functions - these are not accessible to the outside world,
-* but are defined here by convention
-*/
+ * RMAPS module functions - these are not accessible to the outside world,
+ * but are defined here by convention
+ */
 
 /* map a job - used by the HNP to compute the #procs on each node.
  * This is passed to the backend daemons as a regex which they
@@ -81,15 +82,14 @@ typedef int (*prte_rmaps_base_module_assign_loc_fn_t)(prte_job_t *jdata);
  */
 struct prte_rmaps_base_module_3_0_0_t {
     /** Mapping function pointer */
-    prte_rmaps_base_module_map_fn_t         map_job;
+    prte_rmaps_base_module_map_fn_t map_job;
     /* assign locations */
-    prte_rmaps_base_module_assign_loc_fn_t  assign_locations;
+    prte_rmaps_base_module_assign_loc_fn_t assign_locations;
 };
 /** Convenience typedef */
 typedef struct prte_rmaps_base_module_3_0_0_t prte_rmaps_base_module_3_0_0_t;
 /** Convenience typedef */
 typedef prte_rmaps_base_module_3_0_0_t prte_rmaps_base_module_t;
-
 
 /*
  * rmaps component
@@ -108,7 +108,6 @@ struct prte_rmaps_base_component_3_0_0_t {
 typedef struct prte_rmaps_base_component_3_0_0_t prte_rmaps_base_component_3_0_0_t;
 /** Convenience typedef */
 typedef prte_rmaps_base_component_3_0_0_t prte_rmaps_base_component_t;
-
 
 END_C_DECLS
 

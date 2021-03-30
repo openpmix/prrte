@@ -13,6 +13,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +33,7 @@
 #include "prte_config.h"
 
 #ifdef HAVE_CRT_EXTERNS_H
-#include <crt_externs.h>
+#    include <crt_externs.h>
 #endif
 
 BEGIN_C_DECLS
@@ -60,7 +61,8 @@ BEGIN_C_DECLS
  * one of the two is NULL, the other list is simply copied to the
  * output.  If both are NULL, NULL is returned.
  */
-PRTE_EXPORT char **prte_environ_merge(char **minor, char **major) __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char **prte_environ_merge(char **minor,
+                                      char **major) __prte_attribute_warn_unused_result__;
 
 /**
  * Portable version of setenv(3), allowing editing of any
@@ -108,8 +110,8 @@ PRTE_EXPORT char **prte_environ_merge(char **minor, char **major) __prte_attribu
  *   prte_setenv("foo", "bar", true, &my_env);
  * \endcode
  */
-PRTE_EXPORT int prte_setenv(const char *name, const char *value,
-                              bool overwrite, char ***env) __prte_attribute_nonnull__(1);
+PRTE_EXPORT int prte_setenv(const char *name, const char *value, bool overwrite, char ***env)
+    __prte_attribute_nonnull__(1);
 
 /**
  * Portable version of unsetenv(3), allowing editing of any
@@ -130,13 +132,13 @@ PRTE_EXPORT int prte_unsetenv(const char *name, char ***env) __prte_attribute_no
 /* A consistent way to retrieve the home and tmp directory on all supported
  * platforms.
  */
-PRTE_EXPORT const char* prte_home_directory( void );
-PRTE_EXPORT const char* prte_tmp_directory( void );
+PRTE_EXPORT const char *prte_home_directory(void);
+PRTE_EXPORT const char *prte_tmp_directory(void);
 
 /* Some care is needed with environ on OS X when dealing with shared
    libraries.  Handle that care here... */
 #ifdef HAVE__NSGETENVIRON
-#define environ (*_NSGetEnviron())
+#    define environ (*_NSGetEnviron())
 #else
 PRTE_EXPORT extern char **environ;
 #endif

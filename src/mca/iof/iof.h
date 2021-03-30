@@ -131,28 +131,27 @@ BEGIN_C_DECLS
  * behalf of a tool that had the HNP spawn a job. First
  * argument is the prte_job_t of the spawned job, second
  * is a pointer to the name of the requesting tool */
-#define PRTE_IOF_PROXY_PULL(a, b)                                       \
-    do {                                                                \
-        pmix_data_buffer_t *buf;                                        \
-        prte_iof_tag_t tag;                                             \
-        pmix_proc_t nm;                                                 \
-                                                                        \
-        PMIX_DATA_BUFFER_CREATE(buf);                                   \
-                                                                        \
-        /* setup the tag to pull from HNP */                            \
-        tag = PRTE_IOF_STDOUTALL | PRTE_IOF_PULL | PRTE_IOF_EXCLUSIVE;  \
-        PMIx_Data_pack(NULL, buf, &tag, 1, PMIX_UINT16);                \
-        /* pack the name of the source we want to pull */               \
-        PMIX_LOAD_PROCID(&nm, (a)->nspace, PMIX_RANK_WILDCARD);         \
-        PMIx_Data_pack(NULL, buf, &nm, 1, PMIX_PROC);                   \
-        /* pack the name of the tool */                                 \
-        PMIx_Data_pack(NULL, buf, (b), 1, PMIX_PROC);                   \
-                                                                        \
-        /* send the buffer to the HNP */                                \
-        prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,                  \
-                                PRTE_RML_TAG_IOF_HNP,                   \
-                                prte_rml_send_callback, NULL);          \
-    } while(0);
+#define PRTE_IOF_PROXY_PULL(a, b)                                            \
+    do {                                                                     \
+        pmix_data_buffer_t *buf;                                             \
+        prte_iof_tag_t tag;                                                  \
+        pmix_proc_t nm;                                                      \
+                                                                             \
+        PMIX_DATA_BUFFER_CREATE(buf);                                        \
+                                                                             \
+        /* setup the tag to pull from HNP */                                 \
+        tag = PRTE_IOF_STDOUTALL | PRTE_IOF_PULL | PRTE_IOF_EXCLUSIVE;       \
+        PMIx_Data_pack(NULL, buf, &tag, 1, PMIX_UINT16);                     \
+        /* pack the name of the source we want to pull */                    \
+        PMIX_LOAD_PROCID(&nm, (a)->nspace, PMIX_RANK_WILDCARD);              \
+        PMIx_Data_pack(NULL, buf, &nm, 1, PMIX_PROC);                        \
+        /* pack the name of the tool */                                      \
+        PMIx_Data_pack(NULL, buf, (b), 1, PMIX_PROC);                        \
+                                                                             \
+        /* send the buffer to the HNP */                                     \
+        prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP, \
+                                prte_rml_send_callback, NULL);               \
+    } while (0);
 
 /* Initialize the selected module */
 typedef int (*prte_iof_base_init_fn_t)(void);
@@ -165,8 +164,7 @@ typedef int (*prte_iof_base_init_fn_t)(void);
  * @param peer  Name of target peer(s)
  * @param fd    Local file descriptor for input.
  */
-typedef int (*prte_iof_base_push_fn_t)(const pmix_proc_t* peer,
-                                       prte_iof_tag_t src_tag, int fd);
+typedef int (*prte_iof_base_push_fn_t)(const pmix_proc_t *peer, prte_iof_tag_t src_tag, int fd);
 
 /**
  * Explicitly pull data from the specified set of SOURCE peers and
@@ -177,25 +175,20 @@ typedef int (*prte_iof_base_push_fn_t)(const pmix_proc_t* peer,
  * @param source_tag    Indicates the output streams to be forwarded
  * @param fd            Local file descriptor for output.
  */
-typedef int (*prte_iof_base_pull_fn_t)(const pmix_proc_t* peer,
-                                       prte_iof_tag_t source_tag,
-                                       int fd);
+typedef int (*prte_iof_base_pull_fn_t)(const pmix_proc_t *peer, prte_iof_tag_t source_tag, int fd);
 
 /**
  * Close the specified iof stream(s) from the indicated peer(s)
  */
-typedef int (*prte_iof_base_close_fn_t)(const pmix_proc_t* peer,
-                                        prte_iof_tag_t source_tag);
+typedef int (*prte_iof_base_close_fn_t)(const pmix_proc_t *peer, prte_iof_tag_t source_tag);
 
 /**
  * Output something via the IOF subsystem
  */
-typedef int (*prte_iof_base_output_fn_t)(const pmix_proc_t* peer,
-                                         prte_iof_tag_t source_tag,
+typedef int (*prte_iof_base_output_fn_t)(const pmix_proc_t *peer, prte_iof_tag_t source_tag,
                                          const char *msg);
 
-typedef int (*prte_iof_base_push_stdin_fn_t)(const pmix_proc_t* dst_name,
-                                             uint8_t *data, size_t sz);
+typedef int (*prte_iof_base_push_stdin_fn_t)(const pmix_proc_t *dst_name, uint8_t *data, size_t sz);
 
 /* Flag that a job is complete */
 typedef void (*prte_iof_base_complete_fn_t)(const prte_job_t *jdata);
@@ -207,14 +200,14 @@ typedef int (*prte_iof_base_finalize_fn_t)(void);
  *  IOF module.
  */
 struct prte_iof_base_module_2_0_0_t {
-    prte_iof_base_init_fn_t         init;
-    prte_iof_base_push_fn_t         push;
-    prte_iof_base_pull_fn_t         pull;
-    prte_iof_base_close_fn_t        close;
-    prte_iof_base_output_fn_t       output;
-    prte_iof_base_complete_fn_t     complete;
-    prte_iof_base_finalize_fn_t     finalize;
-    prte_iof_base_push_stdin_fn_t   push_stdin;
+    prte_iof_base_init_fn_t init;
+    prte_iof_base_push_fn_t push;
+    prte_iof_base_pull_fn_t pull;
+    prte_iof_base_close_fn_t close;
+    prte_iof_base_output_fn_t output;
+    prte_iof_base_complete_fn_t complete;
+    prte_iof_base_finalize_fn_t finalize;
+    prte_iof_base_push_stdin_fn_t push_stdin;
 };
 
 typedef struct prte_iof_base_module_2_0_0_t prte_iof_base_module_2_0_0_t;
@@ -222,8 +215,8 @@ typedef prte_iof_base_module_2_0_0_t prte_iof_base_module_t;
 PRTE_EXPORT extern prte_iof_base_module_t prte_iof;
 
 struct prte_iof_base_component_2_0_0_t {
-  prte_mca_base_component_t iof_version;
-  prte_mca_base_component_data_t iof_data;
+    prte_mca_base_component_t iof_version;
+    prte_mca_base_component_data_t iof_data;
 };
 typedef struct prte_iof_base_component_2_0_0_t prte_iof_base_component_2_0_0_t;
 typedef struct prte_iof_base_component_2_0_0_t prte_iof_base_component_t;
@@ -233,7 +226,6 @@ END_C_DECLS
 /*
  * Macro for use in components that are of type iof
  */
-#define PRTE_IOF_BASE_VERSION_2_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("iof", 2, 0, 0)
+#define PRTE_IOF_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("iof", 2, 0, 0)
 
 #endif /* PRTE_IOF_H */

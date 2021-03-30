@@ -24,35 +24,35 @@
 
 #include <sys/types.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <string.h>
 
+#include "src/hwloc/hwloc-internal.h"
+#include "src/mca/base/base.h"
+#include "src/mca/mca.h"
+#include "src/threads/tsd.h"
 #include "src/util/if.h"
 #include "src/util/output.h"
-#include "src/mca/mca.h"
-#include "src/mca/base/base.h"
-#include "src/hwloc/hwloc-internal.h"
-#include "src/threads/tsd.h"
 
-#include "types.h"
-#include "src/util/show_help.h"
-#include "src/util/name_fns.h"
-#include "src/runtime/prte_globals.h"
-#include "src/util/hostfile/hostfile.h"
-#include "src/util/dash_host/dash_host.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
+#include "src/runtime/prte_globals.h"
+#include "src/util/dash_host/dash_host.h"
+#include "src/util/hostfile/hostfile.h"
+#include "src/util/name_fns.h"
+#include "src/util/show_help.h"
+#include "types.h"
 
-#include "src/mca/rmaps/base/rmaps_private.h"
 #include "src/mca/rmaps/base/base.h"
+#include "src/mca/rmaps/base/rmaps_private.h"
 
-#define PRTE_RMAPS_PRINT_MAX_SIZE   50
-#define PRTE_RMAPS_PRINT_NUM_BUFS   16
+#define PRTE_RMAPS_PRINT_MAX_SIZE 50
+#define PRTE_RMAPS_PRINT_NUM_BUFS 16
 
-static bool fns_init=false;
+static bool fns_init = false;
 static prte_tsd_key_t print_tsd_key;
-static char* prte_rmaps_print_null = "NULL";
+static char *prte_rmaps_print_null = "NULL";
 typedef struct {
     char *buffers[PRTE_RMAPS_PRINT_NUM_BUFS];
     int cntr;
@@ -64,8 +64,8 @@ static void buffer_cleanup(void *value)
     prte_rmaps_print_buffers_t *ptr;
 
     if (NULL != value) {
-        ptr = (prte_rmaps_print_buffers_t*)value;
-        for (i=0; i < PRTE_RMAPS_PRINT_NUM_BUFS; i++) {
+        ptr = (prte_rmaps_print_buffers_t *) value;
+        for (i = 0; i < PRTE_RMAPS_PRINT_NUM_BUFS; i++) {
             free(ptr->buffers[i]);
         }
     }
@@ -85,22 +85,23 @@ static prte_rmaps_print_buffers_t *get_print_buffer(void)
         fns_init = true;
     }
 
-    ret = prte_tsd_getspecific(print_tsd_key, (void**)&ptr);
-    if (PRTE_SUCCESS != ret) return NULL;
+    ret = prte_tsd_getspecific(print_tsd_key, (void **) &ptr);
+    if (PRTE_SUCCESS != ret)
+        return NULL;
 
     if (NULL == ptr) {
-        ptr = (prte_rmaps_print_buffers_t*)malloc(sizeof(prte_rmaps_print_buffers_t));
-        for (i=0; i < PRTE_RMAPS_PRINT_NUM_BUFS; i++) {
-            ptr->buffers[i] = (char *) malloc((PRTE_RMAPS_PRINT_MAX_SIZE+1) * sizeof(char));
+        ptr = (prte_rmaps_print_buffers_t *) malloc(sizeof(prte_rmaps_print_buffers_t));
+        for (i = 0; i < PRTE_RMAPS_PRINT_NUM_BUFS; i++) {
+            ptr->buffers[i] = (char *) malloc((PRTE_RMAPS_PRINT_MAX_SIZE + 1) * sizeof(char));
         }
         ptr->cntr = 0;
-        ret = prte_tsd_setspecific(print_tsd_key, (void*)ptr);
+        ret = prte_tsd_setspecific(print_tsd_key, (void *) ptr);
     }
 
-    return (prte_rmaps_print_buffers_t*) ptr;
+    return (prte_rmaps_print_buffers_t *) ptr;
 }
 
-char* prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
+char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
 {
     char *ret, *map, *mymap, *tmp;
     prte_rmaps_print_buffers_t *ptr;
@@ -119,7 +120,7 @@ char* prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
         ptr->cntr = 0;
     }
 
-    switch(PRTE_GET_MAPPING_POLICY(mapping)) {
+    switch (PRTE_GET_MAPPING_POLICY(mapping)) {
     case PRTE_MAPPING_BYNODE:
         map = "BYNODE";
         break;
@@ -186,7 +187,7 @@ char* prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
     }
 
     /* remove the trailing mark */
-    mymap[strlen(mymap)-1] = '\0';
+    mymap[strlen(mymap) - 1] = '\0';
 
     snprintf(ptr->buffers[ptr->cntr], PRTE_RMAPS_PRINT_MAX_SIZE, "%s", mymap);
     free(mymap);
@@ -196,9 +197,9 @@ char* prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
     return ret;
 }
 
-char* prte_rmaps_base_print_ranking(prte_ranking_policy_t ranking)
+char *prte_rmaps_base_print_ranking(prte_ranking_policy_t ranking)
 {
-    switch(PRTE_GET_RANKING_POLICY(ranking)) {
+    switch (PRTE_GET_RANKING_POLICY(ranking)) {
     case PRTE_RANK_BY_NODE:
         return "NODE";
     case PRTE_RANK_BY_PACKAGE:

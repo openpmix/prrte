@@ -13,48 +13,48 @@
 
 #include "prte_config.h"
 
-#include <stdlib.h>
 #include <stddef.h>
+#include <stdlib.h>
 
-#include "prte_stdint.h"
 #include "constants.h"
+#include "prte_stdint.h"
 #include "src/class/prte_list.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/util/output.h"
 #include "src/util/error.h"
+#include "src/util/output.h"
 
 #include "src/util/bipartite_graph.h"
 #include "src/util/bipartite_graph_internal.h"
 
 #ifndef container_of
-#define container_of(ptr, type, member) ( \
-        (type *)( ((char *)(ptr)) - offsetof(type,member) ))
+#    define container_of(ptr, type, member) ((type *) (((char *) (ptr)) - offsetof(type, member)))
 #endif
 
 #define GRAPH_DEBUG 0
 #if GRAPH_DEBUG
-#  define GRAPH_DEBUG_OUT(args) printf(args)
+#    define GRAPH_DEBUG_OUT(args) printf(args)
 #else
-#  define GRAPH_DEBUG_OUT(args) do {} while(0)
+#    define GRAPH_DEBUG_OUT(args) \
+        do {                      \
+        } while (0)
 #endif
 
 #define MAX_COST INT64_MAX
 
 #ifndef MAX
-#  define MAX(a,b) ((a) > (b) ? (a) : (b))
+#    define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
 #ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
+#    define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-#define f(i,j) flow[n*i + j]
+#define f(i, j) flow[n * i + j]
 
 /* ensure that (a+b<=max) */
 static inline void check_add64_overflow(int64_t a, int64_t b)
 {
-    assert(!((b > 0) && (a > (INT64_MAX - b))) &&
-           !((b < 0) && (a < (INT64_MIN - b))));
+    assert(!((b > 0) && (a > (INT64_MAX - b))) && !((b < 0) && (a < (INT64_MIN - b))));
 }
 
 static void edge_constructor(prte_bp_graph_edge_t *e)
@@ -70,12 +70,10 @@ static void edge_destructor(prte_bp_graph_edge_t *e)
 }
 
 PRTE_CLASS_DECLARATION(prte_bp_graph_edge_t);
-PRTE_CLASS_INSTANCE(prte_bp_graph_edge_t, prte_object_t,
-                   edge_constructor, edge_destructor);
+PRTE_CLASS_INSTANCE(prte_bp_graph_edge_t, prte_object_t, edge_constructor, edge_destructor);
 
 #if GRAPH_DEBUG
-static void dump_vec(const char *name, int *vec, int n)
-    __prte_attribute_unused__;
+static void dump_vec(const char *name, int *vec, int n) __prte_attribute_unused__;
 
 static void dump_vec(const char *name, int *vec, int n)
 {
@@ -87,8 +85,7 @@ static void dump_vec(const char *name, int *vec, int n)
     fprintf(stderr, "}\n");
 }
 
-static void dump_vec64(const char *name, int64_t *vec, int n)
-    __prte_attribute_unused__;
+static void dump_vec64(const char *name, int64_t *vec, int n) __prte_attribute_unused__;
 
 static void dump_vec64(const char *name, int64_t *vec, int n)
 {
@@ -100,9 +97,7 @@ static void dump_vec64(const char *name, int64_t *vec, int n)
     fprintf(stderr, "}\n");
 }
 
-
-static void dump_flow(int *flow, int n)
-    __prte_attribute_unused__;
+static void dump_flow(int *flow, int n) __prte_attribute_unused__;
 
 static void dump_flow(int *flow, int n)
 {
@@ -112,7 +107,7 @@ static void dump_flow(int *flow, int n)
     for (u = 0; u < n; ++u) {
         fprintf(stderr, "u=%d| ", u);
         for (v = 0; v < n; ++v) {
-            fprintf(stderr, "%2d,", f(u,v));
+            fprintf(stderr, "%2d,", f(u, v));
         }
         fprintf(stderr, "\n");
     }
@@ -127,7 +122,8 @@ static int get_capacity(prte_bp_graph_t *g, int source, int target)
     CHECK_VERTEX_RANGE(g, source);
     CHECK_VERTEX_RANGE(g, target);
 
-    FOREACH_OUT_EDGE(g, source, e) {
+    FOREACH_OUT_EDGE(g, source, e)
+    {
         assert(e->source == source);
         if (e->target == target) {
             return e->capacity;
@@ -137,15 +133,15 @@ static int get_capacity(prte_bp_graph_t *g, int source, int target)
     return 0;
 }
 
-static int
-set_capacity(prte_bp_graph_t *g, int source, int target, int cap)
+static int set_capacity(prte_bp_graph_t *g, int source, int target, int cap)
 {
     prte_bp_graph_edge_t *e;
 
     CHECK_VERTEX_RANGE(g, source);
     CHECK_VERTEX_RANGE(g, target);
 
-    FOREACH_OUT_EDGE(g, source, e) {
+    FOREACH_OUT_EDGE(g, source, e)
+    {
         assert(e->source == source);
         if (e->target == target) {
             e->capacity = cap;
@@ -156,8 +152,7 @@ set_capacity(prte_bp_graph_t *g, int source, int target, int cap)
     return PRTE_ERR_NOT_FOUND;
 }
 
-static void free_vertex(prte_bp_graph_t *g,
-                        prte_bp_graph_vertex_t *v)
+static void free_vertex(prte_bp_graph_t *g, prte_bp_graph_vertex_t *v)
 {
     if (NULL != v) {
         if (NULL != g->v_data_cleanup_fn && NULL != v->v_data) {
@@ -168,8 +163,7 @@ static void free_vertex(prte_bp_graph_t *g,
 }
 
 int prte_bp_graph_create(prte_bp_graph_cleanup_fn_t v_data_cleanup_fn,
-			 prte_bp_graph_cleanup_fn_t e_data_cleanup_fn,
-			 prte_bp_graph_t **g_out)
+                         prte_bp_graph_cleanup_fn_t e_data_cleanup_fn, prte_bp_graph_t **g_out)
 {
     int err;
     prte_bp_graph_t *g = NULL;
@@ -202,7 +196,7 @@ int prte_bp_graph_create(prte_bp_graph_cleanup_fn_t v_data_cleanup_fn,
     *g_out = g;
     return PRTE_SUCCESS;
 
- out_free_g:
+out_free_g:
     free(g);
     return err;
 }
@@ -216,8 +210,8 @@ int prte_bp_graph_free(prte_bp_graph_t *g)
     /* remove all edges from all out_edges lists */
     for (i = 0; i < NUM_VERTICES(g); ++i) {
         v = V_ID_TO_PTR(g, i);
-        LIST_FOREACH_SAFE_CONTAINED(e, next, &v->out_edges,
-                                    prte_bp_graph_edge_t, outbound_li) {
+        LIST_FOREACH_SAFE_CONTAINED(e, next, &v->out_edges, prte_bp_graph_edge_t, outbound_li)
+        {
             prte_list_remove_item(&v->out_edges, &e->outbound_li);
             PRTE_RELEASE(e);
         }
@@ -225,8 +219,8 @@ int prte_bp_graph_free(prte_bp_graph_t *g)
     /* now remove from all in_edges lists and free the edge */
     for (i = 0; i < NUM_VERTICES(g); ++i) {
         v = V_ID_TO_PTR(g, i);
-        LIST_FOREACH_SAFE_CONTAINED(e, next, &v->in_edges,
-                                    prte_bp_graph_edge_t, inbound_li) {
+        LIST_FOREACH_SAFE_CONTAINED(e, next, &v->in_edges, prte_bp_graph_edge_t, inbound_li)
+        {
             prte_list_remove_item(&v->in_edges, &e->inbound_li);
 
             if (NULL != g->e_data_cleanup_fn && NULL != e->e_data) {
@@ -246,9 +240,8 @@ int prte_bp_graph_free(prte_bp_graph_t *g)
     return PRTE_SUCCESS;
 }
 
-int prte_bp_graph_clone(const prte_bp_graph_t *g,
-			bool copy_user_data,
-			prte_bp_graph_t **g_clone_out)
+int prte_bp_graph_clone(const prte_bp_graph_t *g, bool copy_user_data,
+                        prte_bp_graph_t **g_clone_out)
 {
     int err;
     int i;
@@ -262,8 +255,8 @@ int prte_bp_graph_clone(const prte_bp_graph_t *g,
     *g_clone_out = NULL;
 
     if (copy_user_data) {
-	prte_output(0, "[%s:%d:%s] user data copy requested but not yet supported",
-		    __FILE__, __LINE__, __func__);
+        prte_output(0, "[%s:%d:%s] user data copy requested but not yet supported", __FILE__,
+                    __LINE__, __func__);
         abort();
         return PRTE_ERR_FATAL;
     }
@@ -287,10 +280,10 @@ int prte_bp_graph_clone(const prte_bp_graph_t *g,
     /* now reconstruct all the edges (iterate by source vertex only to avoid
      * double-adding) */
     for (i = 0; i < NUM_VERTICES(g); ++i) {
-        FOREACH_OUT_EDGE(g, i, e) {
+        FOREACH_OUT_EDGE(g, i, e)
+        {
             assert(i == e->source);
-            err = prte_bp_graph_add_edge(gx, e->source, e->target,
-					    e->cost, e->capacity, NULL);
+            err = prte_bp_graph_add_edge(gx, e->source, e->target, e->cost, e->capacity, NULL);
             if (PRTE_SUCCESS != err) {
                 goto out_free_gx;
             }
@@ -300,15 +293,14 @@ int prte_bp_graph_clone(const prte_bp_graph_t *g,
     *g_clone_out = gx;
     return PRTE_SUCCESS;
 
- out_free_gx:
+out_free_gx:
     /* we don't reach in and manipulate gx's state directly, so it should be
      * safe to use the standard free function */
     prte_bp_graph_free(gx);
     return err;
 }
 
-int prte_bp_graph_indegree(const prte_bp_graph_t *g,
-			   int vertex)
+int prte_bp_graph_indegree(const prte_bp_graph_t *g, int vertex)
 {
     prte_bp_graph_vertex_t *v;
 
@@ -316,8 +308,7 @@ int prte_bp_graph_indegree(const prte_bp_graph_t *g,
     return prte_list_get_size(&v->in_edges);
 }
 
-int prte_bp_graph_outdegree(const prte_bp_graph_t *g,
-			       int vertex)
+int prte_bp_graph_outdegree(const prte_bp_graph_t *g, int vertex)
 {
     prte_bp_graph_vertex_t *v;
 
@@ -325,12 +316,8 @@ int prte_bp_graph_outdegree(const prte_bp_graph_t *g,
     return prte_list_get_size(&v->out_edges);
 }
 
-int prte_bp_graph_add_edge(prte_bp_graph_t *g,
-			   int from,
-			   int to,
-			   int64_t cost,
-			   int capacity,
-			   void *e_data)
+int prte_bp_graph_add_edge(prte_bp_graph_t *g, int from, int to, int64_t cost, int capacity,
+                           void *e_data)
 {
     prte_bp_graph_edge_t *e;
     prte_bp_graph_vertex_t *v_from, *v_to;
@@ -349,7 +336,8 @@ int prte_bp_graph_add_edge(prte_bp_graph_t *g,
          * handled appropriately */
         return PRTE_ERR_BAD_PARAM;
     }
-    FOREACH_OUT_EDGE(g, from, e) {
+    FOREACH_OUT_EDGE(g, from, e)
+    {
         assert(e->source == from);
         if (e->target == to) {
             return PRTE_EXISTS;
@@ -363,11 +351,11 @@ int prte_bp_graph_add_edge(prte_bp_graph_t *g,
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    e->source   = from;
-    e->target   = to;
-    e->cost     = cost;
+    e->source = from;
+    e->target = to;
+    e->cost = cost;
     e->capacity = capacity;
-    e->e_data   = e_data;
+    e->e_data = e_data;
 
     v_from = V_ID_TO_PTR(g, from);
     prte_list_append(&v_from->out_edges, &e->outbound_li);
@@ -379,9 +367,7 @@ int prte_bp_graph_add_edge(prte_bp_graph_t *g,
     return PRTE_SUCCESS;
 }
 
-int prte_bp_graph_add_vertex(prte_bp_graph_t *g,
-			     void *v_data,
-			     int *index_out)
+int prte_bp_graph_add_vertex(prte_bp_graph_t *g, void *v_data, int *index_out)
 {
     prte_bp_graph_vertex_t *v;
 
@@ -447,7 +433,7 @@ static void shrink_flow_matrix(int *flow, int old_n, int new_n)
 
     for (u = 0; u < new_n; ++u) {
         for (v = 0; v < new_n; ++v) {
-            flow[new_n*u + v] = flow[old_n*u + v];
+            flow[new_n * u + v] = flow[old_n * u + v];
         }
     }
 }
@@ -456,24 +442,20 @@ static void shrink_flow_matrix(int *flow, int old_n, int new_n)
  * Compute the so-called "bottleneck" capacity value for a path "pred" through
  * graph "gx".
  */
-static int
-bottleneck_path(
-		prte_bp_graph_t *gx,
-		int n,
-		int *pred)
+static int bottleneck_path(prte_bp_graph_t *gx, int n, int *pred)
 {
     int u, v;
     int min;
 
     min = INT_MAX;
-    FOREACH_UV_ON_PATH(pred, gx->source_idx, gx->sink_idx, u, v) {
+    FOREACH_UV_ON_PATH(pred, gx->source_idx, gx->sink_idx, u, v)
+    {
         int cap_f_uv = get_capacity(gx, u, v);
         min = MIN(min, cap_f_uv);
     }
 
     return min;
 }
-
 
 /**
  * This routine implements the Bellman-Ford shortest paths algorithm, slightly
@@ -487,10 +469,7 @@ bottleneck_path(
  *
  * The contents of "pred" are only valid if this routine returns true.
  */
-bool prte_bp_graph_bellman_ford(prte_bp_graph_t *gx,
-				int source,
-				int target,
-				int *pred)
+bool prte_bp_graph_bellman_ford(prte_bp_graph_t *gx, int source, int target, int *pred)
 {
     int64_t *dist;
     int i;
@@ -537,13 +516,14 @@ bool prte_bp_graph_bellman_ford(prte_bp_graph_t *gx,
         for (u = 0; u < NUM_VERTICES(gx); ++u) {
             prte_bp_graph_edge_t *e_ptr;
 
-            FOREACH_OUT_EDGE(gx, u, e_ptr) {
+            FOREACH_OUT_EDGE(gx, u, e_ptr)
+            {
                 v = e_ptr->target;
 
                 /* make sure to only construct paths from edges that actually have
                  * non-zero capacity */
-                if (e_ptr->capacity > 0 &&
-                    dist[u] != MAX_COST) { /* avoid signed overflow for "infinity" */
+                if (e_ptr->capacity > 0
+                    && dist[u] != MAX_COST) { /* avoid signed overflow for "infinity" */
                     check_add64_overflow(dist[u], e_ptr->cost);
                     if ((dist[u] + e_ptr->cost) < dist[v]) {
                         dist[v] = dist[u] + e_ptr->cost;
@@ -563,15 +543,15 @@ bool prte_bp_graph_bellman_ford(prte_bp_graph_t *gx,
 
     /* check for negative-cost cycles */
     for (u = 0; u < NUM_VERTICES(gx); ++u) {
-        prte_bp_graph_edge_t * e_ptr;
+        prte_bp_graph_edge_t *e_ptr;
 
-        FOREACH_OUT_EDGE(gx, u, e_ptr) {
+        FOREACH_OUT_EDGE(gx, u, e_ptr)
+        {
             v = e_ptr->target;
-            if (e_ptr->capacity > 0 &&
-                dist[u] != MAX_COST && /* avoid signed overflow */
+            if (e_ptr->capacity > 0 && dist[u] != MAX_COST && /* avoid signed overflow */
                 (dist[u] + e_ptr->cost) < dist[v]) {
-                prte_output(0, "[%s:%d:%s] negative-weight cycle detected",
-			    __FILE__, __LINE__, __func__);
+                prte_output(0, "[%s:%d:%s] negative-weight cycle detected", __FILE__, __LINE__,
+                            __func__);
                 abort();
                 goto out;
             }
@@ -582,7 +562,7 @@ bool prte_bp_graph_bellman_ford(prte_bp_graph_t *gx,
         found_target = true;
     }
 
- out:
+out:
 #if GRAPH_DEBUG
     dump_vec("pred", pred, NUM_VERTICES(gx));
 #endif
@@ -643,29 +623,25 @@ int prte_bp_graph_bipartite_to_flow(prte_bp_graph_t *g)
         int outbound = prte_bp_graph_outdegree(g, u);
 
         if (inbound > 0 && outbound > 0) {
-            prte_output(0, "[%s:%d:%s] graph is not (unidirectionally) bipartite",
-			__FILE__, __LINE__, __func__);
+            prte_output(0, "[%s:%d:%s] graph is not (unidirectionally) bipartite", __FILE__,
+                        __LINE__, __func__);
             abort();
-        }
-        else if (inbound > 0) {
+        } else if (inbound > 0) {
             /* "right" side of the graph, create edges to the sink */
             ++num_right;
-            err = prte_bp_graph_add_edge(g, u, g->sink_idx,
-					    0, /* no cost */
-					    /*capacity=*/1,
-					    /*e_data=*/NULL);
+            err = prte_bp_graph_add_edge(g, u, g->sink_idx, 0, /* no cost */
+                                         /*capacity=*/1,
+                                         /*e_data=*/NULL);
             if (PRTE_SUCCESS != err) {
                 GRAPH_DEBUG_OUT(("add_edge failed"));
                 return err;
             }
-        }
-        else if (outbound > 0) {
+        } else if (outbound > 0) {
             /* "left" side of the graph, create edges to the source */
             ++num_left;
-            err = prte_bp_graph_add_edge(g, g->source_idx, u,
-					    0, /* no cost */
-					    /*capacity=*/1,
-					    /*e_data=*/NULL);
+            err = prte_bp_graph_add_edge(g, g->source_idx, u, 0, /* no cost */
+                                         /*capacity=*/1,
+                                         /*e_data=*/NULL);
             if (PRTE_SUCCESS != err) {
                 GRAPH_DEBUG_OUT(("add_edge failed"));
                 return err;
@@ -685,19 +661,19 @@ int prte_bp_graph_bipartite_to_flow(prte_bp_graph_t *g)
      * exist in the original graph.
      */
     order = prte_bp_graph_order(g); /* need residuals for newly created
-					  source/sink edges too */
+                                          source/sink edges too */
     for (u = 0; u < order; ++u) {
-        prte_bp_graph_edge_t * e_ptr;
-        FOREACH_OUT_EDGE(g, u, e_ptr) {
+        prte_bp_graph_edge_t *e_ptr;
+        FOREACH_OUT_EDGE(g, u, e_ptr)
+        {
             v = e_ptr->target;
 
             /* (u,v) exists, add (v,u) if not already present.  Cost is
              * negative for these edges because "giving back" flow pays us
              * back any cost already incurred. */
-            err = prte_bp_graph_add_edge(g, v, u,
-					    -e_ptr->cost,
-					    /*capacity=*/0,
-					    /*e_data=*/NULL);
+            err = prte_bp_graph_add_edge(g, v, u, -e_ptr->cost,
+                                         /*capacity=*/0,
+                                         /*e_data=*/NULL);
             if (PRTE_SUCCESS != err && PRTE_EXISTS != err) {
                 return err;
             }
@@ -748,8 +724,7 @@ int prte_bp_graph_bipartite_to_flow(prte_bp_graph_t *g)
  * the faster running time will be worth the additional implementation
  * complexity.
  */
-static int min_cost_flow_ssp(prte_bp_graph_t *gx,
-                             int **flow_out)
+static int min_cost_flow_ssp(prte_bp_graph_t *gx, int **flow_out)
 {
     int err = PRTE_SUCCESS;
     int n;
@@ -767,7 +742,7 @@ static int min_cost_flow_ssp(prte_bp_graph_t *gx,
 
     n = prte_bp_graph_order(gx);
 
-    pred = malloc(n*sizeof(*pred));
+    pred = malloc(n * sizeof(*pred));
     if (NULL == pred) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         err = PRTE_ERR_OUT_OF_RESOURCE;
@@ -775,7 +750,7 @@ static int min_cost_flow_ssp(prte_bp_graph_t *gx,
     }
 
     /* "flow" is a 2d matrix of current flow values, all initialized to zero */
-    flow = calloc(n*n, sizeof(*flow));
+    flow = calloc(n * n, sizeof(*flow));
     if (NULL == flow) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         err = PRTE_ERR_OUT_OF_RESOURCE;
@@ -796,13 +771,14 @@ static int min_cost_flow_ssp(prte_bp_graph_t *gx,
         cap_f_path = bottleneck_path(gx, n, pred);
 
         /* augment current flow along P */
-        FOREACH_UV_ON_PATH(pred, gx->source_idx, gx->sink_idx, u, v) {
+        FOREACH_UV_ON_PATH(pred, gx->source_idx, gx->sink_idx, u, v)
+        {
             assert(u == pred[v]);
 
-            f(u,v) = f(u,v) + cap_f_path; /* "forward" edge */
-            f(v,u) = f(v,u) - cap_f_path; /* residual network edge */
+            f(u, v) = f(u, v) + cap_f_path; /* "forward" edge */
+            f(v, u) = f(v, u) - cap_f_path; /* residual network edge */
 
-            assert(f(u,v) == -f(v,u)); /* skew symmetry invariant */
+            assert(f(u, v) == -f(v, u)); /* skew symmetry invariant */
 
             /* update Gx as we go along: decrease capacity by this new
              * augmenting flow */
@@ -810,8 +786,8 @@ static int min_cost_flow_ssp(prte_bp_graph_t *gx,
             assert(c >= 0);
             err = set_capacity(gx, u, v, c);
             if (PRTE_SUCCESS != err) {
-                prte_output(0, "[%s:%d:%s] unable to set capacity, missing edge?",
-			    __FILE__, __LINE__, __func__);
+                prte_output(0, "[%s:%d:%s] unable to set capacity, missing edge?", __FILE__,
+                            __LINE__, __func__);
                 abort();
             }
 
@@ -819,27 +795,26 @@ static int min_cost_flow_ssp(prte_bp_graph_t *gx,
             assert(c >= 0);
             err = set_capacity(gx, v, u, c);
             if (PRTE_SUCCESS != err) {
-                prte_output(0, "[%s:%d:%s] unable to set capacity, missing edge?",
-			    __FILE__, __LINE__, __func__);
+                prte_output(0, "[%s:%d:%s] unable to set capacity, missing edge?", __FILE__,
+                            __LINE__, __func__);
                 abort();
             }
         }
     }
 
- out:
+out:
     *flow_out = flow;
     free(pred);
     return err;
 
- out_error:
+out_error:
     free(*flow_out);
     GRAPH_DEBUG_OUT(("returning error %d", err));
     goto out;
 }
 
-int prte_bp_graph_solve_bipartite_assignment(const prte_bp_graph_t *g,
-					     int *num_match_edges_out,
-					     int **match_edges_out)
+int prte_bp_graph_solve_bipartite_assignment(const prte_bp_graph_t *g, int *num_match_edges_out,
+                                             int **match_edges_out)
 {
     int err;
     int i;
@@ -906,7 +881,7 @@ int prte_bp_graph_solve_bipartite_assignment(const prte_bp_graph_t *g,
 
     for (u = 0; u < n; ++u) {
         for (v = 0; v < n; ++v) {
-            if (f(u,v) > 0) {
+            if (f(u, v) > 0) {
                 ++(*num_match_edges_out);
             }
         }
@@ -929,14 +904,14 @@ int prte_bp_graph_solve_bipartite_assignment(const prte_bp_graph_t *g,
     for (u = 0; u < n; ++u) {
         for (v = 0; v < n; ++v) {
             /* flow exists on this edge so include this edge in the matching */
-            if (f(u,v) > 0) {
+            if (f(u, v) > 0) {
                 (*match_edges_out)[i++] = u;
                 (*match_edges_out)[i++] = v;
             }
         }
     }
 
- out:
+out:
     free(flow);
     prte_bp_graph_free(gx);
     return err;

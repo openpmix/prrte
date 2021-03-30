@@ -29,35 +29,34 @@
 
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <string.h>
 
 #include "src/pmix/pmix-internal.h"
 
-#include "src/mca/rml/rml.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/odls/odls_types.h"
-#include "src/util/name_fns.h"
-#include "src/threads/threads.h"
+#include "src/mca/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
+#include "src/threads/threads.h"
+#include "src/util/name_fns.h"
 
-#include "src/mca/iof/iof.h"
 #include "src/mca/iof/base/base.h"
+#include "src/mca/iof/iof.h"
 
 #include "iof_hnp.h"
 
 static void restart_stdin(int fd, short event, void *cbdata)
 {
-    prte_timer_t *tm = (prte_timer_t*)cbdata;
+    prte_timer_t *tm = (prte_timer_t *) cbdata;
 
     PRTE_ACQUIRE_OBJECT(tm);
 
-    if (NULL != prte_iof_hnp_component.stdinev &&
-        !prte_job_term_ordered &&
-        !prte_iof_hnp_component.stdinev->active) {
+    if (NULL != prte_iof_hnp_component.stdinev && !prte_job_term_ordered
+        && !prte_iof_hnp_component.stdinev->active) {
         PRTE_IOF_READ_ACTIVATE(prte_iof_hnp_component.stdinev);
     }
 
@@ -71,7 +70,7 @@ static void restart_stdin(int fd, short event, void *cbdata)
 bool prte_iof_hnp_stdin_check(int fd)
 {
 #if defined(HAVE_TCGETPGRP)
-    if( isatty(fd) && (getpgrp() != tcgetpgrp(fd)) ) {
+    if (isatty(fd) && (getpgrp() != tcgetpgrp(fd))) {
         return false;
     }
 #endif
@@ -97,7 +96,7 @@ void prte_iof_hnp_stdin_cb(int fd, short event, void *cbdata)
 
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t*)cbdata;
+    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
 
     PRTE_POST_OBJECT(lk);
     lk->status = prte_pmix_convert_status(status);
@@ -109,10 +108,10 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
  */
 void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
 {
-    prte_iof_read_event_t *rev = (prte_iof_read_event_t*)cbdata;
+    prte_iof_read_event_t *rev = (prte_iof_read_event_t *) cbdata;
     unsigned char data[PRTE_IOF_BASE_MSG_MAX];
     int32_t numbytes;
-    prte_iof_proc_t *proct = (prte_iof_proc_t*)rev->proc;
+    prte_iof_proc_t *proct = (prte_iof_proc_t *) rev->proc;
     int rc;
     bool exclusive;
     prte_iof_sink_t *sink;
@@ -145,8 +144,8 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
 
         PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s iof:hnp:read handler %s Error on connection:%d",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(&proct->name), fd));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proct->name),
+                             fd));
         /* Un-recoverable error. Allow the code to flow as usual in order to
          * to send the zero bytes message up the stream, and then close the
          * file descriptor and delete the event.
@@ -182,7 +181,9 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
              * closing the output stream
              */
             if (NULL != proct->stdinev->wev) {
-                if (PRTE_IOF_MAX_INPUT_BUFFERS < prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, proct->stdinev->wev)) {
+                if (PRTE_IOF_MAX_INPUT_BUFFERS < prte_iof_base_write_output(&proct->name, rev->tag,
+                                                                            data, numbytes,
+                                                                            proct->stdinev->wev)) {
                     /* getting too backed up - stop the read event for now if it is still active */
 
                     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
@@ -204,15 +205,19 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
              * sent - this will tell the daemon to close
              * the fd for stdin to that proc
              */
-            if( PRTE_SUCCESS != (rc = prte_iof_hnp_send_data_to_endpoint(&proct->stdinev->daemon, &proct->stdinev->name, PRTE_IOF_STDIN, data, numbytes))) {
+            if (PRTE_SUCCESS
+                != (rc = prte_iof_hnp_send_data_to_endpoint(&proct->stdinev->daemon,
+                                                            &proct->stdinev->name, PRTE_IOF_STDIN,
+                                                            data, numbytes))) {
                 /* if the addressee is unknown, remove the sink from the list */
-                if( PRTE_ERR_ADDRESSEE_UNKNOWN == rc ) {
+                if (PRTE_ERR_ADDRESSEE_UNKNOWN == rc) {
                     PRTE_RELEASE(rev->sink);
                 }
             }
         }
 
-        /* if num_bytes was zero, or we read the last piece of the file, then we need to terminate the event */
+        /* if num_bytes was zero, or we read the last piece of the file, then we need to terminate
+         * the event */
         if (0 == numbytes) {
             if (0 != prte_list_get_size(&proct->stdinev->wev->outputs)) {
                 /* some stuff has yet to be written, so delay the release of proct->stdinev */
@@ -242,14 +247,14 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
      */
     exclusive = false;
     if (NULL != proct->subscribers) {
-        PRTE_LIST_FOREACH(sink, proct->subscribers, prte_iof_sink_t) {
+        PRTE_LIST_FOREACH(sink, proct->subscribers, prte_iof_sink_t)
+        {
             /* if the target isn't set, then this sink is for another purpose - ignore it */
             if (PMIX_NSPACE_INVALID(sink->daemon.nspace)) {
                 continue;
             }
-            if ((sink->tag & rev->tag) &&
-                PMIX_CHECK_NSPACE(sink->name.nspace, proct->name.nspace) &&
-                PMIX_CHECK_RANK(sink->name.rank, proct->name.rank)) {
+            if ((sink->tag & rev->tag) && PMIX_CHECK_NSPACE(sink->name.nspace, proct->name.nspace)
+                && PMIX_CHECK_RANK(sink->name.rank, proct->name.rank)) {
                 /* need to send the data to the remote endpoint - if
                  * the connection closed, numbytes will be zero, so
                  * the remote endpoint will know to close its local fd.
@@ -259,7 +264,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                 PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                      "%s sending data from proc %s of size %d via PMIx to tool %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     PRTE_NAME_PRINT(&proct->name), (int)numbytes,
+                                     PRTE_NAME_PRINT(&proct->name), (int) numbytes,
                                      PRTE_NAME_PRINT(&sink->daemon)));
                 /* don't pass down zero byte blobs */
                 if (0 < numbytes) {
@@ -282,10 +287,11 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                     }
                     /* setup the byte object */
                     PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-                    bo.bytes = (char*)data;
+                    bo.bytes = (char *) data;
                     bo.size = numbytes;
                     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-                    prc = PMIx_server_IOF_deliver(&proct->name, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
+                    prc = PMIx_server_IOF_deliver(&proct->name, pchan, &bo, NULL, 0, lkcbfunc,
+                                                  (void *) &lock);
                     if (PMIX_SUCCESS != prc) {
                         PMIX_ERROR_LOG(prc);
                     } else {
@@ -301,11 +307,12 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
         }
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                         "%s read %d bytes from %s of %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
-                         (PRTE_IOF_STDOUT & rev->tag) ? "stdout" : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
-                         PRTE_NAME_PRINT(&proct->name)));
+    PRTE_OUTPUT_VERBOSE(
+        (1, prte_iof_base_framework.framework_output, "%s read %d bytes from %s of %s",
+         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
+         (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
+                                      : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
+         PRTE_NAME_PRINT(&proct->name)));
 
     if (0 == numbytes) {
         /* if we read 0 bytes from the stdout/err/diag, there is
@@ -323,8 +330,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
             proct->revstderr = NULL;
         }
         /* check to see if they are all done */
-        if (NULL == proct->revstdout &&
-            NULL == proct->revstderr) {
+        if (NULL == proct->revstdout && NULL == proct->revstderr) {
             /* this proc's iof is complete */
             PRTE_ACTIVATE_PROC_STATE(&proct->name, PRTE_PROC_STATE_IOF_COMPLETE);
         }
@@ -336,17 +342,21 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
             if (!exclusive) {
                 /* output this to our local output */
                 if (PRTE_IOF_STDOUT & rev->tag) {
-                    prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, prte_iof_base.iof_write_stdout->wev);
+                    prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes,
+                                               prte_iof_base.iof_write_stdout->wev);
                 } else {
-                    prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, prte_iof_base.iof_write_stderr->wev);
+                    prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes,
+                                               prte_iof_base.iof_write_stderr->wev);
                 }
             }
         } else {
             /* output this to our local output */
             if (PRTE_IOF_STDOUT & rev->tag) {
-                prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, prte_iof_base.iof_write_stdout->wev);
+                prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes,
+                                           prte_iof_base.iof_write_stdout->wev);
             } else {
-                prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes, prte_iof_base.iof_write_stderr->wev);
+                prte_iof_base_write_output(&proct->name, rev->tag, data, numbytes,
+                                           prte_iof_base.iof_write_stderr->wev);
             }
         }
     }

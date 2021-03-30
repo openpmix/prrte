@@ -18,6 +18,7 @@
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,20 +39,16 @@
 
 #include "src/util/output.h"
 
-
-#include "src/mca/plm/plm.h"
+#include "plm_lsf.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
-#include "plm_lsf.h"
-
+#include "src/mca/plm/plm.h"
 
 /*
  * Public string showing the plm lsf component version number
  */
-const char *prte_plm_lsf_component_version_string =
-  "PRTE lsf plm MCA component version " PRTE_VERSION;
-
-
+const char *prte_plm_lsf_component_version_string
+    = "PRTE lsf plm MCA component version " PRTE_VERSION;
 
 /*
  * Local function
@@ -59,7 +56,6 @@ const char *prte_plm_lsf_component_version_string =
 static int plm_lsf_open(void);
 static int plm_lsf_close(void);
 static int prte_plm_lsf_component_query(prte_mca_base_module_t **module, int *priority);
-
 
 /*
  * Instantiate the public struct with all of our public information
@@ -91,24 +87,22 @@ prte_plm_lsf_component_t prte_plm_lsf_component = {
     }
 };
 
-
 static int plm_lsf_open(void)
 {
     return PRTE_SUCCESS;
 }
-
 
 static int plm_lsf_close(void)
 {
     return PRTE_SUCCESS;
 }
 
-
 static int prte_plm_lsf_component_query(prte_mca_base_module_t **module, int *priority)
 {
 
     /* check if lsf is running here and make sure IBM CSM is NOT enabled */
-    if (NULL == getenv("LSB_JOBID") || getenv("CSM_ALLOCATION_ID") || lsb_init("PRTE launcher") < 0) {
+    if (NULL == getenv("LSB_JOBID") || getenv("CSM_ALLOCATION_ID")
+        || lsb_init("PRTE launcher") < 0) {
         /* nope, not here */
         prte_output_verbose(10, prte_plm_base_framework.framework_output,
                             "plm:lsf: NOT available for selection");

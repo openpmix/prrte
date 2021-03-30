@@ -26,12 +26,12 @@
 
 #include <sys/types.h>
 
-#include "src/util/argv.h"
-#include "src/hwloc/hwloc-internal.h"
-#include "src/pmix/pmix-internal.h"
 #include "src/class/prte_pointer_array.h"
+#include "src/hwloc/hwloc-internal.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/pmix/pmix-internal.h"
+#include "src/util/argv.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -42,8 +42,7 @@
  * sending a job object is to communicate the data required to dynamically
  * spawn another job - so we only pack that limited set of required data
  */
-int prte_job_pack(pmix_data_buffer_t *bkt,
-                  prte_job_t *job)
+int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job)
 {
     pmix_status_t rc;
     int32_t j, count, bookmark;
@@ -54,13 +53,13 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     prte_info_item_t *val;
 
     /* pack the nspace */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->nspace, 1, PMIX_PROC_NSPACE);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &job->nspace, 1, PMIX_PROC_NSPACE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
     /* pack the flags */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->flags, 1, PMIX_UINT16);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &job->flags, 1, PMIX_UINT16);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -68,24 +67,26 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
 
     /* pack the attributes that need to be sent */
     count = 0;
-    PRTE_LIST_FOREACH(kv, &job->attributes, prte_attribute_t) {
+    PRTE_LIST_FOREACH(kv, &job->attributes, prte_attribute_t)
+    {
         if (PRTE_ATTR_GLOBAL == kv->local) {
             ++count;
         }
     }
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &count, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
-    PRTE_LIST_FOREACH(kv, &job->attributes, prte_attribute_t) {
+    PRTE_LIST_FOREACH(kv, &job->attributes, prte_attribute_t)
+    {
         if (PRTE_ATTR_GLOBAL == kv->local) {
-            rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->key, 1, PMIX_UINT16);
+            rc = PMIx_Data_pack(NULL, bkt, (void *) &kv->key, 1, PMIX_UINT16);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 return prte_pmix_convert_status(rc);
             }
-            rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->data, 1, PMIX_VALUE);
+            rc = PMIx_Data_pack(NULL, bkt, (void *) &kv->data, 1, PMIX_VALUE);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 return prte_pmix_convert_status(rc);
@@ -94,20 +95,21 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     }
     /* check for job info attribute */
     cache = NULL;
-    if (prte_get_attribute(&job->attributes, PRTE_JOB_INFO_CACHE, (void**)&cache, PMIX_POINTER) &&
-        NULL != cache) {
+    if (prte_get_attribute(&job->attributes, PRTE_JOB_INFO_CACHE, (void **) &cache, PMIX_POINTER)
+        && NULL != cache) {
         /* we need to pack these as well, but they are composed
          * of prte_info_item_t's on a list. So first pack the number
          * of list elements */
         count = prte_list_get_size(cache);
-        rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
+        rc = PMIx_Data_pack(NULL, bkt, (void *) &count, 1, PMIX_INT32);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             return prte_pmix_convert_status(rc);
         }
         /* now pack each element on the list */
-        PRTE_LIST_FOREACH(val, cache, prte_info_item_t) {
-            rc = PMIx_Data_pack(NULL, bkt, (void*)&val->info, 1, PMIX_INFO);
+        PRTE_LIST_FOREACH(val, cache, prte_info_item_t)
+        {
+            rc = PMIx_Data_pack(NULL, bkt, (void *) &val->info, 1, PMIX_INFO);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 return prte_pmix_convert_status(rc);
@@ -116,7 +118,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     } else {
         /* pack a zero to indicate no job info is being passed */
         count = 0;
-        rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
+        rc = PMIx_Data_pack(NULL, bkt, (void *) &count, 1, PMIX_INT32);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             return prte_pmix_convert_status(rc);
@@ -125,13 +127,13 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
 
     /* pack the personality */
     count = prte_argv_count(job->personality);
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &count, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
-    for (j=0; j < count; j++) {
-        rc = PMIx_Data_pack(NULL, bkt, (void*)&job->personality[j], 1, PMIX_STRING);
+    for (j = 0; j < count; j++) {
+        rc = PMIx_Data_pack(NULL, bkt, (void *) &job->personality[j], 1, PMIX_STRING);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             return prte_pmix_convert_status(rc);
@@ -139,7 +141,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     }
 
     /* pack the number of apps */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->num_apps, 1, PMIX_UINT32);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &job->num_apps, 1, PMIX_UINT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -147,8 +149,8 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
 
     /* if there are apps, pack the app_contexts */
     if (0 < job->num_apps) {
-        for (j=0; j < job->apps->size; j++) {
-            if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(job->apps, j))) {
+        for (j = 0; j < job->apps->size; j++) {
+            if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(job->apps, j))) {
                 continue;
             }
             rc = prte_app_pack(bkt, app);
@@ -160,12 +162,12 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     }
 
     /* pack the number of procs and offset */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->num_procs, 1, PMIX_PROC_RANK);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &job->num_procs, 1, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->offset, 1, PMIX_PROC_RANK);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &job->offset, 1, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -175,8 +177,8 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
         /* check attributes to see if this job is to be fully
          * described in the launch msg */
         if (prte_get_attribute(&job->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
-            for (j=0; j < job->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(job->procs, j))) {
+            for (j = 0; j < job->procs->size; j++) {
+                if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(job->procs, j))) {
                     continue;
                 }
                 rc = prte_proc_pack(bkt, proc);
@@ -189,14 +191,14 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     }
 
     /* pack the stdin target */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->stdin_target, 1, PMIX_PROC_RANK);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &job->stdin_target, 1, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
 
     /* pack the total slots allocated to the job */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->total_slots_alloc, 1, PMIX_INT32);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &job->total_slots_alloc, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -209,12 +211,12 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
      */
     if (NULL == job->map) {
         /* pack a zero value */
-        j=0;
+        j = 0;
     } else {
         /* pack a one to indicate a map is there */
         j = 1;
     }
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&j, 1, PMIX_INT32);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &j, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -238,21 +240,21 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     } else {
         bookmark = job->bookmark->index;
     }
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&bookmark, 1, PMIX_INT32);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &bookmark, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
 
     /* pack the job state */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->state, 1, PMIX_INT32);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &job->state, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
 
     /* pack the launcher ID */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&job->launcher, 1, PMIX_PROC_NSPACE);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &job->launcher, 1, PMIX_PROC_NSPACE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -261,8 +263,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt,
     return PRTE_SUCCESS;
 }
 
-int prte_node_pack(pmix_data_buffer_t *bkt,
-                   prte_node_t *node)
+int prte_node_pack(pmix_data_buffer_t *bkt, prte_node_t *node)
 {
     int rc;
     int32_t count;
@@ -272,7 +273,7 @@ int prte_node_pack(pmix_data_buffer_t *bkt,
     /* do not pack the index - it is meaningless on the other end */
 
     /* pack the node name */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&node->name, 1, PMIX_STRING);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &node->name, 1, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -281,7 +282,7 @@ int prte_node_pack(pmix_data_buffer_t *bkt,
     /* do not pack the daemon name or launch id */
 
     /* pack the number of procs on the node */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&node->num_procs, 1, PMIX_PROC_RANK);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &node->num_procs, 1, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -291,14 +292,14 @@ int prte_node_pack(pmix_data_buffer_t *bkt,
 
     /* pack whether we are oversubscribed or not */
     flag = PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&flag, 1, PMIX_UINT8);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &flag, 1, PMIX_UINT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
 
     /* pack the state */
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&node->state, 1, PMIX_UINT8);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &node->state, 1, PMIX_UINT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
@@ -306,25 +307,27 @@ int prte_node_pack(pmix_data_buffer_t *bkt,
 
     /* pack any shared attributes */
     count = 0;
-    PRTE_LIST_FOREACH(kv, &node->attributes, prte_attribute_t) {
+    PRTE_LIST_FOREACH(kv, &node->attributes, prte_attribute_t)
+    {
         if (PRTE_ATTR_GLOBAL == kv->local) {
             ++count;
         }
     }
-    rc = PMIx_Data_pack(NULL, bkt, (void*)&count, 1, PMIX_INT32);
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &count, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
     if (0 < count) {
-        PRTE_LIST_FOREACH(kv, &node->attributes, prte_attribute_t) {
+        PRTE_LIST_FOREACH(kv, &node->attributes, prte_attribute_t)
+        {
             if (PRTE_ATTR_GLOBAL == kv->local) {
-                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->key, 1, PMIX_UINT16);
+                rc = PMIx_Data_pack(NULL, bkt, (void *) &kv->key, 1, PMIX_UINT16);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     return prte_pmix_convert_status(rc);
                 }
-                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->data, 1, PMIX_VALUE);
+                rc = PMIx_Data_pack(NULL, bkt, (void *) &kv->data, 1, PMIX_VALUE);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     return prte_pmix_convert_status(rc);
@@ -337,8 +340,7 @@ int prte_node_pack(pmix_data_buffer_t *bkt,
 /*
  * PROC
  */
-int prte_proc_pack(pmix_data_buffer_t *bkt,
-                   prte_proc_t *proc)
+int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
 {
     pmix_status_t rc;
     int32_t count;
@@ -395,7 +397,8 @@ int prte_proc_pack(pmix_data_buffer_t *bkt,
 
     /* pack the attributes that will go */
     count = 0;
-    PRTE_LIST_FOREACH(kv, &proc->attributes, prte_attribute_t) {
+    PRTE_LIST_FOREACH(kv, &proc->attributes, prte_attribute_t)
+    {
         if (PRTE_ATTR_GLOBAL == kv->local) {
             ++count;
         }
@@ -406,14 +409,15 @@ int prte_proc_pack(pmix_data_buffer_t *bkt,
         return prte_pmix_convert_status(rc);
     }
     if (0 < count) {
-        PRTE_LIST_FOREACH(kv, &proc->attributes, prte_attribute_t) {
+        PRTE_LIST_FOREACH(kv, &proc->attributes, prte_attribute_t)
+        {
             if (PRTE_ATTR_GLOBAL == kv->local) {
-                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->key, 1, PMIX_UINT16);
+                rc = PMIx_Data_pack(NULL, bkt, (void *) &kv->key, 1, PMIX_UINT16);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     return prte_pmix_convert_status(rc);
                 }
-                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->data, 1, PMIX_VALUE);
+                rc = PMIx_Data_pack(NULL, bkt, (void *) &kv->data, 1, PMIX_VALUE);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     return prte_pmix_convert_status(rc);
@@ -428,8 +432,7 @@ int prte_proc_pack(pmix_data_buffer_t *bkt,
 /*
  * APP CONTEXT
  */
-int prte_app_pack(pmix_data_buffer_t *bkt,
-                  prte_app_context_t *app)
+int prte_app_pack(pmix_data_buffer_t *bkt, prte_app_context_t *app)
 {
     pmix_status_t rc;
     int32_t count, j;
@@ -472,8 +475,8 @@ int prte_app_pack(pmix_data_buffer_t *bkt,
     }
 
     /* if there are entries, pack the argv entries */
-    for (j=0; j < count; j++) {
-        rc = PMIx_Data_pack(NULL, bkt, (void*)&app->argv[j], 1, PMIX_STRING);
+    for (j = 0; j < count; j++) {
+        rc = PMIx_Data_pack(NULL, bkt, (void *) &app->argv[j], 1, PMIX_STRING);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             return prte_pmix_convert_status(rc);
@@ -489,8 +492,8 @@ int prte_app_pack(pmix_data_buffer_t *bkt,
     }
 
     /* if there are entries, pack the enviro entries */
-    for (j=0; j < count; j++) {
-        rc = PMIx_Data_pack(NULL, bkt, (void*)&app->env[j], 1, PMIX_STRING);
+    for (j = 0; j < count; j++) {
+        rc = PMIx_Data_pack(NULL, bkt, (void *) &app->env[j], 1, PMIX_STRING);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             return prte_pmix_convert_status(rc);
@@ -506,7 +509,8 @@ int prte_app_pack(pmix_data_buffer_t *bkt,
 
     /* pack attributes */
     count = 0;
-    PRTE_LIST_FOREACH(kv, &app->attributes, prte_attribute_t) {
+    PRTE_LIST_FOREACH(kv, &app->attributes, prte_attribute_t)
+    {
         if (PRTE_ATTR_GLOBAL == kv->local) {
             ++count;
         }
@@ -517,14 +521,15 @@ int prte_app_pack(pmix_data_buffer_t *bkt,
         return prte_pmix_convert_status(rc);
     }
     if (0 < count) {
-        PRTE_LIST_FOREACH(kv, &app->attributes, prte_attribute_t) {
+        PRTE_LIST_FOREACH(kv, &app->attributes, prte_attribute_t)
+        {
             if (PRTE_ATTR_GLOBAL == kv->local) {
-                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->key, 1, PMIX_UINT16);
+                rc = PMIx_Data_pack(NULL, bkt, (void *) &kv->key, 1, PMIX_UINT16);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     return prte_pmix_convert_status(rc);
                 }
-                rc = PMIx_Data_pack(NULL, bkt, (void*)&kv->data, 1, PMIX_VALUE);
+                rc = PMIx_Data_pack(NULL, bkt, (void *) &kv->data, 1, PMIX_VALUE);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     return prte_pmix_convert_status(rc);
@@ -541,11 +546,10 @@ int prte_app_pack(pmix_data_buffer_t *bkt,
  * NOTE: There is no obvious reason to include all the node information when
  * sending a map
  */
-int prte_map_pack(pmix_data_buffer_t *bkt,
-                  struct prte_job_map_t *mp)
+int prte_map_pack(pmix_data_buffer_t *bkt, struct prte_job_map_t *mp)
 {
     pmix_status_t rc;
-    prte_job_map_t *map = (prte_job_map_t*)mp;
+    prte_job_map_t *map = (prte_job_map_t *) mp;
 
     /* pack the requested mapper */
     rc = PMIx_Data_pack(NULL, bkt, &map->req_mapper, 1, PMIX_STRING);
@@ -578,7 +582,7 @@ int prte_map_pack(pmix_data_buffer_t *bkt,
         return prte_pmix_convert_status(rc);
     }
 
-        /* pack the number of nodes involved in the job */
+    /* pack the number of nodes involved in the job */
     rc = PMIx_Data_pack(NULL, bkt, &map->num_nodes, 1, PMIX_UINT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);

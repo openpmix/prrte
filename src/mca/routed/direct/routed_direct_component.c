@@ -8,6 +8,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,8 +24,8 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/proc_info.h"
 
-#include "src/mca/routed/base/base.h"
 #include "routed_direct.h"
+#include "src/mca/routed/base/base.h"
 
 static int prte_routed_direct_component_query(prte_mca_base_module_t **module, int *priority);
 

@@ -15,6 +15,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014      Hochschule Esslingen.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,15 +26,15 @@
 #include "prte_config.h"
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
+#include "constants.h"
 #include "src/class/prte_list.h"
+#include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"
-#include "src/mca/mca.h"
-#include "src/mca/base/base.h"
-#include "constants.h"
 
 /*
  * Local functions
@@ -49,8 +50,8 @@ struct prte_mca_base_dummy_framework_list_item_t {
  * Function for finding and opening either all MCA components, or the
  * one that was specifically requested via a MCA parameter.
  */
-int prte_mca_base_framework_components_open (prte_mca_base_framework_t *framework,
-                                              prte_mca_base_open_flag_t flags)
+int prte_mca_base_framework_components_open(prte_mca_base_framework_t *framework,
+                                            prte_mca_base_open_flag_t flags)
 {
     /* Open flags are not used at this time. Suppress compiler warning. */
     if (flags & PRTE_MCA_BASE_OPEN_FIND_COMPONENTS) {
@@ -63,7 +64,7 @@ int prte_mca_base_framework_components_open (prte_mca_base_framework_t *framewor
     }
 
     /* Open all registered components */
-    return open_components (framework);
+    return open_components(framework);
 }
 
 /*
@@ -83,64 +84,66 @@ static int open_components(prte_mca_base_framework_t *framework)
 
     /* If mca_base_framework_register_components was called with the MCA_BASE_COMPONENTS_ALL flag
        we need to trim down and close any extra components we do not want open */
-    ret = prte_mca_base_components_filter (framework, open_only_flags);
+    ret = prte_mca_base_components_filter(framework, open_only_flags);
     if (PRTE_SUCCESS != ret) {
         return ret;
     }
 
     /* Announce */
-    prte_output_verbose (PRTE_MCA_BASE_VERBOSE_COMPONENT, output_id, "mca: base: components_open: opening %s components",
-                         framework->framework_name);
+    prte_output_verbose(PRTE_MCA_BASE_VERBOSE_COMPONENT, output_id,
+                        "mca: base: components_open: opening %s components",
+                        framework->framework_name);
 
     /* Traverse the list of components */
-    PRTE_LIST_FOREACH_SAFE(cli, next, components, prte_mca_base_component_list_item_t) {
+    PRTE_LIST_FOREACH_SAFE(cli, next, components, prte_mca_base_component_list_item_t)
+    {
         const prte_mca_base_component_t *component = cli->cli_component;
 
-        prte_output_verbose (PRTE_MCA_BASE_VERBOSE_COMPONENT, output_id,
-                             "mca: base: components_open: found loaded component %s",
-                             component->mca_component_name);
+        prte_output_verbose(PRTE_MCA_BASE_VERBOSE_COMPONENT, output_id,
+                            "mca: base: components_open: found loaded component %s",
+                            component->mca_component_name);
 
-	if (NULL != component->mca_open_component) {
-	    /* Call open if register didn't call it already */
+        if (NULL != component->mca_open_component) {
+            /* Call open if register didn't call it already */
             ret = component->mca_open_component();
 
             if (PRTE_SUCCESS == ret) {
-                prte_output_verbose (PRTE_MCA_BASE_VERBOSE_COMPONENT, output_id,
-                                     "mca: base: components_open: "
-                                     "component %s open function successful",
-                                     component->mca_component_name);
+                prte_output_verbose(PRTE_MCA_BASE_VERBOSE_COMPONENT, output_id,
+                                    "mca: base: components_open: "
+                                    "component %s open function successful",
+                                    component->mca_component_name);
             } else {
-		if (PRTE_ERR_NOT_AVAILABLE != ret) {
-		    /* If the component returns PRTE_ERR_NOT_AVAILABLE,
-		       it's a cue to "silently ignore me" -- it's not a
-		       failure, it's just a way for the component to say
-		       "nope!".
+                if (PRTE_ERR_NOT_AVAILABLE != ret) {
+                    /* If the component returns PRTE_ERR_NOT_AVAILABLE,
+                       it's a cue to "silently ignore me" -- it's not a
+                       failure, it's just a way for the component to say
+                       "nope!".
 
-		       Otherwise, however, display an error.  We may end
-		       up displaying this twice, but it may go to separate
-		       streams.  So better to be redundant than to not
-		       display the error in the stream where it was
-		       expected. */
+                       Otherwise, however, display an error.  We may end
+                       up displaying this twice, but it may go to separate
+                       streams.  So better to be redundant than to not
+                       display the error in the stream where it was
+                       expected. */
 
-		    if (prte_mca_base_component_show_load_errors) {
-			prte_output_verbose (PRTE_MCA_BASE_VERBOSE_ERROR, output_id,
-                                             "mca: base: components_open: component %s "
-                                             "/ %s open function failed",
-                                             component->mca_type_name,
-                                             component->mca_component_name);
-		    }
-		    prte_output_verbose (PRTE_MCA_BASE_VERBOSE_COMPONENT, output_id,
-                                         "mca: base: components_open: "
-                                         "component %s open function failed",
-                                         component->mca_component_name);
-		}
+                    if (prte_mca_base_component_show_load_errors) {
+                        prte_output_verbose(PRTE_MCA_BASE_VERBOSE_ERROR, output_id,
+                                            "mca: base: components_open: component %s "
+                                            "/ %s open function failed",
+                                            component->mca_type_name,
+                                            component->mca_component_name);
+                    }
+                    prte_output_verbose(PRTE_MCA_BASE_VERBOSE_COMPONENT, output_id,
+                                        "mca: base: components_open: "
+                                        "component %s open function failed",
+                                        component->mca_component_name);
+                }
 
-                prte_mca_base_component_close (component, output_id);
+                prte_mca_base_component_close(component, output_id);
 
-		prte_list_remove_item (components, &cli->super);
-		PRTE_RELEASE(cli);
-	    }
-	}
+                prte_list_remove_item(components, &cli->super);
+                PRTE_RELEASE(cli);
+            }
+        }
     }
 
     /* All done */

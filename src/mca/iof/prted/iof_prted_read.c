@@ -26,33 +26,33 @@
 
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <string.h>
 
 #include "src/pmix/pmix-internal.h"
 
-#include "src/mca/rml/rml.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/odls/odls_types.h"
-#include "src/util/name_fns.h"
-#include "src/threads/threads.h"
+#include "src/mca/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
+#include "src/threads/threads.h"
+#include "src/util/name_fns.h"
 
-#include "src/mca/iof/iof.h"
 #include "src/mca/iof/base/base.h"
+#include "src/mca/iof/iof.h"
 
 #include "iof_prted.h"
 
 void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
 {
-    prte_iof_read_event_t *rev = (prte_iof_read_event_t*)cbdata;
+    prte_iof_read_event_t *rev = (prte_iof_read_event_t *) cbdata;
     unsigned char data[PRTE_IOF_BASE_MSG_MAX];
-    pmix_data_buffer_t *buf=NULL;
+    pmix_data_buffer_t *buf = NULL;
     int rc;
     int32_t numbytes;
-    prte_iof_proc_t *proct = (prte_iof_proc_t*)rev->proc;
+    prte_iof_proc_t *proct = (prte_iof_proc_t *) rev->proc;
 
     PRTE_ACQUIRE_OBJECT(rev);
 
@@ -72,8 +72,8 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:prted:read handler read %d bytes from %s, fd %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         numbytes, PRTE_NAME_PRINT(&proct->name), fd));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
+                         PRTE_NAME_PRINT(&proct->name), fd));
 
     if (numbytes <= 0) {
         if (0 > numbytes) {
@@ -86,8 +86,8 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
 
             PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                  "%s iof:prted:read handler %s Error on connection:%d",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_NAME_PRINT(&proct->name), fd));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proct->name),
+                                 fd));
         }
         /* numbytes must have been zero, so go down and close the fd etc */
         goto CLEAN_RETURN;
@@ -135,33 +135,32 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
                          "%s iof:prted:read handler sending %d bytes to HNP",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes));
 
-    prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP,
-                            prte_rml_send_callback, NULL);
+    prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP, prte_rml_send_callback,
+                            NULL);
 
     /* re-add the event */
     PRTE_IOF_READ_ACTIVATE(rev);
 
     return;
 
- CLEAN_RETURN:
+CLEAN_RETURN:
     /* must be an error, or zero bytes were read indicating that the
      * proc terminated this IOF channel - either way, release the
      * corresponding event. This deletes the read event and closes
      * the file descriptor */
     if (rev->tag & PRTE_IOF_STDOUT) {
-        if( NULL != proct->revstdout ) {
+        if (NULL != proct->revstdout) {
             prte_iof_base_static_dump_output(proct->revstdout);
             PRTE_RELEASE(proct->revstdout);
         }
     } else if (rev->tag & PRTE_IOF_STDERR) {
-        if( NULL != proct->revstderr ) {
+        if (NULL != proct->revstderr) {
             prte_iof_base_static_dump_output(proct->revstderr);
             PRTE_RELEASE(proct->revstderr);
         }
     }
     /* check to see if they are all done */
-    if (NULL == proct->revstdout &&
-        NULL == proct->revstderr) {
+    if (NULL == proct->revstdout && NULL == proct->revstderr) {
         /* this proc's iof is complete */
         PRTE_ACTIVATE_PROC_STATE(&proct->name, PRTE_PROC_STATE_IOF_COMPLETE);
     }

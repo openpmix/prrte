@@ -5,6 +5,7 @@
  *
  * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
@@ -17,16 +18,15 @@
 #include "prte_config.h"
 
 #ifdef HAVE_UNISTD_H
-#include "unistd.h"
+#    include "unistd.h"
 #endif
 
 #include "src/include/constants.h"
-#include "src/util/output.h"
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
-#include "src/mca/prtedl/prtedl.h"
+#include "src/mca/mca.h"
 #include "src/mca/prtedl/base/base.h"
-
+#include "src/mca/prtedl/prtedl.h"
+#include "src/util/output.h"
 
 int prte_dl_base_select(void)
 {
@@ -37,11 +37,11 @@ int prte_dl_base_select(void)
     /*
      * Select the best component
      */
-    if (PRTE_SUCCESS != prte_mca_base_select("prtedl",
-                                                prte_prtedl_base_framework.framework_output,
-                                                &prte_prtedl_base_framework.framework_components,
-                                                (prte_mca_base_module_t **) &best_module,
-                                                (prte_mca_base_component_t **) &best_component, NULL) ) {
+    if (PRTE_SUCCESS
+        != prte_mca_base_select("prtedl", prte_prtedl_base_framework.framework_output,
+                                &prte_prtedl_base_framework.framework_components,
+                                (prte_mca_base_module_t **) &best_module,
+                                (prte_mca_base_component_t **) &best_component, NULL)) {
         /* This will only happen if no component was selected */
         exit_status = PRTE_ERROR;
         goto cleanup;
@@ -51,6 +51,6 @@ int prte_dl_base_select(void)
     prte_prtedl_base_selected_component = best_component;
     prte_prtedl = best_module;
 
- cleanup:
+cleanup:
     return exit_status;
 }

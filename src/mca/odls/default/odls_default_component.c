@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,16 +35,16 @@
 
 #include <stdlib.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <ctype.h>
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
-#include "src/mca/odls/odls.h"
 #include "src/mca/odls/base/odls_private.h"
 #include "src/mca/odls/default/odls_default.h"
+#include "src/mca/odls/odls.h"
 
 /*
  * Instantiate the public struct with all of our public information
@@ -71,8 +72,6 @@ prte_odls_base_component_t prte_odls_default_component = {
     },
 };
 
-
-
 int prte_odls_default_component_open(void)
 {
     return PRTE_SUCCESS;
@@ -93,7 +92,6 @@ int prte_odls_default_component_query(prte_mca_base_module_t **module, int *prio
     *module = (prte_mca_base_module_t *) &prte_odls_default_module;
     return PRTE_SUCCESS;
 }
-
 
 int prte_odls_default_component_close(void)
 {

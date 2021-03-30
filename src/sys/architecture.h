@@ -16,6 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,18 +32,18 @@
 #define PRTE_SYS_ARCHITECTURE_H
 
 /* Architectures */
-#define PRTE_UNSUPPORTED    0000
-#define PRTE_IA32           0010
-#define PRTE_X86_64         0030
-#define PRTE_POWERPC32      0050
-#define PRTE_POWERPC64      0051
-#define PRTE_ARM            0100
-#define PRTE_ARM64          0101
-#define PRTE_BUILTIN_GCC    0202
-#define PRTE_BUILTIN_NO     0203
-#define PRTE_BUILTIN_C11    0204
+#define PRTE_UNSUPPORTED 0000
+#define PRTE_IA32        0010
+#define PRTE_X86_64      0030
+#define PRTE_POWERPC32   0050
+#define PRTE_POWERPC64   0051
+#define PRTE_ARM         0100
+#define PRTE_ARM64       0101
+#define PRTE_BUILTIN_GCC 0202
+#define PRTE_BUILTIN_NO  0203
+#define PRTE_BUILTIN_C11 0204
 
 /* Formats */
-#define PRTE_DEFAULT        1000  /* standard for given architecture */
+#define PRTE_DEFAULT 1000 /* standard for given architecture */
 
 #endif /* #ifndef PRTE_SYS_ARCHITECTURE_H */

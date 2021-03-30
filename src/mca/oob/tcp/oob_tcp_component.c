@@ -36,59 +36,58 @@
 
 #include "prte_config.h"
 #include "types.h"
-#include "types.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #include <fcntl.h>
 #ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
+#    include <netinet/in.h>
 #endif
 #ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
+#    include <arpa/inet.h>
 #endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif
+#include <arpa/inet.h>
 #include <ctype.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
 
-#include "src/util/show_help.h"
-#include "src/util/error.h"
-#include "src/util/output.h"
-#include "src/include/prte_socket_errno.h"
-#include "src/mca/prteif/prteif.h"
-#include "src/util/net.h"
-#include "src/util/argv.h"
 #include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
+#include "src/include/prte_socket_errno.h"
+#include "src/mca/prteif/prteif.h"
 #include "src/runtime/prte_progress_threads.h"
+#include "src/util/argv.h"
+#include "src/util/error.h"
+#include "src/util/net.h"
+#include "src/util/output.h"
+#include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
+#include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_wait.h"
+#include "src/threads/threads.h"
 #include "src/util/attr.h"
 #include "src/util/name_fns.h"
 #include "src/util/parse_options.h"
 #include "src/util/show_help.h"
-#include "src/threads/threads.h"
-#include "src/runtime/prte_globals.h"
-#include "src/runtime/prte_wait.h"
 
+#include "oob_tcp_peer.h"
 #include "src/mca/oob/tcp/oob_tcp.h"
 #include "src/mca/oob/tcp/oob_tcp_common.h"
 #include "src/mca/oob/tcp/oob_tcp_component.h"
-#include "src/mca/oob/tcp/oob_tcp_peer.h"
 #include "src/mca/oob/tcp/oob_tcp_connection.h"
 #include "src/mca/oob/tcp/oob_tcp_listener.h"
-#include "oob_tcp_peer.h"
+#include "src/mca/oob/tcp/oob_tcp_peer.h"
 
 /*
  * Local utility functions
@@ -102,9 +101,8 @@ static int component_available(void);
 static int component_startup(void);
 static void component_shutdown(void);
 static int component_send(prte_rml_send_t *msg);
-static char* component_get_addr(void);
-static int component_set_addr(pmix_proc_t *peer,
-                              char **uris);
+static char *component_get_addr(void);
+static int component_set_addr(pmix_proc_t *peer, char **uris);
 static bool component_is_reachable(pmix_proc_t *peer);
 
 /*
@@ -157,14 +155,12 @@ static int tcp_component_open(void)
     prte_oob_tcp_component.if_masks = NULL;
 
     /* if_include and if_exclude need to be mutually exclusive */
-    if (PRTE_SUCCESS !=
-        prte_mca_base_var_check_exclusive("prte",
-        prte_oob_tcp_component.super.oob_base.mca_type_name,
-        prte_oob_tcp_component.super.oob_base.mca_component_name,
-        "if_include",
-        prte_oob_tcp_component.super.oob_base.mca_type_name,
-        prte_oob_tcp_component.super.oob_base.mca_component_name,
-        "if_exclude")) {
+    if (PRTE_SUCCESS
+        != prte_mca_base_var_check_exclusive(
+            "prte", prte_oob_tcp_component.super.oob_base.mca_type_name,
+            prte_oob_tcp_component.super.oob_base.mca_component_name, "if_include",
+            prte_oob_tcp_component.super.oob_base.mca_type_name,
+            prte_oob_tcp_component.super.oob_base.mca_component_name, "if_exclude")) {
         /* Return ERR_NOT_AVAILABLE so that a warning message about
            "open" failing is not printed */
         return PRTE_ERR_NOT_AVAILABLE;
@@ -219,82 +215,73 @@ static int tcp_component_register(void)
 
     /* register oob module parameters */
     prte_oob_tcp_component.peer_limit = -1;
-    (void)prte_mca_base_component_var_register(component, "peer_limit",
-                                          "Maximum number of peer connections to simultaneously maintain (-1 = infinite)",
-                                          PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_5,
-                                          PRTE_MCA_BASE_VAR_SCOPE_LOCAL,
-                                          &prte_oob_tcp_component.peer_limit);
+    (void) prte_mca_base_component_var_register(
+        component, "peer_limit",
+        "Maximum number of peer connections to simultaneously maintain (-1 = infinite)",
+        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
+        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.peer_limit);
 
     prte_oob_tcp_component.max_retries = 2;
-    (void)prte_mca_base_component_var_register(component, "peer_retries",
-                                          "Number of times to try shutting down a connection before giving up",
-                                          PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_5,
-                                          PRTE_MCA_BASE_VAR_SCOPE_LOCAL,
-                                          &prte_oob_tcp_component.max_retries);
+    (void) prte_mca_base_component_var_register(
+        component, "peer_retries",
+        "Number of times to try shutting down a connection before giving up",
+        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
+        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.max_retries);
 
     prte_oob_tcp_component.tcp_sndbuf = 0;
-    (void)prte_mca_base_component_var_register(component, "sndbuf",
-                                          "TCP socket send buffering size (in bytes, 0 => leave system default)",
-                                          PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_4,
-                                          PRTE_MCA_BASE_VAR_SCOPE_LOCAL,
-                                          &prte_oob_tcp_component.tcp_sndbuf);
+    (void) prte_mca_base_component_var_register(
+        component, "sndbuf", "TCP socket send buffering size (in bytes, 0 => leave system default)",
+        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
+        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.tcp_sndbuf);
 
     prte_oob_tcp_component.tcp_rcvbuf = 0;
-    (void)prte_mca_base_component_var_register(component, "rcvbuf",
-                                          "TCP socket receive buffering size (in bytes, 0 => leave system default)",
-                                          PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_4,
-                                          PRTE_MCA_BASE_VAR_SCOPE_LOCAL,
-                                          &prte_oob_tcp_component.tcp_rcvbuf);
+    (void) prte_mca_base_component_var_register(
+        component, "rcvbuf",
+        "TCP socket receive buffering size (in bytes, 0 => leave system default)",
+        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
+        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.tcp_rcvbuf);
 
     prte_oob_tcp_component.if_include = NULL;
-    var_id = prte_mca_base_component_var_register(component, "if_include",
-                                             "Comma-delimited list of devices and/or CIDR notation of TCP networks to use for PRTE bootstrap communication (e.g., \"eth0,192.168.0.0/16\").  Mutually exclusive with oob_tcp_if_exclude.",
-                                             PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                             PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                             PRTE_INFO_LVL_2,
-                                             PRTE_MCA_BASE_VAR_SCOPE_LOCAL,
-                                             &prte_oob_tcp_component.if_include);
-    (void)prte_mca_base_var_register_synonym(var_id, "prte", "oob", "tcp", "include",
-                                        PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+    var_id = prte_mca_base_component_var_register(
+        component, "if_include",
+        "Comma-delimited list of devices and/or CIDR notation of TCP networks to use for PRTE "
+        "bootstrap communication (e.g., \"eth0,192.168.0.0/16\").  Mutually exclusive with "
+        "oob_tcp_if_exclude.",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.if_include);
+    (void) prte_mca_base_var_register_synonym(var_id, "prte", "oob", "tcp", "include",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
+                                                  | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
 
     prte_oob_tcp_component.if_exclude = NULL;
-    var_id = prte_mca_base_component_var_register(component, "if_exclude",
-                                             "Comma-delimited list of devices and/or CIDR notation of TCP networks to NOT use for PRTE bootstrap communication -- all devices not matching these specifications will be used (e.g., \"eth0,192.168.0.0/16\").  If set to a non-default value, it is mutually exclusive with oob_tcp_if_include.",
-                                             PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                             PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                             PRTE_INFO_LVL_2,
-                                             PRTE_MCA_BASE_VAR_SCOPE_LOCAL,
-                                             &prte_oob_tcp_component.if_exclude);
-    (void)prte_mca_base_var_register_synonym(var_id, "prte", "oob", "tcp", "exclude",
-                                        PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+    var_id = prte_mca_base_component_var_register(
+        component, "if_exclude",
+        "Comma-delimited list of devices and/or CIDR notation of TCP networks to NOT use for PRTE "
+        "bootstrap communication -- all devices not matching these specifications will be used "
+        "(e.g., \"eth0,192.168.0.0/16\").  If set to a non-default value, it is mutually exclusive "
+        "with oob_tcp_if_include.",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.if_exclude);
+    (void) prte_mca_base_var_register_synonym(var_id, "prte", "oob", "tcp", "exclude",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
+                                                  | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
 
     /* if_include and if_exclude need to be mutually exclusive */
-    if (NULL != prte_oob_tcp_component.if_include &&
-        NULL != prte_oob_tcp_component.if_exclude) {
+    if (NULL != prte_oob_tcp_component.if_include && NULL != prte_oob_tcp_component.if_exclude) {
         /* Return ERR_NOT_AVAILABLE so that a warning message about
            "open" failing is not printed */
         prte_show_help("help-oob-tcp.txt", "include-exclude", true,
-                       prte_oob_tcp_component.if_include,
-                       prte_oob_tcp_component.if_exclude);
+                       prte_oob_tcp_component.if_include, prte_oob_tcp_component.if_exclude);
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
     static_port_string = NULL;
-    (void)prte_mca_base_component_var_register(component, "static_ipv4_ports",
-                                          "Static ports for daemons and procs (IPv4)",
-                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_2,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &static_port_string);
+    (void) prte_mca_base_component_var_register(component, "static_ipv4_ports",
+                                                "Static ports for daemons and procs (IPv4)",
+                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &static_port_string);
 
     /* if ports were provided, parse the provided range */
     if (NULL != static_port_string) {
@@ -309,17 +296,17 @@ static int tcp_component_register(void)
 
 #if PRTE_ENABLE_IPV6
     static_port_string6 = NULL;
-    (void)prte_mca_base_component_var_register(component, "static_ipv6_ports",
-                                          "Static ports for daemons and procs (IPv6)",
-                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_2,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &static_port_string6);
+    (void) prte_mca_base_component_var_register(component, "static_ipv6_ports",
+                                                "Static ports for daemons and procs (IPv6)",
+                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &static_port_string6);
 
     /* if ports were provided, parse the provided range */
     if (NULL != static_port_string6) {
-        prte_util_parse_range_options(static_port_string6, &prte_oob_tcp_component.tcp6_static_ports);
+        prte_util_parse_range_options(static_port_string6,
+                                      &prte_oob_tcp_component.tcp6_static_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp6_static_ports[0], "-1")) {
             prte_argv_free(prte_oob_tcp_component.tcp6_static_ports);
             prte_oob_tcp_component.tcp6_static_ports = NULL;
@@ -329,26 +316,23 @@ static int tcp_component_register(void)
     }
 #endif // PRTE_ENABLE_IPV6
 
-    if (NULL != prte_oob_tcp_component.tcp_static_ports ||
-        NULL != prte_oob_tcp_component.tcp6_static_ports) {
+    if (NULL != prte_oob_tcp_component.tcp_static_ports
+        || NULL != prte_oob_tcp_component.tcp6_static_ports) {
         prte_static_ports = true;
     }
 
     dyn_port_string = NULL;
-    (void)prte_mca_base_component_var_register(component, "dynamic_ipv4_ports",
-                                          "Range of ports to be dynamically used by daemons and procs (IPv4)",
-                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_4,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &dyn_port_string);
+    (void) prte_mca_base_component_var_register(
+        component, "dynamic_ipv4_ports",
+        "Range of ports to be dynamically used by daemons and procs (IPv4)",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &dyn_port_string);
     /* if ports were provided, parse the provided range */
     if (NULL != dyn_port_string) {
         /* can't have both static and dynamic ports! */
         if (prte_static_ports) {
             char *err = prte_argv_join(prte_oob_tcp_component.tcp_static_ports, ',');
-            prte_show_help("help-oob-tcp.txt", "static-and-dynamic", true,
-                           err, dyn_port_string);
+            prte_show_help("help-oob-tcp.txt", "static-and-dynamic", true, err, dyn_port_string);
             free(err);
             return PRTE_ERROR;
         }
@@ -363,18 +347,16 @@ static int tcp_component_register(void)
 
 #if PRTE_ENABLE_IPV6
     dyn_port_string6 = NULL;
-    (void)prte_mca_base_component_var_register(component, "dynamic_ipv6_ports",
-                                          "Range of ports to be dynamically used by daemons and procs (IPv6)",
-                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_4,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &dyn_port_string6);
+    (void) prte_mca_base_component_var_register(
+        component, "dynamic_ipv6_ports",
+        "Range of ports to be dynamically used by daemons and procs (IPv6)",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &dyn_port_string6);
     /* if ports were provided, parse the provided range */
     if (NULL != dyn_port_string6) {
         /* can't have both static and dynamic ports! */
         if (prte_static_ports) {
-            char *err4=NULL, *err6=NULL;
+            char *err4 = NULL, *err6 = NULL;
             if (NULL != prte_oob_tcp_component.tcp_static_ports) {
                 err4 = prte_argv_join(prte_oob_tcp_component.tcp_static_ports, ',');
             }
@@ -382,8 +364,7 @@ static int tcp_component_register(void)
                 err6 = prte_argv_join(prte_oob_tcp_component.tcp6_static_ports, ',');
             }
             prte_show_help("help-oob-tcp.txt", "static-and-dynamic-ipv6", true,
-                           (NULL == err4) ? "N/A" : err4,
-                           (NULL == err6) ? "N/A" : err6,
+                           (NULL == err4) ? "N/A" : err4, (NULL == err6) ? "N/A" : err6,
                            dyn_port_string6);
             if (NULL != err4) {
                 free(err4);
@@ -404,76 +385,66 @@ static int tcp_component_register(void)
 #endif // PRTE_ENABLE_IPV6
 
     prte_oob_tcp_component.disable_ipv4_family = false;
-    (void)prte_mca_base_component_var_register(component, "disable_ipv4_family",
-                                          "Disable the IPv4 interfaces",
-                                          PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_4,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &prte_oob_tcp_component.disable_ipv4_family);
+    (void) prte_mca_base_component_var_register(component, "disable_ipv4_family",
+                                                "Disable the IPv4 interfaces",
+                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_oob_tcp_component.disable_ipv4_family);
 
 #if PRTE_ENABLE_IPV6
     prte_oob_tcp_component.disable_ipv6_family = false;
-    (void)prte_mca_base_component_var_register(component, "disable_ipv6_family",
-                                          "Disable the IPv6 interfaces",
-                                          PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_4,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &prte_oob_tcp_component.disable_ipv6_family);
+    (void) prte_mca_base_component_var_register(component, "disable_ipv6_family",
+                                                "Disable the IPv6 interfaces",
+                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_oob_tcp_component.disable_ipv6_family);
 #endif // PRTE_ENABLE_IPV6
 
     // Wait for this amount of time before sending the first keepalive probe
     prte_oob_tcp_component.keepalive_time = 300;
-    (void)prte_mca_base_component_var_register(component, "keepalive_time",
-                                          "Idle time in seconds before starting to send keepalives (keepalive_time <= 0 disables keepalive functionality)",
-                                          PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_5,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &prte_oob_tcp_component.keepalive_time);
+    (void) prte_mca_base_component_var_register(
+        component, "keepalive_time",
+        "Idle time in seconds before starting to send keepalives (keepalive_time <= 0 disables "
+        "keepalive functionality)",
+        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_oob_tcp_component.keepalive_time);
 
     // Resend keepalive probe every INT seconds
     prte_oob_tcp_component.keepalive_intvl = 20;
-    (void)prte_mca_base_component_var_register(component, "keepalive_intvl",
-                                          "Time between successive keepalive pings when peer has not responded, in seconds (ignored if keepalive_time <= 0)",
-                                          PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_5,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &prte_oob_tcp_component.keepalive_intvl);
+    (void) prte_mca_base_component_var_register(
+        component, "keepalive_intvl",
+        "Time between successive keepalive pings when peer has not responded, in seconds (ignored "
+        "if keepalive_time <= 0)",
+        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_oob_tcp_component.keepalive_intvl);
 
     // After sending PR probes every INT seconds consider the connection dead
     prte_oob_tcp_component.keepalive_probes = 9;
-    (void)prte_mca_base_component_var_register(component, "keepalive_probes",
-                                          "Number of keepalives that can be missed before declaring error (ignored if keepalive_time <= 0)",
-                                          PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_5,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &prte_oob_tcp_component.keepalive_probes);
+    (void) prte_mca_base_component_var_register(component, "keepalive_probes",
+                                                "Number of keepalives that can be missed before "
+                                                "declaring error (ignored if keepalive_time <= 0)",
+                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_oob_tcp_component.keepalive_probes);
 
     prte_oob_tcp_component.retry_delay = 0;
-    (void)prte_mca_base_component_var_register(component, "retry_delay",
-                                          "Time (in sec) to wait before trying to connect to peer again",
-                                          PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_4,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &prte_oob_tcp_component.retry_delay);
+    (void) prte_mca_base_component_var_register(
+        component, "retry_delay", "Time (in sec) to wait before trying to connect to peer again",
+        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_oob_tcp_component.retry_delay);
 
     prte_oob_tcp_component.max_recon_attempts = 10;
-    (void)prte_mca_base_component_var_register(component, "max_recon_attempts",
-                                          "Max number of times to attempt connection before giving up (-1 -> never give up)",
-                                          PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                          PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                          PRTE_INFO_LVL_4,
-                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                          &prte_oob_tcp_component.max_recon_attempts);
+    (void) prte_mca_base_component_var_register(
+        component, "max_recon_attempts",
+        "Max number of times to attempt connection before giving up (-1 -> never give up)",
+        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_oob_tcp_component.max_recon_attempts);
 
     return PRTE_SUCCESS;
 }
-
 
 static char **split_and_resolve(char **orig_str, char *name);
 
@@ -498,35 +469,33 @@ static int component_available(void)
      * subnet+mask
      */
     if (NULL != prte_oob_tcp_component.if_include) {
-        interfaces = split_and_resolve(&prte_oob_tcp_component.if_include,
-                                       "include");
+        interfaces = split_and_resolve(&prte_oob_tcp_component.if_include, "include");
         including = true;
         excluding = false;
     } else if (NULL != prte_oob_tcp_component.if_exclude) {
-        interfaces = split_and_resolve(&prte_oob_tcp_component.if_exclude,
-                                       "exclude");
+        interfaces = split_and_resolve(&prte_oob_tcp_component.if_exclude, "exclude");
         including = false;
         excluding = true;
     }
 
     /* look at all available interfaces */
-    PRTE_LIST_FOREACH(selected_interface, &prte_if_list, prte_if_t) {
+    PRTE_LIST_FOREACH(selected_interface, &prte_if_list, prte_if_t)
+    {
         i = selected_interface->if_index;
         kindex = selected_interface->if_kernel_index;
-        memcpy((struct sockaddr*)&my_ss, &selected_interface->if_addr,
+        memcpy((struct sockaddr *) &my_ss, &selected_interface->if_addr,
                MIN(sizeof(struct sockaddr_storage), sizeof(selected_interface->if_addr)));
         /* ignore non-ip4/6 interfaces */
         if (AF_INET != my_ss.ss_family
 #if PRTE_ENABLE_IPV6
             && AF_INET6 != my_ss.ss_family
 #endif
-            ) {
+        ) {
             continue;
         }
         prte_output_verbose(10, prte_oob_base_framework.framework_output,
                             "WORKING INTERFACE %d KERNEL INDEX %d FAMILY: %s", i, kindex,
                             (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-
 
         /* ignore any virtual interfaces */
         if (0 == strncmp(selected_interface->if_name, "vir", 3)) {
@@ -548,9 +517,10 @@ static int component_available(void)
             /* if we are including, then ignore this if not present */
             if (including) {
                 if (PRTE_SUCCESS != rc) {
-                    prte_output_verbose(20, prte_oob_base_framework.framework_output,
-                                        "%s oob:tcp:init rejecting interface %s (not in include list)",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
+                    prte_output_verbose(
+                        20, prte_oob_base_framework.framework_output,
+                        "%s oob:tcp:init rejecting interface %s (not in include list)",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
                     continue;
                 }
             } else {
@@ -558,7 +528,8 @@ static int component_available(void)
                 if (PRTE_SUCCESS == rc) {
                     prte_output_verbose(20, prte_oob_base_framework.framework_output,
                                         "%s oob:tcp:init rejecting interface %s (in exclude list)",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                        selected_interface->if_name);
                     continue;
                 }
             }
@@ -569,7 +540,8 @@ static int component_available(void)
             if (1 < prte_ifcount() && prte_ifisloopback(i)) {
                 prte_output_verbose(20, prte_oob_base_framework.framework_output,
                                     "%s oob:tcp:init rejecting loopback interface %s",
-                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                    selected_interface->if_name);
                 continue;
             }
         }
@@ -587,23 +559,25 @@ static int component_available(void)
             prte_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init adding %s to our list of %s connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr*) &my_ss),
+                                prte_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-            prte_argv_append_nosize(&prte_oob_tcp_component.ipv4conns, prte_net_get_hostname((struct sockaddr*) &my_ss));
+            prte_argv_append_nosize(&prte_oob_tcp_component.ipv4conns,
+                                    prte_net_get_hostname((struct sockaddr *) &my_ss));
         } else if (AF_INET6 == my_ss.ss_family) {
 #if PRTE_ENABLE_IPV6
             prte_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init adding %s to our list of %s connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr*) &my_ss),
+                                prte_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-            prte_argv_append_nosize(&prte_oob_tcp_component.ipv6conns, prte_net_get_hostname((struct sockaddr*) &my_ss));
+            prte_argv_append_nosize(&prte_oob_tcp_component.ipv6conns,
+                                    prte_net_get_hostname((struct sockaddr *) &my_ss));
 #endif // PRTE_ENABLE_IPV6
         } else {
             prte_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init ignoring %s from out list of connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr*) &my_ss));
+                                prte_net_get_hostname((struct sockaddr *) &my_ss));
         }
         copied_interface = PRTE_NEW(prte_if_t);
         if (NULL == copied_interface) {
@@ -616,17 +590,20 @@ static int component_available(void)
         copied_interface->af_family = my_ss.ss_family;
         copied_interface->if_flags = selected_interface->if_flags;
         copied_interface->if_speed = selected_interface->if_speed;
-        memcpy(&copied_interface->if_addr, &selected_interface->if_addr, sizeof(struct sockaddr_storage));
+        memcpy(&copied_interface->if_addr, &selected_interface->if_addr,
+               sizeof(struct sockaddr_storage));
         copied_interface->if_mask = selected_interface->if_mask;
         /* If bandwidth is not found, set to arbitrary non zero value */
-        copied_interface->if_bandwidth = selected_interface->if_bandwidth > 0 ? selected_interface->if_bandwidth : 1;
-        memcpy(&copied_interface->if_mac, &selected_interface->if_mac, sizeof(copied_interface->if_mac));
+        copied_interface->if_bandwidth = selected_interface->if_bandwidth > 0
+                                             ? selected_interface->if_bandwidth
+                                             : 1;
+        memcpy(&copied_interface->if_mac, &selected_interface->if_mac,
+               sizeof(copied_interface->if_mac));
         copied_interface->ifmtu = selected_interface->ifmtu;
         /* Add the if_mask to the list */
         sprintf(string, "%d", selected_interface->if_mask);
         prte_argv_append_nosize(&prte_oob_tcp_component.if_masks, string);
         prte_list_append(&prte_oob_tcp_component.local_ifs, &(copied_interface->super));
-
     }
 
     /* cleanup */
@@ -638,11 +615,13 @@ static int component_available(void)
 #if PRTE_ENABLE_IPV6
         && 0 == prte_argv_count(prte_oob_tcp_component.ipv6conns)
 #endif
-        ) {
+    ) {
         if (including) {
-            prte_show_help("help-oob-tcp.txt", "no-included-found", true, prte_oob_tcp_component.if_include);
+            prte_show_help("help-oob-tcp.txt", "no-included-found", true,
+                           prte_oob_tcp_component.if_include);
         } else if (excluding) {
-            prte_show_help("help-oob-tcp.txt", "excluded-all", true, prte_oob_tcp_component.if_exclude);
+            prte_show_help("help-oob-tcp.txt", "excluded-all", true,
+                           prte_oob_tcp_component.if_exclude);
         }
         return PRTE_ERR_NOT_AVAILABLE;
     }
@@ -655,8 +634,7 @@ static int component_startup(void)
 {
     int rc = PRTE_SUCCESS;
 
-    prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                        "%s TCP STARTUP",
+    prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP STARTUP",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* if we are a daemon/HNP,
@@ -678,8 +656,7 @@ static void component_shutdown(void)
 {
     int i = 0;
 
-    prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                        "%s TCP SHUTDOWN",
+    prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP SHUTDOWN",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     if (PRTE_PROC_IS_MASTER && prte_oob_tcp_component.listen_thread_active) {
@@ -692,15 +669,13 @@ static void component_shutdown(void)
         close(prte_oob_tcp_component.stop_thread[1]);
 
     } else {
-        prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                        "no hnp or not active");
+        prte_output_verbose(2, prte_oob_base_framework.framework_output, "no hnp or not active");
     }
 
     /* cleanup listen event list */
     PRTE_LIST_DESTRUCT(&prte_oob_tcp_component.listeners);
 
-    prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                        "%s TCP SHUTDOWN done",
+    prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP SHUTDOWN done",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 }
 
@@ -708,8 +683,8 @@ static int component_send(prte_rml_send_t *msg)
 {
     prte_output_verbose(5, prte_oob_base_framework.framework_output,
                         "%s oob:tcp:send_nb to peer %s:%d seq = %d",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(&msg->dst), msg->tag, msg->seq_num );
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst), msg->tag,
+                        msg->seq_num);
 
     /* The module will first see if it knows
      * of a way to send the data to the target, and then
@@ -722,12 +697,11 @@ static int component_send(prte_rml_send_t *msg)
     return PRTE_SUCCESS;
 }
 
-static char* component_get_addr(void)
+static char *component_get_addr(void)
 {
-    char *cptr=NULL, *tmp, *tp, *tm;
+    char *cptr = NULL, *tmp, *tp, *tm;
 
-    if (!prte_oob_tcp_component.disable_ipv4_family &&
-        NULL != prte_oob_tcp_component.ipv4conns) {
+    if (!prte_oob_tcp_component.disable_ipv4_family && NULL != prte_oob_tcp_component.ipv4conns) {
         tmp = prte_argv_join(prte_oob_tcp_component.ipv4conns, ',');
         tp = prte_argv_join(prte_oob_tcp_component.ipv4ports, ',');
         tm = prte_argv_join(prte_oob_tcp_component.if_masks, ',');
@@ -737,8 +711,7 @@ static char* component_get_addr(void)
         free(tm);
     }
 #if PRTE_ENABLE_IPV6
-    if (!prte_oob_tcp_component.disable_ipv6_family &&
-        NULL != prte_oob_tcp_component.ipv6conns) {
+    if (!prte_oob_tcp_component.disable_ipv6_family && NULL != prte_oob_tcp_component.ipv6conns) {
         char *tmp2;
 
         /* Fixes #2498
@@ -775,35 +748,33 @@ static char* component_get_addr(void)
 
 /* the host in this case is always in "dot" notation, and
  * thus we do not need to do a DNS lookup to convert it */
-static int parse_uri(const uint16_t af_family,
-                     const char* host,
-                     const char *port,
-                     struct sockaddr_storage* inaddr)
+static int parse_uri(const uint16_t af_family, const char *host, const char *port,
+                     struct sockaddr_storage *inaddr)
 {
     struct sockaddr_in *in;
 
     if (AF_INET == af_family) {
         memset(inaddr, 0, sizeof(struct sockaddr_in));
-        in = (struct sockaddr_in*) inaddr;
+        in = (struct sockaddr_in *) inaddr;
         in->sin_family = AF_INET;
         in->sin_addr.s_addr = inet_addr(host);
         if (in->sin_addr.s_addr == INADDR_NONE) {
             return PRTE_ERR_BAD_PARAM;
         }
-        ((struct sockaddr_in*) inaddr)->sin_port = htons(atoi(port));
+        ((struct sockaddr_in *) inaddr)->sin_port = htons(atoi(port));
     }
 #if PRTE_ENABLE_IPV6
     else if (AF_INET6 == af_family) {
         struct sockaddr_in6 *in6;
         memset(inaddr, 0, sizeof(struct sockaddr_in6));
-        in6 = (struct sockaddr_in6*) inaddr;
+        in6 = (struct sockaddr_in6 *) inaddr;
 
-        if (0 == inet_pton(AF_INET6, host, (void*)&in6->sin6_addr)) {
-            prte_output (0, "oob_tcp_parse_uri: Could not convert %s\n", host);
+        if (0 == inet_pton(AF_INET6, host, (void *) &in6->sin6_addr)) {
+            prte_output(0, "oob_tcp_parse_uri: Could not convert %s\n", host);
             return PRTE_ERR_BAD_PARAM;
         }
         in6->sin6_family = AF_INET6;
-        in6->sin6_port =  htons(atoi(port));
+        in6->sin6_port = htons(atoi(port));
     }
 #endif
     else {
@@ -812,11 +783,10 @@ static int parse_uri(const uint16_t af_family,
     return PRTE_SUCCESS;
 }
 
-static int component_set_addr(pmix_proc_t *peer,
-                              char **uris)
+static int component_set_addr(pmix_proc_t *peer, char **uris)
 {
     char **addrs, **masks, *hptr;
-    char *tcpuri=NULL, *host, *ports, *masks_string;
+    char *tcpuri = NULL, *host, *ports, *masks_string;
     int i, j, rc;
     uint16_t af_family = AF_UNSPEC;
     uint64_t ui64;
@@ -824,16 +794,15 @@ static int component_set_addr(pmix_proc_t *peer,
     prte_oob_tcp_peer_t *pr;
     prte_oob_tcp_addr_t *maddr;
 
-    memcpy(&ui64, (char*)peer, sizeof(uint64_t));
+    memcpy(&ui64, (char *) peer, sizeof(uint64_t));
     /* cycle across component parts and see if one belongs to us */
     found = false;
 
-    for (i=0; NULL != uris[i]; i++) {
+    for (i = 0; NULL != uris[i]; i++) {
         tcpuri = strdup(uris[i]);
         if (NULL == tcpuri) {
             prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                                "%s oob:tcp: out of memory",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                                "%s oob:tcp: out of memory", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             continue;
         }
         if (0 == strncmp(uris[i], "tcp:", 4)) {
@@ -843,7 +812,7 @@ static int component_set_addr(pmix_proc_t *peer,
 #if PRTE_ENABLE_IPV6
             af_family = AF_INET6;
             host = tcpuri + strlen("tcp6://");
-#else // PRTE_ENABLE_IPV6
+#else  // PRTE_ENABLE_IPV6
             /* we don't support this connection type */
             prte_output_verbose(2, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp: address %s not supported",
@@ -863,8 +832,7 @@ static int component_set_addr(pmix_proc_t *peer,
         /* this one is ours - record the peer */
         prte_output_verbose(2, prte_oob_base_framework.framework_output,
                             "%s oob:tcp: working peer %s address %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            PRTE_NAME_PRINT(peer), uris[i]);
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer), uris[i]);
 
         /* separate the mask from the network addrs */
         masks_string = strrchr(tcpuri, ':');
@@ -898,36 +866,35 @@ static int component_set_addr(pmix_proc_t *peer,
             if ('[' == host[0]) {
                 hptr = &host[1];
             }
-            if (']' == host[strlen(host)-1]) {
-                host[strlen(host)-1] = '\0';
+            if (']' == host[strlen(host) - 1]) {
+                host[strlen(host) - 1] = '\0';
             }
         }
 #endif // PRTE_ENABLE_IPV6
         addrs = prte_argv_split(hptr, ',');
 
-
         /* cycle across the provided addrs */
-        for (j=0; NULL != addrs[j]; j++) {
+        for (j = 0; NULL != addrs[j]; j++) {
             if (NULL == masks[j]) {
                 /* Missing mask information */
                 prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                                     "%s oob:tcp: uri missing mask information.",
-                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                                    "%s oob:tcp: uri missing mask information.",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                 return PRTE_ERR_TAKE_NEXT_OPTION;
             }
             /* if they gave us "localhost", then just take the first conn on our list */
             if (0 == strcasecmp(addrs[j], "localhost")) {
 #if PRTE_ENABLE_IPV6
                 if (AF_INET6 == af_family) {
-                    if (NULL == prte_oob_tcp_component.ipv6conns ||
-                        NULL == prte_oob_tcp_component.ipv6conns[0]) {
+                    if (NULL == prte_oob_tcp_component.ipv6conns
+                        || NULL == prte_oob_tcp_component.ipv6conns[0]) {
                         continue;
                     }
                     host = prte_oob_tcp_component.ipv6conns[0];
                 } else {
 #endif // PRTE_ENABLE_IPV6
-                    if (NULL == prte_oob_tcp_component.ipv4conns ||
-                        NULL == prte_oob_tcp_component.ipv4conns[0]) {
+                    if (NULL == prte_oob_tcp_component.ipv4conns
+                        || NULL == prte_oob_tcp_component.ipv4conns[0]) {
                         continue;
                     }
                     host = prte_oob_tcp_component.ipv4conns[0];
@@ -943,14 +910,15 @@ static int component_set_addr(pmix_proc_t *peer,
                 PMIX_XFER_PROCID(&pr->name, peer);
                 prte_output_verbose(20, prte_oob_base_framework.framework_output,
                                     "%s SET_PEER ADDING PEER %s",
-                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                    PRTE_NAME_PRINT(peer));
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer));
                 prte_list_append(&prte_oob_tcp_component.peers, &pr->super);
             }
 
             maddr = PRTE_NEW(prte_oob_tcp_addr_t);
-            ((struct sockaddr_storage*) &(maddr->addr))->ss_family = af_family;
-            if (PRTE_SUCCESS != (rc = parse_uri(af_family, host, ports, (struct sockaddr_storage*) &(maddr->addr)))) {
+            ((struct sockaddr_storage *) &(maddr->addr))->ss_family = af_family;
+            if (PRTE_SUCCESS
+                != (rc = parse_uri(af_family, host, ports,
+                                   (struct sockaddr_storage *) &(maddr->addr)))) {
                 PRTE_ERROR_LOG(rc);
                 PRTE_RELEASE(maddr);
                 prte_list_remove_item(&prte_oob_tcp_component.peers, &pr->super);
@@ -961,10 +929,8 @@ static int component_set_addr(pmix_proc_t *peer,
 
             prte_output_verbose(20, prte_oob_base_framework.framework_output,
                                 "%s set_peer: peer %s is listening on net %s port %s",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                PRTE_NAME_PRINT(peer),
-                                (NULL == host) ? "NULL" : host,
-                                (NULL == ports) ? "NULL" : ports);
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer),
+                                (NULL == host) ? "NULL" : host, (NULL == ports) ? "NULL" : ports);
             prte_list_append(&pr->addrs, &maddr->super);
 
             found = true;
@@ -989,8 +955,7 @@ static bool component_is_reachable(pmix_proc_t *peer)
     hop = prte_routed.get_route(peer);
     if (PMIX_PROCID_INVALID(&hop)) {
         prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
-                            "%s is NOT reachable by TCP",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                            "%s is NOT reachable by TCP", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         return false;
     }
     /* assume we can reach the hop - the module will tell us if it can't
@@ -1000,14 +965,13 @@ static bool component_is_reachable(pmix_proc_t *peer)
 
 void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
 {
-    prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t*)cbdata;
+    prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
     prte_oob_base_peer_t *bpr;
 
     PRTE_ACQUIRE_OBJECT(pop);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
-                        "%s tcp:set_module called for peer %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        "%s tcp:set_module called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(&pop->peer));
 
     /* make sure the OOB knows that we can reach this peer - we
@@ -1027,15 +991,14 @@ void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
 
 void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
 {
-    prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t*)cbdata;
+    prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
     prte_oob_base_peer_t *bpr;
 
     PRTE_ACQUIRE_OBJECT(pop);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:lost connection called for peer %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(&pop->peer));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&pop->peer));
 
     /* Mark that we no longer support this peer */
     bpr = prte_oob_base_get_peer(&pop->peer);
@@ -1058,14 +1021,13 @@ void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
 
 void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
 {
-    prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t*)cbdata;
+    prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t *) cbdata;
     prte_oob_base_peer_t *bpr;
 
     PRTE_ACQUIRE_OBJECT(mop);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
-                        "%s tcp:no route called for peer %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        "%s tcp:no route called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(&mop->hop));
 
     /* mark that we cannot reach this hop */
@@ -1088,7 +1050,7 @@ void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
 
 void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
 {
-    prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t*)cbdata;
+    prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t *) cbdata;
     prte_rml_send_t *snd;
     prte_oob_base_peer_t *bpr;
     pmix_status_t rc;
@@ -1097,8 +1059,7 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     PRTE_ACQUIRE_OBJECT(mop);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
-                        "%s tcp:unknown hop called for peer %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        "%s tcp:unknown hop called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(&mop->hop));
 
     if (prte_finalizing || prte_abnormal_term_ordered) {
@@ -1107,7 +1068,7 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
         return;
     }
 
-   /* mark that this component cannot reach this hop */
+    /* mark that this component cannot reach this hop */
     bpr = prte_oob_base_get_peer(&mop->hop);
     if (NULL == bpr) {
         /* the overall OOB has no knowledge of this hop. Only
@@ -1116,9 +1077,10 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
          * OOB framework hash table. We have no way of knowing
          * what to do next, so just output an error message and
          * abort */
-        prte_output(0, "%s ERROR: message to %s requires routing and the OOB has no knowledge of the reqd hop %s",
-                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                    PRTE_NAME_PRINT(&mop->snd->hdr.dst),
+        prte_output(0,
+                    "%s ERROR: message to %s requires routing and the OOB has no knowledge of the "
+                    "reqd hop %s",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&mop->snd->hdr.dst),
                     PRTE_NAME_PRINT(&mop->hop));
         PRTE_ACTIVATE_PROC_STATE(&mop->hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
         PRTE_RELEASE(mop);
@@ -1129,9 +1091,10 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     /* mark that this component cannot reach this destination either */
     bpr = prte_oob_base_get_peer(&mop->snd->hdr.dst);
     if (NULL == bpr) {
-        prte_output(0, "%s ERROR: message to %s requires routing and the OOB has no knowledge of this process",
-                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                    PRTE_NAME_PRINT(&mop->snd->hdr.dst));
+        prte_output(
+            0,
+            "%s ERROR: message to %s requires routing and the OOB has no knowledge of this process",
+            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&mop->snd->hdr.dst));
         PRTE_ACTIVATE_PROC_STATE(&mop->hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
         PRTE_RELEASE(mop);
         return;
@@ -1166,16 +1129,15 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
 
 void prte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
 {
-    prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t*)cbdata;
+    prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
 
     PRTE_ACQUIRE_OBJECT(pop);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:failed_to_connect called for peer %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(&pop->peer));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&pop->peer));
 
-   /* if we are terminating, then don't attempt to reconnect */
+    /* if we are terminating, then don't attempt to reconnect */
     if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
         PRTE_RELEASE(pop);
         return;
@@ -1184,8 +1146,7 @@ void prte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
     /* activate the proc state */
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:failed_to_connect unable to reach peer %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(&pop->peer));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&pop->peer));
 
     PRTE_ACTIVATE_PROC_STATE(&pop->peer, PRTE_PROC_STATE_FAILED_TO_CONNECT);
     PRTE_RELEASE(pop);
@@ -1225,9 +1186,9 @@ static char **split_and_resolve(char **orig_str, char *name)
         tmp = strdup(argv[i]);
         str = strchr(argv[i], '/');
         if (NULL == str) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude",
-                           true, name, prte_process_info.nodename,
-                           tmp, "Invalid specification (missing \"/\")");
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
+                           prte_process_info.nodename, tmp,
+                           "Invalid specification (missing \"/\")");
             free(argv[i]);
             free(tmp);
             continue;
@@ -1236,41 +1197,34 @@ static char **split_and_resolve(char **orig_str, char *name)
         argv_prefix = atoi(str + 1);
 
         /* Now convert the IPv4 address */
-        ((struct sockaddr*) &argv_inaddr)->sa_family = AF_INET;
-        ret = inet_pton(AF_INET, argv[i],
-                        &((struct sockaddr_in*) &argv_inaddr)->sin_addr);
+        ((struct sockaddr *) &argv_inaddr)->sa_family = AF_INET;
+        ret = inet_pton(AF_INET, argv[i], &((struct sockaddr_in *) &argv_inaddr)->sin_addr);
         free(argv[i]);
 
         if (1 != ret) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude",
-                           true, name, prte_process_info.nodename, tmp,
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
+                           prte_process_info.nodename, tmp,
                            "Invalid specification (inet_pton() failed)");
             free(tmp);
             continue;
         }
         prte_output_verbose(20, prte_oob_base_framework.framework_output,
                             "%s oob:tcp: Searching for %s address+prefix: %s / %u",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            name,
-                            prte_net_get_hostname((struct sockaddr*) &argv_inaddr),
-                            argv_prefix);
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), name,
+                            prte_net_get_hostname((struct sockaddr *) &argv_inaddr), argv_prefix);
 
         /* Go through all interfaces and see if we can find a match */
-        for (if_index = prte_ifbegin(); if_index >= 0;
-                           if_index = prte_ifnext(if_index)) {
-            prte_ifindextoaddr(if_index,
-                               (struct sockaddr*) &if_inaddr,
-                               sizeof(if_inaddr));
-            if (prte_net_samenetwork((struct sockaddr*) &argv_inaddr,
-                                     (struct sockaddr*) &if_inaddr,
-                                     argv_prefix)) {
+        for (if_index = prte_ifbegin(); if_index >= 0; if_index = prte_ifnext(if_index)) {
+            prte_ifindextoaddr(if_index, (struct sockaddr *) &if_inaddr, sizeof(if_inaddr));
+            if (prte_net_samenetwork((struct sockaddr *) &argv_inaddr,
+                                     (struct sockaddr *) &if_inaddr, argv_prefix)) {
                 break;
             }
         }
         /* If we didn't find a match, keep trying */
         if (if_index < 0) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude",
-                           true, name, prte_process_info.nodename, tmp,
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
+                           prte_process_info.nodename, tmp,
                            "Did not find interface matching this subnet");
             free(tmp);
             continue;
@@ -1280,10 +1234,8 @@ static char **split_and_resolve(char **orig_str, char *name)
            argv */
         prte_ifindextoname(if_index, if_name, sizeof(if_name));
         prte_output_verbose(20, prte_oob_base_framework.framework_output,
-                            "%s oob:tcp: Found match: %s (%s)",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            prte_net_get_hostname((struct sockaddr*) &if_inaddr),
-                            if_name);
+                            "%s oob:tcp: Found match: %s (%s)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            prte_net_get_hostname((struct sockaddr *) &if_inaddr), if_name);
         argv[save++] = strdup(if_name);
         free(tmp);
     }
@@ -1328,18 +1280,14 @@ static void peer_des(prte_oob_tcp_peer_t *peer)
         prte_event_del(&peer->timer_event);
     }
     if (0 <= peer->sd) {
-        prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                            "%s CLOSING SOCKET %d",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            peer->sd);
+        prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s CLOSING SOCKET %d",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), peer->sd);
         CLOSE_THE_SOCKET(peer->sd);
     }
     PRTE_LIST_DESTRUCT(&peer->addrs);
     PRTE_LIST_DESTRUCT(&peer->send_queue);
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_peer_t,
-                   prte_list_item_t,
-                   peer_cons, peer_des);
+PRTE_CLASS_INSTANCE(prte_oob_tcp_peer_t, prte_list_item_t, peer_cons, peer_des);
 
 static void padd_cons(prte_oob_tcp_addr_t *ptr)
 {
@@ -1347,10 +1295,7 @@ static void padd_cons(prte_oob_tcp_addr_t *ptr)
     ptr->retries = 0;
     ptr->state = MCA_OOB_TCP_UNCONNECTED;
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_addr_t,
-                   prte_list_item_t,
-                   padd_cons, NULL);
-
+PRTE_CLASS_INSTANCE(prte_oob_tcp_addr_t, prte_list_item_t, padd_cons, NULL);
 
 static void pop_cons(prte_oob_tcp_peer_op_t *pop)
 {
@@ -1366,23 +1311,15 @@ static void pop_des(prte_oob_tcp_peer_op_t *pop)
         free(pop->port);
     }
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_peer_op_t,
-                   prte_object_t,
-                   pop_cons, pop_des);
+PRTE_CLASS_INSTANCE(prte_oob_tcp_peer_op_t, prte_object_t, pop_cons, pop_des);
 
-PRTE_CLASS_INSTANCE(prte_oob_tcp_msg_op_t,
-                   prte_object_t,
-                   NULL, NULL);
+PRTE_CLASS_INSTANCE(prte_oob_tcp_msg_op_t, prte_object_t, NULL, NULL);
 
-PRTE_CLASS_INSTANCE(prte_oob_tcp_conn_op_t,
-                   prte_object_t,
-                   NULL, NULL);
+PRTE_CLASS_INSTANCE(prte_oob_tcp_conn_op_t, prte_object_t, NULL, NULL);
 
 static void nicaddr_cons(prte_oob_tcp_nicaddr_t *ptr)
 {
     ptr->af_family = PF_UNSPEC;
     memset(&ptr->addr, 0, sizeof(ptr->addr));
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_nicaddr_t,
-                   prte_list_item_t,
-                   nicaddr_cons, NULL);
+PRTE_CLASS_INSTANCE(prte_oob_tcp_nicaddr_t, prte_list_item_t, nicaddr_cons, NULL);

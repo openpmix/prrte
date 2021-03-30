@@ -30,8 +30,8 @@
 
 #include "prte_config.h"
 
-#include "src/hwloc/hwloc-internal.h"
 #include "src/class/prte_list.h"
+#include "src/hwloc/hwloc-internal.h"
 
 #include "src/mca/rmaps/rmaps.h"
 
@@ -40,29 +40,22 @@ BEGIN_C_DECLS
 PRTE_MODULE_EXPORT extern prte_rmaps_base_component_t prte_rmaps_round_robin_component;
 extern prte_rmaps_base_module_t prte_rmaps_round_robin_module;
 
-PRTE_MODULE_EXPORT int prte_rmaps_rr_bynode(prte_job_t *jdata,
-                                              prte_app_context_t *app,
-                                              prte_list_t *node_list,
-                                              int32_t num_slots,
-                                              pmix_rank_t nprocs);
-PRTE_MODULE_EXPORT int prte_rmaps_rr_byslot(prte_job_t *jdata,
-                                              prte_app_context_t *app,
-                                              prte_list_t *node_list,
-                                              int32_t num_slots,
-                                              pmix_rank_t nprocs);
+PRTE_MODULE_EXPORT int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app,
+                                            prte_list_t *node_list, int32_t num_slots,
+                                            pmix_rank_t nprocs);
+PRTE_MODULE_EXPORT int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app,
+                                            prte_list_t *node_list, int32_t num_slots,
+                                            pmix_rank_t nprocs);
 
 PRTE_MODULE_EXPORT int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
-                                             prte_list_t *node_list,
-                                             int32_t num_slots,
-                                             pmix_rank_t num_procs,
-                                             hwloc_obj_type_t target, unsigned cache_level);
+                                           prte_list_t *node_list, int32_t num_slots,
+                                           pmix_rank_t num_procs, hwloc_obj_type_t target,
+                                           unsigned cache_level);
 
 PRTE_MODULE_EXPORT int prte_rmaps_rr_assign_root_level(prte_job_t *jdata);
 
-PRTE_MODULE_EXPORT int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
-                                                    hwloc_obj_type_t target,
-                                                    unsigned cache_level);
-
+PRTE_MODULE_EXPORT int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target,
+                                                  unsigned cache_level);
 
 END_C_DECLS
 

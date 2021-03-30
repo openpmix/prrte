@@ -31,9 +31,9 @@ typedef struct {
     int hb_observing;      /* the deamon vpid of the process we observe */
     int hb_observer;       /* the daemon vpid of the process that observes us */
     double hb_rstamp;      /* the date of the last hb reception */
-    double hb_timeout;     /* the timeout before we start suspecting observed process as dead (delta) */
-    double hb_period;      /* the time spacing between heartbeat emission (eta) */
-    double hb_sstamp;      /* the date at which the last hb emission was done */
+    double hb_timeout; /* the timeout before we start suspecting observed process as dead (delta) */
+    double hb_period;  /* the time spacing between heartbeat emission (eta) */
+    double hb_sstamp;  /* the date at which the last hb emission was done */
     int failed_node_count; /* the number of failed nodes in the ring */
     int *daemons_state;    /* a list of failed daemons' vpid */
 } prte_errmgr_detector_t;
@@ -56,7 +56,7 @@ PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr_detector_module;
  * Propagator functions
  */
 int prte_errmgr_failure_propagate(pmix_nspace_t *job, pmix_proc_t *daemon, prte_proc_state_t state);
-int prte_errmgr_failure_propagate_recv(pmix_data_buffer_t* buffer);
+int prte_errmgr_failure_propagate_recv(pmix_data_buffer_t *buffer);
 int prte_errmgr_init_failure_propagate(void);
 int prte_errmgr_finalize_failure_propagate(void);
 bool errmgr_get_daemon_status(pmix_proc_t daemon);

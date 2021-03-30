@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,13 +39,11 @@ static int prte_iof_prted_open(void);
 static int prte_iof_prted_close(void);
 static int prte_iof_prted_query(prte_mca_base_module_t **module, int *priority);
 
-
 /*
  * Public string showing the iof prted component version number
  */
-const char *prte_iof_prted_component_version_string =
-"PRTE prted iof MCA component version " PRTE_VERSION;
-
+const char *prte_iof_prted_component_version_string
+    = "PRTE prted iof MCA component version " PRTE_VERSION;
 
 prte_iof_prted_component_t prte_iof_prted_component = {
     {
@@ -68,8 +67,8 @@ prte_iof_prted_component_t prte_iof_prted_component = {
 };
 
 /**
-  * component open/close/init function
-  */
+ * component open/close/init function
+ */
 static int prte_iof_prted_open(void)
 {
     /* Nothing to do */
@@ -80,7 +79,6 @@ static int prte_iof_prted_close(void)
 {
     return PRTE_SUCCESS;
 }
-
 
 static int prte_iof_prted_query(prte_mca_base_module_t **module, int *priority)
 {
@@ -96,4 +94,3 @@ static int prte_iof_prted_query(prte_mca_base_module_t **module, int *priority)
 
     return PRTE_SUCCESS;
 }
-

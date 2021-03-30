@@ -3,6 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,14 +18,12 @@
 
 #include "prte_stdint.h"
 
-
 struct prte_rng_buff_t {
     uint32_t alfg[127];
     int tap1;
     int tap2;
 };
 typedef struct prte_rng_buff_t prte_rng_buff_t;
-
 
 /* NOTE: UNLIKE OTHER PRTE FUNCTIONS, THIS FUNCTION RETURNS A 1 IF
  * SUCCESSFUL INSTEAD OF PRTE_SUCCESS */

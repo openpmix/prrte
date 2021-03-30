@@ -15,6 +15,7 @@
  *                         reserved.
  * Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -110,7 +111,6 @@ typedef struct prte_mca_base_module_2_0_0_t prte_mca_base_module_t;
 /** Versioned convenience typedef */
 typedef struct prte_mca_base_module_2_0_0_t prte_mca_base_module_2_0_0_t;
 
-
 /**
  * MCA component open function.
  *
@@ -192,7 +192,8 @@ typedef int (*prte_mca_base_close_component_1_0_0_fn_t)(void);
  * implement their own query function, but must also implment their
  * own select function as a result.
  */
-typedef int (*prte_mca_base_query_component_2_0_0_fn_t)(prte_mca_base_module_2_0_0_t **module, int *priority);
+typedef int (*prte_mca_base_query_component_2_0_0_fn_t)(prte_mca_base_module_2_0_0_t **module,
+                                                        int *priority);
 
 /**
  * MCA component parameter registration function.
@@ -243,7 +244,6 @@ typedef int (*prte_mca_base_query_component_2_0_0_fn_t)(prte_mca_base_module_2_0
  */
 typedef int (*prte_mca_base_register_component_params_2_0_0_fn_t)(void);
 
-
 /**
  * Maximum length of MCA project string names.
  */
@@ -284,61 +284,61 @@ enum {
  */
 struct prte_mca_base_component_2_1_0_t {
 
-  int mca_major_version;
-  /**< Major number of the MCA. */
-  int mca_minor_version;
-  /**< Minor number of the MCA. */
-  int mca_release_version;
-  /**< Release number of the MCA. */
+    int mca_major_version;
+    /**< Major number of the MCA. */
+    int mca_minor_version;
+    /**< Minor number of the MCA. */
+    int mca_release_version;
+    /**< Release number of the MCA. */
 
-  char mca_project_name[PRTE_MCA_BASE_MAX_PROJECT_NAME_LEN + 1];
-  /**< String name of the project that this component belongs to. */
-  int mca_project_major_version;
-  /**< Major version number of the project that this component
-     belongs to. */
-  int mca_project_minor_version;
-  /**< Minor version number of the project that this component
-     belongs to. */
-  int mca_project_release_version;
-  /**< Release version number of the project that this component
-     belongs to. */
+    char mca_project_name[PRTE_MCA_BASE_MAX_PROJECT_NAME_LEN + 1];
+    /**< String name of the project that this component belongs to. */
+    int mca_project_major_version;
+    /**< Major version number of the project that this component
+       belongs to. */
+    int mca_project_minor_version;
+    /**< Minor version number of the project that this component
+       belongs to. */
+    int mca_project_release_version;
+    /**< Release version number of the project that this component
+       belongs to. */
 
-  char mca_type_name[PRTE_MCA_BASE_MAX_TYPE_NAME_LEN + 1];
-  /**< String name of the framework that this component belongs to. */
-  int mca_type_major_version;
-  /**< Major version number of the framework that this component
-     belongs to. */
-  int mca_type_minor_version;
-  /**< Minor version number of the framework that this component
-     belongs to. */
-  int mca_type_release_version;
-  /**< Release version number of the framework that this component
-     belongs to. */
+    char mca_type_name[PRTE_MCA_BASE_MAX_TYPE_NAME_LEN + 1];
+    /**< String name of the framework that this component belongs to. */
+    int mca_type_major_version;
+    /**< Major version number of the framework that this component
+       belongs to. */
+    int mca_type_minor_version;
+    /**< Minor version number of the framework that this component
+       belongs to. */
+    int mca_type_release_version;
+    /**< Release version number of the framework that this component
+       belongs to. */
 
-  char mca_component_name[PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN + 1];
-  /**< This comopnent's string name. */
-  int mca_component_major_version;
-  /**< This component's major version number. */
-  int mca_component_minor_version;
-  /**< This component's minor version number. */
-  int mca_component_release_version;
-  /**< This component's release version number. */
+    char mca_component_name[PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN + 1];
+    /**< This comopnent's string name. */
+    int mca_component_major_version;
+    /**< This component's major version number. */
+    int mca_component_minor_version;
+    /**< This component's minor version number. */
+    int mca_component_release_version;
+    /**< This component's release version number. */
 
-  prte_mca_base_open_component_1_0_0_fn_t mca_open_component;
-  /**< Method for opening this component. */
-  prte_mca_base_close_component_1_0_0_fn_t mca_close_component;
-  /**< Method for closing this component. */
-  prte_mca_base_query_component_2_0_0_fn_t mca_query_component;
-  /**< Method for querying this component. */
-  prte_mca_base_register_component_params_2_0_0_fn_t mca_register_component_params;
-  /**< Method for registering the component's MCA parameters */
+    prte_mca_base_open_component_1_0_0_fn_t mca_open_component;
+    /**< Method for opening this component. */
+    prte_mca_base_close_component_1_0_0_fn_t mca_close_component;
+    /**< Method for closing this component. */
+    prte_mca_base_query_component_2_0_0_fn_t mca_query_component;
+    /**< Method for querying this component. */
+    prte_mca_base_register_component_params_2_0_0_fn_t mca_register_component_params;
+    /**< Method for registering the component's MCA parameters */
 
-  int32_t mca_component_flags;
-  /**< flags for this component */
+    int32_t mca_component_flags;
+    /**< flags for this component */
 
-  /** Extra space to allow for expansion in the future without
-      breaking older components. */
-  char reserved[28];
+    /** Extra space to allow for expansion in the future without
+        breaking older components. */
+    char reserved[28];
 };
 /** Unversioned convenience typedef; use this name in
     frameworks/components to stay forward source-compatible */
@@ -349,9 +349,10 @@ typedef struct prte_mca_base_component_2_1_0_t prte_mca_base_component_2_1_0_t;
 /*
  * Metadata Bit field parameters
  */
-#define PRTE_MCA_BASE_METADATA_PARAM_NONE        (uint32_t)0x00 /**< No Metadata flags */
-#define PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT  (uint32_t)0x02 /**< Checkpoint enabled Component */
-#define PRTE_MCA_BASE_METADATA_PARAM_DEBUG       (uint32_t)0x04 /**< Debug enabled/only Component */
+#define PRTE_MCA_BASE_METADATA_PARAM_NONE       (uint32_t) 0x00 /**< No Metadata flags */
+#define PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT (uint32_t) 0x02 /**< Checkpoint enabled Component \
+                                                                 */
+#define PRTE_MCA_BASE_METADATA_PARAM_DEBUG (uint32_t) 0x04      /**< Debug enabled/only Component */
 
 /**
  * Meta data for MCA v2.0.0 components.
@@ -378,26 +379,24 @@ typedef struct prte_mca_base_component_data_2_0_0_t prte_mca_base_component_data
  * indicating that they subscribe to the MCA version 2.0.0.  See
  * component header files (e.g., coll.h) for examples of its usage.
  */
-#define PRTE_MCA_BASE_VERSION_MAJOR 2
-#define PRTE_MCA_BASE_VERSION_MINOR 1
+#define PRTE_MCA_BASE_VERSION_MAJOR   2
+#define PRTE_MCA_BASE_VERSION_MINOR   1
 #define PRTE_MCA_BASE_VERSION_RELEASE 0
 
-#define PRTE_MCA_BASE_MAKE_VERSION(level, MAJOR, MINOR, RELEASE) \
-    .mca_## level ##_major_version = MAJOR,                 \
-    .mca_## level ##_minor_version = MINOR,                 \
-    .mca_## level ##_release_version = RELEASE
+#define PRTE_MCA_BASE_MAKE_VERSION(level, MAJOR, MINOR, RELEASE)                \
+    .mca_##level##_major_version = MAJOR, .mca_##level##_minor_version = MINOR, \
+    .mca_##level##_release_version = RELEASE
 
+#define _PRTE_MCA_BASE_VERSION_2_1_0(PROJECT, project_major, project_minor, project_release, TYPE, \
+                                     type_major, type_minor, type_release)                         \
+    .mca_major_version = PRTE_MCA_BASE_VERSION_MAJOR,                                              \
+    .mca_minor_version = PRTE_MCA_BASE_VERSION_MINOR,                                              \
+    .mca_release_version = PRTE_MCA_BASE_VERSION_RELEASE, .mca_project_name = PROJECT,             \
+    PRTE_MCA_BASE_MAKE_VERSION(project, project_major, project_minor, project_release),            \
+    .mca_type_name = TYPE, PRTE_MCA_BASE_MAKE_VERSION(type, type_major, type_minor, type_release)
 
-#define _PRTE_MCA_BASE_VERSION_2_1_0(PROJECT, project_major, project_minor, project_release, TYPE, type_major, type_minor, type_release) \
-    .mca_major_version = PRTE_MCA_BASE_VERSION_MAJOR,                        \
-    .mca_minor_version = PRTE_MCA_BASE_VERSION_MINOR,                        \
-    .mca_release_version = PRTE_MCA_BASE_VERSION_RELEASE,                    \
-    .mca_project_name = PROJECT,                                        \
-    PRTE_MCA_BASE_MAKE_VERSION(project, project_major, project_minor, project_release), \
-    .mca_type_name = TYPE,                                              \
-    PRTE_MCA_BASE_MAKE_VERSION(type, type_major, type_minor, type_release)
-
-#define PRTE_MCA_BASE_VERSION_2_1_0(type, type_major, type_minor, type_release) \
-    _PRTE_MCA_BASE_VERSION_2_1_0("prte", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION, type, type_major, type_minor, type_release)
+#define PRTE_MCA_BASE_VERSION_2_1_0(type, type_major, type_minor, type_release)  \
+    _PRTE_MCA_BASE_VERSION_2_1_0("prte", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, \
+                                 PRTE_RELEASE_VERSION, type, type_major, type_minor, type_release)
 
 #endif /* PRTE_MCA_H */

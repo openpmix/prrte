@@ -34,7 +34,6 @@
 
 #include "src/runtime/prte_globals.h"
 
-
 BEGIN_C_DECLS
 
 typedef int (*prte_schizo_convertor_fn_t)(char *option, char ***argv, int idx);
@@ -44,9 +43,9 @@ typedef int (*prte_schizo_convertor_fn_t)(char *option, char ***argv, int idx);
  */
 
 /**
-* SCHIZO module functions - the modules are accessed via
-* the base stub functions
-*/
+ * SCHIZO module functions - the modules are accessed via
+ * the base stub functions
+ */
 
 /* initialize the module - allow it to do whatever one-time
  * things it requires */
@@ -68,11 +67,11 @@ typedef int (*prte_schizo_base_module_define_cli_fn_t)(prte_cmd_line_t *cli);
  * known to this module's personality. First, of course, check that
  * this module is included in the base array of personalities, or is
  * automatically recognizable! */
-typedef int (*prte_schizo_base_module_parse_cli_fn_t)(int argc, int start,
-                                                      char **argv, char ***target);
+typedef int (*prte_schizo_base_module_parse_cli_fn_t)(int argc, int start, char **argv,
+                                                      char ***target);
 
-typedef int (*prte_schizo_base_parse_deprecated_cli_fn_t)(prte_cmd_line_t *cmdline,
-                                                          int *argc, char ***argv);
+typedef int (*prte_schizo_base_parse_deprecated_cli_fn_t)(prte_cmd_line_t *cmdline, int *argc,
+                                                          char ***argv);
 
 /* detect if we are running as a proxy
  * Check the environment to determine what, if any, host we are running
@@ -87,10 +86,8 @@ typedef int (*prte_schizo_base_detect_proxy_fn_t)(char *cmdpath);
 /* parse the environment of the
  * tool to extract any personality-specific envars that need to be
  * forward to the app's environment upon execution */
-typedef int (*prte_schizo_base_module_parse_env_fn_t)(prte_cmd_line_t *cmd_line,
-                                                       char **srcenv,
-                                                       char ***dstenv,
-                                                       bool cmdline);
+typedef int (*prte_schizo_base_module_parse_env_fn_t)(prte_cmd_line_t *cmd_line, char **srcenv,
+                                                      char ***dstenv, bool cmdline);
 
 /* check if running as root is allowed in this environment */
 typedef void (*prte_schizo_base_module_allow_run_as_root_fn_t)(prte_cmd_line_t *cmd_line);
@@ -110,11 +107,8 @@ typedef int (*prte_schizo_base_module_setup_fork_fn_t)(prte_job_t *jdata,
 
 /* add any personality-specific envars required for this specific local
  * proc upon execution */
-typedef int (*prte_schizo_base_module_setup_child_fn_t)(prte_job_t *jdata,
-                                                        prte_proc_t *child,
-                                                        prte_app_context_t *app,
-                                                        char ***env);
-
+typedef int (*prte_schizo_base_module_setup_child_fn_t)(prte_job_t *jdata, prte_proc_t *child,
+                                                        prte_app_context_t *app, char ***env);
 
 /* give the component a chance to cleanup */
 typedef void (*prte_schizo_base_module_finalize_fn_t)(void);
@@ -130,34 +124,33 @@ typedef int (*prte_schizo_base_module_check_sanity_fn_t)(prte_cmd_line_t *cmdlin
  */
 typedef struct {
     char *name;
-    prte_schizo_base_module_init_fn_t                      init;
-    prte_schizo_base_module_define_cli_fn_t                define_cli;
-    prte_schizo_base_module_parse_cli_fn_t                 parse_cli;
-    prte_schizo_base_parse_deprecated_cli_fn_t             parse_deprecated_cli;
-    prte_schizo_base_module_parse_env_fn_t                 parse_env;
-    prte_schizo_base_detect_proxy_fn_t                     detect_proxy;
-    prte_schizo_base_module_allow_run_as_root_fn_t         allow_run_as_root;
-    prte_schizo_base_module_setup_app_fn_t                 setup_app;
-    prte_schizo_base_module_setup_fork_fn_t                setup_fork;
-    prte_schizo_base_module_setup_child_fn_t               setup_child;
-    prte_schizo_base_module_job_info_fn_t                  job_info;
-    prte_schizo_base_module_check_sanity_fn_t              check_sanity;
-    prte_schizo_base_module_finalize_fn_t                  finalize;
+    prte_schizo_base_module_init_fn_t init;
+    prte_schizo_base_module_define_cli_fn_t define_cli;
+    prte_schizo_base_module_parse_cli_fn_t parse_cli;
+    prte_schizo_base_parse_deprecated_cli_fn_t parse_deprecated_cli;
+    prte_schizo_base_module_parse_env_fn_t parse_env;
+    prte_schizo_base_detect_proxy_fn_t detect_proxy;
+    prte_schizo_base_module_allow_run_as_root_fn_t allow_run_as_root;
+    prte_schizo_base_module_setup_app_fn_t setup_app;
+    prte_schizo_base_module_setup_fork_fn_t setup_fork;
+    prte_schizo_base_module_setup_child_fn_t setup_child;
+    prte_schizo_base_module_job_info_fn_t job_info;
+    prte_schizo_base_module_check_sanity_fn_t check_sanity;
+    prte_schizo_base_module_finalize_fn_t finalize;
 } prte_schizo_base_module_t;
 
-
-typedef prte_schizo_base_module_t* (*prte_schizo_API_detect_proxy_fn_t)(char *cmdpath);
+typedef prte_schizo_base_module_t *(*prte_schizo_API_detect_proxy_fn_t)(char *cmdpath);
 
 typedef struct {
-    prte_schizo_base_module_init_fn_t                      init;
-    prte_schizo_base_module_parse_env_fn_t                 parse_env;
-    prte_schizo_API_detect_proxy_fn_t                      detect_proxy;
-    prte_schizo_base_module_setup_app_fn_t                 setup_app;
-    prte_schizo_base_module_setup_fork_fn_t                setup_fork;
-    prte_schizo_base_module_setup_child_fn_t               setup_child;
-    prte_schizo_base_module_job_info_fn_t                  job_info;
-    prte_schizo_base_module_check_sanity_fn_t              check_sanity;
-    prte_schizo_base_module_finalize_fn_t                  finalize;
+    prte_schizo_base_module_init_fn_t init;
+    prte_schizo_base_module_parse_env_fn_t parse_env;
+    prte_schizo_API_detect_proxy_fn_t detect_proxy;
+    prte_schizo_base_module_setup_app_fn_t setup_app;
+    prte_schizo_base_module_setup_fork_fn_t setup_fork;
+    prte_schizo_base_module_setup_child_fn_t setup_child;
+    prte_schizo_base_module_job_info_fn_t job_info;
+    prte_schizo_base_module_check_sanity_fn_t check_sanity;
+    prte_schizo_base_module_finalize_fn_t finalize;
 } prte_schizo_API_module_t;
 
 PRTE_EXPORT extern prte_schizo_API_module_t prte_schizo;
@@ -178,9 +171,7 @@ typedef struct {
 /**
  * Macro for use in components that are of type schizo
  */
-#define PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("schizo", 1, 0, 0)
-
+#define PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_2_1_0("schizo", 1, 0, 0)
 
 END_C_DECLS
 

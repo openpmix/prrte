@@ -11,7 +11,6 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #include "constants.h"
 
@@ -20,22 +19,21 @@
 #include "src/class/prte_list.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/schizo/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
-#include "src/mca/schizo/base/base.h"
 
-int prte_schizo_base_parse_env(prte_cmd_line_t *cmd_line,
-                                char **srcenv,
-                                char ***dstenv,
-                                bool cmdline)
+int prte_schizo_base_parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv,
+                               bool cmdline)
 {
     int rc;
     prte_schizo_base_active_module_t *mod;
 
-    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+    {
         if (NULL != mod->module->parse_env) {
             rc = mod->module->parse_env(cmd_line, srcenv, dstenv, cmdline);
             if (PRTE_SUCCESS != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
@@ -46,13 +44,14 @@ int prte_schizo_base_parse_env(prte_cmd_line_t *cmd_line,
     return PRTE_SUCCESS;
 }
 
-prte_schizo_base_module_t* prte_schizo_base_detect_proxy(char *cmdpath)
+prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath)
 {
     prte_schizo_base_active_module_t *mod;
     prte_schizo_base_module_t *md = NULL;
     int pri = -1, p;
 
-    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+    {
         if (NULL != mod->module->detect_proxy) {
             p = mod->module->detect_proxy(cmdpath);
             if (pri < p) {
@@ -71,7 +70,8 @@ PRTE_EXPORT void prte_schizo_base_root_error_msg(void)
     fprintf(stderr, "defining TMPDIR) or bug can result in catastrophic damage to the OS\n");
     fprintf(stderr, "file system, leaving your system in an unusable state.\n\n");
 
-    fprintf(stderr, "We strongly suggest that you run %s as a non-root user.\n\n", prte_tool_basename);
+    fprintf(stderr, "We strongly suggest that you run %s as a non-root user.\n\n",
+            prte_tool_basename);
 
     fprintf(stderr, "You can override this protection by adding the --allow-run-as-root\n");
     fprintf(stderr, "option to your command line.  However, we reiterate our strong advice\n");
@@ -85,7 +85,8 @@ int prte_schizo_base_setup_app(prte_app_context_t *app)
     int rc;
     prte_schizo_base_active_module_t *mod;
 
-    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+    {
         if (NULL != mod->module->setup_app) {
             rc = mod->module->setup_app(app);
             if (PRTE_SUCCESS != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
@@ -97,13 +98,13 @@ int prte_schizo_base_setup_app(prte_app_context_t *app)
     return PRTE_SUCCESS;
 }
 
-int prte_schizo_base_setup_fork(prte_job_t *jdata,
-                                prte_app_context_t *context)
+int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *context)
 {
     int rc;
     prte_schizo_base_active_module_t *mod;
 
-    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+    {
         if (NULL != mod->module->setup_fork) {
             rc = mod->module->setup_fork(jdata, context);
             if (PRTE_SUCCESS != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
@@ -115,15 +116,14 @@ int prte_schizo_base_setup_fork(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
-int prte_schizo_base_setup_child(prte_job_t *jdata,
-                                 prte_proc_t *child,
-                                 prte_app_context_t *app,
+int prte_schizo_base_setup_child(prte_job_t *jdata, prte_proc_t *child, prte_app_context_t *app,
                                  char ***env)
 {
     int rc;
     prte_schizo_base_active_module_t *mod;
 
-    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+    {
         if (NULL != mod->module->setup_child) {
             rc = mod->module->setup_child(jdata, child, app, env);
             if (PRTE_SUCCESS != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
@@ -139,7 +139,8 @@ void prte_schizo_base_job_info(prte_cmd_line_t *cmdline, void *jobinfo)
 {
     prte_schizo_base_active_module_t *mod;
 
-    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+    {
         if (NULL != mod->module->job_info) {
             mod->module->job_info(cmdline, jobinfo);
         }
@@ -151,7 +152,8 @@ int prte_schizo_base_check_sanity(prte_cmd_line_t *cmdline)
     int rc;
     prte_schizo_base_active_module_t *mod;
 
-    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+    {
         if (NULL != mod->module->check_sanity) {
             rc = mod->module->check_sanity(cmdline);
             if (PRTE_SUCCESS != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
@@ -166,18 +168,16 @@ void prte_schizo_base_finalize(void)
 {
     prte_schizo_base_active_module_t *mod;
 
-    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t) {
+    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+    {
         if (NULL != mod->module->finalize) {
             mod->module->finalize();
         }
     }
 }
 
-
-int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
-                                            int *argc, char ***argv,
-                                            char **options,
-                                            prte_schizo_convertor_fn_t convert)
+int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***argv,
+                                            char **options, prte_schizo_convertor_fn_t convert)
 {
     int pargc;
     char **pargs, *p2;
@@ -191,7 +191,7 @@ int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
     ret = PRTE_SUCCESS;
 
     /* check for deprecated cmd line options */
-    for (i=1; i < pargc && NULL != pargs[i]; i++) {
+    for (i = 1; i < pargc && NULL != pargs[i]; i++) {
         /* Are we done?  i.e., did we find the special "--" token? */
         if (0 == strcmp(pargs[i], "--")) {
             break;
@@ -215,8 +215,7 @@ int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
             if (0 == strcmp(p2, "-np")) {
                 free(p2);
             } else {
-                prte_show_help("help-schizo-base.txt", "single-dash-error", true,
-                               p2, pargs[i]);
+                prte_show_help("help-schizo-base.txt", "single-dash-error", true, p2, pargs[i]);
                 free(p2);
                 ret = PRTE_OPERATION_SUCCEEDED;
             }
@@ -224,13 +223,11 @@ int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
 
         /* is this an argument someone needs to convert? */
         found = false;
-        for (n=0; NULL != options[n]; n++) {
+        for (n = 0; NULL != options[n]; n++) {
             if (0 == strcmp(pargs[i], options[n])) {
                 rc = convert(options[n], argv, i);
-                if (PRTE_SUCCESS != rc &&
-                    PRTE_ERR_SILENT != rc &&
-                    PRTE_ERR_TAKE_NEXT_OPTION != rc &&
-                    PRTE_OPERATION_SUCCEEDED != rc) {
+                if (PRTE_SUCCESS != rc && PRTE_ERR_SILENT != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc
+                    && PRTE_OPERATION_SUCCEEDED != rc) {
                     return rc;
                 }
                 if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
@@ -254,7 +251,7 @@ int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
                 }
                 pargs = *argv;
                 pargc = prte_argv_count(pargs);
-                break;  // for loop
+                break; // for loop
             }
         }
 
@@ -304,14 +301,13 @@ char *prte_schizo_base_getline(FILE *fp)
     memset(input, 0, 2048);
     ret = fgets(input, 2048, fp);
     if (NULL != ret) {
-        input[strlen(input)-1] = '\0';  /* remove newline */
+        input[strlen(input) - 1] = '\0'; /* remove newline */
         buff = strdup(input);
         return buff;
     }
 
     return NULL;
 }
-
 
 bool prte_schizo_base_check_ini(char *cmdpath, char *file)
 {
@@ -330,7 +326,7 @@ bool prte_schizo_base_check_ini(char *cmdpath, char *file)
     }
     /* read the file to find the proxy defnitions */
     while (NULL != (line = prte_schizo_base_getline(fp))) {
-        if('\0' == line[0]) {
+        if ('\0' == line[0]) {
             continue; /* skip empty lines */
         }
         /* find the start of text in the line */
@@ -352,7 +348,7 @@ bool prte_schizo_base_check_ini(char *cmdpath, char *file)
     return false;
 }
 
-char* prte_schizo_base_strip_quotes(char *p)
+char *prte_schizo_base_strip_quotes(char *p)
 {
     char *pout;
 
@@ -362,11 +358,10 @@ char* prte_schizo_base_strip_quotes(char *p)
     } else {
         pout = strdup(p);
     }
-    if ('\"' == pout[strlen(pout)- 1]) {
-        pout[strlen(pout)-1] = '\0';
+    if ('\"' == pout[strlen(pout) - 1]) {
+        pout[strlen(pout) - 1] = '\0';
     }
     return pout;
-
 }
 
 static char *prte_frameworks[] = {
@@ -394,21 +389,20 @@ static char *prte_frameworks[] = {
     NULL,
 };
 
-int prte_schizo_base_parse_prte(int argc, int start,
-                                char **argv, char ***target)
+int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target)
 {
     int i, j;
     bool ignore;
     char *p1, *p2, *param;
 
-    for (i = 0; i < (argc-start); ++i) {
+    for (i = 0; i < (argc - start); ++i) {
         if (0 == strcmp("--prtemca", argv[i])) {
-            if (NULL == argv[i+1] || NULL == argv[i+2]) {
+            if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
                 return PRTE_ERR_FATAL;
             }
-            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
-            p2 = prte_schizo_base_strip_quotes(argv[i+2]);
+            p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
+            p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
             if (NULL == target) {
                 /* push it into our environment */
                 asprintf(&param, "PRTE_MCA_%s", p1);
@@ -427,12 +421,12 @@ int prte_schizo_base_parse_prte(int argc, int start,
             continue;
         }
         if (0 == strcmp("--mca", argv[i])) {
-            if (NULL == argv[i+1] || NULL == argv[i+2]) {
+            if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
                 return PRTE_ERR_FATAL;
             }
-            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
-            p2 = prte_schizo_base_strip_quotes(argv[i+2]);
+            p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
+            p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
 
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
@@ -440,7 +434,7 @@ int prte_schizo_base_parse_prte(int argc, int start,
             if (0 == strncmp("prte", p1, strlen("prte"))) {
                 ignore = false;
             } else {
-                for (j=0; NULL != prte_frameworks[j]; j++) {
+                for (j = 0; NULL != prte_frameworks[j]; j++) {
                     if (0 == strncmp(p1, prte_frameworks[j], strlen(prte_frameworks[j]))) {
                         ignore = false;
                         break;
@@ -471,47 +465,27 @@ int prte_schizo_base_parse_prte(int argc, int start,
 }
 
 static char *pmix_frameworks[] = {
-    "bfrops",
-    "gds",
-    "pcompress",
-    "pdl",
-    "pfexec",
-    "pif",
-    "pinstalldirs",
-    "ploc",
-    "plog",
-    "pmdl",
-    "pnet",
-    "preg",
-    "prm",
-    "psec",
-    "psensor",
-    "pshmem",
-    "psquash",
-    "pstat",
-    "pstrg",
-    "ptl",
-    NULL,
+    "bfrops",  "gds",    "pcompress", "pdl",   "pfexec", "pif", "pinstalldirs",
+    "ploc",    "plog",   "pmdl",      "pnet",  "preg",   "prm", "psec",
+    "psensor", "pshmem", "psquash",   "pstat", "pstrg",  "ptl", NULL,
 };
 
-int prte_schizo_base_parse_pmix(int argc, int start,
-                                char **argv, char ***target)
+int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target)
 {
     int i, j;
     bool ignore;
     char *p1, *p2, *param;
 
-    for (i = 0; i < (argc-start); ++i) {
+    for (i = 0; i < (argc - start); ++i) {
         ignore = true;
-        if (0 == strcmp("--pmixmca", argv[i]) ||
-            0 == strcmp("--gpmixmca", argv[i])) {
-            if (NULL == argv[i+1] || NULL == argv[i+2]) {
+        if (0 == strcmp("--pmixmca", argv[i]) || 0 == strcmp("--gpmixmca", argv[i])) {
+            if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
                 return PRTE_ERR_FATAL;
             }
             /* strip any quotes around the args */
-            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
-            p2 = prte_schizo_base_strip_quotes(argv[i+2]);
+            p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
+            p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
             if (NULL == target) {
                 /* push it into our environment */
                 asprintf(&param, "PMIX_MCA_%s", p1);
@@ -529,22 +503,21 @@ int prte_schizo_base_parse_pmix(int argc, int start,
             i += 2;
             continue;
         }
-        if (0 == strcmp("--mca", argv[i]) ||
-            0 == strcmp("--gmca", argv[i])) {
-            if (NULL == argv[i+1] || NULL == argv[i+2]) {
+        if (0 == strcmp("--mca", argv[i]) || 0 == strcmp("--gmca", argv[i])) {
+            if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
                 return PRTE_ERR_FATAL;
             }
             /* strip any quotes around the args */
-            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
-            p2 = prte_schizo_base_strip_quotes(argv[i+2]);
+            p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
+            p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
 
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
             if (0 == strncmp("pmix", p1, strlen("pmix"))) {
                 ignore = false;
             } else {
-                for (j=0; NULL != pmix_frameworks[j]; j++) {
+                for (j = 0; NULL != pmix_frameworks[j]; j++) {
                     if (0 == strncmp(p1, pmix_frameworks[j], strlen(pmix_frameworks[j]))) {
                         ignore = false;
                         break;

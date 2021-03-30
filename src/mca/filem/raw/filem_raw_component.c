@@ -6,6 +6,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,20 +15,18 @@
  */
 
 #include "prte_config.h"
-#include "src/util/output.h"
 #include "constants.h"
+#include "src/util/output.h"
 
-
-
-#include "src/mca/filem/filem.h"
-#include "src/mca/filem/base/base.h"
 #include "filem_raw.h"
+#include "src/mca/filem/base/base.h"
+#include "src/mca/filem/filem.h"
 
 /*
  * Public string for version number
  */
-const char *prte_filem_raw_component_version_string =
-"PRTE FILEM raw MCA component version " PRTE_VERSION;
+const char *prte_filem_raw_component_version_string
+    = "PRTE FILEM raw MCA component version " PRTE_VERSION;
 
 /*
  * Local functionality
@@ -37,7 +36,7 @@ static int filem_raw_open(void);
 static int filem_raw_close(void);
 static int filem_raw_query(prte_mca_base_module_t **module, int *priority);
 
-bool prte_filem_raw_flatten_trees=false;
+bool prte_filem_raw_flatten_trees = false;
 
 prte_filem_base_component_t prte_filem_raw_component = {
     .base_version = {
@@ -65,12 +64,12 @@ static int filem_raw_register(void)
 
     prte_filem_raw_flatten_trees = false;
     (void) prte_mca_base_component_var_register(c, "flatten_directory_trees",
-                                           "Put all files in the working directory instead of creating their respective directory trees",
-                                           PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                           PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                           PRTE_INFO_LVL_9,
-                                           PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                           &prte_filem_raw_flatten_trees);
+                                                "Put all files in the working directory instead of "
+                                                "creating their respective directory trees",
+                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_filem_raw_flatten_trees);
 
     return PRTE_SUCCESS;
 }
@@ -88,6 +87,6 @@ static int filem_raw_close(void)
 static int filem_raw_query(prte_mca_base_module_t **module, int *priority)
 {
     *priority = 0;
-    *module = (prte_mca_base_module_t*) &prte_filem_raw_module;
+    *module = (prte_mca_base_module_t *) &prte_filem_raw_module;
     return PRTE_SUCCESS;
 }

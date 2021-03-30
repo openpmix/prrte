@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,12 +26,12 @@
 
 #include <string.h>
 #ifdef HAVE_STRINGS_H
-#include <strings.h>
+#    include <strings.h>
 #endif /* HAVE_STRINGS_H */
 
 #include "src/class/prte_object.h"
 #if PRTE_ENABLE_DEBUG
-#include "src/util/output.h"
+#    include "src/util/output.h"
 #endif
 #include "constants.h"
 
@@ -40,13 +41,12 @@ BEGIN_C_DECLS
  *  @file  Array of elements maintained by value.
  */
 
-struct prte_value_array_t
-{
-    prte_object_t    super;
-    unsigned char*  array_items;
-    size_t          array_item_sizeof;
-    size_t          array_size;
-    size_t          array_alloc_size;
+struct prte_value_array_t {
+    prte_object_t super;
+    unsigned char *array_items;
+    size_t array_item_sizeof;
+    size_t array_size;
+    size_t array_alloc_size;
 };
 typedef struct prte_value_array_t prte_value_array_t;
 
@@ -70,10 +70,10 @@ static inline int prte_value_array_init(prte_value_array_t *array, size_t item_s
     array->array_item_sizeof = item_sizeof;
     array->array_alloc_size = 1;
     array->array_size = 0;
-    array->array_items = (unsigned char*)realloc(array->array_items, item_sizeof * array->array_alloc_size);
+    array->array_items = (unsigned char *) realloc(array->array_items,
+                                                   item_sizeof * array->array_alloc_size);
     return (NULL != array->array_items) ? PRTE_SUCCESS : PRTE_ERR_OUT_OF_RESOURCE;
 }
-
 
 /**
  *  Reserve space in the array for new elements, but do not change the size.
@@ -83,21 +83,20 @@ static inline int prte_value_array_init(prte_value_array_t *array, size_t item_s
  *  @return  PRTE error code.
  */
 
-static inline int prte_value_array_reserve(prte_value_array_t* array, size_t size)
+static inline int prte_value_array_reserve(prte_value_array_t *array, size_t size)
 {
-     if(size > array->array_alloc_size) {
-         array->array_items = (unsigned char*)realloc(array->array_items, array->array_item_sizeof * size);
-         if(NULL == array->array_items) {
-             array->array_size = 0;
-             array->array_alloc_size = 0;
-             return PRTE_ERR_OUT_OF_RESOURCE;
-         }
-         array->array_alloc_size = size;
-     }
-     return PRTE_SUCCESS;
+    if (size > array->array_alloc_size) {
+        array->array_items = (unsigned char *) realloc(array->array_items,
+                                                       array->array_item_sizeof * size);
+        if (NULL == array->array_items) {
+            array->array_size = 0;
+            array->array_alloc_size = 0;
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        array->array_alloc_size = size;
+    }
+    return PRTE_SUCCESS;
 }
-
-
 
 /**
  *  Retreives the number of elements in the array.
@@ -106,11 +105,10 @@ static inline int prte_value_array_reserve(prte_value_array_t* array, size_t siz
  *  @return  The number of elements currently in use.
  */
 
-static inline size_t prte_value_array_get_size(prte_value_array_t* array)
+static inline size_t prte_value_array_get_size(prte_value_array_t *array)
 {
     return array->array_size;
 }
-
 
 /**
  *  Set the number of elements in the array.
@@ -127,8 +125,7 @@ static inline size_t prte_value_array_get_size(prte_value_array_t* array)
  *  return the new size.
  */
 
-PRTE_EXPORT int prte_value_array_set_size(prte_value_array_t* array, size_t size);
-
+PRTE_EXPORT int prte_value_array_set_size(prte_value_array_t *array, size_t size);
 
 /**
  *  Macro to retrieve an item from the array by value.
@@ -145,7 +142,7 @@ PRTE_EXPORT int prte_value_array_set_size(prte_value_array_t* array, size_t size
  */
 
 #define PRTE_VALUE_ARRAY_GET_ITEM(array, item_type, item_index) \
-    ((item_type*)((array)->array_items))[item_index]
+    ((item_type *) ((array)->array_items))[item_index]
 
 /**
  *  Retrieve an item from the array by reference.
@@ -159,9 +156,10 @@ PRTE_EXPORT int prte_value_array_set_size(prte_value_array_t* array, size_t size
  *  array size, the array is grown to satisfy the request.
  */
 
-static inline void* prte_value_array_get_item(prte_value_array_t *array, size_t item_index)
+static inline void *prte_value_array_get_item(prte_value_array_t *array, size_t item_index)
 {
-    if(item_index >= array->array_size && prte_value_array_set_size(array, item_index+1) != PRTE_SUCCESS)
+    if (item_index >= array->array_size
+        && prte_value_array_set_size(array, item_index + 1) != PRTE_SUCCESS)
         return NULL;
     return array->array_items + (item_index * array->array_item_sizeof);
 }
@@ -183,7 +181,7 @@ static inline void* prte_value_array_get_item(prte_value_array_t *array, size_t 
  */
 
 #define PRTE_VALUE_ARRAY_SET_ITEM(array, item_type, item_index, item_value) \
-    (((item_type*)((array)->array_items))[item_index] = item_value)
+    (((item_type *) ((array)->array_items))[item_index] = item_value)
 
 /**
  *  Set an array element by value.
@@ -199,16 +197,17 @@ static inline void* prte_value_array_get_item(prte_value_array_t *array, size_t 
  * copied into the array by value.
  */
 
-static inline int prte_value_array_set_item(prte_value_array_t *array, size_t item_index, const void* item)
+static inline int prte_value_array_set_item(prte_value_array_t *array, size_t item_index,
+                                            const void *item)
 {
     int rc;
-    if(item_index >= array->array_size &&
-       (rc = prte_value_array_set_size(array, item_index+1)) != PRTE_SUCCESS)
+    if (item_index >= array->array_size
+        && (rc = prte_value_array_set_size(array, item_index + 1)) != PRTE_SUCCESS)
         return rc;
-    memcpy(array->array_items + (item_index * array->array_item_sizeof), item, array->array_item_sizeof);
+    memcpy(array->array_items + (item_index * array->array_item_sizeof), item,
+           array->array_item_sizeof);
     return PRTE_SUCCESS;
 }
-
 
 /**
  *  Appends an item to the end of the array.
@@ -229,7 +228,6 @@ static inline int prte_value_array_append_item(prte_value_array_t *array, const 
     return prte_value_array_set_item(array, array->array_size, item);
 }
 
-
 /**
  *  Remove a specific item from the array.
  *
@@ -246,12 +244,13 @@ static inline int prte_value_array_remove_item(prte_value_array_t *array, size_t
 {
 #if PRTE_ENABLE_DEBUG
     if (item_index >= array->array_size) {
-        prte_output(0, "prte_value_array_remove_item: invalid index %lu\n", (unsigned long)item_index);
+        prte_output(0, "prte_value_array_remove_item: invalid index %lu\n",
+                    (unsigned long) item_index);
         return PRTE_ERR_BAD_PARAM;
     }
 #endif
-    memmove(array->array_items+(array->array_item_sizeof * item_index),
-            array->array_items+(array->array_item_sizeof * (item_index+1)),
+    memmove(array->array_items + (array->array_item_sizeof * item_index),
+            array->array_items + (array->array_item_sizeof * (item_index + 1)),
             array->array_item_sizeof * (array->array_size - item_index - 1));
     array->array_size--;
     return PRTE_SUCCESS;
@@ -273,8 +272,7 @@ static inline int prte_value_array_remove_item(prte_value_array_t *array, size_t
  * number of pointer dereferences.
  */
 
-#define PRTE_VALUE_ARRAY_GET_BASE(array, item_type) \
-  ((item_type*) ((array)->array_items))
+#define PRTE_VALUE_ARRAY_GET_BASE(array, item_type) ((item_type *) ((array)->array_items))
 
 END_C_DECLS
 

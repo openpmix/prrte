@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,15 +32,14 @@
 
 #include "prte_config.h"
 #include "constants.h"
+#include "src/mca/common/alps/common_alps.h"
+#include "src/mca/ess/alps/ess_alps.h"
+#include "src/mca/ess/base/base.h"
+#include "src/mca/ess/ess.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/proc_info.h"
-#include "src/mca/common/alps/common_alps.h"
-#include "src/mca/ess/ess.h"
-#include "src/mca/ess/base/base.h"
-#include "src/mca/ess/alps/ess_alps.h"
 
 #include <sys/syscall.h>
-
 
 /*
  * Instantiate the public struct with all of our public information
@@ -67,8 +67,7 @@ prte_ess_base_component_t prte_ess_alps_component = {
     },
 };
 
-int
-prte_ess_alps_component_open(void)
+int prte_ess_alps_component_open(void)
 {
     return PRTE_SUCCESS;
 }
@@ -94,9 +93,7 @@ int prte_ess_alps_component_query(prte_mca_base_module_t **module, int *priority
     return rc;
 }
 
-int
-prte_ess_alps_component_close(void)
+int prte_ess_alps_component_close(void)
 {
     return PRTE_SUCCESS;
 }
-

@@ -12,6 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,16 +26,18 @@
 
 uint32_t prte_local_arch = 0xFFFFFFFF;
 
-static inline int32_t prte_arch_isbigendian ( void )
+static inline int32_t prte_arch_isbigendian(void)
 {
     const uint32_t value = 0x12345678;
-    const char *ptr = (char*)&value;
+    const char *ptr = (char *) &value;
     int x = 0;
 
     /* if( sizeof(int) == 8 ) x = 4; */
-    if( ptr[x] == 0x12)  return 1; /* big endian, true */
-    if( ptr[x] == 0x78 ) return 0; /* little endian, false */
-    assert( 0 );  /* unknown architecture not little nor big endian */
+    if (ptr[x] == 0x12)
+        return 1; /* big endian, true */
+    if (ptr[x] == 0x78)
+        return 0; /* little endian, false */
+    assert(0);    /* unknown architecture not little nor big endian */
     return -1;
 }
 
@@ -49,30 +52,30 @@ static inline int32_t prte_arch_isbigendian ( void )
  * of the mantissa. If it's 1 then we have an intel representaion, if not
  * we have a sparc one. QED
  */
-static inline int32_t prte_arch_ldisintel( void )
+static inline int32_t prte_arch_ldisintel(void)
 {
     long double ld = 2.0;
     int i, j;
-    uint32_t* pui = (uint32_t*)(void*)&ld;
+    uint32_t *pui = (uint32_t *) (void *) &ld;
 
     j = LDBL_MANT_DIG / 32;
     i = (LDBL_MANT_DIG % 32) - 1;
-    if( prte_arch_isbigendian() ) { /* big endian */
+    if (prte_arch_isbigendian()) { /* big endian */
         j = (sizeof(long double) / sizeof(unsigned int)) - j;
-        if( i < 0 ) {
+        if (i < 0) {
             i = 31;
-            j = j+1;
+            j = j + 1;
         }
     } else {
-        if( i < 0 ) {
+        if (i < 0) {
             i = 31;
-            j = j-1;
+            j = j - 1;
         }
     }
     return ((pui[j] & (1u << i)) ? 1 : 0);
 }
 
-static inline void prte_arch_setmask ( uint32_t *var, uint32_t mask)
+static inline void prte_arch_setmask(uint32_t *var, uint32_t mask)
 {
     *var |= mask;
 }
@@ -82,63 +85,63 @@ int prte_arch_init(void)
     prte_local_arch = (PRTE_ARCH_HEADERMASK | PRTE_ARCH_UNUSEDMASK);
 
     /* Handle the size of long (can hold a pointer) */
-    if( 8 == sizeof(long) )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LONGIS64 );
+    if (8 == sizeof(long))
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LONGIS64);
 
     /* sizeof bool */
-    if (1 == sizeof(bool) ) {
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_BOOLIS8);
+    if (1 == sizeof(bool)) {
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_BOOLIS8);
     } else if (2 == sizeof(bool)) {
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_BOOLIS16);
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_BOOLIS16);
     } else if (4 == sizeof(bool)) {
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_BOOLIS32);
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_BOOLIS32);
     }
 
     /* Note that fortran logical size is set later, to make
        abstractions a little less painful... */
 
     /* Initialize the information regarding the long double */
-    if( 12 == sizeof(long double) )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LONGDOUBLEIS96 );
-    else if( 16 == sizeof(long double) )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LONGDOUBLEIS128 );
+    if (12 == sizeof(long double))
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LONGDOUBLEIS96);
+    else if (16 == sizeof(long double))
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LONGDOUBLEIS128);
 
     /* Big endian or little endian ? That's the question */
-    if( prte_arch_isbigendian() )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_ISBIGENDIAN );
+    if (prte_arch_isbigendian())
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_ISBIGENDIAN);
 
     /* What's the maximum exponent ? */
-    if ( LDBL_MAX_EXP == 16384 )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LDEXPSIZEIS15 );
+    if (LDBL_MAX_EXP == 16384)
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LDEXPSIZEIS15);
 
     /* How about the length in bits of the mantissa */
-    if ( LDBL_MANT_DIG == 64 )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LDMANTDIGIS64 );
-    else if ( LDBL_MANT_DIG == 105 )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LDMANTDIGIS105 );
-    else if ( LDBL_MANT_DIG == 106 )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LDMANTDIGIS106 );
-    else if ( LDBL_MANT_DIG == 107 )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LDMANTDIGIS107 );
-    else if ( LDBL_MANT_DIG == 113 )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LDMANTDIGIS113 );
+    if (LDBL_MANT_DIG == 64)
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LDMANTDIGIS64);
+    else if (LDBL_MANT_DIG == 105)
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LDMANTDIGIS105);
+    else if (LDBL_MANT_DIG == 106)
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LDMANTDIGIS106);
+    else if (LDBL_MANT_DIG == 107)
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LDMANTDIGIS107);
+    else if (LDBL_MANT_DIG == 113)
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LDMANTDIGIS113);
 
     /* Intel data representation or Sparc ? */
-    if( prte_arch_ldisintel() )
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LDISINTEL );
+    if (prte_arch_ldisintel())
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LDISINTEL);
 
     return PRTE_SUCCESS;
 }
 
-int32_t prte_arch_checkmask ( uint32_t *var, uint32_t mask )
+int32_t prte_arch_checkmask(uint32_t *var, uint32_t mask)
 {
     unsigned int tmpvar = *var;
 
     /* Check whether the headers are set correctly,
        or whether this is an erroneous integer */
-    if( !((*var) & PRTE_ARCH_HEADERMASK) ) {
-        if( (*var) & PRTE_ARCH_HEADERMASK2 ) {
-            char* pcDest, *pcSrc;
+    if (!((*var) & PRTE_ARCH_HEADERMASK)) {
+        if ((*var) & PRTE_ARCH_HEADERMASK2) {
+            char *pcDest, *pcSrc;
             /* Both ends of this integer have the wrong settings,
                maybe its just the wrong endian-representation. Try
                to swap it and check again. If it looks now correct,
@@ -146,13 +149,13 @@ int32_t prte_arch_checkmask ( uint32_t *var, uint32_t mask )
             */
 
             pcDest = (char *) &tmpvar;
-            pcSrc  = (char *) var + 3;
+            pcSrc = (char *) var + 3;
             *pcDest++ = *pcSrc--;
             *pcDest++ = *pcSrc--;
             *pcDest++ = *pcSrc--;
             *pcDest++ = *pcSrc--;
 
-            if( (tmpvar & PRTE_ARCH_HEADERMASK) && (!(tmpvar & PRTE_ARCH_HEADERMASK2)) ) {
+            if ((tmpvar & PRTE_ARCH_HEADERMASK) && (!(tmpvar & PRTE_ARCH_HEADERMASK2))) {
                 *var = tmpvar;
             } else
                 return -1;
@@ -161,18 +164,17 @@ int32_t prte_arch_checkmask ( uint32_t *var, uint32_t mask )
     }
 
     /* Here is the real evaluation of the bitmask */
-    return ( ((*var) & mask) == mask );
+    return (((*var) & mask) == mask);
 }
 
-int
-prte_arch_set_fortran_logical_size(uint32_t size)
+int prte_arch_set_fortran_logical_size(uint32_t size)
 {
     if (1 == size) {
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LOGICALIS8);
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LOGICALIS8);
     } else if (2 == size) {
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LOGICALIS16);
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LOGICALIS16);
     } else if (4 == size) {
-        prte_arch_setmask( &prte_local_arch, PRTE_ARCH_LOGICALIS32);
+        prte_arch_setmask(&prte_local_arch, PRTE_ARCH_LOGICALIS32);
     }
 
     return PRTE_SUCCESS;

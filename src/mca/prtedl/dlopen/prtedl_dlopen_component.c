@@ -6,6 +6,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,13 +22,11 @@
 
 #include "prtedl_dlopen.h"
 
-
 /*
  * Public string showing the sysinfo ompi_linux component version number
  */
-const char *prte_prtedl_dlopen_component_version_string =
-    "PRTE prtedl dlopen MCA component version " PRTE_VERSION;
-
+const char *prte_prtedl_dlopen_component_version_string
+    = "PRTE prtedl dlopen MCA component version " PRTE_VERSION;
 
 /*
  * Local functions
@@ -74,29 +73,21 @@ prte_prtedl_dlopen_component_t prte_prtedl_dlopen_component = {
     },
 };
 
-
 static int dlopen_component_register(void)
 {
     int ret;
 
     prte_prtedl_dlopen_component.filename_suffixes_mca_storage = ".so,.dylib,.dll,.sl";
-    ret =
-        prte_mca_base_component_var_register(&prte_prtedl_dlopen_component.base.base_version,
-                                        "filename_suffixes",
-                                        "Comma-delimited list of filename suffixes that the PRTE dlopen component will try",
-                                        PRTE_MCA_BASE_VAR_TYPE_STRING,
-                                        NULL,
-                                        0,
-                                        PRTE_MCA_BASE_VAR_FLAG_SETTABLE,
-                                        PRTE_INFO_LVL_5,
-                                        PRTE_MCA_BASE_VAR_SCOPE_LOCAL,
-                                        &prte_prtedl_dlopen_component.filename_suffixes_mca_storage);
+    ret = prte_mca_base_component_var_register(
+        &prte_prtedl_dlopen_component.base.base_version, "filename_suffixes",
+        "Comma-delimited list of filename suffixes that the PRTE dlopen component will try",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_5,
+        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_prtedl_dlopen_component.filename_suffixes_mca_storage);
     if (ret < 0) {
         return ret;
     }
-    prte_prtedl_dlopen_component.filename_suffixes =
-        prte_argv_split(prte_prtedl_dlopen_component.filename_suffixes_mca_storage,
-                        ',');
+    prte_prtedl_dlopen_component.filename_suffixes
+        = prte_argv_split(prte_prtedl_dlopen_component.filename_suffixes_mca_storage, ',');
 
     return PRTE_SUCCESS;
 }
@@ -105,7 +96,6 @@ static int dlopen_component_open(void)
 {
     return PRTE_SUCCESS;
 }
-
 
 static int dlopen_component_close(void)
 {
@@ -116,7 +106,6 @@ static int dlopen_component_close(void)
 
     return PRTE_SUCCESS;
 }
-
 
 static int dlopen_component_query(prte_mca_base_module_t **module, int *priority)
 {

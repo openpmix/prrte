@@ -29,25 +29,23 @@
 
 #include <string.h>
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 
-
 #include "src/event/event-internal.h"
-#include "src/pmix/pmix-internal.h"
-#include "src/mca/odls/odls_types.h"
-#include "src/mca/grpcomm/base/base.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
+#include "src/mca/grpcomm/base/base.h"
+#include "src/mca/odls/odls_types.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
+#include "src/mca/state/state.h"
+#include "src/pmix/pmix-internal.h"
+#include "src/prted/prted.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/mca/state/state.h"
-#include "src/runtime/prte_wait.h"
-#include "src/prted/prted.h"
 
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -88,9 +86,7 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
      * and therefore cannot depend on detecting their
      * routed children to determine termination
      */
-    if (prte_abnormal_term_ordered ||
-        prte_never_launched ||
-        !prte_routing_is_enabled) {
+    if (prte_abnormal_term_ordered || prte_never_launched || !prte_routing_is_enabled) {
         cmmnd = PRTE_DAEMON_HALT_VM_CMD;
     }
 
@@ -106,7 +102,7 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
     }
     /* goes to all daemons */
     sig = PRTE_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t*)malloc(sizeof(pmix_proc_t));
+    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     sig->sz = 1;
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
     if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &cmd))) {
@@ -126,7 +122,6 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
     return rc;
 }
 
-
 int prte_plm_base_prted_terminate_job(pmix_nspace_t jobid)
 {
     prte_pointer_array_t procs;
@@ -134,8 +129,7 @@ int prte_plm_base_prted_terminate_job(pmix_nspace_t jobid)
     int rc;
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                         "%s plm:base:prted_terminate job %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         "%s plm:base:prted_terminate job %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_JOBID_PRINT(jobid)));
 
     PRTE_CONSTRUCT(&procs, prte_pointer_array_t);
@@ -155,7 +149,7 @@ int prte_plm_base_prted_kill_local_procs(prte_pointer_array_t *procs)
 {
     int rc;
     pmix_data_buffer_t cmd;
-    prte_daemon_cmd_flag_t command=PRTE_DAEMON_KILL_LOCAL_PROCS;
+    prte_daemon_cmd_flag_t command = PRTE_DAEMON_KILL_LOCAL_PROCS;
     int v;
     prte_proc_t *proc;
     prte_grpcomm_signature_t *sig;
@@ -175,8 +169,8 @@ int prte_plm_base_prted_kill_local_procs(prte_pointer_array_t *procs)
 
     /* pack the proc names */
     if (NULL != procs) {
-        for (v=0; v < procs->size; v++) {
-            if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(procs, v))) {
+        for (v = 0; v < procs->size; v++) {
+            if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(procs, v))) {
                 continue;
             }
             rc = PMIx_Data_pack(NULL, &cmd, &proc->name, 1, PMIX_PROC);
@@ -189,7 +183,7 @@ int prte_plm_base_prted_kill_local_procs(prte_pointer_array_t *procs)
     }
     /* goes to all daemons */
     sig = PRTE_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t*)malloc(sizeof(pmix_proc_t));
+    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     sig->sz = 1;
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
     if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &cmd))) {
@@ -202,12 +196,11 @@ int prte_plm_base_prted_kill_local_procs(prte_pointer_array_t *procs)
     return rc;
 }
 
-
 int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
 {
     int rc;
     pmix_data_buffer_t cmd;
-    prte_daemon_cmd_flag_t command=PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
+    prte_daemon_cmd_flag_t command = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
     prte_grpcomm_signature_t *sig;
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
@@ -242,7 +235,7 @@ int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
 
     /* goes to all daemons */
     sig = PRTE_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t*)malloc(sizeof(pmix_proc_t));
+    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     sig->sz = 1;
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
     if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &cmd))) {

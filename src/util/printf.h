@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -53,8 +54,8 @@ BEGIN_C_DECLS
  *
  * THIS IS A PORTABILITY FEATURE: USE snprintf() in CODE.
  */
-PRTE_EXPORT int  prte_snprintf(char *str, size_t size, const char *fmt, ...) __prte_attribute_format__(__printf__, 3, 4);
-
+PRTE_EXPORT int prte_snprintf(char *str, size_t size, const char *fmt, ...)
+    __prte_attribute_format__(__printf__, 3, 4);
 
 /**
  * Writes to a string under the control of a format string that
@@ -78,7 +79,8 @@ PRTE_EXPORT int  prte_snprintf(char *str, size_t size, const char *fmt, ...) __p
  *
  * THIS IS A PORTABILITY FEATURE: USE vsnprintf() in CODE.
  */
-PRTE_EXPORT int  prte_vsnprintf(char *str, size_t size, const char *fmt, va_list ap) __prte_attribute_format__(__printf__, 3, 0);
+PRTE_EXPORT int prte_vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
+    __prte_attribute_format__(__printf__, 3, 0);
 
 /**
  * Allocates and writes to a string under the control of a format
@@ -104,8 +106,8 @@ PRTE_EXPORT int  prte_vsnprintf(char *str, size_t size, const char *fmt, va_list
  * such behavior.
  *
  */
-PRTE_EXPORT int  prte_asprintf(char **ptr, const char *fmt, ...) __prte_attribute_format__(__printf__, 2, 3);
-
+PRTE_EXPORT int prte_asprintf(char **ptr, const char *fmt, ...)
+    __prte_attribute_format__(__printf__, 2, 3);
 
 /**
  * Allocates and writes to a string under the control of a format
@@ -133,10 +135,9 @@ PRTE_EXPORT int  prte_asprintf(char **ptr, const char *fmt, ...) __prte_attribut
  * such behavior.
  *
  */
-PRTE_EXPORT int  prte_vasprintf(char **ptr, const char *fmt, va_list ap) __prte_attribute_format__(__printf__, 2, 0);
-
+PRTE_EXPORT int prte_vasprintf(char **ptr, const char *fmt, va_list ap)
+    __prte_attribute_format__(__printf__, 2, 0);
 
 END_C_DECLS
 
 #endif /* PRTE_PRINTF_H */
-

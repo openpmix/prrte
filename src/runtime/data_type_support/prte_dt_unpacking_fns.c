@@ -27,10 +27,10 @@
 #include <sys/types.h>
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/pmix/pmix-internal.h"
+#include "src/util/argv.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -42,8 +42,7 @@
  * spawn another job - so we only pack that limited set of required data.
  * Therefore, only unpack what was packed
  */
-int prte_job_unpack(pmix_data_buffer_t *bkt,
-                    prte_job_t **job)
+int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
 {
     int rc;
     int32_t k, n, count, bookmark;
@@ -81,16 +80,16 @@ int prte_job_unpack(pmix_data_buffer_t *bkt,
     }
 
     /* unpack the attributes */
-    n=1;
+    n = 1;
     rc = PMIx_Data_unpack(NULL, bkt, &count, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PRTE_RELEASE(jptr);
         return prte_pmix_convert_status(rc);
     }
-    for (k=0; k < count; k++) {
+    for (k = 0; k < count; k++) {
         kv = PRTE_NEW(prte_attribute_t);
-        n=1;
+        n = 1;
         rc = PMIx_Data_unpack(NULL, bkt, &kv->key, &n, PMIX_UINT16);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -105,22 +104,23 @@ int prte_job_unpack(pmix_data_buffer_t *bkt,
             PRTE_RELEASE(kv);
             return prte_pmix_convert_status(rc);
         }
-        kv->local = PRTE_ATTR_GLOBAL;  // obviously not a local value
+        kv->local = PRTE_ATTR_GLOBAL; // obviously not a local value
         prte_list_append(&jptr->attributes, &kv->super);
     }
     /* unpack any job info */
-    n=1;
+    n = 1;
     rc = PMIx_Data_unpack(NULL, bkt, &count, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PRTE_RELEASE(jptr);
         return prte_pmix_convert_status(rc);
     }
-    if (0 < count){
+    if (0 < count) {
         cache = PRTE_NEW(prte_list_t);
-        prte_set_attribute(&jptr->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void*)cache, PMIX_POINTER);
-        for (k=0; k < count; k++) {
-            n=1;
+        prte_set_attribute(&jptr->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void *) cache,
+                           PMIX_POINTER);
+        for (k = 0; k < count; k++) {
+            n = 1;
             rc = PMIx_Data_unpack(NULL, bkt, &pval, &n, PMIX_INFO);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
@@ -135,15 +135,15 @@ int prte_job_unpack(pmix_data_buffer_t *bkt,
     }
 
     /* unpack the personality */
-    n=1;
+    n = 1;
     rc = PMIx_Data_unpack(NULL, bkt, &count, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PRTE_RELEASE(jptr);
         return prte_pmix_convert_status(rc);
     }
-    for (k=0; k < count; k++) {
-        n=1;
+    for (k = 0; k < count; k++) {
+        n = 1;
         rc = PMIx_Data_unpack(NULL, bkt, &tmp, &n, PMIX_STRING);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -165,7 +165,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt,
     /* if there are apps, unpack them */
     if (0 < jptr->num_apps) {
         prte_app_context_t *app;
-        for (j=0; j < jptr->num_apps; j++) {
+        for (j = 0; j < jptr->num_apps; j++) {
             n = 1;
             rc = prte_app_unpack(bkt, &app);
             if (PMIX_SUCCESS != rc) {
@@ -198,7 +198,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt,
          * described in the launch msg */
         if (prte_get_attribute(&jptr->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
             prte_proc_t *proc;
-            for (j=0; j < jptr->num_procs; j++) {
+            for (j = 0; j < jptr->num_procs; j++) {
                 n = 1;
                 rc = prte_proc_unpack(bkt, &proc);
                 if (PMIX_SUCCESS != rc) {
@@ -260,7 +260,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt,
     }
     if (0 <= bookmark) {
         /* retrieve it */
-        jptr->bookmark = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, bookmark);
+        jptr->bookmark = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, bookmark);
     }
 
     /* unpack the job state */
@@ -283,14 +283,12 @@ int prte_job_unpack(pmix_data_buffer_t *bkt,
 
     *job = jptr;
     return PRTE_SUCCESS;
-
 }
 
 /*
  * NODE
  */
-int prte_node_unpack(pmix_data_buffer_t *bkt,
-                     prte_node_t **nd)
+int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **nd)
 {
     pmix_status_t rc;
     int32_t n, k, count;
@@ -345,16 +343,16 @@ int prte_node_unpack(pmix_data_buffer_t *bkt,
     }
 
     /* unpack the attributes */
-    n=1;
+    n = 1;
     rc = PMIx_Data_unpack(NULL, bkt, &count, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PRTE_RELEASE(node);
         return prte_pmix_convert_status(rc);
     }
-    for (k=0; k < count; k++) {
+    for (k = 0; k < count; k++) {
         kv = PRTE_NEW(prte_attribute_t);
-        n=1;
+        n = 1;
         rc = PMIx_Data_unpack(NULL, bkt, &kv->key, &n, PMIX_UINT16);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -369,7 +367,7 @@ int prte_node_unpack(pmix_data_buffer_t *bkt,
             PRTE_RELEASE(kv);
             return prte_pmix_convert_status(rc);
         }
-        kv->local = PRTE_ATTR_GLOBAL;  // obviously not a local value
+        kv->local = PRTE_ATTR_GLOBAL; // obviously not a local value
         prte_list_append(&node->attributes, &kv->super);
     }
     *nd = node;
@@ -379,12 +377,12 @@ int prte_node_unpack(pmix_data_buffer_t *bkt,
 /*
  * PROC
  */
-int prte_proc_unpack(pmix_data_buffer_t *bkt,
-                     prte_proc_t **pc)
+int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t **pc)
 {
     pmix_status_t rc;
     int32_t n, count, k;
-    prte_attribute_t *kv;;
+    prte_attribute_t *kv;
+    ;
     prte_proc_t *proc;
 
     /* create the prte_proc_t object */
@@ -412,7 +410,7 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt,
         return prte_pmix_convert_status(rc);
     }
 
-   /* unpack the local rank */
+    /* unpack the local rank */
     n = 1;
     rc = PMIx_Data_unpack(NULL, bkt, &proc->local_rank, &n, PMIX_UINT16);
     if (PMIX_SUCCESS != rc) {
@@ -464,9 +462,9 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt,
         PRTE_RELEASE(proc);
         return prte_pmix_convert_status(rc);
     }
-    for (k=0; k < count; k++) {
+    for (k = 0; k < count; k++) {
         kv = PRTE_NEW(prte_attribute_t);
-        n=1;
+        n = 1;
         rc = PMIx_Data_unpack(NULL, bkt, &kv->key, &n, PMIX_UINT16);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -481,7 +479,7 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt,
             PRTE_RELEASE(kv);
             return prte_pmix_convert_status(rc);
         }
-        kv->local = PRTE_ATTR_GLOBAL;  // obviously not a local value
+        kv->local = PRTE_ATTR_GLOBAL; // obviously not a local value
         prte_list_append(&proc->attributes, &kv->super);
     }
     *pc = proc;
@@ -491,8 +489,7 @@ int prte_proc_unpack(pmix_data_buffer_t *bkt,
 /*
  * APP_CONTEXT
  */
-int prte_app_unpack(pmix_data_buffer_t *bkt,
-                    prte_app_context_t **ap)
+int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
 {
     int rc;
     prte_app_context_t *app;
@@ -551,7 +548,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt,
         PRTE_RELEASE(app);
         return prte_pmix_convert_status(rc);
     }
-    for (k=0; k < count; k++) {
+    for (k = 0; k < count; k++) {
         n = 1;
         rc = PMIx_Data_unpack(NULL, bkt, &tmp, &n, PMIX_STRING);
         if (PMIX_SUCCESS != rc) {
@@ -571,7 +568,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt,
         PRTE_RELEASE(app);
         return prte_pmix_convert_status(rc);
     }
-    for (k=0; k < count; k++) {
+    for (k = 0; k < count; k++) {
         n = 1;
         rc = PMIx_Data_unpack(NULL, bkt, &tmp, &n, PMIX_STRING);
         if (PMIX_SUCCESS != rc) {
@@ -598,9 +595,9 @@ int prte_app_unpack(pmix_data_buffer_t *bkt,
         PRTE_RELEASE(app);
         return prte_pmix_convert_status(rc);
     }
-    for (k=0; k < count; k++) {
+    for (k = 0; k < count; k++) {
         kv = PRTE_NEW(prte_attribute_t);
-        n=1;
+        n = 1;
         rc = PMIx_Data_unpack(NULL, bkt, &kv->key, &n, PMIX_UINT16);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -615,7 +612,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt,
             PRTE_RELEASE(kv);
             return prte_pmix_convert_status(rc);
         }
-        kv->local = PRTE_ATTR_GLOBAL;  // obviously not a local value
+        kv->local = PRTE_ATTR_GLOBAL; // obviously not a local value
         prte_list_append(&app->attributes, &kv->super);
     }
     *ap = app;
@@ -627,8 +624,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt,
  * NOTE: There is no obvious reason to include all the node information when
  * sending a map - hence, we do not pack that field, so don't unpack it here
  */
-int prte_map_unpack(pmix_data_buffer_t *bkt,
-                    struct prte_job_map_t **mp)
+int prte_map_unpack(pmix_data_buffer_t *bkt, struct prte_job_map_t **mp)
 {
     int rc;
     int32_t n;

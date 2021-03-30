@@ -4,6 +4,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -15,7 +16,6 @@
 #define GRPCOMM_BMG_H
 
 #include "prte_config.h"
-
 
 #include "src/mca/grpcomm/grpcomm.h"
 
@@ -31,4 +31,3 @@ extern prte_grpcomm_base_module_t prte_grpcomm_bmg_module;
 END_C_DECLS
 
 #endif
-

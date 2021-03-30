@@ -58,12 +58,10 @@ prte_ess_base_component_t prte_ess_lsf_component = {
     },
 };
 
-
 int prte_ess_lsf_component_open(void)
 {
     return PRTE_SUCCESS;
 }
-
 
 int prte_ess_lsf_component_query(prte_mca_base_module_t **module, int *priority)
 {
@@ -73,11 +71,10 @@ int prte_ess_lsf_component_query(prte_mca_base_module_t **module, int *priority)
      * by mpirun in an LSF world
      */
 
-    if (PRTE_PROC_IS_DAEMON &&
-        NULL != getenv("LSB_JOBID") &&
-        NULL != prte_process_info.my_hnp_uri) {
+    if (PRTE_PROC_IS_DAEMON && NULL != getenv("LSB_JOBID")
+        && NULL != prte_process_info.my_hnp_uri) {
         *priority = 40;
-        *module = (prte_mca_base_module_t *)&prte_ess_lsf_module;
+        *module = (prte_mca_base_module_t *) &prte_ess_lsf_module;
         return PRTE_SUCCESS;
     }
 
@@ -87,9 +84,7 @@ int prte_ess_lsf_component_query(prte_mca_base_module_t **module, int *priority)
     return PRTE_ERROR;
 }
 
-
 int prte_ess_lsf_component_close(void)
 {
     return PRTE_SUCCESS;
 }
-

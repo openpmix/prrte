@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,8 +21,8 @@
 #ifndef PRTE_GET_SOCKET_ERROR_H
 #define PRTE_GET_SOCKET_ERROR_H
 
-#include <errno.h>
 #include "constants.h"
+#include <errno.h>
 
 #define prte_socket_errno errno
 

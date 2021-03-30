@@ -3,6 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,7 +56,7 @@
 #include "prte_config.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 BEGIN_C_DECLS
@@ -65,15 +66,16 @@ BEGIN_C_DECLS
  *
  * The caller is responsible for freeing the returned string.
  */
-PRTE_EXPORT char *prte_uri_get_scheme(const char *uri) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_uri_get_scheme(const char *uri)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 /**
  *  Create a uri from a hostname and filename
  *
  * The caller is responsible for freeing the returned string.
  */
-PRTE_EXPORT char *prte_filename_to_uri(const char *filename,
-                                         const char *hostname) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_filename_to_uri(const char *filename, const char *hostname)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 /**
  * Extract the filename (and hostname) from a uri
  *
@@ -85,8 +87,8 @@ PRTE_EXPORT char *prte_filename_to_uri(const char *filename,
  *
  * The caller is responsible for freeing the returned string.
  */
-PRTE_EXPORT char *prte_filename_from_uri(const char *uri,
-                                           char **hostname) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_filename_from_uri(const char *uri, char **hostname)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 END_C_DECLS
 #endif /* PRTE_URI_H */

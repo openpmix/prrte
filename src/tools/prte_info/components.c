@@ -34,12 +34,12 @@
 #include "src/class/prte_list.h"
 #include "src/class/prte_pointer_array.h"
 
-#include "src/util/output.h"
+#include "src/util/argv.h"
 #include "src/util/cmd_line.h"
 #include "src/util/error.h"
-#include "src/util/argv.h"
-#include "src/util/show_help.h"
+#include "src/util/output.h"
 #include "src/util/printf.h"
+#include "src/util/show_help.h"
 
 #include "src/include/frameworks.h"
 
@@ -65,10 +65,8 @@ static void component_map_destruct(prte_info_component_map_t *map)
      * list of components
      */
 }
-PRTE_CLASS_INSTANCE(prte_info_component_map_t,
-                   prte_list_item_t,
-                   component_map_construct,
-                   component_map_destruct);
+PRTE_CLASS_INSTANCE(prte_info_component_map_t, prte_list_item_t, component_map_construct,
+                    component_map_destruct);
 
 prte_pointer_array_t prte_component_map = {{0}};
 
@@ -78,8 +76,8 @@ prte_pointer_array_t prte_component_map = {{0}};
 
 static bool opened_components = false;
 
-
-static int info_register_framework (prte_mca_base_framework_t *framework, prte_pointer_array_t *component_map)
+static int info_register_framework(prte_mca_base_framework_t *framework,
+                                   prte_pointer_array_t *component_map)
 {
     prte_info_component_map_t *map;
     int rc;
@@ -100,19 +98,24 @@ static int info_register_framework (prte_mca_base_framework_t *framework, prte_p
     return rc;
 }
 
-static int register_project_frameworks (const char *project_name, prte_mca_base_framework_t **frameworks,
-                                        prte_pointer_array_t *component_map)
+static int register_project_frameworks(const char *project_name,
+                                       prte_mca_base_framework_t **frameworks,
+                                       prte_pointer_array_t *component_map)
 {
-    int i, rc=PRTE_SUCCESS;
+    int i, rc = PRTE_SUCCESS;
 
-    for (i=0; NULL != frameworks[i]; i++) {
+    for (i = 0; NULL != frameworks[i]; i++) {
         if (PRTE_SUCCESS != (rc = info_register_framework(frameworks[i], component_map))) {
             if (PRTE_ERR_BAD_PARAM == rc) {
-                fprintf(stderr, "\nA \"bad parameter\" error was encountered when opening the %s %s framework\n",
+                fprintf(stderr,
+                        "\nA \"bad parameter\" error was encountered when opening the %s %s "
+                        "framework\n",
                         project_name, frameworks[i]->framework_name);
-                fprintf(stderr, "The output received from that framework includes the following parameters:\n\n");
+                fprintf(stderr, "The output received from that framework includes the following "
+                                "parameters:\n\n");
             } else if (PRTE_ERR_NOT_AVAILABLE != rc) {
-                fprintf(stderr, "%s_info_register: %s failed\n", project_name, frameworks[i]->framework_name);
+                fprintf(stderr, "%s_info_register: %s failed\n", project_name,
+                        frameworks[i]->framework_name);
                 rc = PRTE_ERROR;
             } else {
                 continue;
@@ -130,8 +133,9 @@ static int register_framework_params(prte_pointer_array_t *component_map)
     int rc;
 
     /* Register mca/base parameters */
-    if( PRTE_SUCCESS != prte_mca_base_open() ) {
-        prte_show_help("help-prte_info.txt", "lib-call-fail", true, "mca_base_open", __FILE__, __LINE__ );
+    if (PRTE_SUCCESS != prte_mca_base_open()) {
+        prte_show_help("help-prte_info.txt", "lib-call-fail", true, "mca_base_open", __FILE__,
+                       __LINE__);
         return PRTE_ERROR;
     }
 
@@ -171,12 +175,14 @@ void prte_info_components_close(void)
         return;
     }
 
-    for (i=0; NULL != prte_frameworks[i]; i++) {
+    for (i = 0; NULL != prte_frameworks[i]; i++) {
         (void) prte_mca_base_framework_close(prte_frameworks[i]);
     }
 
-    for (i=0; i < prte_component_map.size; i++) {
-        if (NULL != (map = (prte_info_component_map_t*)prte_pointer_array_get_item(&prte_component_map, i))) {
+    for (i = 0; i < prte_component_map.size; i++) {
+        if (NULL
+            != (map = (prte_info_component_map_t *) prte_pointer_array_get_item(&prte_component_map,
+                                                                                i))) {
             PRTE_RELEASE(map);
         }
     }

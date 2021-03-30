@@ -12,6 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,21 +22,20 @@
 
 #include "prte_config.h"
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "constants.h"
 #include "src/class/prte_ring_buffer.h"
-#include "src/util/output.h"
 #include "src/threads/threads.h"
+#include "src/util/output.h"
 
 static void prte_ring_buffer_construct(prte_ring_buffer_t *);
 static void prte_ring_buffer_destruct(prte_ring_buffer_t *);
 
-PRTE_CLASS_INSTANCE(prte_ring_buffer_t, prte_object_t,
-                   prte_ring_buffer_construct,
-                   prte_ring_buffer_destruct);
+PRTE_CLASS_INSTANCE(prte_ring_buffer_t, prte_object_t, prte_ring_buffer_construct,
+                    prte_ring_buffer_destruct);
 
 /*
  * prte_ring_buffer constructor
@@ -55,7 +55,7 @@ static void prte_ring_buffer_construct(prte_ring_buffer_t *ring)
  */
 static void prte_ring_buffer_destruct(prte_ring_buffer_t *ring)
 {
-    if( NULL != ring->addr) {
+    if (NULL != ring->addr) {
         free(ring->addr);
         ring->addr = NULL;
     }
@@ -68,7 +68,7 @@ static void prte_ring_buffer_destruct(prte_ring_buffer_t *ring)
 /**
  * initialize a ring object
  */
-int prte_ring_buffer_init(prte_ring_buffer_t* ring, int size)
+int prte_ring_buffer_init(prte_ring_buffer_t *ring, int size)
 {
     /* check for errors */
     if (NULL == ring) {
@@ -76,7 +76,7 @@ int prte_ring_buffer_init(prte_ring_buffer_t* ring, int size)
     }
 
     /* Allocate and set the ring to NULL */
-    ring->addr = (char **)calloc(size * sizeof(char*), 1);
+    ring->addr = (char **) calloc(size * sizeof(char *), 1);
     if (NULL == ring->addr) { /* out of memory */
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
@@ -85,20 +85,20 @@ int prte_ring_buffer_init(prte_ring_buffer_t* ring, int size)
     return PRTE_SUCCESS;
 }
 
-void* prte_ring_buffer_push(prte_ring_buffer_t *ring, void *ptr)
+void *prte_ring_buffer_push(prte_ring_buffer_t *ring, void *ptr)
 {
-    char *p=NULL;
+    char *p = NULL;
 
     PRTE_ACQUIRE_THREAD(&(ring->lock));
     if (NULL != ring->addr[ring->head]) {
-        p = (char*)ring->addr[ring->head];
+        p = (char *) ring->addr[ring->head];
         if (ring->tail == ring->size - 1) {
             ring->tail = 0;
         } else {
             ring->tail = ring->head + 1;
         }
     }
-    ring->addr[ring->head] = (char*)ptr;
+    ring->addr[ring->head] = (char *) ptr;
     if (ring->tail < 0) {
         ring->tail = ring->head;
     }
@@ -108,21 +108,21 @@ void* prte_ring_buffer_push(prte_ring_buffer_t *ring, void *ptr)
         ring->head++;
     }
     PRTE_RELEASE_THREAD(&(ring->lock));
-    return (void*)p;
+    return (void *) p;
 }
 
-void* prte_ring_buffer_pop(prte_ring_buffer_t *ring)
+void *prte_ring_buffer_pop(prte_ring_buffer_t *ring)
 {
-    char *p=NULL;
+    char *p = NULL;
 
     PRTE_ACQUIRE_THREAD(&(ring->lock));
     if (-1 == ring->tail) {
         /* nothing has been put on the ring yet */
         p = NULL;
     } else {
-        p = (char*)ring->addr[ring->tail];
+        p = (char *) ring->addr[ring->tail];
         ring->addr[ring->tail] = NULL;
-        if (ring->tail == ring->size-1) {
+        if (ring->tail == ring->size - 1) {
             ring->tail = 0;
         } else {
             ring->tail++;
@@ -133,12 +133,12 @@ void* prte_ring_buffer_pop(prte_ring_buffer_t *ring)
         }
     }
     PRTE_RELEASE_THREAD(&(ring->lock));
-    return (void*)p;
+    return (void *) p;
 }
 
- void* prte_ring_buffer_poke(prte_ring_buffer_t *ring, int i)
- {
-    char *p=NULL;
+void *prte_ring_buffer_poke(prte_ring_buffer_t *ring, int i)
+{
+    char *p = NULL;
     int offset;
 
     PRTE_ACQUIRE_THREAD(&(ring->lock));
@@ -161,5 +161,5 @@ void* prte_ring_buffer_pop(prte_ring_buffer_t *ring)
         p = ring->addr[offset];
     }
     PRTE_RELEASE_THREAD(&(ring->lock));
-    return (void*)p;
+    return (void *) p;
 }

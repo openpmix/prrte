@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,7 +45,6 @@ BEGIN_C_DECLS
  * in the buf buffer.
  */
 PRTE_EXPORT int prte_getcwd(char *buf, size_t size);
-
 
 END_C_DECLS
 

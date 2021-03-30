@@ -30,27 +30,26 @@
 
 #include <string.h>
 
+#include "src/hwloc/hwloc-internal.h"
+#include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"
 #include "src/util/string_copy.h"
-#include "src/mca/base/base.h"
-#include "src/hwloc/hwloc-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ras/base/base.h"
-#include "src/runtime/prte_globals.h"
-#include "src/util/show_help.h"
-#include "src/threads/threads.h"
 #include "src/mca/state/state.h"
+#include "src/runtime/prte_globals.h"
+#include "src/threads/threads.h"
+#include "src/util/show_help.h"
 
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 
-
 void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 {
-    prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
+    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
     prte_node_t *node;
     prte_job_map_t *app_map, *daemon_map;
@@ -75,18 +74,18 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     jdata->state = PRTE_JOB_STATE_MAP;
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps: mapping job %s",
+    prte_output_verbose(5, prte_rmaps_base_framework.framework_output, "mca:rmaps: mapping job %s",
                         PRTE_JOBID_PRINT(jdata->nspace));
 
     /*
      * Check for Colaunch
      */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE,
-                           (void **) &u16ptr, PMIX_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE, (void **) &u16ptr,
+                           PMIX_UINT16)) {
         daemons_per_node = u16;
         if (daemons_per_node <= 0) {
-            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_NODE value %u <= 0\n", daemons_per_node);
+            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_NODE value %u <= 0\n",
+                        daemons_per_node);
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -94,10 +93,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
         colocate_daemons = true;
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC,
-                           (void **) &u16ptr, PMIX_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC, (void **) &u16ptr,
+                           PMIX_UINT16)) {
         if (daemons_per_node > 0) {
-            prte_output(0, "Error: Both PRTE_JOB_DEBUG_DAEMONS_PER_PROC and PRTE_JOB_DEBUG_DAEMONS_PER_NODE provided.");
+            prte_output(0, "Error: Both PRTE_JOB_DEBUG_DAEMONS_PER_PROC and "
+                           "PRTE_JOB_DEBUG_DAEMONS_PER_NODE provided.");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -105,7 +105,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
         daemons_per_proc = u16;
         if (daemons_per_proc <= 0) {
-            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC value %u <= 0\n", daemons_per_proc);
+            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC value %u <= 0\n",
+                        daemons_per_proc);
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -114,8 +115,10 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         colocate_daemons = true;
     }
     if (colocate_daemons) {
-        if (! prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_TARGET, (void **) &target_proc, PMIX_PROC)) {
-            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC/NODE provided without a Debug Target\n");
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_TARGET, (void **) &target_proc,
+                                PMIX_PROC)) {
+            prte_output(
+                0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC/NODE provided without a Debug Target\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -124,8 +127,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps: mapping job %s: Colocate with %s",
-                            PRTE_JOBID_PRINT(jdata->nspace),
-                            PRTE_NAME_PRINT(target_proc));
+                            PRTE_JOBID_PRINT(jdata->nspace), PRTE_NAME_PRINT(target_proc));
 
         target_jdata = prte_get_job_data_object(target_proc->nspace);
         if (NULL == target_jdata) {
@@ -163,22 +165,21 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         PRTE_SET_RANKING_POLICY(daemon_map->ranking, PRTE_RANK_BY_SLOT);
 
         jdata->num_procs = 0;
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL,
+                           PMIX_BOOL);
 
         // Foreach node assigned to the target application
         for (int i = 0; i < app_map->num_nodes; i++) {
             node = (prte_node_t *) prte_pointer_array_get_item(app_map->nodes, i);
             if (daemons_per_proc > 0) {
-                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps: mapping job %s: Assign %d daemons each process on node %s",
-                                    PRTE_JOBID_PRINT(jdata->nspace),
-                                    daemons_per_proc, node->name);
-            }
-            else if (daemons_per_node > 0) {
+                prte_output_verbose(
+                    5, prte_rmaps_base_framework.framework_output,
+                    "mca:rmaps: mapping job %s: Assign %d daemons each process on node %s",
+                    PRTE_JOBID_PRINT(jdata->nspace), daemons_per_proc, node->name);
+            } else if (daemons_per_node > 0) {
                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps: mapping job %s: Assign %d daemons to node %s",
-                                    PRTE_JOBID_PRINT(jdata->nspace),
-                                    daemons_per_proc, node->name);
+                                    PRTE_JOBID_PRINT(jdata->nspace), daemons_per_proc, node->name);
             }
 
             // Map the node to this job
@@ -188,7 +189,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             daemon_map->num_nodes += 1;
 
             // Assign N daemons per node
-            if (daemons_per_node > 0 ) {
+            if (daemons_per_node > 0) {
                 for (int pr = 0; pr < daemons_per_node; ++pr) {
                     // Note: Assume only 1 app context for the daemons (0 == app->idx)
                     if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, 0))) {
@@ -201,10 +202,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 }
             }
             // Assign N daemons per process on this node
-            if (daemons_per_proc > 0 ) {
+            if (daemons_per_proc > 0) {
                 // Foreach application process associated with this job on this node
                 for (int npr = 0; npr < node->procs->size; ++npr) {
-                    if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, npr))) {
+                    if (NULL
+                        == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, npr))) {
                         continue;
                     }
                     if (proc->job != target_jdata) {
@@ -224,7 +226,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             }
 
             // If we are oversubscribing the node, then set the necessary flags
-            if (node->slots < (int)(node->num_procs+1)) {
+            if (node->slots < (int) (node->num_procs + 1)) {
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
                 PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
 
@@ -237,7 +239,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     /* if this is a dynamic job launch and they didn't explicitly
      * request inheritance, then don't inherit the launch directives */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void**)&nptr, PMIX_PROC)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)) {
         /* if the launch proxy is me, then this is the initial launch from
          * a proxy scenario, so we don't really have a parent */
         if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, nptr->nspace)) {
@@ -247,7 +249,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         } else if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
             if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
                 inherit = true;
-            } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
+            } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL,
+                                          PMIX_BOOL)) {
                 inherit = false;
                 parent = NULL;
             } else if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
@@ -257,12 +260,14 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             } else {
                 inherit = prte_rmaps_base.inherit;
             }
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps: dynamic job %s %s inherit launch directives - parent %s is %s",
-                                PRTE_JOBID_PRINT(jdata->nspace),
-                                inherit ? "will" : "will not",
-                                (NULL == parent) ? "N/A" : PRTE_JOBID_PRINT((parent->nspace)),
-                                (NULL == parent) ? "NULL" : ((PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL) ? "TOOL" : "NON-TOOL")));
+            prte_output_verbose(
+                5, prte_rmaps_base_framework.framework_output,
+                "mca:rmaps: dynamic job %s %s inherit launch directives - parent %s is %s",
+                PRTE_JOBID_PRINT(jdata->nspace), inherit ? "will" : "will not",
+                (NULL == parent) ? "N/A" : PRTE_JOBID_PRINT((parent->nspace)),
+                (NULL == parent)
+                    ? "NULL"
+                    : ((PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL) ? "TOOL" : "NON-TOOL")));
         } else {
             inherit = true;
         }
@@ -280,40 +285,49 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         /* if not already assigned, inherit the parent's ppr */
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, NULL, PMIX_STRING)) {
             /* get the parent job's ppr, if it had one */
-            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PPR, (void**)&tmp, PMIX_STRING)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PPR, tmp, PMIX_STRING);
+            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PPR, (void **) &tmp,
+                                   PMIX_STRING)) {
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PPR, tmp,
+                                   PMIX_STRING);
                 free(tmp);
             }
         }
         /* if not already assigned, inherit the parent's pes/proc */
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16)) {
             /* get the parent job's pes/proc, if it had one */
-            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PES_PER_PROC, u16ptr, PMIX_UINT16);
+            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr,
+                                   PMIX_UINT16)) {
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PES_PER_PROC,
+                                   u16ptr, PMIX_UINT16);
             }
         }
         /* if not already assigned, inherit the parent's cpu designation */
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
-            !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)
+            && !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
             /* get the parent job's designation, if it had one */
             if (prte_get_attribute(&parent->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
-            } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL);
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS, NULL,
+                                   PMIX_BOOL);
+            } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_CORE_CPUS, NULL,
+                                          PMIX_BOOL)) {
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS, NULL,
+                                   PMIX_BOOL);
             } else {
                 /* default */
                 if (prte_rmaps_base.hwthread_cpus) {
-                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
+                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS,
+                                       NULL, PMIX_BOOL);
                 } else {
-                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL);
+                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS,
+                                       NULL, PMIX_BOOL);
                 }
             }
         }
     }
 
     /* we always inherit a parent's oversubscribe flag unless the job assigned it */
-    if (NULL != parent &&
-        !(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
+    if (NULL != parent
+        && !(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
         if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(parent->map->mapping)) {
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
         } else {
@@ -322,7 +336,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void**)&tmp, PMIX_STRING)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &tmp, PMIX_STRING)) {
         if (NULL != strcasestr(tmp, "node")) {
             pernode = true;
             /* get the ppn */
@@ -333,7 +347,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
-            ++p;  // step over the colon
+            ++p; // step over the colon
             u16 = strtoul(p, NULL, 10);
         } else if (NULL != strcasestr(tmp, "package")) {
             perpackage = true;
@@ -345,7 +359,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
                 goto cleanup;
             }
-            ++p;  // step over the colon
+            ++p; // step over the colon
             u16 = strtoul(p, NULL, 10);
         }
         free(tmp);
@@ -359,19 +373,22 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     /* estimate the number of procs for assigning default mapping/ranking policies */
     nprocs = 0;
-    for (int i=0; i < jdata->apps->size; i++) {
-        if (NULL != (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
+    for (int i = 0; i < jdata->apps->size; i++) {
+        if (NULL != (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
             if (0 == app->num_procs) {
                 prte_list_t nodes;
                 PRTE_CONSTRUCT(&nodes, prte_list_t);
-                prte_rmaps_base_get_target_nodes(&nodes, &slots, app, PRTE_MAPPING_BYNODE, true, true);
+                prte_rmaps_base_get_target_nodes(&nodes, &slots, app, PRTE_MAPPING_BYNODE, true,
+                                                 true);
                 if (pernode) {
                     slots = u16 * prte_list_get_size(&nodes);
                 } else if (perpackage) {
                     /* add in #packages for each node */
-                    PRTE_LIST_FOREACH(node, &nodes, prte_node_t) {
-                        slots += u16 * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                          HWLOC_OBJ_PACKAGE, 0);
+                    PRTE_LIST_FOREACH(node, &nodes, prte_node_t)
+                    {
+                        slots += u16
+                                 * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                      HWLOC_OBJ_PACKAGE, 0);
                     }
                 } else if (sequential) {
                     slots = prte_list_get_size(&nodes);
@@ -386,7 +403,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
 compute:
     /* set some convenience params */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr,
+                           PMIX_UINT16)) {
         cpus_per_rank = u16;
     } else {
         cpus_per_rank = 1;
@@ -397,8 +415,7 @@ compute:
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: setting mapping policies for job %s nprocs %d inherit %s",
-                        PRTE_JOBID_PRINT(jdata->nspace), (int)nprocs,
-                        inherit ? "TRUE" : "FALSE");
+                        PRTE_JOBID_PRINT(jdata->nspace), (int) nprocs, inherit ? "TRUE" : "FALSE");
 
     /* set the default mapping policy IFF it wasn't provided */
     if (!PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
@@ -427,7 +444,8 @@ compute:
                     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
                 } else if (use_hwthreads) {
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] mapping not given - using byhwthread", __LINE__);
+                                        "mca:rmaps[%d] mapping not given - using byhwthread",
+                                        __LINE__);
                     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
                 } else {
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
@@ -438,12 +456,14 @@ compute:
                 /* if package is available, map by that */
                 if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] mapping not set by user - using bypackage", __LINE__);
+                                        "mca:rmaps[%d] mapping not set by user - using bypackage",
+                                        __LINE__);
                     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
                 } else {
                     /* if we have neither, then just do by slot */
-                    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] mapping not given and no packages - using byslot", __LINE__);
+                    prte_output_verbose(
+                        5, prte_rmaps_base_framework.framework_output,
+                        "mca:rmaps[%d] mapping not given and no packages - using byslot", __LINE__);
                     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
                 }
             }
@@ -454,7 +474,8 @@ compute:
     if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
         if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping))) {
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
-        } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping)) {
+        } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE
+                   & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping)) {
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
         } else {
             PRTE_UNSET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
@@ -467,12 +488,13 @@ compute:
         /* must override any setting */
         PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_USE_LOCAL);
     } else if (!(PRTE_MAPPING_LOCAL_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-        if (inherit && (PRTE_MAPPING_NO_USE_LOCAL & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping))) {
+        if (inherit
+            && (PRTE_MAPPING_NO_USE_LOCAL & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping))) {
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_USE_LOCAL);
         }
     }
 
- ranking:
+ranking:
     /* set the default ranking policy IFF it wasn't provided */
     if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
         did_map = false;
@@ -482,7 +504,7 @@ compute:
                 did_map = true;
             } else if (PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(prte_rmaps_base.ranking)) {
                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                     "mca:rmaps ranking given by MCA param");
+                                    "mca:rmaps ranking given by MCA param");
                 jdata->map->ranking = prte_rmaps_base.ranking;
                 did_map = true;
             }
@@ -506,7 +528,7 @@ compute:
                  * MCA param, then we use it - this can include a directive
                  * to overload */
                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps[%d] default binding policy given", __LINE__);
+                                    "mca:rmaps[%d] default binding policy given", __LINE__);
                 jdata->map->binding = prte_hwloc_default_binding_policy;
                 did_map = true;
             }
@@ -517,12 +539,13 @@ compute:
                 if (use_hwthreads) {
                     /* if we are using hwthread cpus, then bind to those */
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
+                                        "mca:rmaps[%d] binding not given - using byhwthread",
+                                        __LINE__);
                     PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
                 } else {
                     /* bind to core */
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] binding not given - using bycore", __LINE__);
+                                        "mca:rmaps[%d] binding not given - using bycore", __LINE__);
                     PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
                 }
             } else {
@@ -533,51 +556,67 @@ compute:
                 if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                     if (PRTE_MAPPING_BYHWTHREAD == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
+                                            "mca:rmaps[%d] binding not given - using byhwthread",
+                                            __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
                     } else if (PRTE_MAPPING_BYCORE == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given - using bycore", __LINE__);
+                                            "mca:rmaps[%d] binding not given - using bycore",
+                                            __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
                     } else if (PRTE_MAPPING_BYL1CACHE == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given - using byL1", __LINE__);
+                                            "mca:rmaps[%d] binding not given - using byL1",
+                                            __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L1CACHE);
                     } else if (PRTE_MAPPING_BYL2CACHE == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given - using byL2", __LINE__);
+                                            "mca:rmaps[%d] binding not given - using byL2",
+                                            __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L2CACHE);
                     } else if (PRTE_MAPPING_BYL3CACHE == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given - using byL3", __LINE__);
+                                            "mca:rmaps[%d] binding not given - using byL3",
+                                            __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L3CACHE);
                     } else if (PRTE_MAPPING_BYPACKAGE == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
+                                            "mca:rmaps[%d] binding not given - using bypackage",
+                                            __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
                     } else {
                         /* we are mapping by node or some other non-object method */
                         if (nprocs <= 2) {
                             if (use_hwthreads) {
                                 /* if we are using hwthread cpus, then bind to those */
-                                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                                "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
-                                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
+                                prte_output_verbose(
+                                    5, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
+                                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                                PRTE_BIND_TO_HWTHREAD);
                             } else {
                                 /* for performance, bind to core */
-                                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                                "mca:rmaps[%d] binding not given - using bycore", __LINE__);
-                                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
+                                prte_output_verbose(
+                                    5, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps[%d] binding not given - using bycore", __LINE__);
+                                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                                PRTE_BIND_TO_CORE);
                             }
                         } else {
-                            if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
-                                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                                    "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
-                                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
+                            if (NULL
+                                != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE,
+                                                         0)) {
+                                prte_output_verbose(
+                                    5, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
+                                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                                PRTE_BIND_TO_PACKAGE);
                             } else {
                                 /* if we have neither, then just don't bind */
                                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                                    "mca:rmaps[%d] binding not given and no NUMA or packages - not binding", __LINE__);
+                                                    "mca:rmaps[%d] binding not given and no NUMA "
+                                                    "or packages - not binding",
+                                                    __LINE__);
                                 PRTE_SET_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NONE);
                             }
                         }
@@ -586,24 +625,29 @@ compute:
                     if (use_hwthreads) {
                         /* if we are using hwthread cpus, then bind to those */
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
+                                            "mca:rmaps[%d] binding not given - using byhwthread",
+                                            __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
                     } else {
                         /* for performance, bind to core */
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] binding not given - using bycore", __LINE__);
+                                            "mca:rmaps[%d] binding not given - using bycore",
+                                            __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
                     }
                 } else {
                     /* for performance, bind to package, if available */
                     if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
+                                            "mca:rmaps[%d] binding not given - using bypackage",
+                                            __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
                     } else {
                         /* just don't bind */
-                        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps[%d] binding not given and no packages - not binding", __LINE__);
+                        prte_output_verbose(
+                            5, prte_rmaps_base_framework.framework_output,
+                            "mca:rmaps[%d] binding not given and no packages - not binding",
+                            __LINE__);
                         PRTE_SET_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NONE);
                     }
                 }
@@ -620,7 +664,7 @@ compute:
      */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         prte_topology_t *t0;
-        if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, 0))) {
+        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, 0))) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             PRTE_RELEASE(caddy);
             jdata->exit_code = PRTE_ERR_NOT_FOUND;
@@ -628,8 +672,8 @@ compute:
             return;
         }
         t0 = node->topology;
-        for (int i=1; i < prte_node_pool->size; i++) {
-            if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, i))) {
+        for (int i = 1; i < prte_node_pool->size; i++) {
+            if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i))) {
                 continue;
             }
             if (NULL == node->topology) {
@@ -642,20 +686,21 @@ compute:
         /* This is a mapping request for a tool daemon which is handled above
          * so don't run any mapping modules */
         did_map = true;
-    }
-    else {
+    } else {
         /* cycle thru the available mappers until one agrees to map
          * the job
          */
         did_map = false;
         if (1 == prte_list_get_size(&prte_rmaps_base.selected_modules)) {
             /* forced selection */
-            mod = (prte_rmaps_base_selected_module_t*)prte_list_get_first(&prte_rmaps_base.selected_modules);
+            mod = (prte_rmaps_base_selected_module_t *) prte_list_get_first(
+                &prte_rmaps_base.selected_modules);
             jdata->map->req_mapper = strdup(mod->component->mca_component_name);
         }
-        PRTE_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t) {
-            if (PRTE_SUCCESS == (rc = mod->module->map_job(jdata)) ||
-                PRTE_ERR_RESOURCE_BUSY == rc) {
+        PRTE_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t)
+        {
+            if (PRTE_SUCCESS == (rc = mod->module->map_job(jdata))
+                || PRTE_ERR_RESOURCE_BUSY == rc) {
                 did_map = true;
                 break;
             }
@@ -685,8 +730,7 @@ compute:
      */
     if (!did_map || 0 == jdata->num_procs || 0 == jdata->map->num_nodes) {
         prte_show_help("help-prte-rmaps-base.txt", "failed-map", true,
-                       did_map ? "mapped" : "unmapped",
-                       jdata->num_procs, jdata->map->num_nodes);
+                       did_map ? "mapped" : "unmapped", jdata->num_procs, jdata->map->num_nodes);
         jdata->exit_code = -PRTE_JOB_STATE_MAP_FAILED;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
         goto cleanup;
@@ -711,10 +755,10 @@ compute:
         goto cleanup;
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
         /* compute and save local ranks */
         if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_local_ranks(jdata))) {
             PRTE_ERROR_LOG(rc);
@@ -761,9 +805,9 @@ compute:
         }
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) ||
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
         /* display the map */
         prte_rmaps_base_display_map(jdata);
     }
@@ -771,13 +815,13 @@ compute:
     /* set the job state to the next position */
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_COMPLETE);
 
-  cleanup:
-      /* reset any node map flags we used so the next job will start clean */
-       for (int i=0; i < jdata->map->nodes->size; i++) {
-           if (NULL != (node = (prte_node_t*)prte_pointer_array_get_item(jdata->map->nodes, i))) {
-               PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
-           }
-       }
+cleanup:
+    /* reset any node map flags we used so the next job will start clean */
+    for (int i = 0; i < jdata->map->nodes->size; i++) {
+        if (NULL != (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, i))) {
+            PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
+        }
+    }
 
     /* cleanup */
     PRTE_RELEASE(caddy);
@@ -786,12 +830,13 @@ compute:
 void prte_rmaps_base_display_map(prte_job_t *jdata)
 {
     /* ignore daemon job */
-    char *output=NULL;
+    char *output = NULL;
     int i, j, cnt;
     prte_node_t *node;
     prte_proc_t *proc;
     char *tmp1;
-    hwloc_obj_t bd=NULL;;
+    hwloc_obj_t bd = NULL;
+    ;
     prte_hwloc_locality_t locality;
     prte_proc_t *p0;
     char *p0bitmap, *procbitmap;
@@ -813,21 +858,23 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
         fflush(stderr);
         /* loop through nodes */
         cnt = 0;
-        for (i=0; i < jdata->map->nodes->size; i++) {
-            if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(jdata->map->nodes, i))) {
+        for (i = 0; i < jdata->map->nodes->size; i++) {
+            if (NULL
+                == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, i))) {
                 continue;
             }
             prte_output(prte_clean_output, "\t<host num=%d>", cnt);
             fflush(stderr);
             cnt++;
-            for (j=0; j < node->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, j))) {
+            for (j = 0; j < node->procs->size; j++) {
+                if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
                     continue;
                 }
                 if (proc->job != jdata) {
                     continue;
                 }
-                if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, (void**)&bd, PMIX_POINTER)) {
+                if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, (void **) &bd,
+                                       PMIX_POINTER)) {
                     if (NULL == bd) {
                         tmp1 = strdup("UNBOUND");
                     } else {
@@ -836,43 +883,45 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
                 } else {
                     tmp1 = strdup("UNBOUND");
                 }
-                prte_output(prte_clean_output, "\t\t<process rank=%s app_idx=%ld local_rank=%lu node_rank=%lu binding=%s>",
-                            PRTE_VPID_PRINT(proc->name.rank),  (long)proc->app_idx,
-                            (unsigned long)proc->local_rank,
-                            (unsigned long)proc->node_rank, tmp1);
+                prte_output(
+                    prte_clean_output,
+                    "\t\t<process rank=%s app_idx=%ld local_rank=%lu node_rank=%lu binding=%s>",
+                    PRTE_VPID_PRINT(proc->name.rank), (long) proc->app_idx,
+                    (unsigned long) proc->local_rank, (unsigned long) proc->node_rank, tmp1);
                 free(tmp1);
             }
             prte_output(prte_clean_output, "\t</host>");
             fflush(stderr);
         }
 
-         /* test locality - for the first node, print the locality of each proc relative to the first one */
-        node = (prte_node_t*)prte_pointer_array_get_item(jdata->map->nodes, 0);
-        p0 = (prte_proc_t*)prte_pointer_array_get_item(node->procs, 0);
+        /* test locality - for the first node, print the locality of each proc relative to the first
+         * one */
+        node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, 0);
+        p0 = (prte_proc_t *) prte_pointer_array_get_item(node->procs, 0);
         if (NULL == p0) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             return;
         }
         p0bitmap = NULL;
-        if (prte_get_attribute(&p0->attributes, PRTE_PROC_CPU_BITMAP, (void**)&p0bitmap, PMIX_STRING) &&
-            NULL != p0bitmap) {
+        if (prte_get_attribute(&p0->attributes, PRTE_PROC_CPU_BITMAP, (void **) &p0bitmap,
+                               PMIX_STRING)
+            && NULL != p0bitmap) {
             prte_output(prte_clean_output, "\t<locality>");
-            for (j=1; j < node->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, j))) {
+            for (j = 1; j < node->procs->size; j++) {
+                if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
                     continue;
                 }
                 if (proc->job != jdata) {
                     continue;
                 }
                 procbitmap = NULL;
-                if (prte_get_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, (void**)&procbitmap, PMIX_STRING) &&
-                    NULL != procbitmap) {
-                    locality = prte_hwloc_base_get_relative_locality(node->topology->topo,
-                                                                     p0bitmap,
+                if (prte_get_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP,
+                                       (void **) &procbitmap, PMIX_STRING)
+                    && NULL != procbitmap) {
+                    locality = prte_hwloc_base_get_relative_locality(node->topology->topo, p0bitmap,
                                                                      procbitmap);
                     prte_output(prte_clean_output, "\t\t<rank=%s rank=%s locality=%s>",
-                                PRTE_VPID_PRINT(p0->name.rank),
-                                PRTE_VPID_PRINT(proc->name.rank),
+                                PRTE_VPID_PRINT(p0->name.rank), PRTE_VPID_PRINT(proc->name.rank),
                                 prte_hwloc_base_print_locality(locality));
                 }
             }

@@ -29,13 +29,13 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/util/output.h"
-#include "src/util/argv.h"
 #include "src/mca/base/prte_mca_base_framework.h"
+#include "src/util/argv.h"
+#include "src/util/output.h"
 
-#include "src/mca/ess/ess.h"
-#include "src/mca/ess/base/base.h"
 #include "src/mca/base/prte_mca_base_alias.h"
+#include "src/mca/ess/base/base.h"
+#include "src/mca/ess/ess.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
@@ -84,71 +84,72 @@ int prte_finalize(void)
      * references before iterating over the prte_job_data hash table to
      * release the prte_job_t objects.
      */
-    for (n=0; n < prte_job_data->size; n++) {
-        jdata = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, n);
+    for (n = 0; n < prte_job_data->size; n++) {
+        jdata = (prte_job_t *) prte_pointer_array_get_item(prte_job_data, n);
         if (NULL == jdata) {
             continue;
         }
         // Remove all children from the list
         // We do not want to destruct this list here since that occurs in the
         // prte_job_t destructor - which will happen in the next loop.
-        PRTE_LIST_FOREACH_SAFE(child_jdata, next_jdata, &jdata->children, prte_job_t) {
+        PRTE_LIST_FOREACH_SAFE(child_jdata, next_jdata, &jdata->children, prte_job_t)
+        {
             prte_list_remove_item(&jdata->children, &child_jdata->super);
         }
         PRTE_RELEASE(jdata);
     }
     PRTE_RELEASE(prte_job_data);
 
-{
-    prte_pointer_array_t * array = prte_node_topologies;
-    int i;
-    if( array->number_free != array->size ) {
-        prte_mutex_lock(&array->lock);
-        array->lowest_free = 0;
-        array->number_free = array->size;
-        for(i=0; i<array->size; i++) {
-            if(NULL != array->addr[i]) {
-                prte_topology_t * topo = (prte_topology_t *)array->addr[i];
-                topo->topo = NULL;
-                PRTE_RELEASE(topo);
+    {
+        prte_pointer_array_t *array = prte_node_topologies;
+        int i;
+        if (array->number_free != array->size) {
+            prte_mutex_lock(&array->lock);
+            array->lowest_free = 0;
+            array->number_free = array->size;
+            for (i = 0; i < array->size; i++) {
+                if (NULL != array->addr[i]) {
+                    prte_topology_t *topo = (prte_topology_t *) array->addr[i];
+                    topo->topo = NULL;
+                    PRTE_RELEASE(topo);
+                }
+                array->addr[i] = NULL;
             }
-            array->addr[i] = NULL;
+            prte_mutex_unlock(&array->lock);
         }
-        prte_mutex_unlock(&array->lock);
     }
-}
     PRTE_RELEASE(prte_node_topologies);
 
-{
-    prte_pointer_array_t * array = prte_node_pool;
-    int i;
-    prte_node_t *node;
-    if( array->number_free != array->size ) {
-        prte_mutex_lock(&array->lock);
-        array->lowest_free = 0;
-        array->number_free = array->size;
-        for(i=0; i<array->size; i++) {
-            if(NULL != array->addr[i]) {
-                node= (prte_node_t*)array->addr[i];
-                if (NULL != node) {
-                    if (NULL != node->daemon) {
-                        PRTE_RELEASE(node->daemon);
+    {
+        prte_pointer_array_t *array = prte_node_pool;
+        int i;
+        prte_node_t *node;
+        if (array->number_free != array->size) {
+            prte_mutex_lock(&array->lock);
+            array->lowest_free = 0;
+            array->number_free = array->size;
+            for (i = 0; i < array->size; i++) {
+                if (NULL != array->addr[i]) {
+                    node = (prte_node_t *) array->addr[i];
+                    if (NULL != node) {
+                        if (NULL != node->daemon) {
+                            PRTE_RELEASE(node->daemon);
+                        }
+                        PRTE_RELEASE(node);
                     }
-                    PRTE_RELEASE(node);
                 }
+                array->addr[i] = NULL;
             }
-            array->addr[i] = NULL;
+            prte_mutex_unlock(&array->lock);
         }
-        prte_mutex_unlock(&array->lock);
     }
-}
     PRTE_RELEASE(prte_node_pool);
 
     if (NULL != prte_fork_agent) {
         prte_argv_free(prte_fork_agent);
     }
 
-    free (prte_process_info.nodename);
+    free(prte_process_info.nodename);
     prte_process_info.nodename = NULL;
 
     /* call the finalize function for this environment */

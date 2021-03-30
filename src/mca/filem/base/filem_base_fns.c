@@ -11,6 +11,7 @@
  *                         All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,24 +23,24 @@
 
 #include <string.h>
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <time.h>
 
 #include "constants.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/proc_info.h"
 
-#include "src/mca/filem/filem.h"
 #include "src/mca/filem/base/base.h"
+#include "src/mca/filem/filem.h"
 
 /******************
  * Local Functions
@@ -48,56 +49,56 @@
 /******************
  * Object Stuff
  ******************/
-static void process_set_construct(prte_filem_base_process_set_t *req) {
+static void process_set_construct(prte_filem_base_process_set_t *req)
+{
     req->source = *PRTE_NAME_INVALID;
-    req->sink   = *PRTE_NAME_INVALID;
+    req->sink = *PRTE_NAME_INVALID;
 }
 
-static void process_set_destruct( prte_filem_base_process_set_t *req) {
+static void process_set_destruct(prte_filem_base_process_set_t *req)
+{
     req->source = *PRTE_NAME_INVALID;
-    req->sink   = *PRTE_NAME_INVALID;
+    req->sink = *PRTE_NAME_INVALID;
 }
 
-PRTE_CLASS_INSTANCE(prte_filem_base_process_set_t,
-                   prte_list_item_t,
-                   process_set_construct,
-                   process_set_destruct);
+PRTE_CLASS_INSTANCE(prte_filem_base_process_set_t, prte_list_item_t, process_set_construct,
+                    process_set_destruct);
 
-static void file_set_construct(prte_filem_base_file_set_t *req) {
-    req->local_target  = NULL;
-    req->local_hint    = PRTE_FILEM_HINT_NONE;
+static void file_set_construct(prte_filem_base_file_set_t *req)
+{
+    req->local_target = NULL;
+    req->local_hint = PRTE_FILEM_HINT_NONE;
 
     req->remote_target = NULL;
-    req->remote_hint   = PRTE_FILEM_HINT_NONE;
+    req->remote_hint = PRTE_FILEM_HINT_NONE;
 
-    req->target_flag   = PRTE_FILEM_TYPE_UNKNOWN;
-
+    req->target_flag = PRTE_FILEM_TYPE_UNKNOWN;
 }
 
-static void file_set_destruct( prte_filem_base_file_set_t *req) {
-    if( NULL != req->local_target ) {
+static void file_set_destruct(prte_filem_base_file_set_t *req)
+{
+    if (NULL != req->local_target) {
         free(req->local_target);
         req->local_target = NULL;
     }
-    req->local_hint    = PRTE_FILEM_HINT_NONE;
+    req->local_hint = PRTE_FILEM_HINT_NONE;
 
-    if( NULL != req->remote_target ) {
+    if (NULL != req->remote_target) {
         free(req->remote_target);
         req->remote_target = NULL;
     }
-    req->remote_hint   = PRTE_FILEM_HINT_NONE;
+    req->remote_hint = PRTE_FILEM_HINT_NONE;
 
-    req->target_flag   = PRTE_FILEM_TYPE_UNKNOWN;
+    req->target_flag = PRTE_FILEM_TYPE_UNKNOWN;
 }
 
-PRTE_CLASS_INSTANCE(prte_filem_base_file_set_t,
-                   prte_list_item_t,
-                   file_set_construct,
-                   file_set_destruct);
+PRTE_CLASS_INSTANCE(prte_filem_base_file_set_t, prte_list_item_t, file_set_construct,
+                    file_set_destruct);
 
-static void req_construct(prte_filem_base_request_t *req) {
-    PRTE_CONSTRUCT(&req->process_sets,  prte_list_t);
-    PRTE_CONSTRUCT(&req->file_sets,     prte_list_t);
+static void req_construct(prte_filem_base_request_t *req)
+{
+    PRTE_CONSTRUCT(&req->process_sets, prte_list_t);
+    PRTE_CONSTRUCT(&req->file_sets, prte_list_t);
 
     req->num_mv = 0;
 
@@ -109,32 +110,33 @@ static void req_construct(prte_filem_base_request_t *req) {
     req->movement_type = PRTE_FILEM_MOVE_TYPE_UNKNOWN;
 }
 
-static void req_destruct( prte_filem_base_request_t *req) {
-    prte_list_item_t* item = NULL;
+static void req_destruct(prte_filem_base_request_t *req)
+{
+    prte_list_item_t *item = NULL;
 
-    while( NULL != (item = prte_list_remove_first(&req->process_sets)) ) {
+    while (NULL != (item = prte_list_remove_first(&req->process_sets))) {
         PRTE_RELEASE(item);
     }
     PRTE_DESTRUCT(&req->process_sets);
 
-    while( NULL != (item = prte_list_remove_first(&req->file_sets)) ) {
+    while (NULL != (item = prte_list_remove_first(&req->file_sets))) {
         PRTE_RELEASE(item);
     }
     PRTE_DESTRUCT(&req->file_sets);
 
     req->num_mv = 0;
 
-    if( NULL != req->is_done ) {
+    if (NULL != req->is_done) {
         free(req->is_done);
         req->is_done = NULL;
     }
 
-    if( NULL != req->is_active ) {
+    if (NULL != req->is_active) {
         free(req->is_active);
         req->is_active = NULL;
     }
 
-    if( NULL != req->exit_status ) {
+    if (NULL != req->exit_status) {
         free(req->exit_status);
         req->exit_status = NULL;
     }
@@ -142,10 +144,7 @@ static void req_destruct( prte_filem_base_request_t *req) {
     req->movement_type = PRTE_FILEM_MOVE_TYPE_UNKNOWN;
 }
 
-PRTE_CLASS_INSTANCE(prte_filem_base_request_t,
-                   prte_list_item_t,
-                   req_construct,
-                   req_destruct);
+PRTE_CLASS_INSTANCE(prte_filem_base_request_t, prte_list_item_t, req_construct, req_destruct);
 
 /***********************
  * None component stuff
@@ -160,12 +159,12 @@ int prte_filem_base_module_finalize(void)
     return PRTE_SUCCESS;
 }
 
-int prte_filem_base_none_put(prte_filem_base_request_t *request )
+int prte_filem_base_none_put(prte_filem_base_request_t *request)
 {
     return PRTE_SUCCESS;
 }
 
-int prte_filem_base_none_put_nb(prte_filem_base_request_t *request )
+int prte_filem_base_none_put_nb(prte_filem_base_request_t *request)
 {
     return PRTE_SUCCESS;
 }
@@ -200,8 +199,7 @@ int prte_filem_base_none_wait_all(prte_list_t *request_list)
     return PRTE_SUCCESS;
 }
 
-int prte_filem_base_none_preposition_files(prte_job_t *jdata,
-                                           prte_filem_completion_cbfunc_t cbfunc,
+int prte_filem_base_none_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
                                            void *cbdata)
 {
     if (NULL != cbfunc) {
@@ -210,8 +208,7 @@ int prte_filem_base_none_preposition_files(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
-int prte_filem_base_none_link_local_files(prte_job_t *jdata,
-                                          prte_app_context_t *app)
+int prte_filem_base_none_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
 {
     return PRTE_SUCCESS;
 }

@@ -73,64 +73,63 @@
 #include "constants.h"
 #include "types.h"
 
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <errno.h>
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
+#    include <sys/wait.h>
 #endif
 #include <signal.h>
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
+#    include <fcntl.h>
 #endif
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+#    include <sys/param.h>
 #endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif
 #include <stdlib.h>
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
-#endif  /* HAVE_SYS_STAT_H */
+#    include <sys/stat.h>
+#endif /* HAVE_SYS_STAT_H */
 #include <stdarg.h>
 #ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
+#    include <sys/select.h>
 #endif
 #ifdef HAVE_DIRENT_H
-#include <dirent.h>
+#    include <dirent.h>
 #endif
 
-
-#include "src/hwloc/hwloc-internal.h"
 #include "src/class/prte_pointer_array.h"
+#include "src/hwloc/hwloc-internal.h"
+#include "src/util/fd.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
 #include "src/util/sys_limits.h"
-#include "src/util/fd.h"
 
-#include "src/util/show_help.h"
-#include "src/runtime/prte_wait.h"
-#include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rtc/rtc.h"
+#include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
+#include "src/util/show_help.h"
 
+#include "src/mca/odls/alps/odls_alps.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/base/odls_private.h"
-#include "src/mca/odls/alps/odls_alps.h"
 #include "src/prted/pmix/pmix_server.h"
 
 /*
@@ -145,24 +144,18 @@ static int prte_odls_alps_restart_proc(prte_proc_t *child);
  * Explicitly declared functions so that we can get the noreturn
  * attribute registered with the compiler.
  */
-static void send_error_show_help(int fd, int exit_status,
-                                 const char *file, const char *topic, ...)
-    __prte_attribute_noreturn__;
-static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
-    __prte_attribute_noreturn__;
-
+static void send_error_show_help(int fd, int exit_status, const char *file, const char *topic,
+                                 ...) __prte_attribute_noreturn__;
+static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd) __prte_attribute_noreturn__;
 
 /*
  * Module
  */
-prte_odls_base_module_t prte_odls_alps_module = {
-    prte_odls_base_default_get_add_procs_data,
-    prte_odls_alps_launch_local_procs,
-    prte_odls_alps_kill_local_procs,
-    prte_odls_alps_signal_local_procs,
-    prte_odls_alps_restart_proc
-};
-
+prte_odls_base_module_t prte_odls_alps_module = {prte_odls_base_default_get_add_procs_data,
+                                                 prte_odls_alps_launch_local_procs,
+                                                 prte_odls_alps_kill_local_procs,
+                                                 prte_odls_alps_signal_local_procs,
+                                                 prte_odls_alps_restart_proc};
 
 static int odls_alps_kill_local(pid_t pid, int signum)
 {
@@ -185,13 +178,13 @@ static int odls_alps_kill_local(pid_t pid, int signum)
         if (ESRCH != errno) {
             PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                                  "%s odls:alps:SENT KILL %d TO PID %d GOT ERRNO %d",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int)pid, errno));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int) pid, errno));
             return errno;
         }
     }
     PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                          "%s odls:alps:SENT KILL %d TO PID %d SUCCESS",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int)pid));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int) pid));
     return 0;
 }
 
@@ -199,14 +192,13 @@ int prte_odls_alps_kill_local_procs(prte_pointer_array_t *procs)
 {
     int rc;
 
-    if (PRTE_SUCCESS != (rc = prte_odls_base_default_kill_local_procs(procs,
-                                                odls_alps_kill_local))) {
+    if (PRTE_SUCCESS
+        != (rc = prte_odls_base_default_kill_local_procs(procs, odls_alps_kill_local))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
     return PRTE_SUCCESS;
 }
-
 
 static void set_handler_alps(int sig)
 {
@@ -216,7 +208,7 @@ static void set_handler_alps(int sig)
     act.sa_flags = 0;
     sigemptyset(&act.sa_mask);
 
-    sigaction(sig, &act, (struct sigaction *)0);
+    sigaction(sig, &act, (struct sigaction *) 0);
 }
 
 /*
@@ -251,29 +243,26 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
     if (PRTE_SUCCESS != (ret = prte_fd_write(fd, sizeof(*msg), msg))) {
         goto out;
     }
-    if (msg->file_str_len > 0 &&
-        PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->file_str_len, file))) {
+    if (msg->file_str_len > 0
+        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->file_str_len, file))) {
         goto out;
     }
-    if (msg->topic_str_len > 0 &&
-        PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->topic_str_len, topic))) {
+    if (msg->topic_str_len > 0
+        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->topic_str_len, topic))) {
         goto out;
     }
-    if (msg->msg_str_len > 0 &&
-        PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->msg_str_len, str))) {
+    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->msg_str_len, str))) {
         goto out;
     }
 
- out:
+out:
     free(str);
     return ret;
 }
 
-
 /* Called from the child to send an error message up the pipe to the
    waiting parent. */
-static void send_error_show_help(int fd, int exit_status,
-                                 const char *file, const char *topic, ...)
+static void send_error_show_help(int fd, int exit_status, const char *file, const char *topic, ...)
 {
     va_list ap;
     prte_odls_pipe_err_msg_t msg;
@@ -304,10 +293,9 @@ static int close_open_file_descriptors(int write_fd, prte_iof_base_io_conf_t opt
     /* grab the fd of the opendir above so we don't close in the
      * middle of the scan. */
     int dir_scan_fd = dirfd(dir);
-    if(dir_scan_fd < 0 ) {
+    if (dir_scan_fd < 0) {
         return PRTE_ERR_FILE_OPEN_FAILURE;
     }
-
 
     /* close all file descriptors w/ exception of stdin/stdout/stderr,
        the pipe used for the IOF INTERNAL messages, and the pipe up to
@@ -315,14 +303,15 @@ static int close_open_file_descriptors(int write_fd, prte_iof_base_io_conf_t opt
        by the apshephered. These are needed for obtaining RDMA credentials,
        synchronizing with aprun, etc. */
 
-    rc = alps_app_lli_pipes(app_alps_filedes,alps_app_filedes);
+    rc = alps_app_lli_pipes(app_alps_filedes, alps_app_filedes);
     if (0 != rc) {
         closedir(dir);
         return PRTE_ERR_FILE_OPEN_FAILURE;
     }
 
     while ((files = readdir(dir)) != NULL) {
-        if(!strncmp(files->d_name,".",1) || !strncmp(files->d_name,"..",2)) continue;
+        if (!strncmp(files->d_name, ".", 1) || !strncmp(files->d_name, "..", 2))
+            continue;
 
         fd = strtoul(files->d_name, NULL, 10);
         if (EINVAL == errno || ERANGE == errno) {
@@ -334,16 +323,15 @@ static int close_open_file_descriptors(int write_fd, prte_iof_base_io_conf_t opt
          * skip over the pipes we have open to apshepherd or slurmd
          */
 
-        if (fd == XTAPI_FD_IDENTITY) continue;
-        if (fd == XTAPI_FD_RESILIENCY) continue;
-        if ((fd == app_alps_filedes[0]) ||
-            (fd == app_alps_filedes[1]) ||
-            (fd == alps_app_filedes[0]) ||
-            (fd == alps_app_filedes[1])) continue;
+        if (fd == XTAPI_FD_IDENTITY)
+            continue;
+        if (fd == XTAPI_FD_RESILIENCY)
+            continue;
+        if ((fd == app_alps_filedes[0]) || (fd == app_alps_filedes[1])
+            || (fd == alps_app_filedes[0]) || (fd == alps_app_filedes[1]))
+            continue;
 
-        if (fd >=3 &&
-            fd != write_fd &&
-	    fd != dir_scan_fd) {
+        if (fd >= 3 && fd != write_fd && fd != dir_scan_fd) {
             close(fd);
         }
     }
@@ -376,9 +364,7 @@ static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
         */
         if (PRTE_SUCCESS != (i = prte_iof_base_setup_child(&cd->opts, &cd->env))) {
             PRTE_ERROR_LOG(i);
-            send_error_show_help(write_fd, 1,
-                                 "help-prte-odls-alps.txt",
-                                 "iof setup failed",
+            send_error_show_help(write_fd, 1, "help-prte-odls-alps.txt", "iof setup failed",
                                  prte_process_info.nodename, cd->app->app);
             /* Does not return */
         }
@@ -389,7 +375,7 @@ static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     } else if (!PRTE_FLAG_TEST(cd->jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT)) {
         /* tie stdin/out/err/internal to /dev/null */
         int fdnull;
-        for (i=0; i < 3; i++) {
+        for (i = 0; i < 3; i++) {
             fdnull = open("/dev/null", O_RDONLY, 0);
             if (fdnull > i && i != write_fd) {
                 dup2(fdnull, i);
@@ -399,15 +385,12 @@ static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     }
 
     if (PRTE_SUCCESS != close_open_file_descriptors(write_fd, cd->opts)) {
-        send_error_show_help(write_fd, 1, "help-prte-odls-alps.txt",
-                             "close fds",
-                             prte_process_info.nodename, cd->app->app,
-                             __FILE__, __LINE__);
+        send_error_show_help(write_fd, 1, "help-prte-odls-alps.txt", "close fds",
+                             prte_process_info.nodename, cd->app->app, __FILE__, __LINE__);
     }
 
-
     if (cd->argv == NULL) {
-        cd->argv = malloc(sizeof(char*)*2);
+        cd->argv = malloc(sizeof(char *) * 2);
         cd->argv[0] = strdup(cd->app->app);
         cd->argv[1] = NULL;
     }
@@ -435,12 +418,8 @@ static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     /* take us to the correct wdir */
     if (NULL != cd->wdir) {
         if (0 != chdir(cd->wdir)) {
-            send_error_show_help(write_fd, 1,
-                                 "help-prun.txt",
-                                 "prun:wdir-not-found",
-                                 "orted",
-                                 cd->wdir,
-                                 prte_process_info.nodename,
+            send_error_show_help(write_fd, 1, "help-prun.txt", "prun:wdir-not-found", "orted",
+                                 cd->wdir, prte_process_info.nodename,
                                  (NULL == cd->child) ? 0 : cd->child->app_rank);
             /* Does not return */
         }
@@ -451,21 +430,21 @@ static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     if (10 < prte_output_get_verbosity(prte_odls_base_framework.framework_output)) {
         int jout;
         prte_output(0, "%s STARTING %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cd->app->app);
-        for (jout=0; NULL != cd->argv[jout]; jout++) {
-            prte_output(0, "%s\tARGV[%d]: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), jout, cd->argv[jout]);
+        for (jout = 0; NULL != cd->argv[jout]; jout++) {
+            prte_output(0, "%s\tARGV[%d]: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), jout,
+                        cd->argv[jout]);
         }
-        for (jout=0; NULL != cd->env[jout]; jout++) {
-            prte_output(0, "%s\tENVIRON[%d]: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), jout, cd->env[jout]);
+        for (jout = 0; NULL != cd->env[jout]; jout++) {
+            prte_output(0, "%s\tENVIRON[%d]: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), jout,
+                        cd->env[jout]);
         }
     }
 
     execve(cd->cmd, cd->argv, cd->env);
-    send_error_show_help(write_fd, 1,
-                         "help-prte-odls-alps.txt", "execve error",
+    send_error_show_help(write_fd, 1, "help-prte-odls-alps.txt", "execve error",
                          prte_process_info.nodename, cd->app->app, strerror(errno));
     /* Does not return */
 }
-
 
 static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 {
@@ -477,7 +456,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         close(cd->opts.p_stdin[0]);
     }
     close(cd->opts.p_stdout[1]);
-    if( !prte_iof_base.redirect_app_stderr_to_stdout ) {
+    if (!prte_iof_base.redirect_app_stderr_to_stdout) {
         close(cd->opts.p_stderr[1]);
     }
 
@@ -514,10 +493,9 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         if (msg.file_str_len > 0) {
             rc = prte_fd_read(read_fd, msg.file_str_len, file);
             if (PRTE_SUCCESS != rc) {
-                prte_show_help("help-prte-odls-alps.txt", "syscall fail",
-                               true,
-                               prte_process_info.nodename, cd->app,
-                               "prte_fd_read", __FILE__, __LINE__);
+                prte_show_help("help-prte-odls-alps.txt", "syscall fail", true,
+                               prte_process_info.nodename, cd->app, "prte_fd_read", __FILE__,
+                               __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
@@ -528,10 +506,9 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         if (msg.topic_str_len > 0) {
             rc = prte_fd_read(read_fd, msg.topic_str_len, topic);
             if (PRTE_SUCCESS != rc) {
-                prte_show_help("help-prte-odls-alps.txt", "syscall fail",
-                               true,
-                               prte_process_info.nodename, cd->app,
-                               "prte_fd_read", __FILE__, __LINE__);
+                prte_show_help("help-prte-odls-alps.txt", "syscall fail", true,
+                               prte_process_info.nodename, cd->app, "prte_fd_read", __FILE__,
+                               __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
@@ -542,10 +519,9 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         if (msg.msg_str_len > 0) {
             str = calloc(1, msg.msg_str_len + 1);
             if (NULL == str) {
-                prte_show_help("help-prte-odls-alps.txt", "syscall fail",
-                               true,
-                               prte_process_info.nodename, cd->app,
-                               "prte_fd_read", __FILE__, __LINE__);
+                prte_show_help("help-prte-odls-alps.txt", "syscall fail", true,
+                               prte_process_info.nodename, cd->app, "prte_fd_read", __FILE__,
+                               __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
@@ -589,13 +565,12 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
     return PRTE_SUCCESS;
 }
 
-
 /**
  *  Fork/exec the specified processes
  */
 static int odls_alps_fork_local_proc(void *cdptr)
 {
-    prte_odls_spawn_caddy_t *cd = (prte_odls_spawn_caddy_t*)cdptr;
+    prte_odls_spawn_caddy_t *cd = (prte_odls_spawn_caddy_t *) cdptr;
     int p[2];
     pid_t pid;
 
@@ -644,7 +619,6 @@ static int odls_alps_fork_local_proc(void *cdptr)
     return do_parent(cd, p[0]);
 }
 
-
 /**
  * Launch all processes allocated to the current node.
  */
@@ -664,7 +638,8 @@ int prte_odls_alps_launch_local_procs(pmix_data_buffer_t *data)
 
     /* get the RDMA credentials and push them into the launch environment */
 
-    if (PRTE_SUCCESS != (rc = prte_odls_alps_get_rdma_creds())) {;
+    if (PRTE_SUCCESS != (rc = prte_odls_alps_get_rdma_creds())) {
+        ;
         PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                              "%s odls:alps:launch:failed to get GNI rdma credentials %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
@@ -677,7 +652,6 @@ int prte_odls_alps_launch_local_procs(pmix_data_buffer_t *data)
     return PRTE_SUCCESS;
 }
 
-
 /**
  * Send a signal to a pid.  Note that if we get an error, we set the
  * return value and let the upper layer print out the message.
@@ -687,27 +661,26 @@ static int send_signal(pid_t pid, int signal)
     int rc = PRTE_SUCCESS;
 
     PRTE_OUTPUT_VERBOSE((1, prte_odls_base_framework.framework_output,
-                         "%s sending signal %d to pid %ld",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         signal, (long)pid));
+                         "%s sending signal %d to pid %ld", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         signal, (long) pid));
 
     if (kill(pid, signal) != 0) {
-        switch(errno) {
-            case EINVAL:
-                rc = PRTE_ERR_BAD_PARAM;
-                break;
-            case ESRCH:
-                /* This case can occur when we deliver a signal to a
-                   process that is no longer there.  This can happen if
-                   we deliver a signal while the job is shutting down.
-                   This does not indicate a real problem, so just
-                   ignore the error.  */
-                break;
-            case EPERM:
-                rc = PRTE_ERR_PERM;
-                break;
-            default:
-                rc = PRTE_ERROR;
+        switch (errno) {
+        case EINVAL:
+            rc = PRTE_ERR_BAD_PARAM;
+            break;
+        case ESRCH:
+            /* This case can occur when we deliver a signal to a
+               process that is no longer there.  This can happen if
+               we deliver a signal while the job is shutting down.
+               This does not indicate a real problem, so just
+               ignore the error.  */
+            break;
+        case EPERM:
+            rc = PRTE_ERR_PERM;
+            break;
+        default:
+            rc = PRTE_ERROR;
         }
     }
 
@@ -718,7 +691,8 @@ static int prte_odls_alps_signal_local_procs(const pmix_proc_t *proc, int32_t si
 {
     int rc;
 
-    if (PRTE_SUCCESS != (rc = prte_odls_base_default_signal_local_procs(proc, signal, send_signal))) {
+    if (PRTE_SUCCESS
+        != (rc = prte_odls_base_default_signal_local_procs(proc, signal, send_signal))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -730,7 +704,8 @@ static int prte_odls_alps_restart_proc(prte_proc_t *child)
     int rc;
 
     /* restart the local proc */
-    if (PRTE_SUCCESS != (rc = prte_odls_base_default_restart_proc(child, odls_alps_fork_local_proc))) {
+    if (PRTE_SUCCESS
+        != (rc = prte_odls_base_default_restart_proc(child, odls_alps_fork_local_proc))) {
         PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                              "%s odls:alps:restart_proc failed to launch on error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));

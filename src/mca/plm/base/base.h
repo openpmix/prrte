@@ -30,13 +30,12 @@
  */
 #include "prte_config.h"
 
-#include "src/mca/mca.h"
 #include "src/class/prte_list.h"
 #include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/mca.h"
 #include "src/util/printf.h"
 
 #include "src/mca/plm/plm.h"
-
 
 BEGIN_C_DECLS
 

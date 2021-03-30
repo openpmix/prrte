@@ -7,6 +7,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Inria.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,22 +60,19 @@ static int rtc_hwloc_register(void)
 
     /* set as the default */
     my_priority = 70;
-    (void) prte_mca_base_component_var_register (c, "priority", "Priority of the HWLOC rtc component",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_9,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &my_priority);
+    (void) prte_mca_base_component_var_register(c, "priority",
+                                                "Priority of the HWLOC rtc component",
+                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
 
     prte_rtc_hwloc_component.kind = VM_HOLE_BIGGEST;
     vmhole = biggest;
-    (void) prte_mca_base_component_var_register(c, "vmhole",
-                                           "Kind of VM hole to identify - none, begin, biggest, libs, heap, stack (default=biggest)",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                           PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                           PRTE_INFO_LVL_9,
-                                           PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                           &vmhole);
+    (void) prte_mca_base_component_var_register(
+        c, "vmhole",
+        "Kind of VM hole to identify - none, begin, biggest, libs, heap, stack (default=biggest)",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &vmhole);
     if (0 == strcasecmp(vmhole, "none")) {
         prte_rtc_hwloc_component.kind = VM_HOLE_NONE;
     } else if (0 == strcasecmp(vmhole, "begin")) {
@@ -95,13 +93,12 @@ static int rtc_hwloc_register(void)
     return PRTE_SUCCESS;
 }
 
-
 static int rtc_hwloc_query(prte_mca_base_module_t **module, int *priority)
 {
     /* Only run on the HNP */
 
     *priority = my_priority;
-    *module = (prte_mca_base_module_t *)&prte_rtc_hwloc_module;
+    *module = (prte_mca_base_module_t *) &prte_rtc_hwloc_module;
 
     return PRTE_SUCCESS;
 }

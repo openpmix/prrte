@@ -13,6 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,11 +36,9 @@ PRTE_EXPORT void pmix_server_start(void);
 PRTE_EXPORT void pmix_server_finalize(void);
 PRTE_EXPORT void pmix_server_register_params(void);
 
-
 PRTE_EXPORT int prte_pmix_server_register_nspace(prte_job_t *jdata);
 
 PRTE_EXPORT void prte_pmix_server_clear(pmix_proc_t *pname);
-
 
 END_C_DECLS
 

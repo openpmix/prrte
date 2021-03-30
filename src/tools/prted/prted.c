@@ -32,97 +32,95 @@
 
 #include <string.h>
 
-#include <stdio.h>
 #include <ctype.h>
+#include <stdio.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+#    include <sys/param.h>
 #endif
-#include <fcntl.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif  /* HAVE_SYS_TIME_H */
+#    include <sys/time.h>
+#endif /* HAVE_SYS_TIME_H */
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
+#    include <sys/stat.h>
 #endif
 #ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
+#    include <sys/wait.h>
 #endif
 
 #include <pmix_server.h>
 
 #include "src/event/event-internal.h"
+#include "src/hwloc/hwloc-internal.h"
 #include "src/mca/base/base.h"
-#include "src/util/output.h"
+#include "src/mca/base/prte_mca_base_var.h"
+#include "src/pmix/pmix-internal.h"
+#include "src/util/argv.h"
 #include "src/util/basename.h"
 #include "src/util/cmd_line.h"
+#include "src/util/daemon_init.h"
+#include "src/util/fd.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
-#include "src/util/prte_environ.h"
 #include "src/util/os_path.h"
+#include "src/util/output.h"
 #include "src/util/printf.h"
-#include "src/util/argv.h"
-#include "src/util/fd.h"
-#include "src/mca/base/prte_mca_base_var.h"
-#include "src/util/daemon_init.h"
-#include "src/hwloc/hwloc-internal.h"
-#include "src/pmix/pmix-internal.h"
+#include "src/util/prte_environ.h"
 
-#include "src/util/show_help.h"
-#include "src/util/proc_info.h"
-#include "src/util/session_dir.h"
+#include "src/mca/rml/base/rml_contact.h"
+#include "src/threads/threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"
 #include "src/util/parse_options.h"
-#include "src/mca/rml/base/rml_contact.h"
-#include "src/threads/threads.h"
+#include "src/util/proc_info.h"
+#include "src/util/session_dir.h"
+#include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/grpcomm/base/base.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
-#include "src/mca/odls/odls.h"
+#include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/odls/base/odls_private.h"
+#include "src/mca/odls/odls.h"
 #include "src/mca/oob/base/base.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/ras/ras.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/rml/rml.h"
+#include "src/mca/rml/rml_types.h"
+#include "src/mca/routed/routed.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 
 /* need access to the create_jobid fn used by plm components
-* so we can set singleton name, if necessary
-*/
+ * so we can set singleton name, if necessary
+ */
 #include "src/mca/plm/base/plm_private.h"
 
-#include "src/runtime/runtime.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
+#include "src/runtime/runtime.h"
 
-#include "src/prted/prted.h"
 #include "src/prted/pmix/pmix_server.h"
+#include "src/prted/prted.h"
 
 /*
  * Globals
  */
 static void shutdown_callback(int fd, short flags, void *arg);
-static void rollup(int status, pmix_proc_t* sender,
-                   pmix_data_buffer_t *buffer,
-                   prte_rml_tag_t tag, void *cbdata);
-static void node_regex_report(int status, pmix_proc_t* sender,
-                              pmix_data_buffer_t *buffer,
+static void rollup(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
+                   void *cbdata);
+static void node_regex_report(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                               prte_rml_tag_t tag, void *cbdata);
 static void report_prted(void);
 
@@ -139,58 +137,47 @@ static prte_cmd_line_t *prte_cmd_line = NULL;
 prte_cmd_line_init_t prted_cmd_line_opts[] = {
     /* DVM-specific options */
     /* uri of PMIx publish/lookup server, or at least where to get it */
-    { '\0', "prte-server", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "Specify the URI of the publish/lookup server, or the name of the file (specified as file:filename) that contains that info",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "dvm-master-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "URI for the DVM master",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "parent-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
-      "URI for the parent if tree launch is enabled.",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "tree-spawn", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Tree-based spawn in progress",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "daemonize", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Daemonize the DVM daemons into the background",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "set-sid", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Direct the DVM daemons to separate from the current session",
-      PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "prtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
-        "Pass context-specific PRTE MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "pmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
-        "Pass context-specific PMIx MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
+    {'\0', "prte-server", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Specify the URI of the publish/lookup server, or the name of the file (specified as "
+     "file:filename) that contains that info",
+     PRTE_CMD_LINE_OTYPE_DVM},
+    {'\0', "dvm-master-uri", 1, PRTE_CMD_LINE_TYPE_STRING, "URI for the DVM master",
+     PRTE_CMD_LINE_OTYPE_DVM},
+    {'\0', "parent-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "URI for the parent if tree launch is enabled.", PRTE_CMD_LINE_OTYPE_DVM},
+    {'\0', "tree-spawn", 0, PRTE_CMD_LINE_TYPE_BOOL, "Tree-based spawn in progress",
+     PRTE_CMD_LINE_OTYPE_DVM},
+    {'\0', "daemonize", 0, PRTE_CMD_LINE_TYPE_BOOL, "Daemonize the DVM daemons into the background",
+     PRTE_CMD_LINE_OTYPE_DVM},
+    {'\0', "set-sid", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Direct the DVM daemons to separate from the current session", PRTE_CMD_LINE_OTYPE_DVM},
+    {'\0', "prtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
+     "Pass context-specific PRTE MCA parameters; they are considered global if --gmca is not used "
+     "and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "pmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
+     "Pass context-specific PMIx MCA parameters; they are considered global if --gmca is not used "
+     "and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
 
     /* Debug options */
-    { '\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Top-level PRTE debug switch (default: false)",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "debug-daemons", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Debug daemons",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "debug-verbose", 1, PRTE_CMD_LINE_TYPE_INT,
-      "Verbosity level for PRTE debug messages (default: 1)",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { 'd', "debug-devel", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Enable debugging of PRTE",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "debug-daemons-file", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Enable debugging of any PRTE daemons used by this application, storing output in files",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "leave-session-attached", 0, PRTE_CMD_LINE_TYPE_BOOL,
-      "Do not discard stdout/stderr of remote PRTE daemons",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0',  "test-suicide", 1, PRTE_CMD_LINE_TYPE_BOOL,
-      "Suicide instead of clean abort after delay",
-      PRTE_CMD_LINE_OTYPE_DEBUG },
-
+    {'\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL, "Top-level PRTE debug switch (default: false)",
+     PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "debug-daemons", 0, PRTE_CMD_LINE_TYPE_BOOL, "Debug daemons", PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "debug-verbose", 1, PRTE_CMD_LINE_TYPE_INT,
+     "Verbosity level for PRTE debug messages (default: 1)", PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'d', "debug-devel", 0, PRTE_CMD_LINE_TYPE_BOOL, "Enable debugging of PRTE",
+     PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "debug-daemons-file", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Enable debugging of any PRTE daemons used by this application, storing output in files",
+     PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "leave-session-attached", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Do not discard stdout/stderr of remote PRTE daemons", PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "test-suicide", 1, PRTE_CMD_LINE_TYPE_BOOL, "Suicide instead of clean abort after delay",
+     PRTE_CMD_LINE_OTYPE_DEBUG},
 
     /* End of list */
-    { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
-};
+    {'\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL}};
 
 typedef struct {
     prte_pmix_lock_t lock;
@@ -198,19 +185,16 @@ typedef struct {
     size_t ninfo;
 } myxfer_t;
 
-static void infocbfunc(pmix_status_t status,
-                       pmix_info_t *info, size_t ninfo,
-                       void *cbdata,
-                       pmix_release_cbfunc_t release_fn,
-                       void *release_cbdata)
+static void infocbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cbdata,
+                       pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
-    myxfer_t *xfer = (myxfer_t*)cbdata;
+    myxfer_t *xfer = (myxfer_t *) cbdata;
     size_t n;
 
     if (NULL != info) {
         xfer->ninfo = ninfo;
         PMIX_INFO_CREATE(xfer->info, xfer->ninfo);
-        for (n=0; n < ninfo; n++) {
+        for (n = 0; n < ninfo; n++) {
             PMIX_INFO_XFER(&xfer->info[n], &info[n]);
         }
     }
@@ -223,7 +207,8 @@ static void infocbfunc(pmix_status_t status,
 
 static int wait_pipe[2];
 
-static int wait_dvm(pid_t pid) {
+static int wait_dvm(pid_t pid)
+{
     char reply;
     int rc;
     int status;
@@ -263,9 +248,9 @@ int main(int argc, char *argv[])
     char **nonlocal = NULL;
     int n;
     pmix_info_t info;
-    size_t z1=1;
+    size_t z1 = 1;
     pmix_value_t *vptr;
-    int32_t one=1;
+    int32_t one = 1;
     char **pargv;
     int pargc;
     prte_schizo_base_module_t *schizo;
@@ -274,8 +259,7 @@ int main(int argc, char *argv[])
     if (NULL != umask_str) {
         char *endptr;
         long mask = strtol(umask_str, &endptr, 8);
-        if ((! (0 == mask && (EINVAL == errno || ERANGE == errno))) &&
-            (*endptr == '\0')) {
+        if ((!(0 == mask && (EINVAL == errno || ERANGE == errno))) && (*endptr == '\0')) {
             umask(mask);
         }
     }
@@ -292,18 +276,16 @@ int main(int argc, char *argv[])
     /* setup the cmd line - this is specific to the proxy */
     prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
     ret = prte_cmd_line_add(prte_cmd_line, prted_cmd_line_opts);
-    if (PRTE_SUCCESS != ret){
+    if (PRTE_SUCCESS != ret) {
         return ret;
     }
 
     /* parse the result to get values - this will not include MCA params */
-    if (PRTE_SUCCESS != (ret = prte_cmd_line_parse(prte_cmd_line,
-                                                    true, false, argc, argv)) ) {
+    if (PRTE_SUCCESS != (ret = prte_cmd_line_parse(prte_cmd_line, true, false, argc, argv))) {
         if (PRTE_ERR_SILENT != ret) {
-            fprintf(stderr, "%s: command line error (%s)\n", argv[0],
-                    prte_strerror(ret));
+            fprintf(stderr, "%s: command line error (%s)\n", argv[0], prte_strerror(ret));
         }
-       return ret;
+        return ret;
     }
 
     /* save the environment for launch purposes. This MUST be
@@ -315,8 +297,9 @@ int main(int argc, char *argv[])
     prte_launch_environ = prte_argv_copy(environ);
 
     /* open the SCHIZO framework */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                                            PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    if (PRTE_SUCCESS
+        != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
+                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         return ret;
     }
@@ -329,16 +312,14 @@ int main(int argc, char *argv[])
     /* get our schizo module */
     schizo = prte_schizo.detect_proxy(NULL);
     if (NULL == schizo || 0 != strcmp(schizo->name, "prte")) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true,
-                       prte_tool_basename, "NONE");
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "NONE");
         return 1;
     }
 
     /* parse the CLI to load the MCA params */
     if (PRTE_SUCCESS != (ret = schizo->parse_cli(pargc, 0, pargv, NULL))) {
         if (PRTE_ERR_SILENT != ret) {
-            fprintf(stderr, "%s: command line error (%s)\n",
-                    prte_tool_basename,
+            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename,
                     prte_strerror(ret));
         }
         return ret;
@@ -366,15 +347,15 @@ int main(int argc, char *argv[])
      * away just in case we have a problem along the way
      */
     if (prte_debug_daemons_flag) {
-        fprintf(stderr, "Daemon was launched on %s - beginning to initialize\n", prte_process_info.nodename);
+        fprintf(stderr, "Daemon was launched on %s - beginning to initialize\n",
+                prte_process_info.nodename);
     }
 
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
-    if (!prte_debug_flag &&
-        !prte_debug_daemons_flag &&
-        prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
+    if (!prte_debug_flag && !prte_debug_daemons_flag
+        && prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
         pipe(wait_pipe);
         prte_state_base_parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
@@ -397,7 +378,7 @@ int main(int argc, char *argv[])
 
     /* bind ourselves if so directed */
     if (NULL != prte_daemon_cores) {
-        char **cores=NULL, *tmp;
+        char **cores = NULL, *tmp;
         hwloc_obj_t pu;
         hwloc_cpuset_t ours, res;
         int core;
@@ -410,13 +391,12 @@ int main(int argc, char *argv[])
             ours = hwloc_bitmap_alloc();
             hwloc_bitmap_zero(ours);
             res = hwloc_bitmap_alloc();
-            for (i=0; NULL != cores[i]; i++) {
+            for (i = 0; NULL != cores[i]; i++) {
                 core = strtoul(cores[i], NULL, 10);
                 if (NULL == (pu = prte_hwloc_base_get_pu(prte_hwloc_topology, false, core))) {
                     /* the message will now come out locally */
-                    prte_show_help("help-prted.txt", "orted:cannot-bind",
-                                   true, prte_process_info.nodename,
-                                   prte_daemon_cores);
+                    prte_show_help("help-prted.txt", "orted:cannot-bind", true,
+                                   prte_process_info.nodename, prte_daemon_cores);
                     ret = PRTE_ERR_NOT_SUPPORTED;
                     hwloc_bitmap_free(ours);
                     hwloc_bitmap_free(res);
@@ -427,7 +407,7 @@ int main(int argc, char *argv[])
             }
             /* if the result is all zeros, then don't bind */
             if (!hwloc_bitmap_iszero(ours)) {
-                (void)hwloc_set_cpubind(prte_hwloc_topology, ours, 0);
+                (void) hwloc_set_cpubind(prte_hwloc_topology, ours, 0);
                 if (prte_debug_daemons_flag) {
                     tmp = prte_hwloc_base_cset2str(ours, false, prte_hwloc_topology);
                     prte_output(0, "Daemon %s is bound to cores %s",
@@ -442,18 +422,18 @@ int main(int argc, char *argv[])
         }
     }
 
-    if ((int)PMIX_RANK_INVALID != prted_debug_failure) {
-        prted_abort=false;
+    if ((int) PMIX_RANK_INVALID != prted_debug_failure) {
+        prted_abort = false;
         /* some vpid was ordered to fail. The value can be positive
          * or negative, depending upon the desired method for failure,
          * so need to check both here
          */
         if (0 > prted_debug_failure) {
-            prted_debug_failure = -1*prted_debug_failure;
+            prted_debug_failure = -1 * prted_debug_failure;
             prted_abort = true;
         }
         /* are we the specified vpid? */
-        if ((int)PRTE_PROC_MY_NAME->rank == prted_debug_failure) {
+        if ((int) PRTE_PROC_MY_NAME->rank == prted_debug_failure) {
             /* if the user specified we delay, then setup a timer
              * and have it kill us
              */
@@ -493,7 +473,8 @@ int main(int argc, char *argv[])
     }
     PMIX_VALUE_LOAD(&val, myuri, PMIX_STRING);
     free(myuri);
-    if (PMIX_SUCCESS != (prc = PMIx_Store_internal(&prte_process_info.myproc, PMIX_PROC_URI, &val))) {
+    if (PMIX_SUCCESS
+        != (prc = PMIx_Store_internal(&prte_process_info.myproc, PMIX_PROC_URI, &val))) {
         PMIX_ERROR_LOG(prc);
         PMIX_VALUE_DESTRUCT(&val);
         ret = PRTE_ERROR;
@@ -502,15 +483,15 @@ int main(int argc, char *argv[])
     PMIX_VALUE_DESTRUCT(&val);
 
     /* setup the primary daemon command receive function */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON,
-                            PRTE_RML_PERSISTENT, prte_daemon_recv, NULL);
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON, PRTE_RML_PERSISTENT,
+                            prte_daemon_recv, NULL);
 
     /* output a message indicating we are alive, our name, and our pid
      * for debugging purposes
      */
     if (prte_debug_daemons_flag) {
         fprintf(stderr, "Daemon %s checking in as pid %ld on host %s\n",
-                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (long)prte_process_info.pid,
+                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (long) prte_process_info.pid,
                 prte_process_info.nodename);
     }
 
@@ -530,13 +511,11 @@ int main(int argc, char *argv[])
      * any messages we send can flow thru him.
      */
     prte_parent_uri = NULL;
-    (void) prte_mca_base_var_register ("prte", "prte", NULL, "parent_uri",
-                                  "URI for the parent if tree launch is enabled.",
-                                  PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                  PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                  PRTE_INFO_LVL_9,
-                                  PRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
-                                  &prte_parent_uri);
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "parent_uri",
+                                      "URI for the parent if tree launch is enabled.",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                      PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_CONSTANT, &prte_parent_uri);
     if (NULL != prte_parent_uri) {
         /* set the contact info into our local database */
         ret = prte_rml_base_parse_uris(prte_parent_uri, PRTE_PROC_MY_PARENT, NULL);
@@ -558,12 +537,14 @@ int main(int argc, char *argv[])
         /* tell the routed module that we have a path
          * back to the HNP
          */
-        if (PRTE_SUCCESS != (ret = prte_routed.update_route(PRTE_PROC_MY_HNP, PRTE_PROC_MY_PARENT))) {
+        if (PRTE_SUCCESS
+            != (ret = prte_routed.update_route(PRTE_PROC_MY_HNP, PRTE_PROC_MY_PARENT))) {
             PRTE_ERROR_LOG(ret);
             goto DONE;
         }
         /* and a path to our parent */
-        if (PRTE_SUCCESS != (ret = prte_routed.update_route(PRTE_PROC_MY_PARENT, PRTE_PROC_MY_PARENT))) {
+        if (PRTE_SUCCESS
+            != (ret = prte_routed.update_route(PRTE_PROC_MY_PARENT, PRTE_PROC_MY_PARENT))) {
             PRTE_ERROR_LOG(ret);
             goto DONE;
         }
@@ -577,8 +558,8 @@ int main(int argc, char *argv[])
     }
 
     /* setup the rollup callback */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK,
-                            PRTE_RML_PERSISTENT, rollup, NULL);
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK, PRTE_RML_PERSISTENT,
+                            rollup, NULL);
 
     /* define the target jobid */
     PMIX_LOAD_NSPACE(target.nspace, PRTE_PROC_MY_NAME->nspace);
@@ -589,7 +570,7 @@ int main(int argc, char *argv[])
          * their rollup info before sending to our parent, save
          * a little time in the launch phase by "warming up" the
          * connection to our parent while we wait for our children */
-        PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);  // zero-byte message
+        PMIX_DATA_BUFFER_CONSTRUCT(&pbuf); // zero-byte message
         prte_rml.recv_buffer_nb(PRTE_PROC_MY_PARENT, PRTE_RML_TAG_NODE_REGEX_REPORT,
                                 PRTE_RML_PERSISTENT, node_regex_report, &node_regex_waiting);
         node_regex_waiting = true;
@@ -612,7 +593,7 @@ int main(int argc, char *argv[])
      * can turn right around and begin issuing orders to us
      */
 
-    PMIX_DATA_BUFFER_CONSTRUCT(&buffer);  // zero-byte message
+    PMIX_DATA_BUFFER_CONSTRUCT(&buffer); // zero-byte message
     /* insert our name for rollup purposes */
     prc = PMIx_Data_pack(NULL, &buffer, PRTE_PROC_MY_NAME, 1, PMIX_PROC);
     if (PMIX_SUCCESS != prc) {
@@ -622,7 +603,8 @@ int main(int argc, char *argv[])
     }
 
     /* get any connection info we may have pushed */
-    if (PMIX_SUCCESS == PMIx_Get(&prte_process_info.myproc, PMIX_PROC_URI, NULL, 0, &vptr) && NULL != vptr) {
+    if (PMIX_SUCCESS == PMIx_Get(&prte_process_info.myproc, PMIX_PROC_URI, NULL, 0, &vptr)
+        && NULL != vptr) {
         /* use the PMIx data support to pack it */
         PMIX_INFO_LOAD(&info, PMIX_PROC_URI, vptr->data.string, PMIX_STRING);
         PMIX_VALUE_RELEASE(vptr);
@@ -655,7 +637,7 @@ int main(int argc, char *argv[])
             goto DONE;
         }
     } else {
-        int32_t zero=0;
+        int32_t zero = 0;
         prc = PMIx_Data_pack(NULL, &buffer, &zero, 1, PMIX_INT32);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
@@ -673,10 +655,10 @@ int main(int argc, char *argv[])
     }
 
     /* include any non-loopback aliases for this node */
-    for (n=0; NULL != prte_process_info.aliases[n]; n++) {
-        if (0 != strcmp(prte_process_info.aliases[n], "localhost") &&
-            0 != strcmp(prte_process_info.aliases[n], "127.0.0.1") &&
-            0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
+    for (n = 0; NULL != prte_process_info.aliases[n]; n++) {
+        if (0 != strcmp(prte_process_info.aliases[n], "localhost")
+            && 0 != strcmp(prte_process_info.aliases[n], "127.0.0.1")
+            && 0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
             prte_argv_append_nosize(&nonlocal, prte_process_info.aliases[n]);
         }
     }
@@ -688,7 +670,7 @@ int main(int argc, char *argv[])
         prte_argv_free(nonlocal);
         goto DONE;
     }
-    for (ni=0; ni < naliases; ni++) {
+    for (ni = 0; ni < naliases; ni++) {
         prc = PMIx_Data_pack(NULL, &buffer, &nonlocal[ni], 1, PMIX_STRING);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
@@ -727,8 +709,8 @@ int main(int argc, char *argv[])
             PMIX_DATA_BUFFER_DESTRUCT(&data);
             goto DONE;
         }
-        if (PMIx_Data_compress((uint8_t*)data.base_ptr, data.bytes_used,
-                                (uint8_t**)&pbo.bytes, &pbo.size)) {
+        if (PMIx_Data_compress((uint8_t *) data.base_ptr, data.bytes_used, (uint8_t **) &pbo.bytes,
+                               &pbo.size)) {
             /* the data was compressed - mark that we compressed it */
             compressed = true;
         } else {
@@ -817,8 +799,7 @@ int main(int argc, char *argv[])
     }
 
     /* send it to the designated target */
-    if (0 > (ret = prte_rml.send_buffer_nb(&target, &buffer,
-                                           PRTE_RML_TAG_PRTED_CALLBACK,
+    if (0 > (ret = prte_rml.send_buffer_nb(&target, &buffer, PRTE_RML_TAG_PRTED_CALLBACK,
                                            prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&buffer);
@@ -832,22 +813,20 @@ int main(int argc, char *argv[])
     if (prte_cmd_line_is_taken(prte_cmd_line, "tree-spawn")) {
         int j, k;
         bool ignore;
-        char *no_keep[] = {
-            "prte_hnp_uri",
-            "prte_ess_jobid",
-            "prte_ess_vpid",
-            "prte_ess_num_procs",
-            "prte_parent_uri",
-            "mca_base_env_list",
-            NULL
-        };
-        for (i=0; i < argc; i++) {
-            if (0 == strcmp("-"PRTE_MCA_CMD_LINE_ID,  argv[i]) ||
-                0 == strcmp("--"PRTE_MCA_CMD_LINE_ID, argv[i]) ) {
+        char *no_keep[] = {"prte_hnp_uri",
+                           "prte_ess_jobid",
+                           "prte_ess_vpid",
+                           "prte_ess_num_procs",
+                           "prte_parent_uri",
+                           "mca_base_env_list",
+                           NULL};
+        for (i = 0; i < argc; i++) {
+            if (0 == strcmp("-" PRTE_MCA_CMD_LINE_ID, argv[i])
+                || 0 == strcmp("--" PRTE_MCA_CMD_LINE_ID, argv[i])) {
                 ignore = false;
                 /* see if this is something we cannot pass along */
-                for (k=0; NULL != no_keep[k]; k++) {
-                    if (0 == strcmp(no_keep[k], argv[i+1])) {
+                for (k = 0; NULL != no_keep[k]; k++) {
+                    if (0 == strcmp(no_keep[k], argv[i + 1])) {
                         ignore = true;
                         break;
                     }
@@ -857,8 +836,8 @@ int main(int argc, char *argv[])
                      * avoid growing the cmd line with duplicates
                      */
                     if (NULL != prted_cmd_line) {
-                        for (j=0; NULL != prted_cmd_line[j]; j++) {
-                            if (0 == strcmp(argv[i+1], prted_cmd_line[j])) {
+                        for (j = 0; NULL != prted_cmd_line[j]; j++) {
+                            if (0 == strcmp(argv[i + 1], prted_cmd_line[j])) {
                                 /* already here - ignore it */
                                 ignore = true;
                                 break;
@@ -867,8 +846,8 @@ int main(int argc, char *argv[])
                     }
                     if (!ignore) {
                         prte_argv_append_nosize(&prted_cmd_line, argv[i]);
-                        prte_argv_append_nosize(&prted_cmd_line, argv[i+1]);
-                        prte_argv_append_nosize(&prted_cmd_line, argv[i+2]);
+                        prte_argv_append_nosize(&prted_cmd_line, argv[i + 1]);
+                        prte_argv_append_nosize(&prted_cmd_line, argv[i + 2]);
                     }
                 }
                 i += 2;
@@ -877,7 +856,8 @@ int main(int argc, char *argv[])
     }
 
     if (prte_debug_daemons_flag) {
-        prte_output(0, "%s prted: up and running - waiting for commands!", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        prte_output(0, "%s prted: up and running - waiting for commands!",
+                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     }
     ret = PRTE_SUCCESS;
 
@@ -890,7 +870,7 @@ int main(int argc, char *argv[])
     /* ensure all local procs are dead */
     prte_odls.kill_local_procs(NULL);
 
-  DONE:
+DONE:
     /* update the exit status, in case it wasn't done */
     PRTE_UPDATE_EXIT_STATUS(ret);
 
@@ -909,7 +889,7 @@ int main(int argc, char *argv[])
 
 static void shutdown_callback(int fd, short flags, void *arg)
 {
-    prte_timer_t *tm = (prte_timer_t*)arg;
+    prte_timer_t *tm = (prte_timer_t *) arg;
     bool suicide;
 
     if (NULL != tm) {
@@ -933,7 +913,8 @@ static void shutdown_callback(int fd, short flags, void *arg)
         prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
         abort();
     }
-    prte_output(0, "%s is executing clean abnormal termination", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+    prte_output(0, "%s is executing clean abnormal termination",
+                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     /* do -not- call finalize as this will send a message to the HNP
      * indicating clean termination! Instead, just forcibly cleanup
      * the local session_dir tree and exit
@@ -943,9 +924,8 @@ static void shutdown_callback(int fd, short flags, void *arg)
     exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 
-static void rollup(int status, pmix_proc_t* sender,
-                   pmix_data_buffer_t *buffer,
-                   prte_rml_tag_t tag, void *cbdata)
+static void rollup(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
+                   void *cbdata)
 {
     pmix_proc_t child;
     int32_t flag, cnt;
@@ -968,7 +948,7 @@ static void rollup(int status, pmix_proc_t* sender,
             goto report;
         }
     } else {
-       /* xfer the contents of the rollup to our bucket */
+        /* xfer the contents of the rollup to our bucket */
         prc = PMIx_Data_copy_payload(bucket, buffer);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
@@ -989,7 +969,7 @@ static void rollup(int status, pmix_proc_t* sender,
             goto report;
         }
         if (0 < flag) {
-           PMIX_LOAD_PROCID(&proc, prte_process_info.myproc.nspace, sender->rank);
+            PMIX_LOAD_PROCID(&proc, prte_process_info.myproc.nspace, sender->rank);
             /* we have connection info */
             cnt = 1;
             prc = PMIx_Data_unpack(&proc, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
@@ -1008,26 +988,27 @@ static void rollup(int status, pmix_proc_t* sender,
             }
             PMIX_INFO_CREATE(info, ninfo);
             cnt = ninfo;
-            if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(&proc, &pbkt, (void*)info, &cnt, PMIX_INFO))) {
+            if (PMIX_SUCCESS
+                != (prc = PMIx_Data_unpack(&proc, &pbkt, (void *) info, &cnt, PMIX_INFO))) {
                 PMIX_ERROR_LOG(prc);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 goto report;
             }
-            for (cnt=0; cnt < (int)ninfo; cnt++) {
+            for (cnt = 0; cnt < (int) ninfo; cnt++) {
                 prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &info[cnt].value);
                 if (PMIX_SUCCESS != prc) {
                     PMIX_ERROR_LOG(prc);
-                    PMIX_INFO_FREE(info, (size_t)flag);
+                    PMIX_INFO_FREE(info, (size_t) flag);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                     goto report;
                 }
             }
-            PMIX_INFO_FREE(info, (size_t)flag);
+            PMIX_INFO_FREE(info, (size_t) flag);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         }
     }
 
-  report:
+report:
     report_prted();
 }
 
@@ -1046,20 +1027,19 @@ static void report_prted(void)
         PMIX_DATA_BUFFER_RELEASE(bucket);
         /* relay this on to our parent */
         if (0 > (ret = prte_rml.send_buffer_nb(PRTE_PROC_MY_PARENT, mybucket,
-                                               PRTE_RML_TAG_PRTED_CALLBACK,
-                                               prte_rml_send_callback, NULL))) {
+                                               PRTE_RML_TAG_PRTED_CALLBACK, prte_rml_send_callback,
+                                               NULL))) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(mybucket);
         }
     }
 }
 
-static void node_regex_report(int status, pmix_proc_t* sender,
-                              pmix_data_buffer_t *buffer,
+static void node_regex_report(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                               prte_rml_tag_t tag, void *cbdata)
 {
     int rc;
-    bool * active = (bool *)cbdata;
+    bool *active = (bool *) cbdata;
 
     /* extract the node info if needed, and update the routing tree */
     if (PRTE_SUCCESS != (rc = prte_util_decode_nidmap(buffer))) {

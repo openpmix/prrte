@@ -33,20 +33,20 @@
 #include "prte_config.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_UIO_H
-#include <sys/uio.h>
+#    include <sys/uio.h>
 #endif
 #ifdef HAVE_NET_UIO_H
-#include <net/uio.h>
+#    include <net/uio.h>
 #endif
 
 #include "src/class/prte_bitmap.h"
 #include "src/class/prte_hash_table.h"
 #include "src/class/prte_list.h"
-#include "src/util/printf.h"
 #include "src/event/event-internal.h"
+#include "src/util/printf.h"
 
 #include "src/mca/mca.h"
 #include "src/threads/threads.h"
@@ -106,26 +106,20 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_oob_send_t);
  * components until one identifies that it has a module capable
  * of reaching the target.
  */
-typedef void (*mca_oob_send_callback_fn_t)(int status,
-                                           struct iovec *iov,
-                                           int count, void *cbdata);
+typedef void (*mca_oob_send_callback_fn_t)(int status, struct iovec *iov, int count, void *cbdata);
 
 PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
-#define PRTE_OOB_SEND(m)                                                \
-    do {                                                                \
-        prte_oob_send_t *prte_oob_send_cd;                              \
-        prte_output_verbose(1,                                          \
-                            prte_oob_base_framework.framework_output,   \
-                            "%s OOB_SEND: %s:%d",                       \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
-                            __FILE__, __LINE__);                        \
-        prte_oob_send_cd = PRTE_NEW(prte_oob_send_t);                  \
-        prte_oob_send_cd->msg = (m);                                    \
-        PRTE_THREADSHIFT(prte_oob_send_cd, prte_event_base,             \
-                         prte_oob_base_send_nb, PRTE_MSG_PRI);          \
-    }while(0)
+#define PRTE_OOB_SEND(m)                                                                          \
+    do {                                                                                          \
+        prte_oob_send_t *prte_oob_send_cd;                                                        \
+        prte_output_verbose(1, prte_oob_base_framework.framework_output, "%s OOB_SEND: %s:%d",    \
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__);              \
+        prte_oob_send_cd = PRTE_NEW(prte_oob_send_t);                                             \
+        prte_oob_send_cd->msg = (m);                                                              \
+        PRTE_THREADSHIFT(prte_oob_send_cd, prte_event_base, prte_oob_base_send_nb, PRTE_MSG_PRI); \
+    } while (0)
 
-PRTE_EXPORT prte_oob_base_peer_t* prte_oob_base_get_peer(const pmix_proc_t *pr);
+PRTE_EXPORT prte_oob_base_peer_t *prte_oob_base_get_peer(const pmix_proc_t *pr);
 
 /* During initial wireup, we can only transfer contact info on the daemon
  * command line. This limits what we can send to a string representation of

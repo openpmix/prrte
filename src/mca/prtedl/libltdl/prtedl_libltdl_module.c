@@ -4,6 +4,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,9 +19,8 @@
 
 #include "prtedl_libltdl.h"
 
-
 static int libltdl_open(const char *fname, bool use_ext, bool private_namespace,
-                       prte_dl_handle_t **handle, char **err_msg)
+                        prte_dl_handle_t **handle, char **err_msg)
 {
     assert(handle);
 
@@ -56,10 +56,9 @@ static int libltdl_open(const char *fname, bool use_ext, bool private_namespace,
         (*handle)->ltdl_handle = local_handle;
 
 #if PRTE_ENABLE_DEBUG
-        if( NULL != fname ) {
+        if (NULL != fname) {
             (*handle)->filename = strdup(fname);
-        }
-        else {
+        } else {
             (*handle)->filename = strdup("(null)");
         }
 #endif
@@ -68,14 +67,12 @@ static int libltdl_open(const char *fname, bool use_ext, bool private_namespace,
     }
 
     if (NULL != err_msg) {
-        *err_msg = strdup((char*) lt_dlerror());
+        *err_msg = strdup((char *) lt_dlerror());
     }
     return PRTE_ERROR;
 }
 
-
-static int libltdl_lookup(prte_dl_handle_t *handle, const char *symbol,
-                         void **ptr, char **err_msg)
+static int libltdl_lookup(prte_dl_handle_t *handle, const char *symbol, void **ptr, char **err_msg)
 {
     assert(handle);
     assert(handle->ltdl_handle);
@@ -92,11 +89,10 @@ static int libltdl_lookup(prte_dl_handle_t *handle, const char *symbol,
     }
 
     if (NULL != err_msg) {
-        *err_msg = (char*) lt_dlerror();
+        *err_msg = (char *) lt_dlerror();
     }
     return PRTE_ERROR;
 }
-
 
 static int libltdl_close(prte_dl_handle_t *handle)
 {
@@ -114,8 +110,7 @@ static int libltdl_close(prte_dl_handle_t *handle)
 }
 
 static int libltdl_foreachfile(const char *search_path,
-                               int (*func)(const char *filename, void *data),
-                               void *data)
+                               int (*func)(const char *filename, void *data), void *data)
 {
     assert(search_path);
     assert(func);
@@ -124,13 +119,10 @@ static int libltdl_foreachfile(const char *search_path,
     return (0 == ret) ? PRTE_SUCCESS : PRTE_ERROR;
 }
 
-
 /*
  * Module definition
  */
-prte_prtedl_base_module_t prte_prtedl_libltdl_module = {
-    .open = libltdl_open,
-    .lookup = libltdl_lookup,
-    .close = libltdl_close,
-    .foreachfile = libltdl_foreachfile
-};
+prte_prtedl_base_module_t prte_prtedl_libltdl_module = {.open = libltdl_open,
+                                                        .lookup = libltdl_lookup,
+                                                        .close = libltdl_close,
+                                                        .foreachfile = libltdl_foreachfile};

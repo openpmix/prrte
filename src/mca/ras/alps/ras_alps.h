@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,8 +32,8 @@
 #define PRTE_RAS_ALPS_H
 
 #include "prte_config.h"
-#include "src/mca/ras/ras.h"
 #include "src/mca/ras/base/base.h"
+#include "src/mca/ras/ras.h"
 
 BEGIN_C_DECLS
 

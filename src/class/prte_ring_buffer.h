@@ -12,6 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,8 +28,8 @@
 
 #include "prte_config.h"
 
-#include "src/threads/threads.h"
 #include "src/class/prte_object.h"
+#include "src/threads/threads.h"
 #include "src/util/output.h"
 
 BEGIN_C_DECLS
@@ -68,7 +69,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_ring_buffer_t);
  * @return PRTE_SUCCESS if all initializations were succesful. Otherwise,
  *  the error indicate what went wrong in the function.
  */
-PRTE_EXPORT int prte_ring_buffer_init(prte_ring_buffer_t* ring, int size);
+PRTE_EXPORT int prte_ring_buffer_init(prte_ring_buffer_t *ring, int size);
 
 /**
  * Push an item onto the ring buffer
@@ -79,8 +80,7 @@ PRTE_EXPORT int prte_ring_buffer_init(prte_ring_buffer_t* ring, int size);
  * @return PRTE_SUCCESS. Returns error if ring cannot take
  *  another entry
  */
-PRTE_EXPORT void* prte_ring_buffer_push(prte_ring_buffer_t *ring, void *ptr);
-
+PRTE_EXPORT void *prte_ring_buffer_push(prte_ring_buffer_t *ring, void *ptr);
 
 /**
  * Pop an item off of the ring. The oldest entry on the ring will be
@@ -91,14 +91,14 @@ PRTE_EXPORT void* prte_ring_buffer_push(prte_ring_buffer_t *ring, void *ptr);
  * @return Error code.  NULL indicates an error.
  */
 
-PRTE_EXPORT void* prte_ring_buffer_pop(prte_ring_buffer_t *ring);
+PRTE_EXPORT void *prte_ring_buffer_pop(prte_ring_buffer_t *ring);
 
 /*
  * Access an element of the ring, without removing it, indexed
  * starting at the tail - a value of -1 will return the element
  * at the head of the ring
  */
-PRTE_EXPORT void* prte_ring_buffer_poke(prte_ring_buffer_t *ring, int i);
+PRTE_EXPORT void *prte_ring_buffer_poke(prte_ring_buffer_t *ring, int i);
 
 END_C_DECLS
 

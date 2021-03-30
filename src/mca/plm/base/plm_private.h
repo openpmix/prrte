@@ -35,18 +35,17 @@
 #include "types.h"
 
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif  /* HAVE_SYS_TIME_H */
+#    include <sys/time.h>
+#endif /* HAVE_SYS_TIME_H */
 
 #include "src/class/prte_list.h"
 #include "src/class/prte_pointer_array.h"
 #include "src/mca/base/prte_mca_base_framework.h"
 
+#include "src/mca/odls/odls_types.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/mca/rml/rml_types.h"
-#include "src/mca/odls/odls_types.h"
 #include "src/runtime/prte_globals.h"
-
 
 BEGIN_C_DECLS
 
@@ -71,7 +70,6 @@ typedef struct {
  */
 PRTE_EXPORT extern prte_plm_globals_t prte_plm_globals;
 
-
 /**
  * Utility routine to set progress engine schedule
  */
@@ -80,15 +78,15 @@ PRTE_EXPORT int prte_plm_base_set_progress_sched(int sched);
 /*
  * Launch support
  */
-PRTE_EXPORT void prte_plm_base_daemon_callback(int status, pmix_proc_t* sender,
-                                                 pmix_data_buffer_t *buffer,
-                                                 prte_rml_tag_t tag, void *cbdata);
-PRTE_EXPORT void prte_plm_base_daemon_failed(int status, pmix_proc_t* sender,
-                                               pmix_data_buffer_t *buffer,
-                                               prte_rml_tag_t tag, void *cbdata);
-PRTE_EXPORT void prte_plm_base_daemon_topology(int status, pmix_proc_t* sender,
-                                                 pmix_data_buffer_t *buffer,
-                                                 prte_rml_tag_t tag, void *cbdata);
+PRTE_EXPORT void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender,
+                                               pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
+                                               void *cbdata);
+PRTE_EXPORT void prte_plm_base_daemon_failed(int status, pmix_proc_t *sender,
+                                             pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
+                                             void *cbdata);
+PRTE_EXPORT void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender,
+                                               pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
+                                               void *cbdata);
 
 PRTE_EXPORT int prte_plm_base_create_jobid(prte_job_t *jdata);
 PRTE_EXPORT int prte_plm_base_set_hnp_name(void);
@@ -111,17 +109,14 @@ PRTE_EXPORT int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_
  */
 PRTE_EXPORT int prte_plm_base_comm_start(void);
 PRTE_EXPORT int prte_plm_base_comm_stop(void);
-PRTE_EXPORT void prte_plm_base_recv(int status, pmix_proc_t* sender,
-                                      pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                                      void* cbdata);
-
+PRTE_EXPORT void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                                    prte_rml_tag_t tag, void *cbdata);
 
 /**
  * Construct basic PRTE Daemon command line arguments
  */
-PRTE_EXPORT int prte_plm_base_prted_append_basic_args(int *argc, char ***argv,
-                                                        char *ess_module,
-                                                        int *proc_vpid_index);
+PRTE_EXPORT int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess_module,
+                                                      int *proc_vpid_index);
 
 /*
  * Proxy functions for use by daemons and application procs
@@ -133,4 +128,4 @@ PRTE_EXPORT int prte_plm_proxy_finalize(void);
 
 END_C_DECLS
 
-#endif  /* MCA_PLS_PRIVATE_H */
+#endif /* MCA_PLS_PRIVATE_H */

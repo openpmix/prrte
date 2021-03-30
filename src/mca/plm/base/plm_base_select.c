@@ -14,6 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,15 +25,14 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_component_repository.h"
+#include "src/mca/mca.h"
 
 #include "src/util/proc_info.h"
 
-#include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/base/base.h"
-
+#include "src/mca/plm/base/plm_private.h"
 
 /**
  * Function for selecting one component from all those that are
@@ -48,10 +48,11 @@ int prte_plm_base_select(void)
     /*
      * Select the best component
      */
-    if (PRTE_SUCCESS == (rc = prte_mca_base_select("plm", prte_plm_base_framework.framework_output,
-                                                     &prte_plm_base_framework.framework_components,
-                                                     (prte_mca_base_module_t **) &best_module,
-                                                     (prte_mca_base_component_t **) &best_component, NULL))) {
+    if (PRTE_SUCCESS
+        == (rc = prte_mca_base_select("plm", prte_plm_base_framework.framework_output,
+                                      &prte_plm_base_framework.framework_components,
+                                      (prte_mca_base_module_t **) &best_module,
+                                      (prte_mca_base_component_t **) &best_component, NULL))) {
         /* Save the winner */
         prte_plm = *best_module;
     }

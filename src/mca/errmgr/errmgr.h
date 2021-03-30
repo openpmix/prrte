@@ -51,16 +51,16 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
 #include "src/class/prte_object.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/util/output.h"
 #include "src/util/error.h"
+#include "src/util/output.h"
 
-#include "src/runtime/prte_globals.h"
 #include "src/mca/plm/plm_types.h"
+#include "src/runtime/prte_globals.h"
 
 BEGIN_C_DECLS
 
@@ -72,7 +72,7 @@ BEGIN_C_DECLS
  * messages.
  */
 
-#define PRTE_ERROR_NAME(n)  prte_strerror(n)
+#define PRTE_ERROR_NAME(n) prte_strerror(n)
 
 /*
  * Framework Interfaces
@@ -106,7 +106,7 @@ typedef void (*prte_errmgr_base_module_log_fn_t)(int error_code, char *filename,
  * a last-ditch exit procedure that attempts to clean up a little.
  */
 typedef void (*prte_errmgr_base_module_abort_fn_t)(int error_code, char *fmt, ...)
-__prte_attribute_format_funcptr__(__printf__, 2, 3);
+    __prte_attribute_format_funcptr__(__printf__, 2, 3);
 
 /**
  * Alert - abort peers
@@ -114,8 +114,7 @@ __prte_attribute_format_funcptr__(__printf__, 2, 3);
  *  For example, MPI_Abort(comm) will use this function to terminate peers in the
  *  communicator group before aborting itself.
  */
-typedef int (*prte_errmgr_base_module_abort_peers_fn_t)(pmix_proc_t *procs,
-                                                        int32_t num_procs,
+typedef int (*prte_errmgr_base_module_abort_peers_fn_t)(pmix_proc_t *procs, int32_t num_procs,
                                                         int error_code);
 
 typedef void (*prte_errmgr_base_module_enable_detector_fn_t)(bool flag);
@@ -125,16 +124,16 @@ typedef void (*prte_errmgr_base_module_enable_detector_fn_t)(bool flag);
  */
 struct prte_errmgr_base_module_2_3_0_t {
     /** Initialization Function */
-    prte_errmgr_base_module_init_fn_t                       init;
+    prte_errmgr_base_module_init_fn_t init;
     /** Finalization Function */
-    prte_errmgr_base_module_finalize_fn_t                   finalize;
+    prte_errmgr_base_module_finalize_fn_t finalize;
 
-    prte_errmgr_base_module_log_fn_t                        logfn;
-    prte_errmgr_base_module_abort_fn_t                      abort;
-    prte_errmgr_base_module_abort_peers_fn_t                abort_peers;
+    prte_errmgr_base_module_log_fn_t logfn;
+    prte_errmgr_base_module_abort_fn_t abort;
+    prte_errmgr_base_module_abort_peers_fn_t abort_peers;
 
     /* start error detector and propagator */
-    prte_errmgr_base_module_enable_detector_fn_t            enable_detector;
+    prte_errmgr_base_module_enable_detector_fn_t enable_detector;
 };
 typedef struct prte_errmgr_base_module_2_3_0_t prte_errmgr_base_module_2_3_0_t;
 typedef prte_errmgr_base_module_2_3_0_t prte_errmgr_base_module_t;
@@ -162,8 +161,7 @@ typedef prte_errmgr_base_component_3_0_0_t prte_errmgr_base_component_t;
 /*
  * Macro for use in components that are of type errmgr
  */
-#define PRTE_ERRMGR_BASE_VERSION_3_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("errmgr", 3, 0, 0)
+#define PRTE_ERRMGR_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_2_1_0("errmgr", 3, 0, 0)
 
 END_C_DECLS
 

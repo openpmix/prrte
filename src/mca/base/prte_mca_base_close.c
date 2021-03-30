@@ -14,6 +14,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,11 +24,11 @@
 
 #include "prte_config.h"
 
-#include "src/util/output.h"
-#include "src/mca/mca.h"
+#include "constants.h"
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_component_repository.h"
-#include "constants.h"
+#include "src/mca/mca.h"
+#include "src/util/output.h"
 
 extern int prte_mca_base_opened;
 
@@ -35,28 +36,28 @@ extern int prte_mca_base_opened;
  * Main MCA shutdown.
  */
 
-void prte_mca_base_close (void)
+void prte_mca_base_close(void)
 {
-    assert (prte_mca_base_opened);
+    assert(prte_mca_base_opened);
     if (--prte_mca_base_opened) {
         return;
     }
 
     /* deregister all MCA base parameters */
-    int group_id = prte_mca_base_var_group_find ("prte", "mca", "base");
+    int group_id = prte_mca_base_var_group_find("prte", "mca", "base");
 
     if (-1 < group_id) {
-        prte_mca_base_var_group_deregister (group_id);
+        prte_mca_base_var_group_deregister(group_id);
     }
 
     /* release the default paths */
     if (NULL != prte_mca_base_system_default_path) {
-        free (prte_mca_base_system_default_path);
+        free(prte_mca_base_system_default_path);
     }
     prte_mca_base_system_default_path = NULL;
 
     if (NULL != prte_mca_base_user_default_path) {
-        free (prte_mca_base_user_default_path);
+        free(prte_mca_base_user_default_path);
     }
     prte_mca_base_user_default_path = NULL;
 

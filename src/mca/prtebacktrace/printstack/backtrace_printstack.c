@@ -13,6 +13,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,12 +28,11 @@
 #include "constants.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 
-int
-prte_backtrace_print(FILE *file, char *prefix, int strip)
+int prte_backtrace_print(FILE *file, char *prefix, int strip)
 {
     int fd = prte_stacktrace_output_fileno;
 
-    if( NULL != file ) {
+    if (NULL != file) {
         fd = fileno(file);
     }
 
@@ -41,9 +41,7 @@ prte_backtrace_print(FILE *file, char *prefix, int strip)
     return PRTE_SUCCESS;
 }
 
-
-int
-prte_backtrace_buffer(char ***message_out, int *len_out)
+int prte_backtrace_buffer(char ***message_out, int *len_out)
 {
     *message_out = NULL;
     *len_out = 0;

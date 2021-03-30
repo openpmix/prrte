@@ -15,13 +15,13 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
  *
  * $HEADER$
  */
-
 
 #include "prte_config.h"
 
@@ -34,11 +34,11 @@
  */
 #include "src/mca/prtebacktrace/base/static-components.h"
 
-
 /*
  * Globals
  */
 
 /* Uses default register/open/close functions */
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prtebacktrace, NULL, NULL, NULL, NULL,
-                                prte_prtebacktrace_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                prte_prtebacktrace_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

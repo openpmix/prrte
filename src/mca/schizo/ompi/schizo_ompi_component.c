@@ -16,14 +16,13 @@
 
 #include "prte_config.h"
 #include "types.h"
-#include "types.h"
 
 #include "src/util/show_help.h"
 
 #include "src/runtime/prte_globals.h"
 
-#include "src/mca/schizo/schizo.h"
 #include "schizo_ompi.h"
+#include "src/mca/schizo/schizo.h"
 
 static int component_query(prte_mca_base_module_t **module, int *priority);
 
@@ -49,8 +48,7 @@ prte_schizo_ompi_component_t prte_schizo_ompi_component = {
 
 static int component_query(prte_mca_base_module_t **module, int *priority)
 {
-    *module = (prte_mca_base_module_t*)&prte_schizo_ompi_module;
+    *module = (prte_mca_base_module_t *) &prte_schizo_ompi_module;
     *priority = prte_schizo_ompi_component.priority;
     return PRTE_SUCCESS;
 }
-

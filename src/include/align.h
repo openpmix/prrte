@@ -14,6 +14,7 @@
  *
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,10 +25,10 @@
 #ifndef PRTE_ALIGN_H
 #define PRTE_ALIGN_H
 
-#define PRTE_DOWN_ALIGN(x,a,t) ((x) & ~(((t)(a)-1)))
-#define PRTE_DOWN_ALIGN_PTR(x,a,t) ((t)PRTE_DOWN_ALIGN((uintptr_t)x, a, uintptr_t))
-#define PRTE_ALIGN(x,a,t) (((x)+((t)(a)-1)) & ~(((t)(a)-1)))
-#define PRTE_ALIGN_PTR(x,a,t) ((t)PRTE_ALIGN((uintptr_t)x, a, uintptr_t))
-#define PRTE_ALIGN_PAD_AMOUNT(x,s) ((~((uintptr_t)(x))+1) & ((uintptr_t)(s)-1))
+#define PRTE_DOWN_ALIGN(x, a, t)     ((x) & ~(((t)(a) -1)))
+#define PRTE_DOWN_ALIGN_PTR(x, a, t) ((t) PRTE_DOWN_ALIGN((uintptr_t) x, a, uintptr_t))
+#define PRTE_ALIGN(x, a, t)          (((x) + ((t)(a) -1)) & ~(((t)(a) -1)))
+#define PRTE_ALIGN_PTR(x, a, t)      ((t) PRTE_ALIGN((uintptr_t) x, a, uintptr_t))
+#define PRTE_ALIGN_PAD_AMOUNT(x, s)  ((~((uintptr_t)(x)) + 1) & ((uintptr_t)(s) -1))
 
 #endif /* PRTE_ALIGN_H */

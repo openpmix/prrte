@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,22 +34,20 @@
 #include "constants.h"
 
 #include "src/mca/base/prte_mca_base_var.h"
-#include "src/util/prte_environ.h"
-#include "src/util/name_fns.h"
-#include "src/util/show_help.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
+#include "src/util/prte_environ.h"
+#include "src/util/show_help.h"
 
-#include "src/mca/plm/plm.h"
-#include "src/mca/plm/base/plm_private.h"
 #include "plm_slurm.h"
-
+#include "src/mca/plm/base/plm_private.h"
+#include "src/mca/plm/plm.h"
 
 /*
  * Public string showing the plm ompi_slurm component version number
  */
-const char *prte_plm_slurm_component_version_string =
-  "PRTE slurm plm MCA component version " PRTE_VERSION;
-
+const char *prte_plm_slurm_component_version_string
+    = "PRTE slurm plm MCA component version " PRTE_VERSION;
 
 /*
  * Local functions
@@ -57,7 +56,6 @@ static int plm_slurm_register(void);
 static int plm_slurm_open(void);
 static int plm_slurm_close(void);
 static int prte_plm_slurm_component_query(prte_mca_base_module_t **module, int *priority);
-
 
 /*
  * Instantiate the public struct with all of our public information
@@ -94,26 +92,23 @@ prte_plm_slurm_component_t prte_plm_slurm_component = {
        here; will be initialized in plm_slurm_open() */
 };
 
-
 static int plm_slurm_register(void)
 {
     prte_mca_base_component_t *comp = &prte_plm_slurm_component.super.base_version;
 
     prte_plm_slurm_component.custom_args = NULL;
-    (void) prte_mca_base_component_var_register (comp, "args", "Custom arguments to srun",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_9,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_slurm_component.custom_args);
+    (void) prte_mca_base_component_var_register(comp, "args", "Custom arguments to srun",
+                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_plm_slurm_component.custom_args);
 
     prte_plm_slurm_component.slurm_warning_msg = true;
-    (void) prte_mca_base_component_var_register (comp, "warning", "Turn off warning message",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_9,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_slurm_component.slurm_warning_msg);
+    (void) prte_mca_base_component_var_register(comp, "warning", "Turn off warning message",
+                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_plm_slurm_component.slurm_warning_msg);
 
     return PRTE_SUCCESS;
 }
@@ -134,7 +129,7 @@ static int prte_plm_slurm_component_query(prte_mca_base_module_t **module, int *
                              "%s plm:slurm: available for selection",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-        *module = (prte_mca_base_module_t *)&prte_plm_slurm_module;
+        *module = (prte_mca_base_module_t *) &prte_plm_slurm_module;
         return PRTE_SUCCESS;
     }
 
@@ -142,7 +137,6 @@ static int prte_plm_slurm_component_query(prte_mca_base_module_t **module, int *
     *module = NULL;
     return PRTE_ERROR;
 }
-
 
 static int plm_slurm_close(void)
 {

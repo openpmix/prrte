@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,8 +22,8 @@
 #include "types.h"
 
 #include "src/class/prte_list.h"
-#include "src/util/printf.h"
 #include "src/mca/mca.h"
+#include "src/util/printf.h"
 
 #include "src/mca/rtc/rtc.h"
 
@@ -33,7 +34,7 @@ BEGIN_C_DECLS
  */
 PRTE_EXPORT extern prte_mca_base_framework_t prte_rtc_base_framework;
 /* select a component */
-PRTE_EXPORT    int prte_rtc_base_select(void);
+PRTE_EXPORT int prte_rtc_base_select(void);
 
 /*
  * Global functions for MCA overall collective open and close
@@ -64,21 +65,17 @@ typedef struct {
 PRTE_CLASS_DECLARATION(prte_rtc_base_selected_module_t);
 
 PRTE_EXPORT void prte_rtc_base_assign(prte_job_t *jdata);
-PRTE_EXPORT void prte_rtc_base_set(prte_job_t *jdata, prte_proc_t *proc,
-                                     char ***env, int error_fd);
+PRTE_EXPORT void prte_rtc_base_set(prte_job_t *jdata, prte_proc_t *proc, char ***env, int error_fd);
 PRTE_EXPORT void prte_rtc_base_get_avail_vals(prte_list_t *vals);
 
 /* Called from the child to send a warning show_help message up the
    pipe to the waiting parent. */
-PRTE_EXPORT int prte_rtc_base_send_warn_show_help(int fd, const char *file,
-                                                    const char *topic, ...);
+PRTE_EXPORT int prte_rtc_base_send_warn_show_help(int fd, const char *file, const char *topic, ...);
 
 /* Called from the child to send an error message up the pipe to the
    waiting parent. */
-PRTE_EXPORT void prte_rtc_base_send_error_show_help(int fd, int exit_status,
-                                                      const char *file,
-                                                      const char *topic, ...);
-
+PRTE_EXPORT void prte_rtc_base_send_error_show_help(int fd, int exit_status, const char *file,
+                                                    const char *topic, ...);
 
 END_C_DECLS
 

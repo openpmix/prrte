@@ -41,8 +41,8 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/mca/mca.h"
 #include "src/class/prte_pointer_array.h"
+#include "src/mca/mca.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
@@ -75,7 +75,7 @@ typedef int (*prte_plm_base_module_remote_spawn_fn_t)(void);
 typedef int (*prte_plm_base_module_set_hnp_name_fn_t)(void);
 
 /**
-    * Cleanup resources held by module.
+ * Cleanup resources held by module.
  */
 
 typedef int (*prte_plm_base_module_finalize_fn_t)(void);
@@ -96,7 +96,7 @@ typedef int (*prte_plm_base_module_terminate_orteds_fn_t)(void);
  */
 typedef int (*prte_plm_base_module_terminate_procs_fn_t)(prte_pointer_array_t *procs);
 
-    /**
+/**
  * Signal any processes launched for the respective jobid by
  * this component.
  */
@@ -106,22 +106,21 @@ typedef int (*prte_plm_base_module_signal_job_fn_t)(pmix_nspace_t, int32_t);
  * plm module version 1.0.0
  */
 struct prte_plm_base_module_1_0_0_t {
-    prte_plm_base_module_init_fn_t               init;
-    prte_plm_base_module_set_hnp_name_fn_t       set_hnp_name;
-    prte_plm_base_module_spawn_fn_t              spawn;
-    prte_plm_base_module_remote_spawn_fn_t       remote_spawn;
-    prte_plm_base_module_terminate_job_fn_t      terminate_job;
-    prte_plm_base_module_terminate_orteds_fn_t   terminate_orteds;
-    prte_plm_base_module_terminate_procs_fn_t    terminate_procs;
-    prte_plm_base_module_signal_job_fn_t         signal_job;
-    prte_plm_base_module_finalize_fn_t           finalize;
+    prte_plm_base_module_init_fn_t init;
+    prte_plm_base_module_set_hnp_name_fn_t set_hnp_name;
+    prte_plm_base_module_spawn_fn_t spawn;
+    prte_plm_base_module_remote_spawn_fn_t remote_spawn;
+    prte_plm_base_module_terminate_job_fn_t terminate_job;
+    prte_plm_base_module_terminate_orteds_fn_t terminate_orteds;
+    prte_plm_base_module_terminate_procs_fn_t terminate_procs;
+    prte_plm_base_module_signal_job_fn_t signal_job;
+    prte_plm_base_module_finalize_fn_t finalize;
 };
 
 /** shprten prte_plm_base_module_1_0_0_t declaration */
 typedef struct prte_plm_base_module_1_0_0_t prte_plm_base_module_1_0_0_t;
 /** shprten prte_plm_base_module_t declaration */
 typedef struct prte_plm_base_module_1_0_0_t prte_plm_base_module_t;
-
 
 /**
  * plm component
@@ -137,15 +136,13 @@ typedef struct prte_plm_base_component_2_0_0_t prte_plm_base_component_2_0_0_t;
 /** Convenience typedef */
 typedef prte_plm_base_component_2_0_0_t prte_plm_base_component_t;
 
-
 /**
  * Macro for use in modules that are of type plm
  */
-#define PRTE_PLM_BASE_VERSION_2_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("plm", 2, 0, 0)
+#define PRTE_PLM_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("plm", 2, 0, 0)
 
 /* Global structure for accessing PLM functions */
-PRTE_EXPORT extern prte_plm_base_module_t prte_plm;  /* holds selected module's function pointers */
+PRTE_EXPORT extern prte_plm_base_module_t prte_plm; /* holds selected module's function pointers */
 
 END_C_DECLS
 

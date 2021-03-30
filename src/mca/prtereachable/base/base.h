@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,8 +17,8 @@
 #include "prte_config.h"
 #include "src/include/types.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/mca.h"
 
 #include "src/mca/prtereachable/prtereachable.h"
 
@@ -30,9 +31,8 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_prtereachable_base_framework;
  */
 PRTE_EXPORT int prte_reachable_base_select(void);
 
-PRTE_EXPORT prte_reachable_t * prte_reachable_allocate(unsigned int num_local,
-                                                          unsigned int num_remote);
-
+PRTE_EXPORT prte_reachable_t *prte_reachable_allocate(unsigned int num_local,
+                                                      unsigned int num_remote);
 
 END_C_DECLS
 

@@ -23,45 +23,44 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 
-#include <string.h>
 #include <assert.h>
+#include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_QUEUE_H
-#include <sys/queue.h>
+#    include <sys/queue.h>
 #endif
 #include <errno.h>
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #include <fcntl.h>
-#include <stdlib.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
+#    include <sys/wait.h>
 #endif
 
-#include "src/class/prte_object.h"
-#include "src/util/output.h"
 #include "src/class/prte_list.h"
+#include "src/class/prte_object.h"
 #include "src/event/event-internal.h"
-#include "src/threads/mutex.h"
 #include "src/sys/atomic.h"
+#include "src/threads/mutex.h"
+#include "src/util/output.h"
 
 #include "constants.h"
 #include "src/mca/errmgr/errmgr.h"
-#include "src/util/name_fns.h"
-#include "src/threads/threads.h"
 #include "src/runtime/prte_globals.h"
+#include "src/threads/threads.h"
+#include "src/util/name_fns.h"
 
 #include "src/runtime/prte_wait.h"
 
@@ -75,11 +74,7 @@ static void timer_dest(prte_timer_t *tm)
 {
     prte_event_free(tm->ev);
 }
-PRTE_CLASS_INSTANCE(prte_timer_t,
-                   prte_object_t,
-                   timer_const,
-                   timer_dest);
-
+PRTE_CLASS_INSTANCE(prte_timer_t, prte_object_t, timer_const, timer_dest);
 
 static void wccon(prte_wait_tracker_t *p)
 {
@@ -93,9 +88,7 @@ static void wcdes(prte_wait_tracker_t *p)
         PRTE_RELEASE(p->child);
     }
 }
-PRTE_CLASS_INSTANCE(prte_wait_tracker_t,
-                   prte_list_item_t,
-                   wccon, wcdes);
+PRTE_CLASS_INSTANCE(prte_wait_tracker_t, prte_list_item_t, wccon, wcdes);
 
 /* Local Variables */
 static prte_event_t handler;
@@ -120,16 +113,13 @@ int prte_wait_init(void)
 {
     PRTE_CONSTRUCT(&pending_cbs, prte_list_t);
 
-    prte_event_set(prte_event_base,
-                   &handler, SIGCHLD, PRTE_EV_SIGNAL|PRTE_EV_PERSIST,
-                   wait_signal_callback,
-                   &handler);
+    prte_event_set(prte_event_base, &handler, SIGCHLD, PRTE_EV_SIGNAL | PRTE_EV_PERSIST,
+                   wait_signal_callback, &handler);
     prte_event_set_priority(&handler, PRTE_SYS_PRI);
 
     prte_event_add(&handler, NULL);
     return PRTE_SUCCESS;
 }
-
 
 int prte_wait_finalize(void)
 {
@@ -143,8 +133,8 @@ int prte_wait_finalize(void)
 
 /* this function *must* always be called from
  * within an event in the prte_event_base */
-void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback,
-                   prte_event_base_t *evb, void *data)
+void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback, prte_event_base_t *evb,
+                  void *data)
 {
     prte_wait_tracker_t *t2;
 
@@ -159,21 +149,21 @@ void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback,
         if (NULL != callback) {
             /* already heard this proc is dead, so just do the callback */
             t2 = PRTE_NEW(prte_wait_tracker_t);
-            PRTE_RETAIN(child);  // protect against race conditions
+            PRTE_RETAIN(child); // protect against race conditions
             t2->child = child;
             t2->evb = evb;
             t2->cbfunc = callback;
             t2->cbdata = data;
-            prte_event_set(t2->evb, &t2->ev, -1,
-                           PRTE_EV_WRITE, t2->cbfunc, t2);
+            prte_event_set(t2->evb, &t2->ev, -1, PRTE_EV_WRITE, t2->cbfunc, t2);
             prte_event_set_priority(&t2->ev, PRTE_MSG_PRI);
             prte_event_active(&t2->ev, PRTE_EV_WRITE, 1);
         }
         return;
     }
 
-   /* we just override any existing registration */
-    PRTE_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t) {
+    /* we just override any existing registration */
+    PRTE_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t)
+    {
         if (t2->child == child) {
             t2->cbfunc = callback;
             t2->cbdata = data;
@@ -182,7 +172,7 @@ void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback,
     }
     /* get here if this is a new registration */
     t2 = PRTE_NEW(prte_wait_tracker_t);
-    PRTE_RETAIN(child);  // protect against race conditions
+    PRTE_RETAIN(child); // protect against race conditions
     t2->child = child;
     t2->evb = evb;
     t2->cbfunc = callback;
@@ -192,12 +182,13 @@ void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback,
 
 static void cancel_callback(int fd, short args, void *cbdata)
 {
-    prte_wait_tracker_t *trk = (prte_wait_tracker_t*)cbdata;
+    prte_wait_tracker_t *trk = (prte_wait_tracker_t *) cbdata;
     prte_wait_tracker_t *t2;
 
     PRTE_ACQUIRE_OBJECT(trk);
 
-    PRTE_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t) {
+    PRTE_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t)
+    {
         if (t2->child == trk->child) {
             prte_list_remove_item(&pending_cbs, &t2->super);
             PRTE_RELEASE(t2);
@@ -221,16 +212,15 @@ void prte_wait_cb_cancel(prte_proc_t *child)
 
     /* push this into the event library for handling */
     trk = PRTE_NEW(prte_wait_tracker_t);
-    PRTE_RETAIN(child);  // protect against race conditions
+    PRTE_RETAIN(child); // protect against race conditions
     trk->child = child;
     PRTE_THREADSHIFT(trk, prte_event_base, cancel_callback, PRTE_SYS_PRI);
 }
 
-
 /* callback from the event library whenever a SIGCHLD is received */
 static void wait_signal_callback(int fd, short event, void *arg)
 {
-    prte_event_t *signal = (prte_event_t*) arg;
+    prte_event_t *signal = (prte_event_t *) arg;
     int status;
     pid_t pid;
     prte_wait_tracker_t *t2;
@@ -256,14 +246,14 @@ static void wait_signal_callback(int fd, short event, void *arg)
         }
 
         /* we are already in an event, so it is safe to access the list */
-        PRTE_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t) {
+        PRTE_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t)
+        {
             if (pid == t2->child->pid) {
                 /* found it! */
                 t2->child->exit_code = status;
                 prte_list_remove_item(&pending_cbs, &t2->super);
                 if (NULL != t2->cbfunc) {
-                    prte_event_set(t2->evb, &t2->ev, -1,
-                                   PRTE_EV_WRITE, t2->cbfunc, t2);
+                    prte_event_set(t2->evb, &t2->ev, -1, PRTE_EV_WRITE, t2->cbfunc, t2);
                     prte_event_set_priority(&t2->ev, PRTE_MSG_PRI);
                     prte_event_active(&t2->ev, PRTE_EV_WRITE, 1);
                 } else {

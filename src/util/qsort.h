@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,18 +24,18 @@
 
 #if PRTE_HAVE_BROKEN_QSORT
 
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h> /* for size_t */
-#endif
+#    ifdef HAVE_SYS_TYPES_H
+#        include <sys/types.h> /* for size_t */
+#    endif
 
 BEGIN_C_DECLS
 
-void prte_qsort(void *a, size_t n, size_t es, int (*cmp)(const void *, const void*));
+void prte_qsort(void *a, size_t n, size_t es, int (*cmp)(const void *, const void *));
 
 END_C_DECLS
 
 #else
-#error "Don't include src/qsort/qsort.h directly"
+#    error "Don't include src/qsort/qsort.h directly"
 #endif /* PRTE_HAVE_BROKEN_QSORT */
 
 #endif

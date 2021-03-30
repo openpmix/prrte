@@ -13,6 +13,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,13 +25,13 @@
 #define PRTE_ESS_ALPS_H
 
 #include "prte_config.h"
-#include "src/mca/mca.h"
 #include "src/mca/ess/ess.h"
+#include "src/mca/mca.h"
 
 #include "alps/alps.h"
 #include "alps/alps_toolAssist.h"
-#include "alps/libalpsutil.h"
 #include "alps/libalpslli.h"
+#include "alps/libalpsutil.h"
 
 BEGIN_C_DECLS
 

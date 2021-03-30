@@ -27,18 +27,18 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/util/show_help.h"
 #include "src/util/argv.h"
+#include "src/util/show_help.h"
 
-#include "src/util/proc_info.h"
 #include "src/mca/errmgr/base/base.h"
-#include "src/util/name_fns.h"
-#include "src/runtime/prte_globals.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
 
-#include "src/mca/ess/ess.h"
-#include "src/mca/ess/base/base.h"
 #include "src/mca/ess/alps/ess_alps.h"
+#include "src/mca/ess/base/base.h"
+#include "src/mca/ess/ess.h"
 
 #include <errno.h>
 
@@ -46,23 +46,19 @@ static int alps_set_name(void);
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
-prte_ess_base_module_t prte_ess_alps_module = {
-    .init = rte_init,
-    .finalize = rte_finalize,
-    .abort = NULL
-};
+prte_ess_base_module_t prte_ess_alps_module = {.init = rte_init,
+                                               .finalize = rte_finalize,
+                                               .abort = NULL};
 
 /* Local variables */
 static pmix_rank_t starting_vpid = 0;
-
 
 static int rte_init(int argc, char **argv)
 {
     int ret;
     char *error = NULL;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
-                         "ess:alps in rte_init"));
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:alps in rte_init"));
 
     /* run the prolog */
     if (PRTE_SUCCESS != (ret = prte_ess_base_std_prolog())) {
@@ -92,11 +88,10 @@ static int rte_init(int argc, char **argv)
 
     return PRTE_SUCCESS;
 
-   fn_fail:
+fn_fail:
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt",
-                       "prte_init:startup:internal-failure",
-                       true, error, PRTE_ERROR_NAME(ret), ret);
+        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+                       PRTE_ERROR_NAME(ret), ret);
     }
     return ret;
 }
@@ -115,7 +110,7 @@ static int rte_finalize(void)
         PRTE_ERROR_LOG(ret);
     }
 
-   fn_exit:
+fn_exit:
     return ret;
 }
 
@@ -139,10 +134,10 @@ static int alps_set_name(void)
 
     if (PRTE_SUCCESS != (rc = prte_ess_alps_get_first_rank_on_node(&rank))) {
         PRTE_ERROR_LOG(rc);
-        return(rc);
+        return (rc);
     }
 
-    PRTE_PROC_MY_NAME->rank = (pmix_rank_t)rank + starting_vpid;
+    PRTE_PROC_MY_NAME->rank = (pmix_rank_t) rank + starting_vpid;
 
     /* get the num procs as provided in the cmd line param */
     prte_process_info.num_daemons = prte_ess_base_num_procs;

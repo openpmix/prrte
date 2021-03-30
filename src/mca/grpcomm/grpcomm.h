@@ -45,11 +45,11 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/mca/mca.h"
-#include "src/class/prte_list.h"
 #include "src/class/prte_bitmap.h"
-#include "src/pmix/pmix-internal.h"
+#include "src/class/prte_list.h"
+#include "src/mca/mca.h"
 #include "src/mca/rml/rml_types.h"
+#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
@@ -57,7 +57,7 @@ BEGIN_C_DECLS
  * collective completion */
 typedef void (*prte_grpcomm_cbfunc_t)(int status, pmix_data_buffer_t *buf, void *cbdata);
 
-typedef int (*prte_grpcomm_rbcast_cb_t)(pmix_data_buffer_t* buffer);
+typedef int (*prte_grpcomm_rbcast_cb_t)(pmix_data_buffer_t *buffer);
 
 /* Define a collective signature so we don't need to
  * track global collective id's */
@@ -89,7 +89,7 @@ typedef struct {
     /* distance masks for receive */
     prte_bitmap_t distance_mask_recv;
     /* received buckets */
-    pmix_data_buffer_t ** buffers;
+    pmix_data_buffer_t **buffers;
     /* callback function */
     prte_grpcomm_cbfunc_t cbfunc;
     /* user-provided callback data */
@@ -101,7 +101,6 @@ PRTE_CLASS_DECLARATION(prte_grpcomm_coll_t);
  * Component functions - all MUST be provided!
  */
 
-
 /* initialize the selected module */
 typedef int (*prte_grpcomm_base_module_init_fn_t)(void);
 
@@ -111,8 +110,7 @@ typedef void (*prte_grpcomm_base_module_finalize_fn_t)(void);
 /* Scalably send a message. Caller will provide an array
  * of daemon vpids that are to receive the message. A NULL
  * pointer indicates that all daemons are participating. */
-typedef int (*prte_grpcomm_base_module_xcast_fn_t)(pmix_rank_t *vpids,
-                                                   size_t nprocs,
+typedef int (*prte_grpcomm_base_module_xcast_fn_t)(pmix_rank_t *vpids, size_t nprocs,
                                                    pmix_data_buffer_t *msg);
 
 /* allgather - gather data from all specified daemons. Barrier operations
@@ -139,14 +137,14 @@ typedef int (*prte_grpcomm_base_module_rbcast_unregister_cb_fn_t)(int type);
  * Ver 3.0 - internal modules
  */
 typedef struct {
-    prte_grpcomm_base_module_init_fn_t           init;
-    prte_grpcomm_base_module_finalize_fn_t       finalize;
+    prte_grpcomm_base_module_init_fn_t init;
+    prte_grpcomm_base_module_finalize_fn_t finalize;
     /* collective operations */
-    prte_grpcomm_base_module_xcast_fn_t          xcast;
-    prte_grpcomm_base_module_allgather_fn_t      allgather;
-    prte_grpcomm_base_module_rbcast_fn_t         rbcast;
-    prte_grpcomm_base_module_rbcast_register_cb_fn_t        register_cb;
-    prte_grpcomm_base_module_rbcast_unregister_cb_fn_t       unregister_cb;
+    prte_grpcomm_base_module_xcast_fn_t xcast;
+    prte_grpcomm_base_module_allgather_fn_t allgather;
+    prte_grpcomm_base_module_rbcast_fn_t rbcast;
+    prte_grpcomm_base_module_rbcast_register_cb_fn_t register_cb;
+    prte_grpcomm_base_module_rbcast_unregister_cb_fn_t unregister_cb;
 } prte_grpcomm_base_module_t;
 
 /* the Public APIs */
@@ -157,8 +155,7 @@ typedef struct {
  * will send the message to all procs in the specified jobid.
  * The message will be sent to the daemons hosting the specified
  * procs for processing and relay. */
-typedef int (*prte_grpcomm_base_API_xcast_fn_t)(prte_grpcomm_signature_t *sig,
-                                                prte_rml_tag_t tag,
+typedef int (*prte_grpcomm_base_API_xcast_fn_t)(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
                                                 pmix_data_buffer_t *msg);
 
 /* allgather - gather data from all specified procs. Barrier operations
@@ -172,16 +169,13 @@ typedef int (*prte_grpcomm_base_API_xcast_fn_t)(prte_grpcomm_signature_t *sig,
  * will be invoked upon completion. */
 typedef int (*prte_grpcomm_base_API_allgather_fn_t)(prte_grpcomm_signature_t *sig,
                                                     pmix_data_buffer_t *buf, int mode,
-                                                    prte_grpcomm_cbfunc_t cbfunc,
-                                                    void *cbdata);
+                                                    prte_grpcomm_cbfunc_t cbfunc, void *cbdata);
 /* Reliable broadcast a message. Caller will provide an array
  * of daemon. A NULL pointer indicates that all known daemons are in the BMG.
  * A pointer to a name that includes ORTE_VPID_WILDCARD
  * all daemons in the specified jobid.*/
-typedef int (*prte_grpcomm_base_API_rbcast_fn_t)(prte_grpcomm_signature_t *sig,
-                                                prte_rml_tag_t tag,
+typedef int (*prte_grpcomm_base_API_rbcast_fn_t)(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
                                                  pmix_data_buffer_t *msg);
-
 
 typedef int (*prte_grpcomm_base_API_rbcast_register_cb_fn_t)(prte_grpcomm_rbcast_cb_t callback);
 
@@ -189,13 +183,12 @@ typedef int (*prte_grpcomm_base_API_rbcast_unregister_cb_fn_t)(int type);
 
 typedef struct {
     /* collective operations */
-    prte_grpcomm_base_API_xcast_fn_t             xcast;
-    prte_grpcomm_base_API_allgather_fn_t         allgather;
-    prte_grpcomm_base_API_rbcast_fn_t            rbcast;
-    prte_grpcomm_base_API_rbcast_register_cb_fn_t     register_cb;
-    prte_grpcomm_base_API_rbcast_unregister_cb_fn_t   unregister_cb;
+    prte_grpcomm_base_API_xcast_fn_t xcast;
+    prte_grpcomm_base_API_allgather_fn_t allgather;
+    prte_grpcomm_base_API_rbcast_fn_t rbcast;
+    prte_grpcomm_base_API_rbcast_register_cb_fn_t register_cb;
+    prte_grpcomm_base_API_rbcast_unregister_cb_fn_t unregister_cb;
 } prte_grpcomm_API_module_t;
-
 
 /*
  * the standard component data structure
@@ -207,12 +200,10 @@ struct prte_grpcomm_base_component_3_0_0_t {
 typedef struct prte_grpcomm_base_component_3_0_0_t prte_grpcomm_base_component_3_0_0_t;
 typedef prte_grpcomm_base_component_3_0_0_t prte_grpcomm_base_component_t;
 
-
-
 /*
  * Macro for use in components that are of type grpcomm v3.0.0
  */
-#define PRTE_GRPCOMM_BASE_VERSION_3_0_0 \
+#define PRTE_GRPCOMM_BASE_VERSION_3_0_0       \
     /* grpcomm v3.0 is chained to MCA v2.0 */ \
     PRTE_MCA_BASE_VERSION_2_1_0("grpcomm", 3, 0, 0)
 

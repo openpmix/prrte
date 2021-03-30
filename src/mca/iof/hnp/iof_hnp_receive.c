@@ -29,42 +29,41 @@
 
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <string.h>
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
+#    include <fcntl.h>
 #else
-#ifdef HAVE_SYS_FCNTL_H
-#include <sys/fcntl.h>
-#endif
+#    ifdef HAVE_SYS_FCNTL_H
+#        include <sys/fcntl.h>
+#    endif
 #endif
 
 #include "src/pmix/pmix-internal.h"
 
-#include "src/mca/rml/rml.h"
 #include "src/mca/errmgr/errmgr.h"
-#include "src/util/name_fns.h"
-#include "src/threads/threads.h"
+#include "src/mca/rml/rml.h"
 #include "src/runtime/prte_globals.h"
+#include "src/threads/threads.h"
+#include "src/util/name_fns.h"
 
-#include "src/mca/iof/iof.h"
 #include "src/mca/iof/base/base.h"
+#include "src/mca/iof/iof.h"
 
 #include "iof_hnp.h"
 
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t*)cbdata;
+    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
 
     PRTE_POST_OBJECT(lk);
     lk->status = prte_pmix_convert_status(status);
     PRTE_PMIX_WAKEUP_THREAD(lk);
 }
 
-void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
-                       pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                       void* cbdata)
+void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                       prte_rml_tag_t tag, void *cbdata)
 {
     pmix_proc_t origin, requestor;
     unsigned char data[PRTE_IOF_BASE_MSG_MAX];
@@ -77,8 +76,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
     prte_iof_request_t *preq;
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                         "%s received IOF msg from proc %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         "%s received IOF msg from proc %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(sender)));
 
     /* unpack the stream first as this may be flow control info */
@@ -91,16 +89,14 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
 
     if (PRTE_IOF_XON & stream) {
         /* re-start the stdin read event */
-        if (NULL != prte_iof_hnp_component.stdinev &&
-            !prte_job_term_ordered &&
-            !prte_iof_hnp_component.stdinev->active) {
+        if (NULL != prte_iof_hnp_component.stdinev && !prte_job_term_ordered
+            && !prte_iof_hnp_component.stdinev->active) {
             PRTE_IOF_READ_ACTIVATE(prte_iof_hnp_component.stdinev);
         }
         goto CLEAN_RETURN;
     } else if (PRTE_IOF_XOFF & stream) {
         /* stop the stdin read event */
-        if (NULL != prte_iof_hnp_component.stdinev &&
-            !prte_iof_hnp_component.stdinev->active) {
+        if (NULL != prte_iof_hnp_component.stdinev && !prte_iof_hnp_component.stdinev->active) {
             prte_event_del(prte_iof_hnp_component.stdinev->ev);
             prte_iof_hnp_component.stdinev->active = false;
         }
@@ -116,8 +112,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                         "%s received IOF cmd for source %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         "%s received IOF cmd for source %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(&origin)));
 
     /* check to see if a tool has requested something */
@@ -132,8 +127,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
 
         PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s received pull cmd from remote tool %s for proc %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(&requestor),
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&requestor),
                              PRTE_NAME_PRINT(&origin)));
 
         if (PRTE_IOF_EXCLUSIVE & stream) {
@@ -152,7 +146,8 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
         prte_list_append(&prte_iof_base.requests, &preq->super);
 
         /* do we already have this process in our list? */
-        PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
+        PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+        {
             if (PMIX_CHECK_PROCID(&proct->name, &origin)) {
                 /* a tool is requesting that we send it a copy of the specified stream(s)
                  * from the specified process(es), so create a sink for it
@@ -186,28 +181,29 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
     if (PRTE_IOF_CLOSE & stream) {
         PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s received close cmd from remote tool %s for proc %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(sender),
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender),
                              PRTE_NAME_PRINT(&origin)));
         /* a tool is requesting that we no longer forward a copy of the
          * specified stream(s) from the specified process(es) - remove the sink
          */
-        PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
+        PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+        {
             if (!PMIX_CHECK_PROCID(&proct->name, &origin)) {
                 continue;
             }
-            PRTE_LIST_FOREACH_SAFE(sink, next, proct->subscribers, prte_iof_sink_t) {
-                 /* if the target isn't set, then this sink is for another purpose - ignore it */
+            PRTE_LIST_FOREACH_SAFE(sink, next, proct->subscribers, prte_iof_sink_t)
+            {
+                /* if the target isn't set, then this sink is for another purpose - ignore it */
                 if (PMIX_NSPACE_INVALID(sink->daemon.nspace)) {
                     continue;
                 }
                 /* if this sink is the designated one, then remove it from list */
-                if ((stream & sink->tag) &&
-                    PMIX_CHECK_PROCID(&sink->name, &origin)) {
+                if ((stream & sink->tag) && PMIX_CHECK_PROCID(&sink->name, &origin)) {
                     /* send an ack message to the requestor - this ensures that the RML has
                      * completed sending anything to that requestor before it exits
                      */
-                    prte_iof_hnp_send_data_to_endpoint(&sink->daemon, &origin, PRTE_IOF_CLOSE, NULL, 0);
+                    prte_iof_hnp_send_data_to_endpoint(&sink->daemon, &origin, PRTE_IOF_CLOSE, NULL,
+                                                       0);
                     prte_list_remove_item(proct->subscribers, &sink->super);
                     PRTE_RELEASE(sink);
                 }
@@ -217,7 +213,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
     }
 
     /* this must have come from a daemon forwarding output - unpack the data */
-    numbytes=PRTE_IOF_BASE_MSG_MAX;
+    numbytes = PRTE_IOF_BASE_MSG_MAX;
     rc = PMIx_Data_unpack(NULL, buffer, data, &numbytes, PMIX_BYTE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -227,11 +223,11 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s unpacked %d bytes from remote proc %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
-                         PRTE_NAME_PRINT(&origin)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&origin)));
 
     /* do we already have this process in our list? */
-    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t) {
+    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    {
         if (PMIX_CHECK_PROCID(&proct->name, &origin)) {
             /* found it */
             goto NSTEP;
@@ -244,25 +240,25 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
     prte_list_append(&prte_iof_hnp_component.procs, &proct->super);
     prte_iof_base_check_target(proct);
 
-  NSTEP:
+NSTEP:
     /* cycle through the endpoints to see if someone else wants a copy */
     exclusive = false;
     if (NULL != proct->subscribers) {
-        PRTE_LIST_FOREACH(sink, proct->subscribers, prte_iof_sink_t) {
+        PRTE_LIST_FOREACH(sink, proct->subscribers, prte_iof_sink_t)
+        {
             /* if the target isn't set, then this sink is for another purpose - ignore it */
             if (PMIX_NSPACE_INVALID(sink->daemon.nspace)) {
                 continue;
             }
-            if ((stream & sink->tag) &&
-                PMIX_CHECK_PROCID(&sink->name, &origin)) {
+            if ((stream & sink->tag) && PMIX_CHECK_PROCID(&sink->name, &origin)) {
                 /* send the data to the tool */
-                    /* don't pass along zero byte blobs */
+                /* don't pass along zero byte blobs */
                 if (0 < numbytes) {
-                    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                                         "%s sending data from proc %s of size %d via PMIx to tool %s",
-                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                         PRTE_NAME_PRINT(&origin), (int)numbytes,
-                                         PRTE_NAME_PRINT(&sink->daemon)));
+                    PRTE_OUTPUT_VERBOSE(
+                        (1, prte_iof_base_framework.framework_output,
+                         "%s sending data from proc %s of size %d via PMIx to tool %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&origin),
+                         (int) numbytes, PRTE_NAME_PRINT(&sink->daemon)));
                     pmix_byte_object_t bo;
                     pmix_iof_channel_t pchan;
                     prte_pmix_lock_t lock;
@@ -282,10 +278,11 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
                     }
                     /* setup the byte object */
                     PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-                    bo.bytes = (char*)data;
+                    bo.bytes = (char *) data;
                     bo.size = numbytes;
                     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-                    prc = PMIx_server_IOF_deliver(&origin, pchan, &bo, NULL, 0, lkcbfunc, (void*)&lock);
+                    prc = PMIx_server_IOF_deliver(&origin, pchan, &bo, NULL, 0, lkcbfunc,
+                                                  (void *) &lock);
                     if (PMIX_SUCCESS != prc) {
                         PMIX_ERROR_LOG(prc);
                     } else {
@@ -308,12 +305,14 @@ void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
     /* output this to our local output unless one of the sinks was exclusive */
     if (!exclusive) {
         if (PRTE_IOF_STDOUT & stream) {
-            prte_iof_base_write_output(&origin, stream, data, numbytes, prte_iof_base.iof_write_stdout->wev);
+            prte_iof_base_write_output(&origin, stream, data, numbytes,
+                                       prte_iof_base.iof_write_stdout->wev);
         } else {
-            prte_iof_base_write_output(&origin, stream, data, numbytes, prte_iof_base.iof_write_stderr->wev);
+            prte_iof_base_write_output(&origin, stream, data, numbytes,
+                                       prte_iof_base.iof_write_stderr->wev);
         }
     }
 
- CLEAN_RETURN:
+CLEAN_RETURN:
     return;
 }

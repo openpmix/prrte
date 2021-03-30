@@ -26,14 +26,14 @@
 
 #define _GNU_SOURCE
 #include <limits.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <time.h>
-#include <pthread.h>
+#include <unistd.h>
 
-#include <pmix_tool.h>
 #include "debugger.h"
+#include <pmix_tool.h>
 
 static pmix_proc_t myproc;
 static char client_nspace[PMIX_MAX_NSLEN + 1];
@@ -46,7 +46,8 @@ static bool stop_on_exec_supported = false;
 static bool cospawn_supported = false;
 static bool cospawn_reqd = false;
 static int app_npernode = 2; // > 0. Default 2 ppn
-static int app_np = 2; // <= 0 means use default from prte. Default to single node. Must be multiple of npernode
+static int app_np
+    = 2; // <= 0 means use default from prte. Default to single node. Must be multiple of npernode
 static int daemon_colocate_per_proc = 0; // 0 = disable
 static int daemon_colocate_per_node = 0; // 0 = disable
 
@@ -62,13 +63,10 @@ static int daemon_colocate_per_node = 0; // 0 = disable
  * Once we have dealt with the returned data, we must
  * call the release_fn so that the PMIx library can
  * cleanup */
-static void cbfunc(pmix_status_t status,
-                   pmix_info_t *info, size_t ninfo,
-                   void *cbdata,
-                   pmix_release_cbfunc_t release_fn,
-                   void *release_cbdata)
+static void cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cbdata,
+                   pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
-    myquery_data_t *mq = (myquery_data_t*)cbdata;
+    myquery_data_t *mq = (myquery_data_t *) cbdata;
     size_t n;
 
     printf("Called %s as callback for PMIx_Query\n", __FUNCTION__);
@@ -79,8 +77,9 @@ static void cbfunc(pmix_status_t status,
     if (0 < ninfo) {
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
-        for (n=0; n < ninfo; n++) {
-            printf("Key %s Type %s(%d)\n", info[n].key, PMIx_Data_type_string(info[n].value.type), info[n].value.type);
+        for (n = 0; n < ninfo; n++) {
+            printf("Key %s Type %s(%d)\n", info[n].key, PMIx_Data_type_string(info[n].value.type),
+                   info[n].value.type);
             PMIX_INFO_XFER(&mq->info[n], &info[n]);
         }
     }
@@ -99,28 +98,23 @@ static void cbfunc(pmix_status_t status,
  * when registering for general events - i.e.,, the default
  * handler. We don't technically need to register one, but it
  * is usually good practice to catch any events that occur */
-static void notification_fn(size_t evhdlr_registration_id,
-                            pmix_status_t status,
-                            const pmix_proc_t *source,
-                            pmix_info_t info[], size_t ninfo,
+static void notification_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                            const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                             pmix_info_t results[], size_t nresults,
-                            pmix_event_notification_cbfunc_fn_t cbfunc,
-                            void *cbdata)
+                            pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     myrel_t *lock;
     size_t n;
 
-    printf("%s called as callback for event=%s\n", __FUNCTION__,
-           PMIx_Error_string(status));
+    printf("%s called as callback for event=%s\n", __FUNCTION__, PMIx_Error_string(status));
     lock = NULL;
-    if (PMIX_ERR_UNREACH == status ||
-        PMIX_ERR_LOST_CONNECTION == status) {
+    if (PMIX_ERR_UNREACH == status || PMIX_ERR_LOST_CONNECTION == status) {
         /* we should always have info returned to us - if not, there is
          * nothing we can do */
         if (NULL != info) {
-            for (n=0; n < ninfo; n++) {
+            for (n = 0; n < ninfo; n++) {
                 if (PMIX_CHECK_KEY(&info[n], PMIX_EVENT_RETURN_OBJECT)) {
-                    lock = (myrel_t*)info[n].value.data.ptr;
+                    lock = (myrel_t *) info[n].value.data.ptr;
                 }
             }
         }
@@ -147,13 +141,10 @@ static void notification_fn(size_t evhdlr_registration_id,
  * to declare a use-specific notification callback point. In this case,
  * we are asking to know whenever a job terminates, and we will then
  * know we can exit */
-static void release_fn(size_t evhdlr_registration_id,
-                       pmix_status_t status,
-                       const pmix_proc_t *source,
-                       pmix_info_t info[], size_t ninfo,
+static void release_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                       const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                        pmix_info_t results[], size_t nresults,
-                       pmix_event_notification_cbfunc_fn_t cbfunc,
-                       void *cbdata)
+                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     myrel_t *lock;
     pmix_status_t rc;
@@ -167,9 +158,9 @@ static void release_fn(size_t evhdlr_registration_id,
     /* find the return object */
     lock = NULL;
     found = false;
-    for (n=0; n < ninfo; n++) {
+    for (n = 0; n < ninfo; n++) {
         if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
-            lock = (myrel_t*)info[n].value.data.ptr;
+            lock = (myrel_t *) info[n].value.data.ptr;
             /* not every RM will provide an exit code, but check if one was given */
         } else if (0 == strncmp(info[n].key, PMIX_EXIT_CODE, PMIX_MAX_KEYLEN)) {
             exit_code = info[n].value.data.integer;
@@ -189,7 +180,7 @@ static void release_fn(size_t evhdlr_registration_id,
     }
 
     printf("DEBUGGER NOTIFIED THAT JOB %s TERMINATED \n",
-            (NULL == affected) ? "NULL" : affected->nspace);
+           (NULL == affected) ? "NULL" : affected->nspace);
     if (found) {
         if (!lock->exit_code_given) {
             lock->exit_code = exit_code;
@@ -208,8 +199,8 @@ static void release_fn(size_t evhdlr_registration_id,
      *
      * In the separate spawn case, we expect two terminations, the application
      * and the daemon. */
-    if ((0 == strcmp(daemon_nspace, source->nspace)) ||
-        (0 == strcmp(client_nspace, source->nspace))) {
+    if ((0 == strcmp(daemon_nspace, source->nspace))
+        || (0 == strcmp(client_nspace, source->nspace))) {
         lock->lock.count--;
         if (0 == lock->lock.count) {
             DEBUG_WAKEUP_THREAD(&lock->lock);
@@ -230,22 +221,21 @@ static void release_fn(size_t evhdlr_registration_id,
  * to the registered event. The index is used later on to deregister
  * an event handler - if we don't explicitly deregister it, then the
  * PMIx server will do so when it see us exit */
-static void evhandler_reg_callbk(pmix_status_t status,
-                                 size_t evhandler_ref,
-                                 void *cbdata)
+static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbdata)
 {
-    mylock_t *lock = (mylock_t*)cbdata;
+    mylock_t *lock = (mylock_t *) cbdata;
 
     printf("%s called to register callback\n", __FUNCTION__);
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
-                   myproc.nspace, myproc.rank, status, (unsigned long)evhandler_ref);
+                myproc.nspace, myproc.rank, status, (unsigned long) evhandler_ref);
     }
     lock->status = status;
     DEBUG_WAKEUP_THREAD(lock);
 }
 
-static int cospawn_launch(myrel_t *myrel) {
+static int cospawn_launch(myrel_t *myrel)
+{
     pmix_info_t *info;
     pmix_app_t *app;
     size_t ninfo;
@@ -258,8 +248,7 @@ static int cospawn_launch(myrel_t *myrel) {
     char cwd[_POSIX_PATH_MAX + 1];
     char map_str[128];
 
-    printf("Calling %s to spawn application processes and debugger daemon\n",
-           __FUNCTION__);
+    printf("Calling %s to spawn application processes and debugger daemon\n", __FUNCTION__);
     /* Provide job-level directives so the apps do what the user requested.
      * These attributes apply to both the application and daemon processes. */
     ninfo = 4;
@@ -302,12 +291,10 @@ static int cospawn_launch(myrel_t *myrel) {
         n = 0;
         if (stop_on_exec) {
             /* Stop application at first instruction */
-            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_ON_EXEC, NULL,
-                           PMIX_BOOL);
+            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);
         } else if (stop_in_init) {
             /* Stop application in PMIx_Init */
-            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_IN_INIT, NULL,
-                           PMIX_BOOL);
+            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
         }
     } else {
         app[0].ninfo = 0;
@@ -335,19 +322,18 @@ static int cospawn_launch(myrel_t *myrel) {
     PMIX_INFO_LOAD(&app[1].info[n], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
     n++;
     /* Tell daemon that application is waiting for daemon to relase it */
-    PMIX_INFO_LOAD(&app[1].info[n], PMIX_DEBUG_WAIT_FOR_NOTIFY, NULL,
-                   PMIX_BOOL); 
+    PMIX_INFO_LOAD(&app[1].info[n], PMIX_DEBUG_WAIT_FOR_NOTIFY, NULL, PMIX_BOOL);
 
     /* Spawn the job - the function will return when the app
      * has been launched */
     rc = PMIx_Spawn(info, ninfo, app, 2, client_nspace);
-    myrel->lock.count = 1; //app[0].maxprocs + app[1].maxprocs;
+    myrel->lock.count = 1; // app[0].maxprocs + app[1].maxprocs;
     myrel->nspace = strdup(client_nspace);
     PMIX_INFO_FREE(info, ninfo);
     PMIX_APP_FREE(app, 2);
     if (PMIX_SUCCESS != rc) {
-        fprintf(stderr, "Application failed to launch with error: %s(%d)\n",
-                PMIx_Error_string(rc), rc);
+        fprintf(stderr, "Application failed to launch with error: %s(%d)\n", PMIx_Error_string(rc),
+                rc);
         return rc;
     }
     /* Daemon and application are in same namespace */
@@ -355,7 +341,7 @@ static int cospawn_launch(myrel_t *myrel) {
     /* Register the termination event handler here with the intent to
      * filter out non-daemon notifcations .
      * Since the daemon is in the same namespace as the application, it's
-     * rank is assigned one higher than the last application process. In 
+     * rank is assigned one higher than the last application process. In
      * this example,the daemon's rank is 2.
      */
     strcpy(daemon_proc.nspace, client_nspace);
@@ -365,12 +351,11 @@ static int cospawn_launch(myrel_t *myrel) {
     data_array.type = PMIX_PROC;
     data_array.array = &daemon_proc;
     PMIX_INFO_CREATE(info, 2);
-    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_CUSTOM_RANGE, &data_array,
-                   PMIX_DATA_ARRAY);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_CUSTOM_RANGE, &data_array, PMIX_DATA_ARRAY);
     PMIX_INFO_LOAD(&info[1], PMIX_EVENT_RETURN_OBJECT, myrel, PMIX_POINTER);
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(&code, 1, info, 2, release_fn,
-                                evhandler_reg_callbk, (void*)&mylock);
+    PMIx_Register_event_handler(&code, 1, info, 2, release_fn, evhandler_reg_callbk,
+                                (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
     PMIX_INFO_FREE(info, 2);
@@ -423,12 +408,14 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     n++;
     /* Number of daemons per node in the application allocation */
     if (daemon_colocate_per_node > 0) {
-        PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_DAEMONS_PER_NODE, &daemon_colocate_per_node, PMIX_UINT16);
+        PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_DAEMONS_PER_NODE, &daemon_colocate_per_node,
+                       PMIX_UINT16);
         n++;
     }
     /* Number of daemons per proc in the application allocation */
     else if (daemon_colocate_per_proc > 0) {
-        PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_DAEMONS_PER_PROC, &daemon_colocate_per_proc, PMIX_UINT16);
+        PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_DAEMONS_PER_PROC, &daemon_colocate_per_proc,
+                       PMIX_UINT16);
         n++;
     }
     /* Launch one daemon per node -- only needed if co-launch is not supported */
@@ -454,7 +441,8 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     PMIX_INFO_FREE(dinfo, dninfo);
     PMIX_APP_FREE(debugger, 1);
     if (PMIX_SUCCESS != rc) {
-        fprintf(stderr, "Debugger daemons failed to launch with error: %s\n", PMIx_Error_string(rc));
+        fprintf(stderr, "Debugger daemons failed to launch with error: %s\n",
+                PMIx_Error_string(rc));
         return rc;
     }
     /* Cleanup */
@@ -473,8 +461,8 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     myrel->lock.count++;
 
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(&code, 1, dinfo, dninfo,
-                                release_fn, evhandler_reg_callbk, (void*)&mylock);
+    PMIx_Register_event_handler(&code, 1, dinfo, dninfo, release_fn, evhandler_reg_callbk,
+                                (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     printf("Debugger: Registered for termination on nspace %s\n", daemon_nspace);
     rc = mylock.status;
@@ -509,9 +497,8 @@ int main(int argc, char **argv)
     pid = getpid();
 
     /* Process any arguments we were given */
-    for (i=1; i < argc; i++) {
-        if (0 == strcmp(argv[i], "-h") ||
-            0 == strcmp(argv[i], "--help")) {
+    for (i = 1; i < argc; i++) {
+        if (0 == strcmp(argv[i], "-h") || 0 == strcmp(argv[i], "--help")) {
             /* print the usage message and exit */
             printf("Direct Launch Example\n");
             printf("$ prte --daemonize\n");
@@ -522,29 +509,27 @@ int main(int argc, char **argv)
             printf(" --stop-on-exec   Stop application on exec\n");
             printf(" --stop-in-init   Stop application in init (Default)\n");
             printf(" --app-npernode   Number of processes per node (Default: 2)\n");
-            printf(" --app-np         Number of total processes. Must be multiple of --app-npernode (Default: 2)\n");
-            printf(" --daemon-colocate-per-proc  Test Colaunch with Daemons Per Process (Default: 0 = off)\n");
-            printf(" --daemon-colocate-per-node  Test Colaunch with Daemons Per Node (Default: 0 = off)\n");
+            printf(" --app-np         Number of total processes. Must be multiple of "
+                   "--app-npernode (Default: 2)\n");
+            printf(" --daemon-colocate-per-proc  Test Colaunch with Daemons Per Process (Default: "
+                   "0 = off)\n");
+            printf(" --daemon-colocate-per-node  Test Colaunch with Daemons Per Node (Default: 0 = "
+                   "off)\n");
             exit(0);
-        }
-        else if (0 == strcmp(argv[i], "-c") ||
-                 0 == strcmp(argv[i], "--cospawn")){
+        } else if (0 == strcmp(argv[i], "-c") || 0 == strcmp(argv[i], "--cospawn")) {
             cospawn_reqd = true;
             break;
-        }
-        else if (0 == strcmp(argv[i], "--stop-in-init")) {
+        } else if (0 == strcmp(argv[i], "--stop-in-init")) {
             stop_in_init = true;
             stop_on_exec = false;
             break;
-        }
-        else if (0 == strcmp(argv[i], "--stop-on-exec")) {
+        } else if (0 == strcmp(argv[i], "--stop-on-exec")) {
             stop_in_init = false;
             stop_on_exec = true;
             break;
-        }
-        else if (0 == strcmp(argv[i], "--app-npernode")) {
+        } else if (0 == strcmp(argv[i], "--app-npernode")) {
             ++i;
-            if (i >= argc && isdigit(argv[i][0]) ) {
+            if (i >= argc && isdigit(argv[i][0])) {
                 fprintf(stderr, "Error: --app-npernode requires a positive integer argument\n");
                 exit(1);
             }
@@ -553,10 +538,9 @@ int main(int argc, char **argv)
                 fprintf(stderr, "Error: --app-npernode requires a positive integer argument\n");
                 exit(1);
             }
-        }
-        else if (0 == strcmp(argv[i], "--app-np")) {
+        } else if (0 == strcmp(argv[i], "--app-np")) {
             ++i;
-            if (i >= argc && isdigit(argv[i][0]) ) {
+            if (i >= argc && isdigit(argv[i][0])) {
                 fprintf(stderr, "Error: --app-np requires a positive integer argument\n");
                 exit(1);
             }
@@ -565,35 +549,38 @@ int main(int argc, char **argv)
                 fprintf(stderr, "Error: --app-np requires a positive integer argument\n");
                 exit(1);
             }
-        }
-        else if (0 == strcmp(argv[i], "--daemon-colocate-per-proc")) {
+        } else if (0 == strcmp(argv[i], "--daemon-colocate-per-proc")) {
             ++i;
-            if (i >= argc && isdigit(argv[i][0]) ) {
-                fprintf(stderr, "Error: --daemon-colocate-per-proc requires a positive integer argument\n");
+            if (i >= argc && isdigit(argv[i][0])) {
+                fprintf(stderr,
+                        "Error: --daemon-colocate-per-proc requires a positive integer argument\n");
                 exit(1);
             }
             daemon_colocate_per_proc = atoi(argv[i]);
             if (daemon_colocate_per_proc < 0) {
-                fprintf(stderr, "Error: --daemon-colocate-per-proc requires a positive integer argument\n");
+                fprintf(stderr,
+                        "Error: --daemon-colocate-per-proc requires a positive integer argument\n");
                 exit(1);
             }
-        }
-        else if (0 == strcmp(argv[i], "--daemon-colocate-per-node")) {
+        } else if (0 == strcmp(argv[i], "--daemon-colocate-per-node")) {
             ++i;
-            if (i >= argc && isdigit(argv[i][0]) ) {
-                fprintf(stderr, "Error: --daemon-colocate-per-node requires a positive integer argument\n");
+            if (i >= argc && isdigit(argv[i][0])) {
+                fprintf(stderr,
+                        "Error: --daemon-colocate-per-node requires a positive integer argument\n");
                 exit(1);
             }
             daemon_colocate_per_node = atoi(argv[i]);
             if (daemon_colocate_per_node < 0) {
-                fprintf(stderr, "Error: --daemon-colocate-per-node requires a positive integer argument\n");
+                fprintf(stderr,
+                        "Error: --daemon-colocate-per-node requires a positive integer argument\n");
                 exit(1);
             }
         }
     }
 
     if (daemon_colocate_per_node > 0 && daemon_colocate_per_proc > 0) {
-        fprintf(stderr, "Error: Both --daemon-colocate-per-node and --daemon-colocate-per-node options present, but are exclusive\n");
+        fprintf(stderr, "Error: Both --daemon-colocate-per-node and --daemon-colocate-per-node "
+                        "options present, but are exclusive\n");
         exit(1);
     }
     if (cospawn_reqd && (daemon_colocate_per_node > 0 || daemon_colocate_per_proc > 0)) {
@@ -621,7 +608,8 @@ int main(int argc, char **argv)
     }
     PMIX_INFO_FREE(info, ninfo);
 
-    printf("Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank, (unsigned long)pid);
+    printf("Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank,
+           (unsigned long) pid);
 
     /* Construct my own release first */
     DEBUG_CONSTRUCT_LOCK(&myrel.lock);
@@ -632,8 +620,8 @@ int main(int argc, char **argv)
     PMIX_INFO_CREATE(info, ninfo);
     PMIX_INFO_LOAD(&info[n], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(NULL, 0, info, ninfo,
-                                notification_fn, evhandler_reg_callbk, (void*)&mylock);
+    PMIx_Register_event_handler(NULL, 0, info, ninfo, notification_fn, evhandler_reg_callbk,
+                                (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
     PMIX_INFO_FREE(info, ninfo);
@@ -655,7 +643,7 @@ int main(int argc, char **argv)
     myquery_data.info = NULL;
     myquery_data.ninfo = 0;
     /* execute the query */
-    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void*)&myquery_data))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void *) &myquery_data))) {
         fprintf(stderr, "PMIx_Query_info failed: %d\n", rc);
         goto done;
     }
@@ -668,7 +656,8 @@ int main(int argc, char **argv)
      * attributes it supports */
     if (2 != myquery_data.ninfo) {
         /* this is an error */
-        fprintf(stderr, "PMIx Query returned an incorrect number of results: %lu\n", myquery_data.ninfo);
+        fprintf(stderr, "PMIx Query returned an incorrect number of results: %lu\n",
+                myquery_data.ninfo);
         PMIX_INFO_FREE(myquery_data.info, myquery_data.ninfo);
         goto done;
     }
@@ -685,7 +674,7 @@ int main(int argc, char **argv)
      * in the same order as the query keys. However, this is not guaranteed,
      * so we should search the returned info structures to find the desired key
      */
-    for (n=0; n < myquery_data.ninfo; n++) {
+    for (n = 0; n < myquery_data.ninfo; n++) {
         if (0 == strcmp(myquery_data.info[n].key, PMIX_QUERY_SPAWN_SUPPORT)) {
             /* See if the cospawn attribute is included */
             if (NULL != strstr(myquery_data.info[n].value.data.string, PMIX_COSPAWN_APP)) {
@@ -697,7 +686,8 @@ int main(int argc, char **argv)
                 stop_on_exec_supported = true;
             }
             /* See if stop in init is included */
-            else if (NULL != strstr(myquery_data.info[n].value.data.string, PMIX_DEBUG_STOP_IN_INIT)) {
+            else if (NULL
+                     != strstr(myquery_data.info[n].value.data.string, PMIX_DEBUG_STOP_IN_INIT)) {
                 stop_in_init_supported = true;
             }
         }
@@ -729,7 +719,7 @@ int main(int argc, char **argv)
         /* Setup the executable */
         app[0].cmd = strdup("hello");
         PMIX_ARGV_APPEND(rc, app[0].argv, "./hello");
-        getcwd(cwd, _POSIX_PATH_MAX);  // point us to our current directory
+        getcwd(cwd, _POSIX_PATH_MAX); // point us to our current directory
         app[0].cwd = strdup(cwd);
         if (app_np > 0) {
             app[0].maxprocs = app_np;
@@ -740,25 +730,29 @@ int main(int argc, char **argv)
         n = 0;
         PMIX_INFO_CREATE(info, ninfo);
         if (stop_on_exec) {
-            PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);  // procs are to stop on first instruction
+            PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_ON_EXEC, NULL,
+                           PMIX_BOOL); // procs are to stop on first instruction
         } else {
-            PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // procs are to pause in PMIx_Init for debugger attach
+            PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_IN_INIT, NULL,
+                           PMIX_BOOL); // procs are to pause in PMIx_Init for debugger attach
         }
         n++;
         sprintf(map_str, "ppr:%d:node", app_npernode);
         PMIX_INFO_LOAD(&info[n], PMIX_MAPBY, map_str, PMIX_STRING); // 1 per node
         n++;
-        PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
+        PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
         n++;
-        PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
+        PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
         n++;
-        PMIX_INFO_LOAD(&info[n], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the job completes
+        PMIX_INFO_LOAD(&info[n], PMIX_NOTIFY_COMPLETION, NULL,
+                       PMIX_BOOL); // notify us when the job completes
 
         /* Spawn the job - the function will return when the app
          * has been launched */
         printf("Debugger: spawning %s\n", app[0].cmd);
         if (PMIX_SUCCESS != (rc = PMIx_Spawn(info, ninfo, app, napps, client_nspace))) {
-            fprintf(stderr, "Application failed to launch with error: %s(%d)\n", PMIx_Error_string(rc), rc);
+            fprintf(stderr, "Application failed to launch with error: %s(%d)\n",
+                    PMIx_Error_string(rc), rc);
             goto done;
         }
         PMIX_INFO_FREE(info, ninfo);
@@ -777,8 +771,8 @@ int main(int argc, char **argv)
         myrel.lock.count++;
 
         DEBUG_CONSTRUCT_LOCK(&mylock);
-        PMIx_Register_event_handler(&code, 1, info, ninfo,
-                                    release_fn, evhandler_reg_callbk, (void*)&mylock);
+        PMIx_Register_event_handler(&code, 1, info, ninfo, release_fn, evhandler_reg_callbk,
+                                    (void *) &mylock);
         DEBUG_WAIT_THREAD(&mylock);
         printf("Debugger: Registered for termination on nspace %s\n", client_nspace);
         rc = mylock.status;
@@ -796,8 +790,9 @@ int main(int argc, char **argv)
         myquery_data.info = NULL;
         myquery_data.ninfo = 0;
 
-        if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, 1, cbfunc, (void*)&myquery_data))) {
-            fprintf(stderr, "Debugger[%s:%d] Proctable query failed: %d\n", myproc.nspace, myproc.rank, rc);
+        if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, 1, cbfunc, (void *) &myquery_data))) {
+            fprintf(stderr, "Debugger[%s:%d] Proctable query failed: %d\n", myproc.nspace,
+                    myproc.rank, rc);
             goto done;
         }
         /* Wait to get a response */
@@ -805,14 +800,14 @@ int main(int argc, char **argv)
         DEBUG_DESTRUCT_LOCK(&myquery_data.lock);
         /* we should have gotten a response */
         if (PMIX_SUCCESS != myquery_data.status) {
-            fprintf(stderr, "Debugger[%s:%d] Proctable query failed: %s\n",
-                    myproc.nspace, myproc.rank, PMIx_Error_string(myquery_data.status));
+            fprintf(stderr, "Debugger[%s:%d] Proctable query failed: %s\n", myproc.nspace,
+                    myproc.rank, PMIx_Error_string(myquery_data.status));
             goto done;
         }
         /* There should have been data */
         if (NULL == myquery_data.info || 0 == myquery_data.ninfo) {
-            fprintf(stderr, "Debugger[%s:%d] Proctable query return no results\n",
-                    myproc.nspace, myproc.rank);
+            fprintf(stderr, "Debugger[%s:%d] Proctable query return no results\n", myproc.nspace,
+                    myproc.rank);
             goto done;
         }
         /* the query should have returned a data_array */
@@ -820,11 +815,12 @@ int main(int argc, char **argv)
             fprintf(stderr, "Debugger[%s:%d] Query returned incorrect data type: %s(%d)\n",
                     myproc.nspace, myproc.rank,
                     PMIx_Data_type_string(myquery_data.info[0].value.type),
-                    (int)myquery_data.info[0].value.type);
+                    (int) myquery_data.info[0].value.type);
             return -1;
         }
         if (NULL == myquery_data.info[0].value.data.darray->array) {
-            fprintf(stderr, "Debugger[%s:%d] Query returned no proctable info\n", myproc.nspace, myproc.rank);
+            fprintf(stderr, "Debugger[%s:%d] Query returned no proctable info\n", myproc.nspace,
+                    myproc.rank);
             goto done;
         }
         /* The data array consists of a struct:
@@ -839,7 +835,8 @@ int main(int argc, char **argv)
          *     int exit_code;
          *     pmix_proc_state_t state;
          */
-        printf("Received proc table for %d procs\n", (int)myquery_data.info[0].value.data.darray->size);
+        printf("Received proc table for %d procs\n",
+               (int) myquery_data.info[0].value.data.darray->size);
         /* now launch the debugger daemons */
         if (PMIX_SUCCESS != (rc = spawn_debugger(client_nspace, &myrel))) {
             fprintf(stderr, "Debugger daemons failed to spawn: %s\n", PMIx_Error_string(rc));
@@ -847,12 +844,12 @@ int main(int argc, char **argv)
         }
     }
 
-  rundebugger:
+rundebugger:
     /* This is where a debugger tool would wait until the debug operation is complete */
     DEBUG_WAIT_THREAD(&myrel.lock);
 
-  done:
+done:
     DEBUG_DESTRUCT_LOCK(&myrel.lock);
     PMIx_tool_finalize();
-    return(rc);
+    return (rc);
 }

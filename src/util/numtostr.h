@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,8 +33,7 @@
  *  @param num (IN)      Input number
  *  @return              String containing number (NULL on failure)
  */
-PRTE_EXPORT char* prte_ltostr(long num);
-
+PRTE_EXPORT char *prte_ltostr(long num);
 
 /**
  * Convert a double to a char* string.  The returned buffer is allocated
@@ -42,6 +42,6 @@ PRTE_EXPORT char* prte_ltostr(long num);
  * @param num (IN)       Input number
  * @return               String containing number (NULL on failure)
  */
-PRTE_EXPORT char* prte_dtostr(double num);
+PRTE_EXPORT char *prte_dtostr(double num);
 
 #endif /* PRTE_NUMTOSTR_UTIL */

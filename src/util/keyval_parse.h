@@ -41,8 +41,8 @@ extern int prte_util_keyval_parse_lineno;
  * The buffers must not be free()ed and contents may be overwritten
  * immediately after the callback returns.
  */
-typedef void (*prte_keyval_parse_fn_t)(const char *file, int lineno,
-                                       const char *name, const char *value);
+typedef void (*prte_keyval_parse_fn_t)(const char *file, int lineno, const char *name,
+                                       const char *value);
 
 /**
  * Parse \c filename, made up of key = value pairs.
@@ -52,12 +52,11 @@ typedef void (*prte_keyval_parse_fn_t)(const char *file, int lineno,
  * called exactly once.  In a multithreaded context, calls to
  * prte_util_keyval_parse() will serialize multiple calls.
  */
-PRTE_EXPORT int prte_util_keyval_parse(const char *filename,
-                                       prte_keyval_parse_fn_t callback);
+PRTE_EXPORT int prte_util_keyval_parse(const char *filename, prte_keyval_parse_fn_t callback);
 
 PRTE_EXPORT int prte_util_keyval_parse_init(void);
 
-PRTE_EXPORT void prte_util_keyval_parse_finalize (void);
+PRTE_EXPORT void prte_util_keyval_parse_finalize(void);
 
 END_C_DECLS
 

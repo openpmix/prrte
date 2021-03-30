@@ -15,6 +15,7 @@
  *                         reserved.
  * Copyright (c) 2017 IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,8 +41,8 @@
 
 #include "prte_config.h"
 
-#include "src/mca/prtedl/prtedl.h"
 #include "src/mca/prtedl/base/base.h"
+#include "src/mca/prtedl/prtedl.h"
 
 BEGIN_C_DECLS
 struct prte_mca_base_component_repository_item_t {
@@ -89,8 +90,7 @@ PRTE_EXPORT int prte_mca_base_component_repository_init(void);
  *
  * @param[in] path        delimited list of search paths to add
  */
-PRTE_EXPORT int prte_mca_base_component_repository_add (const char *path);
-
+PRTE_EXPORT int prte_mca_base_component_repository_add(const char *path);
 
 /**
  * @brief return the list of components that match a given framework
@@ -101,8 +101,9 @@ PRTE_EXPORT int prte_mca_base_component_repository_add (const char *path);
  * The list returned in {framework_components} is owned by the component
  * repository and CAN NOT be modified by the caller.
  */
-PRTE_EXPORT int prte_mca_base_component_repository_get_components (prte_mca_base_framework_t *framework,
-                                                                     prte_list_t **framework_components);
+PRTE_EXPORT int
+prte_mca_base_component_repository_get_components(prte_mca_base_framework_t *framework,
+                                                  prte_list_t **framework_components);
 
 /**
  * @brief finalize the mca component repository
@@ -116,14 +117,13 @@ PRTE_EXPORT void prte_mca_base_component_repository_finalize(void);
  * @param[in] framework   framework that matches the component
  * @param[in] ri          dynamic component to open
  */
-int prte_mca_base_component_repository_open (prte_mca_base_framework_t *framework,
-                                              prte_mca_base_component_repository_item_t *ri);
-
+int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework,
+                                            prte_mca_base_component_repository_item_t *ri);
 
 /**
  * @brief Reduce the reference count of a component and dlclose it if necessary
  */
-void prte_mca_base_component_repository_release (const prte_mca_base_component_t *component);
+void prte_mca_base_component_repository_release(const prte_mca_base_component_t *component);
 
 /**
  * @brief Increase the reference count of a component
@@ -138,7 +138,7 @@ void prte_mca_base_component_repository_release (const prte_mca_base_component_t
  * @note all components are automatically unloaded by the
  * mca_base_component_repository_finalize() call.
  */
-int prte_mca_base_component_repository_retain_component (const char *type, const char *name);
+int prte_mca_base_component_repository_retain_component(const char *type, const char *name);
 
 END_C_DECLS
 

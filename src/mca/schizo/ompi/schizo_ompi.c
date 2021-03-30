@@ -31,13 +31,13 @@
 #include "types.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 #include <ctype.h>
 
 #ifdef HAVE_SYS_UTSNAME_H
-#include <sys/utsname.h>
+#    include <sys/utsname.h>
 #endif
 
 #include "src/util/argv.h"
@@ -55,364 +55,328 @@
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
 
-#include "src/mca/schizo/base/base.h"
 #include "schizo_ompi.h"
+#include "src/mca/schizo/base/base.h"
 
 static int define_cli(prte_cmd_line_t *cli);
-static int parse_cli(int argc, int start,
-                     char **argv,
-                     char ***target);
-static int parse_deprecated_cli(prte_cmd_line_t *cmdline,
-                                int *argc, char ***argv);
-static int parse_env(prte_cmd_line_t *cmd_line,
-                     char **srcenv,
-                     char ***dstenv,
-                     bool cmdline);
+static int parse_cli(int argc, int start, char **argv, char ***target);
+static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***argv);
+static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline);
 static int detect_proxy(char *argv);
 static void allow_run_as_root(prte_cmd_line_t *cmd_line);
 static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
 static int check_sanity(prte_cmd_line_t *cmd_line);
 
-prte_schizo_base_module_t prte_schizo_ompi_module = {
-    .name = "ompi",
-    .define_cli = define_cli,
-    .parse_cli = parse_cli,
-    .parse_deprecated_cli = parse_deprecated_cli,
-    .parse_env = parse_env,
-    .detect_proxy = detect_proxy,
-    .allow_run_as_root = allow_run_as_root,
-    .job_info = job_info,
-    .check_sanity = check_sanity
-};
+prte_schizo_base_module_t prte_schizo_ompi_module = {.name = "ompi",
+                                                     .define_cli = define_cli,
+                                                     .parse_cli = parse_cli,
+                                                     .parse_deprecated_cli = parse_deprecated_cli,
+                                                     .parse_env = parse_env,
+                                                     .detect_proxy = detect_proxy,
+                                                     .allow_run_as_root = allow_run_as_root,
+                                                     .job_info = job_info,
+                                                     .check_sanity = check_sanity};
 
 static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     /* basic options */
-    { 'h', "help", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "This help message",
-        PRTE_CMD_LINE_OTYPE_GENERAL },
-    { 'V', "version", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Print version and exit",
-        PRTE_CMD_LINE_OTYPE_GENERAL },
-    { 'v', "verbose", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Be verbose", PRTE_CMD_LINE_OTYPE_GENERAL },
-    { 'q', "quiet", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Suppress helpful messages", PRTE_CMD_LINE_OTYPE_GENERAL },
-    { '\0', "parsable", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "When used in conjunction with other parameters, the output is displayed in a machine-parsable format",
-        PRTE_CMD_LINE_OTYPE_GENERAL },
-    { '\0', "parseable", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Synonym for --parsable",
-        PRTE_CMD_LINE_OTYPE_GENERAL },
+    {'h', "help", 0, PRTE_CMD_LINE_TYPE_BOOL, "This help message", PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'V', "version", 0, PRTE_CMD_LINE_TYPE_BOOL, "Print version and exit",
+     PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'v', "verbose", 0, PRTE_CMD_LINE_TYPE_BOOL, "Be verbose", PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'q', "quiet", 0, PRTE_CMD_LINE_TYPE_BOOL, "Suppress helpful messages",
+     PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'\0', "parsable", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "When used in conjunction with other parameters, the output is displayed in a "
+     "machine-parsable format",
+     PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'\0', "parseable", 0, PRTE_CMD_LINE_TYPE_BOOL, "Synonym for --parsable",
+     PRTE_CMD_LINE_OTYPE_GENERAL},
 
     /* mpirun options */
     /* Specify the launch agent to be used */
-    { '\0', "launch-agent", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Name of daemon executable used to start processes on remote nodes (default: prted)",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "launch-agent", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Name of daemon executable used to start processes on remote nodes (default: prted)",
+     PRTE_CMD_LINE_OTYPE_DVM},
     /* maximum size of VM - typically used to subdivide an allocation */
-    { '\0', "max-vm-size", 1, PRTE_CMD_LINE_TYPE_INT,
-        "Number of daemons to start",
-        PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "debug-daemons", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Debug daemons",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "debug-daemons-file", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Enable debugging of any PRTE daemons used by this application, storing output in files",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "leave-session-attached", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Do not discard stdout/stderr of remote PRTE daemons",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "tmpdir", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Set the root for the session directory tree",
-        PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "prefix", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Prefix to be used to look for RTE executables",
-        PRTE_CMD_LINE_OTYPE_DVM },
-    { '\0', "noprefix", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Disable automatic --prefix behavior",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "max-vm-size", 1, PRTE_CMD_LINE_TYPE_INT, "Number of daemons to start",
+     PRTE_CMD_LINE_OTYPE_DVM},
+    {'\0', "debug-daemons", 0, PRTE_CMD_LINE_TYPE_BOOL, "Debug daemons", PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "debug-daemons-file", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Enable debugging of any PRTE daemons used by this application, storing output in files",
+     PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "leave-session-attached", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Do not discard stdout/stderr of remote PRTE daemons", PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "tmpdir", 1, PRTE_CMD_LINE_TYPE_STRING, "Set the root for the session directory tree",
+     PRTE_CMD_LINE_OTYPE_DVM},
+    {'\0', "prefix", 1, PRTE_CMD_LINE_TYPE_STRING, "Prefix to be used to look for RTE executables",
+     PRTE_CMD_LINE_OTYPE_DVM},
+    {'\0', "noprefix", 0, PRTE_CMD_LINE_TYPE_BOOL, "Disable automatic --prefix behavior",
+     PRTE_CMD_LINE_OTYPE_DVM},
 
     /* setup MCA parameters */
-    { '\0', "omca", 2, PRTE_CMD_LINE_TYPE_STRING,
-        "Pass context-specific OMPI MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "gomca", 2, PRTE_CMD_LINE_TYPE_STRING,
-        "Pass global OMPI MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "mca", 2, PRTE_CMD_LINE_TYPE_STRING,
-        "Pass context-specific MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
+    {'\0', "omca", 2, PRTE_CMD_LINE_TYPE_STRING,
+     "Pass context-specific OMPI MCA parameters; they are considered global if --gmca is not used "
+     "and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "gomca", 2, PRTE_CMD_LINE_TYPE_STRING,
+     "Pass global OMPI MCA parameters that are applicable to all contexts (arg0 is the parameter "
+     "name; arg1 is the parameter value)",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "mca", 2, PRTE_CMD_LINE_TYPE_STRING,
+     "Pass context-specific MCA parameters; they are considered global if --gmca is not used and "
+     "only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
     /* setup MCA parameters */
-    { '\0', "prtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
-        "Pass context-specific PRTE MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "pmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
-        "Pass context-specific PMIx MCA parameters; they are considered global if --gmca is not used and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "gpmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
-        "Pass global PMIx MCA parameters that are applicable to all contexts (arg0 is the parameter name; arg1 is the parameter value)",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "tune", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "File(s) containing MCA params for tuning DVM operations",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "prtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
+     "Pass context-specific PRTE MCA parameters; they are considered global if --gmca is not used "
+     "and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "pmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
+     "Pass context-specific PMIx MCA parameters; they are considered global if --gmca is not used "
+     "and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "gpmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
+     "Pass global PMIx MCA parameters that are applicable to all contexts (arg0 is the parameter "
+     "name; arg1 is the parameter value)",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "tune", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "File(s) containing MCA params for tuning DVM operations", PRTE_CMD_LINE_OTYPE_DVM},
 
     /* forward signals */
-    { '\0', "forward-signals", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Comma-delimited list of additional signals (names or integers) to forward to "
-        "application processes [\"none\" => forward nothing]. Signals provided by "
-        "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
-        PRTE_CMD_LINE_OTYPE_DVM},
+    {'\0', "forward-signals", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Comma-delimited list of additional signals (names or integers) to forward to "
+     "application processes [\"none\" => forward nothing]. Signals provided by "
+     "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
+     PRTE_CMD_LINE_OTYPE_DVM},
 
-    { '\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Top-level PRTE debug switch (default: false)",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "debug-verbose", 1, PRTE_CMD_LINE_TYPE_INT,
-        "Verbosity level for PRTE debug messages (default: 1)",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
-    { 'd', "debug-devel", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Enable debugging of PRTE",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
+    {'\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL, "Top-level PRTE debug switch (default: false)",
+     PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "debug-verbose", 1, PRTE_CMD_LINE_TYPE_INT,
+     "Verbosity level for PRTE debug messages (default: 1)", PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'d', "debug-devel", 0, PRTE_CMD_LINE_TYPE_BOOL, "Enable debugging of PRTE",
+     PRTE_CMD_LINE_OTYPE_DEBUG},
 
-    { '\0', "timeout", 1, PRTE_CMD_LINE_TYPE_INT,
-        "Timeout the job after the specified number of seconds",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "report-state-on-timeout", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Report all job and process states upon timeout",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "get-stack-traces", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Get stack traces of all application procs on timeout",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
+    {'\0', "timeout", 1, PRTE_CMD_LINE_TYPE_INT,
+     "Timeout the job after the specified number of seconds", PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "report-state-on-timeout", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Report all job and process states upon timeout", PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "get-stack-traces", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Get stack traces of all application procs on timeout", PRTE_CMD_LINE_OTYPE_DEBUG},
 
-
-    { '\0', "allow-run-as-root", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Allow execution as root (STRONGLY DISCOURAGED)",
-        PRTE_CMD_LINE_OTYPE_DVM },    /* End of list */
+    {'\0', "allow-run-as-root", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Allow execution as root (STRONGLY DISCOURAGED)", PRTE_CMD_LINE_OTYPE_DVM}, /* End of list */
     /* fwd mpirun port */
-    { '\0', "fwd-mpirun-port", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Forward mpirun port to compute node daemons so all will use it",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "fwd-mpirun-port", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Forward mpirun port to compute node daemons so all will use it", PRTE_CMD_LINE_OTYPE_DVM},
 
     /* Conventional options - for historical compatibility, support
      * both single and multi dash versions */
     /* Number of processes; -c, -n, --n, -np, and --np are all
      synonyms */
-    { 'c', "np", 1, PRTE_CMD_LINE_TYPE_INT,
-        "Number of processes to run",
-        PRTE_CMD_LINE_OTYPE_GENERAL },
-    { 'n', "n", 1, PRTE_CMD_LINE_TYPE_INT,
-        "Number of processes to run",
-        PRTE_CMD_LINE_OTYPE_GENERAL },
-    { 'N', NULL, 1, PRTE_CMD_LINE_TYPE_INT,
-        "Number of processes to run per node",
-        PRTE_CMD_LINE_OTYPE_GENERAL },
+    {'c', "np", 1, PRTE_CMD_LINE_TYPE_INT, "Number of processes to run",
+     PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'n', "n", 1, PRTE_CMD_LINE_TYPE_INT, "Number of processes to run",
+     PRTE_CMD_LINE_OTYPE_GENERAL},
+    {'N', NULL, 1, PRTE_CMD_LINE_TYPE_INT, "Number of processes to run per node",
+     PRTE_CMD_LINE_OTYPE_GENERAL},
     /* Use an appfile */
-    { '\0',  "app", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Provide an appfile; ignore all other command line options",
-        PRTE_CMD_LINE_OTYPE_GENERAL },
+    {'\0', "app", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Provide an appfile; ignore all other command line options", PRTE_CMD_LINE_OTYPE_GENERAL},
 
     /* output options */
-    { '\0', "output", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Comma-delimited list of options that control the output generated."
-        "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir:DIRNAME",
-        PRTE_CMD_LINE_OTYPE_OUTPUT },
+    {'\0', "output", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Comma-delimited list of options that control the output generated."
+     "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir:DIRNAME",
+     PRTE_CMD_LINE_OTYPE_OUTPUT},
     /* exit status reporting */
-    { '\0', "report-child-jobs-separately", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Return the exit status of the primary job only",
-        PRTE_CMD_LINE_OTYPE_OUTPUT },
+    {'\0', "report-child-jobs-separately", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Return the exit status of the primary job only", PRTE_CMD_LINE_OTYPE_OUTPUT},
     /* select XML output */
-    { '\0', "xml", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Provide all output in XML format",
-        PRTE_CMD_LINE_OTYPE_OUTPUT },
+    {'\0', "xml", 0, PRTE_CMD_LINE_TYPE_BOOL, "Provide all output in XML format",
+     PRTE_CMD_LINE_OTYPE_OUTPUT},
     /* tag output */
-    { '\0', "tag-output", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Tag all output with [job,rank]",
-        PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "timestamp-output", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Timestamp all application process output",
-        PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "output-directory", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Redirect output from application processes into filename/job/rank/std[out,err,diag]. A relative path value will be converted to an absolute path. The directory name may include a colon followed by a comma-delimited list of optional case-insensitive directives. Supported directives currently include NOJOBID (do not include a job-id directory level) and NOCOPY (do not copy the output to the stdout/err streams)",
-        PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "output-filename", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Redirect output from application processes into filename.rank. A relative path value will be converted to an absolute path. The directory name may include a colon followed by a comma-delimited list of optional case-insensitive directives. Supported directives currently include NOCOPY (do not copy the output to the stdout/err streams)",
-        PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "merge-stderr-to-stdout", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Merge stderr to stdout for each process",
-        PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "xterm", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Create a new xterm window and display output from the specified ranks there",
-        PRTE_CMD_LINE_OTYPE_OUTPUT },
-    { '\0', "stream-buffering", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
+    {'\0', "tag-output", 0, PRTE_CMD_LINE_TYPE_BOOL, "Tag all output with [job,rank]",
+     PRTE_CMD_LINE_OTYPE_OUTPUT},
+    {'\0', "timestamp-output", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Timestamp all application process output", PRTE_CMD_LINE_OTYPE_OUTPUT},
+    {'\0', "output-directory", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Redirect output from application processes into filename/job/rank/std[out,err,diag]. A "
+     "relative path value will be converted to an absolute path. The directory name may include a "
+     "colon followed by a comma-delimited list of optional case-insensitive directives. Supported "
+     "directives currently include NOJOBID (do not include a job-id directory level) and NOCOPY "
+     "(do not copy the output to the stdout/err streams)",
+     PRTE_CMD_LINE_OTYPE_OUTPUT},
+    {'\0', "output-filename", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Redirect output from application processes into filename.rank. A relative path value will be "
+     "converted to an absolute path. The directory name may include a colon followed by a "
+     "comma-delimited list of optional case-insensitive directives. Supported directives currently "
+     "include NOCOPY (do not copy the output to the stdout/err streams)",
+     PRTE_CMD_LINE_OTYPE_OUTPUT},
+    {'\0', "merge-stderr-to-stdout", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Merge stderr to stdout for each process", PRTE_CMD_LINE_OTYPE_OUTPUT},
+    {'\0', "xterm", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Create a new xterm window and display output from the specified ranks there",
+     PRTE_CMD_LINE_OTYPE_OUTPUT},
+    {'\0', "stream-buffering", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
 
     /* input options */
     /* select stdin option */
-    { '\0', "stdin", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Specify procs to receive stdin [rank, all, none] (default: 0, indicating rank 0)",
-        PRTE_CMD_LINE_OTYPE_INPUT },
+    {'\0', "stdin", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Specify procs to receive stdin [rank, all, none] (default: 0, indicating rank 0)",
+     PRTE_CMD_LINE_OTYPE_INPUT},
 
     /* debugger options */
-    { '\0', "output-proctable", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Print the complete proctable to stdout [-], stderr [+], or a file [anything else] after launch",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "stop-on-exec", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "If supported, stop each process at start of execution",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
+    {'\0', "output-proctable", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Print the complete proctable to stdout [-], stderr [+], or a file [anything else] after "
+     "launch",
+     PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "stop-on-exec", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "If supported, stop each process at start of execution", PRTE_CMD_LINE_OTYPE_DEBUG},
 
     /* launch options */
     /* Preload the binary on the remote machine */
-    { 's', "preload-binary", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Preload the binary on the remote machine before starting the remote process.",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
+    {'s', "preload-binary", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Preload the binary on the remote machine before starting the remote process.",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
     /* Preload files on the remote machine */
-    { '\0', "preload-files", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Preload the comma separated list of files to the remote machines current working directory before starting the remote process.",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
+    {'\0', "preload-files", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Preload the comma separated list of files to the remote machines current working directory "
+     "before starting the remote process.",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
     /* Export environment variables; potentially used multiple times,
      so it does not make sense to set into a variable */
-    { 'x', NULL, 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the environment variable foo and takes its value from the current environment; \"-x foo=bar\" exports the environment variable name foo and sets its value to \"bar\" in the started processes; \"-x foo*\" exports all current environmental variables starting with \"foo\")",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "wdir", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Set the working directory of the started processes",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "wd", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Synonym for --wdir",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "set-cwd-to-session-dir", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Set the working directory of the started processes to their session directory",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "path", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "PATH to be used to look for executables to start processes",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "show-progress", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Output a brief periodic report on launch progress",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "pset", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "User-specified name assigned to the processes in their given application",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
+    {'x', NULL, 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the "
+     "environment variable foo and takes its value from the current environment; \"-x foo=bar\" "
+     "exports the environment variable name foo and sets its value to \"bar\" in the started "
+     "processes; \"-x foo*\" exports all current environmental variables starting with \"foo\")",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "wdir", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Set the working directory of the started processes", PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "wd", 1, PRTE_CMD_LINE_TYPE_STRING, "Synonym for --wdir", PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "set-cwd-to-session-dir", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Set the working directory of the started processes to their session directory",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "path", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "PATH to be used to look for executables to start processes", PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "show-progress", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Output a brief periodic report on launch progress", PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "pset", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "User-specified name assigned to the processes in their given application",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
     /* Set a hostfile */
-    { '\0', "hostfile", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Provide a hostfile",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "machinefile", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Provide a hostfile",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { '\0', "default-hostfile", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Provide a default hostfile",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-    { 'H', "host", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "List of hosts to invoke processes on",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
+    {'\0', "hostfile", 1, PRTE_CMD_LINE_TYPE_STRING, "Provide a hostfile",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "machinefile", 1, PRTE_CMD_LINE_TYPE_STRING, "Provide a hostfile",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'\0', "default-hostfile", 1, PRTE_CMD_LINE_TYPE_STRING, "Provide a default hostfile",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    {'H', "host", 1, PRTE_CMD_LINE_TYPE_STRING, "List of hosts to invoke processes on",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
 
     /* placement options */
     /* Mapping options */
-    { '\0', "map-by", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache | "
-        "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr |,"
-        "rankfile]"
-        " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
-        "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
-        "DEVICE(for dist policy), INHERIT, NOINHERIT, PE-LIST=a,b (comma-delimited "
-        "ranges of cpus to use for this job), FILE=<path> for seq and rankfile options",
-        PRTE_CMD_LINE_OTYPE_MAPPING },
+    {'\0', "map-by", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache | "
+     "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr |,"
+     "rankfile]"
+     " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
+     "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
+     "DEVICE(for dist policy), INHERIT, NOINHERIT, PE-LIST=a,b (comma-delimited "
+     "ranges of cpus to use for this job), FILE=<path> for seq and rankfile options",
+     PRTE_CMD_LINE_OTYPE_MAPPING},
 
     /* Ranking options */
-    { '\0', "rank-by", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache "
-        "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
-        PRTE_CMD_LINE_OTYPE_RANKING },
+    {'\0', "rank-by", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache "
+     "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
+     PRTE_CMD_LINE_OTYPE_RANKING},
 
     /* Binding options */
-    { '\0', "bind-to", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Binding policy for job. Allowed values: none, hwthread, core, l1cache, l2cache, "
-        "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
-        "the default when np<=2, and \"package\" is the default when np>2). Allowed colon-delimited qualifiers: "
-        "overload-allowed, if-supported",
-        PRTE_CMD_LINE_OTYPE_BINDING },
+    {'\0', "bind-to", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Binding policy for job. Allowed values: none, hwthread, core, l1cache, l2cache, "
+     "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
+     "the default when np<=2, and \"package\" is the default when np>2). Allowed colon-delimited "
+     "qualifiers: "
+     "overload-allowed, if-supported",
+     PRTE_CMD_LINE_OTYPE_BINDING},
 
     /* rankfile */
-    { '\0', "rankfile", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Name of file to specify explicit task mapping",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
-
+    {'\0', "rankfile", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Name of file to specify explicit task mapping", PRTE_CMD_LINE_OTYPE_LAUNCH},
 
     /* display options */
-    { '\0', "display", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Comma-delimited list of options for displaying information about the allocation and job."
-        "Allowed values: allocation, map, bind, proctable, allocation, map-diffable, topo",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
+    {'\0', "display", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Comma-delimited list of options for displaying information about the allocation and job."
+     "Allowed values: allocation, map, bind, proctable, allocation, map-diffable, topo",
+     PRTE_CMD_LINE_OTYPE_DEBUG},
     /* developer options */
-    { '\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Perform all necessary operations to prepare to launch the application, but do not actually launch it (usually used to test mapping patterns)",
-        PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "display-devel-map", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Display a detailed process map (mostly intended for developers) just before launch",
-        PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "display-topo", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Display the topology as part of the process map (mostly intended for developers) just before launch",
-        PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "display-diffable-map", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Display a diffable process map (mostly intended for developers) just before launch",
-        PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "report-bindings", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Whether to report process bindings to stderr",
-        PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "display-devel-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Display a detailed list (mostly intended for developers) of the allocation being used by this job",
-        PRTE_CMD_LINE_OTYPE_DEVEL },
-    { '\0', "display-map", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Display the process map just before launch",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
-    { '\0', "display-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Display the allocation being used by this job",
-        PRTE_CMD_LINE_OTYPE_DEBUG },
+    {'\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Perform all necessary operations to prepare to launch the application, but do not actually "
+     "launch it (usually used to test mapping patterns)",
+     PRTE_CMD_LINE_OTYPE_DEVEL},
+    {'\0', "display-devel-map", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Display a detailed process map (mostly intended for developers) just before launch",
+     PRTE_CMD_LINE_OTYPE_DEVEL},
+    {'\0', "display-topo", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Display the topology as part of the process map (mostly intended for developers) just before "
+     "launch",
+     PRTE_CMD_LINE_OTYPE_DEVEL},
+    {'\0', "display-diffable-map", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Display a diffable process map (mostly intended for developers) just before launch",
+     PRTE_CMD_LINE_OTYPE_DEVEL},
+    {'\0', "report-bindings", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Whether to report process bindings to stderr", PRTE_CMD_LINE_OTYPE_DEVEL},
+    {'\0', "display-devel-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Display a detailed list (mostly intended for developers) of the allocation being used by "
+     "this job",
+     PRTE_CMD_LINE_OTYPE_DEVEL},
+    {'\0', "display-map", 0, PRTE_CMD_LINE_TYPE_BOOL, "Display the process map just before launch",
+     PRTE_CMD_LINE_OTYPE_DEBUG},
+    {'\0', "display-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Display the allocation being used by this job", PRTE_CMD_LINE_OTYPE_DEBUG},
 
 #if PRTE_ENABLE_FT
-    { '\0', "enable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Enable recovery from process failure [Default = disabled]",
-        PRTE_CMD_LINE_OTYPE_FT },
-    { '\0', "max-restarts", 1, PRTE_CMD_LINE_TYPE_INT,
-        "Max number of times to restart a failed process",
-        PRTE_CMD_LINE_OTYPE_FT },
-    { '\0', "disable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Disable recovery (resets all recovery options to off)",
-        PRTE_CMD_LINE_OTYPE_FT },
-    { '\0', "continuous", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Job is to run until explicitly terminated",
-        PRTE_CMD_LINE_OTYPE_FT },
-    { '\0', "with-ft", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Specify the type(s) of error handling that the application will use.",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
+    {'\0', "enable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Enable recovery from process failure [Default = disabled]", PRTE_CMD_LINE_OTYPE_FT},
+    {'\0', "max-restarts", 1, PRTE_CMD_LINE_TYPE_INT,
+     "Max number of times to restart a failed process", PRTE_CMD_LINE_OTYPE_FT},
+    {'\0', "disable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Disable recovery (resets all recovery options to off)", PRTE_CMD_LINE_OTYPE_FT},
+    {'\0', "continuous", 0, PRTE_CMD_LINE_TYPE_BOOL, "Job is to run until explicitly terminated",
+     PRTE_CMD_LINE_OTYPE_FT},
+    {'\0', "with-ft", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Specify the type(s) of error handling that the application will use.",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
 #endif
 
     /* mpiexec mandated form launch key parameters */
-    { '\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Specify the initial error handler that is attached to predefined communicators during the first MPI call.",
-        PRTE_CMD_LINE_OTYPE_LAUNCH },
+    {'\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Specify the initial error handler that is attached to predefined communicators during the "
+     "first MPI call.",
+     PRTE_CMD_LINE_OTYPE_LAUNCH},
 
     /* Display Commumication Protocol : MPI_Init */
-    { '\0', "display-comm", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Display table of communication methods between ranks during MPI_Init",
-        PRTE_CMD_LINE_OTYPE_GENERAL },
+    {'\0', "display-comm", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Display table of communication methods between ranks during MPI_Init",
+     PRTE_CMD_LINE_OTYPE_GENERAL},
 
     /* Display Commumication Protocol : MPI_Finalize */
-    { '\0', "display-comm-finalize", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Display table of communication methods between ranks during MPI_Finalize",
-        PRTE_CMD_LINE_OTYPE_GENERAL },
+    {'\0', "display-comm-finalize", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Display table of communication methods between ranks during MPI_Finalize",
+     PRTE_CMD_LINE_OTYPE_GENERAL},
 
     /* End of list */
-    { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
-};
+    {'\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL}};
 
 static int define_cli(prte_cmd_line_t *cli)
 {
     int rc;
 
     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                        "%s schizo:ompi: define_cli",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                        "%s schizo:ompi: define_cli", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* protect against bozo error */
     if (NULL == cli) {
@@ -437,11 +401,10 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     /* --oversubscribe -> --map-by :OVERSUBSCRIBE
      * --nooversubscribe -> --map-by :NOOVERSUBSCRIBE
      */
-    else if (0 == strcmp(option, "--oversubscribe") ||
-             0 == strcmp(option, "--nooversubscribe") ) {
+    else if (0 == strcmp(option, "--oversubscribe") || 0 == strcmp(option, "--nooversubscribe")) {
         if (0 == strcmp(option, "--nooversubscribe")) {
-            prte_show_help("help-schizo-base.txt", "deprecated-inform", true,
-                            option, "This is the default behavior so does not need to be specified");
+            prte_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
+                           "This is the default behavior so does not need to be specified");
             modifier = "NOOVERSUBSCRIBE";
         } else {
             modifier = "OVERSUBSCRIBE";
@@ -454,17 +417,15 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     }
     /* --cpu-set and --cpu-list -> --map-by pe-list:X
      */
-    else if (0 == strcmp(option, "--cpu-set") ||
-             0 == strcmp(option, "--cpu-list") ) {
-        prte_asprintf(&p2, "PE-LIST=%s", pargs[i+1]);
+    else if (0 == strcmp(option, "--cpu-set") || 0 == strcmp(option, "--cpu-list")) {
+        prte_asprintf(&p2, "PE-LIST=%s", pargs[i + 1]);
         rc = prte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2, true);
         free(p2);
     }
     /* --bind-to-core and --bind-to-socket -> --bind-to X */
     else if (0 == strcmp(option, "--bind-to-core")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", "core", NULL, true);
-    }
-    else if (0 == strcmp(option, "--bind-to-socket")) {
+    } else if (0 == strcmp(option, "--bind-to-socket")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--bind-to", "socket", NULL, true);
     }
     /* --bynode -> "--map-by X --rank-by X" */
@@ -489,40 +450,36 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
         }
     }
     /* --cpus-per-proc/rank X -> --map-by :pe=X */
-    else if (0 == strcmp(option, "--cpus-per-proc") ||
-             0 == strcmp(option, "--cpus-per-rank") ) {
-        prte_asprintf(&p2, "pe=%s", pargs[i+1]);
+    else if (0 == strcmp(option, "--cpus-per-proc") || 0 == strcmp(option, "--cpus-per-rank")) {
+        prte_asprintf(&p2, "pe=%s", pargs[i + 1]);
         rc = prte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2, true);
         free(p2);
     }
     /* --npernode X and --npersocket X -> --map-by ppr:X:node/socket */
     else if (0 == strcmp(option, "--npernode")) {
-        prte_asprintf(&p2, "ppr:%s:node", pargs[i+1]);
+        prte_asprintf(&p2, "ppr:%s:node", pargs[i + 1]);
         rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL, true);
         free(p2);
-    }
-    else if (0 == strcmp(option, "--pernode")) {
+    } else if (0 == strcmp(option, "--pernode")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--map-by", "ppr:1:node", NULL, true);
-    }
-    else if (0 == strcmp(option, "--npersocket")) {
-        prte_asprintf(&p2, "ppr:%s:socket", pargs[i+1]);
+    } else if (0 == strcmp(option, "--npersocket")) {
+        prte_asprintf(&p2, "ppr:%s:socket", pargs[i + 1]);
         rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL, true);
         free(p2);
-   }
+    }
     /* --ppr X -> --map-by ppr:X */
     else if (0 == strcmp(option, "--ppr")) {
         /* if they didn't specify a complete pattern, then this is an error */
-        if (NULL == strchr(pargs[i+1], ':')) {
-            prte_show_help("help-schizo-base.txt", "bad-ppr", true, pargs[i+1], true);
+        if (NULL == strchr(pargs[i + 1], ':')) {
+            prte_show_help("help-schizo-base.txt", "bad-ppr", true, pargs[i + 1], true);
             return PRTE_ERR_BAD_PARAM;
         }
-        prte_asprintf(&p2, "ppr:%s", pargs[i+1]);
+        prte_asprintf(&p2, "ppr:%s", pargs[i + 1]);
         rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL, true);
         free(p2);
     }
     /* --am[ca] X -> --tune X */
-    else if (0 == strcmp(option, "--amca") ||
-             0 == strcmp(option, "--am")) {
+    else if (0 == strcmp(option, "--amca") || 0 == strcmp(option, "--am")) {
         rc = prte_schizo_base_convert(argv, i, 2, "--tune", NULL, NULL, true);
     }
     /* --tune X -> aggregate */
@@ -531,7 +488,7 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     }
     /* --rankfile X -> map-by rankfile:file=X */
     else if (0 == strcmp(option, "--rankfile")) {
-        prte_asprintf(&p2, "file=%s", pargs[i+1]);
+        prte_asprintf(&p2, "file=%s", pargs[i + 1]);
         rc = prte_schizo_base_convert(argv, i, 2, "--map-by", "rankfile", p2, false);
         free(p2);
         rc = PRTE_ERR_SILENT;
@@ -540,43 +497,39 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     return rc;
 }
 
-static int parse_deprecated_cli(prte_cmd_line_t *cmdline,
-                                int *argc, char ***argv)
+static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***argv)
 {
     pmix_status_t rc;
 
-    char *options[] = {
-        "--nolocal",
-        "--oversubscribe",
-        "--nooversubscribe",
-        "--use-hwthread-cpus",
-        "--cpu-set",
-        "--cpu-list",
-        "--bind-to-core",
-        "--bind-to-socket",
-        "--bynode",
-        "--bycore",
-        "--byslot",
-        "--cpus-per-proc",
-        "--cpus-per-rank",
-        "--npernode",
-        "--pernode",
-        "--npersocket",
-        "--ppr",
-        "--amca",
-        "--am",
-        "--rankfile",
-        NULL
-    };
+    char *options[] = {"--nolocal",
+                       "--oversubscribe",
+                       "--nooversubscribe",
+                       "--use-hwthread-cpus",
+                       "--cpu-set",
+                       "--cpu-list",
+                       "--bind-to-core",
+                       "--bind-to-socket",
+                       "--bynode",
+                       "--bycore",
+                       "--byslot",
+                       "--cpus-per-proc",
+                       "--cpus-per-rank",
+                       "--npernode",
+                       "--pernode",
+                       "--npersocket",
+                       "--ppr",
+                       "--amca",
+                       "--am",
+                       "--rankfile",
+                       NULL};
 
-    rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv,
-                                                 options, convert_deprecated_cli);
+    rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv, options,
+                                                 convert_deprecated_cli);
 
     return rc;
 }
 
-static int check_cache_noadd(char ***c1, char ***c2,
-                             char *p1, char *p2)
+static int check_cache_noadd(char ***c1, char ***c2, char *p1, char *p2)
 {
     char **cache;
     char **cachevals;
@@ -591,14 +544,13 @@ static int check_cache_noadd(char ***c1, char ***c2,
 
     if (NULL != cache) {
         /* see if we already have these */
-        for (k=0; NULL != cache[k]; k++) {
+        for (k = 0; NULL != cache[k]; k++) {
             if (0 == strcmp(cache[k], p1)) {
                 /* we do have it - check for same value */
                 if (0 != strcmp(cachevals[k], p2)) {
                     /* this is an error */
-                    prte_show_help("help-schizo-base.txt",
-                                    "duplicate-mca-value", true,
-                                    p1, p2, cachevals[k]);
+                    prte_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
+                                   cachevals[k]);
                     return PRTE_ERR_BAD_PARAM;
                 }
             }
@@ -607,8 +559,7 @@ static int check_cache_noadd(char ***c1, char ***c2,
     return PRTE_SUCCESS;
 }
 
-static int check_cache(char ***c1, char ***c2,
-                       char *p1, char *p2)
+static int check_cache(char ***c1, char ***c2, char *p1, char *p2)
 {
     int rc;
 
@@ -627,7 +578,7 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
     char *value, **tmp;
     char *p1, *p2;
     size_t len;
-    int k, rc=PRTE_SUCCESS;
+    int k, rc = PRTE_SUCCESS;
     bool found;
 
     p1 = strdup(p);
@@ -639,12 +590,12 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
         rc = check_cache(cache, cachevals, p1, value);
     } else {
         /* check for a '*' wildcard at the end of the value */
-        if ('*' == p1[strlen(p1)-1]) {
+        if ('*' == p1[strlen(p1) - 1]) {
             /* search the local environment for all params
              * that start with the string up to the '*' */
-            p1[strlen(p1)-1] = '\0';
+            p1[strlen(p1) - 1] = '\0';
             len = strlen(p1);
-            for (k=0; NULL != environ[k]; k++) {
+            for (k = 0; NULL != environ[k]; k++) {
                 if (0 == strncmp(environ[k], p1, len)) {
                     value = strdup(environ[k]);
                     /* find the '=' sign */
@@ -664,7 +615,7 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
                 if (NULL != cache) {
                     /* see if it is already in the cache */
                     tmp = *cache;
-                    for (k=0; NULL != tmp[k]; k++) {
+                    for (k = 0; NULL != tmp[k]; k++) {
                         if (0 == strncmp(p1, tmp[k], strlen(p1))) {
                             found = true;
                             break;
@@ -703,7 +654,7 @@ static int process_token(char *token, char ***cache, char ***cachevals)
 
         if (NULL != (ptr = strchr(value, '='))) {
             *ptr = '\0';
-            rc = check_cache(cache, cachevals, value, ptr+1);
+            rc = check_cache(cache, cachevals, value, ptr + 1);
         } else {
             rc = check_cache(cache, cachevals, token, value);
         }
@@ -711,30 +662,28 @@ static int process_token(char *token, char ***cache, char ***cachevals)
         free(value);
     } else {
         *ptr = '\0';
-        rc = check_cache(cache, cachevals, token, ptr+1);
+        rc = check_cache(cache, cachevals, token, ptr + 1);
         /* NTH: don't bother resetting ptr to = since the string will not be used again */
     }
     return rc;
 }
 
-static int process_env_list(const char *env_list,
-                            char ***xparams, char ***xvals,
-                            char sep)
+static int process_env_list(const char *env_list, char ***xparams, char ***xvals, char sep)
 {
-    char** tokens;
+    char **tokens;
     int rc = PRTE_SUCCESS;
 
-    tokens = prte_argv_split(env_list, (int)sep);
+    tokens = prte_argv_split(env_list, (int) sep);
     if (NULL == tokens) {
         return PRTE_SUCCESS;
     }
 
-    for (int i = 0 ; NULL != tokens[i] ; ++i) {
+    for (int i = 0; NULL != tokens[i]; ++i) {
         rc = process_token(tokens[i], xparams, xvals);
         if (PRTE_SUCCESS != rc) {
             if (PRTE_ERR_NOT_FOUND == rc) {
-                prte_show_help("help-schizo-base.txt", "incorrect-env-list-param",
-                                true, tokens[i], env_list);
+                prte_show_help("help-schizo-base.txt", "incorrect-env-list-param", true, tokens[i],
+                               env_list);
             }
             break;
         }
@@ -748,7 +697,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
 {
     FILE *fp;
     char **tmp, **opts, *line, *param, *p1, *p2;
-    int i, n, rc=PRTE_SUCCESS;
+    int i, n, rc = PRTE_SUCCESS;
     char **cache = NULL, **cachevals = NULL;
     char **xparams = NULL, **xvals = NULL;
 
@@ -760,7 +709,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
     /* Iterate through all the files passed in -- it is an ERROR if
      * a given param appears more than once with different values */
 
-    for (i=0; NULL != tmp[i]; i++) {
+    for (i = 0; NULL != tmp[i]; i++) {
         fp = fopen(tmp[i], "r");
         if (NULL == fp) {
             /* if the file given wasn't absolute, check in the default location */
@@ -776,8 +725,8 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
             p1 = prte_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
             fp = fopen(p1, "r");
             if (NULL == fp) {
-                prte_show_help("help-schizo-base.txt", "missing-param-file-def", true,
-                               tmp[i], DEFAULT_PARAM_FILE_PATH);
+                prte_show_help("help-schizo-base.txt", "missing-param-file-def", true, tmp[i],
+                               DEFAULT_PARAM_FILE_PATH);
                 prte_argv_free(tmp);
                 prte_argv_free(cache);
                 prte_argv_free(cachevals);
@@ -789,7 +738,8 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
             free(p1);
         }
         while (NULL != (line = prte_schizo_base_getline(fp))) {
-            if('\0' == line[0]) continue; /* skip empty lines */
+            if ('\0' == line[0])
+                continue; /* skip empty lines */
             opts = prte_argv_split_with_empty(line, ' ');
             if (NULL == opts) {
                 prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
@@ -802,15 +752,16 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 fclose(fp);
                 return PRTE_ERR_BAD_PARAM;
             }
-            for (n=0; NULL != opts[n]; n++) {
+            for (n = 0; NULL != opts[n]; n++) {
                 if ('\0' == opts[n][0] || '#' == opts[n][0]) {
                     /* the line is only spaces, or a comment, ignore */
                     break;
                 }
                 if (0 == strcmp(opts[n], "-x")) {
                     /* the next value must be the envar */
-                    if (NULL == opts[n+1]) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                    if (NULL == opts[n + 1]) {
+                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                                       line);
                         free(line);
                         prte_argv_free(tmp);
                         prte_argv_free(opts);
@@ -821,13 +772,14 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         fclose(fp);
                         return PRTE_ERR_BAD_PARAM;
                     }
-                    p1 = prte_schizo_base_strip_quotes(opts[n+1]);
+                    p1 = prte_schizo_base_strip_quotes(opts[n + 1]);
                     /* some idiot decided to allow spaces around an "=" sign, which is
                      * a violation of the Posix cmd line syntax. Rather than fighting
                      * the battle to correct their error, try to accommodate it here */
-                    if (NULL != opts[n+2] && 0 == strcmp(opts[n+2], "=")) {
-                        if (NULL == opts[n+3]) {
-                            prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                    if (NULL != opts[n + 2] && 0 == strcmp(opts[n + 2], "=")) {
+                        if (NULL == opts[n + 3]) {
+                            prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                                           line);
                             free(line);
                             prte_argv_free(tmp);
                             prte_argv_free(opts);
@@ -838,12 +790,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                             fclose(fp);
                             return PRTE_ERR_BAD_PARAM;
                         }
-                        p2 = prte_schizo_base_strip_quotes(opts[n+3]);
+                        p2 = prte_schizo_base_strip_quotes(opts[n + 3]);
                         prte_asprintf(&param, "%s=%s", p1, p2);
                         free(p1);
                         free(p2);
                         p1 = param;
-                        ++n;  // need an extra step
+                        ++n; // need an extra step
                     }
                     rc = process_envar(p1, &xparams, &xvals);
                     free(p1);
@@ -858,10 +810,11 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         free(line);
                         return rc;
                     }
-                    ++n;  // skip over the envar option
+                    ++n; // skip over the envar option
                 } else if (0 == strcmp(opts[n], "--mca")) {
-                    if (NULL == opts[n+1] || NULL == opts[n+2]) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                    if (NULL == opts[n + 1] || NULL == opts[n + 2]) {
+                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                                       line);
                         free(line);
                         prte_argv_free(tmp);
                         prte_argv_free(opts);
@@ -872,8 +825,8 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         fclose(fp);
                         return PRTE_ERR_BAD_PARAM;
                     }
-                    p1 = prte_schizo_base_strip_quotes(opts[n+1]);
-                    p2 = prte_schizo_base_strip_quotes(opts[n+2]);
+                    p1 = prte_schizo_base_strip_quotes(opts[n + 1]);
+                    p2 = prte_schizo_base_strip_quotes(opts[n + 2]);
                     if (0 == strcmp(p1, "mca_base_env_list")) {
                         /* next option must be the list of envars */
                         rc = process_env_list(p2, &xparams, &xvals, ';');
@@ -894,12 +847,14 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                         free(line);
                         return rc;
                     }
-                    n += 2;  // skip over the MCA option
-                } else if (0 == strncmp(opts[n], "mca_base_env_list", strlen("mca_base_env_list"))) {
+                    n += 2; // skip over the MCA option
+                } else if (0
+                           == strncmp(opts[n], "mca_base_env_list", strlen("mca_base_env_list"))) {
                     /* find the equal sign */
                     p1 = strchr(opts[n], '=');
                     if (NULL == p1) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                                       line);
                         free(line);
                         prte_argv_free(tmp);
                         prte_argv_free(opts);
@@ -926,7 +881,8 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 } else {
                     rc = process_token(opts[n], &cache, &cachevals);
                     if (PRTE_SUCCESS != rc) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                                       line);
                         fclose(fp);
                         prte_argv_free(tmp);
                         prte_argv_free(opts);
@@ -948,7 +904,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
 
     if (NULL != cache) {
         /* add the results into dstenv */
-        for (i=0; NULL != cache[i]; i++) {
+        for (i = 0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
                 prte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
                 prte_setenv(p1, cachevals[i], true, dstenv);
@@ -963,7 +919,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
 
     /* add the -x values */
     if (NULL != xparams) {
-        for (i=0; NULL != xparams[i]; i++) {
+        for (i = 0; NULL != xparams[i]; i++) {
             prte_setenv(xparams[i], xvals[i], true, dstenv);
         }
         prte_argv_free(xparams);
@@ -1027,13 +983,12 @@ static bool check_generic(char *p1)
 
     /* this is a generic MCA designation, so see if the parameter it
      * refers to belongs to a project base or one of our frameworks */
-    if (0 == strncmp("opal_", p1, strlen("opal_")) ||
-        0 == strncmp("ompi_", p1, strlen("ompi_"))) {
+    if (0 == strncmp("opal_", p1, strlen("opal_")) || 0 == strncmp("ompi_", p1, strlen("ompi_"))) {
         return true;
     } else if (0 == strcmp(p1, "mca_base_env_list")) {
         return true;
     } else {
-        for (j=0; NULL != ompi_frameworks[j]; j++) {
+        for (j = 0; NULL != ompi_frameworks[j]; j++) {
             if (0 == strncmp(p1, ompi_frameworks[j], strlen(ompi_frameworks[j]))) {
                 return true;
             }
@@ -1043,9 +998,7 @@ static bool check_generic(char *p1)
     return false;
 }
 
-static int parse_cli(int argc, int start,
-                     char **argv,
-                     char ***target)
+static int parse_cli(int argc, int start, char **argv, char ***target)
 {
     char *p1, *p2;
     int i;
@@ -1053,18 +1006,17 @@ static int parse_cli(int argc, int start,
     bool takeus;
     char *param = NULL;
 
-    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                        "%s schizo:ompi: parse_cli",
+    prte_output_verbose(1, prte_schizo_base_framework.framework_output, "%s schizo:ompi: parse_cli",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    for (i = 0; i < (argc-start); ++i) {
+    for (i = 0; i < (argc - start); ++i) {
         if (0 == strcmp("--omca", argv[i])) {
-            if (NULL == argv[i+1] || NULL == argv[i+2]) {
+            if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
                 return PRTE_ERR_FATAL;
             }
-            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
-            p2 = prte_schizo_base_strip_quotes(argv[i+2]);
+            p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
+            p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
             if (NULL == target) {
                 /* push it into our environment */
                 asprintf(&param, "OMPI_MCA_%s", p1);
@@ -1083,12 +1035,12 @@ static int parse_cli(int argc, int start,
             continue;
         }
         if (0 == strcmp("--mca", argv[i])) {
-            if (NULL == argv[i+1] || NULL == argv[i+2]) {
+            if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
                 return PRTE_ERR_FATAL;
             }
-            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
-            p2 = prte_schizo_base_strip_quotes(argv[i+2]);
+            p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
+            p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
 
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
@@ -1114,50 +1066,47 @@ static int parse_cli(int argc, int start,
         }
         if (0 == strcmp("--map-by", argv[i])) {
             /* if they set "inherit", then make this the default for prte */
-            if (NULL != strcasestr(argv[i+1], "inherit") &&
-                NULL == strcasestr(argv[i+1], "noinherit")) {
+            if (NULL != strcasestr(argv[i + 1], "inherit")
+                && NULL == strcasestr(argv[i + 1], "noinherit")) {
                 if (NULL == target) {
                     /* push it into our environment */
                     prte_setenv("PRTE_MCA_rmaps_default_inherit", "1", true, &environ);
-                    prte_setenv("PRTE_MCA_rmaps_default_mapping_policy", argv[i+1], true, &environ);
+                    prte_setenv("PRTE_MCA_rmaps_default_mapping_policy", argv[i + 1], true,
+                                &environ);
                 } else {
                     prte_argv_append_nosize(target, "--prtemca");
                     prte_argv_append_nosize(target, "rmaps_default_inherit");
                     prte_argv_append_nosize(target, "1");
                     prte_argv_append_nosize(target, "--prtemca");
                     prte_argv_append_nosize(target, "rmaps_default_mapping_policy");
-                    prte_argv_append_nosize(target, argv[i+1]);
+                    prte_argv_append_nosize(target, argv[i + 1]);
                 }
             }
         }
 
 #if PRTE_ENABLE_FT
-        if (0 == strcmp("--with-ft", argv[i]) ||
-            0 == strcmp("-with-ft", argv[i])) {
-            if (NULL == argv[i+1]) {
+        if (0 == strcmp("--with-ft", argv[i]) || 0 == strcmp("-with-ft", argv[i])) {
+            if (NULL == argv[i + 1]) {
                 /* this is an error */
                 return PRTE_ERR_FATAL;
             }
-            p1 = prte_schizo_base_strip_quotes(argv[i+1]);
-            if( 0 != strcmp("no", p1) &&
-                0 != strcmp("false", p1) &&
-                0 != strcmp("0", p1)) {
+            p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
+            if (0 != strcmp("no", p1) && 0 != strcmp("false", p1) && 0 != strcmp("0", p1)) {
                 if (NULL == target) {
                     /* push it into our environment */
                     prte_asprintf(&param, "PRTE_MCA_prte_enable_ft");
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                           "%s schizo:ompi:parse_cli pushing %s into environment",
-                                           PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                                        "%s schizo:ompi:parse_cli pushing %s into environment",
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
                     prte_setenv(param, "true", true, &environ);
-                    //prte_enable_ft = true;
+                    // prte_enable_ft = true;
                     prte_enable_recovery = true;
                     prte_asprintf(&param, "OMPI_MCA_mpi_ft_enable");
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                           "%s schizo:ompi:parse_cli pushing %s into environment",
-                                           PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                                        "%s schizo:ompi:parse_cli pushing %s into environment",
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
                     prte_setenv(param, "true", true, &environ);
-                }
-                else {
+                } else {
                     prte_argv_append_nosize(target, "--prtemca");
                     prte_argv_append_nosize(target, "prte_enable_ft");
                     prte_argv_append_nosize(target, "true");
@@ -1167,38 +1116,32 @@ static int parse_cli(int argc, int start,
                     prte_argv_append_nosize(target, "true");
                 }
             }
-           free(p1);
+            free(p1);
         }
 #endif
     }
 
-    rc = prte_schizo_base_parse_prte(argc, start,
-                                     argv, target);
+    rc = prte_schizo_base_parse_prte(argc, start, argv, target);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
 
-    rc = prte_schizo_base_parse_pmix(argc, start,
-                                     argv, target);
+    rc = prte_schizo_base_parse_pmix(argc, start, argv, target);
 
     return rc;
 }
 
-static int parse_env(prte_cmd_line_t *cmd_line,
-                     char **srcenv,
-                     char ***dstenv,
-                     bool cmdline)
+static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline)
 {
     char *p1, *p2;
     char *env_set_flag;
-    char **cache=NULL, **cachevals=NULL;
-    char **xparams=NULL, **xvals=NULL;
+    char **cache = NULL, **cachevals = NULL;
+    char **xparams = NULL, **xvals = NULL;
     char **envlist = NULL, **envtgt = NULL;
     prte_value_t *pval;
     int i, j, rc;
 
-    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                        "%s schizo:ompi: parse_env",
+    prte_output_verbose(1, prte_schizo_base_framework.framework_output, "%s schizo:ompi: parse_env",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* if they are filling out a cmd line, then we don't
@@ -1218,7 +1161,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
     }
     /* process the resulting cache into the dstenv */
     if (NULL != xparams) {
-        for (i=0; NULL != xparams[i]; i++) {
+        for (i = 0; NULL != xparams[i]; i++) {
             prte_setenv(xparams[i], xvals[i], true, dstenv);
         }
         prte_argv_free(xparams);
@@ -1249,13 +1192,12 @@ static int parse_env(prte_cmd_line_t *cmd_line,
         }
     }
 
-    if (prte_cmd_line_is_taken(cmd_line, "display-comm") && prte_cmd_line_is_taken(cmd_line, "display-comm-finalize")) {
+    if (prte_cmd_line_is_taken(cmd_line, "display-comm")
+        && prte_cmd_line_is_taken(cmd_line, "display-comm-finalize")) {
         prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_init,mpi_finalize", true, dstenv);
-    }
-    else if (prte_cmd_line_is_taken(cmd_line, "display-comm")) {
+    } else if (prte_cmd_line_is_taken(cmd_line, "display-comm")) {
         prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_init", true, dstenv);
-    }
-    else if (prte_cmd_line_is_taken(cmd_line, "display-comm-finalize")) {
+    } else if (prte_cmd_line_is_taken(cmd_line, "display-comm-finalize")) {
         prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
     }
 
@@ -1375,9 +1317,9 @@ static int parse_env(prte_cmd_line_t *cmd_line,
 
     /* if we got any env lists, process them here */
     if (NULL != envlist) {
-        for (i=0; NULL != envlist[i]; i++) {
+        for (i = 0; NULL != envlist[i]; i++) {
             envtgt = prte_argv_split(envlist[i], ';');
-            for (j=0; NULL != envtgt[j]; j++) {
+            for (j = 0; NULL != envtgt[j]; j++) {
                 if (NULL == (p2 = strchr(envtgt[j], '='))) {
                     p1 = getenv(envtgt[j]);
                     if (NULL == p1) {
@@ -1451,7 +1393,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
 
     /* process the resulting cache into the dstenv */
     if (NULL != cache) {
-        for (i=0; NULL != cache[i]; i++) {
+        for (i = 0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
                 prte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
                 prte_setenv(p1, cachevals[i], true, dstenv);
@@ -1466,7 +1408,7 @@ static int parse_env(prte_cmd_line_t *cmd_line,
 
     /* add the -x values */
     if (NULL != xparams) {
-        for (i=0; NULL != xparams[i]; i++) {
+        for (i = 0; NULL != xparams[i]; i++) {
             prte_setenv(xparams[i], xvals[i], true, dstenv);
         }
         prte_argv_free(xparams);
@@ -1481,10 +1423,8 @@ static int detect_proxy(char *cmdpath)
     char *evar;
     char *inipath = NULL;
 
-
     prte_output_verbose(2, prte_schizo_base_framework.framework_output,
-                        "%s[%s]: detect proxy with %s (%s)",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        "%s[%s]: detect proxy with %s (%s)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         __FILE__, cmdpath, prte_tool_basename);
 
     if (NULL == cmdpath) {
@@ -1522,8 +1462,7 @@ static int detect_proxy(char *cmdpath)
          * it belongs to us - however, we exclude explicit
          * calls to "prte" as that is intended to start
          * the DVM */
-        if (NULL != strstr(cmdpath, evar) &&
-            0 != strcmp(prte_tool_basename, "prte")) {
+        if (NULL != strstr(cmdpath, evar) && 0 != strcmp(prte_tool_basename, "prte")) {
             return 100;
         }
     }
@@ -1533,10 +1472,9 @@ static int detect_proxy(char *cmdpath)
      * proxy, so let's check */
     /* if the basename of the cmd was "mpirun" or "mpiexec",
      * we default to us */
-    if (prte_schizo_base.test_proxy_launch ||
-        0 == strcmp(prte_tool_basename, "mpirun") ||
-        0 == strcmp(prte_tool_basename, "mpiexec") ||
-        0 == strcmp(prte_tool_basename, "oshrun")) {
+    if (prte_schizo_base.test_proxy_launch || 0 == strcmp(prte_tool_basename, "mpirun")
+        || 0 == strcmp(prte_tool_basename, "mpiexec")
+        || 0 == strcmp(prte_tool_basename, "oshrun")) {
         return prte_schizo_ompi_component.priority;
     }
 
@@ -1553,8 +1491,8 @@ static void allow_run_as_root(prte_cmd_line_t *cmd_line)
         return;
     }
 
-    if (NULL != (r1 = getenv("OMPI_ALLOW_RUN_AS_ROOT")) &&
-        NULL != (r2 = getenv("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM"))) {
+    if (NULL != (r1 = getenv("OMPI_ALLOW_RUN_AS_ROOT"))
+        && NULL != (r2 = getenv("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM"))) {
         if (0 == strcmp(r1, "1") && 0 == strcmp(r2, "1")) {
             return;
         }
@@ -1573,7 +1511,8 @@ static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
         u16 = pval->value.data.integer;
         if (0 != u16 && 1 != u16 && 2 != u16) {
             /* bad value */
-            prte_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, pval->value.data.integer);
+            prte_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true,
+                           pval->value.data.integer);
             return;
         }
         PMIX_INFO_LIST_ADD(rc, jobinfo, "OMPI_STREAM_BUFFERING", &u16, PMIX_UINT16);

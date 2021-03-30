@@ -18,6 +18,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,18 +37,18 @@
 
 #include <stdlib.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <ctype.h>
 #include <sys/syscall.h>
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
 #include "src/mca/common/alps/common_alps.h"
-#include "src/mca/odls/odls.h"
-#include "src/mca/odls/base/odls_private.h"
 #include "src/mca/odls/alps/odls_alps.h"
+#include "src/mca/odls/base/odls_private.h"
+#include "src/mca/odls/odls.h"
 
 /*
  * Instantiate the public struct with all of our public information
@@ -74,7 +75,6 @@ prte_odls_base_component_t prte_odls_alps_component = {
         PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
     },
 };
-
 
 int prte_odls_alps_component_open(void)
 {
@@ -111,10 +111,7 @@ int prte_odls_alps_component_query(prte_mca_base_module_t **module, int *priorit
     return rc;
 }
 
-
 int prte_odls_alps_component_close(void)
 {
     return PRTE_SUCCESS;
 }
-
-

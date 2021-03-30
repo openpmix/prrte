@@ -4,6 +4,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,8 +23,8 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/mca/mca.h"
 #include "src/class/prte_list.h"
+#include "src/mca/mca.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -55,9 +56,7 @@ typedef void (*prte_rtc_base_module_assign_fn_t)(prte_job_t *jdata);
  * Each module is responsible for reporting errors via the state machine. Thus,
  * no error code is returned. However, warnings and error messages for the user
  * can be output via the provided error_fd */
-typedef void (*prte_rtc_base_module_set_fn_t)(prte_job_t *jdata,
-                                              prte_proc_t *proc,
-                                              char ***env,
+typedef void (*prte_rtc_base_module_set_fn_t)(prte_job_t *jdata, prte_proc_t *proc, char ***env,
                                               int error_fd);
 
 /* Return a list of valid controls values for this component.
@@ -76,21 +75,19 @@ typedef void (*prte_rtc_base_module_fini_fn_t)(void);
  * rtc module version 1.0.0
  */
 typedef struct {
-    prte_rtc_base_module_init_fn_t            init;
-    prte_rtc_base_module_fini_fn_t            finalize;
-    prte_rtc_base_module_assign_fn_t          assign;
-    prte_rtc_base_module_set_fn_t             set;
-    prte_rtc_base_module_get_avail_vals_fn_t  get_available_values;
+    prte_rtc_base_module_init_fn_t init;
+    prte_rtc_base_module_fini_fn_t finalize;
+    prte_rtc_base_module_assign_fn_t assign;
+    prte_rtc_base_module_set_fn_t set;
+    prte_rtc_base_module_get_avail_vals_fn_t get_available_values;
 } prte_rtc_base_module_t;
-
 
 /* provide a public API version */
 typedef struct {
-    prte_rtc_base_module_assign_fn_t          assign;
-    prte_rtc_base_module_set_fn_t             set;
-    prte_rtc_base_module_get_avail_vals_fn_t  get_available_values;
+    prte_rtc_base_module_assign_fn_t assign;
+    prte_rtc_base_module_set_fn_t set;
+    prte_rtc_base_module_get_avail_vals_fn_t get_available_values;
 } prte_rtc_API_module_t;
-
 
 /**
  * rtc component version 1.0.0
@@ -108,9 +105,7 @@ PRTE_EXPORT extern prte_rtc_API_module_t prte_rtc;
 /*
  * Macro for use in components that are of type rtc
  */
-#define PRTE_RTC_BASE_VERSION_1_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("rtc", 1, 0, 0)
-
+#define PRTE_RTC_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_2_1_0("rtc", 1, 0, 0)
 
 END_C_DECLS
 

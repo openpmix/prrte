@@ -30,13 +30,13 @@
 #include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
+#    include <sys/socket.h>
 #endif
 #ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
+#    include <netinet/in.h>
 #endif
 
 /*
@@ -51,15 +51,13 @@
 
 BEGIN_C_DECLS
 
-#define PRTE_IF_FORMAT_ADDR(n)                              \
-    (((n) >> 24) & 0x000000FF), (((n) >> 16) & 0x000000FF), \
-    (((n) >> 8) & 0x000000FF), ((n) & 0x000000FF)
+#define PRTE_IF_FORMAT_ADDR(n)                                                         \
+    (((n) >> 24) & 0x000000FF), (((n) >> 16) & 0x000000FF), (((n) >> 8) & 0x000000FF), \
+        ((n) &0x000000FF)
 
-#define PRTE_IF_ASSEMBLE_NETWORK(n1, n2, n3, n4)    \
-    (((n1) << 24) & 0xFF000000) |                   \
-    (((n2) << 16) & 0x00FF0000) |                   \
-    (((n3) <<  8) & 0x0000FF00) |                   \
-    ( (n4)        & 0x000000FF)
+#define PRTE_IF_ASSEMBLE_NETWORK(n1, n2, n3, n4)                                           \
+    (((n1) << 24) & 0xFF000000) | (((n2) << 16) & 0x00FF0000) | (((n3) << 8) & 0x0000FF00) \
+        | ((n4) &0x000000FF)
 
 /**
  *  Lookup an interface by name and return its prte_list index.
@@ -67,7 +65,7 @@ BEGIN_C_DECLS
  *  @param if_name (IN)  Interface name
  *  @return              Interface prte_list index
  */
-PRTE_EXPORT int prte_ifnametoindex(const char* if_name);
+PRTE_EXPORT int prte_ifnametoindex(const char *if_name);
 
 /**
  *  Lookup an interface by name and return its kernel index.
@@ -75,7 +73,7 @@ PRTE_EXPORT int prte_ifnametoindex(const char* if_name);
  *  @param if_name (IN)  Interface name
  *  @return              Interface kernel index
  */
-PRTE_EXPORT int prte_ifnametokindex(const char* if_name);
+PRTE_EXPORT int prte_ifnametokindex(const char *if_name);
 
 /**
  *  Returns the number of available interfaces.
@@ -103,7 +101,7 @@ PRTE_EXPORT int prte_ifnext(int if_index);
  *  @param if_name (OUT)  Interface name buffer
  *  @param size (IN)      Interface name buffer size
  */
-PRTE_EXPORT int prte_ifindextoname(int if_index, char* if_name, int);
+PRTE_EXPORT int prte_ifindextoname(int if_index, char *if_name, int);
 
 /**
  *  Lookup an interface by index and return its primary address.
@@ -112,11 +110,8 @@ PRTE_EXPORT int prte_ifindextoname(int if_index, char* if_name, int);
  *  @param if_name (OUT)  Interface address buffer
  *  @param size (IN)      Interface address buffer size
  */
-PRTE_EXPORT int prte_ifindextoaddr(int if_index, struct sockaddr*,
-                                     unsigned int);
-PRTE_EXPORT int prte_ifkindextoaddr(int if_kindex,
-                                      struct sockaddr* if_addr,
-                                      unsigned int length);
+PRTE_EXPORT int prte_ifindextoaddr(int if_index, struct sockaddr *, unsigned int);
+PRTE_EXPORT int prte_ifkindextoaddr(int if_kindex, struct sockaddr *if_addr, unsigned int length);
 
 /**
  *  Lookup an interface by index and return its flags.
@@ -124,7 +119,7 @@ PRTE_EXPORT int prte_ifkindextoaddr(int if_kindex,
  *  @param if_index (IN)  Interface index
  *  @param if_flags (OUT) Interface flags
  */
-PRTE_EXPORT int prte_ifindextoflags(int if_index, uint32_t*);
+PRTE_EXPORT int prte_ifindextoflags(int if_index, uint32_t *);
 
 /**
  * Determine if given hostname / IP address is a local address
@@ -165,4 +160,3 @@ PRTE_EXPORT void prte_ifgetaliases(char ***aliases);
 END_C_DECLS
 
 #endif
-

@@ -38,74 +38,74 @@
 
 #include <sys/types.h>
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 
 #include "src/class/prte_hash_table.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/class/prte_value_array.h"
 #include "src/class/prte_ring_buffer.h"
-#include "src/threads/threads.h"
+#include "src/class/prte_value_array.h"
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/threads/threads.h"
 
 #include "src/mca/plm/plm_types.h"
 #include "src/mca/rml/rml_types.h"
-#include "src/util/attr.h"
-#include "src/util/proc_info.h"
-#include "src/util/name_fns.h"
 #include "src/runtime/runtime.h"
-
+#include "src/util/attr.h"
+#include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
 
 BEGIN_C_DECLS
 
-PRTE_EXPORT extern int prte_debug_verbosity;  /* instantiated in src/runtime/prte_init.c */
-PRTE_EXPORT extern char *prte_prohibited_session_dirs;  /* instantiated in src/runtime/prte_init.c */
-PRTE_EXPORT extern bool prte_help_want_aggregate;  /* instantiated in src/util/show_help.c */
-PRTE_EXPORT extern char *prte_job_ident;  /* instantiated in src/runtime/prte_globals.c */
+PRTE_EXPORT extern int prte_debug_verbosity;           /* instantiated in src/runtime/prte_init.c */
+PRTE_EXPORT extern char *prte_prohibited_session_dirs; /* instantiated in src/runtime/prte_init.c */
+PRTE_EXPORT extern bool prte_help_want_aggregate;      /* instantiated in src/util/show_help.c */
+PRTE_EXPORT extern char *prte_job_ident;           /* instantiated in src/runtime/prte_globals.c */
 PRTE_EXPORT extern bool prte_create_session_dirs;  /* instantiated in src/runtime/prte_init.c */
-PRTE_EXPORT extern bool prte_execute_quiet;  /* instantiated in src/runtime/prte_globals.c */
-PRTE_EXPORT extern bool prte_report_silent_errors;  /* instantiated in src/runtime/prte_globals.c */
-PRTE_EXPORT extern bool prte_event_base_active; /* instantiated in src/runtime/prte_init.c */
-PRTE_EXPORT extern bool prte_proc_is_bound;  /* instantiated in src/runtime/prte_init.c */
-PRTE_EXPORT extern int prte_progress_thread_debug;  /* instantiated in src/runtime/prte_init.c */
-PRTE_EXPORT extern char *prte_tool_basename;   // argv[0] of prun or one of its symlinks
+PRTE_EXPORT extern bool prte_execute_quiet;        /* instantiated in src/runtime/prte_globals.c */
+PRTE_EXPORT extern bool prte_report_silent_errors; /* instantiated in src/runtime/prte_globals.c */
+PRTE_EXPORT extern bool prte_event_base_active;    /* instantiated in src/runtime/prte_init.c */
+PRTE_EXPORT extern bool prte_proc_is_bound;        /* instantiated in src/runtime/prte_init.c */
+PRTE_EXPORT extern int prte_progress_thread_debug; /* instantiated in src/runtime/prte_init.c */
+PRTE_EXPORT extern char *prte_tool_basename;       // argv[0] of prun or one of its symlinks
 
 /**
  * Global indicating where this process was bound to at launch (will
  * be NULL if !prte_proc_is_bound)
  */
-PRTE_EXPORT extern hwloc_cpuset_t prte_proc_applied_binding;  /* instantiated in src/runtime/prte_init.c */
-
+PRTE_EXPORT extern hwloc_cpuset_t
+    prte_proc_applied_binding; /* instantiated in src/runtime/prte_init.c */
 
 /* Shortcut for some commonly used names */
-#define PRTE_NAME_WILDCARD      (&prte_name_wildcard)
-PRTE_EXPORT extern pmix_proc_t prte_name_wildcard;  /** instantiated in src/runtime/prte_init.c */
-#define PRTE_NAME_INVALID       (&prte_name_invalid)
-PRTE_EXPORT extern pmix_proc_t prte_name_invalid;  /** instantiated in src/runtime/prte_init.c */
-#define PRTE_JOBID_WILDCARD     (prte_nspace_wildcard)
-PRTE_EXPORT extern pmix_nspace_t prte_nspace_wildcard;  /** instantiated in src/runtime/prte_init.c */
+#define PRTE_NAME_WILDCARD (&prte_name_wildcard)
+PRTE_EXPORT extern pmix_proc_t prte_name_wildcard; /** instantiated in src/runtime/prte_init.c */
+#define PRTE_NAME_INVALID (&prte_name_invalid)
+PRTE_EXPORT extern pmix_proc_t prte_name_invalid; /** instantiated in src/runtime/prte_init.c */
+#define PRTE_JOBID_WILDCARD (prte_nspace_wildcard)
+PRTE_EXPORT extern pmix_nspace_t
+    prte_nspace_wildcard; /** instantiated in src/runtime/prte_init.c */
 
-#define PRTE_PROC_MY_NAME       (&prte_process_info.myproc)
-#define PRTE_PROC_MY_PROCID     (&prte_process_info.myproc)  // backward compatibility synonym
+#define PRTE_PROC_MY_NAME   (&prte_process_info.myproc)
+#define PRTE_PROC_MY_PROCID (&prte_process_info.myproc) // backward compatibility synonym
 
 /* define a special name that point to my parent (aka the process that spawned me) */
-#define PRTE_PROC_MY_PARENT     (&prte_process_info.my_parent)
+#define PRTE_PROC_MY_PARENT (&prte_process_info.my_parent)
 
 /* define a special name that belongs to prte master */
-#define PRTE_PROC_MY_HNP        (&prte_process_info.my_hnp)
+#define PRTE_PROC_MY_HNP (&prte_process_info.my_hnp)
 
 /* define some types so we can store the generic
  * values and still *know* how to convert it for PMIx */
 typedef int prte_status_t;
-typedef uint32_t prte_proc_state_t;  // assigned values in src/mca/plm/plm_types.h
-#define PRTE_PROC_STATE_T   PMIX_UINT32
+typedef uint32_t prte_proc_state_t; // assigned values in src/mca/plm/plm_types.h
+#define PRTE_PROC_STATE_T PMIX_UINT32
 
 /* define the results values for comparisons so we can change them in only one place */
-#define PRTE_VALUE1_GREATER  +1
-#define PRTE_VALUE2_GREATER  -1
-#define PRTE_EQUAL            0
+#define PRTE_VALUE1_GREATER +1
+#define PRTE_VALUE2_GREATER -1
+#define PRTE_EQUAL          0
 
 /* error manager callback function */
 typedef void (*prte_err_cb_fn_t)(pmix_proc_t *proc, prte_proc_state_t state, void *cbdata);
@@ -128,13 +128,13 @@ PRTE_EXPORT extern int prte_exit_status;
  * require exception handling (e.g., ctrl-c termination)
  * that overrides the need to process MPI messages
  */
-#define PRTE_ERROR_PRI  PRTE_EV_ERROR_PRI
-#define PRTE_MSG_PRI    PRTE_EV_MSG_LO_PRI
-#define PRTE_SYS_PRI    PRTE_EV_SYS_LO_PRI
-#define PRTE_INFO_PRI   PRTE_EV_INFO_LO_PRI
+#define PRTE_ERROR_PRI PRTE_EV_ERROR_PRI
+#define PRTE_MSG_PRI   PRTE_EV_MSG_LO_PRI
+#define PRTE_SYS_PRI   PRTE_EV_SYS_LO_PRI
+#define PRTE_INFO_PRI  PRTE_EV_INFO_LO_PRI
 
 /* define some common keys used in PRTE */
-#define PRTE_DB_DAEMON_VPID  "prte.daemon.vpid"
+#define PRTE_DB_DAEMON_VPID "prte.daemon.vpid"
 
 /* State Machine lists */
 PRTE_EXPORT extern prte_list_t prte_job_states;
@@ -143,11 +143,11 @@ PRTE_EXPORT extern prte_list_t prte_proc_states;
 /* a clean output channel without prefix */
 PRTE_EXPORT extern int prte_clean_output;
 
-#define PRTE_GLOBAL_ARRAY_BLOCK_SIZE    64
-#define PRTE_GLOBAL_ARRAY_MAX_SIZE      INT_MAX
+#define PRTE_GLOBAL_ARRAY_BLOCK_SIZE 64
+#define PRTE_GLOBAL_ARRAY_MAX_SIZE   INT_MAX
 
 /* define a default error return code for PRTE */
-#define PRTE_ERROR_DEFAULT_EXIT_CODE    1
+#define PRTE_ERROR_DEFAULT_EXIT_CODE 1
 
 /**
  * Define a macro for updating the prte_exit_status
@@ -167,41 +167,36 @@ PRTE_EXPORT extern int prte_clean_output;
  * we can tell the user the exit code from the process that caused
  * the whole thing to happen.
  */
-#define PRTE_UPDATE_EXIT_STATUS(newstatus)                                  \
-    do {                                                                    \
-        if (0 == prte_exit_status && 0 != newstatus) {                      \
-            PRTE_OUTPUT_VERBOSE((1, prte_debug_output,                      \
-                                 "%s:%s(%d) updating exit status to %d",    \
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),        \
-                                 __FILE__, __LINE__, newstatus));           \
-            prte_exit_status = newstatus;                                   \
-        }                                                                   \
-    } while(0);
+#define PRTE_UPDATE_EXIT_STATUS(newstatus)                                                     \
+    do {                                                                                       \
+        if (0 == prte_exit_status && 0 != newstatus) {                                         \
+            PRTE_OUTPUT_VERBOSE((1, prte_debug_output, "%s:%s(%d) updating exit status to %d", \
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,       \
+                                 newstatus));                                                  \
+            prte_exit_status = newstatus;                                                      \
+        }                                                                                      \
+    } while (0);
 
 /* sometimes we need to reset the exit status - for example, when we
  * are restarting a failed process
  */
-#define PRTE_RESET_EXIT_STATUS()                                \
-    do {                                                        \
-        PRTE_OUTPUT_VERBOSE((1, prte_debug_output,              \
-                            "%s:%s(%d) reseting exit status",   \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
-                            __FILE__, __LINE__));               \
-        prte_exit_status = 0;                                   \
-    } while(0);
-
+#define PRTE_RESET_EXIT_STATUS()                                                       \
+    do {                                                                               \
+        PRTE_OUTPUT_VERBOSE((1, prte_debug_output, "%s:%s(%d) reseting exit status",   \
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__)); \
+        prte_exit_status = 0;                                                          \
+    } while (0);
 
 /* define a set of flags to control the launch of a job */
 typedef uint16_t prte_job_controls_t;
-#define PRTE_JOB_CONTROL    PRTE_UINT16
-
+#define PRTE_JOB_CONTROL PRTE_UINT16
 
 /* global type definitions used by RTE - instanced in prte_globals.c */
 
 /************
-* Declare this to allow us to use it before fully
-* defining it - resolves potential circular definition
-*/
+ * Declare this to allow us to use it before fully
+ * defining it - resolves potential circular definition
+ */
 struct prte_proc_t;
 struct prte_job_map_t;
 /************/
@@ -215,9 +210,8 @@ typedef struct {
 } prte_topology_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_topology_t);
 
-
 /**
-* Information about a specific application to be launched in the RTE.
+ * Information about a specific application to be launched in the RTE.
  */
 typedef struct {
     /** Parent object */
@@ -225,7 +219,7 @@ typedef struct {
     /** Unique index when multiple apps per job */
     prte_app_idx_t idx;
     /** Absolute pathname of argv[0] */
-    char   *app;
+    char *app;
     /** Number of copies of this process that are to be launched */
     int32_t num_procs;
     /** Array of pointers to the proc objects for procs of this app_context
@@ -237,11 +231,11 @@ typedef struct {
     /** First MPI rank of this app_context in the job */
     pmix_rank_t first_rank;
     /** Standard argv-style array, including a final NULL pointer */
-    char  **argv;
+    char **argv;
     /** Standard environ-style array, including a final NULL pointer */
-    char  **env;
+    char **env;
     /** Current working directory for this app */
-    char   *cwd;
+    char *cwd;
     /* flags */
     prte_app_context_flags_t flags;
     /* provide a list of attributes for this app_context in place
@@ -254,7 +248,6 @@ typedef struct {
 } prte_app_context_t;
 
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_app_context_t);
-
 
 typedef struct {
     /** Base object so this can be put on a list */
@@ -314,7 +307,7 @@ typedef struct {
     char **personality;
     /* jobid for this job */
     pmix_nspace_t nspace;
-    int index;  // index in the job array where this is stored
+    int index; // index in the job array where this is stored
     /* offset to the total number of procs so shared memory
      * components can potentially connect to any spawned jobs*/
     pmix_rank_t offset;
@@ -434,7 +427,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_proc_t);
  * an mpirun-unique qualifer to eliminate any global name
  * service
  */
-PRTE_EXPORT prte_job_t* prte_get_job_data_object(const pmix_nspace_t job);
+PRTE_EXPORT prte_job_t *prte_get_job_data_object(const pmix_nspace_t job);
 
 /**
  * Set a job data object - returns an error if it cannot add the object
@@ -443,61 +436,38 @@ PRTE_EXPORT prte_job_t* prte_get_job_data_object(const pmix_nspace_t job);
 PRTE_EXPORT int prte_set_job_data_object(prte_job_t *jdata);
 
 /** Pack/unpack a job object */
-PRTE_EXPORT int prte_job_pack(pmix_data_buffer_t *bkt,
-                              prte_job_t *job);
-PRTE_EXPORT int prte_job_unpack(pmix_data_buffer_t *bkt,
-                                prte_job_t **job);
-PRTE_EXPORT int prte_job_copy(prte_job_t **dest,
-                              prte_job_t *src);
-PRTE_EXPORT void prte_job_print(char **output,
-                                prte_job_t *jdata);
+PRTE_EXPORT int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job);
+PRTE_EXPORT int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job);
+PRTE_EXPORT int prte_job_copy(prte_job_t **dest, prte_job_t *src);
+PRTE_EXPORT void prte_job_print(char **output, prte_job_t *jdata);
 
 /** Pack/unpack an app-context */
-PRTE_EXPORT int prte_app_pack(pmix_data_buffer_t *bkt,
-                              prte_app_context_t *app);
-PRTE_EXPORT int prte_app_unpack(pmix_data_buffer_t *bkt,
-                                prte_app_context_t **app);
-PRTE_EXPORT int prte_app_copy(prte_app_context_t **dest,
-                              prte_app_context_t *src);
-PRTE_EXPORT void prte_app_print(char **output,
-                                prte_job_t *jdata,
-                                prte_app_context_t *src);
+PRTE_EXPORT int prte_app_pack(pmix_data_buffer_t *bkt, prte_app_context_t *app);
+PRTE_EXPORT int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **app);
+PRTE_EXPORT int prte_app_copy(prte_app_context_t **dest, prte_app_context_t *src);
+PRTE_EXPORT void prte_app_print(char **output, prte_job_t *jdata, prte_app_context_t *src);
 
 /** Pack/unpack a proc*/
-PRTE_EXPORT int prte_proc_pack(pmix_data_buffer_t *bkt,
-                               prte_proc_t *proc);
-PRTE_EXPORT int prte_proc_unpack(pmix_data_buffer_t *bkt,
-                                 prte_proc_t **proc);
-PRTE_EXPORT int prte_proc_copy(prte_proc_t **dest,
-                               prte_proc_t *src);
-PRTE_EXPORT void prte_proc_print(char **output,
-                                 prte_job_t *jdata,
-                                 prte_proc_t *src);
+PRTE_EXPORT int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc);
+PRTE_EXPORT int prte_proc_unpack(pmix_data_buffer_t *bkt, prte_proc_t **proc);
+PRTE_EXPORT int prte_proc_copy(prte_proc_t **dest, prte_proc_t *src);
+PRTE_EXPORT void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src);
 
 /** Pack/unpack a job map */
-PRTE_EXPORT int prte_map_pack(pmix_data_buffer_t *bkt,
-                              struct prte_job_map_t *map);
-PRTE_EXPORT int prte_map_unpack(pmix_data_buffer_t *bkt,
-                                struct prte_job_map_t **map);
-PRTE_EXPORT int prte_map_copy(struct prte_job_map_t **dest,
-                              struct prte_job_map_t *src);
+PRTE_EXPORT int prte_map_pack(pmix_data_buffer_t *bkt, struct prte_job_map_t *map);
+PRTE_EXPORT int prte_map_unpack(pmix_data_buffer_t *bkt, struct prte_job_map_t **map);
+PRTE_EXPORT int prte_map_copy(struct prte_job_map_t **dest, struct prte_job_map_t *src);
 PRTE_EXPORT void prte_map_print(char **output, prte_job_t *jdata);
 
-
-PRTE_EXPORT int prte_node_pack(pmix_data_buffer_t *bkt,
-                              prte_node_t *node);
-PRTE_EXPORT int prte_node_unpack(pmix_data_buffer_t *bkt,
-                                 prte_node_t **node);
-PRTE_EXPORT int prte_node_copy(prte_node_t **dest,
-                               prte_node_t *src);
-PRTE_EXPORT void prte_node_print(char **output,
-                                 prte_job_t *jdata,
-                                 prte_node_t *src);
+PRTE_EXPORT int prte_node_pack(pmix_data_buffer_t *bkt, prte_node_t *node);
+PRTE_EXPORT int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **node);
+PRTE_EXPORT int prte_node_copy(prte_node_t **dest, prte_node_t *src);
+PRTE_EXPORT void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src);
 
 /**
  * Get a proc data object
  */
-PRTE_EXPORT prte_proc_t* prte_get_proc_object(const pmix_proc_t *proc);
+PRTE_EXPORT prte_proc_t *prte_get_proc_object(const pmix_proc_t *proc);
 
 /**
  * Get the daemon vpid hosting a given proc
@@ -505,7 +475,7 @@ PRTE_EXPORT prte_proc_t* prte_get_proc_object(const pmix_proc_t *proc);
 PRTE_EXPORT pmix_rank_t prte_get_proc_daemon_vpid(const pmix_proc_t *proc);
 
 /* Get the hostname of a proc */
-PRTE_EXPORT char* prte_get_proc_hostname(const pmix_proc_t *proc);
+PRTE_EXPORT char *prte_get_proc_hostname(const pmix_proc_t *proc);
 
 /* get the node rank of a proc */
 PRTE_EXPORT prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc);

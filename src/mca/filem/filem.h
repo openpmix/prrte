@@ -35,8 +35,8 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
 #include "src/class/prte_object.h"
 
@@ -47,21 +47,21 @@ BEGIN_C_DECLS
  * A set of flags that determine the type of the file
  * in question
  */
-#define PRTE_FILEM_TYPE_FILE      0
-#define PRTE_FILEM_TYPE_DIR       1
-#define PRTE_FILEM_TYPE_UNKNOWN   2
-#define PRTE_FILEM_TYPE_TAR       3
-#define PRTE_FILEM_TYPE_BZIP      4
-#define PRTE_FILEM_TYPE_GZIP      5
-#define PRTE_FILEM_TYPE_EXE       6
+#define PRTE_FILEM_TYPE_FILE    0
+#define PRTE_FILEM_TYPE_DIR     1
+#define PRTE_FILEM_TYPE_UNKNOWN 2
+#define PRTE_FILEM_TYPE_TAR     3
+#define PRTE_FILEM_TYPE_BZIP    4
+#define PRTE_FILEM_TYPE_GZIP    5
+#define PRTE_FILEM_TYPE_EXE     6
 
 /**
  * Type of movement
  */
-#define PRTE_FILEM_MOVE_TYPE_PUT       0
-#define PRTE_FILEM_MOVE_TYPE_GET       1
-#define PRTE_FILEM_MOVE_TYPE_RM        2
-#define PRTE_FILEM_MOVE_TYPE_UNKNOWN   3
+#define PRTE_FILEM_MOVE_TYPE_PUT     0
+#define PRTE_FILEM_MOVE_TYPE_GET     1
+#define PRTE_FILEM_MOVE_TYPE_RM      2
+#define PRTE_FILEM_MOVE_TYPE_UNKNOWN 3
 
 /**
  * Hints that describe the local or remote file target for
@@ -109,13 +109,13 @@ struct prte_filem_base_file_set_1_0_0_t {
     prte_app_idx_t app_idx;
 
     /* Local file reference */
-    char * local_target;
+    char *local_target;
 
     /* Local file reference hints */
     int local_hint;
 
     /* Remove file reference */
-    char * remote_target;
+    char *remote_target;
 
     /* Remote file reference hints */
     int remote_hint;
@@ -200,15 +200,13 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_filem_base_request_t);
  * Module initialization function.
  * Returns PRTE_SUCCESS
  */
-typedef int (*prte_filem_base_module_init_fn_t)
-     (void);
+typedef int (*prte_filem_base_module_init_fn_t)(void);
 
 /**
  * Module finalization function.
  * Returns PRTE_SUCCESS
  */
-typedef int (*prte_filem_base_module_finalize_fn_t)
-     (void);
+typedef int (*prte_filem_base_module_finalize_fn_t)(void);
 
 /**
  * Put a file or directory on the remote machine
@@ -223,8 +221,7 @@ typedef int (*prte_filem_base_module_finalize_fn_t)
  * @return PRTE_SUCCESS on successful file transer
  * @return PRTE_ERROR on failed file transfer
  */
-typedef int (*prte_filem_base_put_fn_t)
-     (prte_filem_base_request_t *request);
+typedef int (*prte_filem_base_put_fn_t)(prte_filem_base_request_t *request);
 
 /**
  * Put a file or directory on the remote machine (Async)
@@ -239,8 +236,7 @@ typedef int (*prte_filem_base_put_fn_t)
  * @return PRTE_SUCCESS on successful file transer
  * @return PRTE_ERROR on failed file transfer
  */
-typedef int (*prte_filem_base_put_nb_fn_t)
-     (prte_filem_base_request_t *request);
+typedef int (*prte_filem_base_put_nb_fn_t)(prte_filem_base_request_t *request);
 
 /**
  * Get a file from the remote machine
@@ -255,8 +251,7 @@ typedef int (*prte_filem_base_put_nb_fn_t)
  * @return PRTE_SUCCESS on successful file transer
  * @return PRTE_ERROR on failed file transfer
  */
-typedef int (*prte_filem_base_get_fn_t)
-     (prte_filem_base_request_t *request);
+typedef int (*prte_filem_base_get_fn_t)(prte_filem_base_request_t *request);
 
 /**
  * Get a file from the remote machine (Async)
@@ -271,8 +266,7 @@ typedef int (*prte_filem_base_get_fn_t)
  * @return PRTE_SUCCESS on successful file transer
  * @return PRTE_ERROR on failed file transfer
  */
-typedef int (*prte_filem_base_get_nb_fn_t)
-     (prte_filem_base_request_t *request);
+typedef int (*prte_filem_base_get_nb_fn_t)(prte_filem_base_request_t *request);
 
 /**
  * Remove a file from the remote machine
@@ -287,8 +281,7 @@ typedef int (*prte_filem_base_get_nb_fn_t)
  * @return PRTE_SUCCESS on success
  * @return PRTE_ERROR on fail
  */
-typedef int (*prte_filem_base_rm_fn_t)
-     (prte_filem_base_request_t *request);
+typedef int (*prte_filem_base_rm_fn_t)(prte_filem_base_request_t *request);
 
 /**
  * Remove a file from the remote machine (Async)
@@ -303,8 +296,7 @@ typedef int (*prte_filem_base_rm_fn_t)
  * @return PRTE_SUCCESS on success
  * @return PRTE_ERROR on fail
  */
-typedef int (*prte_filem_base_rm_nb_fn_t)
-     (prte_filem_base_request_t *request);
+typedef int (*prte_filem_base_rm_nb_fn_t)(prte_filem_base_request_t *request);
 
 /**
  * Wait for a single file movement request to finish
@@ -317,8 +309,7 @@ typedef int (*prte_filem_base_rm_nb_fn_t)
  * @return PRTE_SUCCESS on success
  * @return PRTE_ERROR on fail
  */
-typedef int (*prte_filem_base_wait_fn_t)
-     (prte_filem_base_request_t *request);
+typedef int (*prte_filem_base_wait_fn_t)(prte_filem_base_request_t *request);
 
 /**
  * Wait for a multiple file movement requests to finish
@@ -331,8 +322,7 @@ typedef int (*prte_filem_base_wait_fn_t)
  * @return PRTE_SUCCESS on success
  * @return PRTE_ERROR on fail
  */
-typedef int (*prte_filem_base_wait_all_fn_t)
-     (prte_list_t *request_list);
+typedef int (*prte_filem_base_wait_all_fn_t)(prte_list_t *request_list);
 
 typedef void (*prte_filem_completion_cbfunc_t)(int status, void *cbdata);
 
@@ -343,8 +333,7 @@ typedef int (*prte_filem_base_preposition_files_fn_t)(prte_job_t *jdata,
                                                       void *cbdata);
 
 /* link local files */
-typedef int (*prte_filem_base_link_local_files_fn_t)(prte_job_t *jdata,
-                                                     prte_app_context_t *app);
+typedef int (*prte_filem_base_link_local_files_fn_t)(prte_job_t *jdata, prte_app_context_t *app);
 
 /**
  * Structure for FILEM components.
@@ -363,30 +352,29 @@ typedef struct prte_filem_base_component_2_0_0_t prte_filem_base_component_t;
  */
 struct prte_filem_base_module_1_0_0_t {
     /** Initialization Function */
-    prte_filem_base_module_init_fn_t           filem_init;
+    prte_filem_base_module_init_fn_t filem_init;
     /** Finalization Function */
-    prte_filem_base_module_finalize_fn_t       filem_finalize;
+    prte_filem_base_module_finalize_fn_t filem_finalize;
 
     /** Put a file on the remote machine */
-    prte_filem_base_put_fn_t                   put;
-    prte_filem_base_put_nb_fn_t                put_nb;
+    prte_filem_base_put_fn_t put;
+    prte_filem_base_put_nb_fn_t put_nb;
     /** Get a file from the remote machine */
-    prte_filem_base_get_fn_t                   get;
-    prte_filem_base_get_nb_fn_t                get_nb;
+    prte_filem_base_get_fn_t get;
+    prte_filem_base_get_nb_fn_t get_nb;
 
     /** Remove a file on the remote machine */
-    prte_filem_base_rm_fn_t                    rm;
-    prte_filem_base_rm_nb_fn_t                 rm_nb;
+    prte_filem_base_rm_fn_t rm;
+    prte_filem_base_rm_nb_fn_t rm_nb;
 
     /** Test functions for the non-blocking versions */
-    prte_filem_base_wait_fn_t                  wait;
-    prte_filem_base_wait_all_fn_t              wait_all;
+    prte_filem_base_wait_fn_t wait;
+    prte_filem_base_wait_all_fn_t wait_all;
 
     /* pre-position files to every node */
-    prte_filem_base_preposition_files_fn_t     preposition_files;
+    prte_filem_base_preposition_files_fn_t preposition_files;
     /* create local links for all shared files */
-    prte_filem_base_link_local_files_fn_t      link_local_files;
-
+    prte_filem_base_link_local_files_fn_t link_local_files;
 };
 typedef struct prte_filem_base_module_1_0_0_t prte_filem_base_module_1_0_0_t;
 typedef struct prte_filem_base_module_1_0_0_t prte_filem_base_module_t;
@@ -396,10 +384,8 @@ PRTE_EXPORT extern prte_filem_base_module_t prte_filem;
 /**
  * Macro for use in components that are of type FILEM
  */
-#define PRTE_FILEM_BASE_VERSION_2_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("filem", 2, 0, 0)
+#define PRTE_FILEM_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("filem", 2, 0, 0)
 
 END_C_DECLS
 
 #endif /* PRTE_FILEM_H */
-

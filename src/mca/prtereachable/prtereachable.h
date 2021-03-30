@@ -6,6 +6,7 @@
  * Copyright (c) 2017-2019 Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,12 +18,11 @@
 #define PRTE_REACHABLE_H
 
 #include "prte_config.h"
-#include "src/include/types.h"
 #include "src/class/prte_object.h"
+#include "src/include/types.h"
 
 #include "src/mca/mca.h"
 #include "src/mca/prteif/prteif.h"
-
 
 BEGIN_C_DECLS
 
@@ -78,36 +78,32 @@ typedef int (*prte_reachable_base_module_fini_fn_t)(void);
  *
  *
  */
-typedef prte_reachable_t*
-(*prte_reachable_base_module_reachable_fn_t)(prte_list_t *local_ifs,
-                                              prte_list_t *remote_ifs);
-
+typedef prte_reachable_t *(*prte_reachable_base_module_reachable_fn_t)(prte_list_t *local_ifs,
+                                                                       prte_list_t *remote_ifs);
 
 /*
  * the standard public API data structure
  */
 typedef struct {
     /* currently used APIs */
-    prte_reachable_base_module_init_fn_t                   init;
-    prte_reachable_base_module_fini_fn_t                   finalize;
-    prte_reachable_base_module_reachable_fn_t              reachable;
+    prte_reachable_base_module_init_fn_t init;
+    prte_reachable_base_module_fini_fn_t finalize;
+    prte_reachable_base_module_reachable_fn_t reachable;
 } prte_reachable_base_module_t;
 
 typedef struct {
-    prte_mca_base_component_t                      base_version;
-    prte_mca_base_component_data_t                 base_data;
+    prte_mca_base_component_t base_version;
+    prte_mca_base_component_data_t base_data;
     int priority;
 } prte_reachable_base_component_t;
 
 /*
  * Macro for use in components that are of type reachable
  */
-#define PRTE_REACHABLE_BASE_VERSION_2_0_0             \
-    PRTE_MCA_BASE_VERSION_2_1_0("prtereachable", 2, 0, 0)
+#define PRTE_REACHABLE_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("prtereachable", 2, 0, 0)
 
 /* Global structure for accessing reachability functions */
 PRTE_EXPORT extern prte_reachable_base_module_t prte_reachable;
-
 
 END_C_DECLS
 

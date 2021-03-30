@@ -22,16 +22,15 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #include "constants.h"
 
 #include <signal.h>
 
+#include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"
-#include "src/mca/base/base.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/ess/base/base.h"
@@ -45,9 +44,9 @@
 #include "src/mca/ess/base/static-components.h"
 
 prte_ess_base_module_t prte_ess = {
-    NULL,  /* init */
-    NULL,  /* finalize */
-    NULL,  /* abort */
+    NULL, /* init */
+    NULL, /* finalize */
+    NULL, /* abort */
 };
 int prte_ess_base_std_buffering = -1;
 int prte_ess_base_num_procs = -1;
@@ -55,13 +54,11 @@ char *prte_ess_base_nspace = NULL;
 char *prte_ess_base_vpid = NULL;
 prte_list_t prte_ess_base_signals = {{0}};
 
-static prte_mca_base_var_enum_value_t stream_buffering_values[] = {
-  {-1, "default"},
-  {0, "unbuffered"},
-  {1, "line_buffered"},
-  {2, "fully_buffered"},
-  {0, NULL}
-};
+static prte_mca_base_var_enum_value_t stream_buffering_values[] = {{-1, "default"},
+                                                                   {0, "unbuffered"},
+                                                                   {1, "line_buffered"},
+                                                                   {2, "fully_buffered"},
+                                                                   {0, NULL}};
 
 static char *forwarded_signals = NULL;
 
@@ -71,53 +68,52 @@ static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
     int ret;
 
     prte_ess_base_std_buffering = -1;
-    (void) prte_mca_base_var_enum_create("ess_base_stream_buffering", stream_buffering_values, &new_enum);
-    (void) prte_mca_base_var_register("prte", "ess", "base", "stream_buffering",
-                                       "Adjust buffering for stdout/stderr "
-                                       "[-1 system default] [0 unbuffered] [1 line buffered] [2 fully buffered] "
-                                       "(Default: -1)",
-                                       PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0,
-                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                       PRTE_INFO_LVL_9,
-                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_std_buffering);
+    (void) prte_mca_base_var_enum_create("ess_base_stream_buffering", stream_buffering_values,
+                                         &new_enum);
+    (void) prte_mca_base_var_register(
+        "prte", "ess", "base", "stream_buffering",
+        "Adjust buffering for stdout/stderr "
+        "[-1 system default] [0 unbuffered] [1 line buffered] [2 fully buffered] "
+        "(Default: -1)",
+        PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_std_buffering);
     PRTE_RELEASE(new_enum);
 
     prte_ess_base_nspace = NULL;
     ret = prte_mca_base_var_register("prte", "ess", "base", "nspace", "Process nspace",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                      PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_nspace);
-    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "nspace", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                     PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
+                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_nspace);
+    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "nspace",
+                                       PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
     prte_ess_base_vpid = NULL;
     ret = prte_mca_base_var_register("prte", "ess", "base", "vpid", "Process vpid",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                      PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_vpid);
-    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "vpid", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                     PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
+                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_vpid);
+    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "vpid",
+                                       PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
     prte_ess_base_num_procs = -1;
     ret = prte_mca_base_var_register("prte", "ess", "base", "num_procs",
-                                      "Used to discover the number of procs in the job",
-                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                      PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_num_procs);
-    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "num_procs", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
+                                     "Used to discover the number of procs in the job",
+                                     PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                     PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
+                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_num_procs);
+    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "num_procs",
+                                       PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
     forwarded_signals = NULL;
-    ret = prte_mca_base_var_register ("prte", "ess", "base", "forward_signals",
-                                       "Comma-delimited list of additional signals (names or integers) to forward to "
-                                       "application processes [\"none\" => forward nothing]. Signals provided by "
-                                       "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
-                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                       PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                       PRTE_INFO_LVL_4, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                       &forwarded_signals);
-    prte_mca_base_var_register_synonym(ret, "prte", "ess", "hnp", "forward_signals", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
-
+    ret = prte_mca_base_var_register(
+        "prte", "ess", "base", "forward_signals",
+        "Comma-delimited list of additional signals (names or integers) to forward to "
+        "application processes [\"none\" => forward nothing]. Signals provided by "
+        "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &forwarded_signals);
+    prte_mca_base_var_register_synonym(ret, "prte", "ess", "hnp", "forward_signals",
+                                       PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
     return PRTE_SUCCESS;
 }
@@ -142,9 +138,10 @@ static int prte_ess_base_open(prte_mca_base_open_flag_t flags)
     return prte_mca_base_framework_components_open(&prte_ess_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, ess, "PRTE Environmenal System Setup",
-                                 prte_ess_base_register, prte_ess_base_open, prte_ess_base_close,
-                                 prte_ess_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, ess, "PRTE Environmenal System Setup", prte_ess_base_register,
+                                prte_ess_base_open, prte_ess_base_close,
+                                prte_ess_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 /* signal forwarding */
 
@@ -215,14 +212,14 @@ static struct known_signal known_signals[] = {
     {0, NULL},
 };
 
-#define ESS_ADDSIGNAL(x, s)                                                 \
-    do {                                                                    \
-        prte_ess_base_signal_t *_sig;                                      \
-        _sig = PRTE_NEW(prte_ess_base_signal_t);                          \
-        _sig->signal = (x);                                                 \
-        _sig->signame = strdup((s));                                        \
-        prte_list_append(&prte_ess_base_signals, &_sig->super);           \
-    } while(0)
+#define ESS_ADDSIGNAL(x, s)                                     \
+    do {                                                        \
+        prte_ess_base_signal_t *_sig;                           \
+        _sig = PRTE_NEW(prte_ess_base_signal_t);                \
+        _sig->signal = (x);                                     \
+        _sig->signame = strdup((s));                            \
+        prte_list_append(&prte_ess_base_signals, &_sig->super); \
+    } while (0)
 
 static bool signals_added = false;
 
@@ -234,8 +231,7 @@ int prte_ess_base_setup_signals(char *mysignals)
     bool ignore, found;
 
     /* if they told us "none", then nothing to do */
-    if (NULL != mysignals &&
-        0 == strcmp(mysignals, "none")) {
+    if (NULL != mysignals && 0 == strcmp(mysignals, "none")) {
         return PRTE_SUCCESS;
     }
 
@@ -243,12 +239,12 @@ int prte_ess_base_setup_signals(char *mysignals)
         /* we know that some signals are (nearly) always defined, regardless
          * of environment, so add them here */
         nsigs = sizeof(known_signals) / sizeof(struct known_signal);
-        for (i=0; i < nsigs; i++) {
+        for (i = 0; i < nsigs; i++) {
             if (known_signals[i].can_forward) {
                 ESS_ADDSIGNAL(known_signals[i].signal, known_signals[i].signame);
             }
         }
-        signals_added = true;  // only do this once
+        signals_added = true; // only do this once
     }
 
     /* see if they asked for anything beyond those - note that they may
@@ -256,15 +252,15 @@ int prte_ess_base_setup_signals(char *mysignals)
     if (NULL != mysignals) {
         /* if they told us "none", then dump the list */
         signals = prte_argv_split(mysignals, ',');
-        for (i=0; NULL != signals[i]; i++) {
+        for (i = 0; NULL != signals[i]; i++) {
             sval = 0;
             if (0 != strncmp(signals[i], "SIG", 3)) {
                 /* treat it like a number */
                 errno = 0;
                 sval = strtoul(signals[i], &tmp, 10);
                 if (0 != errno || '\0' != *tmp) {
-                    prte_show_help("help-ess-base.txt", "ess-base:unknown-signal",
-                                   true, signals[i], forwarded_signals);
+                    prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
+                                   forwarded_signals);
                     prte_argv_free(signals);
                     return PRTE_ERR_SILENT;
                 }
@@ -272,7 +268,8 @@ int prte_ess_base_setup_signals(char *mysignals)
 
             /* see if it is one we already covered */
             ignore = false;
-            PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t) {
+            PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+            {
                 if (0 == strcasecmp(signals[i], sig->signame) || sval == sig->signal) {
                     /* got it - we will ignore */
                     ignore = true;
@@ -286,11 +283,12 @@ int prte_ess_base_setup_signals(char *mysignals)
 
             /* see if they gave us a signal name */
             found = false;
-            for (int j = 0 ; known_signals[j].signame ; ++j) {
-                if (0 == strcasecmp (signals[i], known_signals[j].signame) || sval == known_signals[j].signal) {
+            for (int j = 0; known_signals[j].signame; ++j) {
+                if (0 == strcasecmp(signals[i], known_signals[j].signame)
+                    || sval == known_signals[j].signal) {
                     if (!known_signals[j].can_forward) {
-                        prte_show_help("help-ess-base.txt", "ess-base:cannot-forward",
-                                       true, known_signals[j].signame, forwarded_signals);
+                        prte_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
+                                       known_signals[j].signame, forwarded_signals);
                         prte_argv_free(signals);
                         return PRTE_ERR_SILENT;
                     }
@@ -302,8 +300,8 @@ int prte_ess_base_setup_signals(char *mysignals)
 
             if (!found) {
                 if (0 == strncmp(signals[i], "SIG", 3)) {
-                    prte_show_help("help-ess-base.txt", "ess-base:unknown-signal",
-                                   true, signals[i], forwarded_signals);
+                    prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
+                                   forwarded_signals);
                     prte_argv_free(signals);
                     return PRTE_ERR_SILENT;
                 }
@@ -311,7 +309,7 @@ int prte_ess_base_setup_signals(char *mysignals)
                 ESS_ADDSIGNAL(sval, signals[i]);
             }
         }
-        prte_argv_free (signals);
+        prte_argv_free(signals);
     }
     return PRTE_SUCCESS;
 }
@@ -327,6 +325,4 @@ static void sdes(prte_ess_base_signal_t *t)
         free(t->signame);
     }
 }
-PRTE_CLASS_INSTANCE(prte_ess_base_signal_t,
-                     prte_list_item_t,
-                     scon, sdes);
+PRTE_CLASS_INSTANCE(prte_ess_base_signal_t, prte_list_item_t, scon, sdes);

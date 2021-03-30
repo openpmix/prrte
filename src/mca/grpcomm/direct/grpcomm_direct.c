@@ -34,40 +34,31 @@
 #include "src/util/nidmap.h"
 #include "src/util/proc_info.h"
 
-#include "src/mca/grpcomm/base/base.h"
 #include "grpcomm_direct.h"
-
+#include "src/mca/grpcomm/base/base.h"
 
 /* Static API's */
 static int init(void);
 static void finalize(void);
-static int xcast(pmix_rank_t *vpids,
-                 size_t nprocs,
-                 pmix_data_buffer_t *buf);
-static int allgather(prte_grpcomm_coll_t *coll,
-                     pmix_data_buffer_t *buf, int mode);
+static int xcast(pmix_rank_t *vpids, size_t nprocs, pmix_data_buffer_t *buf);
+static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf, int mode);
 
 /* Module def */
-prte_grpcomm_base_module_t prte_grpcomm_direct_module = {
-    .init = init,
-    .finalize = finalize,
-    .xcast = xcast,
-    .allgather = allgather,
-    .rbcast = NULL,
-    .register_cb = NULL,
-    .unregister_cb = NULL
-};
+prte_grpcomm_base_module_t prte_grpcomm_direct_module = {.init = init,
+                                                         .finalize = finalize,
+                                                         .xcast = xcast,
+                                                         .allgather = allgather,
+                                                         .rbcast = NULL,
+                                                         .register_cb = NULL,
+                                                         .unregister_cb = NULL};
 
 /* internal functions */
-static void xcast_recv(int status, pmix_proc_t* sender,
-                       pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                       void* cbdata);
-static void allgather_recv(int status, pmix_proc_t* sender,
-                           pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                           void* cbdata);
-static void barrier_release(int status, pmix_proc_t* sender,
-                            pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                            void* cbdata);
+static void xcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                       prte_rml_tag_t tag, void *cbdata);
+static void allgather_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                           prte_rml_tag_t tag, void *cbdata);
+static void barrier_release(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                            prte_rml_tag_t tag, void *cbdata);
 
 /* internal variables */
 static prte_list_t tracker;
@@ -80,18 +71,12 @@ static int init(void)
     PRTE_CONSTRUCT(&tracker, prte_list_t);
 
     /* post the receives */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD,
-                            PRTE_RML_TAG_XCAST,
-                            PRTE_RML_PERSISTENT,
-                            xcast_recv, NULL);
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD,
-                            PRTE_RML_TAG_ALLGATHER_DIRECT,
-                            PRTE_RML_PERSISTENT,
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST, PRTE_RML_PERSISTENT, xcast_recv,
+                            NULL);
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_ALLGATHER_DIRECT, PRTE_RML_PERSISTENT,
                             allgather_recv, NULL);
     /* setup recv for barrier release */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD,
-                            PRTE_RML_TAG_COLL_RELEASE,
-                            PRTE_RML_PERSISTENT,
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_COLL_RELEASE, PRTE_RML_PERSISTENT,
                             barrier_release, NULL);
 
     return PRTE_SUCCESS;
@@ -106,9 +91,7 @@ static void finalize(void)
     return;
 }
 
-static int xcast(pmix_rank_t *vpids,
-                 size_t nprocs,
-                 pmix_data_buffer_t *buf)
+static int xcast(pmix_rank_t *vpids, size_t nprocs, pmix_data_buffer_t *buf)
 {
     int rc;
 
@@ -122,15 +105,13 @@ static int xcast(pmix_rank_t *vpids,
     return PRTE_SUCCESS;
 }
 
-static int allgather(prte_grpcomm_coll_t *coll,
-                     pmix_data_buffer_t *buf, int mode)
+static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf, int mode)
 {
     int rc;
     pmix_data_buffer_t *relay;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:direct: allgather",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s grpcomm:direct: allgather", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* the base functions pushed us into the event library
      * before calling us, so we can safely access global data
@@ -173,15 +154,13 @@ static int allgather(prte_grpcomm_coll_t *coll,
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* send the info to ourselves for tracking */
-    rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_NAME, relay,
-                                 PRTE_RML_TAG_ALLGATHER_DIRECT,
+    rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_NAME, relay, PRTE_RML_TAG_ALLGATHER_DIRECT,
                                  prte_rml_send_callback, NULL);
     return rc;
 }
 
-static void allgather_recv(int status, pmix_proc_t* sender,
-                           pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                           void* cbdata)
+static void allgather_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                           prte_rml_tag_t tag, void *cbdata)
 {
     int32_t cnt;
     int rc, ret, mode;
@@ -191,8 +170,7 @@ static void allgather_recv(int status, pmix_proc_t* sender,
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct allgather recvd from %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(sender)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender)));
 
     /* unpack the signature */
     cnt = 1;
@@ -234,8 +212,8 @@ static void allgather_recv(int status, pmix_proc_t* sender,
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct allgather recv nexpected %d nrep %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (int)coll->nexpected, (int)coll->nreported));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) coll->nexpected,
+                         (int) coll->nreported));
 
     /* see if everyone has reported */
     if (coll->nreported == coll->nexpected) {
@@ -300,7 +278,7 @@ static void allgather_recv(int status, pmix_proc_t* sender,
                 return;
             }
             /* send the release via xcast */
-            (void)prte_grpcomm.xcast(&sig, PRTE_RML_TAG_COLL_RELEASE, reply);
+            (void) prte_grpcomm.xcast(&sig, PRTE_RML_TAG_COLL_RELEASE, reply);
             PMIX_DATA_BUFFER_RELEASE(reply);
         } else {
             PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
@@ -340,22 +318,20 @@ static void allgather_recv(int status, pmix_proc_t* sender,
                 return;
             }
             /* send the info to our parent */
-            rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_PARENT, reply,
-                                         PRTE_RML_TAG_ALLGATHER_DIRECT,
+            rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_PARENT, reply, PRTE_RML_TAG_ALLGATHER_DIRECT,
                                          prte_rml_send_callback, NULL);
         }
     }
     PMIX_PROC_FREE(sig.signature, sig.sz);
 }
 
-static void xcast_recv(int status, pmix_proc_t* sender,
-                       pmix_data_buffer_t* buffer, prte_rml_tag_t tg,
-                       void* cbdata)
+static void xcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                       prte_rml_tag_t tg, void *cbdata)
 {
     prte_list_item_t *item;
     prte_namelist_t *nm;
     int ret, cnt;
-    pmix_data_buffer_t *relay=NULL, *rly, *rlycopy;
+    pmix_data_buffer_t *relay = NULL, *rly, *rlycopy;
     pmix_data_buffer_t datbuf, *data;
     bool compressed;
     prte_job_t *jdata, *daemons;
@@ -369,8 +345,7 @@ static void xcast_recv(int status, pmix_proc_t* sender,
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct:xcast:recv: with %d bytes",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (int)buffer->bytes_used));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) buffer->bytes_used));
 
     /* we need a passthru buffer to send to our children - we leave it
      * as compressed data */
@@ -386,7 +361,7 @@ static void xcast_recv(int status, pmix_proc_t* sender,
     PRTE_CONSTRUCT(&coll, prte_list_t);
 
     /* unpack the flag to see if this payload is compressed */
-    cnt=1;
+    cnt = 1;
     ret = PMIx_Data_unpack(NULL, buffer, &compressed, &cnt, PMIX_BOOL);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
@@ -408,8 +383,8 @@ static void xcast_recv(int status, pmix_proc_t* sender,
     }
     if (compressed) {
         /* decompress the data */
-        if (PMIx_Data_decompress((uint8_t**)&bo.bytes, &bo.size,
-                                (uint8_t*)pbo.bytes, pbo.size)) {
+        if (PMIx_Data_decompress((uint8_t **) &bo.bytes, &bo.size, (uint8_t *) pbo.bytes,
+                                 pbo.size)) {
             /* the data has been uncompressed */
             ret = PMIx_Data_load(&datbuf, &bo);
             if (PMIX_SUCCESS != ret) {
@@ -444,7 +419,7 @@ static void xcast_recv(int status, pmix_proc_t* sender,
     data = &datbuf;
 
     /* get the signature that we do not need */
-    cnt=1;
+    cnt = 1;
     ret = PMIx_Data_unpack(NULL, data, &sig.sz, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
@@ -469,7 +444,7 @@ static void xcast_recv(int status, pmix_proc_t* sender,
     PMIX_PROC_FREE(sig.signature, sig.sz);
 
     /* get the target tag */
-    cnt=1;
+    cnt = 1;
     ret = PMIx_Data_unpack(NULL, data, &tag, &cnt, PMIX_UINT32);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
@@ -513,7 +488,7 @@ static void xcast_recv(int status, pmix_proc_t* sender,
             return;
         }
         /* unpack the wireup info */
-        cnt=1;
+        cnt = 1;
         while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, data, &dmn, &cnt, PMIX_PROC))) {
             PMIX_VALUE_CONSTRUCT(&val);
             val.type = PMIX_STRING;
@@ -564,17 +539,19 @@ static void xcast_recv(int status, pmix_proc_t* sender,
 
         /* send the message to each recipient on list, deconstructing it as we go */
         while (NULL != (item = prte_list_remove_first(&coll))) {
-            nm = (prte_namelist_t*)item;
+            nm = (prte_namelist_t *) item;
 
             PRTE_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:direct:send_relay sending relay msg of %d bytes to %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int)rly->bytes_used,
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) rly->bytes_used,
                                  PRTE_NAME_PRINT(&nm->name)));
             /* check the state of the recipient - no point
              * sending to someone not alive
              */
             jdata = prte_get_job_data_object(nm->name.nspace);
-            if (NULL == (rec = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, nm->name.rank))) {
+            if (NULL
+                == (rec = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs,
+                                                                      nm->name.rank))) {
                 if (!prte_abnormal_term_ordered && !prte_prteds_term_ordered) {
                     prte_output(0, "%s grpcomm:direct:send_relay proc %s not found - cannot relay",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&nm->name));
@@ -583,13 +560,15 @@ static void xcast_recv(int status, pmix_proc_t* sender,
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 continue;
             }
-            if ((PRTE_PROC_STATE_RUNNING < rec->state &&
-                PRTE_PROC_STATE_CALLED_ABORT != rec->state) ||
-                !PRTE_FLAG_TEST(rec, PRTE_PROC_FLAG_ALIVE)) {
+            if ((PRTE_PROC_STATE_RUNNING < rec->state && PRTE_PROC_STATE_CALLED_ABORT != rec->state)
+                || !PRTE_FLAG_TEST(rec, PRTE_PROC_FLAG_ALIVE)) {
                 if (!prte_abnormal_term_ordered && !prte_prteds_term_ordered) {
-                    prte_output(0, "%s grpcomm:direct:send_relay proc %s not running - cannot relay: %s ",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&nm->name),
-                                PRTE_FLAG_TEST(rec, PRTE_PROC_FLAG_ALIVE) ? prte_proc_state_to_str(rec->state) : "NOT ALIVE");
+                    prte_output(
+                        0, "%s grpcomm:direct:send_relay proc %s not running - cannot relay: %s ",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&nm->name),
+                        PRTE_FLAG_TEST(rec, PRTE_PROC_FLAG_ALIVE)
+                            ? prte_proc_state_to_str(rec->state)
+                            : "NOT ALIVE");
                 }
                 PRTE_RELEASE(item);
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
@@ -605,8 +584,9 @@ static void xcast_recv(int status, pmix_proc_t* sender,
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 continue;
             }
-            if (PRTE_SUCCESS != (ret = prte_rml.send_buffer_nb(&nm->name, rlycopy, PRTE_RML_TAG_XCAST,
-                                                               prte_rml_send_callback, NULL))) {
+            if (PRTE_SUCCESS
+                != (ret = prte_rml.send_buffer_nb(&nm->name, rlycopy, PRTE_RML_TAG_XCAST,
+                                                  prte_rml_send_callback, NULL))) {
                 PRTE_ERROR_LOG(ret);
                 PMIX_DATA_BUFFER_RELEASE(rlycopy);
                 PRTE_RELEASE(item);
@@ -617,10 +597,10 @@ static void xcast_recv(int status, pmix_proc_t* sender,
         }
     }
 
- CLEANUP:
+CLEANUP:
     /* cleanup */
     PRTE_LIST_DESTRUCT(&coll);
-    PMIX_DATA_BUFFER_RELEASE(rly);  // retain accounting
+    PMIX_DATA_BUFFER_RELEASE(rly); // retain accounting
 
     /* now pass the relay buffer to myself for processing IFF it
      * wasn't just a wireup message - don't
@@ -628,8 +608,7 @@ static void xcast_recv(int status, pmix_proc_t* sender,
      * with the relay messages down in the OOB. Instead, pass it
      * directly to the RML message processor */
     if (PRTE_RML_TAG_WIREUP != tag) {
-        PRTE_RML_POST_MESSAGE(PRTE_PROC_MY_NAME, tag, 1,
-                              relay->base_ptr, relay->bytes_used);
+        PRTE_RML_POST_MESSAGE(PRTE_PROC_MY_NAME, tag, 1, relay->base_ptr, relay->bytes_used);
         relay->base_ptr = NULL;
         relay->bytes_used = 0;
     }
@@ -639,9 +618,8 @@ static void xcast_recv(int status, pmix_proc_t* sender,
     PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
 }
 
-static void barrier_release(int status, pmix_proc_t* sender,
-                            pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                            void* cbdata)
+static void barrier_release(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                            prte_rml_tag_t tag, void *cbdata)
 {
     int32_t cnt;
     int rc, ret, mode;
@@ -650,7 +628,7 @@ static void barrier_release(int status, pmix_proc_t* sender,
 
     PRTE_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct: barrier release called with %d bytes",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int)buffer->bytes_used));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) buffer->bytes_used));
 
     /* unpack the signature */
     cnt = 1;

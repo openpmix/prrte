@@ -31,10 +31,10 @@
 #include "src/class/prte_list.h"
 #include "src/util/string_copy.h"
 
-#include "src/mca/rml/base/base.h"
-#include "src/threads/threads.h"
 #include "oob_tcp.h"
 #include "oob_tcp_hdr.h"
+#include "src/mca/rml/base/base.h"
+#include "src/threads/threads.h"
 
 /* forward declare */
 struct prte_oob_tcp_peer_t;
@@ -82,13 +82,12 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
  * s => pointer to prte_oob_tcp_send_t
  * f => true if send event is to be activated
  */
-#define MCA_OOB_TCP_QUEUE_MSG(p, s, f)                                  \
-    do {                                                                \
-        (s)->peer = (struct prte_oob_tcp_peer_t*)(p);                    \
-        (s)->activate = (f);                                            \
-        PRTE_THREADSHIFT((s), prte_event_base,                             \
-                         prte_oob_tcp_queue_msg, PRTE_MSG_PRI);          \
-    } while(0)
+#define MCA_OOB_TCP_QUEUE_MSG(p, s, f)                                                \
+    do {                                                                              \
+        (s)->peer = (struct prte_oob_tcp_peer_t *) (p);                               \
+        (s)->activate = (f);                                                          \
+        PRTE_THREADSHIFT((s), prte_event_base, prte_oob_tcp_queue_msg, PRTE_MSG_PRI); \
+    } while (0)
 
 /* queue a message to be sent by one of our modules - must
  * provide the following params:
@@ -96,33 +95,31 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
  * m - the RML message to be sent
  * p - the final recipient
  */
-#define MCA_OOB_TCP_QUEUE_SEND(m, p)                                    \
-    do {                                                                \
-        prte_oob_tcp_send_t *_s;                                         \
-        prte_output_verbose(5, prte_oob_base_framework.framework_output, \
-                            "%s:[%s:%d] queue send to %s",              \
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),        \
-                             __FILE__, __LINE__,                        \
-                            PRTE_NAME_PRINT(&((m)->dst)));              \
-        _s = PRTE_NEW(prte_oob_tcp_send_t);                              \
-        /* setup the header */                                          \
-        PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->origin);                \
-        PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->dst);                      \
-        _s->hdr.type = MCA_OOB_TCP_USER;                               \
-        _s->hdr.tag = (m)->tag;                                        \
-        _s->hdr.seq_num = (m)->seq_num;                                \
-        /* point to the actual message */                               \
-        _s->msg = (m);                                                 \
-        /* set the total number of bytes to be sent */                  \
-        _s->hdr.nbytes = (m)->dbuf.bytes_used;                          \
-        /* prep header for xmission */                                  \
-        MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                \
-        /* start the send with the header */                            \
-        _s->sdptr = (char*)&_s->hdr;                                  \
-        _s->sdbytes = sizeof(prte_oob_tcp_hdr_t);                       \
-        /* add to the msg queue for this peer */                        \
-        MCA_OOB_TCP_QUEUE_MSG((p), _s, true);                          \
-    } while(0)
+#define MCA_OOB_TCP_QUEUE_SEND(m, p)                                                           \
+    do {                                                                                       \
+        prte_oob_tcp_send_t *_s;                                                               \
+        prte_output_verbose(5, prte_oob_base_framework.framework_output,                       \
+                            "%s:[%s:%d] queue send to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
+                            __FILE__, __LINE__, PRTE_NAME_PRINT(&((m)->dst)));                 \
+        _s = PRTE_NEW(prte_oob_tcp_send_t);                                                    \
+        /* setup the header */                                                                 \
+        PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->origin);                                       \
+        PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->dst);                                             \
+        _s->hdr.type = MCA_OOB_TCP_USER;                                                       \
+        _s->hdr.tag = (m)->tag;                                                                \
+        _s->hdr.seq_num = (m)->seq_num;                                                        \
+        /* point to the actual message */                                                      \
+        _s->msg = (m);                                                                         \
+        /* set the total number of bytes to be sent */                                         \
+        _s->hdr.nbytes = (m)->dbuf.bytes_used;                                                 \
+        /* prep header for xmission */                                                         \
+        MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                                        \
+        /* start the send with the header */                                                   \
+        _s->sdptr = (char *) &_s->hdr;                                                         \
+        _s->sdbytes = sizeof(prte_oob_tcp_hdr_t);                                              \
+        /* add to the msg queue for this peer */                                               \
+        MCA_OOB_TCP_QUEUE_MSG((p), _s, true);                                                  \
+    } while (0)
 
 /* queue a message to be sent by one of our modules upon completing
  * the connection process - must provide the following params:
@@ -130,68 +127,63 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
  * m - the RML message to be sent
  * p - the final recipient
  */
-#define MCA_OOB_TCP_QUEUE_PENDING(m, p)                                 \
-    do {                                                                \
-        prte_oob_tcp_send_t *_s;                                        \
-        prte_output_verbose(5, prte_oob_base_framework.framework_output, \
-                            "%s:[%s:%d] queue pending to %s",           \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
-                            __FILE__, __LINE__,                         \
-                            PRTE_NAME_PRINT(&((m)->dst)));              \
-        _s = PRTE_NEW(prte_oob_tcp_send_t);                              \
-        /* setup the header */                                          \
-        PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->origin);                \
-        PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->dst);                      \
-        _s->hdr.type = MCA_OOB_TCP_USER;                               \
-        _s->hdr.tag = (m)->tag;                                        \
-        _s->hdr.seq_num = (m)->seq_num;                                \
-        /* point to the actual message */                               \
-        _s->msg = (m);                                                 \
-        /* set the total number of bytes to be sent */                  \
-        _s->hdr.nbytes = (m)->dbuf.bytes_used;                          \
-        /* prep header for xmission */                                  \
-        MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                \
-        /* start the send with the header */                            \
-        _s->sdptr = (char*)&_s->hdr;                                  \
-        _s->sdbytes = sizeof(prte_oob_tcp_hdr_t);                       \
-        /* add to the msg queue for this peer */                        \
-        MCA_OOB_TCP_QUEUE_MSG((p), _s, false);                         \
-    } while(0)
+#define MCA_OOB_TCP_QUEUE_PENDING(m, p)                                                           \
+    do {                                                                                          \
+        prte_oob_tcp_send_t *_s;                                                                  \
+        prte_output_verbose(5, prte_oob_base_framework.framework_output,                          \
+                            "%s:[%s:%d] queue pending to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
+                            __FILE__, __LINE__, PRTE_NAME_PRINT(&((m)->dst)));                    \
+        _s = PRTE_NEW(prte_oob_tcp_send_t);                                                       \
+        /* setup the header */                                                                    \
+        PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->origin);                                          \
+        PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->dst);                                                \
+        _s->hdr.type = MCA_OOB_TCP_USER;                                                          \
+        _s->hdr.tag = (m)->tag;                                                                   \
+        _s->hdr.seq_num = (m)->seq_num;                                                           \
+        /* point to the actual message */                                                         \
+        _s->msg = (m);                                                                            \
+        /* set the total number of bytes to be sent */                                            \
+        _s->hdr.nbytes = (m)->dbuf.bytes_used;                                                    \
+        /* prep header for xmission */                                                            \
+        MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                                           \
+        /* start the send with the header */                                                      \
+        _s->sdptr = (char *) &_s->hdr;                                                            \
+        _s->sdbytes = sizeof(prte_oob_tcp_hdr_t);                                                 \
+        /* add to the msg queue for this peer */                                                  \
+        MCA_OOB_TCP_QUEUE_MSG((p), _s, false);                                                    \
+    } while (0)
 
 /* queue a message for relay by one of our modules - must
  * provide the following params:
  *
  * m = the prte_oob_tcp_recv_t that was received
  * p - the next hop
-*/
-#define MCA_OOB_TCP_QUEUE_RELAY(m, p)                                   \
-    do {                                                                \
-        prte_oob_tcp_send_t *_s;                                        \
-        prte_output_verbose(5, prte_oob_base_framework.framework_output, \
-                            "%s:[%s:%d] queue relay to %s",             \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
-                            __FILE__, __LINE__,                         \
-                            PRTE_NAME_PRINT(&((p)->name)));             \
-        _s = PRTE_NEW(prte_oob_tcp_send_t);                              \
-        /* setup the header */                                          \
-        PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->hdr.origin);            \
-        PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->hdr.dst);                  \
-       _s->hdr.type = MCA_OOB_TCP_USER;                               \
-        _s->hdr.tag = (m)->hdr.tag;                                    \
-        (void)prte_string_copy(_s->hdr.routed, (m)->hdr.routed,         \
-                      PRTE_MAX_RTD_SIZE);                               \
-        /* point to the actual message */                               \
-        _s->data = (m)->data;                                          \
-        /* set the total number of bytes to be sent */                  \
-        _s->hdr.nbytes = (m)->hdr.nbytes;                              \
-        /* prep header for xmission */                                  \
-        MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                \
-        /* start the send with the header */                            \
-        _s->sdptr = (char*)&_s->hdr;                                  \
-        _s->sdbytes = sizeof(prte_oob_tcp_hdr_t);                       \
-        /* add to the msg queue for this peer */                        \
-        MCA_OOB_TCP_QUEUE_MSG((p), _s, true);                          \
-    } while(0)
+ */
+#define MCA_OOB_TCP_QUEUE_RELAY(m, p)                                                           \
+    do {                                                                                        \
+        prte_oob_tcp_send_t *_s;                                                                \
+        prte_output_verbose(5, prte_oob_base_framework.framework_output,                        \
+                            "%s:[%s:%d] queue relay to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
+                            __FILE__, __LINE__, PRTE_NAME_PRINT(&((p)->name)));                 \
+        _s = PRTE_NEW(prte_oob_tcp_send_t);                                                     \
+        /* setup the header */                                                                  \
+        PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->hdr.origin);                                    \
+        PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->hdr.dst);                                          \
+        _s->hdr.type = MCA_OOB_TCP_USER;                                                        \
+        _s->hdr.tag = (m)->hdr.tag;                                                             \
+        (void) prte_string_copy(_s->hdr.routed, (m)->hdr.routed, PRTE_MAX_RTD_SIZE);            \
+        /* point to the actual message */                                                       \
+        _s->data = (m)->data;                                                                   \
+        /* set the total number of bytes to be sent */                                          \
+        _s->hdr.nbytes = (m)->hdr.nbytes;                                                       \
+        /* prep header for xmission */                                                          \
+        MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                                         \
+        /* start the send with the header */                                                    \
+        _s->sdptr = (char *) &_s->hdr;                                                          \
+        _s->sdbytes = sizeof(prte_oob_tcp_hdr_t);                                               \
+        /* add to the msg queue for this peer */                                                \
+        MCA_OOB_TCP_QUEUE_MSG((p), _s, true);                                                   \
+    } while (0)
 
 /* State machine for processing message */
 typedef struct {
@@ -201,19 +193,16 @@ typedef struct {
 } prte_oob_tcp_msg_op_t;
 PRTE_CLASS_DECLARATION(prte_oob_tcp_msg_op_t);
 
-#define PRTE_ACTIVATE_TCP_POST_SEND(ms, cbfunc)                         \
-    do {                                                                \
-        prte_oob_tcp_msg_op_t *mop;                                      \
-        prte_output_verbose(5, prte_oob_base_framework.framework_output, \
-                            "%s:[%s:%d] post send to %s",               \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
-                            __FILE__, __LINE__,                         \
-                            PRTE_NAME_PRINT(&((ms)->dst)));             \
-        mop = PRTE_NEW(prte_oob_tcp_msg_op_t);                            \
-        mop->msg = (ms);                                                \
-        PRTE_THREADSHIFT(mop, prte_event_base,                      \
-                         (cbfunc), PRTE_MSG_PRI);                       \
-    } while(0);
+#define PRTE_ACTIVATE_TCP_POST_SEND(ms, cbfunc)                                               \
+    do {                                                                                      \
+        prte_oob_tcp_msg_op_t *mop;                                                           \
+        prte_output_verbose(5, prte_oob_base_framework.framework_output,                      \
+                            "%s:[%s:%d] post send to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
+                            __FILE__, __LINE__, PRTE_NAME_PRINT(&((ms)->dst)));               \
+        mop = PRTE_NEW(prte_oob_tcp_msg_op_t);                                                \
+        mop->msg = (ms);                                                                      \
+        PRTE_THREADSHIFT(mop, prte_event_base, (cbfunc), PRTE_MSG_PRI);                       \
+    } while (0);
 
 typedef struct {
     prte_object_t super;
@@ -224,57 +213,51 @@ typedef struct {
 } prte_oob_tcp_msg_error_t;
 PRTE_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
 
-#define PRTE_ACTIVATE_TCP_MSG_ERROR(s, r, h, cbfunc)                    \
-    do {                                                                \
-        prte_oob_tcp_msg_error_t *mop;                                   \
-        prte_oob_tcp_send_t *snd;                                        \
-        prte_oob_tcp_recv_t *proxy;                                      \
-        prte_output_verbose(5, prte_oob_base_framework.framework_output, \
-                            "%s:[%s:%d] post msg error to %s",          \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
-                            __FILE__, __LINE__,                         \
-                            PRTE_NAME_PRINT((h)));                      \
-        mop = PRTE_NEW(prte_oob_tcp_msg_error_t);                         \
-        if (NULL != (s)) {                                              \
-            mop->snd = (s);                                             \
-        } else if (NULL != (r)) {                                       \
-            /* use a proxy so we can pass NULL into the macro */        \
-            proxy = (r);                                                \
-            /* create a send object for this message */                 \
-            snd = PRTE_NEW(prte_oob_tcp_send_t);                          \
-            mop->snd = snd;                                             \
-            /* transfer and prep the header */                          \
-            snd->hdr = proxy->hdr;                                      \
-            MCA_OOB_TCP_HDR_HTON(&snd->hdr);                            \
-            /* point to the data */                                     \
-            snd->data = proxy->data;                                    \
-            /* start the message with the header */                     \
-            snd->sdptr = (char*)&snd->hdr;                              \
-            snd->sdbytes = sizeof(prte_oob_tcp_hdr_t);                   \
-            /* protect the data */                                      \
-            proxy->data = NULL;                                         \
-        }                                                               \
-        PMIX_XFER_PROCID(&mop->hop, (h));                               \
-        /* this goes to the OOB framework, so use that event base */    \
-        PRTE_THREADSHIFT(mop, prte_event_base,                    \
-                         (cbfunc), PRTE_MSG_PRI);                       \
-    } while(0)
+#define PRTE_ACTIVATE_TCP_MSG_ERROR(s, r, h, cbfunc)                                               \
+    do {                                                                                           \
+        prte_oob_tcp_msg_error_t *mop;                                                             \
+        prte_oob_tcp_send_t *snd;                                                                  \
+        prte_oob_tcp_recv_t *proxy;                                                                \
+        prte_output_verbose(5, prte_oob_base_framework.framework_output,                           \
+                            "%s:[%s:%d] post msg error to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
+                            __FILE__, __LINE__, PRTE_NAME_PRINT((h)));                             \
+        mop = PRTE_NEW(prte_oob_tcp_msg_error_t);                                                  \
+        if (NULL != (s)) {                                                                         \
+            mop->snd = (s);                                                                        \
+        } else if (NULL != (r)) {                                                                  \
+            /* use a proxy so we can pass NULL into the macro */                                   \
+            proxy = (r);                                                                           \
+            /* create a send object for this message */                                            \
+            snd = PRTE_NEW(prte_oob_tcp_send_t);                                                   \
+            mop->snd = snd;                                                                        \
+            /* transfer and prep the header */                                                     \
+            snd->hdr = proxy->hdr;                                                                 \
+            MCA_OOB_TCP_HDR_HTON(&snd->hdr);                                                       \
+            /* point to the data */                                                                \
+            snd->data = proxy->data;                                                               \
+            /* start the message with the header */                                                \
+            snd->sdptr = (char *) &snd->hdr;                                                       \
+            snd->sdbytes = sizeof(prte_oob_tcp_hdr_t);                                             \
+            /* protect the data */                                                                 \
+            proxy->data = NULL;                                                                    \
+        }                                                                                          \
+        PMIX_XFER_PROCID(&mop->hop, (h));                                                          \
+        /* this goes to the OOB framework, so use that event base */                               \
+        PRTE_THREADSHIFT(mop, prte_event_base, (cbfunc), PRTE_MSG_PRI);                            \
+    } while (0)
 
-#define PRTE_ACTIVATE_TCP_NO_ROUTE(r, h, c)                             \
-    do {                                                                \
-        prte_oob_tcp_msg_error_t *mop;                                   \
-        prte_output_verbose(5, prte_oob_base_framework.framework_output, \
-                            "%s:[%s:%d] post no route to %s",           \
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),         \
-                            __FILE__, __LINE__,                         \
-                            PRTE_NAME_PRINT((h)));                      \
-        mop = PRTE_NEW(prte_oob_tcp_msg_error_t);                         \
-        mop->rmsg = (r);                                                \
-        PMIX_XFER_PROCID(&mop->hop, (h));                               \
-        /* this goes to the component, so use the framework             \
-         * event base */                                                \
-        PRTE_THREADSHIFT(mop, prte_event_base,                    \
-                         (c), PRTE_MSG_PRI);                            \
-    } while(0)
+#define PRTE_ACTIVATE_TCP_NO_ROUTE(r, h, c)                                                       \
+    do {                                                                                          \
+        prte_oob_tcp_msg_error_t *mop;                                                            \
+        prte_output_verbose(5, prte_oob_base_framework.framework_output,                          \
+                            "%s:[%s:%d] post no route to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
+                            __FILE__, __LINE__, PRTE_NAME_PRINT((h)));                            \
+        mop = PRTE_NEW(prte_oob_tcp_msg_error_t);                                                 \
+        mop->rmsg = (r);                                                                          \
+        PMIX_XFER_PROCID(&mop->hop, (h));                                                         \
+        /* this goes to the component, so use the framework                                       \
+         * event base */                                                                          \
+        PRTE_THREADSHIFT(mop, prte_event_base, (c), PRTE_MSG_PRI);                                \
+    } while (0)
 
 #endif /* _MCA_OOB_TCP_SENDRECV_H_ */

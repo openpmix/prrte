@@ -16,6 +16,7 @@
  *                         reseved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,12 +60,12 @@ typedef struct prte_fifo_t prte_fifo_t;
 
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_fifo_t);
 
-static inline prte_list_item_t *prte_fifo_head (prte_fifo_t* fifo)
+static inline prte_list_item_t *prte_fifo_head(prte_fifo_t *fifo)
 {
     return (prte_list_item_t *) fifo->prte_fifo_head.data.item;
 }
 
-static inline prte_list_item_t *prte_fifo_tail (prte_fifo_t* fifo)
+static inline prte_list_item_t *prte_fifo_tail(prte_fifo_t *fifo)
 {
     return (prte_list_item_t *) fifo->prte_fifo_tail.data.item;
 }
@@ -73,9 +74,9 @@ static inline prte_list_item_t *prte_fifo_tail (prte_fifo_t* fifo)
  * compare-and-swap. On most architectures the reading of a pointer is an
  * atomic operation so we don't have to protect it.
  */
-static inline bool prte_fifo_is_empty( prte_fifo_t* fifo )
+static inline bool prte_fifo_is_empty(prte_fifo_t *fifo)
 {
-    return prte_fifo_head (fifo) == &fifo->prte_fifo_ghost;
+    return prte_fifo_head(fifo) == &fifo->prte_fifo_ghost;
 }
 
 #if PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128
@@ -84,28 +85,27 @@ static inline bool prte_fifo_is_empty( prte_fifo_t* fifo )
  * to allow the upper level to detect if this element is the first one in the
  * list (if the list was empty before this operation).
  */
-static inline prte_list_item_t *prte_fifo_push_atomic (prte_fifo_t *fifo,
-                                                       prte_list_item_t *item)
+static inline prte_list_item_t *prte_fifo_push_atomic(prte_fifo_t *fifo, prte_list_item_t *item)
 {
     prte_counted_pointer_t tail = {.value = fifo->prte_fifo_tail.value};
-    const prte_list_item_t * const ghost = &fifo->prte_fifo_ghost;
+    const prte_list_item_t *const ghost = &fifo->prte_fifo_ghost;
 
     item->prte_list_next = (prte_list_item_t *) ghost;
 
-    prte_atomic_wmb ();
+    prte_atomic_wmb();
 
     do {
-        if (prte_update_counted_pointer (&fifo->prte_fifo_tail, &tail, item)) {
+        if (prte_update_counted_pointer(&fifo->prte_fifo_tail, &tail, item)) {
             break;
         }
     } while (1);
 
-    prte_atomic_wmb ();
+    prte_atomic_wmb();
 
-  if ((intptr_t) ghost == tail.data.item) {
+    if ((intptr_t) ghost == tail.data.item) {
         /* update the head */
         prte_counted_pointer_t head = {.value = fifo->prte_fifo_head.value};
-        prte_update_counted_pointer (&fifo->prte_fifo_head, &head, item);
+        prte_update_counted_pointer(&fifo->prte_fifo_head, &head, item);
     } else {
         /* update previous item */
         ((prte_list_item_t *) tail.data.item)->prte_list_next = item;
@@ -117,16 +117,16 @@ static inline prte_list_item_t *prte_fifo_push_atomic (prte_fifo_t *fifo,
 /* Retrieve one element from the FIFO. If we reach the ghost element then the FIFO
  * is empty so we return NULL.
  */
-static inline prte_list_item_t *prte_fifo_pop_atomic (prte_fifo_t *fifo)
+static inline prte_list_item_t *prte_fifo_pop_atomic(prte_fifo_t *fifo)
 {
     prte_list_item_t *item, *next, *ghost = &fifo->prte_fifo_ghost;
     prte_counted_pointer_t head, tail;
 
-    prte_read_counted_pointer (&fifo->prte_fifo_head, &head);
+    prte_read_counted_pointer(&fifo->prte_fifo_head, &head);
 
     do {
         tail.value = fifo->prte_fifo_tail.value;
-        prte_atomic_rmb ();
+        prte_atomic_rmb();
 
         item = (prte_list_item_t *) head.data.item;
         next = (prte_list_item_t *) item->prte_list_next;
@@ -136,29 +136,30 @@ static inline prte_list_item_t *prte_fifo_pop_atomic (prte_fifo_t *fifo)
         }
 
         /* the head or next pointer are in an inconsistent state. keep looping. */
-        if (tail.data.item != (intptr_t) item && (intptr_t) ghost != tail.data.item && ghost == next) {
-            prte_read_counted_pointer (&fifo->prte_fifo_head, &head);
+        if (tail.data.item != (intptr_t) item && (intptr_t) ghost != tail.data.item
+            && ghost == next) {
+            prte_read_counted_pointer(&fifo->prte_fifo_head, &head);
             continue;
         }
 
         /* try popping the head */
-        if (prte_update_counted_pointer (&fifo->prte_fifo_head, &head, next)) {
+        if (prte_update_counted_pointer(&fifo->prte_fifo_head, &head, next)) {
             break;
         }
     } while (1);
 
-    prte_atomic_wmb ();
+    prte_atomic_wmb();
 
     /* check for tail and head consistency */
     if (ghost == next) {
         /* the head was just set to &fifo->prte_fifo_ghost. try to update the tail as well */
-        if (!prte_update_counted_pointer (&fifo->prte_fifo_tail, &tail, ghost)) {
+        if (!prte_update_counted_pointer(&fifo->prte_fifo_tail, &tail, ghost)) {
             /* tail was changed by a push operation. wait for the item's next pointer to be se then
              * update the head */
 
             /* wait for next pointer to be updated by push */
             do {
-                prte_atomic_rmb ();
+                prte_atomic_rmb();
             } while (ghost == item->prte_list_next);
 
             /* update the head with the real next value. note that no other thread
@@ -166,7 +167,7 @@ static inline prte_list_item_t *prte_fifo_pop_atomic (prte_fifo_t *fifo)
              * with the next pointer. push will not see an empty list and other pop
              * operations will loop until the head is consistent. */
             fifo->prte_fifo_head.data.item = (intptr_t) item->prte_list_next;
-            prte_atomic_wmb ();
+            prte_atomic_wmb();
         }
     }
 
@@ -180,20 +181,20 @@ static inline prte_list_item_t *prte_fifo_pop_atomic (prte_fifo_t *fifo)
 /* When compare-and-set 128 is not available we avoid the ABA problem by
  * using a spin-lock on the head (using the head counter). Otherwise
  * the algorithm is identical to the compare-and-set 128 version. */
-static inline prte_list_item_t *prte_fifo_push_atomic (prte_fifo_t *fifo,
-                                                       prte_list_item_t *item)
+static inline prte_list_item_t *prte_fifo_push_atomic(prte_fifo_t *fifo, prte_list_item_t *item)
 {
-    const prte_list_item_t * const ghost = &fifo->prte_fifo_ghost;
+    const prte_list_item_t *const ghost = &fifo->prte_fifo_ghost;
     prte_list_item_t *tail_item;
 
     item->prte_list_next = (prte_list_item_t *) ghost;
 
-    prte_atomic_wmb ();
+    prte_atomic_wmb();
 
     /* try to get the tail */
-    tail_item = (prte_list_item_t *) prte_atomic_swap_ptr (&fifo->prte_fifo_tail.data.item, (intptr_t) item);
+    tail_item = (prte_list_item_t *) prte_atomic_swap_ptr(&fifo->prte_fifo_tail.data.item,
+                                                          (intptr_t) item);
 
-    prte_atomic_wmb ();
+    prte_atomic_wmb();
 
     if (ghost == tail_item) {
         /* update the head */
@@ -203,7 +204,7 @@ static inline prte_list_item_t *prte_fifo_push_atomic (prte_fifo_t *fifo,
         tail_item->prte_list_next = item;
     }
 
-    prte_atomic_wmb ();
+    prte_atomic_wmb();
 
     return (prte_list_item_t *) tail_item;
 }
@@ -211,11 +212,11 @@ static inline prte_list_item_t *prte_fifo_push_atomic (prte_fifo_t *fifo,
 /* Retrieve one element from the FIFO. If we reach the ghost element then the FIFO
  * is empty so we return NULL.
  */
-static inline prte_list_item_t *prte_fifo_pop_atomic (prte_fifo_t *fifo)
+static inline prte_list_item_t *prte_fifo_pop_atomic(prte_fifo_t *fifo)
 {
-    const prte_list_item_t * const ghost = &fifo->prte_fifo_ghost;
+    const prte_list_item_t *const ghost = &fifo->prte_fifo_ghost;
 
-#if PRTE_HAVE_ATOMIC_LLSC_PTR
+#    if PRTE_HAVE_ATOMIC_LLSC_PTR
     register prte_list_item_t *item, *next;
     int attempt = 0, ret = 0;
 
@@ -224,7 +225,7 @@ static inline prte_list_item_t *prte_fifo_pop_atomic (prte_fifo_t *fifo)
         if (++attempt == 5) {
             /* deliberatly suspend this thread to allow other threads to run. this should
              * only occur during periods of contention on the lifo. */
-            _prte_lifo_release_cpu ();
+            _prte_lifo_release_cpu();
             attempt = 0;
         }
 
@@ -243,21 +244,21 @@ static inline prte_list_item_t *prte_fifo_pop_atomic (prte_fifo_t *fifo)
         prte_atomic_sc_ptr(&fifo->prte_fifo_head.data.item, next, ret);
     } while (!ret);
 
-#else
+#    else
     prte_list_item_t *item, *next;
 
     /* protect against ABA issues by "locking" the head */
     do {
-        if (!prte_atomic_swap_32 ((prte_atomic_int32_t *) &fifo->prte_fifo_head.data.counter, 1)) {
+        if (!prte_atomic_swap_32((prte_atomic_int32_t *) &fifo->prte_fifo_head.data.counter, 1)) {
             break;
         }
 
-        prte_atomic_wmb ();
+        prte_atomic_wmb();
     } while (1);
 
     prte_atomic_wmb();
 
-    item = prte_fifo_head (fifo);
+    item = prte_fifo_head(fifo);
     if (ghost == item) {
         fifo->prte_fifo_head.data.counter = 0;
         return NULL;
@@ -265,21 +266,22 @@ static inline prte_list_item_t *prte_fifo_pop_atomic (prte_fifo_t *fifo)
 
     next = (prte_list_item_t *) item->prte_list_next;
     fifo->prte_fifo_head.data.item = (uintptr_t) next;
-#endif
+#    endif
 
     if (ghost == next) {
         void *tmp = item;
 
-        if (!prte_atomic_compare_exchange_strong_ptr (&fifo->prte_fifo_tail.data.item, (intptr_t *) &tmp, (intptr_t) ghost)) {
+        if (!prte_atomic_compare_exchange_strong_ptr(&fifo->prte_fifo_tail.data.item,
+                                                     (intptr_t *) &tmp, (intptr_t) ghost)) {
             do {
-                prte_atomic_rmb ();
+                prte_atomic_rmb();
             } while (ghost == item->prte_list_next);
 
             fifo->prte_fifo_head.data.item = (intptr_t) item->prte_list_next;
         }
     }
 
-    prte_atomic_wmb ();
+    prte_atomic_wmb();
 
     /* unlock the head */
     fifo->prte_fifo_head.data.counter = 0;
@@ -292,15 +294,14 @@ static inline prte_list_item_t *prte_fifo_pop_atomic (prte_fifo_t *fifo)
 #endif
 
 /* single threaded versions of push/pop */
-static inline prte_list_item_t *prte_fifo_push_st (prte_fifo_t *fifo,
-                                                   prte_list_item_t *item)
+static inline prte_list_item_t *prte_fifo_push_st(prte_fifo_t *fifo, prte_list_item_t *item)
 {
-    prte_list_item_t *prev = prte_fifo_tail (fifo);
+    prte_list_item_t *prev = prte_fifo_tail(fifo);
 
     item->prte_list_next = &fifo->prte_fifo_ghost;
 
     fifo->prte_fifo_tail.data.item = (intptr_t) item;
-    if (&fifo->prte_fifo_ghost == prte_fifo_head (fifo)) {
+    if (&fifo->prte_fifo_ghost == prte_fifo_head(fifo)) {
         fifo->prte_fifo_head.data.item = (intptr_t) item;
     } else {
         prev->prte_list_next = item;
@@ -309,16 +310,16 @@ static inline prte_list_item_t *prte_fifo_push_st (prte_fifo_t *fifo,
     return (prte_list_item_t *) item->prte_list_next;
 }
 
-static inline prte_list_item_t *prte_fifo_pop_st (prte_fifo_t *fifo)
+static inline prte_list_item_t *prte_fifo_pop_st(prte_fifo_t *fifo)
 {
-    prte_list_item_t *item = prte_fifo_head (fifo);
+    prte_list_item_t *item = prte_fifo_head(fifo);
 
     if (item == &fifo->prte_fifo_ghost) {
         return NULL;
     }
 
     fifo->prte_fifo_head.data.item = (intptr_t) item->prte_list_next;
-    if (&fifo->prte_fifo_ghost == prte_fifo_head (fifo)) {
+    if (&fifo->prte_fifo_ghost == prte_fifo_head(fifo)) {
         fifo->prte_fifo_tail.data.item = (intptr_t) &fifo->prte_fifo_ghost;
     }
 
@@ -327,17 +328,16 @@ static inline prte_list_item_t *prte_fifo_pop_st (prte_fifo_t *fifo)
 }
 
 /* push/pop versions conditioned off prte_using_threads() */
-static inline prte_list_item_t *prte_fifo_push (prte_fifo_t *fifo,
-                                                prte_list_item_t *item)
+static inline prte_list_item_t *prte_fifo_push(prte_fifo_t *fifo, prte_list_item_t *item)
 {
-    return prte_fifo_push_atomic (fifo, item);
+    return prte_fifo_push_atomic(fifo, item);
 }
 
-static inline prte_list_item_t *prte_fifo_pop (prte_fifo_t *fifo)
+static inline prte_list_item_t *prte_fifo_pop(prte_fifo_t *fifo)
 {
-    return prte_fifo_pop_atomic (fifo);
+    return prte_fifo_pop_atomic(fifo);
 }
 
 END_C_DECLS
 
-#endif  /* PRTE_FIFO_H_HAS_BEEN_INCLUDED */
+#endif /* PRTE_FIFO_H_HAS_BEEN_INCLUDED */

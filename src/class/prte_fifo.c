@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,7 +25,7 @@
 #include "prte_config.h"
 #include "src/class/prte_fifo.h"
 
-static void prte_fifo_construct (prte_fifo_t *fifo)
+static void prte_fifo_construct(prte_fifo_t *fifo)
 {
     PRTE_CONSTRUCT(&fifo->prte_fifo_ghost, prte_list_item_t);
 

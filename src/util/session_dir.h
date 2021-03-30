@@ -149,4 +149,4 @@ PRTE_EXPORT int prte_session_dir_cleanup(pmix_nspace_t jobid);
 
 END_C_DECLS
 
-#endif  /* PRTE_SESSION_DIR_H_HAS_BEEN_INCLUDED */
+#endif /* PRTE_SESSION_DIR_H_HAS_BEEN_INCLUDED */

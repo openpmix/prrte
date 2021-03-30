@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -12,7 +13,7 @@
 #include "constants.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <string.h>
 
@@ -23,7 +24,6 @@
 #include "src/util/fd.h"
 
 #include "src/runtime/prte_progress_threads.h"
-
 
 /* create a tracking object for progress threads */
 typedef struct {
@@ -54,7 +54,7 @@ typedef struct {
 
 static void tracker_constructor(prte_progress_tracker_t *p)
 {
-    p->refcount = 1;  // start at one since someone created it
+    p->refcount = 1; // start at one since someone created it
     p->name = NULL;
     p->ev_base = NULL;
     p->ev_active = false;
@@ -84,18 +84,12 @@ static void tracker_destructor(prte_progress_tracker_t *p)
 #endif
 }
 
-static PRTE_CLASS_INSTANCE(prte_progress_tracker_t,
-                          prte_list_item_t,
-                          tracker_constructor,
-                          tracker_destructor);
+static PRTE_CLASS_INSTANCE(prte_progress_tracker_t, prte_list_item_t, tracker_constructor,
+                           tracker_destructor);
 
 #if PRTE_HAVE_LIBEV
 
-typedef enum {
-    PRTE_EVENT_ACTIVE,
-    PRTE_EVENT_ADD,
-    PRTE_EVENT_DEL
-} prte_event_type_t;
+typedef enum { PRTE_EVENT_ACTIVE, PRTE_EVENT_ADD, PRTE_EVENT_DEL } prte_event_type_t;
 
 typedef struct {
     prte_list_item_t super;
@@ -106,37 +100,37 @@ typedef struct {
     prte_event_type_t type;
 } prte_event_caddy_t;
 
-static PRTE_CLASS_INSTANCE(prte_event_caddy_t,
-                           prte_list_item_t,
-                           NULL, NULL);
+static PRTE_CLASS_INSTANCE(prte_event_caddy_t, prte_list_item_t, NULL, NULL);
 
-static prte_progress_tracker_t* prte_progress_tracker_get_by_base(struct event_base *);
+static prte_progress_tracker_t *prte_progress_tracker_get_by_base(struct event_base *);
 
-static void prte_libev_ev_async_cb (EV_P_ ev_async *w, int revents)
+static void prte_libev_ev_async_cb(EV_P_ ev_async *w, int revents)
 {
-    prte_progress_tracker_t *trk = prte_progress_tracker_get_by_base((struct event_base *)EV_A);
+    prte_progress_tracker_t *trk = prte_progress_tracker_get_by_base((struct event_base *) EV_A);
     assert(NULL != trk);
-    pthread_mutex_lock (&trk->mutex);
+    pthread_mutex_lock(&trk->mutex);
     prte_event_caddy_t *cd, *next;
-    PRTE_LIST_FOREACH_SAFE(cd, next, &trk->list, prte_event_caddy_t) {
+    PRTE_LIST_FOREACH_SAFE(cd, next, &trk->list, prte_event_caddy_t)
+    {
         switch (cd->type) {
-            case PRTE_EVENT_ADD:
-                (void)event_add(cd->ev, cd->tv);
-                break;
-            case PRTE_EVENT_DEL:
-                (void)event_del(cd->ev);
-                break;
-            case PRTE_EVENT_ACTIVE:
-                (void)event_active(cd->ev, cd->res, cd->ncalls);
-                break;
+        case PRTE_EVENT_ADD:
+            (void) event_add(cd->ev, cd->tv);
+            break;
+        case PRTE_EVENT_DEL:
+            (void) event_del(cd->ev);
+            break;
+        case PRTE_EVENT_ACTIVE:
+            (void) event_active(cd->ev, cd->res, cd->ncalls);
+            break;
         }
         prte_list_remove_item(&trk->list, &cd->super);
         PRTE_RELEASE(cd);
     }
-    pthread_mutex_unlock (&trk->mutex);
+    pthread_mutex_unlock(&trk->mutex);
 }
 
-int prte_event_add(struct event *ev, struct timeval *tv) {
+int prte_event_add(struct event *ev, struct timeval *tv)
+{
     int res;
     prte_progress_tracker_t *trk = prte_progress_tracker_get_by_base(ev->ev_base);
     if ((NULL != trk) && !pthread_equal(pthread_self(), trk->engine.t_handle)) {
@@ -146,7 +140,7 @@ int prte_event_add(struct event *ev, struct timeval *tv) {
         cd->tv = tv;
         pthread_mutex_lock(&trk->mutex);
         prte_list_append(&trk->list, &cd->super);
-        ev_async_send ((struct ev_loop *)trk->ev_base, &trk->async);
+        ev_async_send((struct ev_loop *) trk->ev_base, &trk->async);
         pthread_mutex_unlock(&trk->mutex);
         res = PRTE_SUCCESS;
     } else {
@@ -155,7 +149,8 @@ int prte_event_add(struct event *ev, struct timeval *tv) {
     return res;
 }
 
-int prte_event_del(struct event *ev) {
+int prte_event_del(struct event *ev)
+{
     int res;
     prte_progress_tracker_t *trk = prte_progress_tracker_get_by_base(ev->ev_base);
     if ((NULL != trk) && !pthread_equal(pthread_self(), trk->engine.t_handle)) {
@@ -164,7 +159,7 @@ int prte_event_del(struct event *ev) {
         cd->ev = ev;
         pthread_mutex_lock(&trk->mutex);
         prte_list_append(&trk->list, &cd->super);
-        ev_async_send ((struct ev_loop *)trk->ev_base, &trk->async);
+        ev_async_send((struct ev_loop *) trk->ev_base, &trk->async);
         pthread_mutex_unlock(&trk->mutex);
         res = PRTE_SUCCESS;
     } else {
@@ -173,7 +168,8 @@ int prte_event_del(struct event *ev) {
     return res;
 }
 
-void prte_event_active (struct event *ev, int res, short ncalls) {
+void prte_event_active(struct event *ev, int res, short ncalls)
+{
     prte_progress_tracker_t *trk = prte_progress_tracker_get_by_base(ev->ev_base);
     if ((NULL != trk) && !pthread_equal(pthread_self(), trk->engine.t_handle)) {
         prte_event_caddy_t *cd = PRTE_NEW(prte_event_caddy_t);
@@ -183,26 +179,24 @@ void prte_event_active (struct event *ev, int res, short ncalls) {
         cd->ncalls = ncalls;
         pthread_mutex_lock(&trk->mutex);
         prte_list_append(&trk->list, &cd->super);
-        ev_async_send ((struct ev_loop *)trk->ev_base, &trk->async);
+        ev_async_send((struct ev_loop *) trk->ev_base, &trk->async);
         pthread_mutex_unlock(&trk->mutex);
     } else {
         event_active(ev, res, ncalls);
     }
 }
 
-void prte_event_base_loopexit (prte_event_base_t *ev_base) {
+void prte_event_base_loopexit(prte_event_base_t *ev_base)
+{
     prte_progress_tracker_t *trk = prte_progress_tracker_get_by_base(ev_base);
     assert(NULL != trk);
-    ev_async_send ((struct ev_loop *)trk->ev_base, &trk->async);
+    ev_async_send((struct ev_loop *) trk->ev_base, &trk->async);
 }
 #endif
 
 static bool inited = false;
 static prte_list_t tracking;
-static struct timeval long_timeout = {
-    .tv_sec = 3600,
-    .tv_usec = 0
-};
+static struct timeval long_timeout = {.tv_sec = 3600, .tv_usec = 0};
 static const char *shared_thread_name = "PRTE-wide async progress thread";
 
 /*
@@ -211,7 +205,7 @@ static const char *shared_thread_name = "PRTE-wide async progress thread";
  */
 static void dummy_timeout_cb(int fd, short args, void *cbdata)
 {
-    prte_progress_tracker_t *trk = (prte_progress_tracker_t*)cbdata;
+    prte_progress_tracker_t *trk = (prte_progress_tracker_t *) cbdata;
 
     prte_event_add(&trk->block, &long_timeout);
 }
@@ -219,10 +213,10 @@ static void dummy_timeout_cb(int fd, short args, void *cbdata)
 /*
  * Main for the progress thread
  */
-static void* progress_engine(prte_object_t *obj)
+static void *progress_engine(prte_object_t *obj)
 {
-    prte_thread_t *t = (prte_thread_t*)obj;
-    prte_progress_tracker_t *trk = (prte_progress_tracker_t*)t->t_arg;
+    prte_thread_t *t = (prte_thread_t *) obj;
+    prte_progress_tracker_t *trk = (prte_progress_tracker_t *) t->t_arg;
 
     while (trk->ev_active) {
         prte_event_loop(trk->ev_base, PRTE_EVLOOP_ONCE);
@@ -275,7 +269,8 @@ prte_event_base_t *prte_progress_thread_init(const char *name)
     }
 
     /* check if we already have this thread */
-    PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t) {
+    PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t)
+    {
         if (0 == strcmp(name, trk->name)) {
             /* we do, so up the refcount on it */
             ++trk->refcount;
@@ -305,13 +300,12 @@ prte_event_base_t *prte_progress_thread_init(const char *name)
 
     /* add an event to the new event base (if there are no events,
        prte_event_loop() will return immediately) */
-    prte_event_set(trk->ev_base, &trk->block, -1, PRTE_EV_PERSIST,
-                   dummy_timeout_cb, trk);
+    prte_event_set(trk->ev_base, &trk->block, -1, PRTE_EV_PERSIST, dummy_timeout_cb, trk);
     prte_event_add(&trk->block, &long_timeout);
 
 #if PRTE_HAVE_LIBEV
-    ev_async_init (&trk->async, prte_libev_ev_async_cb);
-    ev_async_start((struct ev_loop *)trk->ev_base, &trk->async);
+    ev_async_init(&trk->async, prte_libev_ev_async_cb);
+    ev_async_start((struct ev_loop *) trk->ev_base, &trk->async);
 #endif
 
     /* construct the thread object */
@@ -341,7 +335,8 @@ int prte_progress_thread_finalize(const char *name)
     }
 
     /* find the specified engine */
-    PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t) {
+    PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t)
+    {
         if (0 == strcmp(name, trk->name)) {
             /* decrement the refcount */
             --trk->refcount;
@@ -382,7 +377,8 @@ int prte_progress_thread_pause(const char *name)
     }
 
     /* find the specified engine */
-    PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t) {
+    PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t)
+    {
         if (0 == strcmp(name, trk->name)) {
             if (trk->ev_active) {
                 stop_progress_engine(trk);
@@ -396,12 +392,14 @@ int prte_progress_thread_pause(const char *name)
 }
 
 #if PRTE_HAVE_LIBEV
-static prte_progress_tracker_t* prte_progress_tracker_get_by_base(prte_event_base_t *base) {
+static prte_progress_tracker_t *prte_progress_tracker_get_by_base(prte_event_base_t *base)
+{
     prte_progress_tracker_t *trk;
 
-    if (inited)  {
-        PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t) {
-            if(trk->ev_base == base) {
+    if (inited) {
+        PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t)
+        {
+            if (trk->ev_base == base) {
                 return trk;
             }
         }
@@ -424,7 +422,8 @@ int prte_progress_thread_resume(const char *name)
     }
 
     /* find the specified engine */
-    PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t) {
+    PRTE_LIST_FOREACH(trk, &tracking, prte_progress_tracker_t)
+    {
         if (0 == strcmp(name, trk->name)) {
             if (trk->ev_active) {
                 return PRTE_ERR_RESOURCE_BUSY;

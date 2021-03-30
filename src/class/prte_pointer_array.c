@@ -12,6 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,9 +22,9 @@
 
 #include "prte_config.h"
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "constants.h"
 #include "src/class/prte_pointer_array.h"
@@ -33,9 +34,8 @@ static void prte_pointer_array_construct(prte_pointer_array_t *);
 static void prte_pointer_array_destruct(prte_pointer_array_t *);
 static bool grow_table(prte_pointer_array_t *table, int at_least);
 
-PRTE_CLASS_INSTANCE(prte_pointer_array_t, prte_object_t,
-                   prte_pointer_array_construct,
-                   prte_pointer_array_destruct);
+PRTE_CLASS_INSTANCE(prte_pointer_array_t, prte_object_t, prte_pointer_array_construct,
+                    prte_pointer_array_destruct);
 
 /*
  * prte_pointer_array constructor
@@ -58,11 +58,11 @@ static void prte_pointer_array_construct(prte_pointer_array_t *array)
 static void prte_pointer_array_destruct(prte_pointer_array_t *array)
 {
     /* free table */
-    if( NULL != array->free_bits) {
+    if (NULL != array->free_bits) {
         free(array->free_bits);
         array->free_bits = NULL;
     }
-    if( NULL != array->addr ) {
+    if (NULL != array->addr) {
         free(array->addr);
         array->addr = NULL;
     }
@@ -78,12 +78,12 @@ static void prte_pointer_array_destruct(prte_pointer_array_t *array)
  * Translate an index position into the free bits array into 2 values, the
  * index of the element and the index of the bit position.
  */
-#define GET_BIT_POS(IDX, BIDX, PIDX)                                    \
-    do {                                                                \
-        uint32_t __idx = (uint32_t)(IDX);                               \
-        (BIDX) = (__idx / (8 * sizeof(uint64_t)));                      \
-        (PIDX) = (__idx % (8 * sizeof(uint64_t)));                      \
-    } while(0)
+#define GET_BIT_POS(IDX, BIDX, PIDX)               \
+    do {                                           \
+        uint32_t __idx = (uint32_t)(IDX);          \
+        (BIDX) = (__idx / (8 * sizeof(uint64_t))); \
+        (PIDX) = (__idx % (8 * sizeof(uint64_t))); \
+    } while (0)
 
 /**
  * A classical find first zero bit (ffs) on a large array. It checks starting
@@ -94,61 +94,67 @@ static void prte_pointer_array_destruct(prte_pointer_array_t *array)
  * indicator to constants (the type is inferred by the compiler according to
  * the number of bits necessary to represent it).
  */
-#define FIND_FIRST_ZERO(START_IDX, STORE)                               \
-    do {                                                                \
-        uint32_t __b_idx, __b_pos;                                      \
-        if( 0 == table->number_free ) {                                 \
-            (STORE) = table->size;                                      \
-            break;                                                      \
-        }                                                               \
-        GET_BIT_POS((START_IDX), __b_idx, __b_pos);                     \
-        for (; table->free_bits[__b_idx] == 0xFFFFFFFFFFFFFFFFu; __b_idx++); \
-        assert(__b_idx < (uint32_t)table->size);                        \
-        uint64_t __check_value = table->free_bits[__b_idx];             \
-        __b_pos = 0;                                                    \
-                                                                        \
-        if( 0x00000000FFFFFFFFu == (__check_value & 0x00000000FFFFFFFFu) ) { \
-            __check_value >>= 32; __b_pos += 32;                        \
-        }                                                               \
-        if( 0x000000000000FFFFu == (__check_value & 0x000000000000FFFFu) ) { \
-            __check_value >>= 16; __b_pos += 16;                        \
-        }                                                               \
-        if( 0x00000000000000FFu == (__check_value & 0x00000000000000FFu) ) { \
-            __check_value >>= 8; __b_pos += 8;                          \
-        }                                                               \
-        if( 0x000000000000000Fu == (__check_value & 0x000000000000000Fu) ) { \
-            __check_value >>= 4; __b_pos += 4;                          \
-        }                                                               \
-        if( 0x0000000000000003u == (__check_value & 0x0000000000000003u) ) { \
-            __check_value >>= 2; __b_pos += 2;                          \
-        }                                                               \
-        if( 0x0000000000000001u == (__check_value & 0x0000000000000001u) ) { \
-            __b_pos += 1;                                               \
-        }                                                               \
-        (STORE) = (__b_idx * 8 * sizeof(uint64_t)) + __b_pos;           \
-    } while(0)
+#define FIND_FIRST_ZERO(START_IDX, STORE)                                   \
+    do {                                                                    \
+        uint32_t __b_idx, __b_pos;                                          \
+        if (0 == table->number_free) {                                      \
+            (STORE) = table->size;                                          \
+            break;                                                          \
+        }                                                                   \
+        GET_BIT_POS((START_IDX), __b_idx, __b_pos);                         \
+        for (; table->free_bits[__b_idx] == 0xFFFFFFFFFFFFFFFFu; __b_idx++) \
+            ;                                                               \
+        assert(__b_idx < (uint32_t) table->size);                           \
+        uint64_t __check_value = table->free_bits[__b_idx];                 \
+        __b_pos = 0;                                                        \
+                                                                            \
+        if (0x00000000FFFFFFFFu == (__check_value & 0x00000000FFFFFFFFu)) { \
+            __check_value >>= 32;                                           \
+            __b_pos += 32;                                                  \
+        }                                                                   \
+        if (0x000000000000FFFFu == (__check_value & 0x000000000000FFFFu)) { \
+            __check_value >>= 16;                                           \
+            __b_pos += 16;                                                  \
+        }                                                                   \
+        if (0x00000000000000FFu == (__check_value & 0x00000000000000FFu)) { \
+            __check_value >>= 8;                                            \
+            __b_pos += 8;                                                   \
+        }                                                                   \
+        if (0x000000000000000Fu == (__check_value & 0x000000000000000Fu)) { \
+            __check_value >>= 4;                                            \
+            __b_pos += 4;                                                   \
+        }                                                                   \
+        if (0x0000000000000003u == (__check_value & 0x0000000000000003u)) { \
+            __check_value >>= 2;                                            \
+            __b_pos += 2;                                                   \
+        }                                                                   \
+        if (0x0000000000000001u == (__check_value & 0x0000000000000001u)) { \
+            __b_pos += 1;                                                   \
+        }                                                                   \
+        (STORE) = (__b_idx * 8 * sizeof(uint64_t)) + __b_pos;               \
+    } while (0)
 
 /**
  * Set the IDX bit in the free_bits array. The bit should be previously unset.
  */
-#define SET_BIT(IDX)                                                    \
-    do {                                                                \
-        uint32_t __b_idx, __b_pos;                                      \
-        GET_BIT_POS((IDX), __b_idx, __b_pos);                           \
-        assert( 0 == (table->free_bits[__b_idx] & (((uint64_t)1) << __b_pos))); \
-        table->free_bits[__b_idx] |= (((uint64_t)1) << __b_pos);        \
-    } while(0)
+#define SET_BIT(IDX)                                                            \
+    do {                                                                        \
+        uint32_t __b_idx, __b_pos;                                              \
+        GET_BIT_POS((IDX), __b_idx, __b_pos);                                   \
+        assert(0 == (table->free_bits[__b_idx] & (((uint64_t) 1) << __b_pos))); \
+        table->free_bits[__b_idx] |= (((uint64_t) 1) << __b_pos);               \
+    } while (0)
 
 /**
  * Unset the IDX bit in the free_bits array. The bit should be previously set.
  */
-#define UNSET_BIT(IDX)                                                  \
-    do {                                                                \
-        uint32_t __b_idx, __b_pos;                                      \
-        GET_BIT_POS((IDX), __b_idx, __b_pos);                           \
-        assert( (table->free_bits[__b_idx] & (((uint64_t)1) << __b_pos))); \
-        table->free_bits[__b_idx] ^= (((uint64_t)1) << __b_pos);        \
-    } while(0)
+#define UNSET_BIT(IDX)                                                     \
+    do {                                                                   \
+        uint32_t __b_idx, __b_pos;                                         \
+        GET_BIT_POS((IDX), __b_idx, __b_pos);                              \
+        assert((table->free_bits[__b_idx] & (((uint64_t) 1) << __b_pos))); \
+        table->free_bits[__b_idx] ^= (((uint64_t) 1) << __b_pos);          \
+    } while (0)
 
 #if 0
 /**
@@ -177,9 +183,8 @@ static void prte_pointer_array_validate(prte_pointer_array_t *array)
 /**
  * initialize an array object
  */
-int prte_pointer_array_init(prte_pointer_array_t* array,
-                            int initial_allocation,
-                            int max_size, int block_size)
+int prte_pointer_array_init(prte_pointer_array_t *array, int initial_allocation, int max_size,
+                            int block_size)
 {
     size_t num_bytes;
 
@@ -195,12 +200,12 @@ int prte_pointer_array_init(prte_pointer_array_t* array,
     num_bytes = (0 < initial_allocation ? initial_allocation : block_size);
 
     /* Allocate and set the array to NULL */
-    array->addr = (void **)calloc(num_bytes, sizeof(void*));
+    array->addr = (void **) calloc(num_bytes, sizeof(void *));
     if (NULL == array->addr) { /* out of memory */
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
-    array->free_bits = (uint64_t*)calloc(TYPE_ELEM_COUNT(uint64_t, num_bytes), sizeof(uint64_t));
-    if (NULL == array->free_bits) {  /* out of memory */
+    array->free_bits = (uint64_t *) calloc(TYPE_ELEM_COUNT(uint64_t, num_bytes), sizeof(uint64_t));
+    if (NULL == array->free_bits) { /* out of memory */
         free(array->addr);
         array->addr = NULL;
         return PRTE_ERR_OUT_OF_RESOURCE;
@@ -227,15 +232,15 @@ int prte_pointer_array_add(prte_pointer_array_t *table, void *ptr)
 
     if (table->number_free == 0) {
         /* need to grow table */
-        if (!grow_table(table, index) ) {
+        if (!grow_table(table, index)) {
             prte_mutex_unlock(&(table->lock));
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
 
-    assert( (table->addr != NULL) && (table->size > 0) );
-    assert( (table->lowest_free >= 0) && (table->lowest_free < table->size) );
-    assert( (table->number_free > 0) && (table->number_free <= table->size) );
+    assert((table->addr != NULL) && (table->size > 0));
+    assert((table->lowest_free >= 0) && (table->lowest_free < table->size));
+    assert((table->number_free > 0) && (table->number_free <= table->size));
 
     /*
      * add pointer to table, and return the index
@@ -270,8 +275,7 @@ int prte_pointer_array_add(prte_pointer_array_t *table, void *ptr)
  *
  * Assumption: NULL element is free element.
  */
-int prte_pointer_array_set_item(prte_pointer_array_t *table, int index,
-                                void * value)
+int prte_pointer_array_set_item(prte_pointer_array_t *table, int index, void *value)
 {
     assert(table != NULL);
 
@@ -290,8 +294,8 @@ int prte_pointer_array_set_item(prte_pointer_array_t *table, int index,
     }
     assert(table->size > index);
     /* mark element as free, if NULL element */
-    if( NULL == value ) {
-        if( NULL != table->addr[index] ) {
+    if (NULL == value) {
+        if (NULL != table->addr[index]) {
             if (index < table->lowest_free) {
                 table->lowest_free = index;
             }
@@ -303,11 +307,11 @@ int prte_pointer_array_set_item(prte_pointer_array_t *table, int index,
             table->number_free--;
             SET_BIT(index);
             /* Reset lowest_free if required */
-            if ( index == table->lowest_free ) {
+            if (index == table->lowest_free) {
                 FIND_FIRST_ZERO(index, table->lowest_free);
             }
         } else {
-            assert( index != table->lowest_free );
+            assert(index != table->lowest_free);
         }
     }
     table->addr[index] = value;
@@ -339,8 +343,7 @@ int prte_pointer_array_set_item(prte_pointer_array_t *table, int index,
  * In contrary to array_set, this function does not allow to overwrite
  * a value, unless the previous value is NULL ( equiv. to free ).
  */
-bool prte_pointer_array_test_and_set_item (prte_pointer_array_t *table,
-                                           int index, void *value)
+bool prte_pointer_array_test_and_set_item(prte_pointer_array_t *table, int index, void *value)
 {
     assert(table != NULL);
     assert(index >= 0);
@@ -355,7 +358,7 @@ bool prte_pointer_array_test_and_set_item (prte_pointer_array_t *table,
 
     /* expand table if required to set a specific index */
     prte_mutex_lock(&(table->lock));
-    if ( index < table->size && table->addr[index] != NULL ) {
+    if (index < table->size && table->addr[index] != NULL) {
         /* This element is already in use */
         prte_mutex_unlock(&(table->lock));
         return false;
@@ -378,8 +381,8 @@ bool prte_pointer_array_test_and_set_item (prte_pointer_array_t *table,
     table->number_free--;
     SET_BIT(index);
     /* Reset lowest_free if required */
-    if( table->number_free > 0 ) {
-        if ( index == table->lowest_free ) {
+    if (table->number_free > 0) {
+        if (index == table->lowest_free) {
             FIND_FIRST_ZERO(index, table->lowest_free);
         }
     } else {
@@ -402,7 +405,7 @@ bool prte_pointer_array_test_and_set_item (prte_pointer_array_t *table,
 int prte_pointer_array_set_size(prte_pointer_array_t *array, int new_size)
 {
     prte_mutex_lock(&(array->lock));
-    if(new_size > array->size) {
+    if (new_size > array->size) {
         if (!grow_table(array, new_size)) {
             prte_mutex_unlock(&(array->lock));
             return PRTE_ERROR;
@@ -418,9 +421,9 @@ static bool grow_table(prte_pointer_array_t *table, int at_least)
     void *p;
 
     new_size = table->block_size * ((at_least + 1 + table->block_size - 1) / table->block_size);
-    if( new_size >= table->max_size ) {
+    if (new_size >= table->max_size) {
         new_size = table->max_size;
-        if( at_least >= table->max_size ) {
+        if (at_least >= table->max_size) {
             return false;
         }
     }
@@ -431,19 +434,18 @@ static bool grow_table(prte_pointer_array_t *table, int at_least)
     }
 
     table->number_free += (new_size - table->size);
-    table->addr = (void**)p;
+    table->addr = (void **) p;
     for (i = table->size; i < new_size; ++i) {
         table->addr[i] = NULL;
     }
     new_size_int = TYPE_ELEM_COUNT(uint64_t, new_size);
-    if( (int)(TYPE_ELEM_COUNT(uint64_t, table->size)) != new_size_int ) {
-        p = (uint64_t*)realloc(table->free_bits, new_size_int * sizeof(uint64_t));
+    if ((int) (TYPE_ELEM_COUNT(uint64_t, table->size)) != new_size_int) {
+        p = (uint64_t *) realloc(table->free_bits, new_size_int * sizeof(uint64_t));
         if (NULL == p) {
             return false;
         }
-        table->free_bits = (uint64_t*)p;
-        for (i = TYPE_ELEM_COUNT(uint64_t, table->size);
-             i < new_size_int; i++ ) {
+        table->free_bits = (uint64_t *) p;
+        for (i = TYPE_ELEM_COUNT(uint64_t, table->size); i < new_size_int; i++) {
             table->free_bits[i] = 0;
         }
     }

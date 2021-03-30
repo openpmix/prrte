@@ -15,32 +15,32 @@
 
 #include <sys/types.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <string.h>
 #ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
+#    include <sys/wait.h>
 #endif
 #include <pmix.h>
 #include <pmix_server.h>
 
 #include "src/util/output.h"
 
-#include "src/pmix/pmix-internal.h"
-#include "src/prted/pmix/pmix_server_internal.h"
-#include "src/prted/pmix/pmix_server.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/odls/odls.h"
+#include "src/mca/ess/ess.h"
+#include "src/mca/grpcomm/bmg/grpcomm_bmg.h"
+#include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/base/odls_private.h"
+#include "src/mca/odls/odls.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/rml/rml.h"
 #include "src/mca/routed/routed.h"
-#include "src/mca/grpcomm/grpcomm.h"
-#include "src/mca/grpcomm/bmg/grpcomm_bmg.h"
-#include "src/mca/ess/ess.h"
 #include "src/mca/state/state.h"
+#include "src/pmix/pmix-internal.h"
+#include "src/prted/pmix/pmix_server.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 
 #include "src/util/error_strings.h"
 #include "src/util/name_fns.h"
@@ -51,13 +51,13 @@
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/prte_quit.h"
 
-#include "src/mca/propagate/propagate.h"
 #include "src/mca/propagate/base/base.h"
+#include "src/mca/propagate/propagate.h"
 
-#include "src/mca/errmgr/errmgr.h"
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/errmgr/base/errmgr_private.h"
 #include "src/mca/errmgr/detector/errmgr_detector.h"
+#include "src/mca/errmgr/errmgr.h"
 
 #include "propagate_prperror.h"
 
@@ -68,34 +68,25 @@ static int prte_propagate_error_cb_type = -1;
 static int init(void);
 static int finalize(void);
 static int register_prp_callback(void);
-static int prte_propagate_prperror(const pmix_nspace_t job,
-                                   const pmix_proc_t *source,
-                                   const pmix_proc_t *errorproc,
-                                   prte_proc_state_t state);
+static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *source,
+                                   const pmix_proc_t *errorproc, prte_proc_state_t state);
 
-static int prte_propagate_prperror_recv(pmix_data_buffer_t* buffer);
+static int prte_propagate_prperror_recv(pmix_data_buffer_t *buffer);
 
 /* flag use to register callback for grpcomm rbcast forward */
 int enable_callback_register_flag = 1;
 
-prte_propagate_base_module_t prte_propagate_prperror_module ={
-    init,
-    finalize,
-    prte_propagate_prperror,
-    register_prp_callback
-};
+prte_propagate_base_module_t prte_propagate_prperror_module = {init, finalize,
+                                                               prte_propagate_prperror,
+                                                               register_prp_callback};
 
-
-static void flush_error_list(size_t evhdlr_registration_id,
-        pmix_status_t status,
-        const pmix_proc_t *psource,
-        pmix_info_t info[], size_t ninfo,
-        pmix_info_t *results, size_t nresults,
-        pmix_event_notification_cbfunc_fn_t cbfunc,
-        void *cbdata)
+static void flush_error_list(size_t evhdlr_registration_id, pmix_status_t status,
+                             const pmix_proc_t *psource, pmix_info_t info[], size_t ninfo,
+                             pmix_info_t *results, size_t nresults,
+                             pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
-    PRTE_OUTPUT_VERBOSE((2, prte_propagate_base_framework.framework_output,
-                "Flush error process list"));
+    PRTE_OUTPUT_VERBOSE(
+        (2, prte_propagate_base_framework.framework_output, "Flush error process list"));
     PRTE_DESTRUCT(&prte_error_procs);
     PRTE_CONSTRUCT(&prte_error_procs, prte_list_t);
     if (NULL != cbfunc) {
@@ -117,13 +108,14 @@ static int init(void)
 static int register_prp_callback(void)
 {
     int ret;
-    if(enable_callback_register_flag)
-    {
-        if(prte_grpcomm.register_cb!=NULL) {
-            ret= prte_grpcomm.register_cb((prte_grpcomm_rbcast_cb_t)prte_propagate_prperror_recv);
+    if (enable_callback_register_flag) {
+        if (prte_grpcomm.register_cb != NULL) {
+            ret = prte_grpcomm.register_cb((prte_grpcomm_rbcast_cb_t) prte_propagate_prperror_recv);
             prte_propagate_error_cb_type = ret;
-            PRTE_OUTPUT_VERBOSE((5, prte_propagate_base_framework.framework_output,
-                        "propagate: prperror: daemon register grpcomm callback %d at start",prte_propagate_error_cb_type));
+            PRTE_OUTPUT_VERBOSE(
+                (5, prte_propagate_base_framework.framework_output,
+                 "propagate: prperror: daemon register grpcomm callback %d at start",
+                 prte_propagate_error_cb_type));
             enable_callback_register_flag = 0;
         }
     }
@@ -132,11 +124,12 @@ static int register_prp_callback(void)
 
 static int finalize(void)
 {
-    int ret=0;
-    if ( -1 == prte_propagate_error_cb_type){
+    int ret = 0;
+    if (-1 == prte_propagate_error_cb_type) {
         return PRTE_SUCCESS;
     }
-    /* do we need unregister ? cause all module is unloading, those memory maybe collected may have illegal access */
+    /* do we need unregister ? cause all module is unloading, those memory maybe collected may have
+     * illegal access */
     /* ret = prte_grpcomm.unregister_cb(prte_propagate_error_cb_type); */
     prte_propagate_error_cb_type = -1;
     PRTE_DESTRUCT(&prte_error_procs);
@@ -146,13 +139,13 @@ static int finalize(void)
 /*
  * uplevel call from the error handler to initiate a failure_propagator
  */
-static int prte_propagate_prperror(const pmix_nspace_t job,
-                                   const pmix_proc_t *source,
-                                   const pmix_proc_t *errorproc,
-                                   prte_proc_state_t state) {
+static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *source,
+                                   const pmix_proc_t *errorproc, prte_proc_state_t state)
+{
 
     int rc = PRTE_SUCCESS;
-    /* don't need to check jobid because this can be different: daemon and process has different jobids */
+    /* don't need to check jobid because this can be different: daemon and process has different
+     * jobids */
 
     bool daemon_error_flag = false;
 
@@ -160,10 +153,13 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
     prte_namelist_t *nmcheck, *nm;
     nmcheck = PRTE_NEW(prte_namelist_t);
 
-    PRTE_LIST_FOREACH(nmcheck, &prte_error_procs, prte_namelist_t){
+    PRTE_LIST_FOREACH(nmcheck, &prte_error_procs, prte_namelist_t)
+    {
         if (PMIX_CHECK_PROCID(&nmcheck->name, errorproc)) {
-            PRTE_OUTPUT_VERBOSE((10, prte_propagate_base_framework.framework_output,
-                        "propagate: prperror: already propagated this msg: error proc is %s", PRTE_NAME_PRINT(errorproc) ));
+            PRTE_OUTPUT_VERBOSE(
+                (10, prte_propagate_base_framework.framework_output,
+                 "propagate: prperror: already propagated this msg: error proc is %s",
+                 PRTE_NAME_PRINT(errorproc)));
             return rc;
         }
     }
@@ -173,7 +169,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
     prte_list_append(&prte_error_procs, &(nm->super));
 
     prte_grpcomm_signature_t *sig;
-    int cnt=0;
+    int cnt = 0;
     /* ---------------------------------------------------------
      * | cb_type | status | errorproc | nprocs afftected | procs|
      * --------------------------------------------------------*/
@@ -187,7 +183,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
     int ret;
     if (enable_callback_register_flag) {
         if (prte_grpcomm.register_cb != NULL) {
-            ret = prte_grpcomm.register_cb((prte_grpcomm_rbcast_cb_t)prte_propagate_prperror_recv);
+            ret = prte_grpcomm.register_cb((prte_grpcomm_rbcast_cb_t) prte_propagate_prperror_recv);
             prte_propagate_error_cb_type = ret;
             PRTE_OUTPUT_VERBOSE((5, prte_propagate_base_framework.framework_output,
                                  "propagate: prperror: daemon register grpcomm callback %d",
@@ -198,8 +194,8 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
 
     /* change the error daemon state*/
     PRTE_OUTPUT_VERBOSE((5, prte_propagate_base_framework.framework_output,
-                "propagate: prperror: daemon %s rbcast state %d of proc %s",
-                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),state, PRTE_NAME_PRINT(errorproc)));
+                         "propagate: prperror: daemon %s rbcast state %d of proc %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), state, PRTE_NAME_PRINT(errorproc)));
 
     PMIX_DATA_BUFFER_CONSTRUCT(&prperror_buffer);
     /* pack the callback type */
@@ -217,32 +213,33 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
         return rc;
     }
     /* pack dead proc first */
-    rc = PMIx_Data_pack(NULL, &prperror_buffer, (void*)errorproc, 1, PMIX_PROC);
+    rc = PMIx_Data_pack(NULL, &prperror_buffer, (void *) errorproc, 1, PMIX_PROC);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
         return rc;
     }
     prte_node_t *node;
-    /* check this is a daemon or not, if vpid is same cannot ensure this is daemon also need check jobid*/
+    /* check this is a daemon or not, if vpid is same cannot ensure this is daemon also need check
+     * jobid*/
     if (PMIX_CHECK_NSPACE(errorproc->nspace, PRTE_PROC_MY_NAME->nspace)) {
         /* Given a node name, return an array of processes within the specified jobid
          * on that node. If the specified node does not currently host any processes,
          * then the returned list will be empty.
          */
         PRTE_OUTPUT_VERBOSE((5, prte_propagate_base_framework.framework_output,
-                    "%s propagate:daemon prperror this is a daemon error on %s \n",
-                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                    prte_get_proc_hostname(errorproc)));
+                             "%s propagate:daemon prperror this is a daemon error on %s \n",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             prte_get_proc_hostname(errorproc)));
 
-        node = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, errorproc->rank);
+        node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, errorproc->rank);
         if (NULL == node) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
             return PRTE_ERR_NOT_FOUND;
         }
 
-        cnt=node->num_procs; //prte issue, num_procs value is not correct
+        cnt = node->num_procs; // prte issue, num_procs value is not correct
         rc = PMIx_Data_pack(NULL, &prperror_buffer, &cnt, 1, PMIX_INT);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -266,7 +263,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
 
     PMIX_INFO_CREATE(pinfo, pcnt);
 
-    PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, errorproc, PMIX_PROC );
+    PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, errorproc, PMIX_PROC);
 
     if (daemon_error_flag) {
         prte_proc_t *pptr;
@@ -274,11 +271,11 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
         prte_plm_cmd_flag_t cmd;
 
         int i;
-        for (i=0; i < cnt; i++) {
-            if (NULL != (pptr = (prte_proc_t*)prte_pointer_array_get_item(node->procs, i))) {
+        for (i = 0; i < cnt; i++) {
+            if (NULL != (pptr = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i))) {
                 PRTE_OUTPUT_VERBOSE((5, prte_propagate_base_framework.framework_output,
-                                     " %d children are afftected  %s\n",
-                                     cnt, PRTE_NAME_PRINT(&pptr->name)));
+                                     " %d children are afftected  %s\n", cnt,
+                                     PRTE_NAME_PRINT(&pptr->name)));
 
                 rc = PMIx_Data_pack(NULL, &prperror_buffer, &pptr->name, 1, PMIX_PROC);
                 if (PMIX_SUCCESS != rc) {
@@ -287,7 +284,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
                     PMIX_INFO_FREE(pinfo, pcnt);
                     return rc;
                 }
-                PMIX_INFO_LOAD(&pinfo[i+1], PMIX_EVENT_AFFECTED_PROC, &pptr->name, PMIX_PROC );
+                PMIX_INFO_LOAD(&pinfo[i + 1], PMIX_EVENT_AFFECTED_PROC, &pptr->name, PMIX_PROC);
 
                 PMIX_DATA_BUFFER_CREATE(alert);
                 /* pack update state command */
@@ -311,7 +308,8 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
                     return rc;
                 }
 
-                /* proc state now is PRTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this; code is 128+9 */
+                /* proc state now is PRTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this;
+                 * code is 128+9 */
                 pptr->state = PRTE_PROC_STATE_ABORTED_BY_SIG;
                 /* pack the child's vpid */
                 rc = PMIx_Data_pack(NULL, alert, &pptr->name.rank, 1, PMIX_PROC_RANK);
@@ -351,19 +349,17 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
                 }
 
                 /* send this process's info to hnp */
-                if (0 > (rc = prte_rml.send_buffer_nb(
-                                PRTE_PROC_MY_HNP, alert,
-                                PRTE_RML_TAG_PLM,
-                                prte_rml_send_callback, NULL))) {
+                if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
+                                                      prte_rml_send_callback, NULL))) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                          "%s errmgr:detector: send to hnp failed",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                     PRTE_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(alert);
                 }
-                if (PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_IOF_COMPLETE) &&
-                        PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_WAITPID) &&
-                        !PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_RECORDED)) {
+                if (PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_IOF_COMPLETE)
+                    && PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_WAITPID)
+                    && !PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_RECORDED)) {
                     PRTE_ACTIVATE_PROC_STATE(&(pptr->name), PRTE_PROC_STATE_TERMINATED);
                 }
             }
@@ -372,41 +368,46 @@ static int prte_propagate_prperror(const pmix_nspace_t job,
 
     /* goes to all daemons */
     sig = PRTE_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t*)malloc(sizeof(pmix_proc_t));
+    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
     if (PRTE_SUCCESS != (rc = prte_grpcomm.rbcast(sig, PRTE_RML_TAG_PROPAGATE, &prperror_buffer))) {
         PRTE_ERROR_LOG(rc);
     }
     /* notify this error locally, only from rbcast dont have a source id */
-    if( source==NULL ) {
-        if (PRTE_SUCCESS != PMIx_Notify_event(prte_pmix_convert_rc(state), NULL,
-                    PMIX_RANGE_LOCAL, pinfo, cnt+1,
-                    NULL,NULL )) {
+    if (source == NULL) {
+        if (PRTE_SUCCESS
+            != PMIx_Notify_event(prte_pmix_convert_rc(state), NULL, PMIX_RANGE_LOCAL, pinfo,
+                                 cnt + 1, NULL, NULL)) {
             PMIX_INFO_FREE(pinfo, pcnt);
         }
     }
-    //PRTE_DESTRUCT(&prperror_buffer);
+    // PRTE_DESTRUCT(&prperror_buffer);
     PMIX_INFO_FREE(pinfo, pcnt);
     PRTE_RELEASE(sig);
     /* we're done! */
     return PRTE_SUCCESS;
 }
 
-static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source,
-                pmix_proc_t *errorproc, prte_proc_state_t state, pmix_data_buffer_t* buffer,pmix_data_buffer_t* rly) {
+static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source, pmix_proc_t *errorproc,
+                                    prte_proc_state_t state, pmix_data_buffer_t *buffer,
+                                    pmix_data_buffer_t *rly)
+{
 
     int rc = PRTE_SUCCESS;
-    /* don't need to check jobid because this can be different: daemon and process has different jobids */
+    /* don't need to check jobid because this can be different: daemon and process has different
+     * jobids */
 
     /* namelist for tracking error procs */
     prte_namelist_t *nmcheck, *nm;
     nmcheck = PRTE_NEW(prte_namelist_t);
 
-    PRTE_LIST_FOREACH(nmcheck, &prte_error_procs, prte_namelist_t){
+    PRTE_LIST_FOREACH(nmcheck, &prte_error_procs, prte_namelist_t)
+    {
         if (PMIX_CHECK_PROCID(&nmcheck->name, errorproc)) {
-            PRTE_OUTPUT_VERBOSE((10, prte_propagate_base_framework.framework_output,
-                                 "propagate: prperror: already propagated this msg: error proc is %s",
-                                 PRTE_NAME_PRINT(errorproc)));
+            PRTE_OUTPUT_VERBOSE(
+                (10, prte_propagate_base_framework.framework_output,
+                 "propagate: prperror: already propagated this msg: error proc is %s",
+                 PRTE_NAME_PRINT(errorproc)));
             return rc;
         }
     }
@@ -420,7 +421,7 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source,
     /* goes to all daemons */
     prte_grpcomm_signature_t *sig;
     sig = PRTE_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t*)malloc(sizeof(pmix_proc_t));
+    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
     if (PRTE_SUCCESS != (rc = prte_grpcomm.rbcast(sig, PRTE_RML_TAG_PROPAGATE, rly))) {
         PRTE_ERROR_LOG(rc);
@@ -428,43 +429,42 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source,
 
     pmix_info_t *pinfo;
     int ret;
-    int cnt=1;
-    size_t pcnt=1;
+    int cnt = 1;
+    size_t pcnt = 1;
     int num_affected = 0;
     ret = PMIx_Data_unpack(NULL, buffer, &num_affected, &cnt, PMIX_INT);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         return false;
     }
-    pcnt = 1+num_affected;
+    pcnt = 1 + num_affected;
     PMIX_INFO_CREATE(pinfo, pcnt);
 
-    PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, errorproc, PMIX_PROC );
+    PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, errorproc, PMIX_PROC);
 
     pmix_proc_t ename;
-    int i=0;
-    for (i =0; i <num_affected; i++) {
+    int i = 0;
+    for (i = 0; i < num_affected; i++) {
         rc = PMIx_Data_unpack(NULL, buffer, &ename, &cnt, PMIX_PROC);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_INFO_FREE(pinfo, pcnt);
             return rc;
         }
-        PMIX_INFO_LOAD(&pinfo[i+1], PMIX_EVENT_AFFECTED_PROC, &ename, PMIX_PROC );
+        PMIX_INFO_LOAD(&pinfo[i + 1], PMIX_EVENT_AFFECTED_PROC, &ename, PMIX_PROC);
     }
     /* notify this error locally, only from rbcast dont have a source id */
     if (source == NULL) {
-        if (PRTE_SUCCESS != PMIx_Notify_event(prte_pmix_convert_rc(state), NULL,
-                                              PMIX_RANGE_LOCAL, pinfo, num_affected+1,
-                                              NULL,NULL)) {
+        if (PRTE_SUCCESS
+            != PMIx_Notify_event(prte_pmix_convert_rc(state), NULL, PMIX_RANGE_LOCAL, pinfo,
+                                 num_affected + 1, NULL, NULL)) {
             PRTE_RELEASE(pinfo);
         }
     }
     return rc;
 }
 
-
-static int prte_propagate_prperror_recv(pmix_data_buffer_t* buffer)
+static int prte_propagate_prperror_recv(pmix_data_buffer_t *buffer)
 {
     int rc, cnt, state;
     pmix_proc_t errorproc;
@@ -479,7 +479,7 @@ static int prte_propagate_prperror_recv(pmix_data_buffer_t* buffer)
         return false;
     }
     /* get the cbtype */
-    cnt=1;
+    cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &cbtype, &cnt, PMIX_INT);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -499,10 +499,12 @@ static int prte_propagate_prperror_recv(pmix_data_buffer_t* buffer)
         return false;
     }
 
-    PRTE_OUTPUT_VERBOSE((5, prte_propagate_base_framework.framework_output,
-                "%s propagete: prperror: daemon received %s gone forwarding with status %d",
-                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&errorproc), state));
+    PRTE_OUTPUT_VERBOSE(
+        (5, prte_propagate_base_framework.framework_output,
+         "%s propagete: prperror: daemon received %s gone forwarding with status %d",
+         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&errorproc), state));
 
-    _prte_propagate_prperror(prte_process_info.myproc.nspace, NULL, &errorproc, state, buffer , &rly);
+    _prte_propagate_prperror(prte_process_info.myproc.nspace, NULL, &errorproc, state, buffer,
+                             &rly);
     return false;
 }

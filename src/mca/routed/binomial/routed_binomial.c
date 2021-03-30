@@ -19,8 +19,8 @@
 
 #include <stddef.h>
 
-#include "src/class/prte_pointer_array.h"
 #include "src/class/prte_bitmap.h"
+#include "src/class/prte_pointer_array.h"
 #include "src/util/bit_ops.h"
 #include "src/util/output.h"
 
@@ -28,21 +28,20 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
-#include "src/util/name_fns.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime.h"
+#include "src/util/name_fns.h"
 
 #include "src/mca/rml/base/rml_contact.h"
 
-#include "src/mca/routed/base/base.h"
 #include "routed_binomial.h"
+#include "src/mca/routed/base/base.h"
 
 static int init(void);
 static int finalize(void);
 static int delete_route(pmix_proc_t *proc);
-static int update_route(pmix_proc_t *target,
-                        pmix_proc_t *route);
+static int update_route(pmix_proc_t *target, pmix_proc_t *route);
 static pmix_proc_t get_route(pmix_proc_t *target);
 static int route_lost(const pmix_proc_t *route);
 static bool route_is_defined(const pmix_proc_t *target);
@@ -66,11 +65,11 @@ prte_routed_module_t prte_routed_binomial_module = {
 };
 
 /* local globals */
-static pmix_proc_t      *lifeline=NULL;
-static pmix_proc_t      local_lifeline;
-static int                      num_children;
-static prte_list_t              my_children;
-static bool                     hnp_direct=true;
+static pmix_proc_t *lifeline = NULL;
+static pmix_proc_t local_lifeline;
+static int num_children;
+static prte_list_t my_children;
+static bool hnp_direct = true;
 
 static int init(void)
 {
@@ -114,12 +113,9 @@ static int delete_route(pmix_proc_t *proc)
         return PRTE_ERR_BAD_PARAM;
     }
 
-
     PRTE_OUTPUT_VERBOSE((1, prte_routed_base_framework.framework_output,
                          "%s routed_binomial_delete_route for %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(proc)));
-
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
 
     /* THIS CAME FROM OUR OWN JOB FAMILY...there is nothing
      * to do here. The routes will be redefined when we update
@@ -129,33 +125,28 @@ static int delete_route(pmix_proc_t *proc)
     return PRTE_SUCCESS;
 }
 
-static int update_route(pmix_proc_t *target,
-                        pmix_proc_t *route)
+static int update_route(pmix_proc_t *target, pmix_proc_t *route)
 {
     if (PMIX_PROCID_INVALID(target)) {
         return PRTE_ERR_BAD_PARAM;
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_routed_base_framework.framework_output,
-                         "%s routed_binomial_update: %s --> %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(target),
-                         PRTE_NAME_PRINT(route)));
-
+                         "%s routed_binomial_update: %s --> %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(target), PRTE_NAME_PRINT(route)));
 
     /* if I am a daemon and the target is my HNP, then check
      * the route - if it isn't direct, then we just flag that
      * we have a route to the HNP
      */
-    if (PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, PRTE_PROC_MY_HNP, target) &&
-        PRTE_EQUAL != prte_util_compare_name_fields(PRTE_NS_CMP_ALL, PRTE_PROC_MY_HNP, route)) {
+    if (PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, PRTE_PROC_MY_HNP, target)
+        && PRTE_EQUAL != prte_util_compare_name_fields(PRTE_NS_CMP_ALL, PRTE_PROC_MY_HNP, route)) {
         hnp_direct = false;
         return PRTE_SUCCESS;
     }
 
     return PRTE_SUCCESS;
 }
-
 
 static pmix_proc_t get_route(pmix_proc_t *target)
 {
@@ -199,7 +190,6 @@ static pmix_proc_t get_route(pmix_proc_t *target)
         }
     }
 
-
     /* find out what daemon hosts this proc */
     if (PMIX_RANK_INVALID == (daemon.rank = prte_get_proc_daemon_vpid(target))) {
         /*PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);*/
@@ -214,10 +204,9 @@ static pmix_proc_t get_route(pmix_proc_t *target)
     }
 
     /* search routing tree for next step to that daemon */
-    for (item = prte_list_get_first(&my_children);
-            item != prte_list_get_end(&my_children);
-            item = prte_list_get_next(item)) {
-        child = (prte_routed_tree_t*)item;
+    for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
+         item = prte_list_get_next(item)) {
+        child = (prte_routed_tree_t *) item;
         if (child->rank == daemon.rank) {
             /* the child is hosting the proc - just send it there */
             ret = &daemon;
@@ -240,12 +229,10 @@ static pmix_proc_t get_route(pmix_proc_t *target)
 
     ret = &daemon;
 
- found:
+found:
     PRTE_OUTPUT_VERBOSE((1, prte_routed_base_framework.framework_output,
-                         "%s routed_binomial_get(%s) --> %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(target),
-                         PRTE_NAME_PRINT(ret)));
+                         "%s routed_binomial_get(%s) --> %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(target), PRTE_NAME_PRINT(ret)));
 
     return *ret;
 }
@@ -255,23 +242,19 @@ static int route_lost(const pmix_proc_t *route)
     prte_list_item_t *item;
     prte_routed_tree_t *child;
 
-    PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
-                         "%s route to %s lost",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(route)));
+    PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output, "%s route to %s lost",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(route)));
 
     /* if we lose the connection to the lifeline and we are NOT already,
      * in finalize, tell the OOB to abort.
      * NOTE: we cannot call abort from here as the OOB needs to first
      * release a thread-lock - otherwise, we will hang!!
      */
-    if (!prte_finalizing &&
-        NULL != lifeline &&
-        PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, route, lifeline)) {
+    if (!prte_finalizing && NULL != lifeline
+        && PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, route, lifeline)) {
         PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
                              "%s routed:binomial: Connection to lifeline %s lost",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(lifeline)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(lifeline)));
         return PRTE_ERR_FATAL;
     }
 
@@ -279,15 +262,13 @@ static int route_lost(const pmix_proc_t *route)
      * remove it from the child list
      */
     if (PMIX_CHECK_NSPACE(route->nspace, PRTE_PROC_MY_NAME->nspace)) {
-        for (item = prte_list_get_first(&my_children);
-             item != prte_list_get_end(&my_children);
+        for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
              item = prte_list_get_next(item)) {
-            child = (prte_routed_tree_t*)item;
+            child = (prte_routed_tree_t *) item;
             if (child->rank == route->rank) {
                 PRTE_OUTPUT_VERBOSE((4, prte_routed_base_framework.framework_output,
                                      "%s routed_binomial: removing route to child daemon %s",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     PRTE_NAME_PRINT(route)));
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(route)));
                 prte_list_remove_item(&my_children, item);
                 PRTE_RELEASE(item);
                 return PRTE_SUCCESS;
@@ -299,11 +280,10 @@ static int route_lost(const pmix_proc_t *route)
     return PRTE_SUCCESS;
 }
 
-
 static bool route_is_defined(const pmix_proc_t *target)
 {
     /* find out what daemon hosts this proc */
-    if (PMIX_RANK_INVALID == prte_get_proc_daemon_vpid((pmix_proc_t*)target)) {
+    if (PMIX_RANK_INVALID == prte_get_proc_daemon_vpid((pmix_proc_t *) target)) {
         return false;
     }
 
@@ -321,9 +301,8 @@ static int set_lifeline(pmix_proc_t *proc)
     return PRTE_SUCCESS;
 }
 
-static int binomial_tree(int rank, int parent, int me, int num_procs,
-                         int *nchildren, prte_list_t *childrn,
-                         prte_bitmap_t *relatives, bool mine)
+static int binomial_tree(int rank, int parent, int me, int num_procs, int *nchildren,
+                         prte_list_t *childrn, prte_bitmap_t *relatives, bool mine)
 {
     int i, bitmap, peer, hibit, mask, found;
     prte_routed_tree_t *child;
@@ -331,8 +310,7 @@ static int binomial_tree(int rank, int parent, int me, int num_procs,
 
     PRTE_OUTPUT_VERBOSE((3, prte_routed_base_framework.framework_output,
                          "%s routed:binomial rank %d parent %d me %d num_procs %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         rank, parent, me, num_procs));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rank, parent, me, num_procs));
 
     /* is this me? */
     if (me == rank) {
@@ -348,8 +326,7 @@ static int binomial_tree(int rank, int parent, int me, int num_procs,
                 child->rank = peer;
                 PRTE_OUTPUT_VERBOSE((3, prte_routed_base_framework.framework_output,
                                      "%s routed:binomial %d found child %s",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     rank,
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rank,
                                      PRTE_VPID_PRINT(child->rank)));
 
                 if (mine) {
@@ -393,7 +370,8 @@ static int binomial_tree(int rank, int parent, int me, int num_procs,
                                  "%s routed:binomial find children computing tree",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             /* execute compute on this child */
-            if (0 <= (found = binomial_tree(peer, rank, me, num_procs, nchildren, childrn, relatives, mine))) {
+            if (0 <= (found = binomial_tree(peer, rank, me, num_procs, nchildren, childrn,
+                                            relatives, mine))) {
                 PRTE_OUTPUT_VERBOSE((5, prte_routed_base_framework.framework_output,
                                      "%s routed:binomial find children returning found value %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), found));
@@ -420,17 +398,17 @@ static void update_routing_plan(void)
      * lie underneath their branch
      */
     PRTE_PROC_MY_PARENT->rank = binomial_tree(0, 0, PRTE_PROC_MY_NAME->rank,
-                                   prte_process_info.num_daemons,
-                                   &num_children, &my_children, NULL, true);
+                                              prte_process_info.num_daemons, &num_children,
+                                              &my_children, NULL, true);
 
     if (0 < prte_output_get_verbosity(prte_routed_base_framework.framework_output)) {
-        prte_output(0, "%s: parent %u num_children %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_PROC_MY_PARENT->rank, num_children);
-        for (item = prte_list_get_first(&my_children);
-             item != prte_list_get_end(&my_children);
+        prte_output(0, "%s: parent %u num_children %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    PRTE_PROC_MY_PARENT->rank, num_children);
+        for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
              item = prte_list_get_next(item)) {
-            child = (prte_routed_tree_t*)item;
+            child = (prte_routed_tree_t *) item;
             prte_output(0, "%s: \tchild %u", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), child->rank);
-            for (j=0; j < (int)prte_process_info.num_daemons; j++) {
+            for (j = 0; j < (int) prte_process_info.num_daemons; j++) {
                 if (prte_bitmap_is_set_bit(&child->relatives, j)) {
                     prte_output(0, "%s: \t\trelation %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), j);
                 }
@@ -447,9 +425,8 @@ static void get_routing_list(prte_list_t *coll)
 
 static size_t num_routes(void)
 {
-    PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
-                         "%s num routes %d",
+    PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output, "%s num routes %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (int)prte_list_get_size(&my_children)));
+                         (int) prte_list_get_size(&my_children)));
     return prte_list_get_size(&my_children);
 }

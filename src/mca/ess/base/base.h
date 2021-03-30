@@ -78,9 +78,7 @@ PRTE_EXPORT int prte_ess_base_proc_binding(void);
 /*
  * Put functions
  */
-PRTE_EXPORT int prte_ess_env_put(int32_t num_procs,
-                                   int32_t num_local_procs,
-                                   char ***env);
+PRTE_EXPORT int prte_ess_env_put(int32_t num_procs, int32_t num_local_procs, char ***env);
 
 typedef struct {
     prte_list_item_t super;

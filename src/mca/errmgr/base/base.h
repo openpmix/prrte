@@ -12,6 +12,7 @@
  * Copyright (c) 2012-2013 Los Alamos National Security, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,9 +33,8 @@
 
 #include "src/class/prte_list.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/errmgr/errmgr.h"
-
+#include "src/mca/mca.h"
 
 BEGIN_C_DECLS
 
@@ -43,7 +43,7 @@ BEGIN_C_DECLS
  */
 PRTE_EXPORT extern prte_mca_base_framework_t prte_errmgr_base_framework;
 /* select a component */
-PRTE_EXPORT    int prte_errmgr_base_select(void);
+PRTE_EXPORT int prte_errmgr_base_select(void);
 
 END_C_DECLS
 

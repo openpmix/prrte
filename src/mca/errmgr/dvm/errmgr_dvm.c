@@ -23,49 +23,49 @@
 
 #include <sys/types.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <string.h>
 #ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
+#    include <sys/wait.h>
 #endif
+#include "src/pmix/pmix-internal.h"
 #include <pmix.h>
 #include <pmix_server.h>
-#include "src/pmix/pmix-internal.h"
 
+#include "src/pmix/pmix-internal.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
-#include "src/pmix/pmix-internal.h"
 
+#include "src/mca/ess/ess.h"
+#include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/odls/odls.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/base/odls_private.h"
+#include "src/mca/odls/odls.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/rml/rml.h"
 #include "src/mca/routed/routed.h"
-#include "src/mca/grpcomm/grpcomm.h"
-#include "src/mca/ess/ess.h"
 #include "src/mca/state/state.h"
 
+#include "src/threads/threads.h"
 #include "src/util/error_strings.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
-#include "src/threads/threads.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/prte_quit.h"
 
-#include "src/mca/errmgr/errmgr.h"
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/errmgr/base/errmgr_private.h"
+#include "src/mca/errmgr/errmgr.h"
 
-#include "src/mca/propagate/propagate.h"
 #include "errmgr_dvm.h"
+#include "src/mca/propagate/propagate.h"
 
 static int init(void);
 static int finalize(void);
@@ -73,14 +73,12 @@ static int finalize(void);
 /******************
  * dvm module
  ******************/
-prte_errmgr_base_module_t prte_errmgr_dvm_module = {
-    .init = init,
-    .finalize = finalize,
-    .logfn = prte_errmgr_base_log,
-    .abort = prte_errmgr_base_abort,
-    .abort_peers = prte_errmgr_base_abort_peers,
-    .enable_detector = NULL
-};
+prte_errmgr_base_module_t prte_errmgr_dvm_module = {.init = init,
+                                                    .finalize = finalize,
+                                                    .logfn = prte_errmgr_base_log,
+                                                    .abort = prte_errmgr_base_abort,
+                                                    .abort_peers = prte_errmgr_base_abort_peers,
+                                                    .enable_detector = NULL};
 
 /*
  * Local functions
@@ -124,20 +122,17 @@ static int pack_state_for_proc(pmix_data_buffer_t *alert, prte_proc_t *child)
 static void register_cbfunc(int status, size_t errhndler, void *cbdata)
 {
 
-    if(NULL != prte_propagate.register_cb) {
+    if (NULL != prte_propagate.register_cb) {
         prte_propagate.register_cb();
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-            "errmgr:dvm:event register cbfunc with status %d ", status));
+                             "errmgr:dvm:event register cbfunc with status %d ", status));
     }
 }
 
-static void error_notify_cbfunc(size_t evhdlr_registration_id,
-                                pmix_status_t status,
-                                const pmix_proc_t *source,
-                                pmix_info_t info[], size_t ninfo,
+static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t status,
+                                const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                                 pmix_info_t *results, size_t nresults,
-                                pmix_event_notification_cbfunc_fn_t cbfunc,
-                                void *cbdata)
+                                pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     pmix_proc_t proc;
     int rc = PRTE_SUCCESS;
@@ -148,26 +143,29 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
     size_t n;
 
     if (NULL != info) {
-        for (n=0; n < ninfo; n++) {
+        for (n = 0; n < ninfo; n++) {
             if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
                 PMIX_XFER_PROCID(&proc, info[n].value.data.proc);
 
                 if (prte_get_proc_daemon_vpid(&proc) != PRTE_PROC_MY_NAME->rank) {
                     return;
                 }
-                PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                            "%s errmgr: dvm: error proc %s with key-value %s notified from %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc),
-                            info[n].key, PRTE_NAME_PRINT(source)));
+                PRTE_OUTPUT_VERBOSE(
+                    (5, prte_errmgr_base_framework.framework_output,
+                     "%s errmgr: dvm: error proc %s with key-value %s notified from %s",
+                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc), info[n].key,
+                     PRTE_NAME_PRINT(source)));
 
                 if (NULL == (jdata = prte_get_job_data_object(proc.nspace))) {
                     /* must already be complete */
-                    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                                "%s errmgr:dvm:error_notify_callback NULL jdata - ignoring error",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    PRTE_OUTPUT_VERBOSE(
+                        (5, prte_errmgr_base_framework.framework_output,
+                         "%s errmgr:dvm:error_notify_callback NULL jdata - ignoring error",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                     return;
                 }
-                temp_orte_proc= (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc.rank);
+                temp_orte_proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs,
+                                                                             proc.rank);
                 if (NULL == temp_orte_proc) {
                     /* must already be gone */
                     return;
@@ -189,7 +187,8 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
                     return;
                 }
 
-                /* proc state now is PRTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this; code is 128+9 */
+                /* proc state now is PRTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this;
+                 * code is 128+9 */
                 temp_orte_proc->state = PRTE_PROC_STATE_ABORTED_BY_SIG;
                 /* now pack the child's info */
                 if (PRTE_SUCCESS != (rc = pack_state_for_proc(alert, temp_orte_proc))) {
@@ -198,19 +197,17 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id,
                 }
 
                 /* send this process's info to hnp */
-                if (0 > (rc = prte_rml.send_buffer_nb(
-                                PRTE_PROC_MY_HNP, alert,
-                                PRTE_RML_TAG_PLM,
-                                prte_rml_send_callback, NULL))) {
+                if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
+                                                      prte_rml_send_callback, NULL))) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                                "%s errmgr:dvm: send to hnp failed",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                                         "%s errmgr:dvm: send to hnp failed",
+                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                     PRTE_ERROR_LOG(rc);
                     PRTE_RELEASE(alert);
                 }
-                if (PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_IOF_COMPLETE) &&
-                        PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_WAITPID) &&
-                        !PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_RECORDED)) {
+                if (PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_IOF_COMPLETE)
+                    && PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_WAITPID)
+                    && !PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_RECORDED)) {
                     PRTE_ACTIVATE_PROC_STATE(&proc, PRTE_PROC_STATE_TERMINATED);
                 }
 
@@ -241,8 +238,8 @@ static int init(void)
         pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
 
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                "%s errmgr:dvm: register evhandler in errmgr",
-                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                             "%s errmgr:dvm: register evhandler in errmgr",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PMIx_Register_event_handler(&pcode, 1, NULL, 0, error_notify_cbfunc, register_cbfunc, NULL);
     }
 #endif
@@ -274,7 +271,7 @@ static void _terminate_job(pmix_nspace_t jobid)
 
 static void job_errors(int fd, short args, void *cbdata)
 {
-    prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
+    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
     prte_job_state_t jobstate;
     int32_t rc;
@@ -301,8 +298,7 @@ static void job_errors(int fd, short args, void *cbdata)
 
     PRTE_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:dvm: job %s reported state %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_JOBID_PRINT(jdata->nspace),
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
                          prte_job_state_to_str(jobstate)));
 
     if (PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
@@ -311,8 +307,7 @@ static void job_errors(int fd, short args, void *cbdata)
          * a way back to us. In this case, output a message indicating a daemon
          * died without reporting. Otherwise, say nothing as we
          * likely already output an error message */
-        if (PRTE_JOB_STATE_ABORTED == jobstate &&
-            jdata->num_procs != jdata->num_reported) {
+        if (PRTE_JOB_STATE_ABORTED == jobstate && jdata->num_procs != jdata->num_reported) {
             prte_routing_is_enabled = false;
             prte_show_help("help-errmgr-base.txt", "failed-daemon", true);
         }
@@ -331,8 +326,7 @@ static void job_errors(int fd, short args, void *cbdata)
 
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:dvm sending notification of job %s failure to %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_JOBID_PRINT(jdata->nspace),
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
                          PRTE_NAME_PRINT(&jdata->originator)));
 
     /* all jobs were spawned by a requestor, so ensure that requestor
@@ -351,12 +345,11 @@ static void job_errors(int fd, short args, void *cbdata)
      * state machine know this job failed - it has no
      * other means of being alerted since no proc states
      * will be triggered */
-    if (PRTE_JOB_STATE_FAILED_TO_START == jdata->state ||
-        PRTE_JOB_STATE_NEVER_LAUNCHED == jdata->state ||
-        PRTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state ||
-        PRTE_JOB_STATE_ALLOC_FAILED == jdata->state ||
-        PRTE_JOB_STATE_MAP_FAILED == jdata->state ||
-        PRTE_JOB_STATE_CANNOT_LAUNCH == jdata->state) {
+    if (PRTE_JOB_STATE_FAILED_TO_START == jdata->state
+        || PRTE_JOB_STATE_NEVER_LAUNCHED == jdata->state
+        || PRTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state
+        || PRTE_JOB_STATE_ALLOC_FAILED == jdata->state || PRTE_JOB_STATE_MAP_FAILED == jdata->state
+        || PRTE_JOB_STATE_CANNOT_LAUNCH == jdata->state) {
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
     }
 
@@ -366,7 +359,7 @@ static void job_errors(int fd, short args, void *cbdata)
 
 static void proc_errors(int fd, short args, void *cbdata)
 {
-    prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
+    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
     prte_proc_t *pptr, *proct;
     pmix_proc_t *proc = &caddy->name;
@@ -377,10 +370,8 @@ static void proc_errors(int fd, short args, void *cbdata)
     PRTE_ACQUIRE_OBJECT(caddy);
 
     PRTE_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
-                         "%s errmgr:dvm: for proc %s state %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(proc),
-                         prte_proc_state_to_str(state)));
+                         "%s errmgr:dvm: for proc %s state %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state)));
 
     /* get the job object */
     if (prte_finalizing || NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
@@ -388,7 +379,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         PRTE_RELEASE(caddy);
         return;
     }
-    pptr = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, proc->rank);
+    pptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank);
 
     /* we MUST handle a communication failure before doing anything else
      * as it requires some special care to avoid normal termination issues
@@ -419,16 +410,20 @@ static void proc_errors(int fd, short args, void *cbdata)
         /* if we have ordered orteds to terminate or abort
          * is in progress, record it */
         if (prte_prteds_term_ordered || prte_abnormal_term_ordered) {
-            PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                                 "%s Comm failure: daemons terminating - recording daemon %s as gone",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
+            PRTE_OUTPUT_VERBOSE(
+                (5, prte_errmgr_base_framework.framework_output,
+                 "%s Comm failure: daemons terminating - recording daemon %s as gone",
+                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
             /* remove from dependent routes, if it is one */
             prte_routed.route_lost(proc);
             /* if all my routes and local children are gone, then terminate ourselves */
             if (0 == prte_routed.num_routes()) {
-                for (i=0; i < prte_local_children->size; i++) {
-                    if (NULL != (proct = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i)) &&
-                        PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_ALIVE) && proct->state < PRTE_PROC_STATE_UNTERMINATED) {
+                for (i = 0; i < prte_local_children->size; i++) {
+                    if (NULL
+                            != (proct = (prte_proc_t *)
+                                    prte_pointer_array_get_item(prte_local_children, i))
+                        && PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_ALIVE)
+                        && proct->state < PRTE_PROC_STATE_UNTERMINATED) {
                         /* at least one is still alive */
                         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                              "%s Comm failure: at least one proc (%s) still alive",
@@ -442,11 +437,11 @@ static void proc_errors(int fd, short args, void *cbdata)
                                      "%s errmgr_dvm: all routes and children gone - ordering exit",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
-        } else {
+            } else {
                 PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                      "%s Comm failure: %d routes remain alive",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     (int)prte_routed.num_routes()));
+                                     (int) prte_routed.num_routes()));
             }
             goto cleanup;
         }
@@ -457,14 +452,13 @@ static void proc_errors(int fd, short args, void *cbdata)
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             /* output an error message so the user knows what happened */
             prte_show_help("help-errmgr-base.txt", "node-died", true,
-                           PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                           prte_process_info.nodename,
-                           PRTE_NAME_PRINT(proc),
-                           pptr->node->name);
+                           PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_process_info.nodename,
+                           PRTE_NAME_PRINT(proc), pptr->node->name);
             /* mark the daemon job as failed */
             jdata->state = PRTE_JOB_STATE_COMM_FAILED;
             /* point to the lowest rank to cause the problem */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr, PMIX_POINTER);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
+                               PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
             PRTE_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
@@ -490,8 +484,9 @@ static void proc_errors(int fd, short args, void *cbdata)
      * any of our routes or local  children remain alive - if not, then
      * terminate ourselves. */
     if (prte_prteds_term_ordered) {
-        for (i=0; i < prte_local_children->size; i++) {
-            if (NULL != (proct = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i))) {
+        for (i = 0; i < prte_local_children->size; i++) {
+            if (NULL
+                != (proct = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
                 if (PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
                     goto keep_going;
                 }
@@ -507,11 +502,11 @@ static void proc_errors(int fd, short args, void *cbdata)
         }
     }
 
-  keep_going:
+keep_going:
     /* if this is a continuously operating job, then there is nothing more
      * to do - we let the job continue to run */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS_OP, NULL, PMIX_BOOL) ||
-        PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RECOVERABLE)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS_OP, NULL, PMIX_BOOL)
+        || PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RECOVERABLE)) {
         /* always mark the waitpid as having fired */
         PRTE_ACTIVATE_PROC_STATE(&pptr->name, PRTE_PROC_STATE_WAITPID_FIRED);
         /* if this is a remote proc, we won't hear anything more about it
@@ -539,8 +534,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     case PRTE_PROC_STATE_KILLED_BY_CMD:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s killed by cmd",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(proc)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
         /* we ordered this proc to die, so it isn't an abnormal termination
          * and we don't flag it as such
          */
@@ -553,13 +547,13 @@ static void proc_errors(int fd, short args, void *cbdata)
 
     case PRTE_PROC_STATE_ABORTED:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:dvm: proc %s aborted",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             "%s errmgr:dvm: proc %s aborted", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(proc)));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             jdata->state = PRTE_JOB_STATE_ABORTED;
             /* point to the first rank to cause the problem */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr, PMIX_POINTER);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
+                               PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
             PRTE_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
@@ -572,12 +566,12 @@ static void proc_errors(int fd, short args, void *cbdata)
     case PRTE_PROC_STATE_ABORTED_BY_SIG:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s aborted by signal",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(proc)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             jdata->state = PRTE_JOB_STATE_ABORTED_BY_SIG;
             /* point to the first rank to cause the problem */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr, PMIX_POINTER);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
+                               PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
             PRTE_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
@@ -592,12 +586,12 @@ static void proc_errors(int fd, short args, void *cbdata)
     case PRTE_PROC_STATE_TERM_WO_SYNC:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s terminated without sync",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(proc)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             jdata->state = PRTE_JOB_STATE_ABORTED_WO_SYNC;
             /* point to the first rank to cause the problem */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr, PMIX_POINTER);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
+                               PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
             PRTE_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
@@ -610,18 +604,16 @@ static void proc_errors(int fd, short args, void *cbdata)
             if (0 == jdata->exit_code) {
                 jdata->exit_code = PRTE_ERROR_DEFAULT_EXIT_CODE;
             }
-             /* kill the job */
+            /* kill the job */
             _terminate_job(jdata->nspace);
-       }
+        }
         break;
 
     case PRTE_PROC_STATE_FAILED_TO_START:
     case PRTE_PROC_STATE_FAILED_TO_LAUNCH:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:dvm: proc %s %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(proc),
-                             prte_proc_state_to_str(state)));
+                             "%s errmgr:dvm: proc %s %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state)));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             if (PRTE_PROC_STATE_FAILED_TO_START) {
                 jdata->state = PRTE_JOB_STATE_FAILED_TO_START;
@@ -629,7 +621,8 @@ static void proc_errors(int fd, short args, void *cbdata)
                 jdata->state = PRTE_JOB_STATE_FAILED_TO_LAUNCH;
             }
             /* point to the first rank to cause the problem */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr, PMIX_POINTER);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
+                               PMIX_POINTER);
             /* update our exit code */
             jdata->exit_code = pptr->exit_code;
             /* just in case the exit code hadn't been set, do it here - this
@@ -654,12 +647,13 @@ static void proc_errors(int fd, short args, void *cbdata)
     case PRTE_PROC_STATE_CALLED_ABORT:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s called abort with exit code %d",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(proc), pptr->exit_code));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
+                             pptr->exit_code));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             jdata->state = PRTE_JOB_STATE_CALLED_ABORT;
             /* point to the first proc to cause the problem */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr, PMIX_POINTER);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
+                               PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
             PRTE_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
@@ -672,21 +666,23 @@ static void proc_errors(int fd, short args, void *cbdata)
     case PRTE_PROC_STATE_TERM_NON_ZERO:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s exited with non-zero status %d",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(proc),
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
                              pptr->exit_code));
         jdata->exit_code = pptr->exit_code;
         /* track the number of non-zero exits */
         i32 = 0;
         i32ptr = &i32;
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, (void**)&i32ptr, PMIX_INT32);
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, (void **) &i32ptr,
+                           PMIX_INT32);
         ++i32;
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, PRTE_ATTR_LOCAL, i32ptr, PMIX_INT32);
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, PRTE_ATTR_LOCAL, i32ptr,
+                           PMIX_INT32);
         if (prte_abort_non_zero_exit) {
             if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
                 jdata->state = PRTE_JOB_STATE_NON_ZERO_TERM;
                 /* point to the first rank to cause the problem */
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr, PMIX_POINTER);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
+                                   PMIX_POINTER);
                 /* retain the object so it doesn't get free'd */
                 PRTE_RETAIN(pptr);
                 PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
@@ -705,12 +701,12 @@ static void proc_errors(int fd, short args, void *cbdata)
     case PRTE_PROC_STATE_HEARTBEAT_FAILED:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s heartbeat failed",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(proc)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             jdata->state = PRTE_JOB_STATE_HEARTBEAT_FAILED;
             /* point to the first rank to cause the problem */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr, PMIX_POINTER);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
+                               PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
             PRTE_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
@@ -725,13 +721,13 @@ static void proc_errors(int fd, short args, void *cbdata)
     case PRTE_PROC_STATE_UNABLE_TO_SEND_MSG:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: unable to send message to proc %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(proc)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
         /* if this proc is one of my daemons, then we are truly
          * hosed - so just exit out
          */
         if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, proc->nspace)) {
-            /* do not kill the job if ft prte is enabled, with newly spawned process the jobid could be different */
+            /* do not kill the job if ft prte is enabled, with newly spawned process the jobid could
+             * be different */
             if (!prte_enable_ft) {
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             }
@@ -743,8 +739,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         /* shouldn't get this, but terminate job if required */
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:dvm: proc %s default error %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(proc),
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
                              prte_proc_state_to_str(state)));
         if (jdata->num_terminated == jdata->num_procs) {
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
@@ -756,7 +751,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         PRTE_ACTIVATE_PROC_STATE(&pptr->name, PRTE_PROC_STATE_WAITPID_FIRED);
     }
 
-  cleanup:
+cleanup:
     rc = prte_pmix_convert_proc_state_to_error(state);
     rc = prte_plm_base_spawn_reponse(rc, jdata);
     if (PRTE_SUCCESS != rc) {

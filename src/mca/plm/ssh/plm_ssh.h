@@ -17,6 +17,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020-2021 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,14 +35,14 @@
 #include "prte_config.h"
 
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 #include <time.h>
 
 #include "src/mca/mca.h"
 
-#include "src/mca/plm/plm.h"
 #include "src/mca/plm/base/base.h"
+#include "src/mca/plm/plm.h"
 
 BEGIN_C_DECLS
 
@@ -75,7 +76,7 @@ typedef struct prte_plm_ssh_component_t prte_plm_ssh_component_t;
 PRTE_MODULE_EXPORT extern prte_plm_ssh_component_t prte_plm_ssh_component;
 extern prte_plm_base_module_t prte_plm_ssh_module;
 
-PRTE_MODULE_EXPORT char **prte_plm_ssh_search(const char* agent_list, const char *path);
+PRTE_MODULE_EXPORT char **prte_plm_ssh_search(const char *agent_list, const char *path);
 
 END_C_DECLS
 

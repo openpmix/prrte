@@ -13,6 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,10 +27,10 @@
 #include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
+#    include <sys/socket.h>
 #endif
 
 #include "src/class/prte_list.h"
@@ -60,8 +61,8 @@ PRTE_CLASS_DECLARATION(prte_pending_connection_t);
 
 PRTE_EXPORT int prte_start_listening(void);
 PRTE_EXPORT void prte_stop_listening(void);
-PRTE_EXPORT int prte_register_listener(struct sockaddr* address, prte_socklen_t addrlen,
-                                         prte_event_base_t *evbase,
-                                         prte_listener_callback_fn_t handler);
+PRTE_EXPORT int prte_register_listener(struct sockaddr *address, prte_socklen_t addrlen,
+                                       prte_event_base_t *evbase,
+                                       prte_listener_callback_fn_t handler);
 
 #endif /* PRTE_LISTENER_H */

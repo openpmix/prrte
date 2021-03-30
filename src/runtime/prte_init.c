@@ -33,7 +33,7 @@
 
 #include <sys/types.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 #include "src/util/arch.h"
@@ -54,19 +54,19 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "src/threads/threads.h"
 
-#include "src/mca/prtebacktrace/base/base.h"
 #include "src/mca/base/base.h"
+#include "src/mca/errmgr/base/base.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/errmgr/base/base.h"
 #include "src/mca/filem/base/base.h"
 #include "src/mca/grpcomm/base/base.h"
-#include "src/mca/prteif/base/base.h"
-#include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/oob/base/base.h"
 #include "src/mca/plm/base/base.h"
+#include "src/mca/prtebacktrace/base/base.h"
+#include "src/mca/prteif/base/base.h"
+#include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rml/base/base.h"
@@ -75,9 +75,9 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 
-#include "src/runtime/runtime.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
+#include "src/runtime/runtime.h"
 
 /*
  * Whether we have completed prte_init or we are in prte_finalize
@@ -104,9 +104,9 @@ pmix_nspace_t prte_nspace_wildcard = {0};
 static bool util_initialized = false;
 
 #if PRTE_CC_USE_PRAGMA_IDENT
-#pragma ident PRTE_IDENT_STRING
+#    pragma ident PRTE_IDENT_STRING
 #elif PRTE_CC_USE_IDENT
-#ident PRTE_IDENT_STRING
+#    ident PRTE_IDENT_STRING
 #endif
 const char prte_version_string[] = PRTE_IDENT_STRING;
 
@@ -130,8 +130,12 @@ int prte_init_util(prte_proc_type_t flags)
     prte_output_init();
 
     /* initialize install dirs code */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        fprintf(stderr, "prte_prteinstalldirs_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRTE_SUCCESS)\n",
+    if (PRTE_SUCCESS
+        != (ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
+                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        fprintf(stderr,
+                "prte_prteinstalldirs_base_open() failed -- process will likely abort (%s:%d, "
+                "returned %d instead of PRTE_SUCCESS)\n",
                 __FILE__, __LINE__, ret);
         return ret;
     }
@@ -173,9 +177,7 @@ int prte_init_util(prte_proc_type_t flags)
      * doing so twice in cases where the launch agent did it for us
      */
     if (PRTE_SUCCESS != (ret = prte_util_init_sys_limits(&error))) {
-        prte_show_help("help-prte-runtime.txt",
-                        "prte_init:syslimit", false,
-                        error);
+        prte_show_help("help-prte-runtime.txt", "prte_init:syslimit", false, error);
         return PRTE_ERR_SILENT;
     }
 
@@ -185,39 +187,44 @@ int prte_init_util(prte_proc_type_t flags)
         goto error;
     }
 
-    /* Initialize the data storage service. */    /* initialize the mca */
+    /* Initialize the data storage service. */ /* initialize the mca */
     if (PRTE_SUCCESS != (ret = prte_mca_base_open())) {
         error = "mca_base_open";
         goto error;
     }
 
     /* initialize if framework */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prteif_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        fprintf(stderr, "prte_prteif_base_open() failed -- process will likely abort (%s:%d, returned %d instead of PRTE_SUCCESS)\n",
+    if (PRTE_SUCCESS
+        != (ret = prte_mca_base_framework_open(&prte_prteif_base_framework,
+                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        fprintf(stderr,
+                "prte_prteif_base_open() failed -- process will likely abort (%s:%d, returned %d "
+                "instead of PRTE_SUCCESS)\n",
                 __FILE__, __LINE__, ret);
         return ret;
     }
     /* add network aliases to our list of alias hostnames */
     prte_ifgetaliases(&prte_process_info.aliases);
 
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    if (PRTE_SUCCESS
+        != (ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework,
+                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_backtrace_base_open";
         goto error;
     }
 
     return PRTE_SUCCESS;
 
-  error:
+error:
     if (PRTE_ERR_SILENT != ret) {
-        prte_show_help("help-prte-runtime",
-                       "prte_init:startup:internal-failure",
-                       true, error, PRTE_ERROR_NAME(ret), ret);
+        prte_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true, error,
+                       PRTE_ERROR_NAME(ret), ret);
     }
 
     return ret;
 }
 
-int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
+int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
 {
     int ret;
     char *error = NULL;
@@ -283,28 +290,28 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
 
     /* setup the global job and node arrays */
     prte_job_data = PRTE_NEW(prte_pointer_array_t);
-    if (PRTE_SUCCESS != (ret = prte_pointer_array_init(prte_job_data,
-                                                       PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                                       PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                                       PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
+    if (PRTE_SUCCESS
+        != (ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup job array";
         goto error;
     }
     prte_node_pool = PRTE_NEW(prte_pointer_array_t);
-    if (PRTE_SUCCESS != (ret = prte_pointer_array_init(prte_node_pool,
-                               PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                               PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                               PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
+    if (PRTE_SUCCESS
+        != (ret = prte_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup node array";
         goto error;
     }
     prte_node_topologies = PRTE_NEW(prte_pointer_array_t);
-    if (PRTE_SUCCESS != (ret = prte_pointer_array_init(prte_node_topologies,
-                               PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                               PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                               PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
+    if (PRTE_SUCCESS
+        != (ret = prte_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup node topologies array";
         goto error;
@@ -312,7 +319,9 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
 
     /* open the SCHIZO framework as everyone needs it, and the
      * ess will use it to help select its component */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    if (PRTE_SUCCESS
+        != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
+                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_schizo_base_open";
         goto error;
@@ -324,7 +333,9 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
     }
 
     /* open the ESS and select the correct module for this environment */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_framework_open(&prte_ess_base_framework, PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    if (PRTE_SUCCESS
+        != (ret = prte_mca_base_framework_open(&prte_ess_base_framework,
+                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_ess_base_open";
         goto error;
@@ -347,7 +358,7 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
 
 #if PRTE_ENABLE_FT
     if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_DAEMON) {
-        if (NULL != prte_errmgr.enable_detector){
+        if (NULL != prte_errmgr.enable_detector) {
             prte_errmgr.enable_detector(prte_enable_ft);
         }
     }
@@ -367,11 +378,10 @@ int prte_init(int* pargc, char*** pargv, prte_proc_type_t flags)
     PRTE_RELEASE_THREAD(&prte_init_lock);
     return PRTE_SUCCESS;
 
- error:
+error:
     if (PRTE_ERR_SILENT != ret) {
-        prte_show_help("help-prte-runtime",
-                       "prte_init:startup:internal-failure",
-                       true, error, PRTE_ERROR_NAME(ret), ret);
+        prte_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true, error,
+                       PRTE_ERROR_NAME(ret), ret);
     }
 
     return ret;

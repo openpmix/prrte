@@ -38,21 +38,21 @@
 
 #include <sys/types.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <signal.h>
 #include <stdlib.h>
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
+#    include <sys/stat.h>
 #endif
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
+#    include <fcntl.h>
 #endif
 
 #define SR1_PJOBS
@@ -64,20 +64,19 @@
 #include "src/util/output.h"
 #include "src/util/prte_environ.h"
 
-#include "src/util/show_help.h"
-#include "src/runtime/prte_globals.h"
-#include "src/runtime/prte_wait.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/schizo/schizo.h"
 #include "src/mca/state/state.h"
+#include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_wait.h"
 #include "src/threads/threads.h"
+#include "src/util/show_help.h"
 
-#include "src/mca/plm/plm.h"
+#include "plm_lsf.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
-#include "plm_lsf.h"
-
+#include "src/mca/plm/plm.h"
 
 /*
  * Local functions
@@ -88,21 +87,18 @@ static int plm_lsf_terminate_orteds(void);
 static int plm_lsf_signal_job(pmix_nspace_t jobid, int32_t signal);
 static int plm_lsf_finalize(void);
 
-
 /*
  * Global variable
  */
-prte_plm_base_module_t prte_plm_lsf_module = {
-    plm_lsf_init,
-    prte_plm_base_set_hnp_name,
-    plm_lsf_launch_job,
-    NULL,
-    prte_plm_base_prted_terminate_job,
-    plm_lsf_terminate_orteds,
-    prte_plm_base_prted_kill_local_procs,
-    plm_lsf_signal_job,
-    plm_lsf_finalize
-};
+prte_plm_base_module_t prte_plm_lsf_module = {plm_lsf_init,
+                                              prte_plm_base_set_hnp_name,
+                                              plm_lsf_launch_job,
+                                              NULL,
+                                              prte_plm_base_prted_terminate_job,
+                                              plm_lsf_terminate_orteds,
+                                              prte_plm_base_prted_kill_local_procs,
+                                              plm_lsf_signal_job,
+                                              plm_lsf_finalize};
 
 static void launch_daemons(int fd, short args, void *cbdata);
 
@@ -113,7 +109,7 @@ int plm_lsf_init(void)
 {
     int rc;
     prte_job_t *daemons;
-    
+
     if (PRTE_SUCCESS != (rc = prte_plm_base_comm_start())) {
         PRTE_ERROR_LOG(rc);
     }
@@ -133,8 +129,9 @@ int plm_lsf_init(void)
     }
 
     /* point to our launch command */
-    if (PRTE_SUCCESS != (rc = prte_state.add_job_state(PRTE_JOB_STATE_LAUNCH_DAEMONS,
-                                                       launch_daemons, PRTE_SYS_PRI))) {
+    if (PRTE_SUCCESS
+        != (rc = prte_state.add_job_state(PRTE_JOB_STATE_LAUNCH_DAEMONS, launch_daemons,
+                                          PRTE_SYS_PRI))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -166,7 +163,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char **argv = NULL;
     int argc;
     int rc;
-    char** env = NULL;
+    char **env = NULL;
     char **nodelist_argv;
     int nodelist_argc;
     char *vpid_string;
@@ -178,11 +175,11 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_node_t *node;
     int32_t nnode;
     prte_job_t *daemons;
-    prte_state_caddy_t *state = (prte_state_caddy_t*)cbdata;
+    prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
 
     PRTE_ACQUIRE_OBJECT(state);
-    jdata  = state->jdata;
+    jdata = state->jdata;
 
     /* start by setting up the virtual machine */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
@@ -206,10 +203,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
         return;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
-                         "%s plm:lsf: launching vm",
+    PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output, "%s plm:lsf: launching vm",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-
 
     /* Get the map for this job */
     if (NULL == (map = daemons->map)) {
@@ -237,8 +232,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     nodelist_argv = NULL;
     nodelist_argc = 0;
 
-    for (nnode=0; nnode < map->nodes->size; nnode++) {
-        if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(map->nodes, nnode))) {
+    for (nnode = 0; nnode < map->nodes->size; nnode++) {
+        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, nnode))) {
             continue;
         }
         /* if the daemon already exists on this node, then
@@ -275,11 +270,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* add the daemon command (as specified by user) */
     prte_plm_base_setup_prted_cmd(&argc, &argv);
 
-
     /* Add basic orted command line options */
-    prte_plm_base_prted_append_basic_args(&argc, &argv,
-                                           "lsf",
-                                           &proc_vpid_index);
+    prte_plm_base_prted_append_basic_args(&argc, &argv, "lsf", &proc_vpid_index);
 
     /* tell the new daemons the base of the name list so they can compute
      * their own name on the other end
@@ -312,19 +304,19 @@ static void launch_daemons(int fd, short args, void *cbdata)
        don't support different --prefix'es for different nodes in
        the LSF plm) */
     cur_prefix = NULL;
-    for (i=0; i < jdata->apps->size; i++) {
-        char *app_prefix_dir=NULL;
-        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
+    for (i = 0; i < jdata->apps->size; i++) {
+        char *app_prefix_dir = NULL;
+        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&app_prefix_dir, PMIX_STRING) &&
-            NULL != app_prefix_dir) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir,
+                               PMIX_STRING)
+            && NULL != app_prefix_dir) {
             /* Check for already set cur_prefix_dir -- if different,
                complain */
-            if (NULL != cur_prefix &&
-                0 != strcmp (cur_prefix, app_prefix_dir)) {
-                prte_show_help("help-plm-lsf.txt", "multiple-prefixes",
-                               true, cur_prefix, app_prefix_dir);
+            if (NULL != cur_prefix && 0 != strcmp(cur_prefix, app_prefix_dir)) {
+                prte_show_help("help-plm-lsf.txt", "multiple-prefixes", true, cur_prefix,
+                               app_prefix_dir);
                 rc = PRTE_ERR_FAILED_TO_START;
                 goto cleanup;
             }
@@ -357,19 +349,18 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * prun can do the rest of its stuff. Instead, we'll catch any
      * failures and deal with them elsewhere
      */
-    if ( (rc = lsb_launch(nodelist_argv, argv, LSF_DJOB_REPLACE_ENV | LSF_DJOB_NOWAIT, env)) < 0) {
+    if ((rc = lsb_launch(nodelist_argv, argv, LSF_DJOB_REPLACE_ENV | LSF_DJOB_NOWAIT, env)) < 0) {
         PRTE_ERROR_LOG(PRTE_ERR_FAILED_TO_START);
         char *flattened_nodelist = NULL;
         flattened_nodelist = prte_argv_join(nodelist_argv, '\n');
-        prte_show_help("help-plm-lsf.txt", "lsb_launch-failed",
-                       true, rc, lsberrno, lsb_sysmsg(),
+        prte_show_help("help-plm-lsf.txt", "lsb_launch-failed", true, rc, lsberrno, lsb_sysmsg(),
                        prte_argv_count(nodelist_argv), flattened_nodelist);
         free(flattened_nodelist);
         rc = PRTE_ERR_FAILED_TO_START;
-        prte_wait_enable();  /* re-enable our SIGCHLD handler */
+        prte_wait_enable(); /* re-enable our SIGCHLD handler */
         goto cleanup;
     }
-    prte_wait_enable();  /* re-enable our SIGCHLD handler */
+    prte_wait_enable(); /* re-enable our SIGCHLD handler */
 
     /* indicate that the daemons for this job were launched */
     state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
@@ -378,7 +369,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* flag that launch was successful, so far as we currently know */
     failed_launch = false;
 
- cleanup:
+cleanup:
     if (NULL != argv) {
         prte_argv_free(argv);
     }
@@ -395,9 +386,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     PRTE_RELEASE(state);
 }
 
-
 /**
-* Terminate the orteds for a given job
+ * Terminate the orteds for a given job
  */
 static int plm_lsf_terminate_orteds(void)
 {
@@ -409,7 +399,6 @@ static int plm_lsf_terminate_orteds(void)
 
     return rc;
 }
-
 
 /**
  * Signal all the processes in the job
@@ -424,7 +413,6 @@ static int plm_lsf_signal_job(pmix_nspace_t jobid, int32_t signal)
     }
     return rc;
 }
-
 
 static int plm_lsf_finalize(void)
 {

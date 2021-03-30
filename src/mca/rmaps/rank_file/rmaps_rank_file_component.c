@@ -30,8 +30,8 @@
 
 #include <string.h>
 
-#include "src/mca/base/base.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/mca/base/base.h"
 
 #include "src/util/show_help.h"
 
@@ -45,7 +45,6 @@
  */
 
 static int prte_rmaps_rank_file_query(prte_mca_base_module_t **module, int *priority);
-
 
 prte_rmaps_rf_component_t prte_rmaps_rank_file_component = {
     {
@@ -70,20 +69,18 @@ prte_rmaps_rf_component_t prte_rmaps_rank_file_component = {
 static int prte_rmaps_rank_file_query(prte_mca_base_module_t **module, int *priority)
 {
     *priority = 0;
-    *module = (prte_mca_base_module_t *)&prte_rmaps_rank_file_module;
+    *module = (prte_mca_base_module_t *) &prte_rmaps_rank_file_module;
     return PRTE_SUCCESS;
 }
 
 static void rf_map_construct(prte_rmaps_rank_file_map_t *ptr)
 {
     ptr->node_name = NULL;
-    memset(ptr->slot_list, (char)0x00, 64);
+    memset(ptr->slot_list, (char) 0x00, 64);
 }
 static void rf_map_destruct(prte_rmaps_rank_file_map_t *ptr)
 {
-    if (NULL != ptr->node_name) free(ptr->node_name);
+    if (NULL != ptr->node_name)
+        free(ptr->node_name);
 }
-PRTE_CLASS_INSTANCE(prte_rmaps_rank_file_map_t,
-                   prte_object_t,
-                   rf_map_construct,
-                   rf_map_destruct);
+PRTE_CLASS_INSTANCE(prte_rmaps_rank_file_map_t, prte_object_t, rf_map_construct, rf_map_destruct);

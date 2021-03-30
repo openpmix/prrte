@@ -13,7 +13,6 @@
  * $HEADER$
  */
 
-
 #ifndef PRTE_H
 #define PRTE_H
 

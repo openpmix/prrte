@@ -4,6 +4,7 @@
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,8 +17,8 @@
 
 #include "prte_config.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
 BEGIN_C_DECLS
 
@@ -26,20 +27,20 @@ BEGIN_C_DECLS
  * once prte_init has been called is the prte_install_dirs structure
  * and the prte_install_dirs_expand() call */
 struct prte_install_dirs_t {
-    char* prefix;
-    char* exec_prefix;
-    char* bindir;
-    char* sbindir;
-    char* libexecdir;
-    char* datarootdir;
-    char* datadir;
-    char* sysconfdir;
-    char* sharedstatedir;
-    char* localstatedir;
-    char* libdir;
-    char* includedir;
-    char* infodir;
-    char* mandir;
+    char *prefix;
+    char *exec_prefix;
+    char *bindir;
+    char *sbindir;
+    char *libexecdir;
+    char *datarootdir;
+    char *datadir;
+    char *sysconfdir;
+    char *sharedstatedir;
+    char *localstatedir;
+    char *libdir;
+    char *includedir;
+    char *infodir;
+    char *mandir;
 
     /* Note that the following fields intentionally have an "ompi"
        prefix, even though they're down in the PRTE layer.  This is
@@ -57,9 +58,9 @@ struct prte_install_dirs_t {
        Note that these field names match macros set by configure that
        are used in Makefile.am files.  E.g., project help files are
        installed into $(prtedatadir). */
-    char* prtedatadir;
-    char* prtelibdir;
-    char* prteincludedir;
+    char *prtedatadir;
+    char *prtelibdir;
+    char *prteincludedir;
 };
 typedef struct prte_install_dirs_t prte_install_dirs_t;
 
@@ -69,8 +70,7 @@ PRTE_EXPORT extern prte_install_dirs_t prte_install_dirs;
 /**
  * Expand out path variables (such as ${prefix}) in the input string
  * using the current prte_install_dirs structure */
-PRTE_EXPORT char * prte_install_dirs_expand(const char* input);
-
+PRTE_EXPORT char *prte_install_dirs_expand(const char *input);
 
 /**
  * Structure for prteinstalldirs components.
@@ -91,8 +91,7 @@ typedef struct prte_prteinstalldirs_base_component_2_0_0_t prte_prteinstalldirs_
 /*
  * Macro for use in components that are of type prteinstalldirs
  */
-#define PRTE_INSTALLDIRS_BASE_VERSION_2_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("prteinstalldirs", 2, 0, 0)
+#define PRTE_INSTALLDIRS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("prteinstalldirs", 2, 0, 0)
 
 END_C_DECLS
 

@@ -7,6 +7,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -15,18 +16,18 @@
  */
 
 #if !defined(PRTE_MCA_BASE_FRAMEWORK_H)
-#define PRTE_MCA_BASE_FRAMEWORK_H
+#    define PRTE_MCA_BASE_FRAMEWORK_H
 
-#include "src/mca/mca.h"
-#include "src/class/prte_list.h"
+#    include "src/class/prte_list.h"
+#    include "src/mca/mca.h"
 
 /*
  * Register and open flags
  */
 enum prte_mca_base_register_flag_t {
-    PRTE_MCA_BASE_REGISTER_DEFAULT     = 0,
+    PRTE_MCA_BASE_REGISTER_DEFAULT = 0,
     /** Register all components (ignore selection MCA variables) */
-    PRTE_MCA_BASE_REGISTER_ALL         = 1,
+    PRTE_MCA_BASE_REGISTER_ALL = 1,
     /** Do not register DSO components */
     PRTE_MCA_BASE_REGISTER_STATIC_ONLY = 2
 };
@@ -34,17 +35,16 @@ enum prte_mca_base_register_flag_t {
 typedef enum prte_mca_base_register_flag_t prte_mca_base_register_flag_t;
 
 enum prte_mca_base_open_flag_t {
-    PRTE_MCA_BASE_OPEN_DEFAULT         = 0,
+    PRTE_MCA_BASE_OPEN_DEFAULT = 0,
     /** Find components in mca_base_components_find. Used by
      mca_base_framework_open() when NOREGISTER is specified
      by the framework */
     PRTE_MCA_BASE_OPEN_FIND_COMPONENTS = 1,
     /** Do not open DSO components */
-    PRTE_MCA_BASE_OPEN_STATIC_ONLY     = 2,
+    PRTE_MCA_BASE_OPEN_STATIC_ONLY = 2,
 };
 
 typedef enum prte_mca_base_open_flag_t prte_mca_base_open_flag_t;
-
 
 /**
  * Register the MCA framework parameters
@@ -60,7 +60,7 @@ typedef enum prte_mca_base_open_flag_t prte_mca_base_open_flag_t;
  * Frameworks are NOT required to provide this function. It
  * may be NULL.
  */
-typedef int (*prte_mca_base_framework_register_params_fn_t) (prte_mca_base_register_flag_t flags);
+typedef int (*prte_mca_base_framework_register_params_fn_t)(prte_mca_base_register_flag_t flags);
 
 /**
  * Initialize the MCA framework
@@ -91,7 +91,7 @@ typedef int (*prte_mca_base_framework_register_params_fn_t) (prte_mca_base_regis
  * an open function it will need to call mca_base_framework_components_open()
  * if it needs to open any components.
  */
-typedef int (*prte_mca_base_framework_open_fn_t) (prte_mca_base_open_flag_t flags);
+typedef int (*prte_mca_base_framework_open_fn_t)(prte_mca_base_open_flag_t flags);
 
 /**
  * Shut down the MCA framework.
@@ -111,18 +111,18 @@ typedef int (*prte_mca_base_framework_open_fn_t) (prte_mca_base_open_flag_t flag
  * a close function it will need to call mca_base_framework_components_close()
  * if any components were opened.
  */
-typedef int (*prte_mca_base_framework_close_fn_t) (void);
+typedef int (*prte_mca_base_framework_close_fn_t)(void);
 
 typedef enum {
-    PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT    = 0,
+    PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT = 0,
     /** Don't register any variables for this framework */
     PRTE_MCA_BASE_FRAMEWORK_FLAG_NOREGISTER = 1,
     /** Internal. Don't set outside mca_base_framework.h */
     PRTE_MCA_BASE_FRAMEWORK_FLAG_REGISTERED = 2,
     /** Framework does not have any DSO components */
-    PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO     = 4,
+    PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO = 4,
     /** Internal. Don't set outside mca_base_framework.h */
-    PRTE_MCA_BASE_FRAMEWORK_FLAG_OPEN       = 8,
+    PRTE_MCA_BASE_FRAMEWORK_FLAG_OPEN = 8,
     /**
      * The upper 16 bits are reserved for project specific flags.
      */
@@ -130,39 +130,38 @@ typedef enum {
 
 typedef struct prte_mca_base_framework_t {
     /** Project name for this component (ex "prte") */
-    char                                    *framework_project;
+    char *framework_project;
     /** Framework name */
-    char                                    *framework_name;
+    char *framework_name;
     /** Description of this framework or NULL */
-    const char                              *framework_description;
+    const char *framework_description;
     /** Framework register function or NULL if the framework
         and all its components have nothing to register */
-    prte_mca_base_framework_register_params_fn_t  framework_register;
+    prte_mca_base_framework_register_params_fn_t framework_register;
     /** Framework open function or NULL */
-    prte_mca_base_framework_open_fn_t             framework_open;
+    prte_mca_base_framework_open_fn_t framework_open;
     /** Framework close function or NULL */
-    prte_mca_base_framework_close_fn_t            framework_close;
+    prte_mca_base_framework_close_fn_t framework_close;
     /** Framework flags (future use) set to 0 */
-    prte_mca_base_framework_flags_t               framework_flags;
+    prte_mca_base_framework_flags_t framework_flags;
     /** Framework open count */
-    int                                      framework_refcnt;
+    int framework_refcnt;
     /** List of static components */
-    const prte_mca_base_component_t             **framework_static_components;
+    const prte_mca_base_component_t **framework_static_components;
     /** Component selection. This will be registered with the MCA
         variable system and should be either NULL (all components) or
         a heap allocated, comma-delimited list of components. */
-    char                                    *framework_selection;
+    char *framework_selection;
     /** Verbosity level (0-100) */
-    int                                      framework_verbose;
+    int framework_verbose;
     /** Opal output for this framework (or -1) */
-    int                                      framework_output;
+    int framework_output;
     /** List of selected components (filled in by mca_base_framework_register()
         or mca_base_framework_open() */
-    prte_list_t                              framework_components;
+    prte_list_t framework_components;
     /** List of components that failed to load */
-    prte_list_t                              framework_failed_components;
+    prte_list_t framework_failed_components;
 } prte_mca_base_framework_t;
-
 
 /**
  * Register a framework with MCA.
@@ -174,8 +173,8 @@ typedef struct prte_mca_base_framework_t {
  *
  * Call a framework's register function.
  */
-PRTE_EXPORT int prte_mca_base_framework_register (prte_mca_base_framework_t *framework,
-                                                    prte_mca_base_register_flag_t flags);
+PRTE_EXPORT int prte_mca_base_framework_register(prte_mca_base_framework_t *framework,
+                                                 prte_mca_base_register_flag_t flags);
 
 /**
  * Register frameworks with MCA.
@@ -188,8 +187,8 @@ PRTE_EXPORT int prte_mca_base_framework_register (prte_mca_base_framework_t *fra
  * Call the MCA variable registration functions of each framework in the
  * frameworks array.
  */
-PRTE_EXPORT int prte_mca_base_framework_register_list (prte_mca_base_framework_t **frameworks,
-                                                         prte_mca_base_register_flag_t flags);
+PRTE_EXPORT int prte_mca_base_framework_register_list(prte_mca_base_framework_t **frameworks,
+                                                      prte_mca_base_register_flag_t flags);
 
 /**
  * Open a framework
@@ -201,8 +200,8 @@ PRTE_EXPORT int prte_mca_base_framework_register_list (prte_mca_base_framework_t
  *
  * Call a framework's open function.
  */
-PRTE_EXPORT int prte_mca_base_framework_open (prte_mca_base_framework_t *framework,
-                                                prte_mca_base_open_flag_t flags);
+PRTE_EXPORT int prte_mca_base_framework_open(prte_mca_base_framework_t *framework,
+                                             prte_mca_base_open_flag_t flags);
 
 /**
  * Open frameworks
@@ -214,8 +213,8 @@ PRTE_EXPORT int prte_mca_base_framework_open (prte_mca_base_framework_t *framewo
  *
  * Call the open function on multiple frameworks
  */
-PRTE_EXPORT int prte_mca_base_framework_open_list (prte_mca_base_framework_t **frameworks,
-                                                     prte_mca_base_open_flag_t flags);
+PRTE_EXPORT int prte_mca_base_framework_open_list(prte_mca_base_framework_t **frameworks,
+                                                  prte_mca_base_open_flag_t flags);
 
 /**
  * Close a framework
@@ -227,7 +226,7 @@ PRTE_EXPORT int prte_mca_base_framework_open_list (prte_mca_base_framework_t **f
  *
  * Call a framework's close function.
  */
-PRTE_EXPORT int prte_mca_base_framework_close (prte_mca_base_framework_t *framework);
+PRTE_EXPORT int prte_mca_base_framework_close(prte_mca_base_framework_t *framework);
 
 /**
  * Close frameworks
@@ -239,7 +238,7 @@ PRTE_EXPORT int prte_mca_base_framework_close (prte_mca_base_framework_t *framew
  *
  * Call the close function on multiple frameworks
  */
-PRTE_EXPORT int prte_mca_base_framework_close_list (prte_mca_base_framework_t **frameworks);
+PRTE_EXPORT int prte_mca_base_framework_close_list(prte_mca_base_framework_t **frameworks);
 
 /**
  * Check if a framework is already registered
@@ -249,8 +248,7 @@ PRTE_EXPORT int prte_mca_base_framework_close_list (prte_mca_base_framework_t **
  * @retval true if the framework's mca variables are registered
  * @retval false if not
  */
-PRTE_EXPORT bool prte_mca_base_framework_is_registered (struct prte_mca_base_framework_t *framework);
-
+PRTE_EXPORT bool prte_mca_base_framework_is_registered(struct prte_mca_base_framework_t *framework);
 
 /**
  * Check if a framework is already open
@@ -260,28 +258,29 @@ PRTE_EXPORT bool prte_mca_base_framework_is_registered (struct prte_mca_base_fra
  * @retval true if the framework is open
  * @retval false if not
  */
-PRTE_EXPORT bool prte_mca_base_framework_is_open (struct prte_mca_base_framework_t *framework);
-
+PRTE_EXPORT bool prte_mca_base_framework_is_open(struct prte_mca_base_framework_t *framework);
 
 /**
  * Macro to declare an MCA framework
  *
  * Example:
- *  MCA_BASE_FRAMEWORK_DECLARE(prte, foo, NULL, prte_foo_open, prte_foo_close, MCA_BASE_FRAMEWORK_FLAG_LAZY)
+ *  MCA_BASE_FRAMEWORK_DECLARE(prte, foo, NULL, prte_foo_open, prte_foo_close,
+ * MCA_BASE_FRAMEWORK_FLAG_LAZY)
  */
-#define PRTE_MCA_BASE_FRAMEWORK_DECLARE(project, name, description, registerfn, openfn, closefn, static_components, flags) \
-    prte_mca_base_framework_t project##_##name##_base_framework = {   \
-        .framework_project           = #project,                        \
-        .framework_name              = #name,                           \
-        .framework_description       = description,                     \
-        .framework_register          = registerfn,                      \
-        .framework_open              = openfn,                          \
-        .framework_close             = closefn,                         \
-        .framework_flags             = flags,                           \
-        .framework_refcnt            = 0,                               \
-        .framework_static_components = static_components,               \
-        .framework_selection         = NULL,                            \
-        .framework_verbose           = 0,                               \
-        .framework_output            = -1}
+#    define PRTE_MCA_BASE_FRAMEWORK_DECLARE(project, name, description, registerfn, openfn, \
+                                            closefn, static_components, flags)              \
+        prte_mca_base_framework_t project##_##name##_base_framework                         \
+            = {.framework_project = #project,                                               \
+               .framework_name = #name,                                                     \
+               .framework_description = description,                                        \
+               .framework_register = registerfn,                                            \
+               .framework_open = openfn,                                                    \
+               .framework_close = closefn,                                                  \
+               .framework_flags = flags,                                                    \
+               .framework_refcnt = 0,                                                       \
+               .framework_static_components = static_components,                            \
+               .framework_selection = NULL,                                                 \
+               .framework_verbose = 0,                                                      \
+               .framework_output = -1}
 
 #endif /* PRTE_MCA_BASE_FRAMEWORK_H */

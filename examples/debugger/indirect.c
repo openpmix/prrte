@@ -26,17 +26,17 @@
  */
 
 #define _GNU_SOURCE
+#include <getopt.h>
+#include <libgen.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <time.h>
-#include <pthread.h>
-#include <getopt.h>
 #include <string.h>
-#include <libgen.h>
+#include <time.h>
+#include <unistd.h>
 
-#include <pmix_tool.h>
 #include "debugger.h"
+#include <pmix_tool.h>
 
 static pmix_proc_t myproc;
 static volatile bool ilactive = true;
@@ -56,17 +56,13 @@ static volatile bool regpending = true;
  * Once we have dealt with the returned data, we must
  * call the release_fn so that the PMIx library can
  * cleanup */
-static void cbfunc(pmix_status_t status,
-                   pmix_info_t *info, size_t ninfo,
-                   void *cbdata,
-                   pmix_release_cbfunc_t release_fn,
-                   void *release_cbdata)
+static void cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cbdata,
+                   pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
-    myquery_data_t *mq = (myquery_data_t*)cbdata;
+    myquery_data_t *mq = (myquery_data_t *) cbdata;
     size_t n;
 
-    printf("%s called with status %s\n", __FUNCTION__,
-           PMIx_Error_string(status));
+    printf("%s called with status %s\n", __FUNCTION__, PMIx_Error_string(status));
     mq->status = status;
     /* save the returned info - the PMIx library "owns" it
      * and will release it and perform other cleanup actions
@@ -74,8 +70,9 @@ static void cbfunc(pmix_status_t status,
     if (0 < ninfo) {
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
-        for (n=0; n < ninfo; n++) {
-            printf("Key %s Type %s(%d)\n", info[n].key, PMIx_Data_type_string(info[n].value.type), info[n].value.type);
+        for (n = 0; n < ninfo; n++) {
+            printf("Key %s Type %s(%d)\n", info[n].key, PMIx_Data_type_string(info[n].value.type),
+                   info[n].value.type);
             PMIX_INFO_XFER(&mq->info[n], &info[n]);
         }
     }
@@ -94,13 +91,10 @@ static void cbfunc(pmix_status_t status,
  * when registering for general events - i.e.,, the default
  * handler. We don't technically need to register one, but it
  * is usually good practice to catch any events that occur */
-static void notification_fn(size_t evhdlr_registration_id,
-                            pmix_status_t status,
-                            const pmix_proc_t *source,
-                            pmix_info_t info[], size_t ninfo,
+static void notification_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                            const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                             pmix_info_t results[], size_t nresults,
-                            pmix_event_notification_cbfunc_fn_t cbfunc,
-                            void *cbdata)
+                            pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     printf("DEFAULT EVENT HANDLER CALLED WITH STATUS %s\n", PMIx_Error_string(status));
 
@@ -115,16 +109,12 @@ static void notification_fn(size_t evhdlr_registration_id,
 /* this is the event notification function we pass down below
  * when registering for LOST_CONNECTION, thereby indicating
  * that the intermediate launcher we started has terminated */
-static void terminate_fn(size_t evhdlr_registration_id,
-                         pmix_status_t status,
-                         const pmix_proc_t *source,
-                         pmix_info_t info[], size_t ninfo,
+static void terminate_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                         const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                          pmix_info_t results[], size_t nresults,
-                         pmix_event_notification_cbfunc_fn_t cbfunc,
-                         void *cbdata)
+                         pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
-    printf("%s called with status %s\n", __FUNCTION__,
-           PMIx_Error_string(status));
+    printf("%s called with status %s\n", __FUNCTION__, PMIx_Error_string(status));
     /* this example doesn't do anything further */
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
@@ -139,33 +129,28 @@ static void terminate_fn(size_t evhdlr_registration_id,
  * to the registered event. The index is used later on to deregister
  * an event handler - if we don't explicitly deregister it, then the
  * PMIx server will do so when it see us exit */
-static void evhandler_reg_callbk(pmix_status_t status,
-                                 size_t evhandler_ref,
-                                 void *cbdata)
+static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbdata)
 {
-    mylock_t *lock = (mylock_t*)cbdata;
+    mylock_t *lock = (mylock_t *) cbdata;
 
     printf("%s called with status %s\n", __FUNCTION__, PMIx_Error_string(status));
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
-                   myproc.nspace, myproc.rank, status, (unsigned long)evhandler_ref);
+                myproc.nspace, myproc.rank, status, (unsigned long) evhandler_ref);
     }
     lock->status = status;
     regpending = false;
     DEBUG_WAKEUP_THREAD(lock);
 }
 
-static void spawn_cbfunc(size_t evhdlr_registration_id,
-                         pmix_status_t status,
-                         const pmix_proc_t *source,
-                         pmix_info_t info[], size_t ninfo,
+static void spawn_cbfunc(size_t evhdlr_registration_id, pmix_status_t status,
+                         const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                          pmix_info_t results[], size_t nresults,
-                         pmix_event_notification_cbfunc_fn_t cbfunc,
-                         void *cbdata)
+                         pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     size_t n;
 
-    for (n=0; n < ninfo; n++) {
+    for (n = 0; n < ninfo; n++) {
         if (PMIX_CHECK_KEY(&info[n], PMIX_NSPACE)) {
             appnspace = strdup(info[n].value.data.string);
             printf("GOT NSPACE %s\n", appnspace);
@@ -182,14 +167,13 @@ static void spawn_cbfunc(size_t evhdlr_registration_id,
 
 static void cncbfunc(pmix_status_t status, void *cbdata)
 {
-    printf("%s called with status %s\n", __FUNCTION__,
-           PMIx_Error_string(status));
-    mylock_t *mylock = (mylock_t*)cbdata;
+    printf("%s called with status %s\n", __FUNCTION__, PMIx_Error_string(status));
+    mylock_t *mylock = (mylock_t *) cbdata;
     mylock->status = status;
     DEBUG_WAKEUP_THREAD(mylock);
 }
 
-#define DBGR_LOOP_LIMIT  10
+#define DBGR_LOOP_LIMIT 10
 static int help = 0;
 static int mycmd = 0;
 
@@ -212,13 +196,7 @@ int main(int argc, char **argv)
     myrel_t launcher_ready, dbrel;
     pid_t pid;
     pmix_envar_t envar;
-    char *launchers[] = {
-        "prun",
-        "mpirun",
-        "mpiexec",
-        "prterun",
-        NULL
-    };
+    char *launchers[] = {"prun", "mpirun", "mpiexec", "prterun", NULL};
     pmix_proc_t proc, target_proc;
     bool found;
     pmix_data_array_t darray, d2;
@@ -239,7 +217,7 @@ int main(int argc, char **argv)
      * support those we recognize */
     found = false;
     requested_launcher = basename(argv[1]);
-    for (n=0; NULL != launchers[n]; n++) {
+    for (n = 0; NULL != launchers[n]; n++) {
         if (0 == strcmp(requested_launcher, launchers[n])) {
             found = true;
         }
@@ -269,7 +247,8 @@ int main(int argc, char **argv)
     }
     PMIX_INFO_FREE(info, ninfo);
 
-    printf("Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank, (unsigned long)pid);
+    printf("Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank,
+           (unsigned long) pid);
 
     /* get our URI as we will need it later */
     rc = PMIx_Get(&myproc, PMIX_SERVER_URI, NULL, 0, &val);
@@ -288,8 +267,8 @@ int main(int argc, char **argv)
     code = PMIX_ERR_LOST_CONNECTION;
     PMIX_INFO_CREATE(info, 1);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "LOST-CONNECTION", PMIX_STRING);
-    PMIx_Register_event_handler(&code, 1, info, 1,
-                                terminate_fn, evhandler_reg_callbk, (void*)&mylock);
+    PMIx_Register_event_handler(&code, 1, info, 1, terminate_fn, evhandler_reg_callbk,
+                                (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
     PMIX_INFO_FREE(info, 1);
@@ -298,12 +277,11 @@ int main(int argc, char **argv)
     DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIX_INFO_CREATE(info, 1);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "DEFAULT", PMIX_STRING);
-    PMIx_Register_event_handler(NULL, 0, info, 1,
-                                notification_fn, evhandler_reg_callbk, (void*)&mylock);
+    PMIx_Register_event_handler(NULL, 0, info, 1, notification_fn, evhandler_reg_callbk,
+                                (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
     PMIX_INFO_FREE(info, 1);
-
 
     /* we are using an intermediate launcher - we will either use the
      * reference server to start it or will fork/exec it ourselves,
@@ -315,12 +293,12 @@ int main(int argc, char **argv)
     PMIX_ARGV_APPEND(rc, app[0].argv, argv[1]);
     /* pass it the rest of the cmd line as we don't know
      * how to parse it */
-    for (n=2; n < argc; n++) {
+    for (n = 2; n < argc; n++) {
         PMIX_ARGV_APPEND(rc, app[0].argv, argv[n]);
     }
-    getcwd(cwd, 1024);  // point us to our current directory
+    getcwd(cwd, 1024); // point us to our current directory
     app[0].cwd = strdup(cwd);
-    app[0].maxprocs = 1;  // only start one instance of the IL
+    app[0].maxprocs = 1; // only start one instance of the IL
 
     /* tell the IL how to connect back to us */
     PMIX_SETENV(rc, PMIX_LAUNCHER_RNDZ_URI, myuri, &app[0].env);
@@ -351,7 +329,7 @@ int main(int argc, char **argv)
     /* convert job info to array */
     PMIX_INFO_LIST_CONVERT(rc, jinfo, &darray);
     PMIX_INFO_LIST_RELEASE(jinfo);
-    info = (pmix_info_t*)darray.array;
+    info = (pmix_info_t *) darray.array;
     ninfo = darray.size;
 
     /* spawn the launcher - the function will return when the launcher
@@ -361,7 +339,8 @@ int main(int argc, char **argv)
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     PMIX_APP_FREE(app, napps);
     if (PMIX_SUCCESS != rc) {
-        fprintf(stderr, "Launcher %s failed to start with error: %s(%d)\n", argv[1], PMIx_Error_string(rc), rc);
+        fprintf(stderr, "Launcher %s failed to start with error: %s(%d)\n", argv[1],
+                PMIx_Error_string(rc), rc);
         goto done;
     }
 
@@ -373,7 +352,7 @@ int main(int argc, char **argv)
     PMIX_LOAD_PROCID(&proc, clientspace, 0);
     ninfo = 2;
     PMIX_INFO_CREATE(info, ninfo);
-    n=0;
+    n = 0;
     PMIX_INFO_LOAD(&info[n], PMIX_WAIT_FOR_CONNECTION, NULL, PMIX_BOOL);
     ++n;
     i = 2;
@@ -381,7 +360,8 @@ int main(int argc, char **argv)
     rc = PMIx_tool_set_server(&proc, info, ninfo);
     if (PMIX_SUCCESS != rc) {
         /* connection failed */
-        fprintf(stderr, "Failed to set spawned launcher as primary server: %s\n", PMIx_Error_string(rc));
+        fprintf(stderr, "Failed to set spawned launcher as primary server: %s\n",
+                PMIx_Error_string(rc));
         goto done;
     }
     PMIX_INFO_FREE(info, ninfo);
@@ -396,8 +376,8 @@ int main(int argc, char **argv)
     n = 0;
     PMIX_INFO_CREATE(info, 1);
     PMIX_INFO_LOAD(&info[n], PMIX_EVENT_HDLR_NAME, "LAUNCH-COMPLETE", PMIX_STRING);
-    PMIx_Register_event_handler(&code, 1, info, 1,
-                                spawn_cbfunc, evhandler_reg_callbk, (void*)&mylock);
+    PMIx_Register_event_handler(&code, 1, info, 1, spawn_cbfunc, evhandler_reg_callbk,
+                                (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
     PMIX_INFO_FREE(info, 1);
@@ -412,10 +392,8 @@ int main(int argc, char **argv)
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
     /* target this notification solely to that one tool */
     PMIX_INFO_LOAD(&info[1], PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);
-    //PMIX_INFO_LOAD(&info[2], PMIX_EVENT_DO_NOT_CACHE, NULL, PMIX_BOOL);
-    PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, &myproc,
-                      PMIX_RANGE_CUSTOM,
-                      info, 2, NULL, NULL);
+    // PMIX_INFO_LOAD(&info[2], PMIX_EVENT_DO_NOT_CACHE, NULL, PMIX_BOOL);
+    PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, &myproc, PMIX_RANGE_CUSTOM, info, 2, NULL, NULL);
     PMIX_INFO_FREE(info, 2);
     printf("WAITING FOR APPLICATION LAUNCH\n");
     /* wait for the IL to have launched its application */
@@ -425,7 +403,7 @@ int main(int argc, char **argv)
         struct timespec tp = {0, 500000000};
         nanosleep(&tp, NULL);
         ++icount;
-        if (icount > 10 ) {
+        if (icount > 10) {
             fprintf(stderr, "Error: Failed to launch by the timeout\n");
             goto done;
         }
@@ -436,31 +414,36 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    if( NULL == appnspace ){
+    if (NULL == appnspace) {
         fprintf(stderr, "Error: The application has failed to launch\n");
         goto done;
     }
-    printf("APPLICATION HAS LAUNCHED: %s\n", (char*)appnspace);
+    printf("APPLICATION HAS LAUNCHED: %s\n", (char *) appnspace);
 
     /* setup the debugger */
-    mydata = (myquery_data_t*)malloc(sizeof(myquery_data_t));
+    mydata = (myquery_data_t *) malloc(sizeof(myquery_data_t));
     mydata->napps = 1;
     PMIX_APP_CREATE(mydata->apps, mydata->napps);
     mydata->apps[0].cmd = strdup("./daemon");
     PMIX_ARGV_APPEND(rc, mydata->apps[0].argv, "./daemon");
-    getcwd(cwd, 1024);  // point us to our current directory
+    getcwd(cwd, 1024); // point us to our current directory
     mydata->apps[0].cwd = strdup(cwd);
     mydata->apps[0].maxprocs = 1;
-    PMIX_LOAD_PROCID(&target_proc, (void*)appnspace, PMIX_RANK_WILDCARD);
+    PMIX_LOAD_PROCID(&target_proc, (void *) appnspace, PMIX_RANK_WILDCARD);
     /* provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
     PMIX_INFO_LIST_START(dirs);
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, "ppr:1:node", PMIX_STRING);  // instruct the RM to launch one copy of the executable on each node
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_TARGET, &target_proc, PMIX_PROC); // the nspace being debugged
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDOUT, NULL, PMIX_BOOL);  // forward stdout to me
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDERR, NULL, PMIX_BOOL);  // forward stderr to me
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, "ppr:1:node",
+                       PMIX_STRING); // instruct the RM to launch one copy of the executable on each
+                                     // node
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUGGER_DAEMONS, NULL,
+                       PMIX_BOOL); // these are debugger daemons
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_TARGET, &target_proc,
+                       PMIX_PROC); // the nspace being debugged
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_NOTIFY_COMPLETION, NULL,
+                       PMIX_BOOL); // notify us when the debugger job completes
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
     PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
     PMIX_INFO_LIST_RELEASE(dirs);
     mydata->info = darray.array;
@@ -475,7 +458,8 @@ int main(int argc, char **argv)
     PMIX_INFO_FREE(mydata->info, mydata->ninfo);
     PMIX_APP_FREE(mydata->apps, mydata->napps);
     if (PMIX_SUCCESS != rc) {
-        fprintf(stderr, "Debugger daemons failed to launch with error: %s\n", PMIx_Error_string(rc));
+        fprintf(stderr, "Debugger daemons failed to launch with error: %s\n",
+                PMIx_Error_string(rc));
         free(mydata);
         goto done;
     }
@@ -488,12 +472,12 @@ int main(int argc, char **argv)
         nanosleep(&tp, NULL);
     }
 
-  done:
+done:
     PMIx_tool_finalize();
 
     if (NULL != myuri) {
         free(myuri);
     }
 
-    return(rc);
+    return (rc);
 }

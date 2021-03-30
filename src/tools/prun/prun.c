@@ -31,42 +31,43 @@
 #include "src/include/constants.h"
 #include "src/include/version.h"
 
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif  /* HAVE_STRINGS_H */
+#    include <strings.h>
+#endif /* HAVE_STRINGS_H */
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+#    include <sys/param.h>
 #endif
+#include <ctype.h>
 #include <errno.h>
 #include <signal.h>
-#include <ctype.h>
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif  /* HAVE_SYS_TYPES_H */
+#    include <sys/types.h>
+#endif /* HAVE_SYS_TYPES_H */
 #ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
-#endif  /* HAVE_SYS_WAIT_H */
+#    include <sys/wait.h>
+#endif /* HAVE_SYS_WAIT_H */
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif  /* HAVE_SYS_TIME_H */
+#    include <sys/time.h>
+#endif /* HAVE_SYS_TIME_H */
 #include <fcntl.h>
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
+#    include <sys/stat.h>
 #endif
 #ifdef HAVE_POLL_H
-#include <poll.h>
+#    include <poll.h>
 #endif
 
 #include "src/event/event-internal.h"
+#include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/base/base.h"
+#include "src/sys/atomic.h"
 #include "src/util/argv.h"
 #include "src/util/basename.h"
 #include "src/util/cmd_line.h"
@@ -78,19 +79,18 @@
 #include "src/util/prte_environ.h"
 #include "src/util/prte_getcwd.h"
 #include "src/util/show_help.h"
-#include "src/sys/atomic.h"
 
-#include "src/runtime/prte_progress_threads.h"
 #include "src/class/prte_pointer_array.h"
+#include "src/runtime/prte_progress_threads.h"
 
-#include "src/runtime/runtime.h"
-#include "src/runtime/prte_globals.h"
+#include "prun.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/prted/prted.h"
-#include "prun.h"
+#include "src/runtime/prte_globals.h"
+#include "src/runtime/runtime.h"
 
 typedef struct {
     prte_pmix_lock_t lock;
@@ -102,7 +102,7 @@ static pmix_nspace_t spawnednspace;
 
 static size_t evid = INT_MAX;
 static pmix_proc_t myproc;
-static bool forcibly_die=false;
+static bool forcibly_die = false;
 static prte_event_t term_handler;
 static int term_pipe[2];
 static prte_atomic_lock_t prun_abort_inprogress_lock = PRTE_ATOMIC_LOCK_INIT;
@@ -117,7 +117,7 @@ static void epipe_signal_callback(int signal);
 
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
-    prte_pmix_lock_t *lock = (prte_pmix_lock_t*)cbdata;
+    prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
     PRTE_ACQUIRE_OBJECT(lock);
     evid = ref;
     PRTE_PMIX_WAKEUP_THREAD(lock);
@@ -125,18 +125,15 @@ static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
-    prte_pmix_lock_t *lock = (prte_pmix_lock_t*)cbdata;
+    prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
     PRTE_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
-static void defhandler(size_t evhdlr_registration_id,
-                       pmix_status_t status,
-                       const pmix_proc_t *source,
-                       pmix_info_t info[], size_t ninfo,
+static void defhandler(size_t evhdlr_registration_id, pmix_status_t status,
+                       const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                        pmix_info_t *results, size_t nresults,
-                       pmix_event_notification_cbfunc_fn_t cbfunc,
-                       void *cbdata)
+                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     prte_pmix_lock_t *lock = NULL;
     size_t n;
@@ -162,14 +159,13 @@ static void defhandler(size_t evhdlr_registration_id,
         goto progress;
     }
 
-    if (PMIX_ERR_UNREACH == status ||
-        PMIX_ERR_LOST_CONNECTION == status) {
+    if (PMIX_ERR_UNREACH == status || PMIX_ERR_LOST_CONNECTION == status) {
         /* we should always have info returned to us - if not, there is
          * nothing we can do */
         if (NULL != info) {
-            for (n=0; n < ninfo; n++) {
+            for (n = 0; n < ninfo; n++) {
                 if (PMIX_CHECK_KEY(&info[n], PMIX_EVENT_RETURN_OBJECT)) {
-                    lock = (prte_pmix_lock_t*)info[n].value.data.ptr;
+                    lock = (prte_pmix_lock_t *) info[n].value.data.ptr;
                 }
             }
         }
@@ -182,7 +178,7 @@ static void defhandler(size_t evhdlr_registration_id,
         /* release the lock */
         PRTE_PMIX_WAKEUP_THREAD(lock);
     }
-  progress:
+progress:
     /* we _always_ have to execute the evhandler callback or
      * else the event progress engine will hang */
     if (NULL != cbfunc) {
@@ -190,17 +186,13 @@ static void defhandler(size_t evhdlr_registration_id,
     }
 }
 
-
-static void evhandler(size_t evhdlr_registration_id,
-                      pmix_status_t status,
-                      const pmix_proc_t *source,
-                      pmix_info_t info[], size_t ninfo,
+static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
+                      const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                       pmix_info_t *results, size_t nresults,
-                      pmix_event_notification_cbfunc_fn_t cbfunc,
-                      void *cbdata)
+                      pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     prte_pmix_lock_t *lock = NULL;
-    int jobstatus=0;
+    int jobstatus = 0;
     pmix_nspace_t jobid = {0};
     size_t n;
     char *msg = NULL;
@@ -212,20 +204,19 @@ static void evhandler(size_t evhdlr_registration_id,
     /* we should always have info returned to us - if not, there is
      * nothing we can do */
     if (NULL != info) {
-        for (n=0; n < ninfo; n++) {
+        for (n = 0; n < ninfo; n++) {
             if (0 == strncmp(info[n].key, PMIX_JOB_TERM_STATUS, PMIX_MAX_KEYLEN)) {
                 jobstatus = prte_pmix_convert_status(info[n].value.data.status);
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
                 PMIX_LOAD_NSPACE(jobid, info[n].value.data.proc->nspace);
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
-                lock = (prte_pmix_lock_t*)info[n].value.data.ptr;
+                lock = (prte_pmix_lock_t *) info[n].value.data.ptr;
             } else if (0 == strncmp(info[n].key, PMIX_EVENT_TEXT_MESSAGE, PMIX_MAX_KEYLEN)) {
                 msg = info[n].value.data.string;
             }
         }
         if (verbose && PMIX_CHECK_NSPACE(jobid, spawnednspace)) {
-            prte_output(0, "JOB %s COMPLETED WITH STATUS %d",
-                        PRTE_JOBID_PRINT(jobid), jobstatus);
+            prte_output(0, "JOB %s COMPLETED WITH STATUS %d", PRTE_JOBID_PRINT(jobid), jobstatus);
         }
     }
     if (NULL != lock) {
@@ -245,19 +236,17 @@ static void evhandler(size_t evhdlr_registration_id,
     }
 }
 
-static void setupcbfunc(pmix_status_t status,
-                        pmix_info_t info[], size_t ninfo,
-                        void *provided_cbdata,
-                        pmix_op_cbfunc_t cbfunc, void *cbdata)
+static void setupcbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
+                        void *provided_cbdata, pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
-    mylock_t *mylock = (mylock_t*)provided_cbdata;
+    mylock_t *mylock = (mylock_t *) provided_cbdata;
     size_t n;
 
     if (NULL != info) {
         mylock->ninfo = ninfo;
         PMIX_INFO_CREATE(mylock->info, mylock->ninfo);
         /* cycle across the provided info */
-        for (n=0; n < ninfo; n++) {
+        for (n = 0; n < ninfo; n++) {
             PMIX_INFO_XFER(&mylock->info[n], &info[n]);
         }
     } else {
@@ -275,50 +264,43 @@ static void setupcbfunc(pmix_status_t status,
 
 static prte_cmd_line_init_t prte_tool_options[] = {
     /* look first for a system server */
-    { '\0', "system-server-first", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "First look for a system server and connect to it if found",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "system-server-first", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "First look for a system server and connect to it if found", PRTE_CMD_LINE_OTYPE_DVM},
     /* connect only to a system server */
-    { '\0', "system-server-only", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Connect only to a system-level server",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "system-server-only", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Connect only to a system-level server", PRTE_CMD_LINE_OTYPE_DVM},
     /* do not connect */
-    { '\0', "do-not-connect", 0, PRTE_CMD_LINE_TYPE_BOOL,
-        "Do not connect to a server",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "do-not-connect", 0, PRTE_CMD_LINE_TYPE_BOOL, "Do not connect to a server",
+     PRTE_CMD_LINE_OTYPE_DVM},
     /* wait to connect */
-    { '\0', "wait-to-connect", 0, PRTE_CMD_LINE_TYPE_INT,
-        "Delay specified number of seconds before trying to connect",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "wait-to-connect", 0, PRTE_CMD_LINE_TYPE_INT,
+     "Delay specified number of seconds before trying to connect", PRTE_CMD_LINE_OTYPE_DVM},
     /* number of times to try to connect */
-    { '\0', "num-connect-retries", 0, PRTE_CMD_LINE_TYPE_INT,
-        "Max number of times to try to connect",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "num-connect-retries", 0, PRTE_CMD_LINE_TYPE_INT,
+     "Max number of times to try to connect", PRTE_CMD_LINE_OTYPE_DVM},
     /* provide a connection PID */
-    { '\0', "pid", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "PID of the daemon to which we should connect (int => PID or file:<file> for file containing the PID",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "pid", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "PID of the daemon to which we should connect (int => PID or file:<file> for file containing "
+     "the PID",
+     PRTE_CMD_LINE_OTYPE_DVM},
     /* provide a connection namespace */
-    { '\0', "namespace", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Namespace of the daemon to which we should connect",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "namespace", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Namespace of the daemon to which we should connect", PRTE_CMD_LINE_OTYPE_DVM},
     /* uri of the dvm, or at least where to get it */
-    { '\0', "dvm-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Specify the URI of the DVM master, or the name of the file (specified as file:filename) that contains that info",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "dvm-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
+     "Specify the URI of the DVM master, or the name of the file (specified as file:filename) that "
+     "contains that info",
+     PRTE_CMD_LINE_OTYPE_DVM},
     /* override personality */
-    { '\0', "personality", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Specify the personality to be used",
-        PRTE_CMD_LINE_OTYPE_DVM },
+    {'\0', "personality", 1, PRTE_CMD_LINE_TYPE_STRING, "Specify the personality to be used",
+     PRTE_CMD_LINE_OTYPE_DVM},
 
     /* End of list */
-    { '\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL }
-};
-
+    {'\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL}};
 
 int prun(int argc, char *argv[])
 {
-    int rc=1, i;
+    int rc = 1, i;
     char *param, *ptr;
     prte_pmix_lock_t lock, rellock;
     prte_list_t apps;
@@ -350,7 +332,7 @@ int prun(int argc, char *argv[])
 
     prte_atomic_lock_init(&prun_abort_inprogress_lock, PRTE_ATOMIC_LOCK_UNLOCKED);
     /* init the tiny part of PRTE we use */
-    prte_init_util(PRTE_PROC_TOOL);  // just so we pickup any PRTE params from sys/user files
+    prte_init_util(PRTE_PROC_TOOL); // just so we pickup any PRTE params from sys/user files
 
     fullpath = prte_find_absolute_path(argv[0]);
     prte_tool_basename = prte_basename(argv[0]);
@@ -382,8 +364,8 @@ int prun(int argc, char *argv[])
 
     /* Set both ends of this pipe to be close-on-exec so that no
        children inherit it */
-    if (prte_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS ||
-        prte_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
+    if (prte_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS
+        || prte_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
         fprintf(stderr, "unable to set the pipe to CLOEXEC\n");
         prte_progress_thread_finalize(NULL);
         exit(1);
@@ -400,12 +382,11 @@ int prun(int argc, char *argv[])
     /* because we have to use the schizo framework prior to parsing the
      * incoming argv for cmd line options, do a hacky search to support
      * passing of options (e.g., verbosity) for schizo */
-    for (i=1; NULL != argv[i]; i++) {
-        if (0 == strcmp(argv[i], "--prtemca") ||
-            0 == strcmp(argv[i], "--mca")) {
-            if (0 == strncmp(argv[i+1], "schizo", 6)) {
-                prte_asprintf(&param, "PRTE_MCA_%s", argv[i+1]);
-                prte_setenv(param, argv[i+2], true, &environ);
+    for (i = 1; NULL != argv[i]; i++) {
+        if (0 == strcmp(argv[i], "--prtemca") || 0 == strcmp(argv[i], "--mca")) {
+            if (0 == strncmp(argv[i + 1], "schizo", 6)) {
+                prte_asprintf(&param, "PRTE_MCA_%s", argv[i + 1]);
+                prte_setenv(param, argv[i + 2], true, &environ);
                 free(param);
                 i += 2;
             }
@@ -413,8 +394,9 @@ int prun(int argc, char *argv[])
     }
 
     /* open the SCHIZO framework */
-    if (PRTE_SUCCESS != (rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                                           PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    if (PRTE_SUCCESS
+        != (rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
+                                              PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -426,9 +408,9 @@ int prun(int argc, char *argv[])
 
     /* look for any personality specification */
     ptr = NULL;
-    for (i=0; NULL != argv[i]; i++) {
+    for (i = 0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
-            ptr = argv[i+1];
+            ptr = argv[i + 1];
             break;
         }
     }
@@ -440,8 +422,7 @@ int prun(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo.detect_proxy(ptr);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true,
-                       prte_tool_basename, fullpath);
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, fullpath);
         return 1;
     }
 
@@ -450,7 +431,7 @@ int prun(int argc, char *argv[])
      * exit with a giant warning message
      */
     if (0 == geteuid()) {
-        schizo->allow_run_as_root(prte_cmd_line);  // will exit us if not allowed
+        schizo->allow_run_as_root(prte_cmd_line); // will exit us if not allowed
     }
 
     /* setup the cmd line - this is specific to the proxy */
@@ -478,14 +459,11 @@ int prun(int argc, char *argv[])
     }
 
     /* parse the result to get values - this will not include MCA params */
-    if (PRTE_SUCCESS != (rc = prte_cmd_line_parse(prte_cmd_line,
-                                                  true, false, pargc, pargv)) ) {
+    if (PRTE_SUCCESS != (rc = prte_cmd_line_parse(prte_cmd_line, true, false, pargc, pargv))) {
         if (PRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n",
-                    prte_tool_basename,
-                    prte_strerror(rc));
+            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         }
-       return rc;
+        return rc;
     }
 
     /* let the schizo components take a pass at it to get the MCA params - this
@@ -493,9 +471,7 @@ int prun(int argc, char *argv[])
      * supports */
     if (PRTE_SUCCESS != (rc = schizo->parse_cli(pargc, 0, pargv, NULL))) {
         if (PRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n",
-                    prte_tool_basename,
-                    prte_strerror(rc));
+            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         }
         return rc;
     }
@@ -505,9 +481,7 @@ int prun(int argc, char *argv[])
     rc = schizo->check_sanity(prte_cmd_line);
     if (PRTE_SUCCESS != rc) {
         if (PRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n",
-                    prte_tool_basename,
-                    prte_strerror(rc));
+            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         }
         param = prte_argv_join(pargv, ' ');
         fprintf(stderr, "\n******* Cmd line: %s\n\n\n", param);
@@ -522,10 +496,9 @@ int prun(int argc, char *argv[])
     /* see if print version is requested. Do this before
      * check for help so that --version --help works as
      * one might expect. */
-     if (prte_cmd_line_is_taken(prte_cmd_line, "version")) {
-        fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n",
-                prte_tool_basename, "PMIx Reference RunTime Environment",
-                PRTE_VERSION, PACKAGE_BUGREPORT);
+    if (prte_cmd_line_is_taken(prte_cmd_line, "version")) {
+        fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n", prte_tool_basename,
+                "PMIx Reference RunTime Environment", PRTE_VERSION, PACKAGE_BUGREPORT);
         exit(0);
     }
 
@@ -533,9 +506,8 @@ int prun(int argc, char *argv[])
     if (prte_cmd_line_is_taken(prte_cmd_line, "help")) {
         char *str, *args = NULL;
         args = prte_cmd_line_get_usage_msg(prte_cmd_line, false);
-        str = prte_show_help_string("help-prun.txt", "prun:usage", false,
-                                    prte_tool_basename, "PRTE", PRTE_VERSION,
-                                    prte_tool_basename, args,
+        str = prte_show_help_string("help-prun.txt", "prun:usage", false, prte_tool_basename,
+                                    "PRTE", PRTE_VERSION, prte_tool_basename, args,
                                     PACKAGE_BUGREPORT);
         if (NULL != str) {
             printf("%s", str);
@@ -557,16 +529,17 @@ int prun(int argc, char *argv[])
     if (PRTE_SUCCESS != (rc = prte_ess_base_setup_signals(param))) {
         return rc;
     }
-    PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t) {
+    PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+    {
         signal(sig->signal, signal_forward_callback);
     }
 
     /* setup the job data global table */
     prte_job_data = PRTE_NEW(prte_pointer_array_t);
-    if (PRTE_SUCCESS != (ret = prte_pointer_array_init(prte_job_data,
-                                                       PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                                       PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                                       PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
+    if (PRTE_SUCCESS
+        != (ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         return rc;
     }
@@ -582,13 +555,13 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0)) &&
-        0 < pval->value.data.integer) {
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0))
+        && 0 < pval->value.data.integer) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "num-connect-retries", 0, 0)) &&
-        0 < pval->value.data.integer) {
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "num-connect-retries", 0, 0))
+        && 0 < pval->value.data.integer) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
 
@@ -606,20 +579,18 @@ int prun(int argc, char *argv[])
             param = strchr(pval->value.data.string, ':');
             if (NULL == param) {
                 /* malformed input */
-                prte_show_help("help-prun.txt", "bad-option-input", true,
-                               prte_tool_basename, "--pid",
-                               pval->value.data.string, "file:path");
+                prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+                               "--pid", pval->value.data.string, "file:path");
                 return PRTE_ERR_BAD_PARAM;
             }
             ++param;
             fp = fopen(param, "r");
             if (NULL == fp) {
-                prte_show_help("help-prun.txt", "file-open-error", true,
-                               prte_tool_basename, "--pid",
-                               pval->value.data.string, param);
+                prte_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
+                               "--pid", pval->value.data.string, param);
                 return PRTE_ERR_BAD_PARAM;
             }
-            fscanf(fp, "%lu", (unsigned long*)&pid);
+            fscanf(fp, "%lu", (unsigned long *) &pid);
             fclose(fp);
             PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
         }
@@ -631,12 +602,8 @@ int prun(int argc, char *argv[])
     /* set our session directory to something hopefully unique so
      * our rendezvous files don't conflict with other prun/prte
      * instances */
-    prte_asprintf(&ptr, "%s/%s.session.%s.%lu.%lu",
-                  prte_tmp_directory(),
-                  prte_tool_basename,
-                  prte_process_info.nodename,
-                  (unsigned long)geteuid(),
-                  (unsigned long)getpid());
+    prte_asprintf(&ptr, "%s/%s.session.%s.%lu.%lu", prte_tmp_directory(), prte_tool_basename,
+                  prte_process_info.nodename, (unsigned long) geteuid(), (unsigned long) getpid());
     PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_TMPDIR, ptr, PMIX_STRING);
     free(ptr);
 
@@ -654,14 +621,15 @@ int prun(int argc, char *argv[])
 
     /* convert to array of info */
     PMIX_INFO_LIST_CONVERT(ret, tinfo, &darray);
-    iptr = (pmix_info_t*)darray.array;
+    iptr = (pmix_info_t *) darray.array;
     ninfo = darray.size;
     PMIX_INFO_LIST_RELEASE(tinfo);
 
     /* now initialize PMIx - we have to indicate we are a launcher so that we
      * will provide rendezvous points for tools to connect to us */
     if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
-        fprintf(stderr, "%s failed to initialize, likely due to no DVM being available\n", prte_tool_basename);
+        fprintf(stderr, "%s failed to initialize, likely due to no DVM being available\n",
+                prte_tool_basename);
         exit(1);
     }
     PMIX_INFO_FREE(iptr, ninfo);
@@ -673,7 +641,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LOAD(&iptr[1], PMIX_EVENT_RETURN_OBJECT, &rellock, PMIX_POINTER);
     PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_HDLR_NAME, "DEFAULT", PMIX_STRING);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    PMIx_Register_event_handler(NULL, 0,iptr, 2, defhandler, regcbfunc, &lock);
+    PMIx_Register_event_handler(NULL, 0, iptr, 2, defhandler, regcbfunc, &lock);
     PRTE_PMIX_WAIT_THREAD(&lock);
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(iptr, 2);
@@ -687,9 +655,9 @@ int prun(int argc, char *argv[])
     ret = PMIx_Get(&pname, PMIX_LAUNCH_DIRECTIVES, &info, 1, &val);
     PMIX_INFO_DESTRUCT(&info);
     if (PMIX_SUCCESS == ret) {
-        iptr = (pmix_info_t*)val->data.darray->array;
+        iptr = (pmix_info_t *) val->data.darray->array;
         ninfo = val->data.darray->size;
-        for (n=0; n < ninfo; n++) {
+        for (n = 0; n < ninfo; n++) {
             PMIX_INFO_LIST_XFER(ret, jinfo, &iptr[n]);
         }
         PMIX_VALUE_RELEASE(val);
@@ -763,8 +731,7 @@ int prun(int argc, char *argv[])
     }
 
     if (NULL != param && NULL != ptr) {
-        prte_show_help("help-prted.txt", "both-file-and-dir-set", true,
-                        param, ptr);
+        prte_show_help("help-prted.txt", "both-file-and-dir-set", true, param, ptr);
         return PRTE_ERR_FATAL;
     } else if (NULL != param) {
         /* if the given filename isn't an absolute path, then
@@ -827,10 +794,11 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_RECOVERABLE, &flag, PMIX_BOOL);
     }
     /* record the max restarts */
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "max-restarts", 0, 0)) &&
-        0 < pval->value.data.integer) {
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "max-restarts", 0, 0))
+        && 0 < pval->value.data.integer) {
         ui32 = pval->value.data.integer;
-        PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t) {
+        PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t)
+        {
             PMIX_INFO_LIST_ADD(ret, app->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
         }
     }
@@ -849,14 +817,14 @@ int prun(int argc, char *argv[])
      * as that is what MPICH used
      */
     param = NULL;
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "timeout", 0, 0)) ||
-        NULL != (param = getenv("MPIEXEC_TIMEOUT"))) {
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "timeout", 0, 0))
+        || NULL != (param = getenv("MPIEXEC_TIMEOUT"))) {
         if (NULL != param) {
             i = strtol(param, NULL, 10);
             /* both cannot be present, or they must agree */
             if (NULL != pval && i != pval->value.data.integer) {
-                prte_show_help("help-prun.txt", "prun:timeoutconflict", false,
-                               prte_tool_basename, pval->value.data.integer, param);
+                prte_show_help("help-prun.txt", "prun:timeoutconflict", false, prte_tool_basename,
+                               pval->value.data.integer, param);
                 exit(1);
             }
         } else {
@@ -887,7 +855,8 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, schizo->name, PMIX_STRING);
 
     PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
-    ret = PMIx_server_setup_application(prte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc, &mylock);
+    ret = PMIx_server_setup_application(prte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc,
+                                        &mylock);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
@@ -899,13 +868,13 @@ int prun(int argc, char *argv[])
     PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
     /* transfer any returned ENVARS to the job_info */
     if (NULL != mylock.info) {
-        for (n=0; n < mylock.ninfo; n++) {
-            if (0 == strncmp(mylock.info[n].key, PMIX_SET_ENVAR, PMIX_MAX_KEYLEN) ||
-                0 == strncmp(mylock.info[n].key, PMIX_ADD_ENVAR, PMIX_MAX_KEYLEN) ||
-                0 == strncmp(mylock.info[n].key, PMIX_UNSET_ENVAR, PMIX_MAX_KEYLEN) ||
-                0 == strncmp(mylock.info[n].key, PMIX_PREPEND_ENVAR, PMIX_MAX_KEYLEN) ||
-                0 == strncmp(mylock.info[n].key, PMIX_APPEND_ENVAR, PMIX_MAX_KEYLEN)) {
-                PMIX_INFO_LIST_XFER(ret, jinfo,  &mylock.info[n]);
+        for (n = 0; n < mylock.ninfo; n++) {
+            if (0 == strncmp(mylock.info[n].key, PMIX_SET_ENVAR, PMIX_MAX_KEYLEN)
+                || 0 == strncmp(mylock.info[n].key, PMIX_ADD_ENVAR, PMIX_MAX_KEYLEN)
+                || 0 == strncmp(mylock.info[n].key, PMIX_UNSET_ENVAR, PMIX_MAX_KEYLEN)
+                || 0 == strncmp(mylock.info[n].key, PMIX_PREPEND_ENVAR, PMIX_MAX_KEYLEN)
+                || 0 == strncmp(mylock.info[n].key, PMIX_APPEND_ENVAR, PMIX_MAX_KEYLEN)) {
+                PMIX_INFO_LIST_XFER(ret, jinfo, &mylock.info[n]);
             }
         }
         PMIX_INFO_FREE(mylock.info, mylock.ninfo);
@@ -914,8 +883,7 @@ int prun(int argc, char *argv[])
     /* they want to run an application, so let's parse
      * the cmd line to get it */
 
-    if (PRTE_SUCCESS != (rc = prte_parse_locals(prte_cmd_line, &apps,
-                                                pargc, pargv, NULL, NULL))) {
+    if (PRTE_SUCCESS != (rc = prte_parse_locals(prte_cmd_line, &apps, pargc, pargv, NULL, NULL))) {
         PRTE_ERROR_LOG(rc);
         PRTE_LIST_DESTRUCT(&apps);
         goto DONE;
@@ -929,7 +897,7 @@ int prun(int argc, char *argv[])
 
     /* convert the job info into an array */
     PMIX_INFO_LIST_CONVERT(ret, jinfo, &darray);
-    iptr = (pmix_info_t*)darray.array;
+    iptr = (pmix_info_t *) darray.array;
     ninfo = darray.size;
     PMIX_INFO_LIST_RELEASE(jinfo);
 
@@ -937,14 +905,15 @@ int prun(int argc, char *argv[])
     napps = prte_list_get_size(&apps);
     PMIX_APP_CREATE(papps, napps);
     n = 0;
-    PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t) {
+    PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t)
+    {
         papps[n].cmd = strdup(app->app.cmd);
         papps[n].argv = prte_argv_copy(app->app.argv);
         papps[n].env = prte_argv_copy(app->app.env);
         papps[n].cwd = strdup(app->app.cwd);
         papps[n].maxprocs = app->app.maxprocs;
         PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);
-        papps[n].info = (pmix_info_t*)darray.array;
+        papps[n].info = (pmix_info_t *) darray.array;
         papps[n].ninfo = darray.size;
         /* pickup any relevant envars */
         rc = prte_schizo.parse_env(prte_cmd_line, environ, &papps[n].env, false);
@@ -967,7 +936,7 @@ int prun(int argc, char *argv[])
     }
 
     /* push our stdin to the apps */
-    PMIX_LOAD_PROCID(&pname, spawnednspace, 0);  // forward stdin to rank=0
+    PMIX_LOAD_PROCID(&pname, spawnednspace, 0); // forward stdin to rank=0
     PMIX_INFO_CREATE(iptr, 1);
     PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
@@ -1012,8 +981,7 @@ int prun(int argc, char *argv[])
     }
 
     /* if we lost connection to the server, then we are done */
-    if (PMIX_ERR_LOST_CONNECTION == rc ||
-        PMIX_ERR_UNREACH == rc) {
+    if (PMIX_ERR_LOST_CONNECTION == rc || PMIX_ERR_UNREACH == rc) {
         goto DONE;
     }
 
@@ -1036,8 +1004,9 @@ int prun(int argc, char *argv[])
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_DESTRUCT(&info);
 
-  DONE:
-    PRTE_LIST_FOREACH(evitm, &forwarded_signals, prte_event_list_item_t) {
+DONE:
+    PRTE_LIST_FOREACH(evitm, &forwarded_signals, prte_event_list_item_t)
+    {
         prte_event_signal_del(&evitm->ev);
     }
     PRTE_LIST_DESTRUCT(&forwarded_signals);
@@ -1068,7 +1037,8 @@ static void clean_abort(int fd, short flags, void *arg)
             /* exit with a non-zero status */
             exit(1);
         }
-        fprintf(stderr, "prun: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n");
+        fprintf(stderr,
+                "prun: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n");
         forcibly_die = true;
         /* reset the event */
         prte_event_add(&term_handler, NULL);
@@ -1086,7 +1056,7 @@ static void clean_abort(int fd, short flags, void *arg)
     }
 }
 
-static struct timeval current, last={0,0};
+static struct timeval current, last = {0, 0};
 static bool first = true;
 
 /*
@@ -1096,7 +1066,8 @@ static bool first = true;
 static void abort_signal_callback(int fd)
 {
     uint8_t foo = 1;
-    char *msg = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
+    char *msg
+        = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
 
     /* if this is the first time thru, just get
      * the current time
@@ -1114,7 +1085,7 @@ static void abort_signal_callback(int fd)
         if ((current.tv_sec - last.tv_sec) < 5) {
             exit(1);
         }
-        if (-1 == write(1, (void*)msg, strlen(msg))) {
+        if (-1 == write(1, (void *) msg, strlen(msg))) {
             exit(1);
         }
     }
@@ -1132,9 +1103,8 @@ static void signal_forward_callback(int signum)
     pmix_proc_t proc;
     pmix_info_t info;
 
-    if (verbose){
-        fprintf(stderr, "%s: Forwarding signal %d to job\n",
-                prte_tool_basename, signum);
+    if (verbose) {
+        fprintf(stderr, "%s: Forwarding signal %d to job\n", prte_tool_basename, signum);
     }
 
     /* send the signal out to the processes */
@@ -1142,15 +1112,15 @@ static void signal_forward_callback(int signum)
     PMIX_INFO_LOAD(&info, PMIX_JOB_CTRL_SIGNAL, &signum, PMIX_INT);
     rc = PMIx_Job_control(&proc, 1, &info, 1, NULL, NULL);
     if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-        fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)",
-                signum, spawnednspace, PMIx_Error_string(rc));
+        fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)", signum,
+                spawnednspace, PMIx_Error_string(rc));
     }
 }
 
 /**
  * Deal with sigpipe errors
  */
-static int sigpipe_error_count=0;
+static int sigpipe_error_count = 0;
 static void epipe_signal_callback(int signal)
 {
     sigpipe_error_count++;

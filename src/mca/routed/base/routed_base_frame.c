@@ -23,18 +23,17 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/mca.h"
 #include "src/class/prte_bitmap.h"
-#include "src/util/output.h"
 #include "src/mca/base/prte_mca_base_component_repository.h"
+#include "src/mca/mca.h"
+#include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/util/proc_info.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/proc_info.h"
 
-#include "src/mca/routed/routed.h"
 #include "src/mca/routed/base/base.h"
-
+#include "src/mca/routed/routed.h"
 
 /* The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
@@ -63,8 +62,9 @@ static int prte_routed_base_close(void)
 }
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, routed, "PRTE Message Routing Subsystem", NULL,
-                                 prte_routed_base_open, prte_routed_base_close,
-                                 prte_routed_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                prte_routed_base_open, prte_routed_base_close,
+                                prte_routed_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 int prte_routed_base_select(void)
 {
@@ -74,10 +74,11 @@ int prte_routed_base_select(void)
     /*
      * Select the best component
      */
-    if( PRTE_SUCCESS != prte_mca_base_select("routed", prte_routed_base_framework.framework_output,
-                                                &prte_routed_base_framework.framework_components,
-                                                (prte_mca_base_module_t **) &best_module,
-                                                (prte_mca_base_component_t **) &best_component, NULL) ) {
+    if (PRTE_SUCCESS
+        != prte_mca_base_select("routed", prte_routed_base_framework.framework_output,
+                                &prte_routed_base_framework.framework_components,
+                                (prte_mca_base_module_t **) &best_module,
+                                (prte_mca_base_component_t **) &best_component, NULL)) {
         /* This will only happen if no component was selected */
         /* If we didn't find one to select, that is an error */
         return PRTE_ERROR;
@@ -100,6 +101,4 @@ static void destruct(prte_routed_tree_t *rt)
 {
     PRTE_DESTRUCT(&rt->relatives);
 }
-PRTE_CLASS_INSTANCE(prte_routed_tree_t,
-                   prte_list_item_t,
-                   construct, destruct);
+PRTE_CLASS_INSTANCE(prte_routed_tree_t, prte_list_item_t, construct, destruct);

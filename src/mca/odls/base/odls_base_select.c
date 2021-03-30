@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,16 +22,14 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/base/odls_private.h"
-
 
 /**
  * Function for selecting one component from all those that are
@@ -44,10 +43,11 @@ int prte_odls_base_select(void)
     /*
      * Select the best component
      */
-    if( PRTE_SUCCESS != prte_mca_base_select("odls", prte_odls_base_framework.framework_output,
-                                               &prte_odls_base_framework.framework_components,
-                                               (prte_mca_base_module_t **) &best_module,
-                                               (prte_mca_base_component_t **) &best_component, NULL) ) {
+    if (PRTE_SUCCESS
+        != prte_mca_base_select("odls", prte_odls_base_framework.framework_output,
+                                &prte_odls_base_framework.framework_components,
+                                (prte_mca_base_module_t **) &best_module,
+                                (prte_mca_base_component_t **) &best_component, NULL)) {
         /* This will only happen if no component was selected */
         return PRTE_ERR_NOT_FOUND;
     }

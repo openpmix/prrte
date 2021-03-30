@@ -12,6 +12,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,9 +34,9 @@
 
 #include "prte_config.h"
 
-#include "src/threads/mutex.h"
-#include "src/class/prte_object.h"
 #include "prefetch.h"
+#include "src/class/prte_object.h"
+#include "src/threads/mutex.h"
 
 BEGIN_C_DECLS
 
@@ -61,7 +62,7 @@ struct prte_pointer_array_t {
     /** block size for each allocation */
     int block_size;
     /** pointer to an array of bits to speed up the research for an empty position. */
-    uint64_t* free_bits;
+    uint64_t *free_bits;
     /** pointer to array of pointers */
     void **addr;
 };
@@ -88,9 +89,8 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_pointer_array_t);
  * @return PRTE_SUCCESS if all initializations were succesfull. Otherwise,
  *  the error indicate what went wrong in the function.
  */
-PRTE_EXPORT int prte_pointer_array_init( prte_pointer_array_t* array,
-                                           int initial_allocation,
-                                           int max_size, int block_size );
+PRTE_EXPORT int prte_pointer_array_init(prte_pointer_array_t *array, int initial_allocation,
+                                        int max_size, int block_size);
 
 /**
  * Add a pointer to the array (Grow the array, if need be)
@@ -112,8 +112,7 @@ PRTE_EXPORT int prte_pointer_array_add(prte_pointer_array_t *array, void *ptr);
  *
  * @return Error code.  (-1) indicates an error.
  */
-PRTE_EXPORT int prte_pointer_array_set_item(prte_pointer_array_t *array,
-                                int index, void *value);
+PRTE_EXPORT int prte_pointer_array_set_item(prte_pointer_array_t *array, int index, void *value);
 
 /**
  * Get the value of an element in array
@@ -124,12 +123,11 @@ PRTE_EXPORT int prte_pointer_array_set_item(prte_pointer_array_t *array,
  * @return Error code.  NULL indicates an error.
  */
 
-static inline void *prte_pointer_array_get_item(prte_pointer_array_t *table,
-                                                int element_index)
+static inline void *prte_pointer_array_get_item(prte_pointer_array_t *table, int element_index)
 {
     void *p;
 
-    if( PRTE_UNLIKELY(0 > element_index || table->size <= element_index) ) {
+    if (PRTE_UNLIKELY(0 > element_index || table->size <= element_index)) {
         return NULL;
     }
     prte_mutex_lock(&(table->lock));
@@ -137,7 +135,6 @@ static inline void *prte_pointer_array_get_item(prte_pointer_array_t *table,
     prte_mutex_unlock(&(table->lock));
     return p;
 }
-
 
 /**
  * Get the size of the pointer array
@@ -151,7 +148,7 @@ static inline void *prte_pointer_array_get_item(prte_pointer_array_t *table,
  */
 static inline int prte_pointer_array_get_size(prte_pointer_array_t *array)
 {
-  return array->size;
+    return array->size;
 }
 
 /**
@@ -180,9 +177,8 @@ PRTE_EXPORT int prte_pointer_array_set_size(prte_pointer_array_t *array, int siz
  * In contrary to array_set, this function does not allow to overwrite
  * a value, unless the previous value is NULL ( equiv. to free ).
  */
-PRTE_EXPORT bool prte_pointer_array_test_and_set_item (prte_pointer_array_t *table,
-                                          int index,
-                                          void *value);
+PRTE_EXPORT bool prte_pointer_array_test_and_set_item(prte_pointer_array_t *table, int index,
+                                                      void *value);
 
 /**
  * Empty the array.
@@ -193,16 +189,17 @@ PRTE_EXPORT bool prte_pointer_array_test_and_set_item (prte_pointer_array_t *tab
 static inline void prte_pointer_array_remove_all(prte_pointer_array_t *array)
 {
     int i;
-    if( array->number_free == array->size )
-        return;  /* nothing to do here this time (the array is already empty) */
+    if (array->number_free == array->size)
+        return; /* nothing to do here this time (the array is already empty) */
 
     prte_mutex_lock(&array->lock);
     array->lowest_free = 0;
     array->number_free = array->size;
-    for(i = 0; i < array->size; i++) {
+    for (i = 0; i < array->size; i++) {
         array->addr[i] = NULL;
     }
-    for(i = 0; i < (int)((array->size + 8*sizeof(uint64_t) - 1) / (8*sizeof(uint64_t))); i++) {
+    for (i = 0; i < (int) ((array->size + 8 * sizeof(uint64_t) - 1) / (8 * sizeof(uint64_t)));
+         i++) {
         array->free_bits[i] = 0;
     }
     prte_mutex_unlock(&array->lock);

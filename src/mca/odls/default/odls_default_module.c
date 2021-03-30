@@ -73,65 +73,64 @@
 #include "constants.h"
 #include "types.h"
 
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <errno.h>
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
+#    include <sys/wait.h>
 #endif
 #include <signal.h>
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
+#    include <fcntl.h>
 #endif
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+#    include <sys/param.h>
 #endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif
 #include <stdlib.h>
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
-#endif  /* HAVE_SYS_STAT_H */
+#    include <sys/stat.h>
+#endif /* HAVE_SYS_STAT_H */
 #include <stdarg.h>
 #ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
+#    include <sys/select.h>
 #endif
 #ifdef HAVE_DIRENT_H
-#include <dirent.h>
+#    include <dirent.h>
 #endif
 #include <ctype.h>
 #ifdef HAVE_SYS_PTRACE_H
-#include <sys/ptrace.h>
+#    include <sys/ptrace.h>
 #endif
 
-#include "src/hwloc/hwloc-internal.h"
-#include "src/hwloc/hwloc-internal.h"
 #include "src/class/prte_pointer_array.h"
+#include "src/hwloc/hwloc-internal.h"
+#include "src/util/fd.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
 #include "src/util/sys_limits.h"
-#include "src/util/fd.h"
 
-#include "src/util/show_help.h"
-#include "src/runtime/prte_wait.h"
-#include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rtc/rtc.h"
-#include "src/util/name_fns.h"
+#include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_wait.h"
 #include "src/threads/threads.h"
+#include "src/util/name_fns.h"
+#include "src/util/show_help.h"
 
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/base/odls_private.h"
@@ -150,25 +149,20 @@ static int prte_odls_default_restart_proc(prte_proc_t *child);
  * Explicitly declared functions so that we can get the noreturn
  * attribute registered with the compiler.
  */
-static void send_error_show_help(int fd, int exit_status,
-                                 const char *file, const char *topic, ...)
-    __prte_attribute_noreturn__;
+static void send_error_show_help(int fd, int exit_status, const char *file, const char *topic,
+                                 ...) __prte_attribute_noreturn__;
 
-static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
-    __prte_attribute_noreturn__;
-
+static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd) __prte_attribute_noreturn__;
 
 /*
  * Module
  */
-prte_odls_base_module_t prte_odls_default_module = {
-    .get_add_procs_data = prte_odls_base_default_get_add_procs_data,
-    .launch_local_procs = prte_odls_default_launch_local_procs,
-    .kill_local_procs = prte_odls_default_kill_local_procs,
-    .signal_local_procs = prte_odls_default_signal_local_procs,
-    .restart_proc = prte_odls_default_restart_proc
-};
-
+prte_odls_base_module_t prte_odls_default_module
+    = {.get_add_procs_data = prte_odls_base_default_get_add_procs_data,
+       .launch_local_procs = prte_odls_default_launch_local_procs,
+       .kill_local_procs = prte_odls_default_kill_local_procs,
+       .signal_local_procs = prte_odls_default_signal_local_procs,
+       .restart_proc = prte_odls_default_restart_proc};
 
 /* deliver a signal to a specified pid. */
 static int odls_default_kill_local(pid_t pid, int signum)
@@ -193,13 +187,13 @@ static int odls_default_kill_local(pid_t pid, int signum)
         if (ESRCH != errno) {
             PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                                  "%s odls:default:SENT KILL %d TO PID %d GOT ERRNO %d",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int)pid, errno));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int) pid, errno));
             return errno;
         }
     }
     PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                          "%s odls:default:SENT KILL %d TO PID %d SUCCESS",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int)pid));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int) pid));
     return 0;
 }
 
@@ -207,14 +201,13 @@ int prte_odls_default_kill_local_procs(prte_pointer_array_t *procs)
 {
     int rc;
 
-    if (PRTE_SUCCESS != (rc = prte_odls_base_default_kill_local_procs(procs,
-                                            odls_default_kill_local))) {
+    if (PRTE_SUCCESS
+        != (rc = prte_odls_base_default_kill_local_procs(procs, odls_default_kill_local))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
     return PRTE_SUCCESS;
 }
-
 
 static void set_handler_default(int sig)
 {
@@ -224,7 +217,7 @@ static void set_handler_default(int sig)
     act.sa_flags = 0;
     sigemptyset(&act.sa_mask);
 
-    sigaction(sig, &act, (struct sigaction *)0);
+    sigaction(sig, &act, (struct sigaction *) 0);
 }
 
 /*
@@ -259,29 +252,26 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
     if (PRTE_SUCCESS != (ret = prte_fd_write(fd, sizeof(*msg), msg))) {
         goto out;
     }
-    if (msg->file_str_len > 0 &&
-        PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->file_str_len, file))) {
+    if (msg->file_str_len > 0
+        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->file_str_len, file))) {
         goto out;
     }
-    if (msg->topic_str_len > 0 &&
-        PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->topic_str_len, topic))) {
+    if (msg->topic_str_len > 0
+        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->topic_str_len, topic))) {
         goto out;
     }
-    if (msg->msg_str_len > 0 &&
-        PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->msg_str_len, str))) {
+    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->msg_str_len, str))) {
         goto out;
     }
 
- out:
+out:
     free(str);
     return ret;
 }
 
-
 /* Called from the child to send an error message up the pipe to the
    waiting parent. */
-static void send_error_show_help(int fd, int exit_status,
-                                 const char *file, const char *topic, ...)
+static void send_error_show_help(int fd, int exit_status, const char *file, const char *topic, ...)
 {
     va_list ap;
     prte_odls_pipe_err_msg_t msg;
@@ -329,9 +319,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
         if (PRTE_FLAG_TEST(cd->jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT)) {
             if (PRTE_SUCCESS != (i = prte_iof_base_setup_child(&cd->opts, &cd->env))) {
                 PRTE_ERROR_LOG(i);
-                send_error_show_help(write_fd, 1,
-                                     "help-prte-odls-default.txt",
-                                     "iof setup failed",
+                send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "iof setup failed",
                                      prte_process_info.nodename, cd->app->app);
                 /* Does not return */
             }
@@ -343,7 +331,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     } else if (!PRTE_FLAG_TEST(cd->jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT)) {
         /* tie stdin/out/err/internal to /dev/null */
         int fdnull;
-        for (i=0; i < 3; i++) {
+        for (i = 0; i < 3; i++) {
             fdnull = open("/dev/null", O_RDONLY, 0);
             if (fdnull > i && i != write_fd) {
                 dup2(fdnull, i);
@@ -358,7 +346,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     prte_close_open_file_descriptors(write_fd);
 
     if (cd->argv == NULL) {
-        cd->argv = malloc(sizeof(char*)*2);
+        cd->argv = malloc(sizeof(char *) * 2);
         cd->argv[0] = strdup(cd->app->app);
         cd->argv[1] = NULL;
     }
@@ -387,12 +375,8 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     /* take us to the correct wdir */
     if (NULL != cd->wdir) {
         if (0 != chdir(cd->wdir)) {
-            send_error_show_help(write_fd, 1,
-                                 "help-prun.txt",
-                                 "prun:wdir-not-found",
-                                 "prted",
-                                 cd->wdir,
-                                 prte_process_info.nodename,
+            send_error_show_help(write_fd, 1, "help-prun.txt", "prun:wdir-not-found", "prted",
+                                 cd->wdir, prte_process_info.nodename,
                                  (NULL == cd->child) ? 0 : cd->child->app_rank);
             /* Does not return */
         }
@@ -402,15 +386,11 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     if (prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
         errno = 0;
         i = ptrace(PRTE_TRACEME, 0, 0, 0);
-        if  (0 != errno) {
-            send_error_show_help(write_fd, 1,
-                                 "help-prun.txt",
-                                 "prun:stop-on-exec",
-                                 "prted",
-                                 strerror(errno),
-                                 prte_process_info.nodename,
+        if (0 != errno) {
+            send_error_show_help(write_fd, 1, "help-prun.txt", "prun:stop-on-exec", "prted",
+                                 strerror(errno), prte_process_info.nodename,
                                  (NULL == cd->child) ? 0 : cd->child->app_rank);
-          }
+        }
     }
 #endif
 
@@ -419,21 +399,18 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     /* If we get here, an error has occurred. */
     (void) getcwd(dir, sizeof(dir));
     struct stat stats;
-    char* msg;
+    char *msg;
     /* If errno is ENOENT, that indicates either cd->cmd does not exist, or
      * cd->cmd is a script, but has a bad interpreter specified. */
     if (ENOENT == errno && 0 == stat(cd->app->app, &stats)) {
-        asprintf(&msg, "%s has a bad interpreter on the first line.",
-                 cd->app->app);
+        asprintf(&msg, "%s has a bad interpreter on the first line.", cd->app->app);
     } else {
         msg = strdup(strerror(errno));
     }
-    send_error_show_help(write_fd, 1,
-                         "help-prte-odls-default.txt", "execve error",
+    send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "execve error",
                          prte_process_info.nodename, dir, cd->app->app, msg);
     free(msg);
 }
-
 
 static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 {
@@ -445,13 +422,13 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         close(cd->opts.p_stdin[0]);
     }
     close(cd->opts.p_stdout[1]);
-    if( !prte_iof_base.redirect_app_stderr_to_stdout ) {
+    if (!prte_iof_base.redirect_app_stderr_to_stdout) {
         close(cd->opts.p_stderr[1]);
     }
 
 #if PRTE_HAVE_STOP_ON_EXEC
-    if (NULL != cd->child &&
-        prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
+    if (NULL != cd->child
+        && prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
         rc = waitpid(cd->child->pid, &status, WUNTRACED);
         if (-1 == rc) {
             /* doomed */
@@ -471,16 +448,16 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
                 return PRTE_ERR_FAILED_TO_START;
             }
             errno = 0;
-#if PRTE_HAVE_LINUX_PTRACE
-            ptrace(PRTE_DETACH, cd->child->pid, 0, (void*)SIGSTOP);
-#else
+#    if PRTE_HAVE_LINUX_PTRACE
+            ptrace(PRTE_DETACH, cd->child->pid, 0, (void *) SIGSTOP);
+#    else
             ptrace(PRTE_DETACH, cd->child->pid, 0, SIGSTOP);
-#endif
+#    endif
             if (0 != errno) {
                 /* couldn't detach */
                 cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
                 PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
-            close(read_fd);
+                close(read_fd);
                 return PRTE_ERR_FAILED_TO_START;
             }
         } else {
@@ -530,10 +507,9 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         if (msg.file_str_len > 0) {
             rc = prte_fd_read(read_fd, msg.file_str_len, file);
             if (PRTE_SUCCESS != rc) {
-                prte_show_help("help-prte-odls-default.txt", "syscall fail",
-                               true,
-                               prte_process_info.nodename, cd->app->app,
-                               "prte_fd_read", __FILE__, __LINE__);
+                prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
+                               prte_process_info.nodename, cd->app->app, "prte_fd_read", __FILE__,
+                               __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
@@ -544,10 +520,9 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         if (msg.topic_str_len > 0) {
             rc = prte_fd_read(read_fd, msg.topic_str_len, topic);
             if (PRTE_SUCCESS != rc) {
-                prte_show_help("help-prte-odls-default.txt", "syscall fail",
-                               true,
-                               prte_process_info.nodename, cd->app->app,
-                               "prte_fd_read", __FILE__, __LINE__);
+                prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
+                               prte_process_info.nodename, cd->app->app, "prte_fd_read", __FILE__,
+                               __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
@@ -558,10 +533,9 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         if (msg.msg_str_len > 0) {
             str = calloc(1, msg.msg_str_len + 1);
             if (NULL == str) {
-                prte_show_help("help-prte-odls-default.txt", "syscall fail",
-                               true,
-                               prte_process_info.nodename, cd->app->app,
-                               "prte_fd_read", __FILE__, __LINE__);
+                prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
+                               prte_process_info.nodename, cd->app->app, "prte_fd_read", __FILE__,
+                               __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
@@ -605,13 +579,12 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
     return PRTE_SUCCESS;
 }
 
-
 /**
  *  Fork/exec the specified processes
  */
 static int odls_default_fork_local_proc(void *cdptr)
 {
-    prte_odls_spawn_caddy_t *cd = (prte_odls_spawn_caddy_t*)cdptr;
+    prte_odls_spawn_caddy_t *cd = (prte_odls_spawn_caddy_t *) cdptr;
     int p[2];
     pid_t pid;
     prte_proc_t *child = cd->child;
@@ -658,7 +631,6 @@ static int odls_default_fork_local_proc(void *cdptr)
     return do_parent(cd, p[0]);
 }
 
-
 /**
  * Launch all processes allocated to the current node.
  */
@@ -670,9 +642,10 @@ int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data)
 
     /* construct the list of children we are to launch */
     if (PRTE_SUCCESS != (rc = prte_odls_base_default_construct_child_list(data, &job))) {
-        PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
-                             "%s odls:default:launch:local failed to construct child list on error %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
+        PRTE_OUTPUT_VERBOSE(
+            (2, prte_odls_base_framework.framework_output,
+             "%s odls:default:launch:local failed to construct child list on error %s",
+             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
         return rc;
     }
 
@@ -681,7 +654,6 @@ int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data)
 
     return PRTE_SUCCESS;
 }
-
 
 /**
  * Send a signal to a pid.  Note that if we get an error, we set the
@@ -705,27 +677,26 @@ static int send_signal(pid_t pd, int signal)
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_odls_base_framework.framework_output,
-                         "%s sending signal %d to pid %ld",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         signal, (long)pid));
+                         "%s sending signal %d to pid %ld", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         signal, (long) pid));
 
     if (kill(pid, signal) != 0) {
-        switch(errno) {
-            case EINVAL:
-                rc = PRTE_ERR_BAD_PARAM;
-                break;
-            case ESRCH:
-                /* This case can occur when we deliver a signal to a
-                   process that is no longer there.  This can happen if
-                   we deliver a signal while the job is shutting down.
-                   This does not indicate a real problem, so just
-                   ignore the error.  */
-                break;
-            case EPERM:
-                rc = PRTE_ERR_PERM;
-                break;
-            default:
-                rc = PRTE_ERROR;
+        switch (errno) {
+        case EINVAL:
+            rc = PRTE_ERR_BAD_PARAM;
+            break;
+        case ESRCH:
+            /* This case can occur when we deliver a signal to a
+               process that is no longer there.  This can happen if
+               we deliver a signal while the job is shutting down.
+               This does not indicate a real problem, so just
+               ignore the error.  */
+            break;
+        case EPERM:
+            rc = PRTE_ERR_PERM;
+            break;
+        default:
+            rc = PRTE_ERROR;
         }
     }
 
@@ -736,7 +707,8 @@ static int prte_odls_default_signal_local_procs(const pmix_proc_t *proc, int32_t
 {
     int rc;
 
-    if (PRTE_SUCCESS != (rc = prte_odls_base_default_signal_local_procs(proc, signal, send_signal))) {
+    if (PRTE_SUCCESS
+        != (rc = prte_odls_base_default_signal_local_procs(proc, signal, send_signal))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -748,7 +720,8 @@ static int prte_odls_default_restart_proc(prte_proc_t *child)
     int rc;
 
     /* restart the local proc */
-    if (PRTE_SUCCESS != (rc = prte_odls_base_default_restart_proc(child, odls_default_fork_local_proc))) {
+    if (PRTE_SUCCESS
+        != (rc = prte_odls_base_default_restart_proc(child, odls_default_fork_local_proc))) {
         PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                              "%s odls:default:restart_proc failed to launch on error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));

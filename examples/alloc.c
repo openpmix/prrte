@@ -15,6 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,11 +27,11 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <time.h>
+#include <unistd.h>
 
-#include <pmix.h>
 #include "examples.h"
+#include <pmix.h>
 
 /* this is a callback function for the PMIx_Query and
  * PMIx_Allocate APIs. The query will callback with a status indicating
@@ -44,13 +45,10 @@
  * Once we have dealt with the returned data, we must
  * call the release_fn so that the PMIx library can
  * cleanup */
-static void infocbfunc(pmix_status_t status,
-                       pmix_info_t *info, size_t ninfo,
-                       void *cbdata,
-                       pmix_release_cbfunc_t release_fn,
-                       void *release_cbdata)
+static void infocbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cbdata,
+                       pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
-    myquery_data_t *mq = (myquery_data_t*)cbdata;
+    myquery_data_t *mq = (myquery_data_t *) cbdata;
     size_t n;
 
     fprintf(stderr, "Allocation request returned %s\n", PMIx_Error_string(status));
@@ -61,7 +59,7 @@ static void infocbfunc(pmix_status_t status,
     if (0 < ninfo) {
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
-        for (n=0; n < ninfo; n++) {
+        for (n = 0; n < ninfo; n++) {
             fprintf(stderr, "Transferring %s\n", info[n].key);
             PMIX_INFO_XFER(&mq->info[n], &info[n]);
         }
@@ -86,22 +84,19 @@ static void infocbfunc(pmix_status_t status,
  * the status to see if it was "alloc complete", but it often is simpler
  * to declare a use-specific notification callback point. In this case,
  * we are asking to know when the allocation request completes */
-static void release_fn(size_t evhdlr_registration_id,
-                       pmix_status_t status,
-                       const pmix_proc_t *source,
-                       pmix_info_t info[], size_t ninfo,
+static void release_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                       const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                        pmix_info_t results[], size_t nresults,
-                       pmix_event_notification_cbfunc_fn_t cbfunc,
-                       void *cbdata)
+                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     myrel_t *lock;
     size_t n;
 
     /* find the return object */
     lock = NULL;
-    for (n=0; n < ninfo; n++) {
+    for (n = 0; n < ninfo; n++) {
         if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
-            lock = (myrel_t*)info[n].value.data.ptr;
+            lock = (myrel_t *) info[n].value.data.ptr;
             break;
         }
     }
@@ -134,15 +129,13 @@ static void release_fn(size_t evhdlr_registration_id,
  * to the registered event. The index is used later on to deregister
  * an event handler - if we don't explicitly deregister it, then the
  * PMIx server will do so when it sees us exit */
-static void evhandler_reg_callbk(pmix_status_t status,
-                                 size_t evhandler_ref,
-                                 void *cbdata)
+static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbdata)
 {
-    mylock_t *lock = (mylock_t*)cbdata;
+    mylock_t *lock = (mylock_t *) cbdata;
 
     if (PMIX_SUCCESS != status) {
-        fprintf(stderr, "EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
-                status, (unsigned long)evhandler_ref);
+        fprintf(stderr, "EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n", status,
+                (unsigned long) evhandler_ref);
     }
     lock->status = status;
     lock->evhandler_ref = evhandler_ref;
@@ -168,17 +161,19 @@ int main(int argc, char **argv)
 
     /* init us */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %d\n", myproc.nspace, myproc.rank, rc);
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %d\n", myproc.nspace, myproc.rank,
+                rc);
         exit(0);
     }
     fprintf(stderr, "Client ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
 
     /* get our job size */
     PMIX_PROC_CONSTRUCT(&proc);
-    (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
+    (void) strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
     if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_JOB_SIZE, NULL, 0, &val))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Get job size failed: %d\n", myproc.nspace, myproc.rank, rc);
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get job size failed: %d\n", myproc.nspace,
+                myproc.rank, rc);
         goto done;
     }
     nprocs = val->data.uint32;
@@ -191,18 +186,19 @@ int main(int argc, char **argv)
         PMIX_INFO_CREATE(info, 2);
         PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NUM_NODES, &nnodes, PMIX_UINT64);
         PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_ID, myallocation, PMIX_STRING);
-        if (PMIX_SUCCESS != (rc = PMIx_Allocation_request_nb(PMIX_ALLOC_NEW, info, 2, infocbfunc, &mydata))) {
-            fprintf(stderr, "Client ns %s rank %d: PMIx_Allocation_request_nb failed: %d\n", myproc.nspace, myproc.rank, rc);
+        if (PMIX_SUCCESS
+            != (rc = PMIx_Allocation_request_nb(PMIX_ALLOC_NEW, info, 2, infocbfunc, &mydata))) {
+            fprintf(stderr, "Client ns %s rank %d: PMIx_Allocation_request_nb failed: %d\n",
+                    myproc.nspace, myproc.rank, rc);
             goto done;
         }
         DEBUG_WAIT_THREAD(&mydata.lock);
         PMIX_INFO_FREE(info, 2);
-        fprintf(stderr, "Client ns %s rank %d: Allocation returned status: %s\n",
-                myproc.nspace, myproc.rank, PMIx_Error_string(mydata.lock.status));
+        fprintf(stderr, "Client ns %s rank %d: Allocation returned status: %s\n", myproc.nspace,
+                myproc.rank, PMIx_Error_string(mydata.lock.status));
         DEBUG_DESTRUCT_MYQUERY(&mydata);
         /* if it didn't succeed and we have peers out there, then we better wake
          * them up */
-
 
     } else if (1 == myproc.rank) {
         /* demonstrate a notification based approach - register a handler
@@ -213,8 +209,8 @@ int main(int argc, char **argv)
         PMIX_INFO_LOAD(&info[1], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
         DEBUG_CONSTRUCT_LOCK(&mylock);
         code = PMIX_NOTIFY_ALLOC_COMPLETE;
-        PMIx_Register_event_handler(&code, 1, info, 2,
-                                    release_fn, evhandler_reg_callbk, (void*)&mylock);
+        PMIx_Register_event_handler(&code, 1, info, 2, release_fn, evhandler_reg_callbk,
+                                    (void *) &mylock);
         DEBUG_WAIT_THREAD(&mylock);
         PMIX_INFO_FREE(info, 2);
         rc = mylock.status;
@@ -222,8 +218,8 @@ int main(int argc, char **argv)
 
         /* now wait to hear that the request is complete */
         DEBUG_WAIT_THREAD(&myrel.lock);
-        fprintf(stderr, "[%s:%d] Allocation returned status: %s\n",
-                myproc.nspace, myproc.rank, PMIx_Error_string(myrel.lock.status));
+        fprintf(stderr, "[%s:%d] Allocation returned status: %s\n", myproc.nspace, myproc.rank,
+                PMIx_Error_string(myrel.lock.status));
         DEBUG_DESTRUCT_MYREL(&myrel);
 
     } else {
@@ -237,25 +233,27 @@ int main(int argc, char **argv)
         PMIX_INFO_CREATE(query[0].qualifiers, 1);
         PMIX_INFO_LOAD(&query[0].qualifiers[0], PMIX_ALLOC_ID, myallocation, PMIX_STRING);
 
-        if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, 1, infocbfunc, (void*)&mydata))) {
+        if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, 1, infocbfunc, (void *) &mydata))) {
             fprintf(stderr, "PMIx_Query_info failed: %d\n", rc);
             goto done;
         }
         DEBUG_WAIT_THREAD(&mydata.lock);
         PMIX_QUERY_FREE(query, 1);
-        fprintf(stderr, "[%s:%d] Allocation returned status: %s\n",
-                myproc.nspace, myproc.rank, PMIx_Error_string(mydata.lock.status));
+        fprintf(stderr, "[%s:%d] Allocation returned status: %s\n", myproc.nspace, myproc.rank,
+                PMIx_Error_string(mydata.lock.status));
         DEBUG_DESTRUCT_MYQUERY(&mydata);
     }
 
-  done:
+done:
     /* finalize us */
     fprintf(stderr, "Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
-        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %d\n", myproc.nspace, myproc.rank, rc);
+        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %d\n", myproc.nspace,
+                myproc.rank, rc);
     } else {
-        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize successfully completed\n", myproc.nspace, myproc.rank);
+        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize successfully completed\n",
+                myproc.nspace, myproc.rank);
     }
     fflush(stderr);
-    return(0);
+    return (0);
 }

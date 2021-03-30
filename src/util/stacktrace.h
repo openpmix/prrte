@@ -12,6 +12,7 @@
  * Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -54,6 +55,6 @@ PRTE_EXPORT char *prte_stackframe_output_string(void);
  *    is not a valid signal-number
  *
  */
-PRTE_EXPORT int prte_util_register_stackhandlers (void);
+PRTE_EXPORT int prte_util_register_stackhandlers(void);
 
 #endif /* PRTE_STACKTRACE_H */

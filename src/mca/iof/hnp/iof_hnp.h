@@ -44,18 +44,17 @@
 #include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif  /* HAVE_SYS_TYPES_H */
+#    include <sys/types.h>
+#endif /* HAVE_SYS_TYPES_H */
 #ifdef HAVE_SYS_UIO_H
-#include <sys/uio.h>
-#endif  /* HAVE_SYS_UIO_H */
+#    include <sys/uio.h>
+#endif /* HAVE_SYS_UIO_H */
 #ifdef HAVE_NET_UIO_H
-#include <net/uio.h>
-#endif  /* HAVE_NET_UIO_H */
+#    include <net/uio.h>
+#endif /* HAVE_NET_UIO_H */
 
-#include "src/mca/iof/iof.h"
 #include "src/mca/iof/base/base.h"
-
+#include "src/mca/iof/iof.h"
 
 BEGIN_C_DECLS
 
@@ -73,17 +72,14 @@ typedef struct prte_iof_hnp_component_t prte_iof_hnp_component_t;
 PRTE_MODULE_EXPORT extern prte_iof_hnp_component_t prte_iof_hnp_component;
 extern prte_iof_base_module_t prte_iof_hnp_module;
 
-void prte_iof_hnp_recv(int status, pmix_proc_t* sender,
-                       pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                       void* cbdata);
+void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                       prte_rml_tag_t tag, void *cbdata);
 
 void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata);
 void prte_iof_hnp_stdin_cb(int fd, short event, void *cbdata);
 bool prte_iof_hnp_stdin_check(int fd);
 
-int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host,
-                                       pmix_proc_t *target,
-                                       prte_iof_tag_t tag,
+int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host, pmix_proc_t *target, prte_iof_tag_t tag,
                                        unsigned char *data, int numbytes);
 
 END_C_DECLS

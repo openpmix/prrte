@@ -2,6 +2,7 @@
  * Copyright (c) 2012-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012      Los Alamos National Security, LLC. All rights reserved
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -11,18 +12,17 @@
 
 #include "prte_config.h"
 
-#include <stdio.h>
 #include <stddef.h>
+#include <stdio.h>
 
 #include "constants.h"
-#include "src/event/event-internal.h"
 #include "src/class/prte_hotel.h"
-
+#include "src/event/event-internal.h"
 
 static void local_eviction_callback(int fd, short flags, void *arg)
 {
-    prte_hotel_room_eviction_callback_arg_t *eargs =
-        (prte_hotel_room_eviction_callback_arg_t*) arg;
+    prte_hotel_room_eviction_callback_arg_t *eargs = (prte_hotel_room_eviction_callback_arg_t *)
+        arg;
     void *occupant = eargs->hotel->rooms[eargs->room_num].occupant;
 
     /* Remove the occupant from the room.
@@ -38,23 +38,17 @@ static void local_eviction_callback(int fd, short flags, void *arg)
     hotel->unoccupied_rooms[hotel->last_unoccupied_room] = eargs->room_num;
 
     /* Invoke the user callback to tell them that they were evicted */
-    hotel->evict_callback_fn(hotel,
-                             eargs->room_num,
-                             occupant);
+    hotel->evict_callback_fn(hotel, eargs->room_num, occupant);
 }
 
-
-int prte_hotel_init(prte_hotel_t *h, int num_rooms,
-                    prte_event_base_t *evbase,
-                    uint32_t eviction_timeout,
-                    int eviction_event_priority,
+int prte_hotel_init(prte_hotel_t *h, int num_rooms, prte_event_base_t *evbase,
+                    uint32_t eviction_timeout, int eviction_event_priority,
                     prte_hotel_eviction_callback_fn_t evict_callback_fn)
 {
     int i;
 
     /* Bozo check */
-    if (num_rooms <= 0 ||
-        NULL == evict_callback_fn) {
+    if (num_rooms <= 0 || NULL == evict_callback_fn) {
         return PRTE_ERR_BAD_PARAM;
     }
 
@@ -63,12 +57,12 @@ int prte_hotel_init(prte_hotel_t *h, int num_rooms,
     h->eviction_timeout.tv_usec = 0;
     h->eviction_timeout.tv_sec = eviction_timeout;
     h->evict_callback_fn = evict_callback_fn;
-    h->rooms = (prte_hotel_room_t*)malloc(num_rooms * sizeof(prte_hotel_room_t));
+    h->rooms = (prte_hotel_room_t *) malloc(num_rooms * sizeof(prte_hotel_room_t));
     if (NULL != evict_callback_fn) {
-        h->eviction_args =
-            (prte_hotel_room_eviction_callback_arg_t*)malloc(num_rooms * sizeof(prte_hotel_room_eviction_callback_arg_t));
+        h->eviction_args = (prte_hotel_room_eviction_callback_arg_t *) malloc(
+            num_rooms * sizeof(prte_hotel_room_eviction_callback_arg_t));
     }
-    h->unoccupied_rooms = (int*) malloc(num_rooms * sizeof(int));
+    h->unoccupied_rooms = (int *) malloc(num_rooms * sizeof(int));
     h->last_unoccupied_room = num_rooms - 1;
 
     for (i = 0; i < num_rooms; ++i) {
@@ -84,14 +78,11 @@ int prte_hotel_init(prte_hotel_t *h, int num_rooms,
 
         /* Create this room's event (but don't add it) */
         if (NULL != h->evbase) {
-            prte_event_set(h->evbase,
-                           &(h->rooms[i].eviction_timer_event),
-                           -1, 0, local_eviction_callback,
-                           &(h->eviction_args[i]));
+            prte_event_set(h->evbase, &(h->rooms[i].eviction_timer_event), -1, 0,
+                           local_eviction_callback, &(h->eviction_args[i]));
 
             /* Set the priority so it gets serviced properly */
-            prte_event_set_priority(&(h->rooms[i].eviction_timer_event),
-                                    eviction_event_priority);
+            prte_event_set_priority(&(h->rooms[i].eviction_timer_event), eviction_event_priority);
         }
     }
 
@@ -135,7 +126,4 @@ static void destructor(prte_hotel_t *h)
     }
 }
 
-PRTE_CLASS_INSTANCE(prte_hotel_t,
-                   prte_object_t,
-                   constructor,
-                   destructor);
+PRTE_CLASS_INSTANCE(prte_hotel_t, prte_object_t, constructor, destructor);

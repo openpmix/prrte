@@ -7,6 +7,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,10 +21,10 @@
 #include <string.h>
 
 #include "constants.h"
+#include "src/mca/prteif/base/base.h"
+#include "src/mca/prteif/prteif.h"
 #include "src/util/output.h"
 #include "src/util/string_copy.h"
-#include "src/mca/prteif/prteif.h"
-#include "src/mca/prteif/base/base.h"
 
 static int if_posix_open(void);
 
@@ -33,27 +34,19 @@ static int if_posix_open(void);
 prte_if_base_component_t prte_prteif_posix_ipv4_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
-    {
-        PRTE_IF_BASE_VERSION_2_0_0,
+    {PRTE_IF_BASE_VERSION_2_0_0,
 
-        /* Component name and version */
-        "posix_ipv4",
-        PRTE_MAJOR_VERSION,
-        PRTE_MINOR_VERSION,
-        PRTE_RELEASE_VERSION,
+     /* Component name and version */
+     "posix_ipv4", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION,
 
-        /* Component open and close functions */
-        if_posix_open,
-        NULL
-    },
-    {
-        /* This component is checkpointable */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-    },
+     /* Component open and close functions */
+     if_posix_open, NULL},
+    {/* This component is checkpointable */
+     PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT},
 };
 
 /* convert a netmask (in network byte order) to CIDR notation */
-static int prefix (uint32_t netmask)
+static int prefix(uint32_t netmask)
 {
     uint32_t mask = ntohl(netmask);
     int plen = 0;
@@ -84,8 +77,7 @@ static int if_posix_open(void)
        using AF_UNSPEC or AF_INET6 will cause everything to
        fail. */
     if ((sd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        prte_output(0, "prte_ifinit: socket() failed with errno=%d\n",
-                    errno);
+        prte_output(0, "prte_ifinit: socket() failed with errno=%d\n", errno);
         return PRTE_ERROR;
     }
 
@@ -160,12 +152,12 @@ static int if_posix_open(void)
     /*
      * Setup indexes
      */
-    ptr = (char*) ifconf.ifc_req;
+    ptr = (char *) ifconf.ifc_req;
     rem = ifconf.ifc_len;
 
     /* loop through all interfaces */
     while (rem > 0) {
-        struct ifreq* ifr = (struct ifreq*) ptr;
+        struct ifreq *ifr = (struct ifreq *) ptr;
         prte_if_t *intf;
         int length;
 
@@ -212,7 +204,8 @@ static int if_posix_open(void)
 
         intf = PRTE_NEW(prte_if_t);
         if (NULL == intf) {
-            prte_output(0, "prte_ifinit: unable to allocated %lu bytes\n", (unsigned long)sizeof(prte_if_t));
+            prte_output(0, "prte_ifinit: unable to allocated %lu bytes\n",
+                        (unsigned long) sizeof(prte_if_t));
             free(ifconf.ifc_req);
             close(sd);
             return PRTE_ERR_OUT_OF_RESOURCE;
@@ -225,27 +218,27 @@ static int if_posix_open(void)
         intf->if_flags = ifr->ifr_flags;
 
         /* every new address gets its own internal if_index */
-        intf->if_index = prte_list_get_size(&prte_if_list)+1;
+        intf->if_index = prte_list_get_size(&prte_if_list) + 1;
 
-        prte_output_verbose(1, prte_prteif_base_framework.framework_output,
-                            "found interface %s", intf->if_name);
+        prte_output_verbose(1, prte_prteif_base_framework.framework_output, "found interface %s",
+                            intf->if_name);
 
         /* assign the kernel index to distinguish different NICs */
 #ifndef SIOCGIFINDEX
         intf->if_kernel_index = intf->if_index;
 #else
         if (ioctl(sd, SIOCGIFINDEX, ifr) < 0) {
-            prte_output(0,"prte_ifinit: ioctl(SIOCGIFINDEX) failed with errno=%d", errno);
+            prte_output(0, "prte_ifinit: ioctl(SIOCGIFINDEX) failed with errno=%d", errno);
             PRTE_RELEASE(intf);
             continue;
         }
-#if defined(ifr_ifindex)
+#    if defined(ifr_ifindex)
         intf->if_kernel_index = ifr->ifr_ifindex;
-#elif defined(ifr_index)
+#    elif defined(ifr_index)
         intf->if_kernel_index = ifr->ifr_index;
-#else
+#    else
         intf->if_kernel_index = -1;
-#endif
+#    endif
 #endif /* SIOCGIFINDEX */
 
         /* This call returns IPv4 addresses only. Use SIOCGLIFADDR
@@ -270,7 +263,7 @@ static int if_posix_open(void)
         }
 
         /* generate CIDR and assign to netmask */
-        intf->if_mask = prefix(((struct sockaddr_in*) &ifr->ifr_addr)->sin_addr.s_addr);
+        intf->if_mask = prefix(((struct sockaddr_in *) &ifr->ifr_addr)->sin_addr.s_addr);
 
 #if defined(SIOCGIFHWADDR) && defined(HAVE_STRUCT_IFREQ_IFR_HWADDR)
         /* get the MAC address */
@@ -297,5 +290,3 @@ static int if_posix_open(void)
 
     return PRTE_SUCCESS;
 }
-
-

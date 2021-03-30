@@ -3,6 +3,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +19,6 @@
 #include "src/mca/prtedl/prtedl.h"
 
 #include <ltprtedl.h>
-
 
 PRTE_EXPORT extern prte_prtedl_base_module_t prte_prtedl_libltdl_module;
 

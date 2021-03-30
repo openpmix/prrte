@@ -34,8 +34,8 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/mca/mca.h"
 #include "src/class/prte_pointer_array.h"
+#include "src/mca/mca.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
@@ -74,7 +74,7 @@ typedef int (*prte_odls_base_module_kill_local_processes_fn_t)(prte_pointer_arra
  * Signal local processes
  */
 typedef int (*prte_odls_base_module_signal_local_process_fn_t)(const pmix_proc_t *proc,
-                                                              int32_t signal);
+                                                               int32_t signal);
 
 /**
  * Restart a local process
@@ -85,11 +85,11 @@ typedef int (*prte_odls_base_module_restart_proc_fn_t)(prte_proc_t *child);
  * pls module version
  */
 struct prte_odls_base_module_1_3_0_t {
-    prte_odls_base_module_get_add_procs_data_fn_t           get_add_procs_data;
-    prte_odls_base_module_launch_local_processes_fn_t       launch_local_procs;
-    prte_odls_base_module_kill_local_processes_fn_t         kill_local_procs;
-    prte_odls_base_module_signal_local_process_fn_t         signal_local_procs;
-    prte_odls_base_module_restart_proc_fn_t                 restart_proc;
+    prte_odls_base_module_get_add_procs_data_fn_t get_add_procs_data;
+    prte_odls_base_module_launch_local_processes_fn_t launch_local_procs;
+    prte_odls_base_module_kill_local_processes_fn_t kill_local_procs;
+    prte_odls_base_module_signal_local_process_fn_t signal_local_procs;
+    prte_odls_base_module_restart_proc_fn_t restart_proc;
 };
 
 /** shprten prte_odls_base_module_1_3_0_t declaration */
@@ -111,16 +111,15 @@ typedef struct prte_odls_base_component_2_0_0_t prte_odls_base_component_2_0_0_t
 /** Convenience typedef */
 typedef prte_odls_base_component_2_0_0_t prte_odls_base_component_t;
 
-
 /**
  * Macro for use in modules that are of type odls
  */
-#define PRTE_ODLS_BASE_VERSION_2_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("odls", 2, 0, 0)
+#define PRTE_ODLS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("odls", 2, 0, 0)
 
 /* Global structure for accessing ODLS functions
-*/
-PRTE_EXPORT extern prte_odls_base_module_t prte_odls;  /* holds selected module's function pointers */
+ */
+PRTE_EXPORT extern prte_odls_base_module_t
+    prte_odls; /* holds selected module's function pointers */
 
 END_C_DECLS
 

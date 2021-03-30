@@ -28,29 +28,29 @@
 #include "constants.h"
 
 #ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
+#    include <netinet/in.h>
 #endif
 #ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
+#    include <arpa/inet.h>
 #endif
 
-#include "src/mca/base/base.h"
-#include "src/util/output.h"
-#include "src/util/argv.h"
-#include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/event/event-internal.h"
+#include "src/mca/base/base.h"
+#include "src/mca/prtebacktrace/prtebacktrace.h"
+#include "src/util/argv.h"
+#include "src/util/output.h"
 
+#include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rml/base/base.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/routed/routed.h"
-#include "src/mca/errmgr/errmgr.h"
-#include "src/util/name_fns.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
 
-#include "src/mca/oob/oob.h"
-#include "src/mca/oob/base/base.h"
-#include "src/mca/routed/routed.h"
 #include "rml_oob.h"
+#include "src/mca/oob/base/base.h"
+#include "src/mca/oob/oob.h"
+#include "src/mca/routed/routed.h"
 
 static int rml_oob_open(void);
 static int rml_oob_close(void);
@@ -82,18 +82,14 @@ prte_rml_component_t prte_rml_oob_component = {
 };
 
 /* Local variables */
-static void recv_buffer_nb(pmix_proc_t* peer,
-                           prte_rml_tag_t tag,
-                           bool persistent,
-                           prte_rml_buffer_callback_fn_t cbfunc,
-                           void* cbdata)
+static void recv_buffer_nb(pmix_proc_t *peer, prte_rml_tag_t tag, bool persistent,
+                           prte_rml_buffer_callback_fn_t cbfunc, void *cbdata)
 {
     prte_rml_recv_request_t *req;
 
     prte_output_verbose(10, prte_rml_base_framework.framework_output,
-                         "%s rml_recv_buffer_nb for peer %s tag %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(peer), tag);
+                        "%s rml_recv_buffer_nb for peer %s tag %d",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer), tag);
 
     /* push the request into the event base so we can add
      * the receive to our list of posted recvs */
@@ -105,14 +101,13 @@ static void recv_buffer_nb(pmix_proc_t* peer,
     req->post->cbdata = cbdata;
     PRTE_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
 }
-static void recv_cancel(pmix_proc_t* peer, prte_rml_tag_t tag)
+static void recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
 {
     prte_rml_recv_request_t *req;
 
     prte_output_verbose(10, prte_rml_base_framework.framework_output,
-                         "%s rml_recv_cancel for peer %s tag %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(peer), tag);
+                        "%s rml_recv_cancel for peer %s tag %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(peer), tag);
 
     PRTE_ACQUIRE_OBJECT(prte_event_base_active);
     if (!prte_event_base_active) {
@@ -128,25 +123,23 @@ static void recv_cancel(pmix_proc_t* peer, prte_rml_tag_t tag)
     req->post->tag = tag;
     PRTE_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
 }
-static int oob_ping(const char* uri, const struct timeval* tv)
+static int oob_ping(const char *uri, const struct timeval *tv)
 {
     return PRTE_ERR_UNREACH;
 }
 
-static prte_rml_base_module_t base_module = {
-    .component = (struct prte_rml_component_t*)&prte_rml_oob_component,
-    .ping = oob_ping,
-    .send_buffer_nb = prte_rml_oob_send_buffer_nb,
-    .recv_buffer_nb = recv_buffer_nb,
-    .recv_cancel = recv_cancel,
-    .purge = NULL
-};
+static prte_rml_base_module_t base_module = {.component = (struct prte_rml_component_t
+                                                               *) &prte_rml_oob_component,
+                                             .ping = oob_ping,
+                                             .send_buffer_nb = prte_rml_oob_send_buffer_nb,
+                                             .recv_buffer_nb = recv_buffer_nb,
+                                             .recv_cancel = recv_cancel,
+                                             .purge = NULL};
 
 static int rml_oob_open(void)
 {
     return PRTE_SUCCESS;
 }
-
 
 static int rml_oob_close(void)
 {

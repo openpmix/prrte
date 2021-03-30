@@ -28,17 +28,16 @@
 
 #include <string.h>
 
+#include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/util/output.h"
-#include "src/mca/base/base.h"
 
+#include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/show_help.h"
-#include "src/mca/errmgr/errmgr.h"
 
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
-
 
 int prte_rmaps_base_assign_locations(prte_job_t *jdata)
 {
@@ -54,10 +53,12 @@ int prte_rmaps_base_assign_locations(prte_job_t *jdata)
      */
     if (1 == prte_list_get_size(&prte_rmaps_base.selected_modules)) {
         /* forced selection */
-        mod = (prte_rmaps_base_selected_module_t*)prte_list_get_first(&prte_rmaps_base.selected_modules);
+        mod = (prte_rmaps_base_selected_module_t *) prte_list_get_first(
+            &prte_rmaps_base.selected_modules);
         jdata->map->req_mapper = strdup(mod->component->mca_component_name);
     }
-    PRTE_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t) {
+    PRTE_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t)
+    {
         if (NULL == mod->module->assign_locations) {
             continue;
         }
@@ -75,7 +76,6 @@ int prte_rmaps_base_assign_locations(prte_job_t *jdata)
 
     /* if we get here without doing the assignments, then that's an error */
     prte_show_help("help-prte-rmaps-base.txt", "failed-assignments", true,
-                   prte_process_info.nodename,
-                   prte_rmaps_base_print_mapping(jdata->map->mapping));
+                   prte_process_info.nodename, prte_rmaps_base_print_mapping(jdata->map->mapping));
     return PRTE_ERROR;
 }

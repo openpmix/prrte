@@ -17,6 +17,7 @@
  * Copyright (c) 2016      University of Houston. All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,65 +26,64 @@
  */
 
 #include "prte_config.h"
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SHLWAPI_H
-#include <shlwapi.h>
+#    include <shlwapi.h>
 #endif
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+#    include <sys/param.h>
 #endif
 #ifdef HAVE_SYS_MOUNT_H
-#include <sys/mount.h>
+#    include <sys/mount.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
+#    include <sys/stat.h>
 #endif
 #ifdef HAVE_SYS_VFS_H
-#include <sys/vfs.h>
+#    include <sys/vfs.h>
 #endif
 #ifdef HAVE_SYS_STATFS_H
-#include <sys/statfs.h>
+#    include <sys/statfs.h>
 #endif
 #ifdef HAVE_SYS_STATVFS_H
-#include <sys/statvfs.h>
+#    include <sys/statvfs.h>
 #endif
 #ifdef HAVE_SYS_MOUNT_H
-#include <sys/mount.h>
+#    include <sys/mount.h>
 #endif
 #ifdef HAVE_MNTENT_H
-#include <mntent.h>
+#    include <mntent.h>
 #endif
 #ifdef HAVE_PATHS_H
-#include <paths.h>
+#    include <paths.h>
 #endif
 
 #ifdef _PATH_MOUNTED
-#define MOUNTED_FILE _PATH_MOUNTED
+#    define MOUNTED_FILE _PATH_MOUNTED
 #else
-#define MOUNTED_FILE "/etc/mtab"
+#    define MOUNTED_FILE "/etc/mtab"
 #endif
 
-
 #include "prte_stdint.h"
+#include "src/util/argv.h"
+#include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
-#include "src/util/os_path.h"
-#include "src/util/argv.h"
 #include "src/util/printf.h"
 
 /*
  * Sanity check to ensure we have either statfs or statvfs
  */
 #if !defined(HAVE_STATFS) && !defined(HAVE_STATVFS)
-#error Must have either statfs() or statvfs()
+#    error Must have either statfs() or statvfs()
 #endif
 
 /*
@@ -91,17 +91,17 @@
  * no struct statfs (!).  So check to make sure we have struct statfs
  * before allowing the use of statfs().
  */
-#if defined(HAVE_STATFS) && (defined(HAVE_STRUCT_STATFS_F_FSTYPENAME) || \
-                             defined(HAVE_STRUCT_STATFS_F_TYPE))
-#define USE_STATFS 1
+#if defined(HAVE_STATFS) \
+    && (defined(HAVE_STRUCT_STATFS_F_FSTYPENAME) || defined(HAVE_STRUCT_STATFS_F_TYPE))
+#    define USE_STATFS 1
 #endif
 
 static void path_env_load(char *path, int *pargc, char ***pargv);
 static char *list_env_get(char *var, char **list);
 
-bool prte_path_is_absolute( const char *path )
+bool prte_path_is_absolute(const char *path)
 {
-    if( PRTE_PATH_SEP[0] == *path ) {
+    if (PRTE_PATH_SEP[0] == *path) {
         return true;
     }
     return false;
@@ -119,7 +119,7 @@ char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
     int i;
 
     /* If absolute path is given, return it without searching. */
-    if( prte_path_is_absolute(fname) ) {
+    if (prte_path_is_absolute(fname)) {
         return prte_path_access(fname, NULL, mode);
     }
 
@@ -139,7 +139,7 @@ char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
             if (delimit) {
                 *delimit = '\0';
             }
-            env = list_env_get(pathv[i]+1, envv);
+            env = list_env_get(pathv[i] + 1, envv);
             if (delimit) {
                 *delimit = PRTE_PATH_SEP[0];
             }
@@ -152,8 +152,7 @@ char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
                     free(pfix);
                 }
             }
-        }
-        else {
+        } else {
             fullpath = prte_path_access(fname, pathv[i], mode);
         }
         i++;
@@ -190,7 +189,7 @@ char *prte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
                 found_dot = true;
                 free(dirv[i]);
                 dirv[i] = strdup(wrkdir);
-                if (NULL == dirv[i]){
+                if (NULL == dirv[i]) {
                     return NULL;
                 }
             }
@@ -204,13 +203,12 @@ char *prte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
         prte_argv_append(&dirc, &dirv, wrkdir);
     }
 
-    if(NULL == dirv)
+    if (NULL == dirv)
         return NULL;
     fullpath = prte_path_find(fname, dirv, mode, envv);
     prte_argv_free(dirv);
     return fullpath;
 }
-
 
 /**
  *  Forms a complete pathname and checks it for existance and
@@ -252,8 +250,7 @@ char *prte_path_access(char *fname, char *path, int mode)
         return NULL;
     }
 
-    if (!(S_IFREG & buf.st_mode) &&
-        !(S_IFLNK & buf.st_mode)) {
+    if (!(S_IFREG & buf.st_mode) && !(S_IFLNK & buf.st_mode)) {
         /* this isn't a regular file or a symbolic link, so
          * ignore it
          */
@@ -287,7 +284,6 @@ char *prte_path_access(char *fname, char *path, int mode)
     /* must have met all criteria! */
     return fullpath;
 }
-
 
 /**
  *
@@ -337,7 +333,6 @@ static void path_env_load(char *path, int *pargc, char ***pargv)
     }
 }
 
-
 /**
  *  Gets value of variable in list or environment. Looks in the list first
  *
@@ -376,31 +371,31 @@ static char *list_env_get(char *var, char **list)
  * function will return NULL. Otherwise, an newly allocated string
  * will be returned.
  */
-char* prte_find_absolute_path( char* app_name )
+char *prte_find_absolute_path(char *app_name)
 {
-    char* abs_app_name;
+    char *abs_app_name;
     char cwd[PRTE_PATH_MAX], *pcwd;
 
-    if( prte_path_is_absolute(app_name) ) { /* already absolute path */
+    if (prte_path_is_absolute(app_name)) { /* already absolute path */
         abs_app_name = app_name;
-    } else if ( '.' == app_name[0] ||
-               NULL != strchr(app_name, PRTE_PATH_SEP[0])) {
+    } else if ('.' == app_name[0] || NULL != strchr(app_name, PRTE_PATH_SEP[0])) {
         /* the app is in the current directory or below it */
-        pcwd = getcwd( cwd, PRTE_PATH_MAX );
-        if( NULL == pcwd ) {
+        pcwd = getcwd(cwd, PRTE_PATH_MAX);
+        if (NULL == pcwd) {
             /* too bad there is no way we can get the app absolute name */
             return NULL;
         }
-        abs_app_name = prte_os_path( false, pcwd, app_name, NULL );
+        abs_app_name = prte_os_path(false, pcwd, app_name, NULL);
     } else {
         /* Otherwise try to search for the application in the PATH ... */
-        abs_app_name = prte_path_findv( app_name, X_OK, NULL, NULL );
+        abs_app_name = prte_path_findv(app_name, X_OK, NULL, NULL);
     }
 
-    if( NULL != abs_app_name ) {
-        char* resolved_path = (char*)malloc(PRTE_PATH_MAX);
-        realpath( abs_app_name, resolved_path );
-        if( abs_app_name != app_name ) free(abs_app_name);
+    if (NULL != abs_app_name) {
+        char *resolved_path = (char *) malloc(PRTE_PATH_MAX);
+        realpath(abs_app_name, resolved_path);
+        if (abs_app_name != app_name)
+            free(abs_app_name);
         return resolved_path;
     }
     return NULL;
@@ -416,15 +411,13 @@ static char *prte_check_mtab(char *dev_path)
 {
 
 #ifdef HAVE_MNTENT_H
-    FILE * mtab = NULL;
-    struct mntent * part = NULL;
+    FILE *mtab = NULL;
+    struct mntent *part = NULL;
 
     if ((mtab = setmntent(MOUNTED_FILE, "r")) != NULL) {
         while (NULL != (part = getmntent(mtab))) {
-            if ((NULL != part->mnt_dir) &&
-                (NULL != part->mnt_type) &&
-                (0 == strcmp(part->mnt_dir, dev_path)))
-            {
+            if ((NULL != part->mnt_dir) && (NULL != part->mnt_type)
+                && (0 == strcmp(part->mnt_dir, dev_path))) {
                 endmntent(mtab);
                 return strdup(part->mnt_type);
             }
@@ -434,7 +427,6 @@ static char *prte_check_mtab(char *dev_path)
 #endif
     return NULL;
 }
-
 
 /**
  * @brief Figure out, whether fname is on network file system
@@ -481,26 +473,26 @@ static char *prte_check_mtab(char *dev_path)
  *          return 0 success, -1 on failure with errno set.
  */
 #ifndef LL_SUPER_MAGIC
-#define LL_SUPER_MAGIC                    0x0BD00BD0     /* Lustre magic number */
+#    define LL_SUPER_MAGIC 0x0BD00BD0 /* Lustre magic number */
 #endif
 #ifndef NFS_SUPER_MAGIC
-#define NFS_SUPER_MAGIC                   0x6969
+#    define NFS_SUPER_MAGIC 0x6969
 #endif
 #ifndef PAN_KERNEL_FS_CLIENT_SUPER_MAGIC
-#define PAN_KERNEL_FS_CLIENT_SUPER_MAGIC  0xAAD7AAEA     /* Panasas FS */
+#    define PAN_KERNEL_FS_CLIENT_SUPER_MAGIC 0xAAD7AAEA /* Panasas FS */
 #endif
 #ifndef GPFS_SUPER_MAGIC
-#define GPFS_SUPER_MAGIC  0x47504653    /* Thats GPFS in ASCII */
+#    define GPFS_SUPER_MAGIC 0x47504653 /* Thats GPFS in ASCII */
 #endif
 #ifndef AUTOFS_SUPER_MAGIC
-#define AUTOFS_SUPER_MAGIC 0x0187
+#    define AUTOFS_SUPER_MAGIC 0x0187
 #endif
 #ifndef PVFS2_SUPER_MAGIC
-#define PVFS2_SUPER_MAGIC 0x20030528
+#    define PVFS2_SUPER_MAGIC 0x20030528
 #endif
 
-#define MASK2        0xffff
-#define MASK4    0xffffffff
+#define MASK2 0xffff
+#define MASK4 0xffffffff
 
 bool prte_path_nfs(char *fname, char **ret_fstype)
 {
@@ -508,7 +500,7 @@ bool prte_path_nfs(char *fname, char **ret_fstype)
     int fsrc = -1;
     int vfsrc = -1;
     int trials;
-    char * file = strdup (fname);
+    char *file = strdup(fname);
 #if defined(USE_STATFS)
     struct statfs fsbuf;
 #endif
@@ -522,16 +514,14 @@ bool prte_path_nfs(char *fname, char **ret_fstype)
     static struct fs_types_t {
         unsigned long long f_fsid;
         unsigned long long f_mask;
-        const char * f_fsname;
-    } fs_types[] = {
-        {LL_SUPER_MAGIC,                   MASK4, "lustre"},
-        {NFS_SUPER_MAGIC,                  MASK2, "nfs"},
-        {AUTOFS_SUPER_MAGIC,               MASK2, "autofs"},
-        {PAN_KERNEL_FS_CLIENT_SUPER_MAGIC, MASK4, "panfs"},
-        {GPFS_SUPER_MAGIC,                 MASK4, "gpfs"},
-        {PVFS2_SUPER_MAGIC,                MASK4, "pvfs2"}
-    };
-#define FS_TYPES_NUM (int)(sizeof (fs_types)/sizeof (fs_types[0]))
+        const char *f_fsname;
+    } fs_types[] = {{LL_SUPER_MAGIC, MASK4, "lustre"},
+                    {NFS_SUPER_MAGIC, MASK2, "nfs"},
+                    {AUTOFS_SUPER_MAGIC, MASK2, "autofs"},
+                    {PAN_KERNEL_FS_CLIENT_SUPER_MAGIC, MASK4, "panfs"},
+                    {GPFS_SUPER_MAGIC, MASK4, "gpfs"},
+                    {PVFS2_SUPER_MAGIC, MASK4, "pvfs2"}};
+#define FS_TYPES_NUM (int) (sizeof(fs_types) / sizeof(fs_types[0]))
 
     /*
      * First, get the OS-dependent struct stat(v)fs buf.  This may
@@ -555,13 +545,14 @@ again:
     /* In case some error with the current filename, try the parent
        directory */
     if (-1 == fsrc && -1 == vfsrc) {
-        char * last_sep;
+        char *last_sep;
 
-        PRTE_OUTPUT_VERBOSE((10, 0, "prte_path_nfs: stat(v)fs on file:%s failed errno:%d directory:%s\n",
+        PRTE_OUTPUT_VERBOSE((10, 0,
+                             "prte_path_nfs: stat(v)fs on file:%s failed errno:%d directory:%s\n",
                              fname, errno, file));
         if (EPERM == errno) {
             free(file);
-            if ( NULL != ret_fstype ) {
+            if (NULL != ret_fstype) {
                 *ret_fstype = NULL;
             }
             return false;
@@ -569,11 +560,10 @@ again:
 
         last_sep = strrchr(file, PRTE_PATH_SEP[0]);
         /* Stop the search, when we have searched past root '/' */
-        if (NULL == last_sep || (1 == strlen(last_sep) &&
-            PRTE_PATH_SEP[0] == *last_sep)) {
-            free (file);
-            if ( NULL != ret_fstype ) {
-                *ret_fstype=NULL;
+        if (NULL == last_sep || (1 == strlen(last_sep) && PRTE_PATH_SEP[0] == *last_sep)) {
+            free(file);
+            if (NULL != ret_fstype) {
+                *ret_fstype = NULL;
             }
             return false;
         }
@@ -587,15 +577,15 @@ again:
 #if defined(USE_STATFS)
         /* These are uses of struct statfs */
 #    if defined(HAVE_STRUCT_STATFS_F_FSTYPENAME)
-        if (0 == fsrc &&
-            0 == strncasecmp(fs_types[i].f_fsname, fsbuf.f_fstypename,
-                             sizeof(fsbuf.f_fstypename))) {
+        if (0 == fsrc
+            && 0
+                   == strncasecmp(fs_types[i].f_fsname, fsbuf.f_fstypename,
+                                  sizeof(fsbuf.f_fstypename))) {
             goto found;
         }
 #    endif
 #    if defined(HAVE_STRUCT_STATFS_F_TYPE)
-        if (0 == fsrc &&
-            fs_types[i].f_fsid == (fsbuf.f_type & fs_types[i].f_mask)) {
+        if (0 == fsrc && fs_types[i].f_fsid == (fsbuf.f_type & fs_types[i].f_mask)) {
             goto found;
         }
 #    endif
@@ -604,31 +594,33 @@ again:
 #if defined(HAVE_STATVFS)
         /* These are uses of struct statvfs */
 #    if defined(HAVE_STRUCT_STATVFS_F_BASETYPE)
-        if (0 == vfsrc &&
-            0 == strncasecmp(fs_types[i].f_fsname, vfsbuf.f_basetype,
-                             sizeof(vfsbuf.f_basetype))) {
+        if (0 == vfsrc
+            && 0
+                   == strncasecmp(fs_types[i].f_fsname, vfsbuf.f_basetype,
+                                  sizeof(vfsbuf.f_basetype))) {
             goto found;
         }
 #    endif
 #    if defined(HAVE_STRUCT_STATVFS_F_FSTYPENAME)
-        if (0 == vfsrc &&
-            0 == strncasecmp(fs_types[i].f_fsname, vfsbuf.f_fstypename,
-                             sizeof(vfsbuf.f_fstypename))) {
+        if (0 == vfsrc
+            && 0
+                   == strncasecmp(fs_types[i].f_fsname, vfsbuf.f_fstypename,
+                                  sizeof(vfsbuf.f_fstypename))) {
             goto found;
         }
 #    endif
 #endif
     }
 
-    free (file);
-    if ( NULL != ret_fstype ) {
-        *ret_fstype=NULL;
+    free(file);
+    if (NULL != ret_fstype) {
+        *ret_fstype = NULL;
     }
     return false;
 
 found:
 
-    free (file);
+    free(file);
     if (AUTOFS_SUPER_MAGIC == fs_types[i].f_fsid) {
         char *fs_type = prte_check_mtab(fname);
         int x;
@@ -638,35 +630,33 @@ found:
                     continue;
                 }
                 if (0 == strcasecmp(fs_types[x].f_fsname, fs_type)) {
-                    PRTE_OUTPUT_VERBOSE((10, 0, "prte_path_nfs: file:%s on fs:%s\n", fname, fs_type));
+                    PRTE_OUTPUT_VERBOSE(
+                        (10, 0, "prte_path_nfs: file:%s on fs:%s\n", fname, fs_type));
                     free(fs_type);
-                    if ( NULL != ret_fstype ) {
+                    if (NULL != ret_fstype) {
                         *ret_fstype = strdup(fs_types[x].f_fsname);
                     }
                     return true;
                 }
             }
             free(fs_type);
-            if ( NULL != ret_fstype ) {
-                *ret_fstype=NULL;
+            if (NULL != ret_fstype) {
+                *ret_fstype = NULL;
             }
             return false;
         }
     }
 
-    PRTE_OUTPUT_VERBOSE((10, 0, "prte_path_nfs: file:%s on fs:%s\n",
-                fname, fs_types[i].f_fsname));
-    if ( NULL != ret_fstype ) {
-        *ret_fstype = strdup (fs_types[i].f_fsname);
+    PRTE_OUTPUT_VERBOSE((10, 0, "prte_path_nfs: file:%s on fs:%s\n", fname, fs_types[i].f_fsname));
+    if (NULL != ret_fstype) {
+        *ret_fstype = strdup(fs_types[i].f_fsname);
     }
     return true;
 
 #undef FS_TYPES_NUM
 }
 
-int
-prte_path_df(const char *path,
-             uint64_t *out_avail)
+int prte_path_df(const char *path, uint64_t *out_avail)
 {
     int rc = -1;
     int trials = 5;
@@ -692,18 +682,20 @@ prte_path_df(const char *path,
     } while (-1 == rc && ESTALE == err && (--trials > 0));
 
     if (-1 == rc) {
-        PRTE_OUTPUT_VERBOSE((10, 2, "prte_path_df: stat(v)fs on "
+        PRTE_OUTPUT_VERBOSE((10, 2,
+                             "prte_path_df: stat(v)fs on "
                              "path: %s failed with errno: %d (%s)\n",
                              path, err, strerror(err)));
         return PRTE_ERROR;
     }
 
     /* now set the amount of free space available on path */
-                               /* sometimes buf.f_bavail is negative */
-    *out_avail = (uint64_t)buf.f_bsize * (uint64_t)((long)buf.f_bavail < 0 ? 0 : buf.f_bavail);
+    /* sometimes buf.f_bavail is negative */
+    *out_avail = (uint64_t) buf.f_bsize * (uint64_t)((long) buf.f_bavail < 0 ? 0 : buf.f_bavail);
 
-    PRTE_OUTPUT_VERBOSE((10, 2, "prte_path_df: stat(v)fs states "
-                         "path: %s has %"PRIu64 " B of free space.",
+    PRTE_OUTPUT_VERBOSE((10, 2,
+                         "prte_path_df: stat(v)fs states "
+                         "path: %s has %" PRIu64 " B of free space.",
                          path, *out_avail));
 
     return PRTE_SUCCESS;

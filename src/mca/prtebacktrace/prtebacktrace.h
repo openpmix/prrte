@@ -15,6 +15,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,8 +28,8 @@
 
 #include "prte_config.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 #include "src/util/stacktrace.h"
 
 BEGIN_C_DECLS
@@ -38,7 +39,6 @@ BEGIN_C_DECLS
  * functions, both of which are called directly.  The joy of link-time
  * components.
  */
-
 
 /*
  * Print back trace to FILE file with a prefix for each line.
@@ -57,8 +57,7 @@ PRTE_EXPORT int prte_backtrace_print(FILE *file, char *prefix, int strip);
  * \note Probably bad to call this from a signal handler.
  *
  */
-PRTE_EXPORT int prte_backtrace_buffer(char*** messages, int *len);
-
+PRTE_EXPORT int prte_backtrace_buffer(char ***messages, int *len);
 
 /**
  * Structure for backtrace components.
@@ -77,8 +76,7 @@ typedef struct prte_backtrace_base_component_2_0_0_t prte_backtrace_base_compone
 /*
  * Macro for use in components that are of type backtrace
  */
-#define PRTE_BACKTRACE_BASE_VERSION_2_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("backtrace", 2, 0, 0)
+#define PRTE_BACKTRACE_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("backtrace", 2, 0, 0)
 
 END_C_DECLS
 

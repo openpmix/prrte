@@ -17,6 +17,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      NVIDIA Corporation.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,35 +31,34 @@
 
 #include <errno.h>
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 #ifdef HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>
+#    include <sys/resource.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 #include "constants.h"
 #include "src/runtime/prte_globals.h"
 
-#include "src/util/sys_limits.h"
-#include "src/util/show_help.h"
-#include "src/util/output.h"
 #include "src/util/argv.h"
+#include "src/util/output.h"
+#include "src/util/show_help.h"
+#include "src/util/sys_limits.h"
 
 /*
  * Create and initialize storage for the system limits
  */
 PRTE_EXPORT prte_sys_limits_t prte_sys_limits = {
-    /* initialized = */     false,
-    /* num_files   = */     -1,
-    /* num_procs   = */     -1,
-    /* file_size   = */      0
-};
+    /* initialized = */ false,
+    /* num_files   = */ -1,
+    /* num_procs   = */ -1,
+    /* file_size   = */ 0};
 
 static int prte_setlimit(int resource, char *value, rlim_t *out)
 {
@@ -68,9 +68,9 @@ static int prte_setlimit(int resource, char *value, rlim_t *out)
     rlim.rlim_cur = 0;
 
     if (0 == strcmp(value, "max")) {
-            maxlim = (rlim_t) -1;
+        maxlim = (rlim_t) -1;
     } else if (0 == strncmp(value, "unlimited", strlen(value))) {
-            maxlim = RLIM_INFINITY;
+        maxlim = RLIM_INFINITY;
     } else {
         maxlim = strtol(value, NULL, 10);
     }
@@ -108,7 +108,7 @@ static int prte_setlimit(int resource, char *value, rlim_t *out)
 
 int prte_util_init_sys_limits(char **errmsg)
 {
-    char **lims, **lim=NULL, *setlim;
+    char **lims, **lim = NULL, *setlim;
     int i, rc = PRTE_ERROR;
     rlim_t value;
 
@@ -124,7 +124,7 @@ int prte_util_init_sys_limits(char **errmsg)
     }
 
     /* each limit is expressed as a "param:value" pair */
-    for (i=0; NULL != lims[i]; i++) {
+    for (i = 0; NULL != lims[i]; i++) {
         lim = prte_argv_split(lims[i], ':');
         if (1 == prte_argv_count(lim)) {
             setlim = "max";
@@ -138,24 +138,25 @@ int prte_util_init_sys_limits(char **errmsg)
          */
         if (0 == strcmp(lim[0], "1")) {
 #if HAVE_DECL_RLIMIT_NOFILE
-            if (PRTE_SUCCESS !=
-                prte_setlimit(RLIMIT_NOFILE, "max", &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true, "openfiles", "max");
+            if (PRTE_SUCCESS != prte_setlimit(RLIMIT_NOFILE, "max", &value)) {
+                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                                                "openfiles", "max");
                 goto out;
             }
             prte_sys_limits.num_files = value;
 #endif
 #if HAVE_DECL_RLIMIT_NPROC
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_NPROC, "max", &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true, "maxchildren", "max");
+                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                                                "maxchildren", "max");
                 goto out;
             }
             prte_sys_limits.num_procs = value;
 #endif
 #if HAVE_DECL_RLIMIT_FSIZE
-            if (PRTE_SUCCESS !=
-                prte_setlimit(RLIMIT_FSIZE, "max", &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true, "filesize", "max");
+            if (PRTE_SUCCESS != prte_setlimit(RLIMIT_FSIZE, "max", &value)) {
+                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                                                "filesize", "max");
                 goto out;
             }
             prte_sys_limits.file_size = value;
@@ -170,14 +171,16 @@ int prte_util_init_sys_limits(char **errmsg)
         if (0 == strcmp(lim[0], "core")) {
 #if HAVE_DECL_RLIMIT_CORE
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_CORE, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true, "openfiles", setlim);
+                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                                                "openfiles", setlim);
                 goto out;
             }
 #endif
         } else if (0 == strcmp(lim[0], "filesize")) {
 #if HAVE_DECL_RLIMIT_FSIZE
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_FSIZE, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true, "filesize", setlim);
+                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                                                "filesize", setlim);
                 goto out;
             }
             prte_sys_limits.file_size = value;
@@ -185,14 +188,16 @@ int prte_util_init_sys_limits(char **errmsg)
         } else if (0 == strcmp(lim[0], "maxmem")) {
 #if HAVE_DECL_RLIMIT_AS
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_AS, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true, "maxmem", setlim);
+                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                                                "maxmem", setlim);
                 goto out;
             }
 #endif
         } else if (0 == strcmp(lim[0], "openfiles")) {
 #if HAVE_DECL_RLIMIT_NOFILE
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_NOFILE, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true, "openfiles", setlim);
+                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                                                "openfiles", setlim);
                 goto out;
             }
             prte_sys_limits.num_files = value;
@@ -200,20 +205,23 @@ int prte_util_init_sys_limits(char **errmsg)
         } else if (0 == strcmp(lim[0], "stacksize")) {
 #if HAVE_DECL_RLIMIT_STACK
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_STACK, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true, "stacksize", setlim);
+                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                                                "stacksize", setlim);
                 goto out;
             }
 #endif
         } else if (0 == strcmp(lim[0], "maxchildren")) {
 #if HAVE_DECL_RLIMIT_NPROC
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_NPROC, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true, "maxchildren", setlim);
+                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                                                "maxchildren", setlim);
                 goto out;
             }
             prte_sys_limits.num_procs = value;
 #endif
         } else {
-            *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-unrecognized", true, lim[0], setlim);
+            *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-unrecognized", true,
+                                            lim[0], setlim);
             goto out;
         }
         prte_argv_free(lim);
@@ -239,13 +247,13 @@ int prte_getpagesize(void)
     static int page_size = -1;
 
     if (page_size != -1) {
-// testing in a loop showed sysconf() took ~5 usec vs ~0.3 usec with it cached
+        // testing in a loop showed sysconf() took ~5 usec vs ~0.3 usec with it cached
         return page_size;
     }
 
 #ifdef HAVE_GETPAGESIZE
     return page_size = getpagesize();
-#elif defined(_SC_PAGESIZE )
+#elif defined(_SC_PAGESIZE)
     return page_size = sysconf(_SC_PAGESIZE);
 #elif defined(_SC_PAGE_SIZE)
     return page_size = sysconf(_SC_PAGE_SIZE);

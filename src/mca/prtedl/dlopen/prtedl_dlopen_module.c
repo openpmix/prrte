@@ -8,6 +8,7 @@
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,11 +18,11 @@
 
 #include "prte_config.h"
 
-#include <stdlib.h>
-#include <dlfcn.h>
-#include <sys/types.h>
 #include <dirent.h>
+#include <dlfcn.h>
+#include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "constants.h"
@@ -31,12 +32,10 @@
 
 #include "prtedl_dlopen.h"
 
-
 /*
  * Trivial helper function to avoid replicating code
  */
-static void do_dlopen(const char *fname, int flags,
-                      void **handle, char **err_msg)
+static void do_dlopen(const char *fname, int flags, void **handle, char **err_msg)
 {
     assert(handle);
 
@@ -50,7 +49,6 @@ static void do_dlopen(const char *fname, int flags,
         }
     }
 }
-
 
 static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
                        prte_dl_handle_t **handle, char **err_msg)
@@ -74,8 +72,7 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
         int i, rc;
         char *ext;
 
-        for (i = 0, ext = prte_prtedl_dlopen_component.filename_suffixes[i];
-             NULL != ext;
+        for (i = 0, ext = prte_prtedl_dlopen_component.filename_suffixes[i]; NULL != ext;
              ext = prte_prtedl_dlopen_component.filename_suffixes[++i]) {
             char *name;
 
@@ -117,10 +114,9 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
         (*handle)->dlopen_handle = local_handle;
 
 #if PRTE_ENABLE_DEBUG
-        if( NULL != fname ) {
+        if (NULL != fname) {
             (*handle)->filename = strdup(fname);
-        }
-        else {
+        } else {
             (*handle)->filename = strdup("(null)");
         }
 #endif
@@ -128,9 +124,7 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
     return (NULL != local_handle) ? PRTE_SUCCESS : PRTE_ERROR;
 }
 
-
-static int dlopen_lookup(prte_dl_handle_t *handle, const char *symbol,
-                         void **ptr, char **err_msg)
+static int dlopen_lookup(prte_dl_handle_t *handle, const char *symbol, void **ptr, char **err_msg)
 {
     assert(handle);
     assert(handle->dlopen_handle);
@@ -147,7 +141,6 @@ static int dlopen_lookup(prte_dl_handle_t *handle, const char *symbol,
     }
     return PRTE_ERROR;
 }
-
 
 static int dlopen_close(prte_dl_handle_t *handle)
 {
@@ -169,8 +162,7 @@ static int dlopen_close(prte_dl_handle_t *handle)
  * on each one.
  */
 static int dlopen_foreachfile(const char *search_path,
-                              int (*func)(const char *filename, void *data),
-                              void *data)
+                              int (*func)(const char *filename, void *data), void *data)
 {
     int ret;
     DIR *dp = NULL;
@@ -216,9 +208,8 @@ static int dlopen_foreachfile(const char *search_path,
             if (NULL != ptr) {
 
                 /* Skip libtool files */
-                if (strcmp(ptr, ".la") == 0 ||
-                    strcmp(ptr, ".lo") == 0) {
-                    free (abs_name);
+                if (strcmp(ptr, ".la") == 0 || strcmp(ptr, ".lo") == 0) {
+                    free(abs_name);
                     continue;
                 }
 
@@ -228,8 +219,7 @@ static int dlopen_foreachfile(const char *search_path,
             /* Have we already found this file?  Or already found a
                file with the same basename (but different suffix)? */
             bool found = false;
-            for (int j = 0; NULL != good_files &&
-                     NULL != good_files[j]; ++j) {
+            for (int j = 0; NULL != good_files && NULL != good_files[j]; ++j) {
                 if (strcmp(good_files[j], abs_name) == 0) {
                     found = true;
                     break;
@@ -257,7 +247,7 @@ static int dlopen_foreachfile(const char *search_path,
 
     ret = PRTE_SUCCESS;
 
- error:
+error:
     if (NULL != dp) {
         closedir(dp);
     }
@@ -271,13 +261,10 @@ static int dlopen_foreachfile(const char *search_path,
     return ret;
 }
 
-
 /*
  * Module definition
  */
-prte_prtedl_base_module_t prte_prtedl_dlopen_module = {
-    .open = dlopen_open,
-    .lookup = dlopen_lookup,
-    .close = dlopen_close,
-    .foreachfile = dlopen_foreachfile
-};
+prte_prtedl_base_module_t prte_prtedl_dlopen_module = {.open = dlopen_open,
+                                                       .lookup = dlopen_lookup,
+                                                       .close = dlopen_close,
+                                                       .foreachfile = dlopen_foreachfile};

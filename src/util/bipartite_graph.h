@@ -3,6 +3,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,8 +47,7 @@ typedef void (*prte_bp_graph_cleanup_fn_t)(void *user_data);
  * @returns PRTE_SUCCESS or an OMPI error code
  */
 int prte_bp_graph_create(prte_bp_graph_cleanup_fn_t v_data_cleanup_fn,
-			 prte_bp_graph_cleanup_fn_t e_data_cleanup_fn,
-			 prte_bp_graph_t **g_out);
+                         prte_bp_graph_cleanup_fn_t e_data_cleanup_fn, prte_bp_graph_t **g_out);
 
 /**
  * free the given graph
@@ -71,9 +71,8 @@ int prte_bp_graph_free(prte_bp_graph_t *g);
  * @param[in] g_clone_out     the resulting cloned graph
  * @returns PRTE_SUCCESS or an OMPI error code
  */
-int prte_bp_graph_clone(const prte_bp_graph_t *g,
-			bool copy_user_data,
-			prte_bp_graph_t **g_clone_out);
+int prte_bp_graph_clone(const prte_bp_graph_t *g, bool copy_user_data,
+                        prte_bp_graph_t **g_clone_out);
 
 /**
  * return the number of edges for which this vertex is a destination
@@ -82,8 +81,7 @@ int prte_bp_graph_clone(const prte_bp_graph_t *g,
  * @param[in] vertex  the vertex id to query
  * @returns the number of edges for which this vertex is a destination
  */
-int prte_bp_graph_indegree(const prte_bp_graph_t *g,
-			   int vertex);
+int prte_bp_graph_indegree(const prte_bp_graph_t *g, int vertex);
 
 /**
  * return the number of edges for which this vertex is a source
@@ -92,8 +90,7 @@ int prte_bp_graph_indegree(const prte_bp_graph_t *g,
  * @param[in] vertex  the vertex id to query
  * @returns the number of edges for which this vertex is a source
  */
-int prte_bp_graph_outdegree(const prte_bp_graph_t *g,
-			    int vertex);
+int prte_bp_graph_outdegree(const prte_bp_graph_t *g, int vertex);
 
 /**
  * add an edge to the given graph
@@ -107,12 +104,8 @@ int prte_bp_graph_outdegree(const prte_bp_graph_t *g,
  *
  * @returns PRTE_SUCCESS or an OMPI error code
  */
-int prte_bp_graph_add_edge(prte_bp_graph_t *g,
-			   int from,
-			   int to,
-			   int64_t cost,
-			   int capacity,
-			   void *e_data);
+int prte_bp_graph_add_edge(prte_bp_graph_t *g, int from, int to, int64_t cost, int capacity,
+                           void *e_data);
 
 /**
  * add a vertex to the given graph
@@ -123,9 +116,7 @@ int prte_bp_graph_add_edge(prte_bp_graph_t *g,
  *
  * @returns PRTE_SUCCESS or an OMPI error code
  */
-int prte_bp_graph_add_vertex(prte_bp_graph_t *g,
-			     void *v_data,
-			     int *index_out);
+int prte_bp_graph_add_vertex(prte_bp_graph_t *g, void *v_data, int *index_out);
 
 /**
  * compute the order of a graph (number of vertices)
@@ -158,8 +149,7 @@ int prte_bp_graph_order(const prte_bp_graph_t *g);
  *
  * @returns PRTE_SUCCESS or an OMPI error code
  */
-int prte_bp_graph_solve_bipartite_assignment(const prte_bp_graph_t *g,
-					     int *num_match_edges_out,
-					     int **match_edges_out);
+int prte_bp_graph_solve_bipartite_assignment(const prte_bp_graph_t *g, int *num_match_edges_out,
+                                             int **match_edges_out);
 
 #endif /* PRTE_BP_GRAPH_H */

@@ -119,12 +119,12 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_object.h"
 #include "src/class/prte_list.h"
-#include "src/threads/mutex.h"
+#include "src/class/prte_object.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/threads/mutex.h"
 
-#define PRTE_CMD_OPTIONS_MAX  15
+#define PRTE_CMD_OPTIONS_MAX 15
 
 BEGIN_C_DECLS
 
@@ -140,7 +140,6 @@ typedef enum prte_cmd_line_type_t {
 
     PRTE_CMD_LINE_TYPE_MAX
 } prte_cmd_line_type_t;
-
 
 /**
  * Command line option type, for use in
@@ -161,7 +160,6 @@ typedef enum prte_cmd_line_otype_t {
     PRTE_CMD_LINE_OTYPE_UNSUPPORTED,
     PRTE_CMD_LINE_OTYPE_NULL
 } prte_cmd_line_otype_t;
-
 
 /**
  * Main top-level handle.  This interface should not be used by users!
@@ -312,8 +310,7 @@ typedef struct prte_cmd_line_init_t {
  * };
  * \endcode
  */
-PRTE_EXPORT int prte_cmd_line_create(prte_cmd_line_t *cmd,
-                                       prte_cmd_line_init_t *table);
+PRTE_EXPORT int prte_cmd_line_create(prte_cmd_line_t *cmd, prte_cmd_line_init_t *table);
 
 /* Add a table of prte_cmd_line_init_t instances
  * to an existing PRTE command line handle.
@@ -322,8 +319,7 @@ PRTE_EXPORT int prte_cmd_line_create(prte_cmd_line_t *cmd,
  * subsequent call will simply append new options to the existing
  * handle. Note that any duplicates will return an error.
  */
- PRTE_EXPORT int prte_cmd_line_add(prte_cmd_line_t *cmd,
-                                     prte_cmd_line_init_t *table);
+PRTE_EXPORT int prte_cmd_line_add(prte_cmd_line_t *cmd, prte_cmd_line_init_t *table);
 
 /**
  * Create a command line option.
@@ -334,8 +330,7 @@ PRTE_EXPORT int prte_cmd_line_create(prte_cmd_line_t *cmd,
  * @retval PRTE_SUCCESS Upon success.
  *
  */
-PRTE_EXPORT int prte_cmd_line_make_opt_mca(prte_cmd_line_t *cmd,
-                                             prte_cmd_line_init_t entry);
+PRTE_EXPORT int prte_cmd_line_make_opt_mca(prte_cmd_line_t *cmd, prte_cmd_line_init_t entry);
 
 /**
  * Create a command line option.
@@ -364,12 +359,9 @@ PRTE_EXPORT int prte_cmd_line_make_opt_mca(prte_cmd_line_t *cmd,
  * used to generate the output from prte_cmd_line_get_usage_msg().
  *
  */
-PRTE_EXPORT int prte_cmd_line_make_opt3(prte_cmd_line_t *cmd,
-                                          char short_name,
-                                          const char *long_name,
-                                          int num_params,
-                                          const char *desc,
-                                          prte_cmd_line_otype_t otype);
+PRTE_EXPORT int prte_cmd_line_make_opt3(prte_cmd_line_t *cmd, char short_name,
+                                        const char *long_name, int num_params, const char *desc,
+                                        prte_cmd_line_otype_t otype);
 
 /**
  * Parse a command line according to a pre-built PRTE command line
@@ -460,10 +452,8 @@ PRTE_EXPORT int prte_cmd_line_make_opt3(prte_cmd_line_t *cmd,
  * different sets of argv tokens is safe, but will erase any
  * previous parsing results.
  */
-PRTE_EXPORT int prte_cmd_line_parse(prte_cmd_line_t *cmd,
-                                      bool ignore_unknown,
-                                      bool ignore_unknown_option,
-                                      int argc, char **argv);
+PRTE_EXPORT int prte_cmd_line_parse(prte_cmd_line_t *cmd, bool ignore_unknown,
+                                    bool ignore_unknown_option, int argc, char **argv);
 
 /**
  * Return a consolidated "usage" message for a PRTE command line handle.
@@ -486,7 +476,8 @@ PRTE_EXPORT int prte_cmd_line_parse(prte_cmd_line_t *cmd,
  *
  * The returned string must be freed by the caller.
  */
-PRTE_EXPORT char *prte_cmd_line_get_usage_msg(prte_cmd_line_t *cmd, bool parseable) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_cmd_line_get_usage_msg(prte_cmd_line_t *cmd, bool parseable)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 /**
  * Test if a given option was taken on the parsed command line.
@@ -507,8 +498,8 @@ PRTE_EXPORT char *prte_cmd_line_get_usage_msg(prte_cmd_line_t *cmd, bool parseab
  * (either by its short or long name) during token parsing.
  * Otherwise, it will return false.
  */
-PRTE_EXPORT bool prte_cmd_line_is_taken(prte_cmd_line_t *cmd,
-                                          const char *opt) __prte_attribute_nonnull__(1) __prte_attribute_nonnull__(2);
+PRTE_EXPORT bool prte_cmd_line_is_taken(prte_cmd_line_t *cmd, const char *opt)
+    __prte_attribute_nonnull__(1) __prte_attribute_nonnull__(2);
 
 /**
  * Return the number of instances of an option found during parsing.
@@ -530,8 +521,8 @@ PRTE_EXPORT bool prte_cmd_line_is_taken(prte_cmd_line_t *cmd,
  * either the option was not specified as part of the PRTE command line
  * handle, or prte_cmd_line_parse() was not invoked on this handle.
  */
-PRTE_EXPORT int prte_cmd_line_get_ninsts(prte_cmd_line_t *cmd,
-                                           const char *opt) __prte_attribute_nonnull__(1) __prte_attribute_nonnull__(2);
+PRTE_EXPORT int prte_cmd_line_get_ninsts(prte_cmd_line_t *cmd, const char *opt)
+    __prte_attribute_nonnull__(1) __prte_attribute_nonnull__(2);
 
 /**
  * Return a specific parameter for a specific instance of a option
@@ -560,10 +551,8 @@ PRTE_EXPORT int prte_cmd_line_get_ninsts(prte_cmd_line_t *cmd,
  * The returned string should \em not be modified or freed by the
  * caller.
  */
-PRTE_EXPORT prte_value_t *prte_cmd_line_get_param(prte_cmd_line_t *cmd,
-                                                  const char *opt,
-                                                  int instance_num,
-                                                  int param_num);
+PRTE_EXPORT prte_value_t *prte_cmd_line_get_param(prte_cmd_line_t *cmd, const char *opt,
+                                                  int instance_num, int param_num);
 
 /**
  * Return the entire "tail" of unprocessed argv from a PRTE
@@ -592,13 +581,12 @@ PRTE_EXPORT prte_value_t *prte_cmd_line_get_param(prte_cmd_line_t *cmd,
  * of the tail parameters, and must be freed (likely with a call
  * to prte_argv_free()) by the caller.
  */
-PRTE_EXPORT int prte_cmd_line_get_tail(prte_cmd_line_t *cmd, int *tailc,
-                                         char ***tailv);
+PRTE_EXPORT int prte_cmd_line_get_tail(prte_cmd_line_t *cmd, int *tailc, char ***tailv);
 
 PRTE_EXPORT prte_cmd_line_option_t *prte_cmd_line_find_option(prte_cmd_line_t *cmd,
-                                                                 prte_cmd_line_init_t *e) __prte_attribute_nonnull__(1) __prte_attribute_nonnull__(2);
+                                                              prte_cmd_line_init_t *e)
+    __prte_attribute_nonnull__(1) __prte_attribute_nonnull__(2);
 
 END_C_DECLS
-
 
 #endif /* PRTE_CMD_LINE_H */

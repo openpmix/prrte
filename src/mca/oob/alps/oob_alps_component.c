@@ -35,48 +35,47 @@
 
 #include "prte_config.h"
 #include "types.h"
-#include "types.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #include <fcntl.h>
 #ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
+#    include <netinet/in.h>
 #endif
 #ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
+#    include <arpa/inet.h>
 #endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif
 #include <ctype.h>
 
-#include "src/util/show_help.h"
-#include "src/util/error.h"
-#include "src/util/output.h"
-#include "src/include/prte_socket_errno.h"
-#include "src/util/if.h"
-#include "src/util/net.h"
-#include "src/util/argv.h"
 #include "src/class/prte_hash_table.h"
 #include "src/class/prte_list.h"
+#include "src/include/prte_socket_errno.h"
+#include "src/util/argv.h"
+#include "src/util/error.h"
+#include "src/util/if.h"
+#include "src/util/net.h"
+#include "src/util/output.h"
+#include "src/util/show_help.h"
 
+#include "src/mca/common/alps/common_alps.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
+#include "src/mca/oob/base/base.h"
+#include "src/mca/oob/oob.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
-#include "src/mca/oob/oob.h"
-#include "src/mca/oob/base/base.h"
-#include "src/mca/common/alps/common_alps.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/parse_options.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
-#include "src/runtime/prte_globals.h"
 
 static int alps_component_open(void);
 static int alps_component_close(void);
@@ -84,7 +83,7 @@ static int component_available(void);
 static int component_startup(void);
 static void component_shutdown(void);
 static int component_send(prte_rml_send_t *msg);
-static char* component_get_addr(void);
+static char *component_get_addr(void);
 static int component_set_addr(pmix_proc_t *peer, char **uris);
 static bool component_is_reachable(char *routed, pmix_proc_t *peer);
 
@@ -135,8 +134,7 @@ static int component_available(void)
 /* Start all modules */
 static int component_startup(void)
 {
-    prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                        "%s ALPS STARTUP",
+    prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s ALPS STARTUP",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     return PRTE_SUCCESS;
@@ -144,8 +142,7 @@ static int component_startup(void)
 
 static void component_shutdown(void)
 {
-    prte_output_verbose(2, prte_oob_base_framework.framework_output,
-                        "%s ALPS SHUTDOWN",
+    prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s ALPS SHUTDOWN",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 }
 
@@ -153,13 +150,12 @@ static int component_send(prte_rml_send_t *msg)
 {
     prte_output_verbose(10, prte_oob_base_framework.framework_output,
                         "%s oob:alps:send_nb to peer %s:%d this should not be happening",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(&msg->dst), msg->tag);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst), msg->tag);
 
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
-static char* component_get_addr(void)
+static char *component_get_addr(void)
 {
     char *cptr;
 
@@ -172,12 +168,11 @@ static char* component_get_addr(void)
 
     prte_output_verbose(10, prte_oob_base_framework.framework_output,
                         "%s oob:alps: component_get_addr invoked - %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),cptr);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cptr);
     return cptr;
 }
 
-static int component_set_addr(pmix_proc_t *peer,
-                              char **uris)
+static int component_set_addr(pmix_proc_t *peer, char **uris)
 {
     prte_output_verbose(10, prte_oob_base_framework.framework_output,
                         "%s oob:alps: component_set_addr invoked - this should not be happening",

@@ -6,6 +6,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,15 +17,15 @@
 #include "prte_config.h"
 #include "src/util/output.h"
 
-#include "src/mca/state/state.h"
 #include "src/mca/state/base/base.h"
+#include "src/mca/state/state.h"
 #include "state_dvm.h"
 
 /*
  * Public string for version number
  */
-const char *prte_state_dvm_component_version_string =
-    "PRTE STATE dvm MCA component version " PRTE_VERSION;
+const char *prte_state_dvm_component_version_string
+    = "PRTE STATE dvm MCA component version " PRTE_VERSION;
 
 /*
  * Local functionality
@@ -75,7 +76,7 @@ static int state_dvm_component_query(prte_mca_base_module_t **module, int *prior
     /* used by DVM masters */
     if (PRTE_PROC_IS_MASTER) {
         *priority = 100;
-        *module = (prte_mca_base_module_t *)&prte_state_dvm_module;
+        *module = (prte_mca_base_module_t *) &prte_state_dvm_module;
         return PRTE_SUCCESS;
     }
 

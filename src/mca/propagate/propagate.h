@@ -28,11 +28,11 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/mca/mca.h"
-#include "src/class/prte_object.h"
 #include "src/class/prte_bitmap.h"
-#include "src/mca/state/state.h"
+#include "src/class/prte_object.h"
+#include "src/mca/mca.h"
 #include "src/mca/rml/rml_types.h"
+#include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
@@ -41,7 +41,7 @@ BEGIN_C_DECLS
  * collective completion */
 typedef void (*prte_propagate_cbfunc_t)(int status, pmix_data_buffer_t *buf, void *cbdata);
 
-typedef int (*prte_propagate_rbcast_cb_t)(pmix_data_buffer_t* buffer);
+typedef int (*prte_propagate_rbcast_cb_t)(pmix_data_buffer_t *buffer);
 
 /*
  * Component functions - all MUST be provided!
@@ -64,10 +64,10 @@ typedef int (*prte_propagate_base_module_registercb_fn_t)(void);
  * Module Structure
  */
 struct prte_propagate_base_module_2_3_0_t {
-    prte_propagate_base_module_init_fn_t          init;
-    prte_propagate_base_module_finalize_fn_t      finalize;
-    prte_propagate_base_module_prp_fn_t           prp;
-    prte_propagate_base_module_registercb_fn_t    register_cb;
+    prte_propagate_base_module_init_fn_t init;
+    prte_propagate_base_module_finalize_fn_t finalize;
+    prte_propagate_base_module_prp_fn_t prp;
+    prte_propagate_base_module_registercb_fn_t register_cb;
 };
 
 typedef struct prte_propagate_base_module_2_3_0_t prte_propagate_base_module_2_3_0_t;
@@ -98,7 +98,7 @@ typedef prte_propagate_base_component_3_0_0_t prte_propagate_base_component_t;
 /*
  * Macro for use in components that are of type propagate v3.0.0
  */
-#define PRTE_PROPAGATE_BASE_VERSION_3_0_0 \
+#define PRTE_PROPAGATE_BASE_VERSION_3_0_0       \
     /* propagate v3.0 is chained to MCA v2.0 */ \
     PRTE_MCA_BASE_VERSION_2_1_0("propagate", 3, 0, 0)
 

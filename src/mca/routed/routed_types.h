@@ -19,7 +19,6 @@
  * Type definitions to support routed framework
  */
 
-
 #ifndef PRTE_MCA_ROUTED_TYPES_H_
 #define PRTE_MCA_ROUTED_TYPES_H_
 

@@ -18,6 +18,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,8 +39,8 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 
-#include "src/mca/ras/base/ras_private.h"
 #include "ras_gridengine.h"
+#include "src/mca/ras/base/ras_private.h"
 
 /*
  * Local functions
@@ -79,27 +80,33 @@ static int prte_ras_gridengine_register(void)
     prte_mca_base_component_t *c = &prte_ras_gridengine_component.super.base_version;
 
     prte_ras_gridengine_component.priority = 100;
-    (void) prte_mca_base_component_var_register (c, "priority", "Priority of the gridengine ras component",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_gridengine_component.priority);
+    (void) prte_mca_base_component_var_register(c, "priority",
+                                                "Priority of the gridengine ras component",
+                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_ras_gridengine_component.priority);
 
     prte_ras_gridengine_verbose = 0;
-    (void) prte_mca_base_component_var_register (c, "verbose",
-                                            "Enable verbose output for the gridengine ras component",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                            PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_ras_gridengine_verbose);
+    (void) prte_mca_base_component_var_register(
+        c, "verbose", "Enable verbose output for the gridengine ras component",
+        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_ras_gridengine_verbose);
 
     prte_ras_gridengine_component.show_jobid = false;
-    (void) prte_mca_base_component_var_register (c, "show_jobid", "Show the JOB_ID of the Grid Engine job",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_gridengine_component.show_jobid);
+    (void) prte_mca_base_component_var_register(c, "show_jobid",
+                                                "Show the JOB_ID of the Grid Engine job",
+                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_ras_gridengine_component.show_jobid);
 
     return PRTE_SUCCESS;
 }
 
 /**
-  * component open/close/init function
-  */
+ * component open/close/init function
+ */
 static int prte_ras_gridengine_open(void)
 {
     if (prte_ras_gridengine_verbose != 0) {
@@ -115,8 +122,8 @@ static int prte_ras_gridengine_component_query(prte_mca_base_module_t **module, 
 {
     *priority = prte_ras_gridengine_component.priority;
 
-    if (NULL != getenv("SGE_ROOT") && NULL != getenv("ARC") &&
-        NULL != getenv("PE_HOSTFILE") && NULL != getenv("JOB_ID")) {
+    if (NULL != getenv("SGE_ROOT") && NULL != getenv("ARC") && NULL != getenv("PE_HOSTFILE")
+        && NULL != getenv("JOB_ID")) {
         PRTE_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
                              "%s ras:gridengine: available for selection",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));

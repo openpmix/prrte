@@ -15,6 +15,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,17 +23,15 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/mca.h"
-#include "src/mca/base/base.h"
 #include "src/event/event-internal.h"
+#include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
-#include "src/mca/ras/base/ras_private.h"
 #include "src/mca/ras/base/base.h"
-
+#include "src/mca/ras/base/ras_private.h"
 
 /* NOTE: the RAS does not require a proxy as only the
  * HNP can open the framework in prte_init - non-HNP
@@ -56,11 +55,10 @@ static int ras_register(prte_mca_base_register_flag_t flags)
 {
     prte_ras_base.multiplier = 1;
     prte_mca_base_var_register("prte", "ras", "base", "multiplier",
-                                "Simulate a larger cluster by launching N daemons/node",
-                                PRTE_MCA_BASE_VAR_TYPE_INT,
-                                NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                PRTE_INFO_LVL_9,
-                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_base.multiplier);
+                               "Simulate a larger cluster by launching N daemons/node",
+                               PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                               &prte_ras_base.multiplier);
 #if SLURM_CRAY_ENV
     /*
      * If we are in a Cray-SLURM environment, then we cannot
@@ -81,11 +79,10 @@ static int ras_register(prte_mca_base_register_flag_t flags)
 #endif
 
     prte_mca_base_var_register("prte", "ras", "base", "launch_orted_on_hn",
-                                "Launch an prte daemon on the head node",
-                                PRTE_MCA_BASE_VAR_TYPE_BOOL,
-                                NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                PRTE_INFO_LVL_9,
-                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_base.launch_orted_on_hn);
+                               "Launch an prte daemon on the head node",
+                               PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                               &prte_ras_base.launch_orted_on_hn);
     return PRTE_SUCCESS;
 }
 
@@ -114,6 +111,7 @@ static int prte_ras_base_open(prte_mca_base_open_flag_t flags)
     return prte_mca_base_framework_components_open(&prte_ras_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, ras, "PRTE Resource Allocation Subsystem",
-                                 ras_register, prte_ras_base_open, prte_ras_base_close,
-                                 prte_ras_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, ras, "PRTE Resource Allocation Subsystem", ras_register,
+                                prte_ras_base_open, prte_ras_base_close,
+                                prte_ras_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

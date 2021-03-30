@@ -4,6 +4,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,16 +15,16 @@
 
 #include "prte_config.h"
 
-#include "src/include/constants.h"
-#include "src/util/proc_info.h"
-#include "src/mca/prtereachable/prtereachable.h"
 #include "reachable_netlink.h"
+#include "src/include/constants.h"
+#include "src/mca/prtereachable/prtereachable.h"
+#include "src/util/proc_info.h"
 
 /*
  * Public string showing the reachable netlink component version number
  */
-const char *prte_prtereachable_netlink_component_version_string =
-    "PRTE netlink prtereachable MCA component version " PRTE_VERSION;
+const char *prte_prtereachable_netlink_component_version_string
+    = "PRTE netlink prtereachable MCA component version " PRTE_VERSION;
 
 /*
  * Local function
@@ -32,7 +33,6 @@ static int reachable_netlink_open(void);
 static int reachable_netlink_close(void);
 static int reachable_netlink_component_query(prte_mca_base_module_t **module, int *priority);
 static int component_register(void);
-
 
 /*
  * Instantiate the public struct with all of our public information
@@ -87,8 +87,7 @@ static int component_register(void)
     return PRTE_SUCCESS;
 }
 
-static int
-reachable_netlink_component_query(prte_mca_base_module_t **module, int *priority)
+static int reachable_netlink_component_query(prte_mca_base_module_t **module, int *priority)
 {
     *priority = 50;
     *module = (prte_mca_base_module_t *) &prte_prtereachable_netlink_module;

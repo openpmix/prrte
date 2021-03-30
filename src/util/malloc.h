@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,88 +46,91 @@
  */
 
 #ifndef PRTE_MALLOC_DEBUG_LEVEL
-#define PRTE_MALLOC_DEBUG_LEVEL 2
+#    define PRTE_MALLOC_DEBUG_LEVEL 2
 #endif
 
 BEGIN_C_DECLS
-  /**
-   * Initialize malloc debug output.
-   *
-   * This function is invoked to setup a dedicated output stream for
-   * malloc debug functions.  It does \em not (currently) do anything
-   * other than that (i.e., no internal accounting for tracking
-   * malloc/free statements, etc.).
-   *
-   * It is invoked as part of prte_init().  Although this function is
-   * not \em necessary for PRTE_MALLOC() and PRTE_FREE(), it is strong
-   * recommended because no output messages -- regardless of the
-   * malloc debug level set by prte_malloc_debug() -- will be displayed
-   * unless this function is invoked first.
-   */
+/**
+ * Initialize malloc debug output.
+ *
+ * This function is invoked to setup a dedicated output stream for
+ * malloc debug functions.  It does \em not (currently) do anything
+ * other than that (i.e., no internal accounting for tracking
+ * malloc/free statements, etc.).
+ *
+ * It is invoked as part of prte_init().  Although this function is
+ * not \em necessary for PRTE_MALLOC() and PRTE_FREE(), it is strong
+ * recommended because no output messages -- regardless of the
+ * malloc debug level set by prte_malloc_debug() -- will be displayed
+ * unless this function is invoked first.
+ */
 PRTE_EXPORT void prte_malloc_init(void);
 PRTE_EXPORT void prte_malloc_finalize(void);
 
-  /**
-   * \internal
-   *
-   * Back-end error-checking malloc function for PRTE (you should use
-   * the normal malloc() instead of this function).
-   *
-   * @param size The number of bytes to allocate
-   * @param file Typically the __FILE__ macro
-   * @param line Typically the __LINE__ macro
-   *
-   * This function is only used when --enable-mem-debug was specified to
-   * configure (or by default if you're building in a SVN checkout).
-   */
-PRTE_EXPORT void *prte_malloc(size_t size, const char *file, int line) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+/**
+ * \internal
+ *
+ * Back-end error-checking malloc function for PRTE (you should use
+ * the normal malloc() instead of this function).
+ *
+ * @param size The number of bytes to allocate
+ * @param file Typically the __FILE__ macro
+ * @param line Typically the __LINE__ macro
+ *
+ * This function is only used when --enable-mem-debug was specified to
+ * configure (or by default if you're building in a SVN checkout).
+ */
+PRTE_EXPORT void *prte_malloc(size_t size, const char *file, int line)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
-  /**
-   * \internal
-   *
-   * Back-end error-checking calloc function for PRTE (you should use
-   * the normal calloc() instead of this function).
-   *
-   * @param nmembers Number of elements to malloc
-   * @param size Size of each elements
-   * @param file Typically the __FILE__ macro
-   * @param line Typically the __LINE__ macro
-   *
-   * This function is only used when --enable-mem-debug was specified to
-   * configure (or by default if you're building in a SVN checkout).
-   */
-PRTE_EXPORT void *prte_calloc(size_t nmembers, size_t size, const char *file, int line) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+/**
+ * \internal
+ *
+ * Back-end error-checking calloc function for PRTE (you should use
+ * the normal calloc() instead of this function).
+ *
+ * @param nmembers Number of elements to malloc
+ * @param size Size of each elements
+ * @param file Typically the __FILE__ macro
+ * @param line Typically the __LINE__ macro
+ *
+ * This function is only used when --enable-mem-debug was specified to
+ * configure (or by default if you're building in a SVN checkout).
+ */
+PRTE_EXPORT void *prte_calloc(size_t nmembers, size_t size, const char *file, int line)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
-  /**
-   * \internal
-   *
-   * Back-end error-checking realloc function for PRTE (you should use
-   * the normal realloc() instead of this function).
-   *
-   * @param ptr Pointer to reallocate
-   * @param size The number of bytes to allocate
-   * @param file Typically the __FILE__ macro
-   * @param line Typically the __LINE__ macro
-   *
-   * This function is only used when --enable-mem-debug was specified to
-   * configure (or by default if you're building in a SVN checkout).
-   */
-PRTE_EXPORT void *prte_realloc(void *ptr, size_t size, const char *file, int line) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+/**
+ * \internal
+ *
+ * Back-end error-checking realloc function for PRTE (you should use
+ * the normal realloc() instead of this function).
+ *
+ * @param ptr Pointer to reallocate
+ * @param size The number of bytes to allocate
+ * @param file Typically the __FILE__ macro
+ * @param line Typically the __LINE__ macro
+ *
+ * This function is only used when --enable-mem-debug was specified to
+ * configure (or by default if you're building in a SVN checkout).
+ */
+PRTE_EXPORT void *prte_realloc(void *ptr, size_t size, const char *file, int line)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
-  /**
-   * \internal
-   *
-   * Back-end error-checking free function for PRTE (you should use
-   * free() instead of this function).
-   *
-   * @param addr Address on the heap to free()
-   * @param file Typically the __FILE__ macro
-   * @param line Typically the __LINE__ macro
-   *
-   * This function is only used when --enable-mem-debug was specified
-   * to configure (or by default if you're building in a SVN
-   * checkout).
-   */
+/**
+ * \internal
+ *
+ * Back-end error-checking free function for PRTE (you should use
+ * free() instead of this function).
+ *
+ * @param addr Address on the heap to free()
+ * @param file Typically the __FILE__ macro
+ * @param line Typically the __LINE__ macro
+ *
+ * This function is only used when --enable-mem-debug was specified
+ * to configure (or by default if you're building in a SVN
+ * checkout).
+ */
 PRTE_EXPORT void prte_free(void *addr, const char *file, int line) __prte_attribute_nonnull__(1);
 
 /**

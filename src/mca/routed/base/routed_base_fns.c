@@ -51,8 +51,9 @@ void prte_routed_base_xcast_routing(prte_list_t *coll, prte_list_t *my_children)
     if (PRTE_PROC_IS_MASTER) {
         if (prte_abnormal_term_ordered || !prte_routing_is_enabled) {
             daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-            for (i=1; i < daemons->procs->size; i++) {
-                if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(daemons->procs, i))) {
+            for (i = 1; i < daemons->procs->size; i++) {
+                if (NULL
+                    == (proc = (prte_proc_t *) prte_pointer_array_get_item(daemons->procs, i))) {
                     continue;
                 }
                 /* exclude anyone known not alive */
@@ -68,7 +69,8 @@ void prte_routed_base_xcast_routing(prte_list_t *coll, prte_list_t *my_children)
             }
         } else {
             /* the xcast always goes to our children */
-            PRTE_LIST_FOREACH(child, my_children, prte_routed_tree_t) {
+            PRTE_LIST_FOREACH(child, my_children, prte_routed_tree_t)
+            {
                 nm = PRTE_NEW(prte_namelist_t);
                 PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace, child->rank);
                 prte_list_append(coll, &nm->super);
@@ -76,7 +78,8 @@ void prte_routed_base_xcast_routing(prte_list_t *coll, prte_list_t *my_children)
         }
     } else {
         /* I am a daemon - route to my children */
-        PRTE_LIST_FOREACH(child, my_children, prte_routed_tree_t) {
+        PRTE_LIST_FOREACH(child, my_children, prte_routed_tree_t)
+        {
             nm = PRTE_NEW(prte_namelist_t);
             PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace, child->rank);
             prte_list_append(coll, &nm->super);
@@ -113,8 +116,8 @@ int prte_routed_base_process_callback(pmix_nspace_t job, pmix_data_buffer_t *buf
         PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
                              "%s routed_base:callback got uri %s for job %s rank %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             (NULL == rml_uri) ? "NULL" : rml_uri,
-                             PRTE_JOBID_PRINT(job), PRTE_VPID_PRINT(vpid)));
+                             (NULL == rml_uri) ? "NULL" : rml_uri, PRTE_JOBID_PRINT(job),
+                             PRTE_VPID_PRINT(vpid)));
 
         if (NULL == rml_uri) {
             /* should not happen */
@@ -122,7 +125,7 @@ int prte_routed_base_process_callback(pmix_nspace_t job, pmix_data_buffer_t *buf
             return PRTE_ERR_FATAL;
         }
 
-        if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, vpid))) {
+        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, vpid))) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             continue;
         }

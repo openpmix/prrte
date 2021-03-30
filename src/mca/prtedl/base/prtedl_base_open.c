@@ -7,6 +7,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,13 +21,11 @@
 
 #include "src/mca/prtedl/base/static-components.h"
 
-
 /*
  * Globals
  */
 prte_prtedl_base_module_t *prte_prtedl = NULL;
 prte_prtedl_base_component_t *prte_prtedl_base_selected_component = NULL;
-
 
 /*
  * Function for finding and opening either all MCA components,
@@ -49,9 +48,7 @@ int prte_dl_base_open(prte_mca_base_open_flag_t flags)
    But we must mark this framework is NO_DSO so that the MCA framework
    base doesn't try to open any dynamic components in this
    framework. */
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prtedl, "Dynamic loader framework",
-                                 NULL /* register */,
-                                 prte_dl_base_open /* open */,
-                                 NULL /* close */,
-                                 prte_prtedl_base_static_components,
-                                 PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prtedl, "Dynamic loader framework", NULL /* register */,
+                                prte_dl_base_open /* open */, NULL /* close */,
+                                prte_prtedl_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);

@@ -14,6 +14,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,9 +28,9 @@
 
 #include "src/class/prte_list.h"
 #include "src/class/prte_pointer_array.h"
+#include "src/mca/mca.h"
 #include "src/util/cmd_line.h"
 #include "src/util/printf.h"
-#include "src/mca/mca.h"
 
 BEGIN_C_DECLS
 
@@ -46,7 +47,6 @@ extern const char *prte_info_type_base;
 
 extern prte_pointer_array_t mca_types;
 
-
 /*
  * Version-related strings and functions
  */
@@ -60,10 +60,8 @@ extern const char *prte_info_ver_svn;
 
 void prte_info_do_version(bool want_all, prte_cmd_line_t *cmd_line);
 void prte_info_show_prte_version(const char *scope);
-void prte_info_show_component_version(const char *type_name,
-                                      const char *component_name,
-                                      const char *scope,
-                                      const char *ver_type);
+void prte_info_show_component_version(const char *type_name, const char *component_name,
+                                      const char *scope, const char *ver_type);
 
 /*
  * Parameter/configuration-related functions
@@ -91,8 +89,7 @@ extern const char *prte_info_path_pkgdatadir;
 extern const char *prte_info_path_pkgincludedir;
 
 void prte_info_do_params(bool want_all, bool want_internal);
-void prte_info_show_mca_params(const char *type, const char *component,
-                               bool want_internal);
+void prte_info_show_mca_params(const char *type, const char *component, bool want_internal);
 
 void prte_info_do_path(bool want_all, prte_cmd_line_t *cmd_line);
 void prte_info_show_path(const char *type, const char *value);
@@ -105,12 +102,8 @@ void prte_info_show_prte_version(const char *scope);
 /*
  * Output-related functions
  */
-void prte_info_out(const char *pretty_message,
-                   const char *plain_message,
-                   const char *value);
-void prte_info_out_int(const char *pretty_message,
-                       const char *plain_message,
-                       int value);
+void prte_info_out(const char *pretty_message, const char *plain_message, const char *value);
+void prte_info_out_int(const char *pretty_message, const char *plain_message, int value);
 /*
  * Component-related functions
  */

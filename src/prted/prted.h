@@ -36,20 +36,16 @@ BEGIN_C_DECLS
 PRTE_EXPORT int prte_daemon(int argc, char *argv[]);
 
 /* orted communication functions */
-PRTE_EXPORT void prte_daemon_recv(int status, pmix_proc_t* sender,
-                                  pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
-                                  void* cbdata);
+PRTE_EXPORT void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                                  prte_rml_tag_t tag, void *cbdata);
 
 /* direct cmd processing entry points */
 PRTE_EXPORT void prte_daemon_cmd_processor(int fd, short event, void *data);
-PRTE_EXPORT int prte_daemon_process_commands(pmix_proc_t* sender,
-                                             pmix_data_buffer_t *buffer,
+PRTE_EXPORT int prte_daemon_process_commands(pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                              prte_rml_tag_t tag);
 
-PRTE_EXPORT int prte_parse_locals(prte_cmd_line_t *prte_cmd_line,
-                                  prte_list_t *jdata,
-                                  int argc, char* argv[],
-                                  char ***hostfiles, char ***hosts);
+PRTE_EXPORT int prte_parse_locals(prte_cmd_line_t *prte_cmd_line, prte_list_t *jdata, int argc,
+                                  char *argv[], char ***hostfiles, char ***hosts);
 
 END_C_DECLS
 

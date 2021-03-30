@@ -18,6 +18,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,8 +30,8 @@
 #define PRTE_LIFO_H_HAS_BEEN_INCLUDED
 
 #include "prte_config.h"
-#include <time.h>
 #include "src/class/prte_list.h"
+#include <time.h>
 
 #include "src/sys/atomic.h"
 #include "src/threads/threads.h"
@@ -39,7 +40,7 @@ BEGIN_C_DECLS
 
 /* NTH: temporarily suppress warnings about this not being defined */
 #if !defined(PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128)
-#define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 0
+#    define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 0
 #endif
 
 /**
@@ -61,28 +62,29 @@ union prte_counted_pointer_t {
 };
 typedef union prte_counted_pointer_t prte_counted_pointer_t;
 
-
 #if PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128
 
 /* Add one element to the FIFO. We will return the last head of the list
  * to allow the upper level to detect if this element is the first one in the
  * list (if the list was empty before this operation).
  */
-static inline bool prte_update_counted_pointer (volatile prte_counted_pointer_t * volatile addr, prte_counted_pointer_t *old,
-                                                prte_list_item_t *item)
+static inline bool prte_update_counted_pointer(volatile prte_counted_pointer_t *volatile addr,
+                                               prte_counted_pointer_t *old, prte_list_item_t *item)
 {
     prte_counted_pointer_t new_p;
     new_p.data.item = (intptr_t) item;
     new_p.data.counter = old->data.counter + 1;
-    return prte_atomic_compare_exchange_strong_128 (&addr->atomic_value, &old->value, new_p.value);
+    return prte_atomic_compare_exchange_strong_128(&addr->atomic_value, &old->value, new_p.value);
 }
 
-__prte_attribute_always_inline__
-static inline void prte_read_counted_pointer (volatile prte_counted_pointer_t * volatile addr, prte_counted_pointer_t *value)
+__prte_attribute_always_inline__ static inline void
+prte_read_counted_pointer(volatile prte_counted_pointer_t *volatile addr,
+                          prte_counted_pointer_t *value)
 {
-    /* most platforms do not read the value atomically so make sure we read the counted pointer in a specific order */
+    /* most platforms do not read the value atomically so make sure we read the counted pointer in a
+     * specific order */
     value->data.counter = addr->data.counter;
-    prte_atomic_rmb ();
+    prte_atomic_rmb();
     value->data.item = addr->data.item;
 }
 
@@ -91,7 +93,7 @@ static inline void prte_read_counted_pointer (volatile prte_counted_pointer_t * 
 /**
  * @brief Helper function for lifo/fifo to sleep this thread if excessive contention is detected
  */
-static inline void _prte_lifo_release_cpu (void)
+static inline void _prte_lifo_release_cpu(void)
 {
     /* NTH: there are many ways to cause the current thread to be suspended. This one
      * should work well in most cases. Another approach would be to use poll (NULL, 0, ) but
@@ -99,10 +101,9 @@ static inline void _prte_lifo_release_cpu (void)
      * is a performance improvement for the lifo test when this call is made on detection
      * of contention but it may not translate into actually MPI or application performance
      * improvements. */
-    static struct timespec interval = { .tv_sec = 0, .tv_nsec = 100 };
-    nanosleep (&interval, NULL);
+    static struct timespec interval = {.tv_sec = 0, .tv_nsec = 100};
+    nanosleep(&interval, NULL);
 }
-
 
 /* Atomic Last In First Out lists. If we are in a multi-threaded environment then the
  * atomicity is insured via the compare-and-swap operation, if not we simply do a read
@@ -127,16 +128,14 @@ typedef struct prte_lifo_t prte_lifo_t;
 
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_lifo_t);
 
-
 /* The ghost pointer will never change. The head will change via an atomic
  * compare-and-swap. On most architectures the reading of a pointer is an
  * atomic operation so we don't have to protect it.
  */
-static inline bool prte_lifo_is_empty( prte_lifo_t* lifo )
+static inline bool prte_lifo_is_empty(prte_lifo_t *lifo)
 {
     return (prte_list_item_t *) lifo->prte_lifo_head.data.item == &lifo->prte_lifo_ghost;
 }
-
 
 #if PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128
 
@@ -144,17 +143,17 @@ static inline bool prte_lifo_is_empty( prte_lifo_t* lifo )
  * to allow the upper level to detect if this element is the first one in the
  * list (if the list was empty before this operation).
  */
-static inline prte_list_item_t *prte_lifo_push_atomic (prte_lifo_t *lifo,
-                                                       prte_list_item_t *item)
+static inline prte_list_item_t *prte_lifo_push_atomic(prte_lifo_t *lifo, prte_list_item_t *item)
 {
     prte_list_item_t *next = (prte_list_item_t *) lifo->prte_lifo_head.data.item;
 
     do {
         item->prte_list_next = next;
-        prte_atomic_wmb ();
+        prte_atomic_wmb();
 
         /* to protect against ABA issues it is sufficient to only update the counter in pop */
-        if (prte_atomic_compare_exchange_strong_ptr (&lifo->prte_lifo_head.data.item, (intptr_t *) &next, (intptr_t) item)) {
+        if (prte_atomic_compare_exchange_strong_ptr(&lifo->prte_lifo_head.data.item,
+                                                    (intptr_t *) &next, (intptr_t) item)) {
             return next;
         }
         /* DO some kind of pause to release the bus */
@@ -164,12 +163,12 @@ static inline prte_list_item_t *prte_lifo_push_atomic (prte_lifo_t *lifo,
 /* Retrieve one element from the LIFO. If we reach the ghost element then the LIFO
  * is empty so we return NULL.
  */
-static inline prte_list_item_t *prte_lifo_pop_atomic (prte_lifo_t* lifo)
+static inline prte_list_item_t *prte_lifo_pop_atomic(prte_lifo_t *lifo)
 {
     prte_counted_pointer_t old_head;
     prte_list_item_t *item;
 
-    prte_read_counted_pointer (&lifo->prte_lifo_head, &old_head);
+    prte_read_counted_pointer(&lifo->prte_lifo_head, &old_head);
 
     do {
         item = (prte_list_item_t *) old_head.data.item;
@@ -177,9 +176,9 @@ static inline prte_list_item_t *prte_lifo_pop_atomic (prte_lifo_t* lifo)
             return NULL;
         }
 
-        if (prte_update_counted_pointer (&lifo->prte_lifo_head, &old_head,
-                                         (prte_list_item_t *) item->prte_list_next)) {
-            prte_atomic_wmb ();
+        if (prte_update_counted_pointer(&lifo->prte_lifo_head, &old_head,
+                                        (prte_list_item_t *) item->prte_list_next)) {
+            prte_atomic_wmb();
             item->prte_list_next = NULL;
             return item;
         }
@@ -192,8 +191,7 @@ static inline prte_list_item_t *prte_lifo_pop_atomic (prte_lifo_t* lifo)
  * to allow the upper level to detect if this element is the first one in the
  * list (if the list was empty before this operation).
  */
-static inline prte_list_item_t *prte_lifo_push_atomic (prte_lifo_t *lifo,
-                                                       prte_list_item_t *item)
+static inline prte_list_item_t *prte_lifo_push_atomic(prte_lifo_t *lifo, prte_list_item_t *item)
 {
     prte_list_item_t *next = (prte_list_item_t *) lifo->prte_lifo_head.data.item;
 
@@ -203,8 +201,9 @@ static inline prte_list_item_t *prte_lifo_push_atomic (prte_lifo_t *lifo,
     do {
         item->prte_list_next = next;
         prte_atomic_wmb();
-        if (prte_atomic_compare_exchange_strong_ptr (&lifo->prte_lifo_head.data.item, (intptr_t *) &next, (intptr_t) item)) {
-            prte_atomic_wmb ();
+        if (prte_atomic_compare_exchange_strong_ptr(&lifo->prte_lifo_head.data.item,
+                                                    (intptr_t *) &next, (intptr_t) item)) {
+            prte_atomic_wmb();
             /* now safe to pop this item */
             item->item_free = 0;
             return next;
@@ -213,12 +212,12 @@ static inline prte_list_item_t *prte_lifo_push_atomic (prte_lifo_t *lifo,
     } while (1);
 }
 
-#if PRTE_HAVE_ATOMIC_LLSC_PTR
+#    if PRTE_HAVE_ATOMIC_LLSC_PTR
 
 /* Retrieve one element from the LIFO. If we reach the ghost element then the LIFO
  * is empty so we return NULL.
  */
-static inline prte_list_item_t *prte_lifo_pop_atomic (prte_lifo_t* lifo)
+static inline prte_list_item_t *prte_lifo_pop_atomic(prte_lifo_t *lifo)
 {
     register prte_list_item_t *item, *next;
     int attempt = 0, ret;
@@ -227,7 +226,7 @@ static inline prte_list_item_t *prte_lifo_pop_atomic (prte_lifo_t* lifo)
         if (++attempt == 5) {
             /* deliberatly suspend this thread to allow other threads to run. this should
              * only occur during periods of contention on the lifo. */
-            _prte_lifo_release_cpu ();
+            _prte_lifo_release_cpu();
             attempt = 0;
         }
 
@@ -240,33 +239,34 @@ static inline prte_list_item_t *prte_lifo_pop_atomic (prte_lifo_t* lifo)
         prte_atomic_sc_ptr(&lifo->prte_lifo_head.data.item, next, ret);
     } while (!ret);
 
-    prte_atomic_wmb ();
+    prte_atomic_wmb();
 
     item->prte_list_next = NULL;
     return item;
 }
 
-#else
+#    else
 
 /* Retrieve one element from the LIFO. If we reach the ghost element then the LIFO
  * is empty so we return NULL.
  */
-static inline prte_list_item_t *prte_lifo_pop_atomic (prte_lifo_t* lifo)
+static inline prte_list_item_t *prte_lifo_pop_atomic(prte_lifo_t *lifo)
 {
     prte_list_item_t *item, *head, *ghost = &lifo->prte_lifo_ghost;
 
-    while ((item=(prte_list_item_t *)lifo->prte_lifo_head.data.item) != ghost) {
+    while ((item = (prte_list_item_t *) lifo->prte_lifo_head.data.item) != ghost) {
         /* ensure it is safe to pop the head */
         if (prte_atomic_swap_32((prte_atomic_int32_t *) &item->item_free, 1)) {
             continue;
         }
 
-        prte_atomic_wmb ();
+        prte_atomic_wmb();
 
         head = item;
         /* try to swap out the head pointer */
-        if (prte_atomic_compare_exchange_strong_ptr (&lifo->prte_lifo_head.data.item, (intptr_t *) &head,
-                                                     (intptr_t) item->prte_list_next)) {
+        if (prte_atomic_compare_exchange_strong_ptr(&lifo->prte_lifo_head.data.item,
+                                                    (intptr_t *) &head,
+                                                    (intptr_t) item->prte_list_next)) {
             break;
         }
 
@@ -281,19 +281,18 @@ static inline prte_list_item_t *prte_lifo_pop_atomic (prte_lifo_t* lifo)
         return NULL;
     }
 
-    prte_atomic_wmb ();
+    prte_atomic_wmb();
 
     item->prte_list_next = NULL;
     return item;
 }
 
-#endif /* PRTE_HAVE_ATOMIC_LLSC_PTR */
+#    endif /* PRTE_HAVE_ATOMIC_LLSC_PTR */
 
 #endif
 
 /* single-threaded versions of the lifo functions */
-static inline prte_list_item_t *prte_lifo_push_st (prte_lifo_t *lifo,
-                                                   prte_list_item_t *item)
+static inline prte_list_item_t *prte_lifo_push_st(prte_lifo_t *lifo, prte_list_item_t *item)
 {
     item->prte_list_next = (prte_list_item_t *) lifo->prte_lifo_head.data.item;
     item->item_free = 0;
@@ -301,7 +300,7 @@ static inline prte_list_item_t *prte_lifo_push_st (prte_lifo_t *lifo,
     return (prte_list_item_t *) item->prte_list_next;
 }
 
-static inline prte_list_item_t *prte_lifo_pop_st (prte_lifo_t *lifo)
+static inline prte_list_item_t *prte_lifo_pop_st(prte_lifo_t *lifo)
 {
     prte_list_item_t *item;
     item = (prte_list_item_t *) lifo->prte_lifo_head.data.item;
@@ -316,21 +315,20 @@ static inline prte_list_item_t *prte_lifo_pop_st (prte_lifo_t *lifo)
 }
 
 /* conditional versions of lifo functions. use atomics if prte_using_threads is set */
-static inline prte_list_item_t *prte_lifo_push (prte_lifo_t *lifo,
-                                                prte_list_item_t *item)
+static inline prte_list_item_t *prte_lifo_push(prte_lifo_t *lifo, prte_list_item_t *item)
 {
-    return prte_lifo_push_atomic (lifo, item);
+    return prte_lifo_push_atomic(lifo, item);
 
-    //return prte_lifo_push_st (lifo, item);
+    // return prte_lifo_push_st (lifo, item);
 }
 
-static inline prte_list_item_t *prte_lifo_pop (prte_lifo_t *lifo)
+static inline prte_list_item_t *prte_lifo_pop(prte_lifo_t *lifo)
 {
-    return prte_lifo_pop_atomic (lifo);
+    return prte_lifo_pop_atomic(lifo);
 
-    //return prte_lifo_pop_st (lifo);
+    // return prte_lifo_pop_st (lifo);
 }
 
 END_C_DECLS
 
-#endif  /* PRTE_LIFO_H_HAS_BEEN_INCLUDED */
+#endif /* PRTE_LIFO_H_HAS_BEEN_INCLUDED */

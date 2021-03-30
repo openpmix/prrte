@@ -12,6 +12,7 @@
  * Copyright (c) 2007      Voltaire All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,33 +22,23 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
 #include "constants.h"
+#include "src/class/prte_list.h"
 
 /*
  *  List classes
  */
 
-static void prte_list_item_construct(prte_list_item_t*);
-static void prte_list_item_destruct(prte_list_item_t*);
+static void prte_list_item_construct(prte_list_item_t *);
+static void prte_list_item_destruct(prte_list_item_t *);
 
-PRTE_CLASS_INSTANCE(
-    prte_list_item_t,
-    prte_object_t,
-    prte_list_item_construct,
-    prte_list_item_destruct
-);
+PRTE_CLASS_INSTANCE(prte_list_item_t, prte_object_t, prte_list_item_construct,
+                    prte_list_item_destruct);
 
-static void prte_list_construct(prte_list_t*);
-static void prte_list_destruct(prte_list_t*);
+static void prte_list_construct(prte_list_t *);
+static void prte_list_destruct(prte_list_t *);
 
-PRTE_CLASS_INSTANCE(
-    prte_list_t,
-    prte_object_t,
-    prte_list_construct,
-    prte_list_destruct
-);
-
+PRTE_CLASS_INSTANCE(prte_list_t, prte_object_t, prte_list_construct, prte_list_destruct);
 
 /*
  *
@@ -68,11 +59,10 @@ static void prte_list_item_construct(prte_list_item_t *item)
 static void prte_list_item_destruct(prte_list_item_t *item)
 {
 #if PRTE_ENABLE_DEBUG
-    assert( 0 == item->prte_list_item_refcount );
-    assert( NULL == item->prte_list_item_belong_to );
-#endif  /* PRTE_ENABLE_DEBUG */
+    assert(0 == item->prte_list_item_refcount);
+    assert(NULL == item->prte_list_item_belong_to);
+#endif /* PRTE_ENABLE_DEBUG */
 }
-
 
 /*
  *
@@ -87,8 +77,8 @@ static void prte_list_construct(prte_list_t *list)
        should never be removed from this list, added to another list,
        etc.  So set them to sentinel values. */
 
-    PRTE_CONSTRUCT( &(list->prte_list_sentinel), prte_list_item_t );
-    list->prte_list_sentinel.prte_list_item_refcount  = 1;
+    PRTE_CONSTRUCT(&(list->prte_list_sentinel), prte_list_item_t);
+    list->prte_list_sentinel.prte_list_item_refcount = 1;
     list->prte_list_sentinel.prte_list_item_belong_to = list;
 #endif
 
@@ -96,7 +86,6 @@ static void prte_list_construct(prte_list_t *list)
     list->prte_list_sentinel.prte_list_prev = &list->prte_list_sentinel;
     list->prte_list_length = 0;
 }
-
 
 /*
  * Reset all the pointers to be NULL -- do not actually destroy
@@ -107,22 +96,20 @@ static void prte_list_destruct(prte_list_t *list)
     prte_list_construct(list);
 }
 
-
 /*
  * Insert an item at a specific place in a list
  */
 bool prte_list_insert(prte_list_t *list, prte_list_item_t *item, long long idx)
 {
     /* Adds item to list at index and retains item. */
-    int     i;
+    int i;
     volatile prte_list_item_t *ptr, *next;
 
-    if ( idx >= (long long)list->prte_list_length ) {
+    if (idx >= (long long) list->prte_list_length) {
         return false;
     }
 
-    if ( 0 == idx )
-    {
+    if (0 == idx) {
         prte_list_prepend(list, item);
     } else {
 #if PRTE_ENABLE_DEBUG
@@ -133,7 +120,7 @@ bool prte_list_insert(prte_list_t *list, prte_list_item_t *item, long long idx)
 #endif
         /* pointer to element 0 */
         ptr = list->prte_list_sentinel.prte_list_next;
-        for ( i = 0; i < idx-1; i++ )
+        for (i = 0; i < idx - 1; i++)
             ptr = ptr->prte_list_next;
 
         next = ptr->prte_list_next;
@@ -146,7 +133,7 @@ bool prte_list_insert(prte_list_t *list, prte_list_item_t *item, long long idx)
         /* Spot check: ensure this item is only on the list that we
            just insertted it into */
 
-        prte_atomic_add ( &(item->prte_list_item_refcount), 1 );
+        prte_atomic_add(&(item->prte_list_item_refcount), 1);
         assert(1 == item->prte_list_item_refcount);
         item->prte_list_item_belong_to = list;
 #endif
@@ -156,11 +143,8 @@ bool prte_list_insert(prte_list_t *list, prte_list_item_t *item, long long idx)
     return true;
 }
 
-
-static
-void
-prte_list_transfer(prte_list_item_t *pos, prte_list_item_t *begin,
-                   prte_list_item_t *end)
+static void prte_list_transfer(prte_list_item_t *pos, prte_list_item_t *begin,
+                               prte_list_item_t *end)
 {
     volatile prte_list_item_t *tmp;
 
@@ -177,25 +161,21 @@ prte_list_transfer(prte_list_item_t *pos, prte_list_item_t *begin,
         begin->prte_list_prev = tmp;
 #if PRTE_ENABLE_DEBUG
         {
-            volatile prte_list_item_t* item = begin;
-            while( pos != item ) {
+            volatile prte_list_item_t *item = begin;
+            while (pos != item) {
                 item->prte_list_item_belong_to = pos->prte_list_item_belong_to;
                 item = item->prte_list_next;
                 assert(NULL != item);
             }
         }
-#endif  /* PRTE_ENABLE_DEBUG */
+#endif /* PRTE_ENABLE_DEBUG */
     }
 }
 
-
-void
-prte_list_join(prte_list_t *thislist, prte_list_item_t *pos,
-               prte_list_t *xlist)
+void prte_list_join(prte_list_t *thislist, prte_list_item_t *pos, prte_list_t *xlist)
 {
     if (0 != prte_list_get_size(xlist)) {
-        prte_list_transfer(pos, prte_list_get_first(xlist),
-                           prte_list_get_end(xlist));
+        prte_list_transfer(pos, prte_list_get_first(xlist), prte_list_get_end(xlist));
 
         /* fix the sizes */
         thislist->prte_list_length += xlist->prte_list_length;
@@ -203,11 +183,8 @@ prte_list_join(prte_list_t *thislist, prte_list_item_t *pos,
     }
 }
 
-
-void
-prte_list_splice(prte_list_t *thislist, prte_list_item_t *pos,
-                 prte_list_t *xlist, prte_list_item_t *first,
-                 prte_list_item_t *last)
+void prte_list_splice(prte_list_t *thislist, prte_list_item_t *pos, prte_list_t *xlist,
+                      prte_list_item_t *first, prte_list_item_t *last)
 {
     size_t change = 0;
     prte_list_item_t *tmp;
@@ -217,7 +194,7 @@ prte_list_splice(prte_list_t *thislist, prte_list_item_t *pos,
          * first, since last might be end and then we wouldn't be able
          * to run the loop)
          */
-        for (tmp = first ; tmp != last ; tmp = prte_list_get_next(tmp)) {
+        for (tmp = first; tmp != last; tmp = prte_list_get_next(tmp)) {
             change++;
         }
 
@@ -229,31 +206,28 @@ prte_list_splice(prte_list_t *thislist, prte_list_item_t *pos,
     }
 }
 
-
-int prte_list_sort(prte_list_t* list, prte_list_item_compare_fn_t compare)
+int prte_list_sort(prte_list_t *list, prte_list_item_compare_fn_t compare)
 {
-    prte_list_item_t* item;
-    prte_list_item_t** items;
-    size_t i, index=0;
+    prte_list_item_t *item;
+    prte_list_item_t **items;
+    size_t i, index = 0;
 
     if (0 == list->prte_list_length) {
         return PRTE_SUCCESS;
     }
-    items = (prte_list_item_t**)malloc(sizeof(prte_list_item_t*) *
-                                       list->prte_list_length);
+    items = (prte_list_item_t **) malloc(sizeof(prte_list_item_t *) * list->prte_list_length);
 
     if (NULL == items) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    while(NULL != (item = prte_list_remove_first(list))) {
+    while (NULL != (item = prte_list_remove_first(list))) {
         items[index++] = item;
     }
 
-    qsort(items, index, sizeof(prte_list_item_t*),
-          (int(*)(const void*,const void*))compare);
-    for (i=0; i<index; i++) {
-        prte_list_append(list,items[i]);
+    qsort(items, index, sizeof(prte_list_item_t *), (int (*)(const void *, const void *)) compare);
+    for (i = 0; i < index; i++) {
+        prte_list_append(list, items[i]);
     }
     free(items);
     return PRTE_SUCCESS;

@@ -26,23 +26,23 @@
 #include "constants.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
-#include <string.h>
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <ctype.h>
+#include <string.h>
 
-#include "src/util/prte_environ.h"
 #include "src/util/argv.h"
+#include "src/util/prte_environ.h"
 
-#include "src/util/show_help.h"
-#include "src/util/name_fns.h"
-#include "src/util/proc_info.h"
-#include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
+#include "src/util/show_help.h"
 
-#include "src/mca/ess/ess.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/ess/ess.h"
 #include "src/mca/ess/lsf/ess_lsf.h"
 
 static int lsf_set_name(void);
@@ -50,17 +50,14 @@ static int lsf_set_name(void);
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
-prte_ess_base_module_t prte_ess_lsf_module = {
-    .init = rte_init,
-    .finalize = rte_finalize,
-    .abort = NULL
-};
+prte_ess_base_module_t prte_ess_lsf_module = {.init = rte_init,
+                                              .finalize = rte_finalize,
+                                              .abort = NULL};
 
 /*
  * Local variables
  */
-static prte_node_rank_t my_node_rank=PRTE_NODE_RANK_INVALID;
-
+static prte_node_rank_t my_node_rank = PRTE_NODE_RANK_INVALID;
 
 static int rte_init(int argc, char **argv)
 {
@@ -83,12 +80,10 @@ static int rte_init(int argc, char **argv)
     }
     return PRTE_SUCCESS;
 
-
 error:
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt",
-                       "prte_init:startup:internal-failure",
-                       true, error, PRTE_ERROR_NAME(ret), ret);
+        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+                       PRTE_ERROR_NAME(ret), ret);
     }
 
     return ret;
@@ -102,7 +97,8 @@ static int rte_finalize(void)
         PRTE_ERROR_LOG(ret);
     }
 
-    return ret;;
+    return ret;
+    ;
 }
 
 static int lsf_set_name(void)
@@ -125,13 +121,11 @@ static int lsf_set_name(void)
 
     lsf_nodeid = atoi(getenv("LSF_PM_TASKID"));
     prte_output_verbose(1, prte_ess_base_framework.framework_output,
-                        "ess:lsf found LSF_PM_TASKID set to %d",
-                        lsf_nodeid);
+                        "ess:lsf found LSF_PM_TASKID set to %d", lsf_nodeid);
     PRTE_PROC_MY_NAME->rank = vpid + lsf_nodeid - 1;
 
     /* get the num procs as provided in the cmd line param */
     prte_process_info.num_daemons = prte_ess_base_num_procs;
-
 
     return PRTE_SUCCESS;
 }

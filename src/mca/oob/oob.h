@@ -33,13 +33,13 @@
 #include "types.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_UIO_H
-#include <sys/uio.h>
+#    include <sys/uio.h>
 #endif
 #ifdef HAVE_NET_UIO_H
-#include <net/uio.h>
+#    include <net/uio.h>
 #endif
 
 #include "src/class/prte_list.h"
@@ -54,31 +54,29 @@ typedef int (*mca_oob_base_component_avail_fn_t)(void);
 typedef int (*mca_oob_base_component_startup_fn_t)(void);
 typedef void (*mca_oob_base_component_shutdown_fn_t)(void);
 typedef int (*mca_oob_base_component_send_fn_t)(prte_rml_send_t *msg);
-typedef char* (*mca_oob_base_component_get_addr_fn_t)(void);
-typedef int (*mca_oob_base_component_set_addr_fn_t)(pmix_proc_t *peer,
-                                                    char **uris);
+typedef char *(*mca_oob_base_component_get_addr_fn_t)(void);
+typedef int (*mca_oob_base_component_set_addr_fn_t)(pmix_proc_t *peer, char **uris);
 typedef bool (*mca_oob_base_component_is_reachable_fn_t)(pmix_proc_t *peer);
 typedef void (*mca_oob_ping_callback_fn_t)(int status, void *cbdata);
 
 typedef struct {
-    prte_mca_base_component_t                            oob_base;
-    prte_mca_base_component_data_t                       oob_data;
-    int                                             idx;
-    int                                             priority;
-    mca_oob_base_component_avail_fn_t               available;
-    mca_oob_base_component_startup_fn_t             startup;
-    mca_oob_base_component_shutdown_fn_t            shutdown;
-    mca_oob_base_component_send_fn_t                send_nb;
-    mca_oob_base_component_get_addr_fn_t            get_addr;
-    mca_oob_base_component_set_addr_fn_t            set_addr;
-    mca_oob_base_component_is_reachable_fn_t        is_reachable;
+    prte_mca_base_component_t oob_base;
+    prte_mca_base_component_data_t oob_data;
+    int idx;
+    int priority;
+    mca_oob_base_component_avail_fn_t available;
+    mca_oob_base_component_startup_fn_t startup;
+    mca_oob_base_component_shutdown_fn_t shutdown;
+    mca_oob_base_component_send_fn_t send_nb;
+    mca_oob_base_component_get_addr_fn_t get_addr;
+    mca_oob_base_component_set_addr_fn_t set_addr;
+    mca_oob_base_component_is_reachable_fn_t is_reachable;
 } prte_oob_base_component_t;
 
 /**
  * Macro for use in components that are of type oob
  */
-#define PRTE_OOB_BASE_VERSION_2_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("oob", 2, 0, 0)
+#define PRTE_OOB_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("oob", 2, 0, 0)
 
 END_C_DECLS
 

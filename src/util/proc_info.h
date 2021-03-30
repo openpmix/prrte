@@ -36,28 +36,28 @@
 #include <stdint.h>
 
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 
 #include "types.h"
 
 #include "src/hwloc/hwloc-internal.h"
 #include PRTE_PMIX_HEADER
-#if ! PRTE_PMIX_HEADER_GIVEN
-#include <pmix_common.h>
+#if !PRTE_PMIX_HEADER_GIVEN
+#    include <pmix_common.h>
 #endif
 
 BEGIN_C_DECLS
 
 typedef uint8_t prte_proc_type_t;
-#define PRTE_PROC_TYPE_NONE     0x0000
-#define PRTE_PROC_DAEMON        0x0002
-#define PRTE_PROC_MASTER        0x0004
-#define PRTE_PROC_TOOL          0x0008
+#define PRTE_PROC_TYPE_NONE 0x0000
+#define PRTE_PROC_DAEMON    0x0002
+#define PRTE_PROC_MASTER    0x0004
+#define PRTE_PROC_TOOL      0x0008
 
-#define PRTE_PROC_IS_DAEMON         (PRTE_PROC_DAEMON & prte_process_info.proc_type)
-#define PRTE_PROC_IS_MASTER         (PRTE_PROC_MASTER & prte_process_info.proc_type)
-#define PRTE_PROC_IS_TOOL           (PRTE_PROC_TOOL & prte_process_info.proc_type)
+#define PRTE_PROC_IS_DAEMON (PRTE_PROC_DAEMON & prte_process_info.proc_type)
+#define PRTE_PROC_IS_MASTER (PRTE_PROC_MASTER & prte_process_info.proc_type)
+#define PRTE_PROC_IS_TOOL   (PRTE_PROC_TOOL & prte_process_info.proc_type)
 
 /**
  * Process information structure
@@ -70,37 +70,37 @@ typedef uint8_t prte_proc_type_t;
  */
 typedef struct prte_process_info_t {
     pmix_proc_t myproc;
-    pmix_proc_t my_hnp;                 /**< Name of my hnp */
-    char *my_hnp_uri;                   /**< Contact info for my hnp */
-    pmix_proc_t my_parent;              /**< Name of my parent (or my HNP if no parent was specified) */
-    pid_t hnp_pid;                      /**< hnp pid - used if singleton */
-    pmix_rank_t num_daemons;            /**< number of daemons in system */
-    int num_nodes;                      /**< number of nodes in the job */
-    char *nodename;                     /**< string name for this node */
-    char **aliases;                     /**< aliases for this node */
-    pid_t pid;                          /**< Local process ID for this process */
-    prte_proc_type_t proc_type;         /**< Type of process */
-    uint16_t my_port;                   /**< TCP port for out-of-band comm */
-    int num_restarts;                   /**< number of times this proc has restarted */
+    pmix_proc_t my_hnp;         /**< Name of my hnp */
+    char *my_hnp_uri;           /**< Contact info for my hnp */
+    pmix_proc_t my_parent;      /**< Name of my parent (or my HNP if no parent was specified) */
+    pid_t hnp_pid;              /**< hnp pid - used if singleton */
+    pmix_rank_t num_daemons;    /**< number of daemons in system */
+    int num_nodes;              /**< number of nodes in the job */
+    char *nodename;             /**< string name for this node */
+    char **aliases;             /**< aliases for this node */
+    pid_t pid;                  /**< Local process ID for this process */
+    prte_proc_type_t proc_type; /**< Type of process */
+    uint16_t my_port;           /**< TCP port for out-of-band comm */
+    int num_restarts;           /**< number of times this proc has restarted */
     /* The session directory has the form
      * <prefix>/<openmpi-sessions-user>/<jobid>/<procid>, where the prefix
      * can either be provided by the user via the
      * --tmpdir command-line flag, the use of one of several
      * environmental variables, or else a default location.
      */
-    char *tmpdir_base;                  /**< Base directory of the session dir tree */
-    char *top_session_dir;              /**< Top-most directory of the session tree */
-    char *jobfam_session_dir;           /**< Session directory for this family of jobs (i.e., share same mpirun) */
-    char *job_session_dir;              /**< Session directory for job */
-    char *proc_session_dir;             /**< Session directory for the process */
-    bool rm_session_dirs;               /**< Session directories will be cleaned up by RM */
+    char *tmpdir_base;        /**< Base directory of the session dir tree */
+    char *top_session_dir;    /**< Top-most directory of the session tree */
+    char *jobfam_session_dir; /**< Session directory for this family of jobs (i.e., share same
+                                 mpirun) */
+    char *job_session_dir;    /**< Session directory for job */
+    char *proc_session_dir;   /**< Session directory for the process */
+    bool rm_session_dirs;     /**< Session directories will be cleaned up by RM */
 
-    char *sock_stdin;                   /**< Path name to temp file for stdin. */
-    char *sock_stdout;                  /**< Path name to temp file for stdout. */
-    char *sock_stderr;                  /**< Path name to temp file for stderr. */
-    char *cpuset;                       /**< String-representation of bitmap where we are bound */
+    char *sock_stdin;  /**< Path name to temp file for stdin. */
+    char *sock_stdout; /**< Path name to temp file for stdout. */
+    char *sock_stderr; /**< Path name to temp file for stderr. */
+    char *cpuset;      /**< String-representation of bitmap where we are bound */
 } prte_process_info_t;
-
 
 /**
  *
@@ -114,7 +114,6 @@ typedef struct prte_process_info_t {
  * before calling \c prte_rte_info() if the caller is a seed daemon.
  */
 PRTE_EXPORT extern prte_process_info_t prte_process_info;
-
 
 /**
  * \internal
