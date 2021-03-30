@@ -493,6 +493,54 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
         free(p2);
         rc = PRTE_ERR_SILENT;
     }
+    /* --tag-output  ->  "--output tag */
+    else if (0 == strcmp(option, "--tag-output")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--output", NULL, "tag", true);
+    }
+    /* --timestamp-output  ->  --output timestamp */
+    else if (0 == strcmp(option, "--timestamp-output")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--output", NULL, "timestamp", true);
+    }
+    /* --output-directory DIR  ->  --output dir:DIR */
+    else if (0 == strcmp(option, "--output-directory")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--output", "dir", pargs[i + 1], true);
+    }
+    /* --xml  ->  --output xml */
+    else if (0 == strcmp(option, "--xml")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--output", NULL, "xml", true);
+    }
+    /* --display-devel-map  -> --display allocation-devel */
+    else if (0 == strcmp(option, "--display-devel-map")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation-devel", true);
+    }
+    /* --display-devel-allocation  ->  --display allocation-devel */
+    else if (0 == strcmp(option, "--display-devel-allocation")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation-devel", true);
+    }
+    /* --output-proctable  ->  --display proctable */
+    else if (0 == strcmp(option, "--output-proctable")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "proctable", true);
+    }
+    /* --display-map  ->  --display map */
+    else if (0 == strcmp(option, "--display-map")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map", true);
+    }
+    /* --display-topo  ->  --display topo */
+    else if (0 == strcmp(option, "--display-topo")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "topo", true);
+    }
+    /* --display-diffable-map  ->  --display map-diffable */
+    else if (0 == strcmp(option, "--display-diff")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-diffable", true);
+    }
+    /* --report-bindings  ->  --display bind */
+    else if (0 == strcmp(option, "--report-bindings")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "bind", true);
+    }
+    /* --display-allocation  ->  --display allocation */
+    else if (0 == strcmp(option, "--display-allocation")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation", true);
+    }
 
     return rc;
 }
@@ -521,6 +569,17 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                        "--amca",
                        "--am",
                        "--rankfile",
+                       "--display-devel-map",
+                       "--display-devel-allocation",
+                       "--display-map",
+                       "--display-topo",
+                       "--display-diff",
+                       "--report-bindings",
+                       "--display-allocation",
+                       "--tag-output",
+                       "--timestamp-output",
+                       "--xml",
+                       "--output-proctable",
                        NULL};
 
     rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv, options,

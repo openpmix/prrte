@@ -435,7 +435,7 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
         rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation-devel", true);
     }
     /* --display-devel-allocation  ->  --display allocation-devel */
-    if (0 == strcmp(option, "--display-devel-allocation")) {
+    else if (0 == strcmp(option, "--display-devel-allocation")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation-devel", true);
     }
     /* --output-proctable  ->  --display proctable */
