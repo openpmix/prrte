@@ -325,6 +325,8 @@ int prun(int argc, char *argv[])
     pmix_value_t *val;
     pmix_data_array_t darray;
     prte_schizo_base_module_t *schizo;
+    char hostname[PRTE_PATH_MAX];
+    pmix_rank_t rank;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
@@ -338,6 +340,7 @@ int prun(int argc, char *argv[])
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
+    gethostname(hostname, sizeof(hostname));
 
     /** setup callbacks for abort signals - from this point
      * forward, we need to abort in a manner that allows us
@@ -546,6 +549,13 @@ int prun(int argc, char *argv[])
 
     /* setup options */
     PMIX_INFO_LIST_START(tinfo);
+
+    /* tell PMIx what our name should be */
+    prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, getpid());
+    PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
+    free(param);
+    rank = 0;
+    PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
 
     if (prte_cmd_line_is_taken(prte_cmd_line, "do-not-connect")) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
