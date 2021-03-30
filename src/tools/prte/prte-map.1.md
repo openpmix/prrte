@@ -135,7 +135,7 @@ To map processes across sets of objects:
     options include `slot`, `hwthread`, `core`, `l1cache`, `l2cache`, `l3cache`,
     `package`, `node`, `seq`, `dist`, `ppr`, and `rankfile`.
 
-Any object can include modifiers by adding a colon (`:`) and any combination
+Any object can include qualifier by adding a colon (`:`) and any combination
 of one or more of the following to the `--map-by` option:
 
  - `PE=n` bind `n` processing elements to each process
@@ -163,7 +163,7 @@ To order processes' ranks:
     Supported options include `slot`, `hwthread`, `core`, `l1cache`, `l2cache`,
     `l3cache`, `package`, and `node`.
 
-Any object can include modifiers by adding a colon (`:`) and any combination
+Any object can include qualifiers by adding a colon (`:`) and any combination
 of one or more of the following to the `--rank-by` option:
 
  - `SPAN`
@@ -177,7 +177,7 @@ To bind processes to sets of objects:
     Supported options include `none`, `hwthread`, `core`, `l1cache`,
     `l2cache`, `l3cache`, and `package`.
 
-Any object can include modifiers by adding a colon (`:`) and any combination
+Any object can include qualifiers by adding a colon (`:`) and any combination
 of one or more of the following to the `--bind-to` option:
 
  - `overload-allowed` allows for binding more than one process in relation to a CPU
@@ -484,7 +484,7 @@ Ranking by core and by slot provide the identical result - a simple
 progression of ranks across each node. Ranking by package does a
 round-robin ranking within each node until all processes have been
 assigned a rank, and then progresses to the next node. Adding the `:SPAN`
-modifier to the ranking directive causes the ranking algorithm to treat
+qualifier to the ranking directive causes the ranking algorithm to treat
 the entire allocation as a single entity - thus, the process ranks are
 assigned across all sockets before circling back around to the
 beginning.
@@ -622,7 +622,7 @@ those processes is to exceed the number of available slots putting the job
 into an oversubscription scenario.
 
 You can force PRTE to oversubscribe the nodes by using the `:OVERSUBSCRIBE`
-modifier to the `--map-by` option as seen in the example below:
+qualifier to the `--map-by` option as seen in the example below:
 ```
 prun --np 66 --hostfile myhostfile --map-by core:HWTCPUS:OVERSUBSCRIBE --bind-to hwthread hostname
 ```
